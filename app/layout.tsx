@@ -13,7 +13,10 @@ export const metadata: Metadata = {
   title: 'RiskMate - Protect Every Job Before It Starts',
   description: 'Instant risk scoring, auto-mitigation checklists, and shareable PDF reports for service contractors. Built for speed, not bureaucracy.',
   icons: {
-    icon: [{ url: '/favicon.svg', type: 'image/svg+xml' }],
+    icon: [
+      { url: '/favicon.svg', type: 'image/svg+xml' },
+      { url: '/favicon.svg', type: 'image/svg+xml', sizes: 'any' },
+    ],
     apple: [{ url: '/favicon.svg' }],
     shortcut: ['/favicon.svg'],
   },
@@ -27,6 +30,8 @@ export default function RootLayout({
   return (
     <html lang="en" data-scroll-behavior="smooth" className={`${inter.variable} ${playfair.variable} ${inter.className}`}>
       <head>
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+        <link rel="shortcut icon" href="/favicon.svg" type="image/svg+xml" />
         {/* PostHog Analytics */}
         {process.env.NEXT_PUBLIC_POSTHOG_KEY && (
           <>
