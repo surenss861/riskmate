@@ -38,8 +38,8 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  // Supabase session handling
-  await supabase.auth.getUser()
+  // Supabase session handling - refresh session if needed
+  const { data: { user } } = await supabase.auth.getUser()
 
   return response
 }
