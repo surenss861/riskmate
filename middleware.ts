@@ -34,12 +34,13 @@ export async function middleware(request: NextRequest) {
             },
             set(name: string, value: string, options: any) {
               try {
-                request.cookies.set(name, value)
-                response = NextResponse.next({
-                  request: {
-                    headers: request.headers,
-                  },
-                })
+                if (!response) {
+                  response = NextResponse.next({
+                    request: {
+                      headers: request.headers,
+                    },
+                  })
+                }
                 response.cookies.set(name, value, options)
               } catch {
                 // Silently fail cookie setting
@@ -47,12 +48,13 @@ export async function middleware(request: NextRequest) {
             },
             remove(name: string, options: any) {
               try {
-                request.cookies.set(name, '')
-                response = NextResponse.next({
-                  request: {
-                    headers: request.headers,
-                  },
-                })
+                if (!response) {
+                  response = NextResponse.next({
+                    request: {
+                      headers: request.headers,
+                    },
+                  })
+                }
                 response.cookies.set(name, '', { ...options, maxAge: 0 })
               } catch {
                 // Silently fail cookie removal
