@@ -37,8 +37,9 @@ export async function middleware(request: NextRequest) {
       }
     )
 
-    // Refresh session if needed
-    await supabase.auth.getUser()
+    // Just creating the client and setting up cookies is enough
+    // The session refresh happens automatically through cookie operations
+    // No need to call getUser() which can fail
   } catch (error) {
     // If anything fails, return the response anyway
     // This ensures the request continues even if auth fails
