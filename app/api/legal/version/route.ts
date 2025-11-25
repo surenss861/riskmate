@@ -1,0 +1,33 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { createSupabaseServerClient } from '@/lib/supabase/server'
+
+export const runtime = 'nodejs'
+
+const LEGAL_VERSION = process.env.LEGAL_VERSION || '2025-12-riskmate-terms'
+const LEGAL_UPDATED_AT = process.env.LEGAL_UPDATED_AT || '2025-12-01T00:00:00.000Z'
+
+export async function GET(request: NextRequest) {
+  try {
+    const supabase = await createSupabaseServerClient()
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+
+    if (authError || !user) {
+      return NextResponse.json(
+        { message: 'Unauthorized' },
+        { status: 401 }
+      )
+    }
+
+    return NextResponse.json({
+      version: LEGAL_VERSION,
+      updated_at: LEGAL_UPDATED_AT,
+    })
+  } catch (error: any) {
+    console.error('Legal version fetch failed:', error)
+    return NextResponse.json(
+      { message: 'Failed to fetch legal version' },
+      { status: 500 }
+    )
+  }
+}
+
