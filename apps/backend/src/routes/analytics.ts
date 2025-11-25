@@ -43,7 +43,7 @@ analyticsRouter.get(
   "/mitigations",
   authenticate as unknown as express.RequestHandler,
   requireFeature("analytics") as unknown as express.RequestHandler,
-  (async (req: express.Request, res: express.Response) => {
+  async (req: express.Request, res: express.Response) => {
     const authReq = req as AuthenticatedRequest;
     try {
       const orgId =
