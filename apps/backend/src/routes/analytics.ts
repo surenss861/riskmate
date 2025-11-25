@@ -43,17 +43,18 @@ analyticsRouter.get(
   "/mitigations",
   authenticate as unknown as express.RequestHandler,
   requireFeature("analytics") as unknown as express.RequestHandler,
-  async (req: AuthenticatedRequest, res) => {
+  (async (req: express.Request, res: express.Response) => {
+    const authReq = req as AuthenticatedRequest;
     try {
       const orgId =
-        (req.query.org_id as string | undefined) || req.user.organization_id;
+        (authReq.query.org_id as string | undefined) || authReq.user.organization_id;
       if (!orgId) {
         return res.status(400).json({ message: "Missing organization id" });
       }
 
-      const rangeDays = parseRangeDays(req.query.range as string | undefined);
-      const crewId = req.query.crew_id
-        ? String(req.query.crew_id)
+      const rangeDays = parseRangeDays(authReq.query.range as string | undefined);
+      const crewId = authReq.query.crew_id
+        ? String(authReq.query.crew_id)
         : undefined;
 
       const sinceDate = new Date();
