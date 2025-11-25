@@ -117,7 +117,7 @@ export function TrendChart({
       ) : (
         <div className="relative mt-8 overflow-hidden">
           <svg
-            viewBox={`0 0 ${chartDimensions.width} ${chartDimensions.height}`}
+            viewBox={`0 0 ${CHART_DIMENSIONS.width} ${CHART_DIMENSIONS.height}`}
             className="w-full"
           >
             <defs>
@@ -153,20 +153,20 @@ export function TrendChart({
             {/* Y Axis ticks */}
             {[0, 0.25, 0.5, 0.75, 1].map((tick) => {
               const y =
-                chartDimensions.paddingY +
-                (chartDimensions.height - chartDimensions.paddingY * 2) * (1 - tick);
+                CHART_DIMENSIONS.paddingY +
+                (CHART_DIMENSIONS.height - CHART_DIMENSIONS.paddingY * 2) * (1 - tick);
               return (
                 <g key={tick}>
                   <line
-                    x1={chartDimensions.paddingX}
-                    x2={chartDimensions.width - chartDimensions.paddingX}
+                    x1={CHART_DIMENSIONS.paddingX}
+                    x2={CHART_DIMENSIONS.width - CHART_DIMENSIONS.paddingX}
                     y1={y}
                     y2={y}
                     stroke="rgba(255,255,255,0.08)"
                     strokeDasharray="4 8"
                   />
                   <text
-                    x={chartDimensions.paddingX - 10}
+                    x={CHART_DIMENSIONS.paddingX - 10}
                     y={y + 4}
                     textAnchor="end"
                     className="text-[10px] fill-white/45"
@@ -189,7 +189,7 @@ export function TrendChart({
                 <text
                   key={point.original.date}
                   x={point.x}
-                  y={chartDimensions.height - chartDimensions.paddingY + 20}
+                  y={CHART_DIMENSIONS.height - CHART_DIMENSIONS.paddingY + 20}
                   textAnchor="middle"
                   className="text-[10px] fill-white/45"
                 >
