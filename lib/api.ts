@@ -300,16 +300,44 @@ export const analyticsApi = {
   },
 };
 
-// Legal API
+// Legal API - uses Next.js API routes (relative paths)
+async function nextApiRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  const token = await getAuthToken();
+  
+  const response = await fetch(endpoint, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token && { Authorization: `Bearer ${token}` }),
+      ...options.headers,
+    },
+  });
+
+  const contentType = response.headers.get('content-type');
+  const isJson = contentType?.includes('application/json');
+  const data = isJson ? await response.json() : await response.text();
+
+  if (!response.ok) {
+    const message = isJson ? (data?.detail || data?.message) : data || response.statusText;
+    const error: Error & ApiError = new Error(message || 'API request failed') as Error & ApiError;
+    if (isJson && data?.code) {
+      error.code = data.code;
+    }
+    throw error;
+  }
+
+  return data as T;
+}
+
 export const legalApi = {
   getVersion: async () =>
-    apiRequest<{ version: string; updated_at: string }>('/api/legal/version'),
+    nextApiRequest<{ version: string; updated_at: string }>('/api/legal/version'),
   getStatus: async () =>
-    apiRequest<{ accepted: boolean; accepted_at: string | null; version: string }>(
+    nextApiRequest<{ accepted: boolean; accepted_at: string | null; version: string }>(
       '/api/legal/status'
     ),
   accept: async () =>
-    apiRequest<{ accepted: boolean; accepted_at: string; version: string }>(
+    nextApiRequest<{ accepted: boolean; accepted_at: string; version: string }>(
       '/api/legal/accept',
       { method: 'POST' }
     ),
