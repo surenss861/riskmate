@@ -313,7 +313,7 @@ export default function HomePage() {
                 2
               </div>
               <h3 className="text-xl font-semibold mb-2">During the job</h3>
-              <p className="text-[#A1A1A1]">Track site changes, new hazards, and additional photos. See who's on-site and who submitted what—your living job log.</p>
+              <p className="text-[#A1A1A1]">Track site changes, new hazards, and additional photos. See who&apos;s on-site and who submitted what—your living job log.</p>
             </motion.div>
             <motion.div 
               className="text-center"

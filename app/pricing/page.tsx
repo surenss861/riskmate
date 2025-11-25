@@ -228,7 +228,7 @@ export default function PricingPage() {
             </div>
             <div className="bg-white/5 border border-white/10 rounded-xl p-6">
               <h3 className="text-lg font-semibold mb-2">What happens if I exceed my job limit?</h3>
-              <p className="text-white/70">You'll be notified when you're approaching your limit. Upgrade your plan to continue creating jobs.</p>
+              <p className="text-white/70">You&apos;ll be notified when you&apos;re approaching your limit. Upgrade your plan to continue creating jobs.</p>
             </div>
           </div>
         </div>

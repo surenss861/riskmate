@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import ProtectedRoute from '@/components/ProtectedRoute'
@@ -53,11 +53,7 @@ export default function DashboardPage() {
     enabled: roleLoaded && !isMember, // Disable analytics for members, but wait for role to load
   })
 
-  useEffect(() => {
-    loadData()
-  }, [filterStatus, filterRiskLevel])
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       const supabase = createSupabaseBrowserClient()
       const { data: { user } } = await supabase.auth.getUser()
@@ -108,7 +104,11 @@ export default function DashboardPage() {
       }
       setLoading(false)
     }
-  }
+  }, [filterStatus, filterRiskLevel])
+
+  useEffect(() => {
+    loadData()
+  }, [loadData])
 
   const handleLogout = async () => {
     const supabase = createSupabaseBrowserClient()

@@ -71,7 +71,7 @@ export default function ThankYouPage() {
               <div className="text-6xl mb-6">✓</div>
               <h1 className="text-4xl font-bold mb-4">Thank you for your purchase!</h1>
               <p className="text-white/60 mb-8">
-                Your subscription has been activated. You'll be redirected to your dashboard shortly.
+                Your subscription has been activated. You&apos;ll be redirected to your dashboard shortly.
               </p>
               <button
                 onClick={() => router.push('/dashboard')}

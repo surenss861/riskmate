@@ -29,6 +29,13 @@ const formatDateLabel = (isoDate: string) => {
   return date.toLocaleDateString(undefined, options);
 };
 
+const CHART_DIMENSIONS = {
+  width: 720,
+  height: 220,
+  paddingX: 20,
+  paddingY: 30,
+};
+
 export function TrendChart({
   data,
   rangeDays,
@@ -37,16 +44,9 @@ export function TrendChart({
 }: TrendChartProps) {
   const paddedData = data.length > 0 ? data : [{ date: new Date().toISOString().slice(0, 10), completion_rate: 0 }];
 
-  const chartDimensions = {
-    width: 720,
-    height: 220,
-    paddingX: 20,
-    paddingY: 30,
-  };
-
   const points = useMemo(() => {
     if (!paddedData.length) return [];
-    const { width, height, paddingX, paddingY } = chartDimensions;
+    const { width, height, paddingX, paddingY } = CHART_DIMENSIONS;
     const usableWidth = width - paddingX * 2;
     const usableHeight = height - paddingY * 2;
 
@@ -61,7 +61,7 @@ export function TrendChart({
   const areaPath = useMemo(() => {
     if (points.length === 0) return '';
     const start = points[0];
-    const { height, paddingX, paddingY } = chartDimensions;
+    const { height, paddingX, paddingY } = CHART_DIMENSIONS;
     const baseY = height - paddingY;
 
     const line = points
