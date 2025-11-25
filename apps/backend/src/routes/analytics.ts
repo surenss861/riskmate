@@ -63,7 +63,7 @@ analyticsRouter.get(
       const sinceIso = sinceDate.toISOString();
 
       const { data: jobs, error: jobsError } = await supabase
-        .from<JobRecord>("jobs")
+        .from("jobs")
         .select("id, risk_score, created_at")
         .eq("organization_id", orgId)
         .gte("created_at", sinceIso)
@@ -78,7 +78,7 @@ analyticsRouter.get(
       const [mitigationsResponse, documentsResponse] = await Promise.all([
         jobIds.length
           ? supabase
-              .from<MitigationItem>("mitigation_items")
+              .from("mitigation_items")
               .select("id, job_id, created_at, completed_at, completed_by")
               .in("job_id", jobIds)
               .order("created_at", { ascending: true })
@@ -86,7 +86,7 @@ analyticsRouter.get(
           : Promise.resolve({ data: [] as MitigationItem[], error: null }),
         jobIds.length
           ? supabase
-              .from<DocumentRecord>("documents")
+              .from("documents")
               .select("id, job_id, created_at")
               .in("job_id", jobIds)
               .order("created_at", { ascending: true })

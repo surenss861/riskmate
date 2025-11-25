@@ -6,25 +6,27 @@ import { recordAuditLog } from "../middleware/audit";
 
 export const legalRouter = express.Router();
 
-legalRouter.get("/version", authenticate as unknown as express.RequestHandler, async (_req: AuthenticatedRequest, res) => {
+legalRouter.get("/version", authenticate as unknown as express.RequestHandler, async (_req: express.Request, res: express.Response) => {
   res.json({
     version: LEGAL_VERSION,
     updated_at: LEGAL_UPDATED_AT,
   });
 });
 
-legalRouter.get("/status", authenticate as unknown as express.RequestHandler, async (req: AuthenticatedRequest, res) => {
+legalRouter.get("/status", authenticate as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
+  const authReq = req as AuthenticatedRequest;
   res.json({
-    accepted: req.user.legalAccepted,
-    accepted_at: req.user.legalAcceptedAt ?? null,
+    accepted: authReq.user.legalAccepted,
+    accepted_at: authReq.user.legalAcceptedAt ?? null,
     version: LEGAL_VERSION,
   });
 });
 
-legalRouter.post("/accept", authenticate as unknown as express.RequestHandler, async (req: AuthenticatedRequest, res) => {
+legalRouter.post("/accept", authenticate as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
+  const authReq = req as AuthenticatedRequest;
   try {
-    const { id: userId, organization_id } = req.user;
-    const ipAddress = getClientIp(req.headers) || req.ip;
+    const { id: userId, organization_id } = authReq.user;
+    const ipAddress = getClientIp(authReq.headers) || authReq.ip;
 
     const { data, error } = await supabase
       .from("legal_acceptances")

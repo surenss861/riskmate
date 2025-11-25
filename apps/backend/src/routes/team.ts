@@ -21,9 +21,10 @@ function generateTempPassword(length = 12) {
 
 teamRouter.use(authenticate as unknown as express.RequestHandler);
 
-teamRouter.get("/", async (req: AuthenticatedRequest, res) => {
+teamRouter.get("/", async (req: express.Request, res: express.Response) => {
+  const authReq = req as AuthenticatedRequest;
   try {
-    const organizationId = req.user.organization_id;
+    const organizationId = authReq.user.organization_id;
 
     const { data: members, error: membersError } = await supabase
       .from("users")
@@ -50,7 +51,7 @@ teamRouter.get("/", async (req: AuthenticatedRequest, res) => {
     const activeMembers = members?.length ?? 0;
     const pendingInvites = invites?.length ?? 0;
     const seatLimit =
-      req.user.seatsLimit ?? limitsFor(req.user.plan).seats ?? null;
+      authReq.user.seatsLimit ?? limitsFor(authReq.user.plan).seats ?? null;
 
     res.json({
       members: members ?? [],
@@ -62,8 +63,8 @@ teamRouter.get("/", async (req: AuthenticatedRequest, res) => {
         available:
           seatLimit === null ? null : Math.max(seatLimit - activeMembers, 0),
       },
-      current_user_role: req.user.role ?? "member",
-      plan: req.user.plan,
+      current_user_role: authReq.user.role ?? "member",
+      plan: authReq.user.plan,
     });
   } catch (error: any) {
     console.error("Team fetch failed:", error);
@@ -76,9 +77,10 @@ teamRouter.get("/", async (req: AuthenticatedRequest, res) => {
   }
 });
 
-teamRouter.post("/invite", async (req: AuthenticatedRequest, res) => {
+teamRouter.post("/invite", async (req: express.Request, res: express.Response) => {
+  const authReq = req as AuthenticatedRequest;
   try {
-    const { email, role = "member" } = req.body ?? {};
+    const { email, role = "member" } = authReq.body ?? {};
 
     if (!email || typeof email !== "string") {
       return res.status(400).json({ message: "Email is required" });
@@ -88,18 +90,18 @@ teamRouter.post("/invite", async (req: AuthenticatedRequest, res) => {
       return res.status(400).json({ message: "Invalid role selection" });
     }
 
-    if (!["owner", "admin"].includes(req.user.role ?? "")) {
+    if (!["owner", "admin"].includes(authReq.user.role ?? "")) {
       return res.status(403).json({ message: "Only admins can invite teammates" });
     }
 
-    if (req.user.subscriptionStatus === "past_due" || req.user.subscriptionStatus === "canceled") {
+    if (authReq.user.subscriptionStatus === "past_due" || authReq.user.subscriptionStatus === "canceled") {
       return res.status(402).json({
         message: "Subscription inactive. Update billing to invite teammates.",
         code: "PLAN_INACTIVE",
       });
     }
 
-    const organizationId = req.user.organization_id;
+    const organizationId = authReq.user.organization_id;
     const normalizedEmail = email.trim().toLowerCase();
 
     const { data: memberCountData, error: memberCountError, count: memberCount } =
@@ -114,7 +116,7 @@ teamRouter.post("/invite", async (req: AuthenticatedRequest, res) => {
     }
 
     const seatLimit =
-      req.user.seatsLimit ?? limitsFor(req.user.plan).seats ?? null;
+      authReq.user.seatsLimit ?? limitsFor(authReq.user.plan).seats ?? null;
 
     if (seatLimit !== null && (memberCount ?? 0) >= seatLimit) {
       return res.status(402).json({
@@ -145,7 +147,7 @@ teamRouter.post("/invite", async (req: AuthenticatedRequest, res) => {
         password: tempPassword,
         email_confirm: true,
         user_metadata: {
-          invited_by: req.user.id,
+          invited_by: authReq.user.id,
           organization_id: organizationId,
         },
       });
@@ -167,7 +169,7 @@ teamRouter.post("/invite", async (req: AuthenticatedRequest, res) => {
       organization_id: organizationId,
       role,
       must_reset_password: true,
-      invited_by: req.user.id,
+      invited_by: authReq.user.id,
     });
 
     if (insertUserError) {
@@ -183,7 +185,7 @@ teamRouter.post("/invite", async (req: AuthenticatedRequest, res) => {
           organization_id: organizationId,
           email: normalizedEmail,
           role,
-          invited_by: req.user.id,
+          invited_by: authReq.user.id,
           user_id: newUserId,
         })
         .select("id, email, role, created_at, user_id")
@@ -211,17 +213,18 @@ teamRouter.post("/invite", async (req: AuthenticatedRequest, res) => {
   }
 });
 
-teamRouter.delete("/invite/:id", async (req: AuthenticatedRequest, res) => {
+teamRouter.delete("/invite/:id", async (req: express.Request, res: express.Response) => {
+  const authReq = req as AuthenticatedRequest;
   try {
-    if (!["owner", "admin"].includes(req.user.role ?? "")) {
+    if (!["owner", "admin"].includes(authReq.user.role ?? "")) {
       return res.status(403).json({ message: "Only admins can revoke invites" });
     }
 
     const { data: inviteRow, error: inviteFetchError } = await supabase
       .from("organization_invites")
       .select("user_id")
-      .eq("id", req.params.id)
-      .eq("organization_id", req.user.organization_id)
+      .eq("id", authReq.params.id)
+      .eq("organization_id", authReq.user.organization_id)
       .is("accepted_at", null)
       .maybeSingle();
 
@@ -245,8 +248,8 @@ teamRouter.delete("/invite/:id", async (req: AuthenticatedRequest, res) => {
     const { error: revokeError } = await supabase
       .from("organization_invites")
       .update({ revoked_at: new Date().toISOString() })
-      .eq("id", req.params.id)
-      .eq("organization_id", req.user.organization_id)
+      .eq("id", authReq.params.id)
+      .eq("organization_id", authReq.user.organization_id)
       .is("accepted_at", null);
 
     if (revokeError) {
@@ -260,13 +263,14 @@ teamRouter.delete("/invite/:id", async (req: AuthenticatedRequest, res) => {
   }
 });
 
-teamRouter.delete("/member/:id", async (req: AuthenticatedRequest, res) => {
+teamRouter.delete("/member/:id", async (req: express.Request, res: express.Response) => {
+  const authReq = req as AuthenticatedRequest;
   try {
-    if (!["owner", "admin"].includes(req.user.role ?? "")) {
+    if (!["owner", "admin"].includes(authReq.user.role ?? "")) {
       return res.status(403).json({ message: "Only owners and admins can remove teammates" });
     }
 
-    if (req.user.id === req.params.id) {
+    if (authReq.user.id === authReq.params.id) {
       return res.status(400).json({ message: "You cannot remove yourself." });
     }
 
@@ -274,8 +278,8 @@ teamRouter.delete("/member/:id", async (req: AuthenticatedRequest, res) => {
     const { data: targetMember, error: targetError } = await supabase
       .from("users")
       .select("id, role")
-      .eq("id", req.params.id)
-      .eq("organization_id", req.user.organization_id)
+      .eq("id", authReq.params.id)
+      .eq("organization_id", authReq.user.organization_id)
       .is("archived_at", null)
       .maybeSingle();
 
@@ -293,7 +297,7 @@ teamRouter.delete("/member/:id", async (req: AuthenticatedRequest, res) => {
       const { count, error: ownerCountError } = await supabase
         .from("users")
         .select("id", { count: "exact", head: true })
-        .eq("organization_id", req.user.organization_id)
+        .eq("organization_id", authReq.user.organization_id)
         .eq("role", "owner")
         .is("archived_at", null);
 
@@ -304,7 +308,7 @@ teamRouter.delete("/member/:id", async (req: AuthenticatedRequest, res) => {
       // Only allow removing an owner if:
       // 1. The requester is an owner (not just an admin)
       // 2. There are multiple owners (so we don't leave the org without an owner)
-      if (req.user.role !== "owner") {
+      if (authReq.user.role !== "owner") {
         return res.status(403).json({ message: "Only owners can remove other owners" });
       }
 
@@ -318,8 +322,8 @@ teamRouter.delete("/member/:id", async (req: AuthenticatedRequest, res) => {
     const { error } = await supabase
       .from("users")
       .update({ archived_at: new Date().toISOString() })
-      .eq("id", req.params.id)
-      .eq("organization_id", req.user.organization_id)
+      .eq("id", authReq.params.id)
+      .eq("organization_id", authReq.user.organization_id)
       .is("archived_at", null);
 
     if (error) {
@@ -333,17 +337,18 @@ teamRouter.delete("/member/:id", async (req: AuthenticatedRequest, res) => {
   }
 });
 
-teamRouter.post("/acknowledge-reset", async (req: AuthenticatedRequest, res) => {
+teamRouter.post("/acknowledge-reset", async (req: express.Request, res: express.Response) => {
+  const authReq = req as AuthenticatedRequest;
   try {
     await supabase
       .from("users")
       .update({ must_reset_password: false })
-      .eq("id", req.user.id);
+      .eq("id", authReq.user.id);
 
     await supabase
       .from("organization_invites")
       .update({ accepted_at: new Date().toISOString() })
-      .eq("user_id", req.user.id)
+      .eq("user_id", authReq.user.id)
       .is("accepted_at", null);
 
     res.json({ status: "ok" });

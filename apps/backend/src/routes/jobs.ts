@@ -11,10 +11,11 @@ export const jobsRouter = express.Router();
 
 // GET /api/jobs
 // Returns paginated list of jobs for organization
-jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (req: AuthenticatedRequest, res) => {
+jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
+  const authReq = req as AuthenticatedRequest;
   try {
-    const { organization_id } = req.user;
-    const { page = 1, limit = 20, status, risk_level } = req.query;
+    const { organization_id } = authReq.user;
+    const { page = 1, limit = 20, status, risk_level } = authReq.query;
 
     const pageNum = parseInt(page as string, 10);
     const limitNum = parseInt(limit as string, 10);
@@ -74,10 +75,11 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
 
 // GET /api/jobs/:id
 // Returns full job details with risk score and mitigation items
-jobsRouter.get("/:id", authenticate as unknown as express.RequestHandler, async (req: AuthenticatedRequest, res) => {
+jobsRouter.get("/:id", authenticate as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
+  const authReq = req as AuthenticatedRequest;
   try {
-    const jobId = req.params.id;
-    const { organization_id } = req.user;
+    const jobId = authReq.params.id;
+    const { organization_id } = authReq.user;
 
     // Get job
     const { data: job, error: jobError } = await supabase
@@ -120,9 +122,10 @@ jobsRouter.get("/:id", authenticate as unknown as express.RequestHandler, async 
 
 // POST /api/jobs
 // Creates a new job and calculates risk score
-jobsRouter.post("/", authenticate as unknown as express.RequestHandler, enforceJobLimit as unknown as express.RequestHandler, async (req: AuthenticatedRequest, res) => {
+jobsRouter.post("/", authenticate as unknown as express.RequestHandler, enforceJobLimit as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
+  const authReq = req as AuthenticatedRequest;
   try {
-    const { organization_id, id: userId } = req.user;
+    const { organization_id, id: userId } = authReq.user;
     const {
       client_name,
       client_type,
@@ -135,7 +138,7 @@ jobsRouter.post("/", authenticate as unknown as express.RequestHandler, enforceJ
       has_subcontractors = false,
       subcontractor_count = 0,
       insurance_status = 'pending',
-    } = req.body;
+    } = authReq.body;
 
     // Validate required fields
     if (!client_name || !client_type || !job_type || !location) {
@@ -280,11 +283,12 @@ jobsRouter.post("/", authenticate as unknown as express.RequestHandler, enforceJ
 
 // PATCH /api/jobs/:id
 // Updates a job and optionally recalculates risk score
-jobsRouter.patch("/:id", authenticate as unknown as express.RequestHandler, async (req: AuthenticatedRequest, res) => {
+jobsRouter.patch("/:id", authenticate as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
+  const authReq = req as AuthenticatedRequest;
   try {
-    const jobId = req.params.id;
-    const { organization_id, id: userId } = req.user;
-    const updateData = req.body;
+    const jobId = authReq.params.id;
+    const { organization_id, id: userId } = authReq.user;
+    const updateData = authReq.body;
     const { risk_factor_codes, ...jobUpdates } = updateData;
     let updatedRiskScore: number | null = null;
     let updatedClientName: string | null = null;
@@ -400,12 +404,13 @@ jobsRouter.patch("/:id", authenticate as unknown as express.RequestHandler, asyn
 });
 
 // PATCH /api/jobs/:id/mitigations/:mitigationId
-jobsRouter.patch("/:id/mitigations/:mitigationId", authenticate as unknown as express.RequestHandler, async (req: AuthenticatedRequest, res) => {
+jobsRouter.patch("/:id/mitigations/:mitigationId", authenticate as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
+  const authReq = req as AuthenticatedRequest;
   try {
-    const jobId = req.params.id;
-    const mitigationId = req.params.mitigationId;
-    const { organization_id } = req.user;
-    const { done } = req.body;
+    const jobId = authReq.params.id;
+    const mitigationId = authReq.params.mitigationId;
+    const { organization_id } = authReq.user;
+    const { done } = authReq.body;
 
     if (typeof done !== "boolean") {
       return res.status(400).json({ message: "'done' boolean field is required" });
@@ -451,7 +456,7 @@ jobsRouter.patch("/:id/mitigations/:mitigationId", authenticate as unknown as ex
 
     recordAuditLog({
       organizationId: organization_id,
-      actorId: req.user.id,
+      actorId: authReq.user.id,
       eventName: done ? "mitigation.completed" : "mitigation.reopened",
       targetType: "mitigation",
       targetId: mitigationId,
@@ -496,10 +501,11 @@ const invalidateJobReportCache = (organizationId: string, jobId: string) => {
   jobReportCache.delete(`${organizationId}:${jobId}`);
 };
 
-jobsRouter.get("/:id/full", authenticate as unknown as express.RequestHandler, async (req: AuthenticatedRequest, res) => {
+jobsRouter.get("/:id/full", authenticate as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
+  const authReq = req as AuthenticatedRequest;
   try {
-    const jobId = req.params.id;
-    const { organization_id } = req.user;
+    const jobId = authReq.params.id;
+    const { organization_id } = authReq.user;
     const cacheKey = `${organization_id}:${jobId}`;
     const cached = getCachedJobReport(cacheKey);
     if (cached) {
@@ -519,10 +525,11 @@ jobsRouter.get("/:id/full", authenticate as unknown as express.RequestHandler, a
 
 // GET /api/jobs/:id/documents
 // Returns all uploaded documents for a specific job
-jobsRouter.get("/:id/documents", authenticate as unknown as express.RequestHandler, async (req: AuthenticatedRequest, res) => {
+jobsRouter.get("/:id/documents", authenticate as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
+  const authReq = req as AuthenticatedRequest;
   try {
-    const jobId = req.params.id;
-    const { organization_id } = req.user;
+    const jobId = authReq.params.id;
+    const { organization_id } = authReq.user;
 
     // Verify job belongs to organization
     const { data: job, error: jobError } = await supabase
@@ -592,11 +599,12 @@ jobsRouter.get("/:id/documents", authenticate as unknown as express.RequestHandl
 
 // POST /api/jobs/:id/documents
 // Persists document metadata after upload to storage
-jobsRouter.post("/:id/documents", authenticate as unknown as express.RequestHandler, async (req: AuthenticatedRequest, res) => {
+jobsRouter.post("/:id/documents", authenticate as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
+  const authReq = req as AuthenticatedRequest;
   try {
-    const jobId = req.params.id;
-    const { organization_id, id: userId } = req.user;
-    const { name, type = "photo", file_path, file_size, mime_type, description } = req.body || {};
+    const jobId = authReq.params.id;
+    const { organization_id, id: userId } = authReq.user;
+    const { name, type = "photo", file_path, file_size, mime_type, description } = authReq.body || {};
 
     if (!name || !file_path || file_size === undefined || !mime_type) {
       return res.status(400).json({
@@ -685,10 +693,11 @@ jobsRouter.post("/:id/documents", authenticate as unknown as express.RequestHand
 
 // GET /api/jobs/:id/audit
 // Returns recent audit entries for a specific job
-jobsRouter.get("/:id/audit", authenticate as unknown as express.RequestHandler, async (req: AuthenticatedRequest, res) => {
+jobsRouter.get("/:id/audit", authenticate as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
+  const authReq = req as AuthenticatedRequest;
   try {
-    const jobId = req.params.id;
-    const { organization_id } = req.user;
+    const jobId = authReq.params.id;
+    const { organization_id } = authReq.user;
 
     const { data: job, error: jobError } = await supabase
       .from("jobs")

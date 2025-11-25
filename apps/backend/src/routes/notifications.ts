@@ -12,9 +12,10 @@ notificationsRouter.post(
   "/register",
   authenticate as unknown as express.RequestHandler,
   requireFeature("notifications") as unknown as express.RequestHandler,
-  async (req: AuthenticatedRequest, res) => {
+  async (req: express.Request, res: express.Response) => {
+    const authReq = req as AuthenticatedRequest;
     try {
-      const { token, platform } = req.body || {};
+      const { token, platform } = authReq.body || {};
 
       if (!token || typeof token !== "string") {
         return res
@@ -23,8 +24,8 @@ notificationsRouter.post(
       }
 
       await registerDeviceToken({
-        userId: req.user.id,
-        organizationId: req.user.organization_id,
+        userId: authReq.user.id,
+        organizationId: authReq.user.organization_id,
         token,
         platform,
       });
@@ -41,9 +42,10 @@ notificationsRouter.delete(
   "/register",
   authenticate as unknown as express.RequestHandler,
   requireFeature("notifications") as unknown as express.RequestHandler,
-  async (req: AuthenticatedRequest, res) => {
+  async (req: express.Request, res: express.Response) => {
+    const authReq = req as AuthenticatedRequest;
     try {
-      const { token } = req.body || {};
+      const { token } = authReq.body || {};
       if (!token || typeof token !== "string") {
         return res
           .status(400)
