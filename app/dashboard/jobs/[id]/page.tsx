@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { jobsApi } from '@/lib/api'
@@ -48,13 +48,7 @@ export default function JobDetailPage() {
   const [loading, setLoading] = useState(true)
   const [updatingMitigation, setUpdatingMitigation] = useState<string | null>(null)
 
-  useEffect(() => {
-    if (jobId) {
-      loadJob()
-    }
-  }, [jobId])
-
-  const loadJob = async () => {
+  const loadJob = useCallback(async () => {
     try {
       const response = await jobsApi.get(jobId)
       setJob(response.data)
@@ -63,7 +57,13 @@ export default function JobDetailPage() {
       console.error('Failed to load job:', err)
       setLoading(false)
     }
-  }
+  }, [jobId])
+
+  useEffect(() => {
+    if (jobId) {
+      loadJob()
+    }
+  }, [jobId, loadJob])
 
   const toggleMitigation = async (itemId: string, currentDone: boolean) => {
     setUpdatingMitigation(itemId)
