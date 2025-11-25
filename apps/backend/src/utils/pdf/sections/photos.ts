@@ -5,7 +5,7 @@ import { formatTime, truncateText, categorizePhotos } from '../utils';
 import type { JobDocumentAsset } from '../types';
 
 export function renderPhotosSection(
-  doc: PDFDocument,
+  doc: PDFKit.PDFDocument,
   photos: JobDocumentAsset[],
   jobStartDate: string | null | undefined,
   pageWidth: number,

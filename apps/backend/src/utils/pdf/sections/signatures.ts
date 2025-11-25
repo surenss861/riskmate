@@ -3,7 +3,7 @@ import { STYLES } from '../styles';
 import { addSectionHeader } from '../helpers';
 
 export function renderSignaturesAndCompliance(
-  doc: PDFDocument,
+  doc: PDFKit.PDFDocument,
   pageWidth: number,
   pageHeight: number,
   margin: number,

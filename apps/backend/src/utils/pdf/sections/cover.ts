@@ -5,7 +5,7 @@ import { formatDate } from '../utils';
 import type { JobData, OrganizationData } from '../types';
 
 export function renderCoverPage(
-  doc: PDFDocument,
+  doc: PDFKit.PDFDocument,
   job: JobData,
   organization: OrganizationData,
   logoBuffer: Buffer | null,

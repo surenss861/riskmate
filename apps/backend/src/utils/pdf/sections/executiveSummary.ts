@@ -5,7 +5,7 @@ import { formatDate, getRiskColor, truncateText } from '../utils';
 import type { JobData, RiskScoreData, MitigationItem, JobDocumentAsset } from '../types';
 
 export function renderExecutiveSummary(
-  doc: PDFDocument,
+  doc: PDFKit.PDFDocument,
   job: JobData,
   riskScore: RiskScoreData | null,
   mitigationItems: MitigationItem[],

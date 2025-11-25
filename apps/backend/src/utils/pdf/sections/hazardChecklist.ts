@@ -5,7 +5,7 @@ import { formatTime, getSeverityColor, truncateText } from '../utils';
 import type { JobData, RiskScoreData } from '../types';
 
 export function renderHazardChecklist(
-  doc: PDFDocument,
+  doc: PDFKit.PDFDocument,
   job: JobData,
   riskScore: RiskScoreData | null,
   pageWidth: number,

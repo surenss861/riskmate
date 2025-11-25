@@ -5,7 +5,7 @@ import { formatTime, truncateText } from '../utils';
 import type { MitigationItem } from '../types';
 
 export function renderControlsApplied(
-  doc: PDFDocument,
+  doc: PDFKit.PDFDocument,
   mitigationItems: MitigationItem[],
   accent: string,
   pageWidth: number,

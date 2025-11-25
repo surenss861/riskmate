@@ -4,7 +4,7 @@ import { addSectionHeader, groupTimelineEvents } from '../helpers';
 import type { AuditLogEntry } from '../types';
 
 export function renderTimeline(
-  doc: PDFDocument,
+  doc: PDFKit.PDFDocument,
   auditLogs: AuditLogEntry[],
   pageWidth: number,
   pageHeight: number,
