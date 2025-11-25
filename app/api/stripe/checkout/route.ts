@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2025-10-29.clover',
-})
+function getStripeClient() {
+  const secretKey = process.env.STRIPE_SECRET_KEY
+  if (!secretKey) {
+    throw new Error('STRIPE_SECRET_KEY is not set')
+  }
+  return new Stripe(secretKey, {
+    apiVersion: '2025-10-29.clover',
+  })
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -24,6 +30,8 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
+
+    const stripe = getStripeClient()
 
     // Create Checkout Session
     const session = await stripe.checkout.sessions.create({
