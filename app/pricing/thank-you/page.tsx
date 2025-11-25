@@ -1,12 +1,12 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
 import RiskMateLogo from '@/components/RiskMateLogo'
 import { subscriptionsApi } from '@/lib/api'
 
-export default function ThankYouPage() {
+function ThankYouContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [loading, setLoading] = useState(true)
@@ -84,6 +84,23 @@ export default function ThankYouPage() {
         </motion.div>
       </div>
     </div>
+  )
+}
+
+export default function ThankYouPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-[#050505] text-white flex items-center justify-center">
+          <div className="max-w-2xl mx-auto px-6 text-center">
+            <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-[#F97316] mx-auto mb-6" />
+            <h1 className="text-4xl font-bold mb-4">Loading...</h1>
+          </div>
+        </div>
+      }
+    >
+      <ThankYouContent />
+    </Suspense>
   )
 }
 
