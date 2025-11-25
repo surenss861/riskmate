@@ -23,15 +23,16 @@ export default function MagneticButton({
   const springY = useSpring(y, { stiffness: 300, damping: 30 })
 
   useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
+    const handleMouseMove = (e: Event) => {
       if (!ref.current) return
       
+      const mouseEvent = e as MouseEvent
       const rect = ref.current.getBoundingClientRect()
       const centerX = rect.left + rect.width / 2
       const centerY = rect.top + rect.height / 2
       
-      const distanceX = e.clientX - centerX
-      const distanceY = e.clientY - centerY
+      const distanceX = mouseEvent.clientX - centerX
+      const distanceY = mouseEvent.clientY - centerY
       
       const strength = 0.3
       x.set(distanceX * strength)
