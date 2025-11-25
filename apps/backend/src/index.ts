@@ -51,7 +51,7 @@ const isAllowedOrigin = (origin?: string) => {
 
 // Middleware
 const corsOptions: cors.CorsOptionsDelegate = (req, callback) => {
-  const origin = req.header("Origin") || undefined;
+  const origin = req.headers.origin || undefined;
 
   if (isAllowedOrigin(origin)) {
     const options: cors.CorsOptions = {
