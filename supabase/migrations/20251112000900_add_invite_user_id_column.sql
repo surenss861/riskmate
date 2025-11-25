@@ -1,0 +1,3 @@
+ALTER TABLE organization_invites
+  ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id) ON DELETE CASCADE;
+

@@ -1,0 +1,277 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  overflow-x: hidden;
+}
+
+body {
+  font-family: var(--font-inter), system-ui, -apple-system, sans-serif;
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: var(--color-bg);
+  color: var(--color-text);
+  overflow-x: hidden;
+}
+
+:root {
+  --color-bg: #0A0A0A;
+  --color-surface: #121212;
+  --color-accent: #F97316;
+  --color-text: #FFFFFF;
+  --color-subtext: #A1A1A1;
+}
+/* Typography */
+.font-display {
+  font-family: var(--font-playfair), serif;
+}
+
+a,
+button {
+  cursor: pointer;
+  transition: color 0.2s ease, opacity 0.2s ease;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #000;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #333;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+/* StringTune CSS Variables & Animations - Minimal */
+
+/* Progress-based animations - subtle fade-up */
+[string-progress],
+[data-string-progress] {
+  --string-progress: 1; /* Default to visible */
+  opacity: calc(var(--string-progress));
+  transform: translateY(calc((1 - var(--string-progress)) * 20px));
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+/* Parallax elements - minimal movement */
+[string-parallax],
+[data-string-parallax] {
+  will-change: transform;
+  transition: transform 0.1s ease-out;
+}
+
+/* Show/reveal animation classes - minimal fade */
+[string-show]:not(.-inview),
+[data-string-show]:not(.-inview) {
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 0.4s ease-out, transform 0.4s ease-out;
+}
+
+[string-show].-inview,
+[data-string-show].-inview {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Lazy-loaded images */
+[string-lazy],
+[data-string-lazy] {
+  opacity: 0;
+  transition: opacity 0.4s ease-in;
+}
+
+[string-lazy].-inview,
+[data-string-lazy].-inview {
+  opacity: 1;
+}
+
+/* Minimal fade-in on load */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-in {
+  animation: fadeIn 0.6s ease-out;
+}
+
+/* Minimal button hover */
+.btn-primary {
+  transition: background-color 0.2s ease, transform 0.2s ease;
+}
+
+.btn-primary:hover {
+  background-color: var(--color-accent);
+  transform: translateY(-1px);
+}
+
+.btn-secondary {
+  transition: border-color 0.2s ease, color 0.2s ease, background-color 0.2s ease;
+  background-color: transparent;
+}
+
+.btn-secondary:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+  background-color: rgba(255, 255, 255, 0.05);
+  color: var(--color-text);
+}
+
+/* Minimal card hover */
+.card {
+  transition: all 0.2s ease;
+}
+
+.card:hover {
+  transform: translateY(-3px);
+  background-color: #1a1a1a;
+}
+
+/* Popular card accent */
+.card-popular {
+  border-bottom: 2px solid var(--color-accent);
+}
+
+/* Bento Grid Layout */
+.bento-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 1.5rem;
+}
+
+@media (max-width: 768px) {
+  .bento-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Scroll to Top Button - Minimal */
+.scroll-to-top {
+  position: fixed;
+  bottom: 2rem;
+  right: 2rem;
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  background: #121212;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.2s ease;
+  z-index: 100;
+}
+
+.scroll-to-top.visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+.scroll-to-top:hover {
+  background: #1a1a1a;
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-2px);
+}
+
+/* Removed texture/noise background - too cluttered */
+
+/* Section divider */
+.section-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+  margin: 0 auto;
+  max-width: 1200px;
+}
+
+/* Number badge - simple */
+.number-badge {
+  background: #121212;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+@keyframes glowPulse {
+  0% {
+    box-shadow: 0 0 6px rgba(249, 115, 22, 0.4), 0 0 0px rgba(249, 115, 22, 0);
+  }
+  50% {
+    box-shadow: 0 0 18px rgba(249, 115, 22, 0.7), 0 0 30px rgba(249, 115, 22, 0.15);
+  }
+  100% {
+    box-shadow: 0 0 6px rgba(249, 115, 22, 0.4), 0 0 0px rgba(249, 115, 22, 0);
+  }
+}
+
+.glow-indicator {
+  animation: glowPulse 2.8s ease-in-out infinite;
+}
+
+@keyframes sheenSweep {
+  0% {
+    transform: translateX(-120%) skewX(-20deg);
+    opacity: 0;
+  }
+  40% {
+    opacity: 0.35;
+  }
+  100% {
+    transform: translateX(140%) skewX(-20deg);
+    opacity: 0;
+  }
+}
+
+.shine-on-hover::after {
+  content: '';
+  position: absolute;
+  inset: -10%;
+  background: linear-gradient(120deg, transparent 30%, rgba(255, 255, 255, 0.25) 50%, transparent 70%);
+  opacity: 0;
+  transform: translateX(-120%) skewX(-20deg);
+  transition: opacity 0.3s ease;
+}
+
+.shine-on-hover:hover::after {
+  opacity: 1;
+  animation: sheenSweep 1.4s forwards;
+}
+
+@keyframes floatSoft {
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+.animate-soft-float {
+  animation: floatSoft 6s ease-in-out infinite;
+}

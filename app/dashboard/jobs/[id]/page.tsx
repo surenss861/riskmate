@@ -1,0 +1,311 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { useRouter, useParams } from 'next/navigation'
+import { motion } from 'framer-motion'
+import { jobsApi } from '@/lib/api'
+import ProtectedRoute from '@/components/ProtectedRoute'
+import RiskMateLogo from '@/components/RiskMateLogo'
+
+interface MitigationItem {
+  id: string
+  title: string
+  description: string
+  done: boolean
+  is_completed: boolean
+}
+
+interface Job {
+  id: string
+  client_name: string
+  client_type: string
+  job_type: string
+  location: string
+  description: string
+  status: string
+  risk_score: number | null
+  risk_level: string | null
+  risk_score_detail: {
+    overall_score: number
+    risk_level: string
+    factors: Array<{
+      code: string
+      name: string
+      severity: string
+      weight: number
+    }>
+  } | null
+  mitigation_items: MitigationItem[]
+  created_at: string
+}
+
+export default function JobDetailPage() {
+  const router = useRouter()
+  const params = useParams()
+  const jobId = params.id as string
+
+  const [job, setJob] = useState<Job | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [updatingMitigation, setUpdatingMitigation] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (jobId) {
+      loadJob()
+    }
+  }, [jobId])
+
+  const loadJob = async () => {
+    try {
+      const response = await jobsApi.get(jobId)
+      setJob(response.data)
+      setLoading(false)
+    } catch (err: any) {
+      console.error('Failed to load job:', err)
+      setLoading(false)
+    }
+  }
+
+  const toggleMitigation = async (itemId: string, currentDone: boolean) => {
+    setUpdatingMitigation(itemId)
+    try {
+      if (job) {
+        setJob({
+          ...job,
+          mitigation_items: job.mitigation_items.map((item) =>
+            item.id === itemId
+              ? { ...item, done: !currentDone, is_completed: !currentDone }
+              : item
+          ),
+        })
+      }
+    } catch (err) {
+      console.error('Failed to update mitigation:', err)
+      if (job) {
+        setJob({
+          ...job,
+          mitigation_items: job.mitigation_items.map((item) =>
+            item.id === itemId ? { ...item, done: currentDone } : item
+          ),
+        })
+      }
+    } finally {
+      setUpdatingMitigation(null)
+    }
+  }
+
+  const getScoreColor = (score: number | null) => {
+    if (score === null) return 'text-gray-400'
+    if (score >= 71) return 'text-red-400'
+    if (score >= 41) return 'text-[#F97316]'
+    return 'text-green-400'
+  }
+
+  const getScoreBg = (score: number | null) => {
+    if (score === null) return 'bg-gray-500/10 border-gray-500/30'
+    if (score >= 71) return 'bg-red-500/10 border-red-500/30'
+    if (score >= 41) return 'bg-[#F97316]/10 border-[#F97316]/30'
+    return 'bg-green-500/10 border-green-500/30'
+  }
+
+  if (loading) {
+    return (
+      <ProtectedRoute>
+        <div className="min-h-screen bg-[#0A0A0A] text-white flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#F97316] mx-auto mb-4"></div>
+            <p className="text-[#A1A1A1]">Loading job...</p>
+          </div>
+        </div>
+      </ProtectedRoute>
+    )
+  }
+
+  if (!job) {
+    return (
+      <ProtectedRoute>
+        <div className="min-h-screen bg-[#0A0A0A] text-white flex items-center justify-center">
+          <div className="text-center">
+            <p className="text-[#A1A1A1] mb-4">Job not found</p>
+            <button
+              onClick={() => router.push('/dashboard')}
+              className="px-6 py-3 bg-[#F97316] hover:bg-[#FB923C] rounded-lg text-black font-semibold transition-colors"
+            >
+              Back to Dashboard
+            </button>
+          </div>
+        </div>
+      </ProtectedRoute>
+    )
+  }
+
+  const completedCount = job.mitigation_items.filter((m) => m.done).length
+  const totalCount = job.mitigation_items.length
+
+  return (
+    <ProtectedRoute>
+      <div className="min-h-screen bg-[#0A0A0A] text-white">
+        <header className="border-b border-white/5 px-6 py-4">
+          <div className="max-w-7xl mx-auto flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <RiskMateLogo size="sm" showText={true} />
+            </div>
+            <div className="flex items-center gap-3">
+            <button
+              onClick={() => router.push('/dashboard')}
+              className="text-sm text-[#A1A1A1] hover:text-white transition-colors"
+            >
+              ← Back to Dashboard
+            </button>
+              <button
+                onClick={() => router.push(`/dashboard/jobs/${jobId}/report`)}
+                className="rounded-lg border border-white/10 px-4 py-2 text-sm text-white transition hover:border-white/25 hover:bg-white/5"
+              >
+                View Report
+              </button>
+            </div>
+          </div>
+        </header>
+
+        <div className="max-w-7xl mx-auto px-6 py-12">
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
+            <h1 className="text-5xl font-bold mb-3 font-display">{job.client_name}</h1>
+            <p className="text-xl text-[#A1A1A1] mb-1">{job.location}</p>
+            <p className="text-sm text-[#A1A1A1]/70">
+              {job.job_type} • {job.client_type} • {job.status.replace('_', ' ')}
+            </p>
+          </motion.div>
+
+          <div className="grid lg:grid-cols-3 gap-6">
+            <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }}>
+              <div className={`p-8 rounded-xl border ${getScoreBg(job.risk_score)} bg-[#121212]/80 backdrop-blur-sm`}>
+                <div className="text-center mb-8">
+                  <div className={`text-8xl font-bold mb-3 ${getScoreColor(job.risk_score)}`}>
+                    {job.risk_score ?? '—'}
+                  </div>
+                  <div className="text-2xl font-semibold mb-2 text-white">
+                    {job.risk_level ? `${job.risk_level.toUpperCase()} Risk` : 'No Score'}
+                  </div>
+                  {job.risk_score_detail && (
+                    <div className="text-sm text-[#A1A1A1]">
+                      {job.risk_score_detail.factors.length} risk factor{job.risk_score_detail.factors.length !== 1 ? 's' : ''} detected
+                    </div>
+                  )}
+                </div>
+
+                {job.risk_score_detail && job.risk_score_detail.factors.length > 0 && (
+                  <div className="space-y-3 mb-8">
+                    {job.risk_score_detail.factors.map((factor, i) => (
+                      <div key={i} className="flex items-center gap-3 text-sm">
+                        <div className="w-2 h-2 rounded-full bg-[#F97316]" />
+                        <span className="text-[#A1A1A1]">{factor.name}</span>
+                        <span className="text-xs text-[#A1A1A1]/70 ml-auto">+{factor.weight}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {totalCount > 0 && (
+                  <div className="pt-6 border-t border-white/10">
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-sm text-[#A1A1A1]">Mitigation Progress</span>
+                      <span className="text-sm font-semibold text-white">
+                        {completedCount}/{totalCount}
+                      </span>
+                    </div>
+                    <div className="w-full bg-black/40 rounded-full h-2.5 overflow-hidden">
+                      <div
+                        className="bg-[#F97316] h-2.5 rounded-full transition-all duration-500"
+                        style={{ width: `${totalCount > 0 ? (completedCount / totalCount) * 100 : 0}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+              <div className="p-8 rounded-xl border border-white/10 bg-[#121212]/80 backdrop-blur-sm h-full">
+                <h2 className="text-2xl font-semibold mb-6 text-white">Mitigation Checklist</h2>
+                {totalCount === 0 ? (
+                  <p className="text-sm text-[#A1A1A1]">
+                    No mitigation items yet. Update risk factors to generate checklist.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {job.mitigation_items.map((item) => (
+                      <label
+                        key={item.id}
+                        className="flex items-start gap-3 p-4 rounded-lg hover:bg-white/5 transition-colors cursor-pointer border border-transparent hover:border-white/5"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={item.done}
+                          onChange={() => toggleMitigation(item.id, item.done)}
+                          disabled={updatingMitigation === item.id}
+                          className="mt-1 w-5 h-5 rounded border-white/20 bg-black/40 text-[#F97316] focus:ring-[#F97316] focus:ring-2 disabled:opacity-50"
+                        />
+                        <span
+                          className={`flex-1 text-sm ${
+                            item.done ? 'line-through text-[#A1A1A1]/50' : 'text-[#A1A1A1]'
+                          }`}
+                        >
+                          {item.title}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+                {totalCount > 0 && (
+                  <p className="text-sm text-[#A1A1A1] mt-6 pt-6 border-t border-white/10">
+                    Complete all items before starting work to reduce risk.
+                  </p>
+                )}
+              </div>
+            </motion.div>
+
+            <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }}>
+              <div className="p-8 rounded-xl border border-white/10 bg-[#121212]/80 backdrop-blur-sm h-full flex flex-col">
+                <h2 className="text-2xl font-semibold mb-6 text-white">Job Details</h2>
+
+                <div className="space-y-4 mb-8 flex-1">
+                  {job.description && (
+                    <div>
+                      <div className="text-xs text-[#A1A1A1] uppercase mb-1">Description</div>
+                      <div className="text-sm text-white">{job.description}</div>
+                    </div>
+                  )}
+                  <div>
+                    <div className="text-xs text-[#A1A1A1] uppercase mb-1">Created</div>
+                    <div className="text-sm text-white">
+                      {new Date(job.created_at).toLocaleDateString()}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-[#A1A1A1] uppercase mb-1">Status</div>
+                    <div className="text-sm text-white capitalize">{job.status}</div>
+                  </div>
+                </div>
+
+                <div className="pt-6 border-t border-white/10 space-y-3">
+                  <button
+                    onClick={() => router.push(`/dashboard/jobs/${jobId}/report`)}
+                    className="w-full px-6 py-3 bg-[#F97316] hover:bg-[#FB923C] text-black rounded-lg font-semibold transition-colors"
+                  >
+                    View Live Report →
+                  </button>
+                  <button
+                    onClick={() => router.push(`/dashboard/jobs/${jobId}/edit`)}
+                    className="w-full px-6 py-3 border border-white/20 text-white rounded-lg hover:bg-white/5 transition-colors"
+                  >
+                    Edit Job Details
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        </div>
+      </div>
+    </ProtectedRoute>
+  )
+}
+

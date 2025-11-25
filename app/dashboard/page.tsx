@@ -1,0 +1,489 @@
+'use client'
+
+import { useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { createSupabaseBrowserClient } from '@/lib/supabase/client'
+import ProtectedRoute from '@/components/ProtectedRoute'
+import { motion } from 'framer-motion'
+import { jobsApi, subscriptionsApi, riskApi } from '@/lib/api'
+import UpgradeBanner from '@/components/UpgradeBanner'
+import { useAnalytics } from '@/hooks/useAnalytics'
+import { KpiGrid } from '@/components/dashboard/KpiGrid'
+import { TrendChart } from '@/components/dashboard/TrendChart'
+import EvidenceWidget from '@/components/dashboard/EvidenceWidget'
+import { DashboardNavbar } from '@/components/dashboard/DashboardNavbar'
+import Link from 'next/link'
+
+interface Job {
+  id: string
+  client_name: string
+  job_type: string
+  location: string
+  status: string
+  risk_score: number | null
+  risk_level: string | null
+  created_at: string
+}
+
+export default function DashboardPage() {
+  const router = useRouter()
+  const [user, setUser] = useState<any>(null)
+  const [userRole, setUserRole] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [jobs, setJobs] = useState<Job[]>([])
+  const [subscription, setSubscription] = useState<any>(null)
+  const [hazards, setHazards] = useState<any[]>([])
+  const [filterStatus, setFilterStatus] = useState<string>('')
+  const [filterRiskLevel, setFilterRiskLevel] = useState<string>('')
+  const [showUpgradeBanner, setShowUpgradeBanner] = useState(false)
+  const [analyticsRange, setAnalyticsRange] = useState<number>(30)
+
+  const isMember = userRole === 'member'
+  const roleLoaded = userRole !== null
+
+  const {
+    data: analytics,
+    isLoading: analyticsLoading,
+    isError: analyticsError,
+    isFeatureLocked: analyticsLocked,
+    refetch: refetchAnalytics,
+  } = useAnalytics({
+    range: `${analyticsRange}d`,
+    refreshIntervalMs: 5 * 60 * 1000,
+    enabled: roleLoaded && !isMember, // Disable analytics for members, but wait for role to load
+  })
+
+  useEffect(() => {
+    loadData()
+  }, [filterStatus, filterRiskLevel])
+
+  const loadData = async () => {
+    try {
+      const supabase = createSupabaseBrowserClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      setUser(user)
+
+      // Load user role
+      let role = 'member'
+      if (user) {
+        const { data: userRow } = await supabase
+          .from('users')
+          .select('role')
+          .eq('id', user.id)
+          .maybeSingle()
+        role = userRow?.role ?? 'member'
+        setUserRole(role)
+      }
+
+      // Load jobs
+      const jobsResponse = await jobsApi.list({
+        status: filterStatus || undefined,
+        risk_level: filterRiskLevel || undefined,
+        limit: 20,
+      })
+      setJobs(jobsResponse.data)
+
+      // Load subscription and hazards (only for owners/admins)
+      if (role !== 'member') {
+      try {
+        const subResponse = await subscriptionsApi.get()
+        setSubscription(subResponse.data)
+      } catch (err) {
+        // Subscription might not exist yet
+      }
+
+      try {
+        const hazardsResponse = await riskApi.getSummary()
+        setHazards(hazardsResponse.hazards || [])
+      } catch (err) {
+        // Ignore errors
+        }
+      }
+
+      setLoading(false)
+    } catch (err: any) {
+      console.error('Failed to load dashboard data:', err)
+      if (err.message?.includes('JOB_LIMIT')) {
+        setShowUpgradeBanner(true)
+      }
+      setLoading(false)
+    }
+  }
+
+  const handleLogout = async () => {
+    const supabase = createSupabaseBrowserClient()
+    await supabase.auth.signOut()
+    router.push('/login')
+  }
+
+  const getRiskBadgeColor = (riskLevel: string | null) => {
+    switch (riskLevel) {
+      case 'critical':
+        return 'bg-red-500/20 text-red-400 border-red-500/30'
+      case 'high':
+        return 'bg-orange-500/20 text-orange-400 border-orange-500/30'
+      case 'medium':
+        return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
+      case 'low':
+        return 'bg-green-500/20 text-green-400 border-green-500/30'
+      default:
+        return 'bg-gray-500/20 text-gray-400 border-gray-500/30'
+    }
+  }
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'completed':
+        return 'text-green-400'
+      case 'in_progress':
+        return 'text-blue-400'
+      case 'cancelled':
+        return 'text-red-400'
+      default:
+        return 'text-[#A1A1A1]'
+    }
+  }
+
+  const jobsWithEvidence = analytics.jobs_with_evidence
+  const totalJobsForRange =
+    analytics.jobs_with_evidence + analytics.jobs_without_evidence
+
+  const kpiItems = useMemo(
+    () => [
+      {
+        id: 'compliance',
+        title: 'Compliance Rate',
+        value: Math.round(analytics.completion_rate * 100),
+        suffix: '%',
+        description: 'Mitigation items marked complete in this window.',
+        highlightColor:
+          analytics.completion_rate >= 0.9
+            ? '#29E673'
+            : analytics.completion_rate >= 0.7
+            ? '#FACC15'
+            : '#FB7185',
+        trend:
+          analytics.completion_rate >= 0.9
+            ? 'up'
+            : analytics.completion_rate <= 0.5
+            ? 'down'
+            : 'flat',
+        trendLabel: analyticsError ? 'Using cached data' : 'Live field data',
+        isLoading: analyticsLoading,
+      },
+      {
+        id: 'close-time',
+        title: 'Avg. Time to Close',
+        value: Number(analytics.avg_time_to_close_hours.toFixed(1)),
+        suffix: 'h',
+        description: 'From mitigation created → completed.',
+        highlightColor: '#38BDF8',
+        trend: analytics.avg_time_to_close_hours <= 24 ? 'up' : 'down',
+        trendLabel:
+          analytics.avg_time_to_close_hours <= 24
+            ? 'Under 24h target'
+            : 'Investigate slow mitigations',
+        isLoading: analyticsLoading,
+      },
+      {
+        id: 'high-risk',
+        title: 'High-Risk Jobs',
+        value: analytics.high_risk_jobs,
+        description: 'Jobs scoring above 75 risk.',
+        highlightColor: '#FB7185',
+        trend: analytics.high_risk_jobs === 0 ? 'up' : 'down',
+        trendLabel:
+          analytics.high_risk_jobs === 0
+            ? 'All jobs in safe zone'
+            : 'Needs immediate mitigation',
+        isLoading: analyticsLoading,
+      },
+      {
+        id: 'evidence-files',
+        title: 'Evidence Files',
+        value: analytics.evidence_count,
+        description: 'Photos captured within the selected window.',
+        highlightColor: '#F97316',
+        trend: analytics.evidence_count > 0 ? 'up' : 'flat',
+        trendLabel:
+          analytics.evidence_count > 0
+            ? 'Evidence trail building'
+            : 'Add site photos',
+        isLoading: analyticsLoading,
+      },
+    ],
+    [
+      analytics.completion_rate,
+      analytics.avg_time_to_close_hours,
+      analytics.high_risk_jobs,
+      analytics.evidence_count,
+      analyticsError,
+      analyticsLoading,
+    ]
+  )
+
+  const handleRangeChange = (nextRange: number) => {
+    if (nextRange === analyticsRange) return
+    setAnalyticsRange(nextRange)
+    refetchAnalytics()
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#0A0A0A] text-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#F97316] mx-auto mb-4"></div>
+          <p className="text-[#A1A1A1]">Loading...</p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <ProtectedRoute>
+      <div className="relative min-h-screen overflow-hidden bg-[#050505] text-white">
+        {/* Ambient Gradient Backdrop */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 -z-10"
+        >
+          <div className="absolute -top-40 left-1/2 h-[620px] w-[620px] -translate-x-1/2 rounded-full bg-[#F97316]/10 blur-[180px]" />
+          <div className="absolute left-[-20%] top-1/3 h-[420px] w-[420px] rounded-full bg-[#38BDF8]/10 blur-[160px]" />
+          <div className="absolute right-[-10%] bottom-[-15%] h-[520px] w-[520px] rounded-full bg-[#A855F7]/10 blur-[200px]" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.06),_transparent_55%)]" />
+            </div>
+
+        <DashboardNavbar email={user?.email} onLogout={handleLogout} />
+
+        {/* Dashboard Content */}
+        <div className="relative mx-auto max-w-7xl px-6 py-14">
+          <motion.div
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.45 }}
+            className="relative mb-12 flex flex-wrap items-center justify-between gap-6 overflow-hidden rounded-[36px] border border-white/10 bg-black/35 px-10 py-12 shadow-[0_40px_140px_rgba(10,10,25,0.7)] backdrop-blur-2xl"
+          >
+            <span className="pointer-events-none absolute -left-24 top-0 h-64 w-64 rounded-full bg-[#F97316]/20 blur-[120px]" />
+            <span className="pointer-events-none absolute -right-32 bottom-[-60px] h-72 w-72 rounded-full bg-[#38BDF8]/18 blur-[160px]" />
+            <div className="relative max-w-xl">
+              <p className="text-xs uppercase tracking-[0.42em] text-white/50">
+                Control Center
+              </p>
+              <h1 className="mt-3 font-display text-4xl font-bold text-white md:text-5xl">
+                Operations Dashboard
+              </h1>
+              <div className="mt-4 h-[2px] w-24 bg-gradient-to-r from-[#F97316] via-[#FFC857] to-transparent animate-soft-float" />
+              <p className="mt-4 text-base text-white/65">
+                Document every job with hazard checklists, risk assessments, photos, and signatures. Everything timestamped and ready for clients, insurers, and auditors.
+              </p>
+              <div className="mt-6 flex flex-wrap gap-3 text-sm text-white/50">
+                <span className="rounded-full border border-white/15 px-3 py-1 backdrop-blur-sm">
+                  Audit-ready reports
+                </span>
+                <span className="rounded-full border border-white/15 px-3 py-1 backdrop-blur-sm">
+                  Timestamped evidence
+                </span>
+                <span className="rounded-full border border-white/15 px-3 py-1 backdrop-blur-sm">
+                  Compliance trail
+                </span>
+              </div>
+            </div>
+            <div className="relative flex flex-col items-end gap-3">
+            <button
+              onClick={() => router.push('/dashboard/jobs/new')}
+                className="group relative flex items-center gap-3 overflow-hidden rounded-2xl border border-transparent bg-gradient-to-r from-[#F97316] via-[#FF8A3D] to-[#FFD166] px-7 py-3 text-base font-semibold text-black shadow-[0_18px_40px_rgba(249,115,22,0.35)] transition-transform duration-300 hover:scale-[1.03]"
+            >
+                <span className="relative z-10">+ New Job</span>
+                <span className="absolute inset-0 bg-white/20 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+            </button>
+              <Link
+                href="/dashboard/jobs"
+                className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-5 py-2 text-sm font-medium text-white/80 transition hover:border-white/25 hover:bg-white/10"
+              >
+                View job roster →
+              </Link>
+          </div>
+          </motion.div>
+
+          {!isMember && showUpgradeBanner && (
+            <UpgradeBanner
+              message="You've reached your Starter plan limit. Upgrade to Pro for unlimited jobs."
+              onDismiss={() => setShowUpgradeBanner(false)}
+            />
+          )}
+
+          {/* KPI Tiles - Only for owners/admins */}
+          {!isMember && (analyticsLocked ? (
+            <motion.div
+              initial={{ opacity: 0, y: 18 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1, duration: 0.45 }}
+              className="mb-12 overflow-hidden rounded-[32px] border border-white/12 bg-black/35 px-10 py-12 text-center shadow-[0_34px_120px_rgba(10,10,25,0.6)] backdrop-blur-2xl"
+            >
+              <p className="text-xs uppercase tracking-[0.36em] text-white/45">Analytics</p>
+              <h2 className="mt-3 text-3xl font-semibold text-white">Upgrade to unlock live analytics</h2>
+              <p className="mt-4 text-sm text-white/65 max-w-2xl mx-auto">
+                The Business plan includes real-time mitigation metrics, evidence reporting, and compliance insights. Upgrade your plan to see live analytics here.
+              </p>
+              <div className="mt-6 flex flex-col gap-3 items-center">
+                <button
+                  onClick={() => router.push('/pricing#business')}
+                  className="group relative overflow-hidden rounded-2xl border border-transparent bg-gradient-to-r from-[#FACC15] via-[#FFD166] to-[#F97316] px-6 py-3 text-sm font-semibold text-black shadow-[0_20px_44px_rgba(249,181,22,0.35)] transition-transform duration-300 hover:scale-[1.03]"
+                >
+                  <span className="relative z-10">Explore Business Plan</span>
+                  <span className="absolute inset-0 bg-white/20 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+                </button>
+                <button
+                  onClick={() => router.push('/pricing')}
+                  className="rounded-2xl border border-white/15 px-6 py-3 text-sm font-medium text-white/80 transition hover:border-white/25 hover:bg-white/10"
+                >
+                  View all plans →
+                </button>
+              </div>
+            </motion.div>
+          ) : (
+            <motion.div
+              initial={{ opacity: 0, y: 18 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1, duration: 0.45 }}
+              className="mb-10 space-y-6"
+            >
+            <KpiGrid items={kpiItems} />
+            <div className="grid gap-6 xl:grid-cols-[2fr_1fr]">
+              <TrendChart
+                data={analytics.trend}
+                rangeDays={analyticsRange}
+                onRangeChange={handleRangeChange}
+                isLoading={analyticsLoading}
+              />
+              <EvidenceWidget
+                totalJobs={totalJobsForRange}
+                jobsWithEvidence={jobsWithEvidence}
+                evidenceCount={analytics.evidence_count}
+                avgTimeToFirstEvidenceHours={analytics.avg_time_to_first_evidence_hours}
+                isLoading={analyticsLoading}
+              />
+            </div>
+            </motion.div>
+          ))}
+
+          {/* Top Hazards - Only for owners/admins */}
+          {!isMember && hazards.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 18 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.12, duration: 0.45 }}
+              className="relative mb-10 overflow-hidden rounded-3xl border border-white/10 bg-black/40 p-7 shadow-[0_26px_90px_rgba(8,8,24,0.5)] backdrop-blur-2xl"
+            >
+              <span className="pointer-events-none absolute -right-28 top-[-90px] h-56 w-56 rounded-full bg-[#F97316]/16 blur-[140px]" />
+              <h2 className="text-xl font-semibold text-white">Top Hazards (Last 30 Days)</h2>
+              <p className="mt-1 text-sm text-white/60">
+                The most frequent risk signatures across your active projects.
+              </p>
+              <div className="mt-5 flex flex-wrap gap-3">
+                {hazards.map((hazard) => (
+                  <div
+                    key={hazard.code}
+                    className="rounded-2xl border border-white/12 bg-white/5 px-4 py-2 text-sm text-white transition hover:border-white/25 hover:bg-white/10"
+                  >
+                    <span className="font-medium">{hazard.name}</span>
+                    <span className="ml-2 text-xs text-white/55">({hazard.count}x)</span>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          )}
+
+          {/* Job List */}
+          <motion.div
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.18, duration: 0.45 }}
+            className="overflow-hidden rounded-3xl border border-white/10 bg-black/45 shadow-[0_32px_110px_rgba(8,8,22,0.55)] backdrop-blur-2xl"
+          >
+            <div className="flex items-center justify-between border-b border-white/10 px-6 py-6">
+              <h2 className="text-2xl font-semibold text-white">Jobs</h2>
+              <div className="flex gap-3">
+                <select
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value)}
+                  className="rounded-xl border border-white/10 bg-black/40 px-4 py-2 text-sm text-white transition focus:outline-none focus:ring-2 focus:ring-[#F97316]/60"
+                >
+                  <option value="">All Status</option>
+                  <option value="draft">Draft</option>
+                  <option value="pending">Pending</option>
+                  <option value="in_progress">In Progress</option>
+                  <option value="completed">Completed</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
+                <select
+                  value={filterRiskLevel}
+                  onChange={(e) => setFilterRiskLevel(e.target.value)}
+                  className="rounded-xl border border-white/10 bg-black/40 px-4 py-2 text-sm text-white transition focus:outline-none focus:ring-2 focus:ring-[#F97316]/60"
+                >
+                  <option value="">All Risk Levels</option>
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                  <option value="critical">Critical</option>
+                </select>
+              </div>
+            </div>
+
+            {jobs.length === 0 ? (
+              <div className="px-12 py-16 text-center">
+                <p className="mb-4 text-white/60">No jobs yet</p>
+                <button
+                  onClick={() => router.push('/dashboard/jobs/new')}
+                  className="rounded-2xl bg-[#F97316] px-6 py-3 font-semibold text-black transition-all hover:bg-[#FB923C]"
+                >
+                  Create Your First Job
+                </button>
+              </div>
+            ) : (
+              <div className="divide-y divide-white/5/50">
+                {jobs.map((job, index) => (
+                  <motion.div
+                    key={job.id}
+                    onClick={() => router.push(`/dashboard/jobs/${job.id}`)}
+                    initial={{ opacity: 0, y: 18 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.05 * index }}
+                    whileHover={{ backgroundColor: 'rgba(255,255,255,0.06)', scale: 1.01 }}
+                    className="group cursor-pointer px-6 py-5 transition duration-200"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-4 mb-2">
+                          <h3 className="text-lg font-semibold">{job.client_name}</h3>
+                          <span className={`text-xs px-2 py-1 rounded border ${getRiskBadgeColor(job.risk_level)}`}>
+                            {job.risk_level?.toUpperCase() || 'NO SCORE'}
+                          </span>
+                          <span className={`text-xs ${getStatusColor(job.status)}`}>
+                            {job.status.replace('_', ' ').toUpperCase()}
+                          </span>
+                        </div>
+                        <div className="text-sm text-[#A1A1A1] mb-1">
+                          {job.job_type} • {job.location}
+                        </div>
+                        <div className="text-xs text-[#A1A1A1]">
+                          Created {new Date(job.created_at).toLocaleDateString()}
+                        </div>
+                      </div>
+                      {job.risk_score !== null && (
+                        <div className="text-right">
+                          <div className="text-3xl font-bold">{job.risk_score}</div>
+                          <div className="text-xs text-white/50">Risk Score</div>
+                        </div>
+                      )}
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            )}
+          </motion.div>
+        </div>
+      </div>
+    </ProtectedRoute>
+  )
+}
