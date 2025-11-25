@@ -42,7 +42,9 @@ export function TrendChart({
   onRangeChange,
   isLoading = false,
 }: TrendChartProps) {
-  const paddedData = data.length > 0 ? data : [{ date: new Date().toISOString().slice(0, 10), completion_rate: 0 }];
+  const paddedData = useMemo(() => {
+    return data.length > 0 ? data : [{ date: new Date().toISOString().slice(0, 10), completion_rate: 0 }];
+  }, [data]);
 
   const points = useMemo(() => {
     if (!paddedData.length) return [];

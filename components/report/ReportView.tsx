@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Image from 'next/image'
 import { JobReportData } from '@/types/report'
 import { ImageModal } from './ImageModal'
 
@@ -225,10 +226,13 @@ export function ReportView({
               >
                 {photo.url ? (
                   <div className="relative w-full h-48 overflow-hidden group">
-                    <img
+                    <Image
                       src={photo.url}
                       alt={photo.description || photo.name}
+                      width={400}
+                      height={192}
                       className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300"
+                      unoptimized
                     />
                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
                       <div className="opacity-0 group-hover:opacity-100 transition-opacity">

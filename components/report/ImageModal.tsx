@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
+import Image from 'next/image'
 
 interface ImageModalProps {
   isOpen: boolean
@@ -60,11 +61,14 @@ export function ImageModal({ isOpen, imageUrl, imageAlt, onClose }: ImageModalPr
             />
           </svg>
         </button>
-        <img
+        <Image
           src={imageUrl}
           alt={imageAlt || 'Evidence photo'}
+          width={1920}
+          height={1080}
           className="max-w-full max-h-full object-contain rounded-lg"
           onClick={(e) => e.stopPropagation()}
+          unoptimized
         />
       </div>
     </div>
