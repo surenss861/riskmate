@@ -6,14 +6,14 @@ import { recordAuditLog } from "../middleware/audit";
 
 export const legalRouter = express.Router();
 
-legalRouter.get("/version", authenticate, async (_req: AuthenticatedRequest, res) => {
+legalRouter.get("/version", authenticate as unknown as express.RequestHandler, async (_req: AuthenticatedRequest, res) => {
   res.json({
     version: LEGAL_VERSION,
     updated_at: LEGAL_UPDATED_AT,
   });
 });
 
-legalRouter.get("/status", authenticate, async (req: AuthenticatedRequest, res) => {
+legalRouter.get("/status", authenticate as unknown as express.RequestHandler, async (req: AuthenticatedRequest, res) => {
   res.json({
     accepted: req.user.legalAccepted,
     accepted_at: req.user.legalAcceptedAt ?? null,
@@ -21,7 +21,7 @@ legalRouter.get("/status", authenticate, async (req: AuthenticatedRequest, res) 
   });
 });
 
-legalRouter.post("/accept", authenticate, async (req: AuthenticatedRequest, res) => {
+legalRouter.post("/accept", authenticate as unknown as express.RequestHandler, async (req: AuthenticatedRequest, res) => {
   try {
     const { id: userId, organization_id } = req.user;
     const ipAddress = getClientIp(req.headers) || req.ip;

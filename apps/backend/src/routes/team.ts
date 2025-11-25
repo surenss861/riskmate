@@ -19,7 +19,7 @@ function generateTempPassword(length = 12) {
   return password;
 }
 
-teamRouter.use(authenticate);
+teamRouter.use(authenticate as unknown as express.RequestHandler);
 
 teamRouter.get("/", async (req: AuthenticatedRequest, res) => {
   try {

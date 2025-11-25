@@ -10,8 +10,8 @@ export const notificationsRouter = express.Router();
 
 notificationsRouter.post(
   "/register",
-  authenticate,
-  requireFeature("notifications"),
+  authenticate as unknown as express.RequestHandler,
+  requireFeature("notifications") as unknown as express.RequestHandler,
   async (req: AuthenticatedRequest, res) => {
     try {
       const { token, platform } = req.body || {};
@@ -39,8 +39,8 @@ notificationsRouter.post(
 
 notificationsRouter.delete(
   "/register",
-  authenticate,
-  requireFeature("notifications"),
+  authenticate as unknown as express.RequestHandler,
+  requireFeature("notifications") as unknown as express.RequestHandler,
   async (req: AuthenticatedRequest, res) => {
     try {
       const { token } = req.body || {};

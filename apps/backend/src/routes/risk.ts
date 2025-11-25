@@ -6,7 +6,7 @@ export const riskRouter = express.Router();
 
 // GET /api/risk/factors
 // Returns all available risk factors for job creation
-riskRouter.get("/factors", authenticate, async (req: AuthenticatedRequest, res) => {
+riskRouter.get("/factors", authenticate as unknown as express.RequestHandler, async (req: AuthenticatedRequest, res) => {
   try {
     const { data: factors, error } = await supabase
       .from("risk_factors")
@@ -26,7 +26,7 @@ riskRouter.get("/factors", authenticate, async (req: AuthenticatedRequest, res) 
 
 // GET /api/risk/summary
 // Returns top 3 hazards for organization in last 30 days
-riskRouter.get("/summary", authenticate, async (req: AuthenticatedRequest, res) => {
+riskRouter.get("/summary", authenticate as unknown as express.RequestHandler, async (req: AuthenticatedRequest, res) => {
   try {
     const { organization_id } = req.user;
 

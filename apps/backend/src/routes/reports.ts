@@ -105,8 +105,7 @@ async function ensureBucketExists(bucketId: string) {
 
 // POST /api/reports/generate/:jobId
 // Generates a Risk Snapshot PDF report for a job
-// @ts-expect-error - authenticate middleware adds user property to req
-reportsRouter.post("/generate/:jobId", authenticate, (async (req, res) => {
+reportsRouter.post("/generate/:jobId", authenticate as unknown as RequestHandler, (async (req, res) => {
   const authReq = req as AuthenticatedRequest;
   try {
     const { organization_id, id: userId } = authReq.user;
@@ -354,8 +353,7 @@ reportsRouter.get("/public/:token", async (req, res) => {
 
 // GET /api/reports/:jobId
 // Returns the latest report for a job
-// @ts-expect-error - authenticate middleware adds user property to req
-reportsRouter.get("/:jobId", authenticate, (async (req, res) => {
+reportsRouter.get("/:jobId", authenticate as unknown as RequestHandler, (async (req, res) => {
   const authReq = req as AuthenticatedRequest;
   try {
     const { organization_id } = authReq.user;
@@ -417,8 +415,7 @@ reportsRouter.get("/:jobId", authenticate, (async (req, res) => {
 
 // POST /api/reports/permit-pack/:jobId
 // Bundles selected documents into a downloadable zip file
-// @ts-expect-error - authenticate middleware adds user property to req
-reportsRouter.post("/permit-pack/:jobId", authenticate, requireFeature("permit_pack"), (async (req, res) => {
+reportsRouter.post("/permit-pack/:jobId", authenticate as unknown as RequestHandler, requireFeature("permit_pack") as unknown as RequestHandler, (async (req, res) => {
   const authReq = req as AuthenticatedRequest;
   try {
     const { organization_id } = authReq.user;

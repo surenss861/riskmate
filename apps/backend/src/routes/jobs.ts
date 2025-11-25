@@ -11,7 +11,7 @@ export const jobsRouter = express.Router();
 
 // GET /api/jobs
 // Returns paginated list of jobs for organization
-jobsRouter.get("/", authenticate, async (req: AuthenticatedRequest, res) => {
+jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (req: AuthenticatedRequest, res) => {
   try {
     const { organization_id } = req.user;
     const { page = 1, limit = 20, status, risk_level } = req.query;
@@ -74,7 +74,7 @@ jobsRouter.get("/", authenticate, async (req: AuthenticatedRequest, res) => {
 
 // GET /api/jobs/:id
 // Returns full job details with risk score and mitigation items
-jobsRouter.get("/:id", authenticate, async (req: AuthenticatedRequest, res) => {
+jobsRouter.get("/:id", authenticate as unknown as express.RequestHandler, async (req: AuthenticatedRequest, res) => {
   try {
     const jobId = req.params.id;
     const { organization_id } = req.user;
@@ -120,7 +120,7 @@ jobsRouter.get("/:id", authenticate, async (req: AuthenticatedRequest, res) => {
 
 // POST /api/jobs
 // Creates a new job and calculates risk score
-jobsRouter.post("/", authenticate, enforceJobLimit, async (req: AuthenticatedRequest, res) => {
+jobsRouter.post("/", authenticate as unknown as express.RequestHandler, enforceJobLimit as unknown as express.RequestHandler, async (req: AuthenticatedRequest, res) => {
   try {
     const { organization_id, id: userId } = req.user;
     const {
@@ -280,7 +280,7 @@ jobsRouter.post("/", authenticate, enforceJobLimit, async (req: AuthenticatedReq
 
 // PATCH /api/jobs/:id
 // Updates a job and optionally recalculates risk score
-jobsRouter.patch("/:id", authenticate, async (req: AuthenticatedRequest, res) => {
+jobsRouter.patch("/:id", authenticate as unknown as express.RequestHandler, async (req: AuthenticatedRequest, res) => {
   try {
     const jobId = req.params.id;
     const { organization_id, id: userId } = req.user;
@@ -400,7 +400,7 @@ jobsRouter.patch("/:id", authenticate, async (req: AuthenticatedRequest, res) =>
 });
 
 // PATCH /api/jobs/:id/mitigations/:mitigationId
-jobsRouter.patch("/:id/mitigations/:mitigationId", authenticate, async (req: AuthenticatedRequest, res) => {
+jobsRouter.patch("/:id/mitigations/:mitigationId", authenticate as unknown as express.RequestHandler, async (req: AuthenticatedRequest, res) => {
   try {
     const jobId = req.params.id;
     const mitigationId = req.params.mitigationId;
@@ -496,7 +496,7 @@ const invalidateJobReportCache = (organizationId: string, jobId: string) => {
   jobReportCache.delete(`${organizationId}:${jobId}`);
 };
 
-jobsRouter.get("/:id/full", authenticate, async (req: AuthenticatedRequest, res) => {
+jobsRouter.get("/:id/full", authenticate as unknown as express.RequestHandler, async (req: AuthenticatedRequest, res) => {
   try {
     const jobId = req.params.id;
     const { organization_id } = req.user;
@@ -519,7 +519,7 @@ jobsRouter.get("/:id/full", authenticate, async (req: AuthenticatedRequest, res)
 
 // GET /api/jobs/:id/documents
 // Returns all uploaded documents for a specific job
-jobsRouter.get("/:id/documents", authenticate, async (req: AuthenticatedRequest, res) => {
+jobsRouter.get("/:id/documents", authenticate as unknown as express.RequestHandler, async (req: AuthenticatedRequest, res) => {
   try {
     const jobId = req.params.id;
     const { organization_id } = req.user;
@@ -592,7 +592,7 @@ jobsRouter.get("/:id/documents", authenticate, async (req: AuthenticatedRequest,
 
 // POST /api/jobs/:id/documents
 // Persists document metadata after upload to storage
-jobsRouter.post("/:id/documents", authenticate, async (req: AuthenticatedRequest, res) => {
+jobsRouter.post("/:id/documents", authenticate as unknown as express.RequestHandler, async (req: AuthenticatedRequest, res) => {
   try {
     const jobId = req.params.id;
     const { organization_id, id: userId } = req.user;
@@ -685,7 +685,7 @@ jobsRouter.post("/:id/documents", authenticate, async (req: AuthenticatedRequest
 
 // GET /api/jobs/:id/audit
 // Returns recent audit entries for a specific job
-jobsRouter.get("/:id/audit", authenticate, async (req: AuthenticatedRequest, res) => {
+jobsRouter.get("/:id/audit", authenticate as unknown as express.RequestHandler, async (req: AuthenticatedRequest, res) => {
   try {
     const jobId = req.params.id;
     const { organization_id } = req.user;
