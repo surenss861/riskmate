@@ -2,77 +2,49 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function middleware(request: NextRequest) {
-  // Always ensure we return a valid response, even if everything fails
-  try {
-    let response = NextResponse.next({
-      request: {
-        headers: request.headers,
-      },
-    })
+  // Check if Supabase environment variables are set
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-    // Check if Supabase environment variables are set
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-
-    if (!supabaseUrl || !supabaseAnonKey) {
-      // If env vars are missing, just return the response without auth handling
-      return response
-    }
-
-    try {
-      const supabase = createServerClient(
-        supabaseUrl,
-        supabaseAnonKey,
-        {
-          cookies: {
-            get(name: string) {
-              try {
-                return request.cookies.get(name)?.value
-              } catch {
-                return undefined
-              }
-            },
-            set(name: string, value: string, options: any) {
-              try {
-                response.cookies.set(name, value, options)
-              } catch {
-                // Silently fail cookie setting
-              }
-            },
-            remove(name: string, options: any) {
-              try {
-                response.cookies.set(name, '', { ...options, maxAge: 0 })
-              } catch {
-                // Silently fail cookie removal
-              }
-            },
-          },
-        }
-      )
-
-      // Supabase session handling - refresh session if needed
-      try {
-        await supabase.auth.getUser()
-        // User data is available but we don't need to do anything with it here
-        // The middleware just refreshes the session
-      } catch (authError) {
-        // If auth fails, continue without blocking the request
-        // Don't log in production to avoid noise
-      }
-    } catch (error) {
-      // If Supabase client creation fails, continue without blocking
-      // Return the response we already created
-    }
-
-    return response
-  } catch (error) {
-    // Ultimate fallback - if everything fails, return a basic response
-    return NextResponse.next({
-      request: {
-        headers: request.headers,
-      },
-    })
+  // If env vars are missing, skip auth handling
+  if (!supabaseUrl || !supabaseAnonKey) {
+    return NextResponse.next()
   }
+
+  // Create response first
+  let response = NextResponse.next({
+    request: {
+      headers: request.headers,
+    },
+  })
+
+  try {
+    const supabase = createServerClient(
+      supabaseUrl,
+      supabaseAnonKey,
+      {
+        cookies: {
+          get(name: string) {
+            return request.cookies.get(name)?.value
+          },
+          set(name: string, value: string, options: any) {
+            response.cookies.set(name, value, options)
+          },
+          remove(name: string, options: any) {
+            response.cookies.set(name, '', { ...options, maxAge: 0 })
+          },
+        },
+      }
+    )
+
+    // Refresh session if needed
+    await supabase.auth.getUser()
+  } catch (error) {
+    // If anything fails, return the response anyway
+    // This ensures the request continues even if auth fails
+  }
+
+  return response
 }
 
 export const config = {
