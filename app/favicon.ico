@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="RiskMate logo">
+  <defs>
+    <linearGradient id="rmGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#F97316"/>
+      <stop offset="50%" stop-color="#FB923C"/>
+      <stop offset="100%" stop-color="#FACC15"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="16" fill="#050505"/>
+  <path
+    d="M22 16h13c8 0 14 5.4 14 13.6 0 6.2-3.6 11.2-9.4 12.8L41 52H32l-1.8-8H22V16Zm13 18.2c2.6 0 4.3-1.7 4.3-4.4S37.6 25.6 35 25.6H31v8.6h4Z"
+    fill="url(#rmGradient)"/>
+</svg>
+
