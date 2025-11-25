@@ -178,12 +178,13 @@ export default function DashboardPage() {
             : analyticsData.completion_rate >= 0.7
             ? '#FACC15'
             : '#FB7185',
-        trend:
+        trend: (
           analyticsData.completion_rate >= 0.9
             ? 'up'
             : analyticsData.completion_rate <= 0.5
             ? 'down'
-            : 'flat',
+            : 'flat'
+        ) as 'up' | 'down' | 'flat',
         trendLabel: analyticsError ? 'Using cached data' : 'Live field data',
         isLoading: analyticsLoading,
       },
@@ -194,7 +195,7 @@ export default function DashboardPage() {
         suffix: 'h',
         description: 'From mitigation created → completed.',
         highlightColor: '#38BDF8',
-        trend: analyticsData.avg_time_to_close_hours <= 24 ? 'up' : 'down',
+        trend: (analyticsData.avg_time_to_close_hours <= 24 ? 'up' : 'down') as 'up' | 'down',
         trendLabel:
           analyticsData.avg_time_to_close_hours <= 24
             ? 'Under 24h target'
@@ -207,7 +208,7 @@ export default function DashboardPage() {
         value: analyticsData.high_risk_jobs,
         description: 'Jobs scoring above 75 risk.',
         highlightColor: '#FB7185',
-        trend: analyticsData.high_risk_jobs === 0 ? 'up' : 'down',
+        trend: (analyticsData.high_risk_jobs === 0 ? 'up' : 'down') as 'up' | 'down',
         trendLabel:
           analyticsData.high_risk_jobs === 0
             ? 'All jobs in safe zone'
@@ -220,7 +221,7 @@ export default function DashboardPage() {
         value: analyticsData.evidence_count,
         description: 'Photos captured within the selected window.',
         highlightColor: '#F97316',
-        trend: analyticsData.evidence_count > 0 ? 'up' : 'flat',
+        trend: (analyticsData.evidence_count > 0 ? 'up' : 'flat') as 'up' | 'flat',
         trendLabel:
           analyticsData.evidence_count > 0
             ? 'Evidence trail building'
