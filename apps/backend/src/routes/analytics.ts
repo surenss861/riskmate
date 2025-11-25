@@ -41,8 +41,8 @@ const toDateKey = (value: string) => value.slice(0, 10);
 
 analyticsRouter.get(
   "/mitigations",
-  authenticate,
-  requireFeature("analytics"),
+  authenticate as express.RequestHandler,
+  requireFeature("analytics") as express.RequestHandler,
   async (req: AuthenticatedRequest, res) => {
     try {
       const orgId =
