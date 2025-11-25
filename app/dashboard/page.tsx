@@ -144,28 +144,44 @@ export default function DashboardPage() {
     }
   }
 
-  const jobsWithEvidence = analytics.jobs_with_evidence
+  // Default analytics object to prevent null errors
+  const defaultAnalytics = {
+    jobs_with_evidence: 0,
+    jobs_without_evidence: 0,
+    completion_rate: 0,
+    avg_time_to_close_hours: 0,
+    high_risk_jobs: 0,
+    total_jobs: 0,
+    evidence_count: 0,
+    avg_time_to_first_evidence_hours: 0,
+    trend_data: [],
+    trend: [],
+  }
+
+  const analyticsData = analytics || defaultAnalytics
+
+  const jobsWithEvidence = analyticsData.jobs_with_evidence
   const totalJobsForRange =
-    analytics.jobs_with_evidence + analytics.jobs_without_evidence
+    analyticsData.jobs_with_evidence + analyticsData.jobs_without_evidence
 
   const kpiItems = useMemo(
     () => [
       {
         id: 'compliance',
         title: 'Compliance Rate',
-        value: Math.round(analytics.completion_rate * 100),
+        value: Math.round(analyticsData.completion_rate * 100),
         suffix: '%',
         description: 'Mitigation items marked complete in this window.',
         highlightColor:
-          analytics.completion_rate >= 0.9
+          analyticsData.completion_rate >= 0.9
             ? '#29E673'
-            : analytics.completion_rate >= 0.7
+            : analyticsData.completion_rate >= 0.7
             ? '#FACC15'
             : '#FB7185',
         trend:
-          analytics.completion_rate >= 0.9
+          analyticsData.completion_rate >= 0.9
             ? 'up'
-            : analytics.completion_rate <= 0.5
+            : analyticsData.completion_rate <= 0.5
             ? 'down'
             : 'flat',
         trendLabel: analyticsError ? 'Using cached data' : 'Live field data',
@@ -174,13 +190,13 @@ export default function DashboardPage() {
       {
         id: 'close-time',
         title: 'Avg. Time to Close',
-        value: Number(analytics.avg_time_to_close_hours.toFixed(1)),
+        value: Number(analyticsData.avg_time_to_close_hours.toFixed(1)),
         suffix: 'h',
         description: 'From mitigation created → completed.',
         highlightColor: '#38BDF8',
-        trend: analytics.avg_time_to_close_hours <= 24 ? 'up' : 'down',
+        trend: analyticsData.avg_time_to_close_hours <= 24 ? 'up' : 'down',
         trendLabel:
-          analytics.avg_time_to_close_hours <= 24
+          analyticsData.avg_time_to_close_hours <= 24
             ? 'Under 24h target'
             : 'Investigate slow mitigations',
         isLoading: analyticsLoading,
@@ -188,12 +204,12 @@ export default function DashboardPage() {
       {
         id: 'high-risk',
         title: 'High-Risk Jobs',
-        value: analytics.high_risk_jobs,
+        value: analyticsData.high_risk_jobs,
         description: 'Jobs scoring above 75 risk.',
         highlightColor: '#FB7185',
-        trend: analytics.high_risk_jobs === 0 ? 'up' : 'down',
+        trend: analyticsData.high_risk_jobs === 0 ? 'up' : 'down',
         trendLabel:
-          analytics.high_risk_jobs === 0
+          analyticsData.high_risk_jobs === 0
             ? 'All jobs in safe zone'
             : 'Needs immediate mitigation',
         isLoading: analyticsLoading,
@@ -201,22 +217,22 @@ export default function DashboardPage() {
       {
         id: 'evidence-files',
         title: 'Evidence Files',
-        value: analytics.evidence_count,
+        value: analyticsData.evidence_count,
         description: 'Photos captured within the selected window.',
         highlightColor: '#F97316',
-        trend: analytics.evidence_count > 0 ? 'up' : 'flat',
+        trend: analyticsData.evidence_count > 0 ? 'up' : 'flat',
         trendLabel:
-          analytics.evidence_count > 0
+          analyticsData.evidence_count > 0
             ? 'Evidence trail building'
             : 'Add site photos',
         isLoading: analyticsLoading,
       },
     ],
     [
-      analytics.completion_rate,
-      analytics.avg_time_to_close_hours,
-      analytics.high_risk_jobs,
-      analytics.evidence_count,
+      analyticsData.completion_rate,
+      analyticsData.avg_time_to_close_hours,
+      analyticsData.high_risk_jobs,
+      analyticsData.evidence_count,
       analyticsError,
       analyticsLoading,
     ]
@@ -351,7 +367,7 @@ export default function DashboardPage() {
             <KpiGrid items={kpiItems} />
             <div className="grid gap-6 xl:grid-cols-[2fr_1fr]">
               <TrendChart
-                data={analytics.trend}
+                data={analyticsData.trend}
                 rangeDays={analyticsRange}
                 onRangeChange={handleRangeChange}
                 isLoading={analyticsLoading}
@@ -359,8 +375,8 @@ export default function DashboardPage() {
               <EvidenceWidget
                 totalJobs={totalJobsForRange}
                 jobsWithEvidence={jobsWithEvidence}
-                evidenceCount={analytics.evidence_count}
-                avgTimeToFirstEvidenceHours={analytics.avg_time_to_first_evidence_hours}
+                evidenceCount={analyticsData.evidence_count}
+                avgTimeToFirstEvidenceHours={analyticsData.avg_time_to_first_evidence_hours}
                 isLoading={analyticsLoading}
               />
             </div>
