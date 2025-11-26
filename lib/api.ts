@@ -5,7 +5,8 @@
 import { JobReportData } from '@/types/report'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
-const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5173';
+// Use relative paths for Next.js API routes in production, or backend URL if explicitly set
+const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || '';
 
 export interface ApiError {
   message: string;
