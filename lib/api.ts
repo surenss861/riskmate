@@ -30,7 +30,10 @@ async function apiRequest<T>(
 ): Promise<T> {
   const token = await getAuthToken();
   
-  const response = await fetch(`${API_URL}${endpoint}`, {
+  // Use API_URL if set, otherwise use relative path (Next.js API routes)
+  const url = API_URL ? `${API_URL}${endpoint}` : endpoint;
+  
+  const response = await fetch(url, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
