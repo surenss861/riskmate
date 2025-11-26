@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { calculateRiskScore, generateMitigationItems } from '@/lib/utils/riskScoring'
 
 export const runtime = 'nodejs'
 
@@ -88,6 +89,182 @@ export async function GET(request: NextRequest) {
     console.error('Jobs fetch failed:', error)
     return NextResponse.json(
       { message: 'Failed to fetch jobs' },
+      { status: 500 }
+    )
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const supabase = await createSupabaseServerClient()
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+
+    if (authError || !user) {
+      return NextResponse.json(
+        { message: 'Unauthorized' },
+        { status: 401 }
+      )
+    }
+
+    // Get user's organization_id
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('organization_id')
+      .eq('id', user.id)
+      .single()
+
+    if (userError || !userData?.organization_id) {
+      return NextResponse.json(
+        { message: 'Failed to get organization ID' },
+        { status: 500 }
+      )
+    }
+
+    const organization_id = userData.organization_id
+    const userId = user.id
+    const body = await request.json()
+
+    const {
+      client_name,
+      client_type,
+      job_type,
+      location,
+      description,
+      start_date,
+      end_date,
+      risk_factor_codes = [],
+      has_subcontractors = false,
+      subcontractor_count = 0,
+      insurance_status = 'pending',
+    } = body
+
+    // Validate required fields
+    if (!client_name || !client_type || !job_type || !location) {
+      return NextResponse.json(
+        { message: 'Missing required fields: client_name, client_type, job_type, location' },
+        { status: 400 }
+      )
+    }
+
+    // Check subscription limits (Starter: 10 jobs/month)
+    const { data: subscription } = await supabase
+      .from('subscriptions')
+      .select('tier, current_period_start')
+      .eq('organization_id', organization_id)
+      .eq('status', 'active')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    const tier = subscription?.tier || 'starter'
+    const periodStart = subscription?.current_period_start
+      ? new Date(subscription.current_period_start)
+      : new Date(new Date().getFullYear(), new Date().getMonth(), 1)
+
+    if (tier === 'starter') {
+      const { count } = await supabase
+        .from('jobs')
+        .select('*', { count: 'exact', head: true })
+        .eq('organization_id', organization_id)
+        .gte('created_at', periodStart.toISOString())
+
+      if ((count || 0) >= 10) {
+        return NextResponse.json(
+          {
+            code: 'JOB_LIMIT',
+            message: 'Starter plan limit reached (10 jobs/month). Upgrade to Pro for unlimited jobs.',
+          },
+          { status: 403 }
+        )
+      }
+    }
+
+    // Create job
+    const { data: job, error: jobError } = await supabase
+      .from('jobs')
+      .insert({
+        organization_id,
+        created_by: userId,
+        client_name,
+        client_type,
+        job_type,
+        location,
+        description,
+        start_date: start_date || null,
+        end_date: end_date || null,
+        status: 'draft',
+        has_subcontractors,
+        subcontractor_count,
+        insurance_status,
+      })
+      .select()
+      .single()
+
+    if (jobError) {
+      console.error('Job creation failed:', jobError)
+      return NextResponse.json(
+        { message: 'Failed to create job' },
+        { status: 500 }
+      )
+    }
+
+    // Calculate risk score if risk factors provided
+    let riskScoreResult = null
+    if (risk_factor_codes && risk_factor_codes.length > 0) {
+      try {
+        riskScoreResult = await calculateRiskScore(risk_factor_codes)
+
+        // Save risk score
+        await supabase.from('job_risk_scores').insert({
+          job_id: job.id,
+          overall_score: riskScoreResult.overall_score,
+          risk_level: riskScoreResult.risk_level,
+          factors: riskScoreResult.factors,
+        })
+
+        // Update job with risk score
+        await supabase
+          .from('jobs')
+          .update({
+            risk_score: riskScoreResult.overall_score,
+            risk_level: riskScoreResult.risk_level,
+          })
+          .eq('id', job.id)
+
+        // Generate mitigation items
+        await generateMitigationItems(job.id, risk_factor_codes)
+      } catch (riskError: any) {
+        console.error('Risk scoring failed:', riskError)
+        // Continue without risk score - job is still created
+      }
+    }
+
+    // Fetch complete job with risk details
+    const { data: completeJob } = await supabase
+      .from('jobs')
+      .select('*')
+      .eq('id', job.id)
+      .single()
+
+    const { data: mitigationItems } = await supabase
+      .from('mitigation_items')
+      .select('id, title, description, done, is_completed')
+      .eq('job_id', job.id)
+
+    return NextResponse.json(
+      {
+        data: {
+          ...completeJob,
+          risk_score_detail: riskScoreResult,
+          mitigation_items: mitigationItems || [],
+        },
+      },
+      { status: 201 }
+    )
+  } catch (error: any) {
+    console.error('Job creation error:', error)
+    return NextResponse.json(
+      { message: error.message || 'Failed to create job' },
       { status: 500 }
     )
   }
