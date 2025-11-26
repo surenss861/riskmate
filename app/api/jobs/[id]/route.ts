@@ -5,7 +5,7 @@ export const runtime = 'nodejs'
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createSupabaseServerClient()
@@ -33,7 +33,7 @@ export async function GET(
     }
 
     const organization_id = userData.organization_id
-    const jobId = params.id
+    const { id: jobId } = await params
 
     // Get job
     const { data: job, error: jobError } = await supabase
