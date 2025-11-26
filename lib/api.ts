@@ -5,8 +5,12 @@
 import { JobReportData } from '@/types/report'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
-// Use relative paths for Next.js API routes in production, or backend URL if explicitly set
-const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || '';
+// Use relative paths for Next.js API routes (empty string = relative paths)
+// Only use backend URL if explicitly set and not in production
+const API_URL = 
+  typeof window !== 'undefined' && process.env.NEXT_PUBLIC_BACKEND_URL && process.env.NODE_ENV === 'development'
+    ? process.env.NEXT_PUBLIC_BACKEND_URL
+    : '';
 
 export interface ApiError {
   message: string;
