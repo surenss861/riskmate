@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const ipAddress = getClientIp(request.headers) || request.ip || undefined
+    const ipAddress = getClientIp(request.headers) || undefined
 
     // Upsert legal acceptance
     const { data, error } = await supabase
