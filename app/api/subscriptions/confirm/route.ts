@@ -195,3 +195,38 @@ export async function POST(request: NextRequest) {
   }
 }
 
+
+    await applyPlanToOrganization(organizationId, planCode, {
+      stripeCustomerId: typeof session.customer === 'string' ? session.customer : null,
+      stripeSubscriptionId:
+        typeof session.subscription === 'string'
+          ? session.subscription
+          : subscription?.id ?? null,
+      currentPeriodStart: subscription
+        ? (subscription as any).current_period_start ?? null
+        : null,
+      currentPeriodEnd: subscription
+        ? (subscription as any).current_period_end ?? null
+        : null,
+    })
+
+    // Track successful plan switch from checkout
+    await trackPlanSwitchSuccess(organizationId, user.id, previousPlan, planCode, {
+      from_checkout: true,
+      session_id: session_id,
+    })
+
+    return NextResponse.json({
+      status: 'updated',
+      plan: planCode,
+      organization_id: organizationId,
+    })
+  } catch (error: any) {
+    console.error('Checkout confirmation failed:', error)
+    return NextResponse.json(
+      { message: 'Failed to confirm subscription', detail: error?.message },
+      { status: 500 }
+    )
+  }
+}
+

@@ -231,3 +231,13 @@ export async function POST(request: NextRequest) {
   }
 }
 
+
+  } catch (error: any) {
+    console.error('Plan switch error:', error)
+    return NextResponse.json(
+      { error: error.message || 'Failed to switch plan' },
+      { status: 500 }
+    )
+  }
+}
+

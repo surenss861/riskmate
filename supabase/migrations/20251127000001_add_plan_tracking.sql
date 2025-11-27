@@ -1,8 +1,9 @@
--- Plan tracking table to store user plan information and history
+-- Plan tracking table to store organization plan information and history
+-- Plans are organization-level, but we track which user initiated the action
 CREATE TABLE IF NOT EXISTS plan_tracking (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  actor_id UUID REFERENCES users(id) ON DELETE SET NULL, -- User who initiated the action (plans are org-level)
   plan_code TEXT NOT NULL CHECK (plan_code IN ('starter', 'pro', 'business')),
   previous_plan_code TEXT CHECK (previous_plan_code IN ('starter', 'pro', 'business')),
   event_type TEXT NOT NULL, -- 'view', 'switch_initiated', 'switch_success', 'switch_failed', 'checkout_redirected'
@@ -16,8 +17,8 @@ CREATE TABLE IF NOT EXISTS plan_tracking (
 CREATE INDEX IF NOT EXISTS idx_plan_tracking_org_created_at 
   ON plan_tracking (organization_id, created_at DESC);
 
-CREATE INDEX IF NOT EXISTS idx_plan_tracking_user_created_at 
-  ON plan_tracking (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_plan_tracking_actor_created_at 
+  ON plan_tracking (actor_id, created_at DESC);
 
 CREATE INDEX IF NOT EXISTS idx_plan_tracking_plan_code 
   ON plan_tracking (plan_code);
@@ -39,7 +40,7 @@ CREATE POLICY "Users can insert plan tracking in their organization"
   ON plan_tracking FOR INSERT
   WITH CHECK (
     organization_id = get_user_organization_id()
-    AND user_id = auth.uid()
+    AND (actor_id IS NULL OR actor_id = auth.uid())
   );
 
 -- Add current_plan column to users table for quick access
@@ -63,10 +64,11 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Function for org_subscriptions trigger
+-- Plans are organization-level, so all users in the org get the same plan
 CREATE OR REPLACE FUNCTION update_user_current_plan_from_org_sub()
 RETURNS TRIGGER AS $$
 BEGIN
-  -- Update all users in the organization with the new plan
+  -- Update all users in the organization with the new plan (plans are org-level)
   UPDATE users
   SET current_plan = NEW.plan_code
   WHERE organization_id = NEW.organization_id;
@@ -100,4 +102,6 @@ SET current_plan = COALESCE(
   'starter'
 )
 WHERE current_plan IS NULL;
+
+
 

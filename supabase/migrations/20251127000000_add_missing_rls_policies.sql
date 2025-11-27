@@ -170,7 +170,7 @@ BEGIN
       ON plan_tracking FOR INSERT
       WITH CHECK (
         organization_id = get_user_organization_id()
-        AND user_id = auth.uid()
+        AND (actor_id IS NULL OR actor_id = auth.uid())
       );
   END IF;
 END $$;
