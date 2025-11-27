@@ -16,7 +16,24 @@ function ThankYouContent() {
     const confirmPurchase = async () => {
       const sessionId = searchParams.get('session_id')
       if (!sessionId) {
-        setError('Missing session ID')
+        // Check if user might have completed checkout but session_id is missing
+        // This can happen if Stripe redirects without the parameter
+        // Try to check subscription status instead
+        try {
+          const subscription = await subscriptionsApi.get()
+          if (subscription.data?.status === 'active' || subscription.data?.status === 'trialing') {
+            // Subscription is already active, treat as success
+            setLoading(false)
+            setTimeout(() => {
+              router.push('/dashboard')
+            }, 3000)
+            return
+          }
+        } catch (err) {
+          // If we can't check subscription, show the error
+        }
+        
+        setError('Missing session ID. If you just completed a purchase, your subscription may still be processing. Please check your dashboard or try again.')
         setLoading(false)
         return
       }
@@ -30,7 +47,7 @@ function ThankYouContent() {
         }, 3000)
       } catch (err: any) {
         console.error('Failed to confirm checkout:', err)
-        setError(err?.message || 'Failed to confirm purchase')
+        setError(err?.message || 'Failed to confirm purchase. Your payment may have been processed. Please check your dashboard.')
         setLoading(false)
       }
     }
@@ -58,13 +75,21 @@ function ThankYouContent() {
             <>
               <div className="text-6xl mb-6">⚠️</div>
               <h1 className="text-4xl font-bold mb-4">Something went wrong</h1>
-              <p className="text-white/60 mb-6">{error}</p>
-              <button
-                onClick={() => router.push('/dashboard')}
-                className="rounded-lg bg-[#F97316] px-8 py-4 text-black font-semibold hover:bg-[#FB923C]"
-              >
-                Go to Dashboard
-              </button>
+              <p className="text-white/60 mb-6 max-w-md mx-auto">{error}</p>
+              <div className="flex gap-4 justify-center">
+                <button
+                  onClick={() => router.push('/dashboard')}
+                  className="rounded-lg bg-[#F97316] px-8 py-4 text-black font-semibold hover:bg-[#FB923C]"
+                >
+                  Check Dashboard
+                </button>
+                <button
+                  onClick={() => router.push('/pricing')}
+                  className="rounded-lg border border-white/20 px-8 py-4 text-white font-semibold hover:bg-white/10"
+                >
+                  Back to Pricing
+                </button>
+              </div>
             </>
           ) : (
             <>
