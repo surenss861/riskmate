@@ -48,23 +48,62 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Map plan names to Stripe price IDs
+    const stripe = getStripeClient()
+
+    // Try to get price ID from environment variable first
     const priceIdMap: Record<string, string> = {
       starter: process.env.STRIPE_PRICE_ID_STARTER || '',
       pro: process.env.STRIPE_PRICE_ID_PRO || '',
       business: process.env.STRIPE_PRICE_ID_BUSINESS || '',
     }
 
-    const priceId = priceIdMap[plan]
+    let priceId = priceIdMap[plan]
+
+    // If no price ID, try to get it from product ID
+    if (!priceId) {
+      const productIdMap: Record<string, string> = {
+        starter: process.env.STRIPE_PRODUCT_ID_STARTER || '',
+        pro: process.env.STRIPE_PRODUCT_ID_PRO || '',
+        business: process.env.STRIPE_PRODUCT_ID_BUSINESS || '',
+      }
+
+      const productId = productIdMap[plan]
+      
+      if (productId) {
+        try {
+          // Fetch the product and get its default price
+          const product = await stripe.products.retrieve(productId)
+          const prices = await stripe.prices.list({
+            product: productId,
+            active: true,
+            limit: 1,
+          })
+          
+          if (prices.data.length > 0) {
+            priceId = prices.data[0].id
+          } else {
+            return NextResponse.json(
+              { error: `No active price found for product: ${productId}` },
+              { status: 500 }
+            )
+          }
+        } catch (err: any) {
+          console.error('Failed to fetch product price:', err)
+          return NextResponse.json(
+            { error: `Failed to get price for product ${productId}: ${err.message}` },
+            { status: 500 }
+          )
+        }
+      }
+    }
 
     if (!priceId) {
       return NextResponse.json(
-        { error: `Stripe price ID not configured for plan: ${plan}` },
+        { error: `Stripe price ID or product ID not configured for plan: ${plan}. Please set STRIPE_PRICE_ID_${plan.toUpperCase()} or STRIPE_PRODUCT_ID_${plan.toUpperCase()}` },
         { status: 500 }
       )
     }
 
-    const stripe = getStripeClient()
     const organizationId = userData.organization_id
 
     // Create Checkout Session
