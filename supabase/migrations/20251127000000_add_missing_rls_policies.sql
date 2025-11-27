@@ -156,6 +156,25 @@ BEGIN
   END IF;
 END $$;
 
+-- plan_tracking policies (if table exists)
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'plan_tracking') THEN
+    DROP POLICY IF EXISTS "Users can view plan tracking in their organization" ON plan_tracking;
+    CREATE POLICY "Users can view plan tracking in their organization"
+      ON plan_tracking FOR SELECT
+      USING (organization_id = get_user_organization_id());
+
+    DROP POLICY IF EXISTS "Users can insert plan tracking in their organization" ON plan_tracking;
+    CREATE POLICY "Users can insert plan tracking in their organization"
+      ON plan_tracking FOR INSERT
+      WITH CHECK (
+        organization_id = get_user_organization_id()
+        AND user_id = auth.uid()
+      );
+  END IF;
+END $$;
+
 -- Add UPDATE policy for subscriptions if missing
 DO $$
 BEGIN
