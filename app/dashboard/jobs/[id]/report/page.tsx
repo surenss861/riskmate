@@ -36,6 +36,7 @@ export default function JobReportPage() {
   const { data, isLoading, error } = useFullJob(jobId)
   const [exporting, setExporting] = useState(false)
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null)
+  const [exportError, setExportError] = useState<string | null>(null)
 
   useEffect(() => {
     return () => {
@@ -176,7 +177,7 @@ export default function JobReportPage() {
           return
         } else {
           console.error('Failed to create blob from base64')
-          alert('Failed to create PDF file. Please try again.')
+          setExportError('Failed to create PDF file. Please try again.')
         }
       } else if (pdf_url) {
         // Fallback to URL download
@@ -203,13 +204,13 @@ export default function JobReportPage() {
         return
       } else {
         console.error('No PDF URL or base64 data available')
-        alert('Report generated but no PDF data available. Please check the console for details.')
+        setExportError('Report generated but no PDF data available. Please check the console for details.')
       }
     } catch (err: any) {
       console.error('Failed to export PDF', err)
       const errorMessage = err?.message || err?.detail || 'Failed to export PDF'
       console.error('Error details:', err)
-      alert(errorMessage)
+      setExportError(errorMessage)
     } finally {
       setExporting(false)
     }
@@ -302,6 +303,14 @@ export default function JobReportPage() {
             exportInProgress={exporting}
           />
         </main>
+
+        {/* Error Modal */}
+        <ErrorModal
+          isOpen={exportError !== null}
+          title="Export Error"
+          message={exportError || ''}
+          onClose={() => setExportError(null)}
+        />
       </div>
     </ProtectedRoute>
   )

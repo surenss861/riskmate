@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import { DashboardNavbar } from '@/components/dashboard/DashboardNavbar'
+import { ErrorModal } from '@/components/dashboard/ErrorModal'
 import { subscriptionsApi } from '@/lib/api'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
@@ -423,7 +424,7 @@ export default function AccountPage() {
                             const response = await subscriptionsApi.createPortalSession()
                             window.location.href = response.url
                           } catch (err: any) {
-                            alert(err?.message || 'Failed to open billing portal')
+                            setError(err?.message || 'Failed to open billing portal')
                           }
                         }}
                         className="rounded-lg border border-white/10 px-6 py-3 text-white font-semibold hover:border-white/30"
@@ -447,6 +448,14 @@ export default function AccountPage() {
             </div>
           </div>
         </main>
+
+        {/* Error Modal */}
+        <ErrorModal
+          isOpen={error !== null}
+          title="Error"
+          message={error || ''}
+          onClose={() => setError(null)}
+        />
       </div>
     </ProtectedRoute>
   )

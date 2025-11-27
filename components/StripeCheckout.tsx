@@ -13,6 +13,7 @@ interface StripeCheckoutProps {
 
 export default function StripeCheckout({ plan, price, children, className = '', onClick }: StripeCheckoutProps) {
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const handleCheckout = async () => {
     setLoading(true)
@@ -45,19 +46,27 @@ export default function StripeCheckout({ plan, price, children, className = '', 
       }
     } catch (error: any) {
       console.error('Checkout error:', error)
-      alert(error?.message || 'Unable to start checkout. Please try again.')
+      setError(error?.message || 'Unable to start checkout. Please try again.')
       setLoading(false)
     }
   }
 
   return (
-    <button
-      onClick={handleCheckout}
-      disabled={loading}
-      className={className}
-    >
-      {loading ? 'Loading...' : children}
-    </button>
+    <>
+      <button
+        onClick={handleCheckout}
+        disabled={loading}
+        className={className}
+      >
+        {loading ? 'Loading...' : children}
+      </button>
+      <ErrorModal
+        isOpen={error !== null}
+        title="Checkout Error"
+        message={error || ''}
+        onClose={() => setError(null)}
+      />
+    </>
   )
 }
 
