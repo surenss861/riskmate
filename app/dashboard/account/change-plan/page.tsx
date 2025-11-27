@@ -90,7 +90,7 @@ export default function ChangePlanPage() {
         setUser(user)
 
         const subscriptionResponse = await subscriptionsApi.get()
-        const tier = subscriptionResponse.data?.tier
+        const tier = subscriptionResponse.data?.tier as PlanCode | null
         setCurrentPlan(tier || 'starter')
       } catch (err: any) {
         console.error('Failed to load subscription:', err)
