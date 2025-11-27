@@ -175,12 +175,8 @@ export async function POST(request: NextRequest) {
         await applyPlanToOrganization(organizationId, plan as PlanCode, {
           stripeCustomerId: currentSubscription.stripe_customer_id || null,
           stripeSubscriptionId: currentSubscription.stripe_subscription_id,
-          currentPeriodStart: updatedSubscription.current_period_start
-            ? new Date(updatedSubscription.current_period_start * 1000).toISOString()
-            : null,
-          currentPeriodEnd: updatedSubscription.current_period_end
-            ? new Date(updatedSubscription.current_period_end * 1000).toISOString()
-            : null,
+          currentPeriodStart: updatedSubscription.current_period_start || null,
+          currentPeriodEnd: updatedSubscription.current_period_end || null,
         })
 
         return NextResponse.json({
