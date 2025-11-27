@@ -16,12 +16,13 @@ export interface PlanTrackingEvent {
 }
 
 /**
- * Track a plan-related event in audit_logs
+ * Track a plan-related event in audit_logs and plan_tracking
  */
 export async function trackPlanEvent(event: PlanTrackingEvent): Promise<void> {
   try {
     const supabase = await createSupabaseServerClient()
     
+    // Track in audit_logs (for compliance/audit trail)
     await supabase.from('audit_logs').insert({
       organization_id: event.organization_id,
       actor_id: event.user_id,
@@ -33,6 +34,30 @@ export async function trackPlanEvent(event: PlanTrackingEvent): Promise<void> {
         ...event.metadata,
       },
     })
+
+    // Also track in plan_tracking table (for analytics)
+    if (event.current_plan) {
+      const eventTypeMap: Record<string, string> = {
+        'subscription.plan_viewed': 'view',
+        'subscription.plan_switch_initiated': 'switch_initiated',
+        'subscription.plan_changed': 'switch_success',
+        'subscription.plan_switch_failed': 'switch_failed',
+        'subscription.checkout_redirected': 'checkout_redirected',
+      }
+
+      const eventType = eventTypeMap[event.event_name] || 'unknown'
+
+      await supabase.from('plan_tracking').insert({
+        organization_id: event.organization_id,
+        user_id: event.user_id,
+        plan_code: event.current_plan,
+        previous_plan_code: event.previous_plan || null,
+        event_type: eventType,
+        is_upgrade: event.metadata?.is_upgrade ?? null,
+        is_downgrade: event.metadata?.is_downgrade ?? null,
+        metadata: event.metadata || {},
+      })
+    }
   } catch (error) {
     // Don't throw - tracking failures shouldn't break the main flow
     console.error('Failed to track plan event:', error)
