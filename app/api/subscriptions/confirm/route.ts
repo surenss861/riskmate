@@ -150,6 +150,17 @@ export async function POST(request: NextRequest) {
         ? await stripe.subscriptions.retrieve(session.subscription)
         : null
 
+    // Get previous plan before switching
+    const { data: prevSubscription } = await supabase
+      .from('subscriptions')
+      .select('tier')
+      .eq('organization_id', organizationId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    
+    const previousPlan = prevSubscription?.tier || null
+
     await applyPlanToOrganization(organizationId, planCode, {
       stripeCustomerId: typeof session.customer === 'string' ? session.customer : null,
       stripeSubscriptionId:
@@ -162,6 +173,12 @@ export async function POST(request: NextRequest) {
       currentPeriodEnd: subscription
         ? (subscription as any).current_period_end ?? null
         : null,
+    })
+
+    // Track successful plan switch from checkout
+    await trackPlanSwitchSuccess(organizationId, user.id, previousPlan, planCode, {
+      from_checkout: true,
+      session_id: session_id,
     })
 
     return NextResponse.json({
