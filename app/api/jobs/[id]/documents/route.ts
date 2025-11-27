@@ -162,19 +162,7 @@ export async function POST(
     }
 
     // Verify job belongs to organization
-    const { data: job, error: jobError } = await supabase
-      .from('jobs')
-      .select('id')
-      .eq('id', jobId)
-      .eq('organization_id', organization_id)
-      .single()
-
-    if (jobError || !job) {
-      return NextResponse.json(
-        { message: 'Job not found' },
-        { status: 404 }
-      )
-    }
+        // Job ownership already verified above
 
     // Insert document metadata
     const { data: inserted, error: insertError } = await supabase
