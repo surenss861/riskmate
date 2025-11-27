@@ -146,7 +146,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Check subscription limits (Starter: 10 jobs/month)
+    // Check subscription limits (Starter: 3 jobs/month)
     const { data: subscription } = await supabase
       .from('subscriptions')
       .select('tier, current_period_start')
@@ -172,7 +172,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(
           {
             code: 'JOB_LIMIT',
-            message: 'Starter plan limit reached (10 jobs/month). Upgrade to Pro for unlimited jobs.',
+            message: 'Starter plan limit reached (3 jobs/month). Upgrade to Pro for unlimited jobs.',
           },
           { status: 403 }
         )

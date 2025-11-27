@@ -76,7 +76,7 @@ export default function PricingPage() {
 
         {/* Pricing Cards */}
         <div className="grid md:grid-cols-3 gap-6 mb-16">
-          {/* Starter */}
+          {/* Starter / Free */}
           <motion.div
             className="bg-[#121212] border border-white/10 rounded-xl p-8"
             initial={{ opacity: 0, y: 30 }}
@@ -86,18 +86,22 @@ export default function PricingPage() {
           >
             <h3 className="text-2xl font-semibold mb-2">Starter</h3>
             <div className="mb-2">
-              <span className="text-4xl font-bold">$29</span>
+              <span className="text-4xl font-bold">$0</span>
               <span className="text-white/60">/mo</span>
             </div>
-            <p className="text-sm text-white/60 mb-6">per business</p>
+            <p className="text-sm text-white/60 mb-6">Free forever</p>
             <ul className="space-y-3 mb-8">
               <li className="flex items-start">
                 <span className="text-[#F97316] mr-2">✓</span>
-                <span className="text-white/70">10 jobs per month</span>
+                <span className="text-white/70">3 jobs per month</span>
               </li>
               <li className="flex items-start">
                 <span className="text-[#F97316] mr-2">✓</span>
-                <span className="text-white/70">1 team seat</span>
+                <span className="text-white/70">1 team seat (solo operator)</span>
+              </li>
+              <li className="flex items-start">
+                <span className="text-[#F97316] mr-2">✓</span>
+                <span className="text-white/70">Unlimited PDF reports</span>
               </li>
               <li className="flex items-start">
                 <span className="text-[#F97316] mr-2">✓</span>
@@ -105,15 +109,18 @@ export default function PricingPage() {
               </li>
               <li className="flex items-start">
                 <span className="text-[#F97316] mr-2">✓</span>
-                <span className="text-white/70">Shareable job reports</span>
+                <span className="text-white/70">Photo uploads</span>
+              </li>
+              <li className="flex items-start">
+                <span className="text-[#F97316] mr-2">✓</span>
+                <span className="text-white/70">Job timelines</span>
               </li>
             </ul>
             <button
-              onClick={() => handleCheckout('starter')}
-              disabled={loading !== null}
-              className="w-full px-6 py-3 border border-white/10 rounded-lg hover:bg-white/5 transition-colors font-semibold disabled:opacity-50"
+              onClick={() => router.push('/signup')}
+              className="w-full px-6 py-3 border border-white/10 rounded-lg hover:bg-white/5 transition-colors font-semibold"
             >
-              {loading === 'starter' ? 'Processing...' : 'Get Started'}
+              Get Started Free
             </button>
           </motion.div>
 
@@ -131,11 +138,15 @@ export default function PricingPage() {
             </div>
             <h3 className="text-2xl font-semibold mb-2 mt-2">Pro</h3>
             <div className="mb-2">
-              <span className="text-4xl font-bold">$59</span>
+              <span className="text-4xl font-bold">$29</span>
               <span className="text-white/60">/mo</span>
             </div>
             <p className="text-sm text-white/60 mb-6">per business</p>
             <ul className="space-y-3 mb-8">
+              <li className="flex items-start">
+                <span className="text-[#F97316] mr-2">✓</span>
+                <span className="text-white/70">Everything in Starter</span>
+              </li>
               <li className="flex items-start">
                 <span className="text-[#F97316] mr-2">✓</span>
                 <span className="text-white/70">Unlimited jobs</span>
@@ -146,15 +157,19 @@ export default function PricingPage() {
               </li>
               <li className="flex items-start">
                 <span className="text-[#F97316] mr-2">✓</span>
-                <span className="text-white/70">Branded PDFs</span>
+                <span className="text-white/70">Team invites & activity tracking</span>
               </li>
               <li className="flex items-start">
                 <span className="text-[#F97316] mr-2">✓</span>
-                <span className="text-white/70">Email notifications</span>
+                <span className="text-white/70">More photo storage</span>
               </li>
               <li className="flex items-start">
                 <span className="text-[#F97316] mr-2">✓</span>
-                <span className="text-white/70">Shareable job reports</span>
+                <span className="text-white/70">Advanced controls list</span>
+              </li>
+              <li className="flex items-start">
+                <span className="text-[#F97316] mr-2">✓</span>
+                <span className="text-white/70">Job-level timeline logs</span>
               </li>
             </ul>
             <button
@@ -183,7 +198,7 @@ export default function PricingPage() {
             <ul className="space-y-3 mb-8">
               <li className="flex items-start">
                 <span className="text-[#F97316] mr-2">✓</span>
-                <span className="text-white/70">Unlimited jobs</span>
+                <span className="text-white/70">Everything in Pro</span>
               </li>
               <li className="flex items-start">
                 <span className="text-[#F97316] mr-2">✓</span>
@@ -191,19 +206,23 @@ export default function PricingPage() {
               </li>
               <li className="flex items-start">
                 <span className="text-[#F97316] mr-2">✓</span>
-                <span className="text-white/70">Everything in Pro</span>
+                <span className="text-white/70">Advanced team management</span>
               </li>
               <li className="flex items-start">
                 <span className="text-[#F97316] mr-2">✓</span>
-                <span className="text-white/70">Advanced analytics</span>
+                <span className="text-white/70">Detailed hazard analytics</span>
               </li>
               <li className="flex items-start">
                 <span className="text-[#F97316] mr-2">✓</span>
-                <span className="text-white/70">Permit Pack</span>
+                <span className="text-white/70">Trend reports</span>
               </li>
               <li className="flex items-start">
                 <span className="text-[#F97316] mr-2">✓</span>
-                <span className="text-white/70">Versioned audit logs</span>
+                <span className="text-white/70">Unlimited photo storage</span>
+              </li>
+              <li className="flex items-start">
+                <span className="text-[#F97316] mr-2">✓</span>
+                <span className="text-white/70">Supervisor dashboard</span>
               </li>
               <li className="flex items-start">
                 <span className="text-[#F97316] mr-2">✓</span>

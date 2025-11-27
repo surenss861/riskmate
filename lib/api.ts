@@ -224,6 +224,13 @@ export const subscriptionsApi = {
       body: JSON.stringify({ session_id: sessionId }),
     });
   },
+
+  switchPlan: async (plan: 'starter' | 'pro' | 'business') => {
+    return apiRequest<{ success: boolean; message?: string; plan?: string; url?: string }>('/api/subscriptions/switch', {
+      method: 'POST',
+      body: JSON.stringify({ plan }),
+    });
+  },
 };
 
 // Team API

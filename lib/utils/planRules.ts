@@ -10,7 +10,7 @@ export function limitsFor(plan: PlanCode): PlanLimits {
     case 'starter':
       return {
         seats: 1,
-        jobsMonthly: 10,
+        jobsMonthly: 3, // Free plan: 3 jobs/month
       }
     case 'pro':
       return {
