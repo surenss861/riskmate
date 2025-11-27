@@ -93,10 +93,25 @@ export async function POST(request: NextRequest) {
       .eq('id', user.id)
       .single()
 
-    if (userData?.organization_id !== finalOrgId) {
+    if (!userData?.organization_id) {
+      return NextResponse.json(
+        { message: 'Failed to get user organization' },
+        { status: 500 }
+      )
+    }
+
+    if (userData.organization_id !== finalOrgId) {
       return NextResponse.json(
         { message: 'Session does not belong to this organization' },
         { status: 403 }
+      )
+    }
+
+    // Ensure finalOrgId is defined (TypeScript guard)
+    if (!finalOrgId) {
+      return NextResponse.json(
+        { message: 'Organization identifier is missing' },
+        { status: 400 }
       )
     }
 
