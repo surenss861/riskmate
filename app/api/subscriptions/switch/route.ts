@@ -3,7 +3,7 @@ import { createSupabaseServerClient } from '@/lib/supabase/server'
 import Stripe from 'stripe'
 import { applyPlanToOrganization } from '@/lib/utils/applyPlan'
 import { PlanCode } from '@/lib/utils/planRules'
-import { trackPlanSwitchInitiated, trackPlanSwitchSuccess, trackPlanSwitchFailed, trackPlanEvent } from '@/lib/utils/trackPlan'
+import { trackPlanSwitchInitiated, trackPlanSwitchSuccess, trackPlanSwitchFailed } from '@/lib/utils/trackPlan'
 
 export const runtime = 'nodejs'
 
@@ -78,6 +78,7 @@ export async function POST(request: NextRequest) {
 
     // If switching to the same plan, return success
     if (currentPlan === plan) {
+      await trackPlanSwitchSuccess(organizationId, userId, currentPlan, plan, { no_change: true })
       return NextResponse.json({
         success: true,
         message: 'Already on this plan',
@@ -92,6 +93,7 @@ export async function POST(request: NextRequest) {
         stripeSubscriptionId: null, // Cancel subscription for free plan
         currentPeriodStart: null,
         currentPeriodEnd: null,
+        status: 'canceled',
       })
 
       // Cancel Stripe subscription if it exists
@@ -99,10 +101,14 @@ export async function POST(request: NextRequest) {
         try {
           const stripe = getStripeClient()
           await stripe.subscriptions.cancel(currentSubscription.stripe_subscription_id)
+          await trackPlanSwitchSuccess(organizationId, userId, currentPlan, plan, { downgrade_to_free: true })
         } catch (err: any) {
           console.warn('Failed to cancel Stripe subscription:', err)
-          // Continue anyway - we've updated the plan
+          await trackPlanSwitchFailed(organizationId, userId, currentPlan, plan, err?.message || 'Stripe cancellation failed')
+          // Continue anyway - we've updated the plan in our DB
         }
+      } else {
+        await trackPlanSwitchSuccess(organizationId, userId, currentPlan, plan, { downgrade_to_free_no_stripe_sub: true })
       }
 
       return NextResponse.json({
@@ -112,7 +118,7 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // For paid plans (pro/business), create a checkout session for upgrade/downgrade
+    // For paid plans (pro/business), handle upgrade/downgrade or new subscription
     const priceIdMap: Record<string, string> = {
       pro: process.env.STRIPE_PRICE_ID_PRO || '',
       business: process.env.STRIPE_PRICE_ID_BUSINESS || '',
@@ -128,7 +134,7 @@ export async function POST(request: NextRequest) {
       }
 
       const productId = productIdMap[plan]
-      
+
       if (productId) {
         try {
           const stripe = getStripeClient()
@@ -137,29 +143,32 @@ export async function POST(request: NextRequest) {
             active: true,
             limit: 1,
           })
-          
           if (prices.data.length > 0) {
             priceId = prices.data[0].id
           }
-        } catch (err: any) {
-          console.error('Failed to fetch product price:', err)
+        } catch (err) {
+          console.error(`Failed to fetch price for product ${productId}:`, err)
+          await trackPlanSwitchFailed(organizationId, userId, currentPlan, plan, `Failed to fetch price for product ${productId}`)
+          return NextResponse.json(
+            { error: 'Failed to retrieve pricing information' },
+            { status: 500 }
+          )
         }
       }
     }
 
     if (!priceId) {
+      await trackPlanSwitchFailed(organizationId, userId, currentPlan, plan, 'Stripe price ID not found')
       return NextResponse.json(
-        { error: `Stripe price ID not configured for plan: ${plan}` },
+        { error: 'Stripe price ID not configured for this plan' },
         { status: 500 }
       )
     }
 
-    const stripe = getStripeClient()
-
-    // If user has an active subscription, update it
+    // If user has an active Stripe subscription, update it
     if (currentSubscription?.stripe_subscription_id && currentPlan !== 'starter') {
       try {
-        // Update the subscription to the new plan
+        const stripe = getStripeClient()
         const subscription = await stripe.subscriptions.retrieve(
           currentSubscription.stripe_subscription_id
         )
@@ -175,19 +184,17 @@ export async function POST(request: NextRequest) {
         // Apply the new plan
         const updatedSubscription = await stripe.subscriptions.retrieve(
           currentSubscription.stripe_subscription_id
-        )
+        ) as Stripe.Subscription
 
         await applyPlanToOrganization(organizationId, plan as PlanCode, {
           stripeCustomerId: currentSubscription.stripe_customer_id || null,
           stripeSubscriptionId: currentSubscription.stripe_subscription_id,
           currentPeriodStart: (updatedSubscription as any).current_period_start ?? null,
           currentPeriodEnd: (updatedSubscription as any).current_period_end ?? null,
+          status: updatedSubscription.status,
         })
 
-        // Track successful plan switch
-        await trackPlanSwitchSuccess(organizationId, userId, currentPlan, plan, {
-          updated_existing_subscription: true,
-        })
+        await trackPlanSwitchSuccess(organizationId, userId, currentPlan, plan, { paid_plan_update: true })
 
         return NextResponse.json({
           success: true,
@@ -196,11 +203,13 @@ export async function POST(request: NextRequest) {
         })
       } catch (err: any) {
         console.error('Failed to update subscription:', err)
-        // Fall through to create new checkout session
+        await trackPlanSwitchFailed(organizationId, userId, currentPlan, plan, err?.message || 'Stripe subscription update failed')
+        // Fall through to create new checkout session if update fails
       }
     }
 
-    // If no active subscription, create a checkout session
+    // If no active subscription or update failed, create a checkout session
+    const stripe = getStripeClient()
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
       payment_method_types: ['card'],
@@ -216,6 +225,7 @@ export async function POST(request: NextRequest) {
         plan,
         organization_id: organizationId,
         action: 'switch',
+        previous_plan: currentPlan,
       },
       client_reference_id: organizationId,
       customer: currentSubscription?.stripe_customer_id || undefined,
@@ -230,14 +240,3 @@ export async function POST(request: NextRequest) {
     )
   }
 }
-
-
-  } catch (error: any) {
-    console.error('Plan switch error:', error)
-    return NextResponse.json(
-      { error: error.message || 'Failed to switch plan' },
-      { status: 500 }
-    )
-  }
-}
-

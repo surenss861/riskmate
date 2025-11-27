@@ -66,7 +66,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (!organizationId) {
+    let finalOrgId = organizationId
+    if (!finalOrgId) {
       // Try to get from user's organization
       const { data: userData } = await supabase
         .from('users')
@@ -82,7 +83,22 @@ export async function POST(request: NextRequest) {
       }
 
       // Use user's organization if not in session
-      const finalOrgId = userData.organization_id
+      finalOrgId = userData.organization_id
+    }
+
+    // Verify organization belongs to user
+    const { data: userData } = await supabase
+      .from('users')
+      .select('organization_id')
+      .eq('id', user.id)
+      .single()
+
+    if (userData?.organization_id !== finalOrgId) {
+      return NextResponse.json(
+        { message: 'Session does not belong to this organization' },
+        { status: 403 }
+      )
+    }
 
     const subscription =
       typeof session.subscription === 'object'
@@ -114,6 +130,7 @@ export async function POST(request: NextRequest) {
       currentPeriodEnd: subscription
         ? (subscription as any).current_period_end ?? null
         : null,
+      status: subscription?.status,
     })
 
     // Track successful plan switch from checkout
@@ -122,69 +139,10 @@ export async function POST(request: NextRequest) {
       session_id: session_id,
     })
 
-      return NextResponse.json({
-        status: 'updated',
-        plan: planCode,
-        organization_id: finalOrgId,
-      })
-    }
-
-    // Verify organization belongs to user
-    const { data: userData } = await supabase
-      .from('users')
-      .select('organization_id')
-      .eq('id', user.id)
-      .single()
-
-    if (userData?.organization_id !== organizationId) {
-      return NextResponse.json(
-        { message: 'Session does not belong to this organization' },
-        { status: 403 }
-      )
-    }
-
-    const subscription =
-      typeof session.subscription === 'object'
-        ? session.subscription
-        : session.subscription
-        ? await stripe.subscriptions.retrieve(session.subscription)
-        : null
-
-    // Get previous plan before switching
-    const { data: prevSubscription } = await supabase
-      .from('subscriptions')
-      .select('tier')
-      .eq('organization_id', organizationId)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-    
-    const previousPlan = prevSubscription?.tier || null
-
-    await applyPlanToOrganization(organizationId, planCode, {
-      stripeCustomerId: typeof session.customer === 'string' ? session.customer : null,
-      stripeSubscriptionId:
-        typeof session.subscription === 'string'
-          ? session.subscription
-          : subscription?.id ?? null,
-      currentPeriodStart: subscription
-        ? (subscription as any).current_period_start ?? null
-        : null,
-      currentPeriodEnd: subscription
-        ? (subscription as any).current_period_end ?? null
-        : null,
-    })
-
-    // Track successful plan switch from checkout
-    await trackPlanSwitchSuccess(organizationId, user.id, previousPlan, planCode, {
-      from_checkout: true,
-      session_id: session_id,
-    })
-
     return NextResponse.json({
       status: 'updated',
       plan: planCode,
-      organization_id: organizationId,
+      organization_id: finalOrgId,
     })
   } catch (error: any) {
     console.error('Checkout confirmation failed:', error)
@@ -194,39 +152,3 @@ export async function POST(request: NextRequest) {
     )
   }
 }
-
-
-    await applyPlanToOrganization(organizationId, planCode, {
-      stripeCustomerId: typeof session.customer === 'string' ? session.customer : null,
-      stripeSubscriptionId:
-        typeof session.subscription === 'string'
-          ? session.subscription
-          : subscription?.id ?? null,
-      currentPeriodStart: subscription
-        ? (subscription as any).current_period_start ?? null
-        : null,
-      currentPeriodEnd: subscription
-        ? (subscription as any).current_period_end ?? null
-        : null,
-    })
-
-    // Track successful plan switch from checkout
-    await trackPlanSwitchSuccess(organizationId, user.id, previousPlan, planCode, {
-      from_checkout: true,
-      session_id: session_id,
-    })
-
-    return NextResponse.json({
-      status: 'updated',
-      plan: planCode,
-      organization_id: organizationId,
-    })
-  } catch (error: any) {
-    console.error('Checkout confirmation failed:', error)
-    return NextResponse.json(
-      { message: 'Failed to confirm subscription', detail: error?.message },
-      { status: 500 }
-    )
-  }
-}
-
