@@ -9,30 +9,6 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string; mitigationId: string }> }
 ) {
   try {
-    const supabase = await createSupabaseServerClient()
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-
-    if (authError || !user) {
-      return NextResponse.json(
-        { message: 'Unauthorized' },
-        { status: 401 }
-      )
-    }
-
-    // Get user's organization_id
-    const { data: userData, error: userError } = await supabase
-      .from('users')
-      .select('organization_id')
-      .eq('id', user.id)
-      .single()
-
-    if (userError || !userData?.organization_id) {
-      return NextResponse.json(
-        { message: 'Failed to get organization ID' },
-        { status: 500 }
-      )
-    }
-
     // Get organization context (throws if unauthorized)
     const { organization_id, user_id } = await getOrganizationContext()
     const { id: jobId, mitigationId } = await params
