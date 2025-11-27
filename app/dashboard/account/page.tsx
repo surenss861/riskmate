@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import { DashboardNavbar } from '@/components/dashboard/DashboardNavbar'
 import { ErrorModal } from '@/components/dashboard/ErrorModal'
@@ -411,12 +412,12 @@ export default function AccountPage() {
                     </div>
                   )}
                   <div className="flex gap-3 pt-4">
-                    <button
-                      onClick={() => router.push('/dashboard/account/change-plan')}
-                      className="rounded-lg bg-[#F97316] px-6 py-3 text-black font-semibold hover:bg-[#FB923C] transition-colors"
+                    <Link
+                      href="/dashboard/account/change-plan"
+                      className="rounded-lg bg-[#F97316] px-6 py-3 text-black font-semibold hover:bg-[#FB923C] transition-colors inline-block text-center"
                     >
                       Change Plan
-                    </button>
+                    </Link>
                     {subscription.stripe_customer_id && (
                       <button
                         onClick={async () => {
