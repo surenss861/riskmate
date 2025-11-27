@@ -4,6 +4,8 @@ import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import { DashboardNavbar } from '@/components/dashboard/DashboardNavbar'
+import { InviteSuccessModal } from '@/components/dashboard/InviteSuccessModal'
+import { ConfirmModal } from '@/components/dashboard/ConfirmModal'
 import { teamApi } from '@/lib/api'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
@@ -49,6 +51,10 @@ export default function TeamPage() {
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteRole, setInviteRole] = useState<'member' | 'admin'>('member')
   const [error, setError] = useState<string | null>(null)
+  const [showInviteSuccess, setShowInviteSuccess] = useState(false)
+  const [inviteSuccessData, setInviteSuccessData] = useState<{ email: string; password: string } | null>(null)
+  const [showRemoveConfirm, setShowRemoveConfirm] = useState(false)
+  const [memberToRemove, setMemberToRemove] = useState<string | null>(null)
 
   useEffect(() => {
     const loadData = async () => {
@@ -100,11 +106,13 @@ export default function TeamPage() {
       const data = await teamApi.get()
       setTeam(data)
 
-      // Show temporary password (in a real app, you'd send this via email)
+      // Show temporary password modal
       if (response.temporary_password) {
-        alert(
-          `Invite sent! Temporary password: ${response.temporary_password}\n\nShare this with ${inviteEmail} - they'll need to reset it on first login.`
-        )
+        setInviteSuccessData({
+          email: inviteEmail.trim(),
+          password: response.temporary_password,
+        })
+        setShowInviteSuccess(true)
       }
 
       setInviteEmail('')
@@ -118,12 +126,18 @@ export default function TeamPage() {
   }
 
   const handleRemoveMember = async (memberId: string) => {
-    if (!confirm('Are you sure you want to remove this team member?')) return
+    setMemberToRemove(memberId)
+    setShowRemoveConfirm(true)
+  }
 
-    setRemoving(memberId)
+  const confirmRemoveMember = async () => {
+    if (!memberToRemove) return
+
+    setRemoving(memberToRemove)
     setError(null)
+    setShowRemoveConfirm(false)
     try {
-      await teamApi.removeMember(memberId)
+      await teamApi.removeMember(memberToRemove)
       const data = await teamApi.get()
       setTeam(data)
     } catch (err: any) {
@@ -131,6 +145,7 @@ export default function TeamPage() {
       setError(err?.message || 'Failed to remove team member')
     } finally {
       setRemoving(null)
+      setMemberToRemove(null)
     }
   }
 
@@ -364,6 +379,32 @@ export default function TeamPage() {
             )}
           </div>
         </main>
+
+        {/* Invite Success Modal */}
+        <InviteSuccessModal
+          isOpen={showInviteSuccess}
+          email={inviteSuccessData?.email || ''}
+          temporaryPassword={inviteSuccessData?.password || ''}
+          onClose={() => {
+            setShowInviteSuccess(false)
+            setInviteSuccessData(null)
+          }}
+        />
+
+        {/* Remove Member Confirmation Modal */}
+        <ConfirmModal
+          isOpen={showRemoveConfirm}
+          title="Remove Team Member"
+          message="Are you sure you want to remove this team member? This action cannot be undone."
+          confirmText="Remove"
+          cancelText="Cancel"
+          confirmColor="red"
+          onConfirm={confirmRemoveMember}
+          onCancel={() => {
+            setShowRemoveConfirm(false)
+            setMemberToRemove(null)
+          }}
+        />
       </div>
     </ProtectedRoute>
   )
