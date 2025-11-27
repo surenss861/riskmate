@@ -91,7 +91,20 @@ export default function ChangePlanPage() {
 
         const subscriptionResponse = await subscriptionsApi.get()
         const tier = subscriptionResponse.data?.tier as PlanCode | null
-        setCurrentPlan(tier || 'starter')
+        const plan = tier || 'starter'
+        setCurrentPlan(plan)
+
+        // Track plan view and set user plan property
+        if (typeof window !== 'undefined' && (window as any).posthog) {
+          (window as any).posthog.capture('change_plan_page_viewed', {
+            current_plan: plan,
+          })
+          // Set user plan as a property for all future events
+          (window as any).posthog.identify(user?.id, {
+            plan: plan,
+            email: user?.email,
+          })
+        }
       } catch (err: any) {
         console.error('Failed to load subscription:', err)
         setError('Failed to load your current plan')
@@ -111,11 +124,28 @@ export default function ChangePlanPage() {
     setSwitching(plan)
     setError(null)
 
+    // Track plan switch attempt
+    if (typeof window !== 'undefined' && (window as any).posthog) {
+      (window as any).posthog.capture('plan_switch_initiated', {
+        from_plan: currentPlan,
+        to_plan: plan,
+        is_upgrade: plan === 'pro' || plan === 'business',
+        is_downgrade: plan === 'starter' && currentPlan !== 'starter',
+      })
+    }
+
     try {
       // If switching to starter (free), confirm cancellation
       if (plan === 'starter' && currentPlan !== 'starter') {
         if (!confirm('Switch to Starter (free) plan? Your subscription will be cancelled and you\'ll lose access to paid features.')) {
           setSwitching(null)
+          // Track cancellation
+          if (typeof window !== 'undefined' && (window as any).posthog) {
+            (window as any).posthog.capture('plan_switch_cancelled', {
+              from_plan: currentPlan,
+              to_plan: plan,
+            })
+          }
           return
         }
       }
@@ -123,9 +153,28 @@ export default function ChangePlanPage() {
       const response = await subscriptionsApi.switchPlan(plan)
       
       if (response.url) {
+        // Track redirect to checkout
+        if (typeof window !== 'undefined' && (window as any).posthog) {
+          (window as any).posthog.capture('plan_switch_checkout_redirect', {
+            from_plan: currentPlan,
+            to_plan: plan,
+          })
+        }
         // Redirect to Stripe checkout
         window.location.href = response.url
       } else if (response.success) {
+        // Track successful plan switch
+        if (typeof window !== 'undefined' && (window as any).posthog) {
+          (window as any).posthog.capture('plan_switched', {
+            from_plan: currentPlan,
+            to_plan: plan,
+          })
+          // Update user plan property
+          (window as any).posthog.identify(user?.id, {
+            plan: plan,
+            email: user?.email,
+          })
+        }
         // Plan switched successfully (e.g., to free)
         router.push('/dashboard/account')
       } else {
@@ -133,6 +182,14 @@ export default function ChangePlanPage() {
       }
     } catch (err: any) {
       console.error('Failed to switch plan:', err)
+      // Track plan switch error
+      if (typeof window !== 'undefined' && (window as any).posthog) {
+        (window as any).posthog.capture('plan_switch_failed', {
+          from_plan: currentPlan,
+          to_plan: plan,
+          error: err?.message || 'Unknown error',
+        })
+      }
       setError(err?.message || 'Failed to switch plan. Please try again.')
       setSwitching(null)
     }
