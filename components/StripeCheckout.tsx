@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { trackCheckoutStarted } from '@/lib/posthog'
+import { ErrorModal } from '@/components/dashboard/ErrorModal'
 
 interface StripeCheckoutProps {
   plan: 'starter' | 'pro' | 'business'

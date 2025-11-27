@@ -6,6 +6,7 @@ import { useParams, useRouter } from 'next/navigation'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import RiskMateLogo from '@/components/RiskMateLogo'
 import { ReportView } from '@/components/report/ReportView'
+import { ErrorModal } from '@/components/dashboard/ErrorModal'
 import { reportsApi } from '@/lib/api'
 import { useFullJob } from '@/hooks/useFullJob'
 
