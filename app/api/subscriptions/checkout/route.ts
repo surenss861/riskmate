@@ -16,10 +16,20 @@ function getStripeClient(): Stripe {
 
 export async function POST(request: NextRequest) {
   try {
+    // Check for Stripe secret key first
+    if (!process.env.STRIPE_SECRET_KEY) {
+      console.error('STRIPE_SECRET_KEY is not set in environment variables')
+      return NextResponse.json(
+        { error: 'Stripe configuration error: Secret key not set' },
+        { status: 500 }
+      )
+    }
+
     const supabase = await createSupabaseServerClient()
     const { data: { user }, error: authError } = await supabase.auth.getUser()
 
     if (authError || !user) {
+      console.error('Auth error:', authError)
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -33,6 +43,7 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (userError || !userData?.organization_id) {
+      console.error('User data error:', userError)
       return NextResponse.json(
         { error: 'Failed to get organization ID' },
         { status: 500 }
@@ -98,8 +109,10 @@ export async function POST(request: NextRequest) {
     }
 
     if (!priceId) {
+      const errorMsg = `Stripe price ID or product ID not configured for plan: ${plan}. Please set STRIPE_PRICE_ID_${plan.toUpperCase()} or STRIPE_PRODUCT_ID_${plan.toUpperCase()} in Vercel environment variables.`
+      console.error(errorMsg)
       return NextResponse.json(
-        { error: `Stripe price ID or product ID not configured for plan: ${plan}. Please set STRIPE_PRICE_ID_${plan.toUpperCase()} or STRIPE_PRODUCT_ID_${plan.toUpperCase()}` },
+        { error: errorMsg },
         { status: 500 }
       )
     }
@@ -128,8 +141,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ url: session.url })
   } catch (error: any) {
     console.error('Stripe checkout error:', error)
+    console.error('Error stack:', error.stack)
+    const errorMessage = error.message || 'Failed to create checkout session'
     return NextResponse.json(
-      { error: error.message || 'Failed to create checkout session' },
+      { 
+        error: errorMessage,
+        detail: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      },
       { status: 500 }
     )
   }
