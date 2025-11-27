@@ -62,9 +62,6 @@ export async function POST(request: NextRequest) {
     const organizationId = userData.organization_id
     const userId = user.id
 
-    // Track plan switch initiation
-    await trackPlanSwitchInitiated(organizationId, userId, currentPlan, plan)
-
     // Get current subscription
     const { data: currentSubscription } = await supabase
       .from('subscriptions')
@@ -75,6 +72,9 @@ export async function POST(request: NextRequest) {
       .maybeSingle()
 
     const currentPlan = currentSubscription?.tier || 'starter'
+
+    // Track plan switch initiation
+    await trackPlanSwitchInitiated(organizationId, userId, currentPlan, plan)
 
     // If switching to the same plan, return success
     if (currentPlan === plan) {
