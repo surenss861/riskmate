@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from '@/lib/supabase/server'
 import Stripe from 'stripe'
 import { applyPlanToOrganization } from '@/lib/utils/applyPlan'
 import { PlanCode } from '@/lib/utils/planRules'
+import { trackPlanSwitchInitiated, trackPlanSwitchSuccess, trackPlanSwitchFailed, trackPlanEvent } from '@/lib/utils/trackPlan'
 
 export const runtime = 'nodejs'
 
@@ -59,6 +60,10 @@ export async function POST(request: NextRequest) {
     }
 
     const organizationId = userData.organization_id
+    const userId = user.id
+
+    // Track plan switch initiation
+    await trackPlanSwitchInitiated(organizationId, userId, currentPlan, plan)
 
     // Get current subscription
     const { data: currentSubscription } = await supabase
@@ -177,6 +182,11 @@ export async function POST(request: NextRequest) {
           stripeSubscriptionId: currentSubscription.stripe_subscription_id,
           currentPeriodStart: (updatedSubscription as any).current_period_start ?? null,
           currentPeriodEnd: (updatedSubscription as any).current_period_end ?? null,
+        })
+
+        // Track successful plan switch
+        await trackPlanSwitchSuccess(organizationId, userId, currentPlan, plan, {
+          updated_existing_subscription: true,
         })
 
         return NextResponse.json({

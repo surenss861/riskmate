@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import RiskMateLogo from '@/components/RiskMateLogo'
@@ -14,50 +14,17 @@ export default function PricingPage() {
   const [loading, setLoading] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    // Track pricing page view
-    if (typeof window !== 'undefined' && (window as any).posthog) {
-      (window as any).posthog.capture('pricing_page_viewed')
-    }
-  }, [])
-
   const handleCheckout = async (plan: PlanCode) => {
     setLoading(plan)
-    
-    // Track checkout initiation
-    if (typeof window !== 'undefined' && (window as any).posthog) {
-      (window as any).posthog.capture('checkout_initiated', {
-        plan: plan,
-        source: 'pricing_page',
-      })
-    }
-
     try {
       const response = await subscriptionsApi.createCheckoutSession({
         plan,
         success_url: `${window.location.origin}/pricing/thank-you`,
         cancel_url: `${window.location.origin}/pricing/cancelled`,
       })
-      
-      // Track checkout redirect
-      if (typeof window !== 'undefined' && (window as any).posthog) {
-        (window as any).posthog.capture('checkout_redirected', {
-          plan: plan,
-        })
-      }
-      
       window.location.href = response.url
     } catch (err: any) {
       console.error('Failed to create checkout session:', err)
-      
-      // Track checkout error
-      if (typeof window !== 'undefined' && (window as any).posthog) {
-        (window as any).posthog.capture('checkout_failed', {
-          plan: plan,
-          error: err?.message || 'Unknown error',
-        })
-      }
-      
       setError(err?.message || 'API request failed')
       setLoading(null)
     }
