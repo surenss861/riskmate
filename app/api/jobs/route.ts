@@ -168,7 +168,7 @@ export async function POST(request: NextRequest) {
         .eq('organization_id', organization_id)
         .gte('created_at', periodStart.toISOString())
 
-      if ((count || 0) >= 10) {
+      if ((count || 0) >= 3) {
         return NextResponse.json(
           {
             code: 'JOB_LIMIT',
