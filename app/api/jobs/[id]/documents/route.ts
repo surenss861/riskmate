@@ -80,34 +80,16 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabase = await createSupabaseServerClient()
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-
-    if (authError || !user) {
-      return NextResponse.json(
-        { message: 'Unauthorized' },
-        { status: 401 }
-      )
-    }
-
-    // Get user's organization_id
-    const { data: userData, error: userError } = await supabase
-      .from('users')
-      .select('organization_id')
-      .eq('id', user.id)
-      .single()
-
-    if (userError || !userData?.organization_id) {
-      return NextResponse.json(
-        { message: 'Failed to get organization ID' },
-        { status: 500 }
-      )
-    }
-
-    const organization_id = userData.organization_id
-    const userId = user.id
+    // Get organization context (throws if unauthorized)
+    const { organization_id, user_id } = await getOrganizationContext()
     const { id: jobId } = await params
     const body = await request.json()
+
+    // Verify job ownership (defense-in-depth)
+    await verifyJobOwnership(jobId, organization_id)
+
+    const supabase = await createSupabaseServerClient()
+    const userId = user_id
 
     const { name, type = 'photo', file_path, file_size, mime_type, description } = body
 
@@ -127,9 +109,6 @@ export async function POST(
         { status: 400 }
       )
     }
-
-    // Verify job belongs to organization
-        // Job ownership already verified above
 
     // Insert document metadata
     const { data: inserted, error: insertError } = await supabase
