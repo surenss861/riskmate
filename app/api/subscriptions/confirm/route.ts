@@ -83,22 +83,26 @@ export async function POST(request: NextRequest) {
       // Use user's organization if not in session
       const finalOrgId = userData.organization_id
 
-      const subscription =
-        typeof session.subscription === 'object'
-          ? session.subscription
-          : session.subscription
-          ? await stripe.subscriptions.retrieve(session.subscription)
-          : null
+    const subscription =
+      typeof session.subscription === 'object'
+        ? session.subscription
+        : session.subscription
+        ? await stripe.subscriptions.retrieve(session.subscription)
+        : null
 
-      await applyPlanToOrganization(finalOrgId, planCode, {
-        stripeCustomerId: typeof session.customer === 'string' ? session.customer : null,
-        stripeSubscriptionId:
-          typeof session.subscription === 'string'
-            ? session.subscription
-            : subscription?.id ?? null,
-        currentPeriodStart: subscription?.current_period_start ?? null,
-        currentPeriodEnd: subscription?.current_period_end ?? null,
-      })
+    await applyPlanToOrganization(finalOrgId, planCode, {
+      stripeCustomerId: typeof session.customer === 'string' ? session.customer : null,
+      stripeSubscriptionId:
+        typeof session.subscription === 'string'
+          ? session.subscription
+          : subscription?.id ?? null,
+      currentPeriodStart: subscription
+        ? (subscription as any).current_period_start ?? null
+        : null,
+      currentPeriodEnd: subscription
+        ? (subscription as any).current_period_end ?? null
+        : null,
+    })
 
       return NextResponse.json({
         status: 'updated',
@@ -134,8 +138,12 @@ export async function POST(request: NextRequest) {
         typeof session.subscription === 'string'
           ? session.subscription
           : subscription?.id ?? null,
-      currentPeriodStart: subscription?.current_period_start ?? null,
-      currentPeriodEnd: subscription?.current_period_end ?? null,
+      currentPeriodStart: subscription
+        ? (subscription as any).current_period_start ?? null
+        : null,
+      currentPeriodEnd: subscription
+        ? (subscription as any).current_period_end ?? null
+        : null,
     })
 
     return NextResponse.json({

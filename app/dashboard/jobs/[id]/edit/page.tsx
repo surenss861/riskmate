@@ -39,9 +39,11 @@ export default function EditJobPage() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    loadJob()
-    loadRiskFactors()
-  }, [jobId])
+    if (jobId) {
+      loadJob()
+      loadRiskFactors()
+    }
+  }, [jobId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadJob = async () => {
     try {
