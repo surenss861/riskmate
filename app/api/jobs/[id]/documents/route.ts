@@ -8,47 +8,14 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabase = await createSupabaseServerClient()
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-
-    if (authError || !user) {
-      return NextResponse.json(
-        { message: 'Unauthorized' },
-        { status: 401 }
-      )
-    }
-
-    // Get user's organization_id
-    const { data: userData, error: userError } = await supabase
-      .from('users')
-      .select('organization_id')
-      .eq('id', user.id)
-      .single()
-
-    if (userError || !userData?.organization_id) {
-      return NextResponse.json(
-        { message: 'Failed to get organization ID' },
-        { status: 500 }
-      )
-    }
-
-    const organization_id = userData.organization_id
+    // Get organization context (throws if unauthorized)
+    const { organization_id } = await getOrganizationContext()
     const { id: jobId } = await params
 
-    // Verify job belongs to organization
-    const { data: job, error: jobError } = await supabase
-      .from('jobs')
-      .select('id, organization_id')
-      .eq('id', jobId)
-      .eq('organization_id', organization_id)
-      .single()
+    // Verify job ownership (defense-in-depth)
+    await verifyJobOwnership(jobId, organization_id)
 
-    if (jobError || !job) {
-      return NextResponse.json(
-        { message: 'Job not found' },
-        { status: 404 }
-      )
-    }
+    const supabase = await createSupabaseServerClient()
 
     // Get documents for this job
     const { data, error } = await supabase

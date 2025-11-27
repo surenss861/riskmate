@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { getOrganizationContext, verifyJobOwnership } from '@/lib/utils/organizationGuard'
 
 export const runtime = 'nodejs'
 
@@ -32,7 +33,8 @@ export async function PATCH(
       )
     }
 
-    const organization_id = userData.organization_id
+    // Get organization context (throws if unauthorized)
+    const { organization_id, user_id } = await getOrganizationContext()
     const { id: jobId, mitigationId } = await params
     const body = await request.json()
     const { done } = body
@@ -44,20 +46,11 @@ export async function PATCH(
       )
     }
 
-    // Verify job belongs to organization
-    const { data: job, error: jobError } = await supabase
-      .from('jobs')
-      .select('id')
-      .eq('id', jobId)
-      .eq('organization_id', organization_id)
-      .single()
+    // Verify job ownership (defense-in-depth)
+    await verifyJobOwnership(jobId, organization_id)
 
-    if (jobError || !job) {
-      return NextResponse.json(
-        { message: 'Job not found' },
-        { status: 404 }
-      )
-    }
+    const supabase = await createSupabaseServerClient()
+    const userId = user_id
 
     // Update mitigation item
     const updatePayload = {
