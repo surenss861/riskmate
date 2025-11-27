@@ -410,94 +410,28 @@ export default function AccountPage() {
                       </div>
                     </div>
                   )}
-                  <div className="space-y-4 pt-4">
-                    <div>
-                      <div className="text-sm text-white/60 mb-2">Switch Plan</div>
-                      <div className="flex flex-wrap gap-2">
-                        {subscription.tier !== 'starter' && (
-                          <button
-                            onClick={async () => {
-                              if (!confirm('Switch to Starter (free) plan? Your subscription will be cancelled.')) return
-                              try {
-                                const response = await subscriptionsApi.switchPlan('starter')
-                                if (response.url) {
-                                  window.location.href = response.url
-                                } else {
-                                  // Plan switched successfully
-                                  window.location.reload()
-                                }
-                              } catch (err: any) {
-                                setError(err?.message || 'Failed to switch plan')
-                              }
-                            }}
-                            className="rounded-lg border border-white/20 px-4 py-2 text-sm text-white hover:bg-white/10 transition-colors"
-                          >
-                            Switch to Starter
-                          </button>
-                        )}
-                        {subscription.tier !== 'pro' && (
-                          <button
-                            onClick={async () => {
-                              try {
-                                const response = await subscriptionsApi.switchPlan('pro')
-                                if (response.url) {
-                                  window.location.href = response.url
-                                } else {
-                                  window.location.reload()
-                                }
-                              } catch (err: any) {
-                                setError(err?.message || 'Failed to switch plan')
-                              }
-                            }}
-                            className="rounded-lg bg-[#F97316] px-4 py-2 text-sm text-black font-semibold hover:bg-[#FB923C] transition-colors"
-                          >
-                            {subscription.tier === 'starter' ? 'Upgrade to Pro' : 'Switch to Pro'}
-                          </button>
-                        )}
-                        {subscription.tier !== 'business' && (
-                          <button
-                            onClick={async () => {
-                              try {
-                                const response = await subscriptionsApi.switchPlan('business')
-                                if (response.url) {
-                                  window.location.href = response.url
-                                } else {
-                                  window.location.reload()
-                                }
-                              } catch (err: any) {
-                                setError(err?.message || 'Failed to switch plan')
-                              }
-                            }}
-                            className="rounded-lg border border-[#F97316] text-[#F97316] px-4 py-2 text-sm font-semibold hover:bg-[#F97316]/10 transition-colors"
-                          >
-                            {subscription.tier === 'starter' ? 'Upgrade to Business' : 'Switch to Business'}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex gap-3 pt-2 border-t border-white/10">
+                  <div className="flex gap-3 pt-4">
+                    <button
+                      onClick={() => router.push('/pricing')}
+                      className="rounded-lg bg-[#F97316] px-6 py-3 text-black font-semibold hover:bg-[#FB923C] transition-colors"
+                    >
+                      Change Plan
+                    </button>
+                    {subscription.stripe_customer_id && (
                       <button
-                        onClick={() => router.push('/pricing')}
+                        onClick={async () => {
+                          try {
+                            const response = await subscriptionsApi.createPortalSession()
+                            window.location.href = response.url
+                          } catch (err: any) {
+                            setError(err?.message || 'Failed to open billing portal')
+                          }
+                        }}
                         className="rounded-lg border border-white/10 px-6 py-3 text-white font-semibold hover:border-white/30"
                       >
-                        View All Plans
+                        Manage Billing
                       </button>
-                      {subscription.stripe_customer_id && (
-                        <button
-                          onClick={async () => {
-                            try {
-                              const response = await subscriptionsApi.createPortalSession()
-                              window.location.href = response.url
-                            } catch (err: any) {
-                              setError(err?.message || 'Failed to open billing portal')
-                            }
-                          }}
-                          className="rounded-lg border border-white/10 px-6 py-3 text-white font-semibold hover:border-white/30"
-                        >
-                          Manage Billing
-                        </button>
-                      )}
-                    </div>
+                    )}
                   </div>
                 </div>
               ) : (
