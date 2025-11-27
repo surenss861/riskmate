@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { buildJobReport } from '@/lib/utils/jobReport'
-// Import PDF generator from backend utils
-// Path: app/api/reports/generate/[id]/route.ts -> apps/backend/src/utils/pdf/index.ts
-// 6 levels up from [id] folder to root, then into apps/backend
-import { generateRiskSnapshotPDF } from '../../../../../apps/backend/src/utils/pdf'
+// Import PDF generator from lib utils (copied from backend)
+import { generateRiskSnapshotPDF } from '@/lib/utils/pdf'
 import crypto from 'crypto'
 
 export const runtime = 'nodejs'
