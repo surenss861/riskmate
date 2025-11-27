@@ -33,7 +33,7 @@ export async function PATCH(
       done,
       is_completed: done,
       completed_at: done ? new Date().toISOString() : null,
-      completed_by: done ? user.id : null,
+      completed_by: done ? userId : null,
     }
 
     const { data: updatedItem, error: updateError } = await supabase
