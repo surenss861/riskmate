@@ -412,7 +412,7 @@ export default function AccountPage() {
                   )}
                   <div className="flex gap-3 pt-4">
                     <button
-                      onClick={() => router.push('/pricing')}
+                      onClick={() => router.push('/dashboard/account/change-plan')}
                       className="rounded-lg bg-[#F97316] px-6 py-3 text-black font-semibold hover:bg-[#FB923C] transition-colors"
                     >
                       Change Plan
