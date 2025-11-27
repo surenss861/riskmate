@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { jobsApi, riskApi } from '@/lib/api'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import RiskMateLogo from '@/components/RiskMateLogo'
+import Image from 'next/image'
 
 interface RiskFactor {
   id: string
@@ -37,11 +38,16 @@ export default function EditJobPage() {
     insurance_status: 'pending',
   })
   const [error, setError] = useState<string | null>(null)
+  const [documents, setDocuments] = useState<any[]>([])
+  const [uploading, setUploading] = useState(false)
+  const [selectedImage, setSelectedImage] = useState<{ url: string; alt: string } | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (jobId) {
       loadJob()
       loadRiskFactors()
+      loadDocuments()
     }
   }, [jobId]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -83,6 +89,58 @@ export default function EditJobPage() {
       console.error('Failed to load risk factors:', err)
     }
   }
+
+  const loadDocuments = async () => {
+    try {
+      const response = await jobsApi.getDocuments(jobId)
+      setDocuments(response.data || [])
+    } catch (err: any) {
+      console.error('Failed to load documents:', err)
+    }
+  }
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Validate file type (images only)
+    if (!file.type.startsWith('image/')) {
+      setError('Please upload an image file')
+      return
+    }
+
+    // Validate file size (max 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      setError('File size must be less than 10MB')
+      return
+    }
+
+    setUploading(true)
+    setError(null)
+
+    try {
+      await jobsApi.uploadDocument(jobId, file, {
+        name: file.name,
+        type: 'photo',
+        description: `Uploaded on ${new Date().toLocaleDateString()}`,
+      })
+      
+      // Reload documents
+      await loadDocuments()
+      
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+    } catch (err: any) {
+      console.error('Failed to upload document:', err)
+      setError(err.message || 'Failed to upload photo')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const photos = documents.filter((doc) => doc.type === 'photo' && doc.url)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -343,6 +401,178 @@ export default function EditJobPage() {
                   )}
                 </div>
               </div>
+
+              {/* Photos Section */}
+              <div className="bg-[#121212]/80 backdrop-blur-sm border border-white/10 rounded-xl p-8">
+                <h2 className="text-2xl font-semibold mb-4">Photos & Evidence</h2>
+                <p className="text-sm text-[#A1A1A1] mb-6">
+                  Upload photos to document job conditions, hazards, and completed work.
+                </p>
+
+                {/* Upload Button */}
+                <div className="mb-6">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileUpload}
+                    className="hidden"
+                    id="photo-upload"
+                    disabled={uploading}
+                  />
+                  <label
+                    htmlFor="photo-upload"
+                    className={`inline-flex items-center gap-2 px-6 py-3 rounded-lg border border-white/20 text-white cursor-pointer transition-colors ${
+                      uploading
+                        ? 'opacity-50 cursor-not-allowed'
+                        : 'hover:bg-white/5 hover:border-white/30'
+                    }`}
+                  >
+                    {uploading ? (
+                      <>
+                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                        <span>Uploading...</span>
+                      </>
+                    ) : (
+                      <>
+                        <svg
+                          className="w-5 h-5"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M12 4v16m8-8H4"
+                          />
+                        </svg>
+                        <span>Add Photo</span>
+                      </>
+                    )}
+                  </label>
+                </div>
+
+                {/* Photo Gallery */}
+                {photos.length > 0 ? (
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    {photos.map((photo) => (
+                      <div
+                        key={photo.id}
+                        className="bg-black/40 border border-white/10 rounded-xl overflow-hidden cursor-pointer hover:border-white/20 transition-colors"
+                        onClick={() => {
+                          if (photo.url) {
+                            setSelectedImage({
+                              url: photo.url,
+                              alt: photo.description || photo.name,
+                            })
+                          }
+                        }}
+                      >
+                        {photo.url ? (
+                          <div className="relative w-full h-48 overflow-hidden group">
+                            <Image
+                              src={photo.url}
+                              alt={photo.description || photo.name}
+                              width={400}
+                              height={192}
+                              className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300"
+                              unoptimized
+                            />
+                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                              <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                                <svg
+                                  className="w-8 h-8 text-white"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"
+                                  />
+                                </svg>
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="w-full h-48 bg-white/5 flex items-center justify-center text-white/40">
+                            Image unavailable
+                          </div>
+                        )}
+                        <div className="p-3">
+                          <div className="text-sm font-semibold text-white truncate">
+                            {photo.description || photo.name}
+                          </div>
+                          {photo.created_at && (
+                            <div className="text-xs text-white/60 mt-1">
+                              {new Date(photo.created_at).toLocaleDateString()}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-12 border border-dashed border-white/10 rounded-lg">
+                    <svg
+                      className="w-12 h-12 text-white/20 mx-auto mb-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                      />
+                    </svg>
+                    <p className="text-white/60 text-sm">No photos uploaded yet</p>
+                    <p className="text-white/40 text-xs mt-2">Click &quot;Add Photo&quot; to get started</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Image Modal */}
+              {selectedImage && (
+                <div
+                  className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4"
+                  onClick={() => setSelectedImage(null)}
+                >
+                  <div className="relative max-w-4xl max-h-[90vh] w-full h-full flex items-center justify-center">
+                    <button
+                      onClick={() => setSelectedImage(null)}
+                      className="absolute top-4 right-4 text-white hover:text-white/70 transition-colors z-10"
+                    >
+                      <svg
+                        className="w-8 h-8"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M6 18L18 6M6 6l12 12"
+                        />
+                      </svg>
+                    </button>
+                    <Image
+                      src={selectedImage.url}
+                      alt={selectedImage.alt}
+                      width={1200}
+                      height={800}
+                      className="max-w-full max-h-full object-contain"
+                      unoptimized
+                    />
+                  </div>
+                </div>
+              )}
 
               {/* Risk Factors - Safety Checklist */}
               <div className="bg-[#121212]/80 backdrop-blur-sm border border-white/10 rounded-xl p-8">
