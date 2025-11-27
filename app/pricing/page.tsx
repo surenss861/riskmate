@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import RiskMateLogo from '@/components/RiskMateLogo'
+import { ErrorModal } from '@/components/dashboard/ErrorModal'
 import { subscriptionsApi } from '@/lib/api'
 
 type PlanCode = 'starter' | 'pro' | 'business'
@@ -11,6 +12,7 @@ type PlanCode = 'starter' | 'pro' | 'business'
 export default function PricingPage() {
   const router = useRouter()
   const [loading, setLoading] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   const handleCheckout = async (plan: PlanCode) => {
     setLoading(plan)
@@ -23,7 +25,7 @@ export default function PricingPage() {
       window.location.href = response.url
     } catch (err: any) {
       console.error('Failed to create checkout session:', err)
-      alert(err?.message || 'Failed to start checkout')
+      setError(err?.message || 'API request failed')
       setLoading(null)
     }
   }
@@ -245,6 +247,14 @@ export default function PricingPage() {
           </button>
         </div>
       </main>
+
+      {/* Error Modal */}
+      <ErrorModal
+        isOpen={error !== null}
+        title="Checkout Error"
+        message={error || ''}
+        onClose={() => setError(null)}
+      />
     </div>
   )
 }
