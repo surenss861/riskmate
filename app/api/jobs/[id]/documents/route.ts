@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { getOrganizationContext, verifyJobOwnership } from '@/lib/utils/organizationGuard'
 
 export const runtime = 'nodejs'
 
