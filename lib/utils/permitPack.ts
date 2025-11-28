@@ -7,11 +7,10 @@
  * This is a Business plan feature.
  */
 
-import archiver from 'archiver'
+import * as archiver from 'archiver'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { buildJobReport } from './jobReport'
 import { generateRiskSnapshotPDF } from './pdf'
-import { Readable } from 'stream'
 
 export interface PermitPackOptions {
   jobId: string
