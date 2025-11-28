@@ -26,8 +26,8 @@ const PLANS: Plan[] = [
     code: 'starter',
     name: 'Starter',
     price: 0,
-    priceLabel: 'Free',
-    description: 'Perfect for trying out RiskMate',
+    priceLabel: '$0',
+    description: 'Free forever',
     features: [
       '3 jobs per month',
       '1 team seat (solo operator)',
@@ -41,8 +41,8 @@ const PLANS: Plan[] = [
     code: 'pro',
     name: 'Pro',
     price: 29,
-    priceLabel: '$29/mo',
-    description: 'For small contractor crews',
+    priceLabel: '$29',
+    description: 'per business',
     features: [
       'Everything in Starter',
       'Unlimited jobs',
@@ -58,8 +58,8 @@ const PLANS: Plan[] = [
     code: 'business',
     name: 'Business',
     price: 129,
-    priceLabel: '$129/mo',
-    description: 'For established contractors',
+    priceLabel: '$129',
+    description: 'per business',
     features: [
       'Everything in Pro',
       'Unlimited team seats',
@@ -215,7 +215,7 @@ export default function ChangePlanPage() {
                   <h3 className="text-2xl font-semibold mb-2 mt-2">{plan.name}</h3>
                   <div className="mb-2">
                     <span className="text-4xl font-bold">{plan.priceLabel}</span>
-                    {plan.price > 0 && <span className="text-white/60">/mo</span>}
+                    <span className="text-white/60">/mo</span>
                   </div>
                   <p className="text-sm text-white/60 mb-6">{plan.description}</p>
 
