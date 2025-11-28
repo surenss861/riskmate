@@ -49,6 +49,14 @@ export default function JobDetailPage() {
   const [updatingMitigation, setUpdatingMitigation] = useState<string | null>(null)
   const [subscriptionTier, setSubscriptionTier] = useState<string | null>(null)
   const [generatingPermitPack, setGeneratingPermitPack] = useState(false)
+  const [permitPacks, setPermitPacks] = useState<Array<{
+    id: string
+    version: number
+    file_path: string
+    generated_at: string
+    downloadUrl: string | null
+  }>>([])
+  const [loadingPermitPacks, setLoadingPermitPacks] = useState(false)
 
   const loadJob = useCallback(async () => {
     try {
@@ -67,7 +75,7 @@ export default function JobDetailPage() {
     }
   }, [jobId, loadJob])
 
-  // Load subscription tier
+  // Load subscription tier and permit packs
   useEffect(() => {
     const loadSubscription = async () => {
       try {
@@ -80,6 +88,24 @@ export default function JobDetailPage() {
     loadSubscription()
   }, [])
 
+  // Load permit packs for Business plan users
+  useEffect(() => {
+    const loadPermitPacks = async () => {
+      if (subscriptionTier === 'business' && jobId) {
+        setLoadingPermitPacks(true)
+        try {
+          const response = await jobsApi.getPermitPacks(jobId)
+          setPermitPacks(response.data || [])
+        } catch (err) {
+          console.error('Failed to load permit packs:', err)
+        } finally {
+          setLoadingPermitPacks(false)
+        }
+      }
+    }
+    loadPermitPacks()
+  }, [subscriptionTier, jobId])
+
   const handleGeneratePermitPack = async () => {
     if (!jobId) return
 
@@ -90,6 +116,12 @@ export default function JobDetailPage() {
       if (response.success && response.data.downloadUrl) {
         // Open download URL in new tab
         window.open(response.data.downloadUrl, '_blank')
+        
+        // Reload permit packs list
+        if (subscriptionTier === 'business') {
+          const packsResponse = await jobsApi.getPermitPacks(jobId)
+          setPermitPacks(packsResponse.data || [])
+        }
         
         // Show success message
         alert('Permit Pack generated successfully! The download should start automatically.')

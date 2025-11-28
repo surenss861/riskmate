@@ -185,6 +185,19 @@ export const jobsApi = {
       method: 'POST',
     });
   },
+
+  getPermitPacks: async (id: string) => {
+    return apiRequest<{
+      data: Array<{
+        id: string;
+        version: number;
+        file_path: string;
+        generated_at: string;
+        generated_by: string | null;
+        downloadUrl: string | null;
+      }>;
+    }>(`/api/jobs/${id}/permit-packs`);
+  },
 };
 
 // Risk API
