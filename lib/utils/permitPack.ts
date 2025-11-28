@@ -273,7 +273,7 @@ function createZipBuffer(
   files: Array<{ path: string; content: Buffer | string }>
 ): Promise<Buffer> {
   return new Promise((resolve, reject) => {
-    const archive = archiver('zip', {
+    const archive = archiver.default('zip', {
       zlib: { level: 9 },
     })
 
