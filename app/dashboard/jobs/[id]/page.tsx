@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { jobsApi } from '@/lib/api'
+import { jobsApi, subscriptionsApi } from '@/lib/api'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import RiskMateLogo from '@/components/RiskMateLogo'
 
@@ -47,6 +47,8 @@ export default function JobDetailPage() {
   const [job, setJob] = useState<Job | null>(null)
   const [loading, setLoading] = useState(true)
   const [updatingMitigation, setUpdatingMitigation] = useState<string | null>(null)
+  const [subscriptionTier, setSubscriptionTier] = useState<string | null>(null)
+  const [generatingPermitPack, setGeneratingPermitPack] = useState(false)
 
   const loadJob = useCallback(async () => {
     try {
@@ -64,6 +66,47 @@ export default function JobDetailPage() {
       loadJob()
     }
   }, [jobId, loadJob])
+
+  // Load subscription tier
+  useEffect(() => {
+    const loadSubscription = async () => {
+      try {
+        const response = await subscriptionsApi.get()
+        setSubscriptionTier(response.data?.tier || null)
+      } catch (err) {
+        console.error('Failed to load subscription:', err)
+      }
+    }
+    loadSubscription()
+  }, [])
+
+  const handleGeneratePermitPack = async () => {
+    if (!jobId) return
+
+    setGeneratingPermitPack(true)
+    try {
+      const response = await jobsApi.generatePermitPack(jobId)
+      
+      if (response.success && response.data.downloadUrl) {
+        // Open download URL in new tab
+        window.open(response.data.downloadUrl, '_blank')
+        
+        // Show success message
+        alert('Permit Pack generated successfully! The download should start automatically.')
+      } else {
+        throw new Error('Failed to generate permit pack')
+      }
+    } catch (err: any) {
+      console.error('Failed to generate permit pack:', err)
+      if (err.code === 'FEATURE_RESTRICTED') {
+        alert('Permit Pack Generator is only available for Business plan subscribers. Upgrade to Business to access this feature.')
+      } else {
+        alert(err?.message || 'Failed to generate permit pack. Please try again.')
+      }
+    } finally {
+      setGeneratingPermitPack(false)
+    }
+  }
 
   const toggleMitigation = async (itemId: string, currentDone: boolean) => {
     setUpdatingMitigation(itemId)
@@ -162,6 +205,24 @@ export default function JobDetailPage() {
               >
                 View Report
               </button>
+              {subscriptionTier === 'business' && (
+                <button
+                  onClick={handleGeneratePermitPack}
+                  disabled={generatingPermitPack}
+                  className="rounded-lg bg-[#F97316] px-4 py-2 text-sm text-black font-semibold transition hover:bg-[#FB923C] disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  {generatingPermitPack ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-black" />
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      📦 Generate Permit Pack
+                    </>
+                  )}
+                </button>
+              )}
             </div>
           </div>
         </header>

@@ -172,6 +172,19 @@ export const jobsApi = {
 
   full: async (id: string) =>
     apiRequest<JobReportData>(`/api/jobs/${id}/full`),
+
+  generatePermitPack: async (id: string) => {
+    return apiRequest<{
+      success: boolean;
+      data: {
+        downloadUrl: string;
+        filePath: string;
+        size: number;
+      };
+    }>(`/api/jobs/${id}/permit-pack`, {
+      method: 'POST',
+    });
+  },
 };
 
 // Risk API
