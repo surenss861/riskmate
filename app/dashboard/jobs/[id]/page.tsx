@@ -396,6 +396,91 @@ export default function JobDetailPage() {
               </div>
             </motion.div>
           </div>
+
+          {/* Permit Packs Section (Business Plan Only) */}
+          {subscriptionTier === 'business' && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+              className="mt-8"
+            >
+              <div className="p-8 rounded-xl border border-white/10 bg-[#121212]/80 backdrop-blur-sm">
+                <div className="flex items-center justify-between mb-6">
+                  <div>
+                    <h2 className="text-2xl font-semibold mb-2 text-white">Permit Packs</h2>
+                    <p className="text-sm text-[#A1A1A1]">
+                      Downloadable ZIP bundles containing all job documents, photos, and compliance materials
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleGeneratePermitPack}
+                    disabled={generatingPermitPack}
+                    className="rounded-lg bg-[#F97316] px-6 py-3 text-sm text-black font-semibold transition hover:bg-[#FB923C] disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  >
+                    {generatingPermitPack ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-black" />
+                        Generating...
+                      </>
+                    ) : (
+                      <>
+                        📦 Generate New Pack
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {loadingPermitPacks ? (
+                  <div className="text-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#F97316] mx-auto mb-4" />
+                    <p className="text-sm text-[#A1A1A1]">Loading permit packs...</p>
+                  </div>
+                ) : permitPacks.length === 0 ? (
+                  <div className="text-center py-8 border border-white/10 rounded-lg bg-black/20">
+                    <p className="text-sm text-[#A1A1A1] mb-2">No permit packs generated yet</p>
+                    <p className="text-xs text-[#A1A1A1]/70">
+                      Click "Generate New Pack" to create your first permit pack
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {permitPacks.map((pack) => (
+                      <div
+                        key={pack.id}
+                        className="flex items-center justify-between p-4 rounded-lg border border-white/10 bg-black/20 hover:bg-black/30 transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-lg bg-[#F97316]/20 flex items-center justify-center">
+                            <span className="text-xl">📦</span>
+                          </div>
+                          <div>
+                            <div className="text-sm font-semibold text-white">
+                              Permit Pack v{pack.version}
+                            </div>
+                            <div className="text-xs text-[#A1A1A1]">
+                              Generated {new Date(pack.generated_at).toLocaleDateString()} at{' '}
+                              {new Date(pack.generated_at).toLocaleTimeString()}
+                            </div>
+                          </div>
+                        </div>
+                        {pack.downloadUrl ? (
+                          <button
+                            onClick={() => window.open(pack.downloadUrl!, '_blank')}
+                            className="px-4 py-2 rounded-lg border border-white/20 text-white text-sm hover:bg-white/10 transition-colors"
+                          >
+                            Download
+                          </button>
+                        ) : (
+                          <span className="text-xs text-[#A1A1A1]">Unavailable</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          )}
         </div>
       </div>
     </ProtectedRoute>
