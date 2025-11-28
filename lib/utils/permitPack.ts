@@ -41,11 +41,6 @@ export async function generatePermitPack(
     throw new Error('Job not found')
   }
 
-  // Create ZIP archive
-  const archive = archiver('zip', {
-    zlib: { level: 9 }, // Maximum compression
-  })
-
   // Collect all files to add
   const filesToAdd: Array<{
     path: string
