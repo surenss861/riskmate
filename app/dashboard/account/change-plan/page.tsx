@@ -25,32 +25,28 @@ const PLANS: Plan[] = [
   {
     code: 'starter',
     name: 'Starter',
-    price: 0,
-    priceLabel: '$0',
-    description: 'Free forever',
+    price: 29,
+    priceLabel: '$29',
+    description: 'per business',
     features: [
-      '3 jobs per month',
-      '1 team seat (solo operator)',
-      'Unlimited PDF reports',
+      '10 jobs per month',
       'Automatic risk scores',
-      'Photo uploads',
-      'Job timelines',
+      'Branded watermark PDFs',
+      'Shareable job reports (view-only links)',
     ],
   },
   {
     code: 'pro',
     name: 'Pro',
-    price: 29,
-    priceLabel: '$29',
+    price: 59,
+    priceLabel: '$59',
     description: 'per business',
     features: [
-      'Everything in Starter',
       'Unlimited jobs',
       'Up to 5 team seats',
-      'Team invites & activity tracking',
-      'More photo storage',
-      'Advanced controls list',
-      'Job-level timeline logs',
+      'Branded PDFs + notifications',
+      'Live reports + client share links',
+      'Priority email support',
     ],
     popular: true,
   },
@@ -61,14 +57,11 @@ const PLANS: Plan[] = [
     priceLabel: '$129',
     description: 'per business',
     features: [
-      'Everything in Pro',
-      'Unlimited team seats',
-      'Advanced team management',
-      'Detailed hazard analytics',
-      'Trend reports',
-      'Unlimited photo storage',
-      'Supervisor dashboard',
-      'Priority support',
+      'Unlimited seats',
+      'Permit Pack Generator (ZIP bundle)',
+      'Org-level dashboard analytics',
+      'Versioned audit logs (compliance history)',
+      'Dedicated onboarding & phone support',
     ],
   },
 ]
@@ -204,6 +197,11 @@ export default function ChangePlanPage() {
                   {plan.popular && (
                     <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 bg-[#F97316] text-black text-xs font-semibold rounded-full">
                       Most Popular
+                    </div>
+                  )}
+                  {plan.code === 'business' && !isCurrent && (
+                    <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 bg-white/10 text-white text-xs font-semibold rounded-full border border-white/20">
+                      Audit-Ready
                     </div>
                   )}
                   {isCurrent && (
