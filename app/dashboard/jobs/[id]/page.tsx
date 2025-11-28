@@ -440,7 +440,7 @@ export default function JobDetailPage() {
                   <div className="text-center py-8 border border-white/10 rounded-lg bg-black/20">
                     <p className="text-sm text-[#A1A1A1] mb-2">No permit packs generated yet</p>
                     <p className="text-xs text-[#A1A1A1]/70">
-                      Click "Generate New Pack" to create your first permit pack
+                      Click &quot;Generate New Pack&quot; to create your first permit pack
                     </p>
                   </div>
                 ) : (
