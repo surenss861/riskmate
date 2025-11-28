@@ -7,7 +7,7 @@
  * This is a Business plan feature.
  */
 
-import * as archiver from 'archiver'
+import archiver from 'archiver'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { buildJobReport } from './jobReport'
 import { generateRiskSnapshotPDF } from './pdf'
@@ -273,7 +273,7 @@ function createZipBuffer(
   files: Array<{ path: string; content: Buffer | string }>
 ): Promise<Buffer> {
   return new Promise((resolve, reject) => {
-    const archive = archiver.default('zip', {
+    const archive = archiver('zip', {
       zlib: { level: 9 },
     })
 
