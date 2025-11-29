@@ -419,7 +419,7 @@ export default function DashboardPage() {
             className="overflow-hidden rounded-3xl border border-white/10 bg-black/45 shadow-[0_32px_110px_rgba(8,8,22,0.55)] backdrop-blur-2xl"
           >
             <div className="flex items-center justify-between border-b border-white/10 px-6 py-6">
-              <h2 className="text-2xl font-semibold text-white">Jobs</h2>
+              <h2 className="text-2xl font-semibold text-white">Job Roaster</h2>
               <div className="flex gap-3">
                 <select
                   value={filterStatus}
