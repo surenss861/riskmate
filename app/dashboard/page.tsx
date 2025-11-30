@@ -462,17 +462,21 @@ export default function DashboardPage() {
                 {jobs.map((job, index) => (
                   <motion.div
                     key={job.id}
-                    onClick={() => router.push(`/dashboard/jobs/${job.id}`)}
                     initial={{ opacity: 0, y: 18 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.05 * index }}
                     whileHover={{ backgroundColor: 'rgba(255,255,255,0.06)', scale: 1.01 }}
-                    className="group cursor-pointer px-6 py-5 transition duration-200"
+                    className="group px-6 py-5 transition duration-200"
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex-1">
                         <div className="flex items-center gap-4 mb-2">
-                          <h3 className="text-lg font-semibold">{job.client_name}</h3>
+                          <Link
+                            href={`/dashboard/jobs/${job.id}`}
+                            className="text-lg font-semibold hover:text-[#F97316] transition-colors cursor-pointer"
+                          >
+                            {job.client_name}
+                          </Link>
                           <span className={`text-xs px-2 py-1 rounded border ${getRiskBadgeColor(job.risk_level)}`}>
                             {job.risk_level?.toUpperCase() || 'NO SCORE'}
                           </span>
