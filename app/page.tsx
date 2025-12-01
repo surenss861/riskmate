@@ -647,6 +647,48 @@ export default function HomePage() {
           </motion.div>
         </section>
 
+        {/* Comparison Pages Section */}
+        <section className="max-w-6xl mx-auto px-6 py-20">
+          <motion.div
+            className="text-center mb-12"
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+          >
+            <h2 className="text-4xl font-bold mb-4 font-display">How RiskMate Compares</h2>
+            <p className="text-[#A1A1A1] max-w-2xl mx-auto">
+              See how RiskMate stacks up against other solutions contractors use for safety documentation.
+            </p>
+          </motion.div>
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {[
+              { title: 'vs SafetyCulture', link: '/compare/safetyculture', description: 'Why contractors choose RiskMate' },
+              { title: 'vs SiteDocs', link: '/compare/sitedocs', description: 'Job-centric vs document-centric' },
+              { title: 'vs Pen & Paper', link: '/compare/pen-and-paper', description: 'Digital vs traditional' },
+              { title: 'vs Spreadsheets', link: '/compare/spreadsheets', description: 'Purpose-built vs generic' },
+            ].map((comparison, index) => (
+              <motion.button
+                key={index}
+                onClick={() => router.push(comparison.link)}
+                className="p-6 bg-[#121212] rounded-xl border border-white/5 hover:border-[#F97316]/30 transition-colors text-left group"
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.6, delay: index * 0.1 }}
+              >
+                <h3 className="text-lg font-semibold mb-2 group-hover:text-[#F97316] transition-colors">
+                  {comparison.title}
+                </h3>
+                <p className="text-sm text-white/60 mb-3">{comparison.description}</p>
+                <span className="text-[#F97316] text-sm font-medium group-hover:underline">
+                  Compare →
+                </span>
+              </motion.button>
+            ))}
+          </div>
+        </section>
+
         {/* How It Works - Minimal Steps */}
         <section 
           className="max-w-6xl mx-auto px-6 py-20"
