@@ -249,6 +249,55 @@ export default function DashboardPage() {
     refetchAnalytics()
   }
 
+  // Compute DashboardOverview data
+  const todaysJobs = useMemo(() => {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    return jobs.filter((job) => {
+      const jobDate = new Date(job.created_at)
+      jobDate.setHours(0, 0, 0, 0)
+      return jobDate.getTime() === today.getTime()
+    }).map((job) => ({
+      id: job.id,
+      client_name: job.client_name,
+      risk_score: job.risk_score,
+      status: job.status,
+    }))
+  }, [jobs])
+
+  const jobsAtRisk = useMemo(() => {
+    return jobs
+      .filter((job) => job.risk_score !== null && job.risk_score > 75)
+      .map((job) => ({
+        id: job.id,
+        client_name: job.client_name,
+        risk_score: job.risk_score!,
+        risk_level: job.risk_level || 'high',
+      }))
+  }, [jobs])
+
+  const recentEvidence = useMemo(() => {
+    // Placeholder - would need to fetch from documents/photos API
+    return []
+  }, [])
+
+  const incompleteMitigations = useMemo(() => {
+    // Placeholder - would need to fetch from mitigation_items API
+    return []
+  }, [])
+
+  const workforceActivity = useMemo(() => {
+    // Placeholder - would need to fetch from users/team API
+    return []
+  }, [])
+
+  const complianceTrend = useMemo(() => {
+    return (analyticsData.trend || []).map((item: any) => ({
+      date: item.date || item.period || '',
+      rate: item.completion_rate || item.rate || 0,
+    }))
+  }, [analyticsData.trend])
+
   if (loading) {
     return (
       <ProtectedRoute>
