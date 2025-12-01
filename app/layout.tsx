@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { Inter, Playfair_Display } from 'next/font/google'
 import './globals.css'
+import { PWARegister } from '@/components/PWARegister'
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
 const playfair = Playfair_Display({
@@ -32,6 +33,7 @@ export default function RootLayout({
       <head>
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
         <link rel="shortcut icon" href="/favicon.svg" type="image/svg+xml" />
+        <link rel="manifest" href="/manifest.json" />
         {/* PostHog Analytics */}
         {process.env.NEXT_PUBLIC_POSTHOG_KEY && (
           <>
@@ -51,7 +53,10 @@ export default function RootLayout({
           defer
         />
       </head>
-      <body>{children}</body>
+      <body>
+        <PWARegister />
+        {children}
+      </body>
     </html>
   )
 }
