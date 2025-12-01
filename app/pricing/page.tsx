@@ -215,6 +215,162 @@ export default function PricingPage() {
           </motion.div>
         </div>
 
+        {/* Feature Comparison Table */}
+        <div className="mb-16">
+          <h2 className="text-3xl font-bold text-center mb-8">Compare Plans</h2>
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="border-b border-white/10">
+                  <th className="text-left p-4 text-white/80 font-semibold">Feature</th>
+                  <th className="text-center p-4 text-white/80 font-semibold">Starter</th>
+                  <th className="text-center p-4 text-white/80 font-semibold">Pro</th>
+                  <th className="text-center p-4 text-white/80 font-semibold">Business</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="border-b border-white/5">
+                  <td className="p-4 text-white/70">Jobs per month</td>
+                  <td className="p-4 text-center text-white/70">3</td>
+                  <td className="p-4 text-center text-white/70">Unlimited</td>
+                  <td className="p-4 text-center text-white/70">Unlimited</td>
+                </tr>
+                <tr className="border-b border-white/5">
+                  <td className="p-4 text-white/70">Team seats</td>
+                  <td className="p-4 text-center text-white/70">1</td>
+                  <td className="p-4 text-center text-white/70">5</td>
+                  <td className="p-4 text-center text-white/70">Unlimited</td>
+                </tr>
+                <tr className="border-b border-white/5">
+                  <td className="p-4 text-white/70">Risk scoring engine</td>
+                  <td className="p-4 text-center text-[#F97316]">✓</td>
+                  <td className="p-4 text-center text-[#F97316]">✓</td>
+                  <td className="p-4 text-center text-[#F97316]">✓</td>
+                </tr>
+                <tr className="border-b border-white/5">
+                  <td className="p-4 text-white/70">PDF reports</td>
+                  <td className="p-4 text-center text-white/70">Watermarked</td>
+                  <td className="p-4 text-center text-[#F97316]">Branded</td>
+                  <td className="p-4 text-center text-[#F97316]">Branded</td>
+                </tr>
+                <tr className="border-b border-white/5">
+                  <td className="p-4 text-white/70">Live report links</td>
+                  <td className="p-4 text-center text-white/40">—</td>
+                  <td className="p-4 text-center text-[#F97316]">✓</td>
+                  <td className="p-4 text-center text-[#F97316]">✓</td>
+                </tr>
+                <tr className="border-b border-white/5">
+                  <td className="p-4 text-white/70">Priority support</td>
+                  <td className="p-4 text-center text-white/40">—</td>
+                  <td className="p-4 text-center text-white/70">Email</td>
+                  <td className="p-4 text-center text-[#F97316]">Dedicated</td>
+                </tr>
+                <tr className="border-b border-white/5">
+                  <td className="p-4 text-white/70">Permit Pack Generator</td>
+                  <td className="p-4 text-center text-white/40">—</td>
+                  <td className="p-4 text-center text-white/40">—</td>
+                  <td className="p-4 text-center text-[#F97316]">✓</td>
+                </tr>
+                <tr className="border-b border-white/5">
+                  <td className="p-4 text-white/70">Audit log versioning</td>
+                  <td className="p-4 text-center text-white/40">—</td>
+                  <td className="p-4 text-center text-white/40">—</td>
+                  <td className="p-4 text-center text-[#F97316]">✓</td>
+                </tr>
+                <tr>
+                  <td className="p-4 text-white/70">Organization analytics</td>
+                  <td className="p-4 text-center text-white/40">—</td>
+                  <td className="p-4 text-center text-white/40">—</td>
+                  <td className="p-4 text-center text-[#F97316]">✓</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Testimonials */}
+        <div className="mb-16">
+          <h2 className="text-3xl font-bold text-center mb-8">What Contractors Say</h2>
+          <div className="grid md:grid-cols-3 gap-6">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+              className="bg-white/5 border border-white/10 rounded-xl p-6"
+            >
+              <p className="text-white/80 mb-4 italic">
+                &quot;RiskMate cut my reporting time in half. Clients love the PDFs.&quot;
+              </p>
+              <p className="text-sm text-white/60">— James L., Electrical Contractor</p>
+            </motion.div>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+              className="bg-white/5 border border-white/10 rounded-xl p-6"
+            >
+              <p className="text-white/80 mb-4 italic">
+                &quot;The Permit Pack feature pays for itself every week.&quot;
+              </p>
+              <p className="text-sm text-white/60">— Hector R., Roofing Company Owner</p>
+            </motion.div>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+              className="bg-white/5 border border-white/10 rounded-xl p-6"
+            >
+              <p className="text-white/80 mb-4 italic">
+                &quot;My team actually follows safety now because it&apos;s so easy.&quot;
+              </p>
+              <p className="text-sm text-white/60">— Carla M., HVAC Supervisor</p>
+            </motion.div>
+          </div>
+        </div>
+
+        {/* ROI Calculator */}
+        <div className="mb-16 bg-white/5 border border-white/10 rounded-2xl p-8">
+          <h2 className="text-3xl font-bold text-center mb-4">See How Much RiskMate Saves Your Business</h2>
+          <p className="text-center text-white/60 mb-8">
+            RiskMate reduces job documentation time by 40–60% per job. Fewer safety mistakes = fewer client disputes.
+          </p>
+          <div className="max-w-2xl mx-auto space-y-6">
+            <div>
+              <label className="block text-sm text-white/70 mb-2">Jobs per month</label>
+              <input
+                type="number"
+                defaultValue="10"
+                className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-[#F97316]"
+              />
+            </div>
+            <div>
+              <label className="block text-sm text-white/70 mb-2">Avg time wasted on paperwork (hours per job)</label>
+              <input
+                type="number"
+                defaultValue="2"
+                className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-[#F97316]"
+              />
+            </div>
+            <div>
+              <label className="block text-sm text-white/70 mb-2">Hourly labor cost ($)</label>
+              <input
+                type="number"
+                defaultValue="50"
+                className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-[#F97316]"
+              />
+            </div>
+            <div className="pt-4 border-t border-white/10">
+              <div className="text-center">
+                <p className="text-sm text-white/60 mb-2">Estimated monthly savings</p>
+                <p className="text-4xl font-bold text-[#F97316]">$400+</p>
+                <p className="text-xs text-white/50 mt-2">
+                  Permit Packs help close projects 30% faster.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* FAQ Section */}
         <div className="max-w-3xl mx-auto">
           <h2 className="text-3xl font-bold text-center mb-8">Frequently Asked Questions</h2>

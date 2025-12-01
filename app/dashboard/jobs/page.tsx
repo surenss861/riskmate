@@ -98,14 +98,6 @@ export default function JobsPage() {
     <ProtectedRoute>
       <div className="min-h-screen bg-[#050505] text-white">
         <DashboardNavbar email={user?.email} onLogout={() => router.push('/')} />
-        <div className="max-w-7xl mx-auto px-6 py-8">
-          <div className="mb-6">
-            <h1 className="text-3xl font-bold mb-2">Job Roaster</h1>
-            <p className="text-sm text-white/60">
-              Your centralized job hub — track progress, hazards, documents, and generate audit-ready reports.
-            </p>
-          </div>
-
         <div className="mx-auto max-w-7xl px-6 py-14">
           <motion.div
             initial={{ opacity: 0, y: 24 }}
@@ -116,10 +108,10 @@ export default function JobsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <h1 className="font-display text-4xl font-bold text-white md:text-5xl">
-                  Job Roster
+                  Job Roaster
                 </h1>
                 <p className="mt-2 text-white/60">
-                  View and manage all your jobs
+                  Your centralized job hub — track progress, hazards, documents, and generate audit-ready reports.
                 </p>
               </div>
               <button
