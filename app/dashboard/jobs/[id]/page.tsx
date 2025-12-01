@@ -11,6 +11,12 @@ import { DashboardSkeleton } from '@/components/dashboard/SkeletonLoader'
 import { EditableText } from '@/components/dashboard/EditableText'
 import { EditableSelect } from '@/components/dashboard/EditableSelect'
 import { VersionHistory } from '@/components/dashboard/VersionHistory'
+import { JobAssignment } from '@/components/dashboard/JobAssignment'
+import { EvidenceVerification } from '@/components/dashboard/EvidenceVerification'
+import { TemplatesManager } from '@/components/dashboard/TemplatesManager'
+import { optimizePhoto } from '@/lib/utils/photoOptimization'
+import { getGPSLocation } from '@/lib/utils/gpsMetadata'
+import { hasPermission } from '@/lib/utils/permissions'
 
 interface MitigationItem {
   id: string
@@ -523,11 +529,59 @@ export default function JobDetailPage() {
             </motion.div>
               )}
 
-              {/* Version History */}
+              {/* Job Assignment */}
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.5 }}
+                className="mt-8"
+              >
+                <JobAssignment
+                  jobId={jobId}
+                  workers={[]} // TODO: Fetch from team API
+                  onAssign={async (workerId) => {
+                    // TODO: Implement assignment API
+                    console.log('Assign worker:', workerId)
+                  }}
+                  onUnassign={async (workerId) => {
+                    // TODO: Implement unassignment API
+                    console.log('Unassign worker:', workerId)
+                  }}
+                  onCheckIn={async (workerId) => {
+                    // TODO: Implement check-in API
+                    console.log('Check in worker:', workerId)
+                  }}
+                  onCheckOut={async (workerId) => {
+                    // TODO: Implement check-out API
+                    console.log('Check out worker:', workerId)
+                  }}
+                  userRole="admin" // TODO: Get from user context
+                />
+              </motion.div>
+
+              {/* Evidence Verification */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.6 }}
+                className="mt-8"
+              >
+                <EvidenceVerification
+                  jobId={jobId}
+                  items={[]} // TODO: Fetch from documents/mitigations API
+                  onVerify={async (id, status, reason) => {
+                    // TODO: Implement verification API
+                    console.log('Verify evidence:', id, status, reason)
+                  }}
+                  userRole="admin" // TODO: Get from user context
+                />
+              </motion.div>
+
+              {/* Version History */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.7 }}
                 className="mt-8"
               >
                 <VersionHistory

@@ -7,6 +7,7 @@ import ProtectedRoute from '@/components/ProtectedRoute'
 import { motion } from 'framer-motion'
 import { jobsApi } from '@/lib/api'
 import { DashboardNavbar } from '@/components/dashboard/DashboardNavbar'
+import { DataGrid } from '@/components/dashboard/DataGrid'
 
 interface Job {
   id: string
@@ -181,54 +182,77 @@ export default function JobsPage() {
               </button>
             </motion.div>
           ) : (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.45, delay: 0.2 }}
-              className="space-y-4"
-            >
-              {jobs.map((job) => (
-                <div
-                  key={job.id}
-                  onClick={() => router.push(`/dashboard/jobs/${job.id}`)}
-                  className="group cursor-pointer rounded-2xl border border-white/10 bg-black/35 p-6 transition-all hover:border-white/20 hover:bg-black/50"
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3">
-                        <h3 className="text-lg font-semibold text-white">
-                          {job.client_name}
-                        </h3>
-                        <span
-                          className={`rounded-full border px-2.5 py-0.5 text-xs font-medium ${getStatusColor(job.status)}`}
-                        >
-                          {job.status}
-                        </span>
-                      </div>
-                      <p className="mt-1 text-sm text-white/60">
-                        {job.job_type} • {job.location}
-                      </p>
-                      <p className="mt-2 text-xs text-white/40">
-                        Created {formatDate(job.created_at)}
-                      </p>
-                    </div>
-                    <div className="ml-4 text-right">
-                      {job.risk_score !== null && (
-                        <div className="mb-2">
-                          <div className="text-2xl font-bold text-white">
-                            {job.risk_score}
-                          </div>
-                          <div
-                            className={`text-xs font-medium ${getRiskColor(job.risk_level)}`}
-                          >
-                            {job.risk_level?.toUpperCase() || 'N/A'}
-                          </div>
+            <DataGrid
+              data={jobs}
+              columns={[
+                {
+                  id: 'client_name',
+                  header: 'Client Name',
+                  accessor: (job) => job.client_name,
+                  sortable: true,
+                  render: (value, job) => (
+                    <button
+                      onClick={() => router.push(`/dashboard/jobs/${job.id}`)}
+                      className="text-white hover:text-[#F97316] transition-colors font-semibold"
+                    >
+                      {value}
+                    </button>
+                  ),
+                },
+                {
+                  id: 'job_type',
+                  header: 'Job Type',
+                  accessor: (job) => job.job_type,
+                  sortable: true,
+                },
+                {
+                  id: 'location',
+                  header: 'Location',
+                  accessor: (job) => job.location,
+                  sortable: true,
+                },
+                {
+                  id: 'status',
+                  header: 'Status',
+                  accessor: (job) => job.status,
+                  sortable: true,
+                  render: (value) => (
+                    <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(value)}`}>
+                      {value}
+                    </span>
+                  ),
+                },
+                {
+                  id: 'risk_score',
+                  header: 'Risk Score',
+                  accessor: (job) => job.risk_score ?? '—',
+                  sortable: true,
+                  render: (value, job) => (
+                    <div className="text-right">
+                      <div className="text-lg font-bold text-white">{value}</div>
+                      {job.risk_level && (
+                        <div className={`text-xs ${getRiskColor(job.risk_level)}`}>
+                          {job.risk_level.toUpperCase()}
                         </div>
                       )}
                     </div>
-                  </div>
-                </div>
-              ))}
+                  ),
+                },
+                {
+                  id: 'created_at',
+                  header: 'Created',
+                  accessor: (job) => formatDate(job.created_at),
+                  sortable: true,
+                },
+              ]}
+              onRowClick={(job) => router.push(`/dashboard/jobs/${job.id}`)}
+              rowHighlight={(job) => {
+                if (job.risk_score && job.risk_score > 80) return 'red-500'
+                if (job.risk_score && job.risk_score > 60) return 'orange-500'
+                return null
+              }}
+            />
+          )}
 
               {/* Pagination */}
               {totalPages > 1 && (
