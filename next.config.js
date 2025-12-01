@@ -10,6 +10,14 @@ const nextConfig = {
       },
     ],
   },
+  async rewrites() {
+    return [
+      {
+        source: '/sample-risk-report.pdf',
+        destination: '/api/sample-report',
+      },
+    ]
+  },
 }
 
 module.exports = nextConfig

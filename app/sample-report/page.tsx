@@ -133,9 +133,7 @@ export default function SampleReportPage() {
           <div className="border-t border-white/10 pt-6">
             <button
               onClick={() => {
-                // In a real implementation, this would download a sample PDF
-                // For now, we'll create a placeholder
-                window.open('/sample-risk-report.pdf', '_blank')
+                window.open('/api/sample-report', '_blank')
               }}
               className="w-full px-8 py-4 bg-[#F97316] hover:bg-[#FB923C] text-black rounded-lg font-semibold text-lg transition-colors flex items-center justify-center gap-3"
             >
