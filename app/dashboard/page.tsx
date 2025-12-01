@@ -74,9 +74,16 @@ export default function DashboardPage() {
           .maybeSingle()
         role = userRow?.role ?? 'member'
         setUserRole(role)
-        // Show onboarding if not completed
-        const onboardingCompleted = userRow?.has_completed_onboarding || userRow?.onboarding_completed
-        setShowOnboarding(!onboardingCompleted)
+        // Show onboarding only if user exists and explicitly hasn't completed it
+        if (userRow) {
+          const onboardingCompleted = userRow.has_completed_onboarding ?? userRow.onboarding_completed
+          // Only show if explicitly false or null (not completed)
+          setShowOnboarding(onboardingCompleted !== true)
+        } else {
+          // If user row doesn't exist yet, don't show onboarding
+          // (user will be created on signup/signin, and onboarding will be handled then)
+          setShowOnboarding(false)
+        }
       }
 
       // Load jobs
@@ -612,13 +619,29 @@ export default function DashboardPage() {
           const supabase = createSupabaseBrowserClient()
           const { data: { user } } = await supabase.auth.getUser()
           if (user) {
+            const { error } = await supabase
+              .from('users')
+              .update({ has_completed_onboarding: true })
+              .eq('id', user.id)
+            
+            if (error) {
+              console.error('Failed to update onboarding status:', error)
+              // Still hide the onboarding even if update fails
+            }
+          }
+        }}
+        onSkip={async () => {
+          setShowOnboarding(false)
+          // Also mark as completed when skipped
+          const supabase = createSupabaseBrowserClient()
+          const { data: { user } } = await supabase.auth.getUser()
+          if (user) {
             await supabase
               .from('users')
               .update({ has_completed_onboarding: true })
               .eq('id', user.id)
           }
         }}
-        onSkip={() => setShowOnboarding(false)}
       />
     </ProtectedRoute>
   )
