@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import { motion } from 'framer-motion'
@@ -108,9 +109,9 @@ export default function JobsPage() {
           >
             <div className="flex items-center justify-between">
               <div>
-                <h1 className="font-display text-4xl font-bold text-white md:text-5xl">
+                <Link href="/dashboard/jobs" className="font-display text-4xl font-bold text-white md:text-5xl hover:text-[#F97316] transition-colors">
                   Job Roaster
-                </h1>
+                </Link>
                 <p className="mt-2 text-white/60">
                   Your centralized job hub — track progress, hazards, documents, and generate audit-ready reports.
                 </p>
@@ -254,29 +255,27 @@ export default function JobsPage() {
             />
           )}
 
-              {/* Pagination */}
-              {totalPages > 1 && (
-                <div className="mt-8 flex items-center justify-center gap-2">
-                  <button
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    disabled={page === 1}
-                    className="rounded-lg border border-white/15 bg-white/5 px-4 py-2 text-sm text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-white/10"
-                  >
-                    Previous
-                  </button>
-                  <span className="px-4 text-sm text-white/60">
-                    Page {page} of {totalPages}
-                  </span>
-                  <button
-                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                    disabled={page === totalPages}
-                    className="rounded-lg border border-white/15 bg-white/5 px-4 py-2 text-sm text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-white/10"
-                  >
-                    Next
-                  </button>
-                </div>
-              )}
-            </motion.div>
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="mt-8 flex items-center justify-center gap-2">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="rounded-lg border border-white/15 bg-white/5 px-4 py-2 text-sm text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-white/10"
+              >
+                Previous
+              </button>
+              <span className="px-4 text-sm text-white/60">
+                Page {page} of {totalPages}
+              </span>
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+                className="rounded-lg border border-white/15 bg-white/5 px-4 py-2 text-sm text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-white/10"
+              >
+                Next
+              </button>
+            </div>
           )}
         </div>
       </div>
