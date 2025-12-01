@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { motion } from 'framer-motion'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import { DashboardNavbar } from '@/components/dashboard/DashboardNavbar'
 import { TemplatesManager } from '@/components/dashboard/TemplatesManager'

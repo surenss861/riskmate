@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
+import Image from 'next/image'
 import { motion } from 'framer-motion'
 import RiskMateLogo from '@/components/RiskMateLogo'
 
@@ -142,9 +143,11 @@ export default function ClientPortalPage() {
                   rel="noopener noreferrer"
                   className="aspect-square rounded-lg overflow-hidden border border-white/10 hover:border-[#F97316] transition-colors"
                 >
-                  <img
+                  <Image
                     src={photo.url}
                     alt={photo.name}
+                    width={300}
+                    height={300}
                     className="w-full h-full object-cover"
                   />
                 </a>
