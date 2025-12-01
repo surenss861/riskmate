@@ -376,12 +376,40 @@ export default function PricingPage() {
           <h2 className="text-3xl font-bold text-center mb-8">Frequently Asked Questions</h2>
           <div className="space-y-6">
             <div className="bg-white/5 border border-white/10 rounded-xl p-6">
+              <h3 className="text-lg font-semibold mb-2">Can I use RiskMate as a solo contractor?</h3>
+              <p className="text-white/70">Absolutely! The Starter plan is perfect for solo contractors. You get 3 jobs per month, automatic risk scoring, and branded PDF reports—everything you need to document your work professionally.</p>
+            </div>
+            <div className="bg-white/5 border border-white/10 rounded-xl p-6">
+              <h3 className="text-lg font-semibold mb-2">Can I invite subcontractors?</h3>
+              <p className="text-white/70">Yes! Pro and Business plans allow you to invite team members. Subcontractors can be added as team members with appropriate permissions. They can document hazards, upload photos, and complete mitigations—all tracked under your organization.</p>
+            </div>
+            <div className="bg-white/5 border border-white/10 rounded-xl p-6">
+              <h3 className="text-lg font-semibold mb-2">Does every worker need a login?</h3>
+              <p className="text-white/70">No. You can document jobs yourself, or invite team members as needed. On the Starter plan, you get 1 seat. Pro gives you up to 5 seats, and Business offers unlimited seats for larger crews.</p>
+            </div>
+            <div className="bg-white/5 border border-white/10 rounded-xl p-6">
+              <h3 className="text-lg font-semibold mb-2">Are my job reports private?</h3>
+              <p className="text-white/70">Yes. All your data is encrypted and stored securely. Each organization&apos;s data is completely isolated. You control who sees your reports—share them with clients via secure links, or keep them private for your records.</p>
+            </div>
+            <div className="bg-white/5 border border-white/10 rounded-xl p-6">
+              <h3 className="text-lg font-semibold mb-2">Is this tax-deductible?</h3>
+              <p className="text-white/70">Yes! RiskMate is a business expense and is tax-deductible for contractors. It&apos;s a software tool for safety documentation and compliance, which qualifies as a business expense in Canada and the US.</p>
+            </div>
+            <div className="bg-white/5 border border-white/10 rounded-xl p-6">
               <h3 className="text-lg font-semibold mb-2">Can I change plans later?</h3>
-              <p className="text-white/70">Yes, you can upgrade or downgrade your plan at any time. Changes take effect immediately.</p>
+              <p className="text-white/70">Yes, you can upgrade or downgrade your plan at any time. Changes take effect immediately. If you upgrade mid-month, you&apos;ll be prorated. If you downgrade, you&apos;ll keep access until the end of your billing period.</p>
             </div>
             <div className="bg-white/5 border border-white/10 rounded-xl p-6">
               <h3 className="text-lg font-semibold mb-2">What happens if I exceed my job limit?</h3>
-              <p className="text-white/70">You&apos;ll be notified when you&apos;re approaching your limit. Upgrade your plan to continue creating jobs.</p>
+              <p className="text-white/70">You&apos;ll be notified when you&apos;re approaching your limit. On the Starter plan (3 jobs/month), you can upgrade to Pro for unlimited jobs. We never delete your data—you just need to upgrade to continue creating new jobs.</p>
+            </div>
+            <div className="bg-white/5 border border-white/10 rounded-xl p-6">
+              <h3 className="text-lg font-semibold mb-2">Can I export my data?</h3>
+              <p className="text-white/70">Yes. You can download PDF reports for any job at any time. Business plan users can also generate Permit Pack ZIP files that include all job documents, photos, and reports in one bundle.</p>
+            </div>
+            <div className="bg-white/5 border border-white/10 rounded-xl p-6">
+              <h3 className="text-lg font-semibold mb-2">Do you offer refunds?</h3>
+              <p className="text-white/70">We offer a satisfaction guarantee. If you&apos;re not happy with RiskMate within the first 30 days, contact us and we&apos;ll work with you to make it right or provide a refund.</p>
             </div>
           </div>
         </div>

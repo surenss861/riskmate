@@ -283,6 +283,17 @@ export default function HomePage() {
               >
                 See It in Action
               </motion.button>
+              <motion.button
+                onClick={() => router.push('/sample-report')}
+                className="px-8 py-4 border border-white/10 rounded-lg hover:border-white/20 transition-colors font-semibold text-lg btn-secondary flex items-center gap-2"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Sample Report
+              </motion.button>
             </motion.div>
 
             {/* Trust Badges */}
@@ -316,6 +327,245 @@ export default function HomePage() {
               Share with clients, insurers, auditors
             </div>
           </div>
+        </section>
+
+        {/* Enhanced Trust Signals Section */}
+        <section className="max-w-6xl mx-auto px-6 py-16 border-t border-white/5">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+            className="text-center mb-12"
+          >
+            <p className="text-sm text-[#A1A1A1] mb-6">Trusted by contractors across Canada</p>
+            <div className="flex flex-wrap justify-center items-center gap-8 mb-8 opacity-60">
+              {/* Placeholder company type logos */}
+              <div className="px-6 py-3 bg-[#121212] rounded-lg border border-white/5 text-sm">Electrical Contractors</div>
+              <div className="px-6 py-3 bg-[#121212] rounded-lg border border-white/5 text-sm">Roofing Companies</div>
+              <div className="px-6 py-3 bg-[#121212] rounded-lg border border-white/5 text-sm">HVAC Services</div>
+              <div className="px-6 py-3 bg-[#121212] rounded-lg border border-white/5 text-sm">General Contractors</div>
+            </div>
+            <div className="flex flex-wrap justify-center items-center gap-6 text-sm text-[#A1A1A1]">
+              <div className="flex items-center gap-2">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                </svg>
+                <span>iPhone, iPad</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+                <span>Android</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+                <span>Web, PWA</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                </svg>
+                <span>Industry compliance built-in</span>
+              </div>
+            </div>
+          </motion.div>
+        </section>
+
+        {/* What RiskMate Replaces Section */}
+        <section className="max-w-6xl mx-auto px-6 py-20">
+          <motion.h2
+            className="text-4xl font-bold text-center mb-4 font-display"
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+          >
+            What RiskMate Replaces
+          </motion.h2>
+          <motion.p
+            className="text-[#A1A1A1] text-center mb-12 max-w-2xl mx-auto"
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6, delay: 0.1 }}
+          >
+            Stop juggling multiple tools and messy workflows. Here&apos;s what disappears when you use RiskMate.
+          </motion.p>
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[
+              { old: 'Paper hazard forms', new: 'Digital checklists with auto-scoring' },
+              { old: 'Photo albums in iMessage', new: 'Organized evidence gallery with timestamps' },
+              { old: 'Google Drive folders', new: 'Centralized job dashboard' },
+              { old: 'Manual PDF reports', new: 'One-click branded PDF generation' },
+              { old: 'No audit trail', new: 'Complete version history & compliance logs' },
+              { old: 'Lost signatures', new: 'Digital signatures with GPS verification' },
+            ].map((item, index) => (
+              <motion.div
+                key={index}
+                className="p-6 bg-[#121212] rounded-xl border border-white/5"
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.6, delay: index * 0.1 }}
+                whileHover={{ y: -3, borderColor: 'rgba(249, 115, 22, 0.3)' }}
+              >
+                <div className="flex items-start gap-3 mb-3">
+                  <div className="text-red-400 text-xl">✗</div>
+                  <div className="flex-1">
+                    <p className="text-white/60 line-through text-sm">{item.old}</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <div className="text-green-400 text-xl">✓</div>
+                  <div className="flex-1">
+                    <p className="text-white font-medium">{item.new}</p>
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </section>
+
+        {/* Mobile App Promo Section */}
+        <section className="max-w-6xl mx-auto px-6 py-20 bg-gradient-to-b from-[#121212] to-transparent rounded-3xl border border-white/5">
+          <div className="grid md:grid-cols-2 gap-12 items-center">
+            <motion.div
+              initial={{ opacity: 0, x: -30 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6 }}
+            >
+              <h2 className="text-4xl font-bold mb-4 font-display">Capture evidence on-site</h2>
+              <p className="text-xl text-[#A1A1A1] mb-6">
+                The RiskMate mobile app lets you document jobs from anywhere—even without internet.
+              </p>
+              <ul className="space-y-4 mb-8">
+                <li className="flex items-start gap-3">
+                  <svg className="w-6 h-6 text-[#F97316] mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <div>
+                    <p className="font-semibold text-white">Offline mode support</p>
+                    <p className="text-sm text-[#A1A1A1]">Capture hazards and photos without internet, sync when you&apos;re back online</p>
+                  </div>
+                </li>
+                <li className="flex items-start gap-3">
+                  <svg className="w-6 h-6 text-[#F97316] mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <div>
+                    <p className="font-semibold text-white">Instant sync with web dashboard</p>
+                    <p className="text-sm text-[#A1A1A1]">Everything you capture on mobile appears instantly in your web dashboard</p>
+                  </div>
+                </li>
+                <li className="flex items-start gap-3">
+                  <svg className="w-6 h-6 text-[#F97316] mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <div>
+                    <p className="font-semibold text-white">GPS & weather metadata</p>
+                    <p className="text-sm text-[#A1A1A1]">Every photo includes location and weather data for proof of presence</p>
+                  </div>
+                </li>
+              </ul>
+              <div className="flex gap-4">
+                <button
+                  onClick={() => router.push('/signup')}
+                  className="px-6 py-3 bg-[#F97316] hover:bg-[#FB923C] text-black rounded-lg font-semibold transition-colors"
+                >
+                  Get Started
+                </button>
+                <button
+                  onClick={() => router.push('/demo')}
+                  className="px-6 py-3 border border-white/10 hover:border-white/20 text-white rounded-lg font-semibold transition-colors"
+                >
+                  View Demo
+                </button>
+              </div>
+            </motion.div>
+            <motion.div
+              className="relative"
+              initial={{ opacity: 0, x: 30 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6 }}
+            >
+              <div className="aspect-[9/16] bg-gradient-to-br from-[#F97316]/20 to-[#F97316]/5 rounded-3xl border border-[#F97316]/20 p-8 flex items-center justify-center">
+                <div className="text-center">
+                  <svg className="w-24 h-24 mx-auto mb-4 text-[#F97316]/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                  </svg>
+                  <p className="text-white/60 text-sm">Mobile App</p>
+                  <p className="text-white/40 text-xs mt-2">Coming Soon</p>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        </section>
+
+        {/* Social Proof Section */}
+        <section className="max-w-6xl mx-auto px-6 py-20">
+          <motion.div
+            className="text-center mb-12"
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+          >
+            <h2 className="text-4xl font-bold mb-4 font-display">Built with real contractors</h2>
+            <p className="text-[#A1A1A1] max-w-2xl mx-auto">
+              RiskMate was built with feedback from dozens of electricians, roofers, HVAC technicians, and renovators during beta testing.
+            </p>
+          </motion.div>
+          <div className="grid md:grid-cols-3 gap-6">
+            {[
+              {
+                quote: 'RiskMate cut my reporting time in half. Clients love the professional PDFs.',
+                author: 'James L.',
+                role: 'Electrical Contractor',
+              },
+              {
+                quote: 'The Permit Pack feature pays for itself every week. No more scrambling for documents.',
+                author: 'Hector R.',
+                role: 'Roofing Company Owner',
+              },
+              {
+                quote: 'My team actually follows safety protocols now because it&apos;s so easy to document.',
+                author: 'Carla M.',
+                role: 'HVAC Supervisor',
+              },
+            ].map((testimonial, index) => (
+              <motion.div
+                key={index}
+                className="p-6 bg-[#121212] rounded-xl border border-white/5"
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.6, delay: index * 0.1 }}
+              >
+                <p className="text-white/70 italic mb-4">&ldquo;{testimonial.quote}&rdquo;</p>
+                <div>
+                  <p className="font-semibold text-white">{testimonial.author}</p>
+                  <p className="text-sm text-[#A1A1A1]">{testimonial.role}</p>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+          <motion.div
+            className="text-center mt-12"
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6, delay: 0.3 }}
+          >
+            <p className="text-sm text-[#A1A1A1]">
+              Used by dozens of contractors during beta testing • Built with industry compliance in mind
+            </p>
+          </motion.div>
         </section>
 
         {/* How It Works - Minimal Steps */}
@@ -599,6 +849,38 @@ export default function HomePage() {
                 }}
               />
             </motion.button>
+          </motion.div>
+        </section>
+
+        {/* Founder Story Section */}
+        <section className="max-w-4xl mx-auto px-6 py-20">
+          <motion.div
+            className="text-center"
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+          >
+            <h2 className="text-4xl font-bold mb-6 font-display">Why RiskMate Exists</h2>
+            <div className="bg-[#121212] rounded-xl border border-white/10 p-8 text-left">
+              <p className="text-lg text-white/80 leading-relaxed mb-4">
+                After talking to dozens of contractors across Canada, one thing was consistent:
+              </p>
+              <p className="text-xl text-white font-semibold mb-6 italic">
+                &ldquo;Safety paperwork was a mess.&rdquo;
+              </p>
+              <p className="text-lg text-white/80 leading-relaxed mb-4">
+                Electricians were taking photos in iMessage, losing them, then scrambling to recreate reports when clients asked. Roofers were filling out paper forms that got lost or damaged. HVAC crews were using Google Drive folders that no one could find.
+              </p>
+              <p className="text-lg text-white/80 leading-relaxed">
+                <strong className="text-white">RiskMate fixes that.</strong> One clean dashboard. Everything timestamped. Audit-ready reports in one click. No more lost paperwork, no more scrambling, no more liability gaps.
+              </p>
+              <div className="mt-8 pt-8 border-t border-white/10">
+                <p className="text-sm text-[#A1A1A1]">
+                  Built by contractors, for contractors. Every feature was designed with real field work in mind.
+                </p>
+              </div>
+            </div>
           </motion.div>
         </section>
 
