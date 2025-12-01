@@ -1,73 +1,17 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { motion } from 'framer-motion'
 import ScrollToTop from '@/components/ScrollToTop'
 import RiskMateLogo from '@/components/RiskMateLogo'
-import Lenis from 'lenis'
 
 export default function HomePage() {
   const router = useRouter()
   const [scrolled, setScrolled] = useState(false)
   const [navOpacity, setNavOpacity] = useState(0.4)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const lenisRef = useRef<Lenis | null>(null)
-
-  // Initialize Lenis smooth scroll
-  useEffect(() => {
-    const lenis = new Lenis({
-      duration: 1.2,
-      easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
-      orientation: 'vertical',
-      gestureOrientation: 'vertical',
-      smoothWheel: true,
-      wheelMultiplier: 1,
-      touchMultiplier: 2,
-      infinite: false,
-    })
-
-    lenisRef.current = lenis
-
-    // Add lenis class to html
-    document.documentElement.classList.add('lenis', 'lenis-smooth')
-
-    function raf(time: number) {
-      lenis.raf(time)
-      requestAnimationFrame(raf)
-    }
-
-    requestAnimationFrame(raf)
-
-    // Handle hash links with smooth scroll
-    const handleHashClick = (e: MouseEvent) => {
-      const target = e.target as HTMLElement
-      const link = target.closest('a[href^="#"]')
-      if (link) {
-        const href = link.getAttribute('href')
-        if (href && href !== '#') {
-          e.preventDefault()
-          const targetId = href.slice(1)
-          const targetElement = document.getElementById(targetId)
-          if (targetElement) {
-            lenis.scrollTo(targetElement, {
-              offset: -80,
-              duration: 1.5,
-            })
-          }
-        }
-      }
-    }
-
-    document.addEventListener('click', handleHashClick)
-
-    return () => {
-      lenis.destroy()
-      document.documentElement.classList.remove('lenis', 'lenis-smooth')
-      document.removeEventListener('click', handleHashClick)
-    }
-  }, [])
 
   useEffect(() => {
     const handleScroll = () => {

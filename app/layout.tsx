@@ -3,6 +3,7 @@ import { Inter, Playfair_Display } from 'next/font/google'
 import './globals.css'
 import { PWARegister } from '@/components/PWARegister'
 import { ChatWidget } from '@/components/ChatWidget'
+import { SmoothScroll } from '@/components/SmoothScroll'
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
 const playfair = Playfair_Display({
@@ -55,6 +56,7 @@ export default function RootLayout({
         />
       </head>
       <body>
+        <SmoothScroll />
         <PWARegister />
         {children}
         <ChatWidget />
