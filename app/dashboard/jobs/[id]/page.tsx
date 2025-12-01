@@ -6,6 +6,8 @@ import { motion } from 'framer-motion'
 import { jobsApi, subscriptionsApi } from '@/lib/api'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import RiskMateLogo from '@/components/RiskMateLogo'
+import { GenerationProgressModal } from '@/components/dashboard/GenerationProgressModal'
+import { DashboardSkeleton } from '@/components/dashboard/SkeletonLoader'
 
 interface MitigationItem {
   id: string
@@ -110,30 +112,35 @@ export default function JobDetailPage() {
     if (!jobId) return
 
     setGeneratingPermitPack(true)
+    setError(null)
+    setShowProgressModal(true)
+    
     try {
       const response = await jobsApi.generatePermitPack(jobId)
       
       if (response.success && response.data.downloadUrl) {
-        // Open download URL in new tab
-        window.open(response.data.downloadUrl, '_blank')
-        
-        // Reload permit packs list
-        if (subscriptionTier === 'business') {
-          const packsResponse = await jobsApi.getPermitPacks(jobId)
-          setPermitPacks(packsResponse.data || [])
-        }
-        
-        // Show success message
-        alert('Permit Pack generated successfully! The download should start automatically.')
+        // Wait for progress modal to show completion
+        setTimeout(() => {
+          // Open download URL in new tab
+          window.open(response.data.downloadUrl, '_blank')
+          
+          // Reload permit packs list
+          if (subscriptionTier === 'business') {
+            jobsApi.getPermitPacks(jobId).then((packsResponse) => {
+              setPermitPacks(packsResponse.data || [])
+            })
+          }
+        }, 1000)
       } else {
         throw new Error('Failed to generate permit pack')
       }
     } catch (err: any) {
       console.error('Failed to generate permit pack:', err)
+      setShowProgressModal(false)
       if (err.code === 'FEATURE_RESTRICTED') {
-        alert('Permit Pack Generator is only available for Business plan subscribers. Upgrade to Business to access this feature.')
+        setError('Permit Pack Generator is only available for Business plan subscribers. Upgrade to Business to access this feature.')
       } else {
-        alert(err?.message || 'Failed to generate permit pack. Please try again.')
+        setError(err?.message || 'Failed to generate permit pack. Please try again.')
       }
     } finally {
       setGeneratingPermitPack(false)
@@ -185,12 +192,7 @@ export default function JobDetailPage() {
   if (loading) {
     return (
       <ProtectedRoute>
-        <div className="min-h-screen bg-[#0A0A0A] text-white flex items-center justify-center">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#F97316] mx-auto mb-4"></div>
-            <p className="text-[#A1A1A1]">Loading job...</p>
-          </div>
-        </div>
+        <DashboardSkeleton />
       </ProtectedRoute>
     )
   }
@@ -483,6 +485,14 @@ export default function JobDetailPage() {
           )}
         </div>
       </div>
+      <GenerationProgressModal
+        isOpen={showProgressModal}
+        onClose={() => setShowProgressModal(false)}
+        onComplete={() => {
+          setShowProgressModal(false)
+        }}
+        type="permit-pack"
+      />
     </ProtectedRoute>
   )
 }

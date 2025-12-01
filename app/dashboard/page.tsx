@@ -12,6 +12,8 @@ import { KpiGrid } from '@/components/dashboard/KpiGrid'
 import { TrendChart } from '@/components/dashboard/TrendChart'
 import EvidenceWidget from '@/components/dashboard/EvidenceWidget'
 import { DashboardNavbar } from '@/components/dashboard/DashboardNavbar'
+import { DashboardSkeleton, JobListSkeleton } from '@/components/dashboard/SkeletonLoader'
+import { DashboardOverview } from '@/components/dashboard/DashboardOverview'
 import Link from 'next/link'
 
 interface Job {
@@ -247,12 +249,9 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0A0A0A] text-white flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#F97316] mx-auto mb-4"></div>
-          <p className="text-[#A1A1A1]">Loading...</p>
-        </div>
-      </div>
+      <ProtectedRoute>
+        <DashboardSkeleton />
+      </ProtectedRoute>
     )
   }
 
@@ -384,6 +383,25 @@ export default function DashboardPage() {
             </motion.div>
           ))}
 
+          {/* Enhanced Dashboard Overview - Only for owners/admins */}
+          {!isMember && (
+            <motion.div
+              initial={{ opacity: 0, y: 18 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.12, duration: 0.45 }}
+              className="mb-10"
+            >
+              <DashboardOverview
+                todaysJobs={todaysJobs}
+                jobsAtRisk={jobsAtRisk}
+                recentEvidence={recentEvidence}
+                incompleteMitigations={incompleteMitigations}
+                workforceActivity={workforceActivity}
+                complianceTrend={complianceTrend}
+              />
+            </motion.div>
+          )}
+
           {/* Top Hazards - Only for owners/admins */}
           {!isMember && hazards.length > 0 && (
             <motion.div
@@ -459,6 +477,8 @@ export default function DashboardPage() {
                   Create Your First Job
                 </button>
               </div>
+            ) : loading ? (
+              <JobListSkeleton />
             ) : (
               <div className="divide-y divide-white/5/50">
                 {jobs.map((job, index) => (
