@@ -568,6 +568,85 @@ export default function HomePage() {
           </motion.div>
         </section>
 
+        {/* Case Studies Section */}
+        <section className="max-w-6xl mx-auto px-6 py-20">
+          <motion.div
+            className="text-center mb-12"
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+          >
+            <h2 className="text-4xl font-bold mb-4 font-display">See RiskMate in Action</h2>
+            <p className="text-[#A1A1A1] max-w-2xl mx-auto">
+              Real examples of how contractors use RiskMate for their specific trade. See sample jobs, hazards, mitigations, and reports.
+            </p>
+          </motion.div>
+          <div className="grid md:grid-cols-3 gap-6">
+            {[
+              {
+                title: 'Electrical Contractor',
+                description: 'Commercial panel upgrade with live electrical work, confined spaces, and high-risk hazards.',
+                riskScore: '78 (HIGH RISK)',
+                link: '/case-studies/electrical',
+                icon: '⚡',
+              },
+              {
+                title: 'Roofing Company',
+                description: 'High-rise flat roof replacement with fall protection, weather hazards, and permit compliance.',
+                riskScore: '85 (CRITICAL)',
+                link: '/case-studies/roofing',
+                icon: '🏗️',
+              },
+              {
+                title: 'HVAC Services',
+                description: 'Commercial rooftop unit installation with refrigerant handling and confined space work.',
+                riskScore: '68 (HIGH RISK)',
+                link: '/case-studies/hvac',
+                icon: '❄️',
+              },
+            ].map((study, index) => (
+              <motion.div
+                key={index}
+                className="p-6 bg-[#121212] rounded-xl border border-white/5 hover:border-[#F97316]/30 transition-colors cursor-pointer group"
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.6, delay: index * 0.1 }}
+                onClick={() => router.push(study.link)}
+              >
+                <div className="text-4xl mb-4">{study.icon}</div>
+                <h3 className="text-xl font-semibold mb-2 group-hover:text-[#F97316] transition-colors">
+                  {study.title}
+                </h3>
+                <p className="text-sm text-white/70 mb-4">{study.description}</p>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-[#A1A1A1] bg-black/20 px-3 py-1 rounded">
+                    Risk Score: {study.riskScore}
+                  </span>
+                  <svg className="w-5 h-5 text-[#F97316] group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+          <motion.div
+            className="text-center mt-8"
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6, delay: 0.4 }}
+          >
+            <button
+              onClick={() => router.push('/case-studies/electrical')}
+              className="text-[#F97316] hover:text-[#FB923C] font-semibold transition-colors"
+            >
+              View All Case Studies →
+            </button>
+          </motion.div>
+        </section>
+
         {/* How It Works - Minimal Steps */}
         <section 
           className="max-w-6xl mx-auto px-6 py-20"
