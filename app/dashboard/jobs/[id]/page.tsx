@@ -10,6 +10,7 @@ import { GenerationProgressModal } from '@/components/dashboard/GenerationProgre
 import { DashboardSkeleton } from '@/components/dashboard/SkeletonLoader'
 import { EditableText } from '@/components/dashboard/EditableText'
 import { EditableSelect } from '@/components/dashboard/EditableSelect'
+import { VersionHistory } from '@/components/dashboard/VersionHistory'
 
 interface MitigationItem {
   id: string
@@ -520,7 +521,20 @@ export default function JobDetailPage() {
                 )}
               </div>
             </motion.div>
-          )}
+              )}
+
+              {/* Version History */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.5 }}
+                className="mt-8"
+              >
+                <VersionHistory
+                  jobId={jobId}
+                  entries={[]} // TODO: Fetch from audit_logs API
+                />
+              </motion.div>
         </div>
       </div>
       <GenerationProgressModal

@@ -14,6 +14,8 @@ import EvidenceWidget from '@/components/dashboard/EvidenceWidget'
 import { DashboardNavbar } from '@/components/dashboard/DashboardNavbar'
 import { DashboardSkeleton, JobListSkeleton } from '@/components/dashboard/SkeletonLoader'
 import { DashboardOverview } from '@/components/dashboard/DashboardOverview'
+import { Changelog } from '@/components/dashboard/Changelog'
+import { OnboardingWizard } from '@/components/onboarding/OnboardingWizard'
 import Link from 'next/link'
 
 interface Job {
@@ -407,6 +409,18 @@ export default function DashboardPage() {
             </motion.div>
           )}
 
+          {/* Changelog - Only for owners/admins */}
+          {!isMember && (
+            <motion.div
+              initial={{ opacity: 0, y: 18 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.14, duration: 0.45 }}
+              className="mb-10"
+            >
+              <Changelog />
+            </motion.div>
+          )}
+
           {/* Top Hazards - Only for owners/admins */}
           {!isMember && hazards.length > 0 && (
             <motion.div
@@ -535,6 +549,25 @@ export default function DashboardPage() {
           </motion.div>
         </div>
       </div>
+
+      {/* Onboarding Wizard */}
+      <OnboardingWizard
+        isOpen={showOnboarding}
+        onComplete={() => {
+          setShowOnboarding(false)
+          // Mark onboarding as completed
+          const supabase = createSupabaseBrowserClient()
+          supabase.auth.getUser().then(({ data: { user } }) => {
+            if (user) {
+              supabase
+                .from('users')
+                .update({ onboarding_completed: true })
+                .eq('id', user.id)
+            }
+          })
+        }}
+        onSkip={() => setShowOnboarding(false)}
+      />
     </ProtectedRoute>
   )
 }
