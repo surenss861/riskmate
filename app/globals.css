@@ -18,8 +18,16 @@ html.lenis {
   height: auto;
 }
 
-.lenis.lenis-smooth {
+html.lenis.lenis-smooth {
   scroll-behavior: auto !important;
+}
+
+html.lenis.lenis-stopped {
+  overflow: hidden;
+}
+
+html.lenis.lenis-scrolling iframe {
+  pointer-events: none;
 }
 
 .lenis.lenis-smooth [data-lenis-prevent] {
