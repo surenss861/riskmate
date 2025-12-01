@@ -14,6 +14,7 @@ import { VersionHistory } from '@/components/dashboard/VersionHistory'
 import { JobAssignment } from '@/components/dashboard/JobAssignment'
 import { EvidenceVerification } from '@/components/dashboard/EvidenceVerification'
 import { TemplatesManager } from '@/components/dashboard/TemplatesManager'
+import { ErrorModal } from '@/components/dashboard/ErrorModal'
 import { optimizePhoto } from '@/lib/utils/photoOptimization'
 import { getGPSLocation } from '@/lib/utils/gpsMetadata'
 import { hasPermission } from '@/lib/utils/permissions'
@@ -68,6 +69,8 @@ export default function JobDetailPage() {
     downloadUrl: string | null
   }>>([])
   const [loadingPermitPacks, setLoadingPermitPacks] = useState(false)
+  const [showProgressModal, setShowProgressModal] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const loadJob = useCallback(async () => {
     try {
@@ -598,6 +601,12 @@ export default function JobDetailPage() {
           setShowProgressModal(false)
         }}
         type="permit-pack"
+      />
+      <ErrorModal
+        isOpen={error !== null}
+        title="Error"
+        message={error || ''}
+        onClose={() => setError(null)}
       />
     </ProtectedRoute>
   )
