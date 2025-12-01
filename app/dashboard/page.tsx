@@ -41,6 +41,7 @@ export default function DashboardPage() {
   const [filterRiskLevel, setFilterRiskLevel] = useState<string>('')
   const [showUpgradeBanner, setShowUpgradeBanner] = useState(false)
   const [analyticsRange, setAnalyticsRange] = useState<number>(30)
+  const [showOnboarding, setShowOnboarding] = useState(false)
 
   const isMember = userRole === 'member'
   const roleLoaded = userRole !== null
@@ -63,16 +64,19 @@ export default function DashboardPage() {
       const { data: { user } } = await supabase.auth.getUser()
       setUser(user)
 
-      // Load user role
+      // Load user role and onboarding status
       let role = 'member'
       if (user) {
         const { data: userRow } = await supabase
           .from('users')
-          .select('role')
+          .select('role, has_completed_onboarding, onboarding_completed')
           .eq('id', user.id)
           .maybeSingle()
         role = userRow?.role ?? 'member'
         setUserRole(role)
+        // Show onboarding if not completed
+        const onboardingCompleted = userRow?.has_completed_onboarding || userRow?.onboarding_completed
+        setShowOnboarding(!onboardingCompleted)
       }
 
       // Load jobs
@@ -602,18 +606,17 @@ export default function DashboardPage() {
       {/* Onboarding Wizard */}
       <OnboardingWizard
         isOpen={showOnboarding}
-        onComplete={() => {
+        onComplete={async () => {
           setShowOnboarding(false)
           // Mark onboarding as completed
           const supabase = createSupabaseBrowserClient()
-          supabase.auth.getUser().then(({ data: { user } }) => {
-            if (user) {
-              supabase
-                .from('users')
-                .update({ onboarding_completed: true })
-                .eq('id', user.id)
-            }
-          })
+          const { data: { user } } = await supabase.auth.getUser()
+          if (user) {
+            await supabase
+              .from('users')
+              .update({ has_completed_onboarding: true })
+              .eq('id', user.id)
+          }
         }}
         onSkip={() => setShowOnboarding(false)}
       />
