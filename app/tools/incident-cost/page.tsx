@@ -6,6 +6,13 @@ import { motion } from 'framer-motion'
 import RiskMateLogo from '@/components/RiskMateLogo'
 import Link from 'next/link'
 
+const INCIDENT_TYPES = [
+  { value: 'minor', label: 'Minor Injury (First Aid)', baseCost: 2000 },
+  { value: 'moderate', label: 'Moderate Injury (Medical Treatment)', baseCost: 15000 },
+  { value: 'serious', label: 'Serious Injury (Lost Time)', baseCost: 50000 },
+  { value: 'critical', label: 'Critical Injury (Permanent Disability)', baseCost: 250000 },
+] as const
+
 export default function IncidentCostPage() {
   const router = useRouter()
   const [incidentType, setIncidentType] = useState<string>('minor')
@@ -15,15 +22,8 @@ export default function IncidentCostPage() {
   const [legalFees, setLegalFees] = useState(10000)
   const [insuranceIncrease, setInsuranceIncrease] = useState(5000)
 
-  const incidentTypes = [
-    { value: 'minor', label: 'Minor Injury (First Aid)', baseCost: 2000 },
-    { value: 'moderate', label: 'Moderate Injury (Medical Treatment)', baseCost: 15000 },
-    { value: 'serious', label: 'Serious Injury (Lost Time)', baseCost: 50000 },
-    { value: 'critical', label: 'Critical Injury (Permanent Disability)', baseCost: 250000 },
-  ]
-
   const totalCost = useMemo(() => {
-    const base = incidentTypes.find((t) => t.value === incidentType)?.baseCost || 0
+    const base = INCIDENT_TYPES.find((t) => t.value === incidentType)?.baseCost || 0
     const lostTimeCost = lostTime * hourlyRate * 8 // 8 hours per day
     const total = base + medicalCosts + lostTimeCost + legalFees + insuranceIncrease
     return total
@@ -77,7 +77,7 @@ export default function IncidentCostPage() {
                 onChange={(e) => setIncidentType(e.target.value)}
                 className="w-full px-4 py-3 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:border-[#F97316]"
               >
-                {incidentTypes.map((type) => (
+                {INCIDENT_TYPES.map((type) => (
                   <option key={type.value} value={type.value}>
                     {type.label}
                   </option>
@@ -171,7 +171,7 @@ export default function IncidentCostPage() {
               <div className="flex justify-between items-center p-3 bg-black/20 rounded-lg">
                 <span className="text-sm text-white/70">Base Incident Cost</span>
                 <span className="text-sm font-semibold text-white">
-                  ${(incidentTypes.find((t) => t.value === incidentType)?.baseCost || 0).toLocaleString()}
+                  ${(INCIDENT_TYPES.find((t) => t.value === incidentType)?.baseCost || 0).toLocaleString()}
                 </span>
               </div>
               <div className="flex justify-between items-center p-3 bg-black/20 rounded-lg">

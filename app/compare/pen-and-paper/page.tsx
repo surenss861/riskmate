@@ -160,7 +160,7 @@ export default function PenAndPaperComparisonPage() {
                   </li>
                   <li className="flex items-start gap-3">
                     <span className="text-red-400 mt-1">•</span>
-                    <span><strong>Lost jobs:</strong> Can\'t find documentation when clients ask</span>
+                    <span><strong>Lost jobs:</strong> Can&apos;t find documentation when clients ask</span>
                   </li>
                   <li className="flex items-start gap-3">
                     <span className="text-red-400 mt-1">•</span>
