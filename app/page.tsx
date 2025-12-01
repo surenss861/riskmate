@@ -689,6 +689,69 @@ export default function HomePage() {
           </div>
         </section>
 
+        {/* Calculator Tools Section */}
+        <section className="max-w-6xl mx-auto px-6 py-20">
+          <motion.div
+            className="text-center mb-12"
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+          >
+            <h2 className="text-4xl font-bold mb-4 font-display">Free Safety Calculators</h2>
+            <p className="text-[#A1A1A1] max-w-2xl mx-auto">
+              Use these free tools to assess your risk, compliance, and potential savings. No signup required.
+            </p>
+          </motion.div>
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {[
+              {
+                title: 'Risk Score Calculator',
+                description: 'Estimate your job\'s risk score',
+                link: '/tools/risk-score-calculator',
+                icon: '📊',
+              },
+              {
+                title: 'Compliance Score',
+                description: 'Check your safety compliance level',
+                link: '/tools/compliance-score',
+                icon: '✅',
+              },
+              {
+                title: 'Incident Cost',
+                description: 'Calculate the cost of workplace incidents',
+                link: '/tools/incident-cost',
+                icon: '💰',
+              },
+              {
+                title: 'Time Saved',
+                description: 'See how much time RiskMate saves',
+                link: '/tools/time-saved',
+                icon: '⏱️',
+              },
+            ].map((tool, index) => (
+              <motion.button
+                key={index}
+                onClick={() => router.push(tool.link)}
+                className="p-6 bg-[#121212] rounded-xl border border-white/5 hover:border-[#F97316]/30 transition-colors text-left group"
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.6, delay: index * 0.1 }}
+              >
+                <div className="text-3xl mb-3">{tool.icon}</div>
+                <h3 className="text-lg font-semibold mb-2 group-hover:text-[#F97316] transition-colors">
+                  {tool.title}
+                </h3>
+                <p className="text-sm text-white/60 mb-3">{tool.description}</p>
+                <span className="text-[#F97316] text-sm font-medium group-hover:underline">
+                  Calculate →
+                </span>
+              </motion.button>
+            ))}
+          </div>
+        </section>
+
         {/* How It Works - Minimal Steps */}
         <section 
           className="max-w-6xl mx-auto px-6 py-20"
