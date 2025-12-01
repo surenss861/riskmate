@@ -15,6 +15,7 @@ export type Permission =
   | 'mitigations.complete'
   | 'documents.upload'
   | 'documents.delete'
+  | 'reports.view'
   | 'reports.generate'
   | 'reports.share'
   | 'permit_packs.generate'
@@ -43,6 +44,7 @@ const ROLE_PERMISSIONS: PermissionMap = {
     'mitigations.complete',
     'documents.upload',
     'documents.delete',
+    'reports.view',
     'reports.generate',
     'reports.share',
     'permit_packs.generate',
@@ -62,6 +64,7 @@ const ROLE_PERMISSIONS: PermissionMap = {
     'mitigations.complete',
     'documents.upload',
     'documents.delete',
+    'reports.view',
     'reports.generate',
     'reports.share',
     'permit_packs.generate',
