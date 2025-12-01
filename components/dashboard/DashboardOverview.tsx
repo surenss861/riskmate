@@ -80,7 +80,12 @@ export function DashboardOverview({
           className="rounded-xl border border-white/10 bg-[#121212]/80 backdrop-blur-sm p-6"
         >
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-white">Today&apos;s Jobs</h3>
+            <div>
+              <h3 className="text-lg font-semibold text-white">Today&apos;s Jobs</h3>
+              <p className="text-xs text-white/50 mt-0.5">
+                Jobs scheduled for today based on your team&apos;s workload.
+              </p>
+            </div>
             <span className="text-2xl font-bold text-[#F97316]">{todaysJobs.length}</span>
           </div>
           <div className="space-y-2">
@@ -113,12 +118,14 @@ export function DashboardOverview({
           className="rounded-xl border border-red-500/30 bg-red-500/5 backdrop-blur-sm p-6"
         >
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-white">Jobs at Risk</h3>
+            <div>
+              <h3 className="text-lg font-semibold text-white">Jobs at Risk</h3>
+              <p className="text-xs text-white/50 mt-0.5">
+                Jobs with high or critical risk scores. Review hazards before work continues.
+              </p>
+            </div>
             <span className="text-2xl font-bold text-red-400">{jobsAtRisk.length}</span>
           </div>
-          <p className="text-xs text-white/60 mb-3">
-            Jobs with risk scores above 80 require immediate attention
-          </p>
           <div className="space-y-2">
             {jobsAtRisk.length === 0 ? (
               <p className="text-sm text-white/50">No high-risk jobs</p>
@@ -147,7 +154,12 @@ export function DashboardOverview({
           className="rounded-xl border border-white/10 bg-[#121212]/80 backdrop-blur-sm p-6"
         >
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-white">Recent Evidence</h3>
+            <div>
+              <h3 className="text-lg font-semibold text-white">Recent Evidence</h3>
+              <p className="text-xs text-white/50 mt-0.5">
+                The latest photos and documents your team captured in the field.
+              </p>
+            </div>
             <span className="text-sm text-white/50">Last 24h</span>
           </div>
           <div className="space-y-2">
@@ -178,12 +190,14 @@ export function DashboardOverview({
           className="rounded-xl border border-yellow-500/30 bg-yellow-500/5 backdrop-blur-sm p-6"
         >
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-white">Incomplete Mitigations</h3>
+            <div>
+              <h3 className="text-lg font-semibold text-white">Incomplete Mitigations</h3>
+              <p className="text-xs text-white/50 mt-0.5">
+                Outstanding safety actions that need completion before closing the job.
+              </p>
+            </div>
             <span className="text-2xl font-bold text-yellow-400">{incompleteMitigations.length}</span>
           </div>
-          <p className="text-xs text-white/60 mb-3">
-            Safety items that need to be completed before work starts
-          </p>
           <div className="space-y-2">
             {incompleteMitigations.length === 0 ? (
               <p className="text-sm text-white/50">All mitigations complete</p>
@@ -212,7 +226,12 @@ export function DashboardOverview({
           className="rounded-xl border border-white/10 bg-[#121212]/80 backdrop-blur-sm p-6"
         >
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-white">Compliance Trend</h3>
+            <div>
+              <h3 className="text-lg font-semibold text-white">Compliance Trend</h3>
+              <p className="text-xs text-white/50 mt-0.5">
+                How consistently your organization is meeting safety standards.
+              </p>
+            </div>
             <span className="text-sm text-white/50">Last 7 days</span>
           </div>
           {complianceTrend.length === 0 ? (
@@ -243,7 +262,12 @@ export function DashboardOverview({
           className="rounded-xl border border-white/10 bg-[#121212]/80 backdrop-blur-sm p-6"
         >
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-white">Workforce Activity</h3>
+            <div>
+              <h3 className="text-lg font-semibold text-white">Workforce Activity</h3>
+              <p className="text-xs text-white/50 mt-0.5">
+                Live view of team engagement and recent job interactions.
+              </p>
+            </div>
             <span className="text-sm text-white/50">{workforceActivity.length} active</span>
           </div>
           <div className="space-y-2">

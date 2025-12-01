@@ -8,6 +8,8 @@ import ProtectedRoute from '@/components/ProtectedRoute'
 import RiskMateLogo from '@/components/RiskMateLogo'
 import { GenerationProgressModal } from '@/components/dashboard/GenerationProgressModal'
 import { DashboardSkeleton } from '@/components/dashboard/SkeletonLoader'
+import { EditableText } from '@/components/dashboard/EditableText'
+import { EditableSelect } from '@/components/dashboard/EditableSelect'
 
 interface MitigationItem {
   id: string
@@ -263,10 +265,38 @@ export default function JobDetailPage() {
 
         <div className="max-w-7xl mx-auto px-6 py-12">
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
-            <h1 className="text-5xl font-bold mb-3 font-display">{job.client_name}</h1>
+            <EditableText
+              value={job.client_name}
+              onSave={async (newValue) => {
+                await jobsApi.update(jobId, { client_name: newValue })
+                setJob({ ...job, client_name: newValue })
+              }}
+              className="text-5xl font-bold mb-3 font-display block"
+              inputClassName="text-5xl font-bold"
+            />
             <p className="text-xl text-[#A1A1A1] mb-1">{job.location}</p>
-            <p className="text-sm text-[#A1A1A1]/70">
-              {job.job_type} • {job.client_type} • {job.status.replace('_', ' ')}
+            <div className="flex items-center gap-3 mb-2">
+              <p className="text-sm text-[#A1A1A1]/70">
+                {job.job_type} • {job.client_type}
+              </p>
+              <span className="text-[#A1A1A1]/50">•</span>
+              <EditableSelect
+                value={job.status}
+                options={[
+                  { value: 'draft', label: 'Draft', color: '#A1A1A1' },
+                  { value: 'pending', label: 'Pending', color: '#FACC15' },
+                  { value: 'in_progress', label: 'In Progress', color: '#38BDF8' },
+                  { value: 'completed', label: 'Completed', color: '#29E673' },
+                  { value: 'cancelled', label: 'Cancelled', color: '#FB7185' },
+                ]}
+                onSave={async (newValue) => {
+                  await jobsApi.update(jobId, { status: newValue })
+                  setJob({ ...job, status: newValue })
+                }}
+              />
+            </div>
+            <p className="text-xs text-white/50 mt-2">
+              Status helps your team understand what stage this job is in.
             </p>
           </motion.div>
 
@@ -285,6 +315,9 @@ export default function JobDetailPage() {
                       {job.risk_score_detail.factors.length} risk factor{job.risk_score_detail.factors.length !== 1 ? 's' : ''} detected
                     </div>
                   )}
+                  <p className="text-xs text-white/50 mt-3">
+                    Scores update automatically as hazards and mitigations change.
+                  </p>
                 </div>
 
                 {job.risk_score_detail && job.risk_score_detail.factors.length > 0 && (
@@ -318,9 +351,14 @@ export default function JobDetailPage() {
               </div>
             </motion.div>
 
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-              <div className="p-8 rounded-xl border border-white/10 bg-[#121212]/80 backdrop-blur-sm h-full">
-                <h2 className="text-2xl font-semibold mb-6 text-white">Mitigation Checklist</h2>
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+                  <div className="p-8 rounded-xl border border-white/10 bg-[#121212]/80 backdrop-blur-sm h-full">
+                    <div className="mb-6">
+                      <h2 className="text-2xl font-semibold mb-2 text-white">Mitigation Checklist</h2>
+                      <p className="text-sm text-white/60">
+                        These are the safety actions required to reduce the job&apos;s overall risk.
+                      </p>
+                    </div>
                 {totalCount === 0 ? (
                   <p className="text-sm text-[#A1A1A1]">
                     No mitigation items yet. Update risk factors to generate checklist.
@@ -350,11 +388,11 @@ export default function JobDetailPage() {
                     ))}
                   </div>
                 )}
-                {totalCount > 0 && (
-                  <p className="text-sm text-[#A1A1A1] mt-6 pt-6 border-t border-white/10">
-                    Complete all items before starting work to reduce risk.
-                  </p>
-                )}
+                    {totalCount > 0 && (
+                      <p className="text-sm text-[#A1A1A1] mt-6 pt-6 border-t border-white/10">
+                        Mark mitigations complete only after verifying the action was performed on-site.
+                      </p>
+                    )}
               </div>
             </motion.div>
 

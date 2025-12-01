@@ -290,7 +290,7 @@ export default function DashboardPage() {
               </h1>
               <div className="mt-4 h-[2px] w-24 bg-gradient-to-r from-[#F97316] via-[#FFC857] to-transparent animate-soft-float" />
               <p className="mt-4 text-base text-white/65">
-                Document every job with hazard checklists, risk assessments, photos, and signatures. Everything timestamped and ready for clients, insurers, and auditors.
+                Your safety activity at a glance — stay ahead of risks before they become problems.
               </p>
               <div className="mt-6 flex flex-wrap gap-3 text-sm text-white/50">
                 <span className="rounded-full border border-white/15 px-3 py-1 backdrop-blur-sm">
@@ -391,6 +391,11 @@ export default function DashboardPage() {
               transition={{ delay: 0.12, duration: 0.45 }}
               className="mb-10"
             >
+              <div className="mb-4">
+                <p className="text-sm text-white/60">
+                  Your centralized job hub — track progress, hazards, documents, and generate audit-ready reports.
+                </p>
+              </div>
               <DashboardOverview
                 todaysJobs={todaysJobs}
                 jobsAtRisk={jobsAtRisk}
@@ -469,7 +474,10 @@ export default function DashboardPage() {
 
             {jobs.length === 0 ? (
               <div className="px-12 py-16 text-center">
-                <p className="mb-4 text-white/60">No jobs yet</p>
+                <p className="mb-2 text-white/60">No jobs yet</p>
+                <p className="mb-6 text-sm text-white/40">
+                  Create your first job to start documenting your work.
+                </p>
                 <button
                   onClick={() => router.push('/dashboard/jobs/new')}
                   className="rounded-2xl bg-[#F97316] px-6 py-3 font-semibold text-black transition-all hover:bg-[#FB923C]"
