@@ -448,6 +448,18 @@ export default function AccountPage() {
                 </div>
               )}
             </div>
+
+            {/* Templates Manager */}
+            {organization && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 }}
+                className="mt-8"
+              >
+                <TemplatesManager organizationId={organization.id} />
+              </motion.div>
+            )}
           </div>
         </main>
 
