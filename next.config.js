@@ -18,6 +18,17 @@ const nextConfig = {
       },
     ]
   },
+  webpack: (config, { isServer }) => {
+    if (isServer) {
+      // Include PDFKit font files in serverless bundle
+      config.externals = config.externals || [];
+      // Don't externalize pdfkit - we need it bundled
+      config.externals = config.externals.filter(
+        (external) => typeof external !== 'string' || !external.includes('pdfkit')
+      );
+    }
+    return config;
+  },
 }
 
 module.exports = nextConfig

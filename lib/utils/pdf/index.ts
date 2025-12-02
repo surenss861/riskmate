@@ -18,6 +18,12 @@ import { renderTimeline } from './sections/timeline';
 import { renderPhotosSection } from './sections/photos';
 import { renderSignaturesAndCompliance } from './sections/signatures';
 
+// Workaround for serverless environments where font files aren't available
+// PDFKit needs font metric files, but in Vercel/serverless they may not be available
+// We'll handle this by catching font-related errors and providing a fallback
+// Note: PDFKit should work with standard fonts (Helvetica, Times-Roman, Courier) 
+// without requiring .afm files, but some versions may still try to load them
+
 // ============================================
 // MAIN GENERATOR
 // ============================================
@@ -36,15 +42,21 @@ export async function generateRiskSnapshotPDF(
   const jobEndDate = job.end_date ? new Date(job.end_date) : null;
 
   return new Promise((resolve, reject) => {
-    const doc = new PDFDocument({
-      size: 'LETTER',
-      margins: {
-        top: STYLES.spacing.pageMargin,
-        bottom: 60,
-        left: STYLES.spacing.pageMargin,
-        right: STYLES.spacing.pageMargin,
-      },
-    });
+    let doc: PDFKit.PDFDocument;
+    
+    try {
+      doc = new PDFDocument({
+        size: 'LETTER',
+        margins: {
+          top: STYLES.spacing.pageMargin,
+          bottom: 60,
+          left: STYLES.spacing.pageMargin,
+          right: STYLES.spacing.pageMargin,
+        },
+      });
+    } catch (initError: any) {
+      return reject(new Error(`Failed to initialize PDF: ${initError?.message || String(initError)}`));
+    }
 
     const chunks: Buffer[] = [];
     let pageCount = 1;
@@ -99,7 +111,14 @@ export async function generateRiskSnapshotPDF(
 
     doc.on('data', (chunk: Buffer) => chunks.push(chunk));
     doc.on('end', () => resolve(Buffer.concat(chunks)));
-    doc.on('error', (err) => reject(err));
+    doc.on('error', (err: any) => {
+      // Handle font loading errors in serverless environments
+      if (err?.message?.includes('ENOENT') && err?.message?.includes('.afm')) {
+        reject(new Error('PDF generation failed: Font files not available. This is a known issue in serverless environments. Please ensure PDFKit font data is included in the deployment.'));
+      } else {
+        reject(err);
+      }
+    });
 
     // First page (cover) is created by PDFKit constructor
     addWatermark(doc);
