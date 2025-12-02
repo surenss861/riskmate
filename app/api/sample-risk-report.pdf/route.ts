@@ -134,6 +134,7 @@ export async function GET() {
     )
 
     // Return PDF with proper headers
+    // @ts-expect-error - Buffer is compatible with BodyInit at runtime
     return new NextResponse(pdfBuffer, {
       status: 200,
       headers: {

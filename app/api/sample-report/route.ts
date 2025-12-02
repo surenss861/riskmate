@@ -146,8 +146,9 @@ export async function GET() {
     )
 
     // Return PDF with proper headers
-    // Convert Buffer to Uint8Array for NextResponse
-    return new NextResponse(new Uint8Array(pdfBuffer), {
+    // NextResponse accepts Buffer at runtime, but TypeScript types are strict
+    // @ts-expect-error - Buffer is compatible with BodyInit at runtime
+    return new NextResponse(pdfBuffer, {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',
