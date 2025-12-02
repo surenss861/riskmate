@@ -146,7 +146,8 @@ export async function GET() {
     )
 
     // Return PDF with proper headers
-    return new NextResponse(pdfBuffer as any, {
+    // Convert Buffer to Uint8Array for NextResponse
+    return new NextResponse(new Uint8Array(pdfBuffer), {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',
