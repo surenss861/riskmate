@@ -458,7 +458,10 @@ export default function AccountPage() {
                 transition={{ delay: 0.3 }}
                 className="mt-8"
               >
-                <TemplatesManager organizationId={organization.id} />
+                <TemplatesManager 
+                  organizationId={organization.id} 
+                  subscriptionTier={subscription?.tier || 'starter'}
+                />
               </motion.div>
             )}
           </div>

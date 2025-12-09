@@ -155,6 +155,12 @@ export function ApplyTemplateModal({
         hazardIds = template.hazard_ids || []
       }
 
+      if (hazardIds.length === 0) {
+        alert('This template has no hazards to apply')
+        setApplying(false)
+        return
+      }
+
       await onApply(hazardIds, selectedTemplate, activeTab, replaceExisting)
       onClose()
     } catch (err: any) {

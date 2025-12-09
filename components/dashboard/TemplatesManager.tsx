@@ -43,11 +43,12 @@ interface RiskFactor {
 
 interface TemplatesManagerProps {
   organizationId: string
+  subscriptionTier?: string | null
 }
 
 type TemplateTab = 'hazard' | 'job'
 
-export function TemplatesManager({ organizationId }: TemplatesManagerProps) {
+export function TemplatesManager({ organizationId, subscriptionTier = 'starter' }: TemplatesManagerProps) {
   const [activeTab, setActiveTab] = useState<TemplateTab>('hazard')
   const [hazardTemplates, setHazardTemplates] = useState<HazardTemplate[]>([])
   const [jobTemplates, setJobTemplates] = useState<JobTemplate[]>([])
@@ -101,6 +102,29 @@ export function TemplatesManager({ organizationId }: TemplatesManagerProps) {
     } finally {
       setLoading(false)
     }
+  }
+
+  const checkTemplateLimit = async (): Promise<boolean> => {
+    if (subscriptionTier === 'pro' || subscriptionTier === 'business') {
+      return true // Unlimited
+    }
+
+    // Starter: 3 templates max (hazard + job combined)
+    const supabase = createSupabaseBrowserClient()
+    const { count: hazardCount } = await supabase
+      .from('hazard_templates')
+      .select('*', { count: 'exact', head: true })
+      .eq('organization_id', organizationId)
+      .eq('archived', false)
+
+    const { count: jobCount } = await supabase
+      .from('job_templates')
+      .select('*', { count: 'exact', head: true })
+      .eq('organization_id', organizationId)
+      .eq('archived', false)
+
+    const totalTemplates = (hazardCount || 0) + (jobCount || 0)
+    return totalTemplates < 3
   }
 
   const handleArchive = async (templateId: string) => {
@@ -164,9 +188,20 @@ export function TemplatesManager({ organizationId }: TemplatesManagerProps) {
           <p className="text-xs text-white/50 mt-0.5">
             Create reusable presets for hazards and job types so your crew can spin up jobs in 10 seconds instead of 10 minutes.
           </p>
+          {subscriptionTier === 'starter' && (
+            <p className="text-xs text-[#F97316] mt-1">
+              Starter: 3 templates • Pro/Business: Unlimited
+            </p>
+          )}
         </div>
         <button
-          onClick={() => {
+          onClick={async () => {
+            const canCreate = await checkTemplateLimit()
+            if (!canCreate) {
+              alert('Starter plans can create up to 3 templates. Upgrade to Pro for unlimited templates.')
+              window.open('/pricing?from=templates', '_blank')
+              return
+            }
             setEditingTemplate(null)
             setShowCreateModal(true)
           }}
@@ -207,7 +242,7 @@ export function TemplatesManager({ organizationId }: TemplatesManagerProps) {
           <p className="text-sm text-white/50">Loading templates...</p>
         </div>
       ) : currentTemplates.length === 0 ? (
-        <div className="text-center py-12 border border-white/10 rounded-lg bg-black/20">
+          <div className="text-center py-12 border border-white/10 rounded-lg bg-black/20">
           <div className="text-4xl mb-4">📋</div>
           <p className="text-sm text-white/70 mb-2">
             No {activeTab === 'hazard' ? 'hazard' : 'job'} templates yet
@@ -215,8 +250,19 @@ export function TemplatesManager({ organizationId }: TemplatesManagerProps) {
           <p className="text-xs text-white/40 mb-4">
             Create your first template to speed up job setup.
           </p>
+          {subscriptionTier === 'starter' && (
+            <p className="text-xs text-white/50 mb-4">
+              Starter includes 3 templates. Pro/Business: unlimited.
+            </p>
+          )}
           <button
-            onClick={() => {
+            onClick={async () => {
+              const canCreate = await checkTemplateLimit()
+              if (!canCreate) {
+                alert('Starter plans can create up to 3 templates. Upgrade to Pro for unlimited templates.')
+                window.open('/pricing?from=templates', '_blank')
+                return
+              }
               setEditingTemplate(null)
               setShowCreateModal(true)
             }}
@@ -293,6 +339,7 @@ export function TemplatesManager({ organizationId }: TemplatesManagerProps) {
           type={activeTab}
           template={editingTemplate}
           organizationId={organizationId}
+          subscriptionTier={subscriptionTier}
           riskFactors={riskFactors}
           onClose={() => {
             setShowCreateModal(false)
@@ -314,6 +361,7 @@ interface TemplateModalProps {
   type: TemplateTab
   template: HazardTemplate | JobTemplate | null
   organizationId: string
+  subscriptionTier?: string | null
   riskFactors: RiskFactor[]
   onClose: () => void
   onSave: () => void
@@ -323,6 +371,7 @@ function TemplateModal({
   type,
   template,
   organizationId,
+  subscriptionTier = 'starter',
   riskFactors,
   onClose,
   onSave,
