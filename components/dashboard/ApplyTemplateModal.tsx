@@ -164,6 +164,27 @@ export function ApplyTemplateModal({
       }
 
       await onApply(hazardIds, selectedTemplate, activeTab, replaceExisting)
+      
+      // Track template application
+      const { trackTemplateApplied } = await import('@/lib/posthog')
+      const supabase = createSupabaseBrowserClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        const { data: userRow } = await supabase
+          .from('users')
+          .select('organization_id')
+          .eq('id', user.id)
+          .single()
+        if (userRow?.organization_id) {
+          const { data: subData } = await supabase
+            .from('subscriptions')
+            .select('tier')
+            .eq('organization_id', userRow.organization_id)
+            .eq('status', 'active')
+            .single()
+          trackTemplateApplied(subData?.tier || 'starter', activeTab, 'job-detail')
+        }
+      }
       onClose()
     } catch (err: any) {
       console.error('Failed to apply template:', err)

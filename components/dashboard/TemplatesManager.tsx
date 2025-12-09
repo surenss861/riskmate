@@ -1,9 +1,12 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { riskApi } from '@/lib/api'
+import { TemplateUpgradeModal } from './TemplateUpgradeModal'
+import { trackEvent } from '@/lib/posthog'
+import { Check } from 'lucide-react'
 
 interface HazardTemplate {
   id: string
@@ -54,8 +57,10 @@ export function TemplatesManager({ organizationId, subscriptionTier = 'starter' 
   const [jobTemplates, setJobTemplates] = useState<JobTemplate[]>([])
   const [loading, setLoading] = useState(true)
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false)
   const [editingTemplate, setEditingTemplate] = useState<HazardTemplate | JobTemplate | null>(null)
   const [riskFactors, setRiskFactors] = useState<RiskFactor[]>([])
+  const [templateUsageCounts, setTemplateUsageCounts] = useState<Record<string, number>>({})
 
   useEffect(() => {
     loadTemplates()
@@ -87,6 +92,8 @@ export function TemplatesManager({ organizationId, subscriptionTier = 'starter' 
 
         if (error) throw error
         setHazardTemplates(data || [])
+        // Load usage counts after templates are set
+        setTimeout(() => loadUsageCounts(data || []), 0)
       } else {
         const { data, error } = await supabase
           .from('job_templates')
@@ -97,6 +104,8 @@ export function TemplatesManager({ organizationId, subscriptionTier = 'starter' 
 
         if (error) throw error
         setJobTemplates(data || [])
+        // Load usage counts after templates are set
+        setTimeout(() => loadUsageCounts(data || []), 0)
       }
     } catch (err: any) {
       console.error('Failed to load templates:', err)
@@ -105,9 +114,26 @@ export function TemplatesManager({ organizationId, subscriptionTier = 'starter' 
     }
   }
 
-  const checkTemplateLimit = async (): Promise<boolean> => {
+  const loadUsageCounts = async (templates: (HazardTemplate | JobTemplate)[]) => {
+    try {
+      const supabase = createSupabaseBrowserClient()
+      const counts: Record<string, number> = {}
+
+      // For now, we'll show 0 usage. In the future, we can query jobs that used templates
+      // This requires adding a template_id field to jobs table or tracking in metadata
+      templates.forEach((t) => {
+        counts[t.id] = 0 // Placeholder until we add proper tracking
+      })
+
+      setTemplateUsageCounts((prev) => ({ ...prev, ...counts }))
+    } catch (err) {
+      console.error('Failed to load usage counts:', err)
+    }
+  }
+
+  const checkTemplateLimit = async (): Promise<{ canCreate: boolean; currentCount: number; limit: number }> => {
     if (subscriptionTier === 'pro' || subscriptionTier === 'business') {
-      return true // Unlimited
+      return { canCreate: true, currentCount: 0, limit: Infinity }
     }
 
     // Starter: 3 templates max (hazard + job combined)
@@ -125,8 +151,16 @@ export function TemplatesManager({ organizationId, subscriptionTier = 'starter' 
       .eq('archived', false)
 
     const totalTemplates = (hazardCount || 0) + (jobCount || 0)
-    return totalTemplates < 3
+    return { canCreate: totalTemplates < 3, currentCount: totalTemplates, limit: 3 }
   }
+
+  const templateLimitInfo = useMemo(() => {
+    if (subscriptionTier === 'pro' || subscriptionTier === 'business') {
+      return { current: 0, limit: Infinity, isUnlimited: true }
+    }
+    const total = hazardTemplates.length + jobTemplates.length
+    return { current: total, limit: 3, isUnlimited: false }
+  }, [subscriptionTier, hazardTemplates.length, jobTemplates.length])
 
   const handleArchive = async (templateId: string) => {
     if (!confirm('Are you sure you want to archive this template?')) return
@@ -180,33 +214,60 @@ export function TemplatesManager({ organizationId, subscriptionTier = 'starter' 
 
   const currentTemplates = activeTab === 'hazard' ? hazardTemplates : jobTemplates
 
+  const handleNewTemplate = async () => {
+    const limitCheck = await checkTemplateLimit()
+    if (!limitCheck.canCreate) {
+      trackEvent('templates.limit_hit', {
+        plan: subscriptionTier,
+        current_count: limitCheck.currentCount,
+        limit: limitCheck.limit,
+      })
+      setShowUpgradeModal(true)
+      return
+    }
+    trackEvent('template.create_initiated', {
+      plan: subscriptionTier,
+      type: activeTab,
+    })
+    setEditingTemplate(null)
+    setShowCreateModal(true)
+  }
+
   return (
     <div className="rounded-xl border border-white/10 bg-[#121212]/80 backdrop-blur-sm p-6">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h3 className="text-lg font-semibold text-white">Templates</h3>
-          <p className="text-xs text-white/50 mt-0.5">
-            Create reusable presets for hazards and job types so your crew can spin up jobs in 10 seconds instead of 10 minutes.
+      <div className="flex items-start justify-between mb-6">
+        <div className="flex-1">
+          <div className="flex items-center gap-3 mb-2">
+            <h3 className="text-lg font-semibold text-white">Templates</h3>
+            {subscriptionTier === 'pro' || subscriptionTier === 'business' ? (
+              <span className="px-2 py-0.5 text-xs font-medium bg-[#F97316]/20 text-[#F97316] rounded border border-[#F97316]/30 flex items-center gap-1">
+                <Check size={12} />
+                Unlimited
+              </span>
+            ) : (
+              <span className="px-2 py-0.5 text-xs font-medium bg-white/5 text-white/70 rounded border border-white/10">
+                {templateLimitInfo.current} of {templateLimitInfo.limit}
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-white/50 mb-2">
+            Save go-to hazard + job setups so your team can spin up jobs in 30 seconds.
           </p>
-          {subscriptionTier === 'starter' && (
+          {subscriptionTier === 'starter' && templateLimitInfo.current === 2 && (
             <p className="text-xs text-[#F97316] mt-1">
-              Starter: 3 templates • Pro/Business: Unlimited
+              You&apos;ve created {templateLimitInfo.current} of {templateLimitInfo.limit} templates on Starter. <span className="text-white/70">Pro/Business: Unlimited.</span>
+            </p>
+          )}
+          {subscriptionTier === 'starter' && templateLimitInfo.current < 2 && (
+            <p className="text-xs text-white/40 mt-1">
+              Starter: {templateLimitInfo.limit} templates • Pro/Business: Unlimited
             </p>
           )}
         </div>
         <button
-          onClick={async () => {
-            const canCreate = await checkTemplateLimit()
-            if (!canCreate) {
-              alert('Starter plans can create up to 3 templates. Upgrade to Pro for unlimited templates.')
-              window.open('/pricing?from=templates', '_blank')
-              return
-            }
-            setEditingTemplate(null)
-            setShowCreateModal(true)
-          }}
-          className="px-4 py-2 bg-[#F97316] hover:bg-[#FB923C] text-black rounded-lg font-semibold text-sm transition-colors"
+          onClick={handleNewTemplate}
+          className="px-4 py-2 bg-[#F97316] hover:bg-[#FB923C] text-black rounded-lg font-semibold text-sm transition-colors flex items-center gap-2"
         >
           + New Template
         </button>
@@ -243,30 +304,35 @@ export function TemplatesManager({ organizationId, subscriptionTier = 'starter' 
           <p className="text-sm text-white/50">Loading templates...</p>
         </div>
       ) : currentTemplates.length === 0 ? (
-          <div className="text-center py-12 border border-white/10 rounded-lg bg-black/20">
+        <div className="text-center py-12 border border-white/10 rounded-lg bg-black/20">
           <div className="text-4xl mb-4">📋</div>
-          <p className="text-sm text-white/70 mb-2">
-            No {activeTab === 'hazard' ? 'hazard' : 'job'} templates yet
-          </p>
-          <p className="text-xs text-white/40 mb-4">
-            Create your first template to speed up job setup.
-          </p>
-          {subscriptionTier === 'starter' && (
-            <p className="text-xs text-white/50 mb-4">
-              Starter includes 3 templates. Pro/Business: unlimited.
-            </p>
+          {activeTab === 'hazard' ? (
+            <>
+              <p className="text-sm font-medium text-white mb-2">
+                No hazard templates yet
+              </p>
+              <p className="text-xs text-white/60 mb-3 max-w-md mx-auto">
+                Create a hazard bundle (e.g., &apos;Electrical Work&apos; or &apos;Roof Tear-Off&apos;) and reuse it across jobs.
+              </p>
+              <p className="text-xs text-white/40 mb-4 italic">
+                Suggested examples: &apos;Residential Roof Tear-Off&apos;, &apos;Panel Upgrade&apos;, &apos;Confined Space Entry&apos;
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="text-sm font-medium text-white mb-2">
+                No job templates yet
+              </p>
+              <p className="text-xs text-white/60 mb-3 max-w-md mx-auto">
+                Save whole job setups with hazards + mitigations pre-loaded.
+              </p>
+              <p className="text-xs text-white/40 mb-4 italic">
+                Suggested examples: &apos;Residential Service Call&apos;, &apos;Commercial Roof Replacement&apos;
+              </p>
+            </>
           )}
           <button
-            onClick={async () => {
-              const canCreate = await checkTemplateLimit()
-              if (!canCreate) {
-                alert('Starter plans can create up to 3 templates. Upgrade to Pro for unlimited templates.')
-                window.open('/pricing?from=templates', '_blank')
-                return
-              }
-              setEditingTemplate(null)
-              setShowCreateModal(true)
-            }}
+            onClick={handleNewTemplate}
             className="px-4 py-2 bg-[#F97316] hover:bg-[#FB923C] text-black rounded-lg font-semibold text-sm transition-colors"
           >
             + New Template
@@ -299,6 +365,9 @@ export function TemplatesManager({ organizationId, subscriptionTier = 'starter' 
                       {activeTab === 'hazard'
                         ? `${(template as HazardTemplate).hazard_ids?.length || 0} hazards`
                         : `${(template as JobTemplate).hazard_template_ids?.length || 0} hazard templates`}
+                    </span>
+                    <span>
+                      Used in {templateUsageCounts[template.id] || 0} job{templateUsageCounts[template.id] !== 1 ? 's' : ''}
                     </span>
                     <span>
                       Updated {new Date(template.updated_at || template.created_at).toLocaleDateString()}
@@ -349,16 +418,29 @@ export function TemplatesManager({ organizationId, subscriptionTier = 'starter' 
           onSave={() => {
             setShowCreateModal(false)
             setEditingTemplate(null)
+            trackEvent('template.created', {
+              plan: subscriptionTier,
+              type: activeTab,
+              organization_id: organizationId,
+            })
             loadTemplates()
           }}
         />
       )}
+
+      {/* Upgrade Modal */}
+      <TemplateUpgradeModal
+        isOpen={showUpgradeModal}
+        onClose={() => setShowUpgradeModal(false)}
+        currentCount={templateLimitInfo.current}
+        limit={templateLimitInfo.limit}
+      />
     </div>
   )
 }
 
-// Template Modal Component
-interface TemplateModalProps {
+// Export TemplateModal for use in Job Detail
+export interface TemplateModalProps {
   type: TemplateTab
   template: HazardTemplate | JobTemplate | null
   organizationId: string
@@ -366,9 +448,29 @@ interface TemplateModalProps {
   riskFactors: RiskFactor[]
   onClose: () => void
   onSave: () => void
+  onSaveAndApply?: (templateId: string, hazardIds: string[]) => void // Optional: for "Save & Apply Now" button
 }
 
-function TemplateModal({
+const SUGGESTED_TEMPLATE_NAMES = [
+  'Residential Roof Tear-Off',
+  'Electrical Panel Upgrade',
+  'HVAC Maintenance Visit',
+  'Trenching + Excavation Work',
+  'High-Risk Commercial Job Template',
+]
+
+const TRADE_OPTIONS = [
+  'Roofing',
+  'Electrical',
+  'HVAC',
+  'Plumbing',
+  'Landscaping',
+  'Renovation',
+  'General Contractor',
+  'Other',
+]
+
+export function TemplateModal({
   type,
   template,
   organizationId,
@@ -376,6 +478,7 @@ function TemplateModal({
   riskFactors,
   onClose,
   onSave,
+  onSaveAndApply,
 }: TemplateModalProps) {
   const [loading, setLoading] = useState(false)
   const [formData, setFormData] = useState({
@@ -389,23 +492,57 @@ function TemplateModal({
     type === 'hazard' ? (template as HazardTemplate)?.hazard_ids || [] : []
   )
   const [searchQuery, setSearchQuery] = useState('')
-  const [severityFilter, setSeverityFilter] = useState<string>('all')
+  const [selectedSeverities, setSelectedSeverities] = useState<string[]>([])
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([])
+
+  // Get unique categories from risk factors
+  const availableCategories = useMemo(() => {
+    const categories = new Set<string>()
+    riskFactors.forEach((f) => {
+      if (f.category) categories.add(f.category)
+    })
+    return Array.from(categories).sort()
+  }, [riskFactors])
+
+  // Get selected hazard details for preview
+  const selectedHazardDetails = useMemo(() => {
+    return riskFactors.filter((f) => selectedHazards.includes(f.id))
+  }, [selectedHazards, riskFactors])
 
   const filteredFactors = riskFactors.filter((factor) => {
     const matchesSearch = factor.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       factor.code.toLowerCase().includes(searchQuery.toLowerCase())
-    const matchesSeverity = severityFilter === 'all' || factor.severity === severityFilter
-    return matchesSearch && matchesSeverity
+    const matchesSeverity = selectedSeverities.length === 0 || selectedSeverities.includes(factor.severity)
+    const matchesCategory = selectedCategories.length === 0 || selectedCategories.includes(factor.category)
+    return matchesSearch && matchesSeverity && matchesCategory
   })
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const toggleSeverity = (severity: string) => {
+    setSelectedSeverities((prev) =>
+      prev.includes(severity) ? prev.filter((s) => s !== severity) : [...prev, severity]
+    )
+  }
+
+  const toggleCategory = (category: string) => {
+    setSelectedCategories((prev) =>
+      prev.includes(category) ? prev.filter((c) => c !== category) : [...prev, category]
+    )
+  }
+
+  const handleSuggestedName = (name: string) => {
+    setFormData({ ...formData, name })
+  }
+
+  const handleSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault()
     setLoading(true)
 
     try {
       const supabase = createSupabaseBrowserClient()
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('Not authenticated')
+
+      let createdTemplateId: string | null = null
 
       if (type === 'hazard') {
         const payload = {
@@ -424,10 +561,17 @@ function TemplateModal({
             .update(payload)
             .eq('id', template.id)
           if (error) throw error
+          createdTemplateId = template.id
         } else {
-          const { error } = await supabase.from('hazard_templates').insert(payload)
+          const { data, error } = await supabase.from('hazard_templates').insert(payload).select('id').single()
           if (error) throw error
+          createdTemplateId = data.id
         }
+        trackEvent('template.created', {
+          plan: subscriptionTier,
+          type: 'hazard',
+          organization_id: organizationId,
+        })
       } else {
         // Job template - simplified for v1
         const payload = {
@@ -449,16 +593,25 @@ function TemplateModal({
             .update(payload)
             .eq('id', template.id)
           if (error) throw error
+          createdTemplateId = template.id
         } else {
-          const { error } = await supabase.from('job_templates').insert(payload)
+          const { data, error } = await supabase.from('job_templates').insert(payload).select('id').single()
           if (error) throw error
+          createdTemplateId = data.id
         }
+        trackEvent('template.created', {
+          plan: subscriptionTier,
+          type: 'job',
+          organization_id: organizationId,
+        })
       }
 
       onSave()
+      return { success: true, templateId: createdTemplateId, hazardIds: selectedHazards } // Success with template ID
     } catch (err: any) {
       console.error('Failed to save template:', err)
       alert(err.message || 'Failed to save template')
+      return { success: false, templateId: null, hazardIds: [] } // Failure
     } finally {
       setLoading(false)
     }
@@ -471,10 +624,22 @@ function TemplateModal({
         animate={{ opacity: 1, scale: 1 }}
         className="bg-[#121212] border border-white/10 rounded-xl p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto"
       >
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-semibold text-white">
-            {template ? 'Edit' : 'Create'} {type === 'hazard' ? 'Hazard' : 'Job'} Template
-          </h2>
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-xl font-semibold text-white">
+              {template ? 'Edit' : 'Create'} {type === 'hazard' ? 'Hazard' : 'Job'} Template
+            </h2>
+            {type === 'hazard' && (
+              <p className="text-xs text-white/50 mt-1.5">
+                Hazard templates let you pre-load hazards into jobs instantly. Perfect for repetitive work like roof tear-offs, electrical jobs, or HVAC maintenance.
+              </p>
+            )}
+            {type === 'job' && (
+              <p className="text-xs text-white/50 mt-1.5">
+                Job templates save whole job setups with hazards + mitigations pre-loaded. Create once, use everywhere.
+              </p>
+            )}
+          </div>
           <button
             onClick={onClose}
             className="text-white/60 hover:text-white transition-colors"
@@ -496,16 +661,38 @@ function TemplateModal({
                 className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-[#F97316]"
                 placeholder="e.g., Residential Roof Tear-Off Hazards"
               />
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                {SUGGESTED_TEMPLATE_NAMES.slice(0, 3).map((name) => (
+                  <button
+                    key={name}
+                    type="button"
+                    onClick={() => handleSuggestedName(name)}
+                    className="text-xs px-2 py-0.5 text-white/40 hover:text-white/70 border border-white/10 hover:border-white/20 rounded transition-colors"
+                  >
+                    {name}
+                  </button>
+                ))}
+              </div>
             </div>
             <div>
               <label className="block text-sm text-white/60 mb-2">Trade / Category</label>
-              <input
-                type="text"
+              <select
                 value={formData.trade}
                 onChange={(e) => setFormData({ ...formData, trade: e.target.value })}
-                className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-[#F97316]"
-                placeholder="e.g., Roofing, Electrical"
-              />
+                className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:border-[#F97316]"
+              >
+                <option value="">Select a trade...</option>
+                {TRADE_OPTIONS.map((trade) => (
+                  <option key={trade} value={trade}>
+                    {trade}
+                  </option>
+                ))}
+              </select>
+              {formData.trade === '' && (
+                <p className="text-xs text-white/30 mt-1.5 italic">
+                  Or type a custom trade name
+                </p>
+              )}
             </div>
           </div>
 
@@ -559,27 +746,66 @@ function TemplateModal({
             <div>
               <label className="block text-sm text-white/60 mb-2">Select Hazards</label>
               
-              {/* Search and Filter */}
-              <div className="flex gap-2 mb-4">
+              {/* Search */}
+              <div className="mb-4">
                 <input
                   type="text"
                   placeholder="Search hazards..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="flex-1 px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-[#F97316]"
+                  className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-[#F97316]"
                 />
-                <select
-                  value={severityFilter}
-                  onChange={(e) => setSeverityFilter(e.target.value)}
-                  className="px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:border-[#F97316]"
-                >
-                  <option value="all">All Severities</option>
-                  <option value="critical">Critical</option>
-                  <option value="high">High</option>
-                  <option value="medium">Medium</option>
-                  <option value="low">Low</option>
-                </select>
               </div>
+
+              {/* Severity Filter Chips */}
+              <div className="mb-3">
+                <p className="text-xs text-white/50 mb-2">Filter by Severity</p>
+                <div className="flex flex-wrap gap-2">
+                  {['critical', 'high', 'medium', 'low'].map((severity) => (
+                    <button
+                      key={severity}
+                      type="button"
+                      onClick={() => toggleSeverity(severity)}
+                      className={`px-3 py-1 text-xs rounded-lg border transition-colors ${
+                        selectedSeverities.includes(severity)
+                          ? severity === 'critical'
+                            ? 'bg-red-500/20 border-red-500/50 text-red-400'
+                            : severity === 'high'
+                            ? 'bg-orange-500/20 border-orange-500/50 text-orange-400'
+                            : severity === 'medium'
+                            ? 'bg-yellow-500/20 border-yellow-500/50 text-yellow-400'
+                            : 'bg-blue-500/20 border-blue-500/50 text-blue-400'
+                          : 'bg-white/5 border-white/10 text-white/60 hover:border-white/20'
+                      }`}
+                    >
+                      {severity.charAt(0).toUpperCase() + severity.slice(1)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Category Filter Chips */}
+              {availableCategories.length > 0 && (
+                <div className="mb-4">
+                  <p className="text-xs text-white/50 mb-2">Filter by Category</p>
+                  <div className="flex flex-wrap gap-2">
+                    {availableCategories.map((category) => (
+                      <button
+                        key={category}
+                        type="button"
+                        onClick={() => toggleCategory(category)}
+                        className={`px-3 py-1 text-xs rounded-lg border transition-colors ${
+                          selectedCategories.includes(category)
+                            ? 'bg-[#F97316]/20 border-[#F97316]/50 text-[#F97316]'
+                            : 'bg-white/5 border-white/10 text-white/60 hover:border-white/20'
+                        }`}
+                      >
+                        {category}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Hazard List */}
               <div className="max-h-64 overflow-y-auto space-y-2 border border-white/10 rounded-lg p-4 bg-black/20">
@@ -626,9 +852,28 @@ function TemplateModal({
                   ))
                 )}
               </div>
-              <p className="text-xs text-white/40 mt-2">
-                {selectedHazards.length} hazard{selectedHazards.length !== 1 ? 's' : ''} selected
-              </p>
+
+              {/* Preview Summary */}
+              {selectedHazards.length > 0 && (
+                <div className="mt-4 p-4 rounded-lg border border-[#F97316]/20 bg-[#F97316]/5">
+                  <p className="text-sm font-medium text-white mb-2">
+                    {selectedHazards.length} hazard{selectedHazards.length !== 1 ? 's' : ''} selected
+                  </p>
+                  <div className="space-y-1">
+                    {selectedHazardDetails.slice(0, 5).map((hazard) => (
+                      <div key={hazard.id} className="text-xs text-white/70 flex items-center gap-2">
+                        <span className="text-[#F97316]">•</span>
+                        <span>{hazard.name}</span>
+                      </div>
+                    ))}
+                    {selectedHazardDetails.length > 5 && (
+                      <p className="text-xs text-white/50 italic">
+                        +{selectedHazardDetails.length - 5} more
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -642,12 +887,29 @@ function TemplateModal({
             >
               Cancel
             </button>
+            {onSaveAndApply && (
+              <button
+                type="button"
+                onClick={async () => {
+                  const result = await handleSubmit()
+                  if (result.success && result.templateId && result.hazardIds.length > 0) {
+                    onSaveAndApply(result.templateId, result.hazardIds)
+                  }
+                }}
+                disabled={loading || !formData.name || (type === 'hazard' && selectedHazards.length === 0)}
+                className="px-4 py-2 bg-white/10 hover:bg-white/15 text-white rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed border border-white/10"
+              >
+                {loading ? 'Saving...' : 'Save & Apply Now'}
+              </button>
+            )}
             <button
               type="submit"
               disabled={loading || !formData.name}
-              className="flex-1 px-4 py-2 bg-[#F97316] hover:bg-[#FB923C] text-black rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className={`px-4 py-2 bg-[#F97316] hover:bg-[#FB923C] text-black rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                onSaveAndApply ? 'flex-1' : 'flex-1'
+              }`}
             >
-              {loading ? 'Saving...' : template ? 'Update Template' : 'Create Template'}
+              {loading ? 'Saving...' : template ? 'Update Template' : 'Save Template'}
             </button>
           </div>
         </form>

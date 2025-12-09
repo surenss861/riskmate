@@ -3,7 +3,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { jobsApi, subscriptionsApi } from '@/lib/api'
+import { jobsApi, subscriptionsApi, riskApi } from '@/lib/api'
+import { Toast } from '@/components/dashboard/Toast'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import RiskMateLogo from '@/components/RiskMateLogo'
 import { GenerationProgressModal } from '@/components/dashboard/GenerationProgressModal'
@@ -13,7 +14,7 @@ import { EditableSelect } from '@/components/dashboard/EditableSelect'
 import { VersionHistory } from '@/components/dashboard/VersionHistory'
 import { JobAssignment } from '@/components/dashboard/JobAssignment'
 import { EvidenceVerification } from '@/components/dashboard/EvidenceVerification'
-import { TemplatesManager } from '@/components/dashboard/TemplatesManager'
+import { TemplatesManager, TemplateModal, TemplateModalProps } from '@/components/dashboard/TemplatesManager'
 import { ApplyTemplateModal } from '@/components/dashboard/ApplyTemplateModal'
 import { ErrorModal } from '@/components/dashboard/ErrorModal'
 import { optimizePhoto } from '@/lib/utils/photoOptimization'
@@ -73,7 +74,10 @@ export default function JobDetailPage() {
   const [showProgressModal, setShowProgressModal] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showApplyTemplate, setShowApplyTemplate] = useState(false)
+  const [showCreateTemplate, setShowCreateTemplate] = useState(false)
   const [organizationId, setOrganizationId] = useState<string | null>(null)
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+  const [riskFactors, setRiskFactors] = useState<any[]>([])
 
   const loadJob = useCallback(async () => {
     try {
@@ -92,12 +96,16 @@ export default function JobDetailPage() {
     }
   }, [jobId, loadJob])
 
-  // Load subscription tier, permit packs, and organization ID
+  // Load subscription tier, permit packs, organization ID, and risk factors
   useEffect(() => {
     const loadData = async () => {
       try {
         const response = await subscriptionsApi.get()
         setSubscriptionTier(response.data?.tier || null)
+
+        // Load risk factors for template creation
+        const riskResponse = await riskApi.getFactors()
+        setRiskFactors(riskResponse.data)
 
         // Load organization ID
         const { createSupabaseBrowserClient } = await import('@/lib/supabase/client')
@@ -711,6 +719,31 @@ export default function JobDetailPage() {
           onApply={handleApplyTemplate}
         />
       )}
+
+      {/* Create Template Modal */}
+      {showCreateTemplate && organizationId && riskFactors.length > 0 && (
+        <TemplateModal
+          type="hazard"
+          template={null}
+          organizationId={organizationId}
+          subscriptionTier={subscriptionTier}
+          riskFactors={riskFactors}
+          onClose={() => setShowCreateTemplate(false)}
+          onSave={() => {
+            setShowCreateTemplate(false)
+            setToast({ message: 'Template created successfully!', type: 'success' })
+          }}
+          onSaveAndApply={handleSaveAndApplyTemplate}
+        />
+      )}
+
+      {/* Toast Notification */}
+      <Toast
+        message={toast?.message || ''}
+        type={toast?.type || 'success'}
+        isOpen={toast !== null}
+        onClose={() => setToast(null)}
+      />
 
       <ErrorModal
         isOpen={error !== null}

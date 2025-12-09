@@ -64,3 +64,16 @@ export const trackStarterBlock11thJob = () => {
   trackEvent('starter_block_11th_job')
 }
 
+// Template tracking
+export const trackTemplateCreated = (plan: string, type: 'hazard' | 'job', orgSize?: number) => {
+  trackEvent('template.created', { plan, type, org_size: orgSize })
+}
+
+export const trackTemplateApplied = (plan: string, type: 'hazard' | 'job', where: 'new-job' | 'job-detail') => {
+  trackEvent('template.applied', { plan, type, where })
+}
+
+export const trackTemplateLimitHit = (plan: string, currentCount: number, limit: number) => {
+  trackEvent('templates.limit_hit', { plan, current_count: currentCount, limit })
+}
+

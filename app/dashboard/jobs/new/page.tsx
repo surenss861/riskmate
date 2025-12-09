@@ -150,6 +150,23 @@ export default function NewJobPage() {
         start_date: formData.start_date || undefined,
       })
 
+      // Track template usage if a template was applied
+      if (selectedTemplate) {
+        const { trackTemplateApplied } = await import('@/lib/posthog')
+        const { createSupabaseBrowserClient } = await import('@/lib/supabase/client')
+        const supabase = createSupabaseBrowserClient()
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+          const { data: subData } = await supabase
+            .from('subscriptions')
+            .select('tier')
+            .eq('organization_id', (await supabase.from('users').select('organization_id').eq('id', user.id).single()).data?.organization_id)
+            .eq('status', 'active')
+            .single()
+          trackTemplateApplied(subData?.tier || 'starter', 'job', 'new-job')
+        }
+      }
+
       // Redirect to job detail page
       router.push(`/dashboard/jobs/${response.data.id}`)
     } catch (err: any) {
