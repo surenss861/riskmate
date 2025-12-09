@@ -40,12 +40,14 @@ export default function NewJobPage() {
   useEffect(() => {
     loadRiskFactors()
     loadTemplates()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
     if (selectedTemplate) {
       applyTemplate(selectedTemplate)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedTemplate])
 
   const loadRiskFactors = async () => {

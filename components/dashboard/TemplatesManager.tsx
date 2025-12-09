@@ -60,6 +60,7 @@ export function TemplatesManager({ organizationId, subscriptionTier = 'starter' 
   useEffect(() => {
     loadTemplates()
     loadRiskFactors()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab])
 
   const loadRiskFactors = async () => {

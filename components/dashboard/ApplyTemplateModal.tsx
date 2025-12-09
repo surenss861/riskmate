@@ -50,12 +50,14 @@ export function ApplyTemplateModal({
   useEffect(() => {
     loadTemplates()
     loadRiskFactors()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
     if (selectedTemplate) {
       loadPreview()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedTemplate, activeTab])
 
   const loadRiskFactors = async () => {
