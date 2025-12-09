@@ -85,6 +85,30 @@ export default function JobDetailPage() {
     try {
       const response = await jobsApi.get(jobId)
       setJob(response.data)
+      
+      // Load applied template info if exists
+      if (response.data.applied_template_id && response.data.applied_template_type) {
+        const { createSupabaseBrowserClient } = await import('@/lib/supabase/client')
+        const supabase = createSupabaseBrowserClient()
+        const table = response.data.applied_template_type === 'hazard' ? 'hazard_templates' : 'job_templates'
+        
+        const { data: templateData } = await supabase
+          .from(table)
+          .select('id, name')
+          .eq('id', response.data.applied_template_id)
+          .single()
+        
+        if (templateData) {
+          setAppliedTemplate({
+            id: templateData.id,
+            name: templateData.name,
+            type: response.data.applied_template_type,
+          })
+        }
+      } else {
+        setAppliedTemplate(null)
+      }
+      
       setLoading(false)
     } catch (err: any) {
       console.error('Failed to load job:', err)
