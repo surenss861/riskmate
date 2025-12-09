@@ -14,6 +14,7 @@ import { VersionHistory } from '@/components/dashboard/VersionHistory'
 import { JobAssignment } from '@/components/dashboard/JobAssignment'
 import { EvidenceVerification } from '@/components/dashboard/EvidenceVerification'
 import { TemplatesManager } from '@/components/dashboard/TemplatesManager'
+import { ApplyTemplateModal } from '@/components/dashboard/ApplyTemplateModal'
 import { ErrorModal } from '@/components/dashboard/ErrorModal'
 import { optimizePhoto } from '@/lib/utils/photoOptimization'
 import { getGPSLocation } from '@/lib/utils/gpsMetadata'
@@ -71,6 +72,8 @@ export default function JobDetailPage() {
   const [loadingPermitPacks, setLoadingPermitPacks] = useState(false)
   const [showProgressModal, setShowProgressModal] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showApplyTemplate, setShowApplyTemplate] = useState(false)
+  const [organizationId, setOrganizationId] = useState<string | null>(null)
 
   const loadJob = useCallback(async () => {
     try {
@@ -89,17 +92,32 @@ export default function JobDetailPage() {
     }
   }, [jobId, loadJob])
 
-  // Load subscription tier and permit packs
+  // Load subscription tier, permit packs, and organization ID
   useEffect(() => {
-    const loadSubscription = async () => {
+    const loadData = async () => {
       try {
         const response = await subscriptionsApi.get()
         setSubscriptionTier(response.data?.tier || null)
+
+        // Load organization ID
+        const { createSupabaseBrowserClient } = await import('@/lib/supabase/client')
+        const supabase = createSupabaseBrowserClient()
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+          const { data: userRow } = await supabase
+            .from('users')
+            .select('organization_id')
+            .eq('id', user.id)
+            .single()
+          if (userRow?.organization_id) {
+            setOrganizationId(userRow.organization_id)
+          }
+        }
       } catch (err) {
-        console.error('Failed to load subscription:', err)
+        console.error('Failed to load data:', err)
       }
     }
-    loadSubscription()
+    loadData()
   }, [])
 
   // Load permit packs for Business plan users
@@ -230,6 +248,42 @@ export default function JobDetailPage() {
   const completedCount = job.mitigation_items.filter((m) => m.done).length
   const totalCount = job.mitigation_items.length
 
+  const currentRiskFactorCodes = job.risk_score_detail?.factors
+    ? job.risk_score_detail.factors.map((f) => f.code)
+    : []
+
+  const handleApplyTemplate = async (
+    hazardIds: string[],
+    templateId: string,
+    templateType: 'hazard' | 'job',
+    replaceExisting: boolean = false
+  ) => {
+    try {
+      const response = await fetch(`/api/jobs/${jobId}/apply-template`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          hazard_ids: hazardIds,
+          template_id: templateId,
+          template_type: templateType,
+          replace_existing: replaceExisting,
+        }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.message || 'Failed to apply template')
+      }
+
+      const { data } = await response.json()
+      setJob(data)
+      loadJob() // Reload to get fresh data
+    } catch (err: any) {
+      console.error('Failed to apply template:', err)
+      setError(err.message || 'Failed to apply template')
+    }
+  }
+
   return (
     <ProtectedRoute>
       <div className="min-h-screen bg-[#0A0A0A] text-white">
@@ -358,6 +412,51 @@ export default function JobDetailPage() {
                     </div>
                   </div>
                 )}
+
+                {/* Risk & Hazards Section */}
+                <div className="pt-6 border-t border-white/10 mt-8">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h3 className="text-lg font-semibold text-white mb-1">Risk & Hazards</h3>
+                      <p className="text-xs text-white/50">
+                        {job.risk_score_detail?.factors.length || 0} hazard{job.risk_score_detail?.factors.length !== 1 ? 's' : ''} identified
+                      </p>
+                    </div>
+                    {organizationId && (
+                      <button
+                        onClick={() => setShowApplyTemplate(true)}
+                        className="px-4 py-2 bg-[#F97316] hover:bg-[#FB923C] text-black rounded-lg font-semibold text-sm transition-colors"
+                      >
+                        Apply Template
+                      </button>
+                    )}
+                  </div>
+                  {job.risk_score_detail && job.risk_score_detail.factors.length > 0 ? (
+                    <div className="space-y-2">
+                      {job.risk_score_detail.factors.map((factor, i) => (
+                        <div
+                          key={i}
+                          className="flex items-center gap-3 p-3 rounded-lg border border-white/10 bg-black/20"
+                        >
+                          <div className="w-2 h-2 rounded-full bg-[#F97316]" />
+                          <div className="flex-1">
+                            <div className="text-sm text-white">{factor.name}</div>
+                            <div className="text-xs text-white/50 mt-0.5">
+                              {factor.severity} severity • +{factor.weight} points
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-6 border border-white/10 rounded-lg bg-black/20">
+                      <p className="text-sm text-white/50 mb-2">No hazards identified yet</p>
+                      <p className="text-xs text-white/40">
+                        Apply a template or add hazards manually to get started
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
             </motion.div>
 
@@ -602,6 +701,17 @@ export default function JobDetailPage() {
         }}
         type="permit-pack"
       />
+      {/* Apply Template Modal */}
+      {showApplyTemplate && organizationId && (
+        <ApplyTemplateModal
+          jobId={jobId}
+          organizationId={organizationId}
+          currentRiskFactorCodes={currentRiskFactorCodes}
+          onClose={() => setShowApplyTemplate(false)}
+          onApply={handleApplyTemplate}
+        />
+      )}
+
       <ErrorModal
         isOpen={error !== null}
         title="Error"
