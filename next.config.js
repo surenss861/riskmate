@@ -29,10 +29,8 @@ const nextConfig = {
     }
     return config;
   },
-  // Next.js 16: Explicitly use webpack (not Turbopack) for now
-  experimental: {
-    turbo: undefined, // Disable Turbopack
-  },
+  // Next.js 16: Add empty turbopack config to silence error (we use webpack)
+  turbopack: {},
 }
 
 module.exports = nextConfig
