@@ -5,7 +5,6 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import RiskMateLogo from '@/components/RiskMateLogo'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
-import { DarkModeToggle } from './DarkModeToggle'
 
 interface DashboardNavbarProps {
   email?: string | null
@@ -89,7 +88,6 @@ export function DashboardNavbar({ email, onLogout }: DashboardNavbarProps) {
         </div>
 
         <div className="flex items-center justify-between gap-3 sm:justify-end">
-          <DarkModeToggle />
           {email && <span className="truncate text-sm text-white/60">{email}</span>}
           {onLogout && (
             <button

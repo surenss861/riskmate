@@ -21,6 +21,9 @@ export default function NewJobPage() {
   const [loading, setLoading] = useState(false)
   const [riskFactors, setRiskFactors] = useState<RiskFactor[]>([])
   const [selectedRiskFactors, setSelectedRiskFactors] = useState<string[]>([])
+  const [selectedTemplate, setSelectedTemplate] = useState<string>('')
+  const [jobTemplates, setJobTemplates] = useState<any[]>([])
+  const [hazardTemplates, setHazardTemplates] = useState<any[]>([])
   const [formData, setFormData] = useState({
     client_name: '',
     client_type: 'residential',
@@ -36,7 +39,14 @@ export default function NewJobPage() {
 
   useEffect(() => {
     loadRiskFactors()
+    loadTemplates()
   }, [])
+
+  useEffect(() => {
+    if (selectedTemplate) {
+      applyTemplate(selectedTemplate)
+    }
+  }, [selectedTemplate])
 
   const loadRiskFactors = async () => {
     try {
@@ -44,6 +54,85 @@ export default function NewJobPage() {
       setRiskFactors(response.data)
     } catch (err: any) {
       console.error('Failed to load risk factors:', err)
+    }
+  }
+
+  const loadTemplates = async () => {
+    try {
+      const { createSupabaseBrowserClient } = await import('@/lib/supabase/client')
+      const supabase = createSupabaseBrowserClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      const { data: userRow } = await supabase
+        .from('users')
+        .select('organization_id')
+        .eq('id', user.id)
+        .single()
+
+      if (!userRow?.organization_id) return
+
+      // Load job templates
+      const { data: jobTemplatesData } = await supabase
+        .from('job_templates')
+        .select('*')
+        .eq('organization_id', userRow.organization_id)
+        .eq('archived', false)
+
+      setJobTemplates(jobTemplatesData || [])
+
+      // Load hazard templates
+      const { data: hazardTemplatesData } = await supabase
+        .from('hazard_templates')
+        .select('*')
+        .eq('organization_id', userRow.organization_id)
+        .eq('archived', false)
+
+      setHazardTemplates(hazardTemplatesData || [])
+    } catch (err) {
+      console.error('Failed to load templates:', err)
+    }
+  }
+
+  const applyTemplate = async (templateId: string) => {
+    try {
+      const template = jobTemplates.find((t) => t.id === templateId)
+      if (!template) return
+
+      // Pre-fill form fields
+      if (template.job_type) setFormData((prev) => ({ ...prev, job_type: template.job_type }))
+      if (template.client_type) setFormData((prev) => ({ ...prev, client_type: template.client_type }))
+      if (template.description) setFormData((prev) => ({ ...prev, description: template.description }))
+
+      // Apply hazard templates
+      if (template.hazard_template_ids && template.hazard_template_ids.length > 0) {
+        const { createSupabaseBrowserClient } = await import('@/lib/supabase/client')
+        const supabase = createSupabaseBrowserClient()
+        
+        // Get all hazards from hazard templates
+        const { data: hazardTemplatesData } = await supabase
+          .from('hazard_templates')
+          .select('hazard_ids')
+          .in('id', template.hazard_template_ids)
+
+        const allHazardIds = hazardTemplatesData?.flatMap((ht) => ht.hazard_ids || []) || []
+        
+        // Convert hazard IDs to risk factor codes
+        // Note: hazard_ids in templates are risk_factor IDs, need to match with riskFactors
+        const hazardCodes = riskFactors
+          .filter((rf) => allHazardIds.includes(rf.id))
+          .map((rf) => rf.code)
+
+        setSelectedRiskFactors(hazardCodes)
+      } else if (template.hazard_ids && template.hazard_ids.length > 0) {
+        // Direct hazard IDs (for backward compatibility)
+        const hazardCodes = riskFactors
+          .filter((rf) => template.hazard_ids.includes(rf.id))
+          .map((rf) => rf.code)
+        setSelectedRiskFactors(hazardCodes)
+      }
+    } catch (err) {
+      console.error('Failed to apply template:', err)
     }
   }
 
@@ -132,6 +221,30 @@ export default function NewJobPage() {
             )}
 
             <form onSubmit={handleSubmit} className="space-y-8">
+              {/* Template Selector */}
+              {jobTemplates.length > 0 && (
+                <div className="bg-[#121212]/80 backdrop-blur-sm border border-white/10 rounded-xl p-6">
+                  <label className="block text-sm font-medium mb-2">
+                    Start from Template (Optional)
+                  </label>
+                  <select
+                    value={selectedTemplate}
+                    onChange={(e) => setSelectedTemplate(e.target.value)}
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:border-[#F97316]"
+                  >
+                    <option value="">Create from scratch</option>
+                    {jobTemplates.map((template) => (
+                      <option key={template.id} value={template.id}>
+                        {template.name}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-white/50 mt-2">
+                    Select a template to pre-fill job details and hazards
+                  </p>
+                </div>
+              )}
+
               {/* Basic Job Info */}
               <div className="bg-[#121212]/80 backdrop-blur-sm border border-white/10 rounded-xl p-8">
                 <h2 className="text-2xl font-semibold mb-6">Job Information</h2>
