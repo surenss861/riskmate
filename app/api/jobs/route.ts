@@ -136,6 +136,8 @@ export async function POST(request: NextRequest) {
       has_subcontractors = false,
       subcontractor_count = 0,
       insurance_status = 'pending',
+      applied_template_id,
+      applied_template_type,
     } = body
 
     // Validate required fields
@@ -196,6 +198,8 @@ export async function POST(request: NextRequest) {
         has_subcontractors,
         subcontractor_count,
         insurance_status,
+        applied_template_id: applied_template_id || null,
+        applied_template_type: applied_template_type || null,
       })
       .select()
       .single()

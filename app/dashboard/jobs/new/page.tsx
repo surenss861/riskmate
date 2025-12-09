@@ -144,10 +144,30 @@ export default function NewJobPage() {
     setError(null)
 
     try {
+      // Determine template ID and type if a template was used
+      let appliedTemplateId: string | undefined
+      let appliedTemplateType: 'hazard' | 'job' | undefined
+      
+      if (selectedTemplate) {
+        // Check if it's a job template
+        const jobTemplate = jobTemplates.find((t) => t.id === selectedTemplate)
+        if (jobTemplate) {
+          appliedTemplateId = selectedTemplate
+          appliedTemplateType = 'job'
+        } else {
+          // It's a hazard template (applied via job template's hazard_template_ids)
+          // For now, we'll track the job template that was used
+          appliedTemplateId = selectedTemplate
+          appliedTemplateType = 'job'
+        }
+      }
+
       const response = await jobsApi.create({
         ...formData,
         risk_factor_codes: selectedRiskFactors,
         start_date: formData.start_date || undefined,
+        applied_template_id: appliedTemplateId,
+        applied_template_type: appliedTemplateType,
       })
 
       // Track template usage if a template was applied

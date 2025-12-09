@@ -51,6 +51,8 @@ interface Job {
   } | null
   mitigation_items: MitigationItem[]
   created_at: string
+  applied_template_id?: string | null
+  applied_template_type?: 'hazard' | 'job' | null
 }
 
 export default function JobDetailPage() {
@@ -336,7 +338,7 @@ export default function JobDetailPage() {
         </header>
 
         <div className="max-w-7xl mx-auto px-6 py-12">
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
             <EditableText
               value={job.client_name}
               onSave={async (newValue) => {
@@ -346,7 +348,24 @@ export default function JobDetailPage() {
               className="text-5xl font-bold mb-3 font-display block"
               inputClassName="text-5xl font-bold"
             />
-            <p className="text-xl text-[#A1A1A1] mb-1">{job.location}</p>
+            <div className="flex items-center gap-3 mb-1">
+              <p className="text-xl text-[#A1A1A1]">{job.location}</p>
+              {appliedTemplate && (
+                <span className="px-3 py-1 text-xs font-medium bg-[#F97316]/20 text-[#F97316] rounded-lg border border-[#F97316]/30 flex items-center gap-1.5">
+                  <span>📋</span>
+                  <span>From template: {appliedTemplate.name}</span>
+                  <button
+                    onClick={() => {
+                      // Open template in Account page (new tab)
+                      window.open(`/dashboard/account#template-${appliedTemplate.id}`, '_blank')
+                    }}
+                    className="text-[#F97316] hover:text-[#FB923C] underline text-xs"
+                  >
+                    View
+                  </button>
+                </span>
+              )}
+            </div>
             <div className="flex items-center gap-3 mb-2">
               <p className="text-sm text-[#A1A1A1]/70">
                 {job.job_type} • {job.client_type}

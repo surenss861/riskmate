@@ -96,12 +96,14 @@ export async function POST(
       })
     }
 
-    // Update job with new risk score
+    // Update job with new risk score and template tracking
     await supabase
       .from('jobs')
       .update({
         risk_score: riskScoreResult.overall_score,
         risk_level: riskScoreResult.risk_level,
+        applied_template_id: template_id || null,
+        applied_template_type: template_type || null,
       })
       .eq('id', jobId)
 

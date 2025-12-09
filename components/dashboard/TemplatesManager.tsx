@@ -119,15 +119,32 @@ export function TemplatesManager({ organizationId, subscriptionTier = 'starter' 
       const supabase = createSupabaseBrowserClient()
       const counts: Record<string, number> = {}
 
-      // For now, we'll show 0 usage. In the future, we can query jobs that used templates
-      // This requires adding a template_id field to jobs table or tracking in metadata
-      templates.forEach((t) => {
-        counts[t.id] = 0 // Placeholder until we add proper tracking
-      })
+      // Query real usage counts from jobs table
+      for (const template of templates) {
+        const templateType = activeTab === 'hazard' ? 'hazard' : 'job'
+        const { count, error } = await supabase
+          .from('jobs')
+          .select('*', { count: 'exact', head: true })
+          .eq('organization_id', organizationId)
+          .eq('applied_template_id', template.id)
+          .eq('applied_template_type', templateType)
+
+        if (!error) {
+          counts[template.id] = count || 0
+        } else {
+          counts[template.id] = 0
+        }
+      }
 
       setTemplateUsageCounts((prev) => ({ ...prev, ...counts }))
     } catch (err) {
       console.error('Failed to load usage counts:', err)
+      // Fallback to 0 if query fails
+      const counts: Record<string, number> = {}
+      templates.forEach((t) => {
+        counts[t.id] = 0
+      })
+      setTemplateUsageCounts((prev) => ({ ...prev, ...counts }))
     }
   }
 
