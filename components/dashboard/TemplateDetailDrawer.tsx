@@ -142,12 +142,12 @@ export function TemplateDetailDrawer({
               {usageCount > 0 && (
                 <button
                   onClick={() => {
-                    router.push(`/dashboard/jobs?template=${template.id}`)
+                    router.push(`/dashboard/jobs?source=template&templateId=${template.id}`)
                     onClose()
                   }}
                   className="text-xs text-[#F97316] hover:text-[#FB923C] flex items-center gap-1 mt-2"
                 >
-                  View all jobs <ExternalLink size={12} />
+                  View all {usageCount} job{usageCount !== 1 ? 's' : ''} <ExternalLink size={12} />
                 </button>
               )}
             </div>

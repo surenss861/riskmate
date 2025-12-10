@@ -94,14 +94,14 @@ export default function JobDetailPage() {
         
         const { data: templateData } = await supabase
           .from(table)
-          .select('id, name')
+          .select('id, name, archived')
           .eq('id', response.data.applied_template_id)
           .single()
         
         if (templateData) {
           setAppliedTemplate({
             id: templateData.id,
-            name: templateData.name,
+            name: templateData.name + (templateData.archived ? ' (Archived)' : ''),
             type: response.data.applied_template_type,
           })
         }
@@ -780,9 +780,14 @@ export default function JobDetailPage() {
           subscriptionTier={subscriptionTier}
           riskFactors={riskFactors}
           usageCount={0}
-          onClose={() => setShowCreateTemplate(false)}
+          prefillData={prefillTemplateData || undefined}
+          onClose={() => {
+            setShowCreateTemplate(false)
+            setPrefillTemplateData(null)
+          }}
           onSave={() => {
             setShowCreateTemplate(false)
+            setPrefillTemplateData(null)
             setToast({ message: 'Template created successfully!', type: 'success' })
           }}
           onSaveAndApply={handleSaveAndApplyTemplate}

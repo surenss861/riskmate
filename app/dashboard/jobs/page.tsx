@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import ProtectedRoute from '@/components/ProtectedRoute'
@@ -26,13 +26,14 @@ interface Job {
 
 export default function JobsPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [jobs, setJobs] = useState<Job[]>([])
   const [filterStatus, setFilterStatus] = useState<string>('')
   const [filterRiskLevel, setFilterRiskLevel] = useState<string>('')
-  const [filterTemplateSource, setFilterTemplateSource] = useState<string>('') // 'all', 'template', 'manual'
-  const [filterTemplateId, setFilterTemplateId] = useState<string>('')
+  const [filterTemplateSource, setFilterTemplateSource] = useState<string>(searchParams.get('source') || '') // 'all', 'template', 'manual'
+  const [filterTemplateId, setFilterTemplateId] = useState<string>(searchParams.get('templateId') || '')
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
   const [templates, setTemplates] = useState<Array<{ id: string; name: string }>>([])

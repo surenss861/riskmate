@@ -90,24 +90,46 @@ export function TemplatesManager({ organizationId, subscriptionTier = 'starter' 
           .select('*')
           .eq('organization_id', organizationId)
           .eq('archived', false)
-          .order('updated_at', { ascending: false })
 
         if (error) throw error
-        setHazardTemplates(data || [])
-        // Load usage counts after templates are set
-        setTimeout(() => loadUsageCounts(data || []), 0)
+        
+        // Load usage counts first
+        const counts = await loadUsageCounts(data || [])
+        
+        // Sort by usage count (desc), then by updated_at (desc)
+        const sorted = [...(data || [])].sort((a, b) => {
+          const usageA = counts[a.id] || 0
+          const usageB = counts[b.id] || 0
+          if (usageA !== usageB) {
+            return usageB - usageA // Higher usage first
+          }
+          return new Date(b.updated_at || b.created_at).getTime() - new Date(a.updated_at || a.created_at).getTime()
+        })
+        
+        setHazardTemplates(sorted)
       } else {
         const { data, error } = await supabase
           .from('job_templates')
           .select('*')
           .eq('organization_id', organizationId)
           .eq('archived', false)
-          .order('updated_at', { ascending: false })
 
         if (error) throw error
-        setJobTemplates(data || [])
-        // Load usage counts after templates are set
-        setTimeout(() => loadUsageCounts(data || []), 0)
+        
+        // Load usage counts first
+        const counts = await loadUsageCounts(data || [])
+        
+        // Sort by usage count (desc), then by updated_at (desc)
+        const sorted = [...(data || [])].sort((a, b) => {
+          const usageA = counts[a.id] || 0
+          const usageB = counts[b.id] || 0
+          if (usageA !== usageB) {
+            return usageB - usageA // Higher usage first
+          }
+          return new Date(b.updated_at || b.created_at).getTime() - new Date(a.updated_at || a.created_at).getTime()
+        })
+        
+        setJobTemplates(sorted)
       }
     } catch (err: any) {
       console.error('Failed to load templates:', err)
@@ -182,7 +204,13 @@ export function TemplatesManager({ organizationId, subscriptionTier = 'starter' 
   }, [subscriptionTier, hazardTemplates.length, jobTemplates.length])
 
   const handleArchive = async (templateId: string) => {
-    if (!confirm('Are you sure you want to archive this template?')) return
+    const usageCount = templateUsageCounts[templateId] || 0
+    
+    if (usageCount > 0) {
+      if (!confirm(`This template is used in ${usageCount} job${usageCount !== 1 ? 's' : ''}. Archiving will hide it from new jobs but existing jobs will still reference it. Continue?`)) return
+    } else {
+      if (!confirm('Are you sure you want to archive this template?')) return
+    }
 
     try {
       const supabase = createSupabaseBrowserClient()
@@ -492,6 +520,7 @@ export interface TemplateModalProps {
   subscriptionTier?: string | null
   riskFactors: RiskFactor[]
   usageCount?: number // For showing warning when editing templates in use
+  prefillData?: { name: string; trade?: string; hazardIds: string[] } // For pre-filling from job
   onClose: () => void
   onSave: () => void
   onSaveAndApply?: (templateId: string, hazardIds: string[]) => void // Optional: for "Save & Apply Now" button
@@ -523,6 +552,7 @@ export function TemplateModal({
   subscriptionTier = 'starter',
   riskFactors,
   usageCount = 0,
+  prefillData,
   onClose,
   onSave,
   onSaveAndApply,
@@ -536,16 +566,30 @@ export function TemplateModal({
       document.body.style.overflow = 'unset'
     }
   }, [])
+  
+  // Initialize form data - prioritize prefillData over template
   const [formData, setFormData] = useState({
-    name: template?.name || '',
-    trade: (template as HazardTemplate)?.trade || '',
+    name: prefillData?.name || template?.name || '',
+    trade: prefillData?.trade || (template as HazardTemplate)?.trade || '',
     description: (template as HazardTemplate)?.description || '',
     job_type: (template as JobTemplate)?.job_type || '',
     client_type: (template as JobTemplate)?.client_type || 'residential',
   })
   const [selectedHazards, setSelectedHazards] = useState<string[]>(
-    type === 'hazard' ? (template as HazardTemplate)?.hazard_ids || [] : []
+    prefillData?.hazardIds || (type === 'hazard' ? (template as HazardTemplate)?.hazard_ids || [] : [])
   )
+  
+  // Update form when prefillData changes
+  useEffect(() => {
+    if (prefillData) {
+      setFormData((prev) => ({
+        ...prev,
+        name: prefillData.name || prev.name,
+        trade: prefillData.trade || prev.trade,
+      }))
+      setSelectedHazards(prefillData.hazardIds || [])
+    }
+  }, [prefillData])
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedSeverities, setSelectedSeverities] = useState<string[]>([])
   const [selectedCategories, setSelectedCategories] = useState<string[]>([])
