@@ -319,6 +319,49 @@ export default function JobDetailPage() {
     }
   }
 
+  const handleSaveAndApplyTemplate = async (templateId: string, hazardIds: string[]) => {
+    try {
+      // Convert hazard IDs to risk factor codes
+      const hazardCodes = riskFactors
+        .filter((rf) => hazardIds.includes(rf.id))
+        .map((rf) => rf.code)
+
+      if (hazardCodes.length === 0) {
+        throw new Error('No hazards to apply')
+      }
+
+      await handleApplyTemplate(hazardIds, templateId, 'hazard', false)
+      setShowCreateTemplate(false)
+      setPrefillTemplateData(null)
+      setToast({ message: 'Template saved and applied to this job!', type: 'success' })
+    } catch (err: any) {
+      console.error('Failed to save and apply template:', err)
+      setToast({ message: err.message || 'Failed to save and apply template', type: 'error' })
+    }
+  }
+
+  const handleSaveAsTemplate = () => {
+    if (!job || !job.risk_score_detail || job.risk_score_detail.factors.length === 0) {
+      setToast({ message: 'No hazards to save as template', type: 'error' })
+      return
+    }
+
+    // Get current hazard IDs from risk factors
+    const currentHazardCodes = job.risk_score_detail.factors.map((f) => f.code)
+    const currentHazardIds = riskFactors
+      .filter((rf) => currentHazardCodes.includes(rf.code))
+      .map((rf) => rf.id)
+
+    // Pre-fill template data
+    setPrefillTemplateData({
+      name: `${job.client_name} - ${job.job_type}`,
+      trade: job.job_type, // Use job_type as trade hint
+      hazardIds: currentHazardIds,
+    })
+
+    setShowCreateTemplate(true)
+  }
+
   return (
     <ProtectedRoute>
       <div className="min-h-screen bg-[#0A0A0A] text-white">
