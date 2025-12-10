@@ -779,6 +779,7 @@ export default function JobDetailPage() {
           organizationId={organizationId}
           subscriptionTier={subscriptionTier}
           riskFactors={riskFactors}
+          usageCount={0}
           onClose={() => setShowCreateTemplate(false)}
           onSave={() => {
             setShowCreateTemplate(false)

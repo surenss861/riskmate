@@ -20,6 +20,8 @@ interface Job {
   risk_level: string | null
   created_at: string
   updated_at: string
+  applied_template_id?: string | null
+  applied_template_type?: 'hazard' | 'job' | null
 }
 
 export default function JobsPage() {
@@ -29,29 +31,108 @@ export default function JobsPage() {
   const [jobs, setJobs] = useState<Job[]>([])
   const [filterStatus, setFilterStatus] = useState<string>('')
   const [filterRiskLevel, setFilterRiskLevel] = useState<string>('')
+  const [filterTemplateSource, setFilterTemplateSource] = useState<string>('') // 'all', 'template', 'manual'
+  const [filterTemplateId, setFilterTemplateId] = useState<string>('')
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
+  const [templates, setTemplates] = useState<Array<{ id: string; name: string }>>([])
+  const [loadingTemplates, setLoadingTemplates] = useState(false)
+
+  // Load templates for filter dropdown
+  useEffect(() => {
+    const loadTemplates = async () => {
+      try {
+        setLoadingTemplates(true)
+        const supabase = createSupabaseBrowserClient()
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return
+
+        const { data: userRow } = await supabase
+          .from('users')
+          .select('organization_id')
+          .eq('id', user.id)
+          .single()
+
+        if (!userRow?.organization_id) return
+
+        // Load both hazard and job templates
+        const { data: hazardTemplates } = await supabase
+          .from('hazard_templates')
+          .select('id, name')
+          .eq('organization_id', userRow.organization_id)
+          .eq('archived', false)
+
+        const { data: jobTemplates } = await supabase
+          .from('job_templates')
+          .select('id, name')
+          .eq('organization_id', userRow.organization_id)
+          .eq('archived', false)
+
+        setTemplates([...(hazardTemplates || []), ...(jobTemplates || [])])
+      } catch (err) {
+        console.error('Failed to load templates:', err)
+      } finally {
+        setLoadingTemplates(false)
+      }
+    }
+    loadTemplates()
+  }, [])
 
   const loadJobs = useCallback(async () => {
     try {
+      setLoading(true)
       const supabase = createSupabaseBrowserClient()
       const { data: { user } } = await supabase.auth.getUser()
       setUser(user)
 
-      const jobsResponse = await jobsApi.list({
-        page,
-        status: filterStatus || undefined,
-        risk_level: filterRiskLevel || undefined,
-        limit: 50,
-      })
-      setJobs(jobsResponse.data)
-      setTotalPages(jobsResponse.pagination?.totalPages || 1)
+      if (!user) return
+
+      const { data: userRow } = await supabase
+        .from('users')
+        .select('organization_id')
+        .eq('id', user.id)
+        .single()
+
+      if (!userRow?.organization_id) return
+
+      // Build query with template filters
+      let query = supabase
+        .from('jobs')
+        .select('id, client_name, job_type, location, status, risk_score, risk_level, created_at, updated_at, applied_template_id, applied_template_type', { count: 'exact' })
+        .eq('organization_id', userRow.organization_id)
+        .order('created_at', { ascending: false })
+        .range((page - 1) * 50, page * 50 - 1)
+
+      if (filterStatus) {
+        query = query.eq('status', filterStatus)
+      }
+
+      if (filterRiskLevel) {
+        query = query.eq('risk_level', filterRiskLevel)
+      }
+
+      if (filterTemplateSource === 'template') {
+        query = query.not('applied_template_id', 'is', null)
+      } else if (filterTemplateSource === 'manual') {
+        query = query.is('applied_template_id', null)
+      }
+
+      if (filterTemplateId) {
+        query = query.eq('applied_template_id', filterTemplateId)
+      }
+
+      const { data: jobsData, count, error } = await query
+
+      if (error) throw error
+
+      setJobs(jobsData || [])
+      setTotalPages(Math.ceil((count || 0) / 50))
       setLoading(false)
     } catch (err: any) {
       console.error('Failed to load jobs:', err)
       setLoading(false)
     }
-  }, [page, filterStatus, filterRiskLevel])
+  }, [page, filterStatus, filterRiskLevel, filterTemplateSource, filterTemplateId])
 
   useEffect(() => {
     loadJobs()
@@ -161,6 +242,39 @@ export default function JobsPage() {
               <option value="high">High</option>
               <option value="critical">Critical</option>
             </select>
+
+            <select
+              value={filterTemplateSource}
+              onChange={(e) => {
+                setFilterTemplateSource(e.target.value)
+                setFilterTemplateId('') // Reset template filter when source changes
+                setPage(1)
+              }}
+              className="rounded-lg border border-white/15 bg-white/5 px-4 py-2 text-sm text-white focus:border-white/25 focus:outline-none"
+            >
+              <option value="">All Sources</option>
+              <option value="template">From Template</option>
+              <option value="manual">Manual</option>
+            </select>
+
+            {filterTemplateSource === 'template' && templates.length > 0 && (
+              <select
+                value={filterTemplateId}
+                onChange={(e) => {
+                  setFilterTemplateId(e.target.value)
+                  setPage(1)
+                }}
+                className="rounded-lg border border-white/15 bg-white/5 px-4 py-2 text-sm text-white focus:border-white/25 focus:outline-none"
+                disabled={loadingTemplates}
+              >
+                <option value="">All Templates</option>
+                {templates.map((template) => (
+                  <option key={template.id} value={template.id}>
+                    {template.name}
+                  </option>
+                ))}
+              </select>
+            )}
           </motion.div>
 
           {/* Jobs List */}

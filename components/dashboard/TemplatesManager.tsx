@@ -5,6 +5,7 @@ import { motion } from 'framer-motion'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { riskApi } from '@/lib/api'
 import { TemplateUpgradeModal } from './TemplateUpgradeModal'
+import { TemplateDetailDrawer } from './TemplateDetailDrawer'
 import { trackEvent } from '@/lib/posthog'
 import { Check } from 'lucide-react'
 
@@ -61,6 +62,7 @@ export function TemplatesManager({ organizationId, subscriptionTier = 'starter' 
   const [editingTemplate, setEditingTemplate] = useState<HazardTemplate | JobTemplate | null>(null)
   const [riskFactors, setRiskFactors] = useState<RiskFactor[]>([])
   const [templateUsageCounts, setTemplateUsageCounts] = useState<Record<string, number>>({})
+  const [selectedTemplateForDetail, setSelectedTemplateForDetail] = useState<HazardTemplate | JobTemplate | null>(null)
 
   useEffect(() => {
     loadTemplates()
@@ -362,7 +364,8 @@ export function TemplatesManager({ organizationId, subscriptionTier = 'starter' 
               key={template.id}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="p-4 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 transition-colors"
+              className="p-4 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 transition-colors cursor-pointer"
+              onClick={() => setSelectedTemplateForDetail(template)}
             >
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1">
@@ -393,7 +396,8 @@ export function TemplatesManager({ organizationId, subscriptionTier = 'starter' 
                 </div>
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.stopPropagation()
                       setEditingTemplate(template)
                       setShowCreateModal(true)
                     }}
@@ -402,13 +406,19 @@ export function TemplatesManager({ organizationId, subscriptionTier = 'starter' 
                     Edit
                   </button>
                   <button
-                    onClick={() => handleDuplicate(template)}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleDuplicate(template)
+                    }}
                     className="px-3 py-1 text-xs text-white/70 hover:text-white border border-white/10 rounded hover:bg-white/5 transition-colors"
                   >
                     Duplicate
                   </button>
                   <button
-                    onClick={() => handleArchive(template.id)}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleArchive(template.id)
+                    }}
                     className="px-3 py-1 text-xs text-white/70 hover:text-white border border-white/10 rounded hover:bg-white/5 transition-colors"
                   >
                     Archive
@@ -428,6 +438,7 @@ export function TemplatesManager({ organizationId, subscriptionTier = 'starter' 
           organizationId={organizationId}
           subscriptionTier={subscriptionTier}
           riskFactors={riskFactors}
+          usageCount={editingTemplate ? templateUsageCounts[editingTemplate.id] || 0 : 0}
           onClose={() => {
             setShowCreateModal(false)
             setEditingTemplate(null)
@@ -441,6 +452,23 @@ export function TemplatesManager({ organizationId, subscriptionTier = 'starter' 
               organization_id: organizationId,
             })
             loadTemplates()
+          }}
+        />
+      )}
+
+      {/* Template Detail Drawer */}
+      {selectedTemplateForDetail && (
+        <TemplateDetailDrawer
+          template={selectedTemplateForDetail}
+          type={activeTab}
+          organizationId={organizationId}
+          usageCount={templateUsageCounts[selectedTemplateForDetail.id] || 0}
+          riskFactors={riskFactors}
+          onClose={() => setSelectedTemplateForDetail(null)}
+          onEdit={() => {
+            setEditingTemplate(selectedTemplateForDetail)
+            setSelectedTemplateForDetail(null)
+            setShowCreateModal(true)
           }}
         />
       )}
@@ -463,6 +491,7 @@ export interface TemplateModalProps {
   organizationId: string
   subscriptionTier?: string | null
   riskFactors: RiskFactor[]
+  usageCount?: number // For showing warning when editing templates in use
   onClose: () => void
   onSave: () => void
   onSaveAndApply?: (templateId: string, hazardIds: string[]) => void // Optional: for "Save & Apply Now" button
@@ -493,6 +522,7 @@ export function TemplateModal({
   organizationId,
   subscriptionTier = 'starter',
   riskFactors,
+  usageCount = 0,
   onClose,
   onSave,
   onSaveAndApply,
