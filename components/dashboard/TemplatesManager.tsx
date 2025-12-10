@@ -498,6 +498,14 @@ export function TemplateModal({
   onSaveAndApply,
 }: TemplateModalProps) {
   const [loading, setLoading] = useState(false)
+
+  // Prevent body scroll when modal is open
+  useEffect(() => {
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = 'unset'
+    }
+  }, [])
   const [formData, setFormData] = useState({
     name: template?.name || '',
     trade: (template as HazardTemplate)?.trade || '',
@@ -635,11 +643,28 @@ export function TemplateModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm overflow-y-auto"
+      onClick={(e) => {
+        // Close modal when clicking backdrop
+        if (e.target === e.currentTarget) {
+          onClose()
+        }
+      }}
+      onWheel={(e) => {
+        // Prevent scroll propagation to body
+        e.stopPropagation()
+      }}
+      onTouchMove={(e) => {
+        // Prevent touch scroll propagation to body
+        e.stopPropagation()
+      }}
+    >
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="bg-[#121212] border border-white/10 rounded-xl p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+        className="bg-[#121212] border border-white/10 rounded-xl p-6 w-full max-w-4xl my-8 max-h-[calc(100vh-4rem)] overflow-y-auto"
       >
         <div className="flex items-center justify-between mb-4">
           <div>
