@@ -207,7 +207,7 @@ export default function JobDetailPage() {
       if (err.code === 'FEATURE_RESTRICTED') {
         setError('Permit Pack Generator is only available for Business plan subscribers. Upgrade to Business to access this feature.')
       } else {
-        setError(err?.message || 'Failed to generate permit pack. Please try again.')
+        setError('Couldn\'t generate permit pack. Nothing was lost — try again in a moment.')
       }
     } finally {
       setGeneratingPermitPack(false)

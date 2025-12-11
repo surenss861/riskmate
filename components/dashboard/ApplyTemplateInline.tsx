@@ -187,7 +187,7 @@ export function ApplyTemplateInline({
       onClose()
     } catch (err: any) {
       console.error('Failed to apply template:', err)
-      alert(err.message || 'Failed to apply template')
+      alert('Couldn\'t load that template. Nothing was lost — try again in a moment.')
     } finally {
       setApplying(false)
     }

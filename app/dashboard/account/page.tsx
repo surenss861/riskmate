@@ -146,7 +146,7 @@ export default function AccountPage() {
       setEditingProfile(false)
     } catch (err: any) {
       console.error('Failed to update profile:', err)
-      setError(err?.message || 'Failed to update profile')
+      setError('Couldn\'t save that change. Your data is still here — try again.')
     } finally {
       setUpdating(false)
     }
