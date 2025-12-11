@@ -215,26 +215,35 @@ export default function JobDetailPage() {
   }
 
   const toggleMitigation = async (itemId: string, currentDone: boolean) => {
+    // Optimistic update - update UI immediately
+    const previousState = job?.mitigation_items
+    if (job) {
+      setJob({
+        ...job,
+        mitigation_items: job.mitigation_items.map((item) =>
+          item.id === itemId
+            ? { ...item, done: !currentDone, is_completed: !currentDone }
+            : item
+        ),
+      })
+    }
     setUpdatingMitigation(itemId)
+    
     try {
-      if (job) {
-        setJob({
-          ...job,
-          mitigation_items: job.mitigation_items.map((item) =>
-            item.id === itemId
-              ? { ...item, done: !currentDone, is_completed: !currentDone }
-              : item
-          ),
-        })
-      }
+      // Make API call
+      const response = await fetch(`/api/jobs/${jobId}/mitigations/${itemId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ done: !currentDone }),
+      })
+      if (!response.ok) throw new Error('Failed to update')
     } catch (err) {
       console.error('Failed to update mitigation:', err)
-      if (job) {
+      // Rollback on error
+      if (job && previousState) {
         setJob({
           ...job,
-          mitigation_items: job.mitigation_items.map((item) =>
-            item.id === itemId ? { ...item, done: currentDone } : item
-          ),
+          mitigation_items: previousState,
         })
       }
     } finally {
