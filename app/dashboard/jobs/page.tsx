@@ -405,6 +405,7 @@ function JobsPageContent(): JSX.Element {
         </div>
       </div>
     </div>
+    </>
   )
 }
 
