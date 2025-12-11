@@ -138,7 +138,7 @@ export function TemplatesManager({ organizationId, subscriptionTier = 'starter' 
     }
   }
 
-  const loadUsageCounts = async (templates: (HazardTemplate | JobTemplate)[]) => {
+  const loadUsageCounts = async (templates: (HazardTemplate | JobTemplate)[]): Promise<Record<string, number>> => {
     try {
       const supabase = createSupabaseBrowserClient()
       const counts: Record<string, number> = {}
