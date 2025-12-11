@@ -695,10 +695,10 @@ Business: { seats: null, jobsMonthly: null } // unlimited
 ---
 
 ### 11. Templates System
-**Route**: `/dashboard/templates` (Future)  
-**Status**: ⚠️ Partially Implemented (Backend tables exist, UI pending)  
+**Route**: `/dashboard/account` (Templates tab) + `/dashboard/jobs/new` + `/dashboard/jobs/[id]`  
+**Status**: ✅ Fully Implemented (v1 Complete)  
 **Impact**: Medium (Retention)  
-**Agent Scenario**: Agent (Admin/Owner) navigates to templates page, creates job template with hazards/mitigations, saves template, creates new job using template, verifies template data is pre-filled.  
+**Agent Scenario**: Agent (Admin/Owner) navigates to Account → Templates, creates hazard/job template, applies template to new job, applies template to existing job, saves manual job as template, views template usage stats, archives template with usage warning.  
 **Test Prerequisites**: Admin/Owner role, template tables populated (or seed data)
 
 **Templates Types**:
@@ -725,25 +725,42 @@ Business: { seats: null, jobsMonthly: null } // unlimited
    - Can be attached to hazards or jobs
    - Example: "Fall Protection Checklist"
 
-**UI** (Future):
-- Admin-only page at `/dashboard/templates`
-- List of templates (tabs: Job / Hazard / Mitigation)
-- "Create Template" button
-- Template editor:
-  - Name, description
-  - Select hazards/mitigations
-  - Save
-- "Use Template" button on job creation/edit
+**v1 Implementation** (✅ Complete):
+- Templates management in `/dashboard/account` → Templates tab
+- List of templates (tabs: Hazard / Job) with usage-based sorting
+- "Create Template" button with plan gating (Starter: 3 max, Pro/Business: unlimited)
+- Template editor modal:
+  - Name, trade/category, description
+  - Multi-select hazards with severity/category filters
+  - Suggested template names
+  - Preview hazards summary
+  - "Save & Apply Now" option (from Job Detail)
+- Template detail drawer:
+  - Usage stats ("Used in X jobs")
+  - Recent jobs list (top 5)
+  - "View all jobs" link → filtered jobs page
+  - Edit/Duplicate/Archive actions
+- Apply template on:
+  - New Job page: "Start from template" dropdown
+  - Job Detail page: "Apply Template" button with preview
+- "Save as Template" button on Job Detail (for manual jobs)
+- Archive behavior:
+  - Usage warning before archiving
+  - Soft delete only (never breaks existing jobs)
+  - "(Archived)" label shown in Job Detail
+- Usage-based sorting (most used templates first)
+- Jobs filter by template source (All/From Template/Manual) + template dropdown
 
-**On Job Creation**:
-- User can select template from dropdown
-- Backend clones template data into new job
-- User can still edit before saving
+**Database Tables**:
+- `hazard_templates` (✅ with RLS)
+- `job_templates` (✅ with RLS)
+- `mitigation_templates` (Future v2)
 
-**Database Tables** (Exist):
-- `hazard_templates`
-- `mitigation_templates`
-- `job_templates`
+**v2 Future Enhancements** (Not in scope for v1):
+- Template pinning for official templates
+- Template analytics (completion rates, risk score trends)
+- Trade-based template recommendations
+- Template health metrics
 
 ---
 
