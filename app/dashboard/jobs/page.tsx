@@ -41,10 +41,12 @@ function JobsPageContent(): JSX.Element {
 
   // Initialize filters from URL params
   useEffect(() => {
-    const source = searchParams.get('source') || ''
-    const templateId = searchParams.get('templateId') || ''
-    setFilterTemplateSource(source)
-    setFilterTemplateId(templateId)
+    if (searchParams) {
+      const source = searchParams.get('source') || ''
+      const templateId = searchParams.get('templateId') || ''
+      setFilterTemplateSource(source)
+      setFilterTemplateId(templateId)
+    }
   }, [searchParams])
 
   // Load templates for filter dropdown
