@@ -376,7 +376,7 @@ export default function JobDetailPage() {
   return (
     <ProtectedRoute>
       <div className="min-h-screen bg-[#0A0A0A] text-white">
-        <header className="border-b border-white/5 px-6 py-4">
+        <header className="sticky top-0 z-40 border-b border-white/5 bg-[#0A0A0A]/95 backdrop-blur-sm px-6 py-4">
           <div className="max-w-7xl mx-auto flex items-center justify-between">
             <div className="flex items-center gap-3">
               <RiskMateLogo size="sm" showText={true} />
