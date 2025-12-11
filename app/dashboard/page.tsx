@@ -322,10 +322,8 @@ export default function DashboardPage() {
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.45 }}
-            className="relative mb-12 flex flex-wrap items-center justify-between gap-6 overflow-hidden rounded-[36px] border border-white/10 bg-black/35 px-10 py-12 shadow-[0_40px_140px_rgba(10,10,25,0.7)] backdrop-blur-2xl"
+            className="relative mb-12 flex flex-wrap items-center justify-between gap-6 rounded-lg border border-white/10 bg-[#121212]/80 backdrop-blur-sm px-8 py-10"
           >
-            <span className="pointer-events-none absolute -left-24 top-0 h-64 w-64 rounded-full bg-[#F97316]/20 blur-[120px]" />
-            <span className="pointer-events-none absolute -right-32 bottom-[-60px] h-72 w-72 rounded-full bg-[#38BDF8]/18 blur-[160px]" />
             <div className="relative max-w-xl">
               <p className="text-xs uppercase tracking-[0.42em] text-white/50">
                 Control Center
@@ -337,14 +335,14 @@ export default function DashboardPage() {
               <p className="mt-4 text-base text-white/65">
                 Your safety activity at a glance — stay ahead of risks before they become problems.
               </p>
-              <div className="mt-6 flex flex-wrap gap-3 text-sm text-white/50">
-                <span className="rounded-full border border-white/15 px-3 py-1 backdrop-blur-sm">
+              <div className="mt-6 flex flex-wrap gap-3 text-sm">
+                <span className="px-4 py-2 bg-[#121212] rounded-lg border border-white/5">
                   Audit-ready reports
                 </span>
-                <span className="rounded-full border border-white/15 px-3 py-1 backdrop-blur-sm">
+                <span className="px-4 py-2 bg-[#121212] rounded-lg border border-white/5">
                   Timestamped evidence
                 </span>
-                <span className="rounded-full border border-white/15 px-3 py-1 backdrop-blur-sm">
+                <span className="px-4 py-2 bg-[#121212] rounded-lg border border-white/5">
                   Compliance trail
                 </span>
               </div>
@@ -352,14 +350,13 @@ export default function DashboardPage() {
             <div className="relative flex flex-col items-end gap-3">
             <button
               onClick={() => router.push('/dashboard/jobs/new')}
-                className="group relative flex items-center gap-3 overflow-hidden rounded-2xl border border-transparent bg-gradient-to-r from-[#F97316] via-[#FF8A3D] to-[#FFD166] px-7 py-3 text-base font-semibold text-black shadow-[0_18px_40px_rgba(249,115,22,0.35)] transition-transform duration-300 hover:scale-[1.03]"
+              className="px-6 py-3 bg-[#F97316] text-black rounded-lg hover:bg-[#FB923C] transition-all font-semibold text-base"
             >
-                <span className="relative z-10">+ New Job</span>
-                <span className="absolute inset-0 bg-white/20 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+              + New Job
             </button>
               <Link
                 href="/dashboard/jobs"
-                className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-5 py-2 text-sm font-medium text-white/80 transition hover:border-white/25 hover:bg-white/10"
+                className="inline-flex items-center gap-2 px-6 py-3 border border-white/10 rounded-lg hover:border-white/20 transition-colors font-medium text-sm"
               >
                 View job roster →
               </Link>
@@ -379,7 +376,7 @@ export default function DashboardPage() {
               initial={{ opacity: 0, y: 18 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1, duration: 0.45 }}
-              className="mb-12 overflow-hidden rounded-[32px] border border-white/12 bg-black/35 px-10 py-12 text-center shadow-[0_34px_120px_rgba(10,10,25,0.6)] backdrop-blur-2xl"
+              className="mb-12 rounded-lg border border-white/10 bg-[#121212]/80 backdrop-blur-sm px-8 py-10 text-center"
             >
               <p className="text-xs uppercase tracking-[0.36em] text-white/45">Analytics</p>
               <h2 className="mt-3 text-3xl font-semibold text-white">Upgrade to unlock live analytics</h2>
@@ -389,14 +386,13 @@ export default function DashboardPage() {
               <div className="mt-6 flex flex-col gap-3 items-center">
                 <button
                   onClick={() => router.push('/pricing#business')}
-                  className="group relative overflow-hidden rounded-2xl border border-transparent bg-gradient-to-r from-[#FACC15] via-[#FFD166] to-[#F97316] px-6 py-3 text-sm font-semibold text-black shadow-[0_20px_44px_rgba(249,181,22,0.35)] transition-transform duration-300 hover:scale-[1.03]"
+                  className="px-6 py-3 bg-[#F97316] text-black rounded-lg hover:bg-[#FB923C] transition-all font-semibold text-sm"
                 >
-                  <span className="relative z-10">Explore Business Plan</span>
-                  <span className="absolute inset-0 bg-white/20 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+                  Explore Business Plan
                 </button>
                 <button
                   onClick={() => router.push('/pricing')}
-                  className="rounded-2xl border border-white/15 px-6 py-3 text-sm font-medium text-white/80 transition hover:border-white/25 hover:bg-white/10"
+                  className="px-6 py-3 border border-white/10 rounded-lg hover:border-white/20 transition-colors font-medium text-sm"
                 >
                   View all plans →
                 </button>
@@ -496,7 +492,7 @@ export default function DashboardPage() {
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.18, duration: 0.45 }}
-            className="overflow-hidden rounded-3xl border border-white/10 bg-black/45 shadow-[0_32px_110px_rgba(8,8,22,0.55)] backdrop-blur-2xl"
+            className="rounded-lg border border-white/10 bg-[#121212]/80 backdrop-blur-sm"
           >
             <div className="flex items-center justify-between border-b border-white/10 px-6 py-6">
               <Link href="/dashboard/jobs">
