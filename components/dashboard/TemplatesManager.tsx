@@ -161,6 +161,7 @@ export function TemplatesManager({ organizationId, subscriptionTier = 'starter' 
       }
 
       setTemplateUsageCounts((prev) => ({ ...prev, ...counts }))
+      return counts
     } catch (err) {
       console.error('Failed to load usage counts:', err)
       // Fallback to 0 if query fails
@@ -169,6 +170,7 @@ export function TemplatesManager({ organizationId, subscriptionTier = 'starter' 
         counts[t.id] = 0
       })
       setTemplateUsageCounts((prev) => ({ ...prev, ...counts }))
+      return counts
     }
   }
 
