@@ -405,7 +405,7 @@ function JobsPageContent() {
         </div>
       </div>
     </div>
-    </>
+    </React.Fragment>
   )
 }
 
