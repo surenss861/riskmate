@@ -550,13 +550,13 @@ export default function DashboardPage() {
               <div className="px-12 py-16 text-center">
                 <p className="mb-2 text-white/60">No jobs yet</p>
                 <p className="mb-6 text-sm text-white/40">
-                  Create your first job to start documenting your work.
+                  Create your first job to generate your first safety report.
                 </p>
                 <button
                   onClick={() => router.push('/dashboard/jobs/new')}
                   className="rounded-2xl bg-[#F97316] px-6 py-3 font-semibold text-black transition-all hover:bg-[#FB923C]"
                 >
-                  Create Your First Job
+                  Create Job
                 </button>
               </div>
             ) : loading ? (

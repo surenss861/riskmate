@@ -51,12 +51,12 @@ export function JobsPageContentView(props: JobsPageContentProps) {
                 Your centralized job hub — track progress, hazards, documents, and generate audit-ready reports.
               </p>
             </div>
-            <button
-              onClick={() => router.push('/dashboard/jobs/new')}
-              className="rounded-xl bg-gradient-to-r from-[#F97316] via-[#FF8A3D] to-[#FFD166] px-6 py-3 font-semibold text-black shadow-[0_18px_40px_rgba(249,115,22,0.35)] transition-transform hover:scale-105"
-            >
-              + New Job
-            </button>
+              <button
+                onClick={() => router.push('/dashboard/jobs/new')}
+                className="rounded-xl bg-gradient-to-r from-[#F97316] via-[#FF8A3D] to-[#FFD166] px-6 py-3 font-semibold text-black shadow-[0_18px_40px_rgba(249,115,22,0.35)] transition-transform hover:scale-105"
+              >
+                + Create Job
+              </button>
           </div>
         </motion.div>
 
@@ -137,19 +137,20 @@ export function JobsPageContentView(props: JobsPageContentProps) {
             <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#F97316] border-t-transparent" />
           </div>
         ) : props.jobs.length === 0 ? (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="rounded-2xl border border-white/10 bg-black/35 p-12 text-center"
-          >
-            <p className="text-white/60">No jobs found</p>
-            <button
-              onClick={() => router.push('/dashboard/jobs/new')}
-              className="mt-4 rounded-lg bg-[#F97316] px-6 py-2 font-medium text-black hover:bg-[#FB923C]"
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="rounded-2xl border border-white/10 bg-black/35 p-12 text-center"
             >
-              Create Your First Job
-            </button>
-          </motion.div>
+              <p className="text-white/60 mb-2">No jobs yet</p>
+              <p className="text-sm text-white/40 mb-6">Create your first job to generate your first safety report.</p>
+              <button
+                onClick={() => router.push('/dashboard/jobs/new')}
+                className="mt-4 rounded-lg bg-[#F97316] px-6 py-2 font-medium text-black hover:bg-[#FB923C]"
+              >
+                Create Job
+              </button>
+            </motion.div>
         ) : (
           <DataGrid
             data={props.jobs}

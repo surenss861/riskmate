@@ -207,7 +207,7 @@ export function ApplyTemplateInline({
       className="mt-8 p-8 rounded-xl border border-white/10 bg-[#121212]/80 backdrop-blur-sm"
     >
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-xl font-semibold text-white">Apply Template</h2>
+        <h2 className="text-xl font-semibold text-white">Quick-Load Template</h2>
         <button
           onClick={onClose}
           className="text-white/60 hover:text-white transition-colors"
@@ -382,7 +382,7 @@ export function ApplyTemplateInline({
           disabled={applying || !selectedTemplate || (previewHazards.length === 0 && !replaceExisting)}
           className="flex-1 px-4 py-2 bg-[#F97316] hover:bg-[#FB923C] text-black rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {applying ? 'Applying...' : replaceExisting ? 'Replace & Apply' : 'Apply Template'}
+          {applying ? 'Loading...' : replaceExisting ? 'Replace & Load' : 'Load Template'}
         </button>
       </div>
     </motion.div>

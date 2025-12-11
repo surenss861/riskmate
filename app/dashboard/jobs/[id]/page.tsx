@@ -16,6 +16,7 @@ import { JobAssignment } from '@/components/dashboard/JobAssignment'
 import { EvidenceVerification } from '@/components/dashboard/EvidenceVerification'
 import { TemplatesManager, TemplateModal, TemplateModalProps } from '@/components/dashboard/TemplatesManager'
 import { ApplyTemplateInline } from '@/components/dashboard/ApplyTemplateInline'
+import { buttonStyles, cardStyles } from '@/lib/styles/design-system'
 import { ErrorModal } from '@/components/dashboard/ErrorModal'
 import { optimizePhoto } from '@/lib/utils/photoOptimization'
 import { getGPSLocation } from '@/lib/utils/gpsMetadata'
@@ -380,7 +381,7 @@ export default function JobDetailPage() {
             </button>
               <button
                 onClick={() => router.push(`/dashboard/jobs/${jobId}/report`)}
-                className="rounded-lg border border-white/10 px-4 py-2 text-sm text-white transition hover:border-white/25 hover:bg-white/5"
+                className={buttonStyles.secondary}
               >
                 View Report
               </button>
@@ -388,7 +389,7 @@ export default function JobDetailPage() {
                 <button
                   onClick={handleGeneratePermitPack}
                   disabled={generatingPermitPack}
-                  className="rounded-lg bg-[#F97316] px-4 py-2 text-sm text-black font-semibold transition hover:bg-[#FB923C] disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  className={`${buttonStyles.primary} flex items-center gap-2`}
                 >
                   {generatingPermitPack ? (
                     <>
@@ -523,7 +524,7 @@ export default function JobDetailPage() {
                         {!job.applied_template_id && job.risk_score_detail && job.risk_score_detail.factors.length > 0 && (
                           <button
                             onClick={handleSaveAsTemplate}
-                            className="px-4 py-2 bg-white/10 hover:bg-white/15 text-white rounded-lg font-semibold text-sm transition-colors border border-white/10"
+                            className={buttonStyles.tertiary}
                             title="Save this job setup as a reusable template"
                           >
                             💾 Save as Template
@@ -534,15 +535,15 @@ export default function JobDetailPage() {
                             setPrefillTemplateData(null)
                             setShowCreateTemplate(true)
                           }}
-                          className="px-4 py-2 bg-white/10 hover:bg-white/15 text-white rounded-lg font-semibold text-sm transition-colors border border-white/10"
+                          className={buttonStyles.tertiary}
                         >
                           + Create Template
                         </button>
                         <button
                           onClick={() => setShowApplyTemplate(true)}
-                          className="px-4 py-2 bg-[#F97316] hover:bg-[#FB923C] text-black rounded-lg font-semibold text-sm transition-colors"
+                          className={buttonStyles.primary}
                         >
-                          Apply Template
+                          Quick-Load Template
                         </button>
                       </div>
                     )}
@@ -647,13 +648,13 @@ export default function JobDetailPage() {
                 <div className="pt-6 border-t border-white/10 space-y-3">
                   <button
                     onClick={() => router.push(`/dashboard/jobs/${jobId}/report`)}
-                    className="w-full px-6 py-3 bg-[#F97316] hover:bg-[#FB923C] text-black rounded-lg font-semibold transition-colors"
+                    className={`${buttonStyles.primary} w-full`}
                   >
                     View Live Report →
                   </button>
                   <button
                     onClick={() => router.push(`/dashboard/jobs/${jobId}/edit`)}
-                    className="w-full px-6 py-3 border border-white/20 text-white rounded-lg hover:bg-white/5 transition-colors"
+                    className={`${buttonStyles.secondary} w-full`}
                   >
                     Edit Job Details
                   </button>
@@ -692,7 +693,7 @@ export default function JobDetailPage() {
                   <button
                     onClick={handleGeneratePermitPack}
                     disabled={generatingPermitPack}
-                    className="rounded-lg bg-[#F97316] px-6 py-3 text-sm text-black font-semibold transition hover:bg-[#FB923C] disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    className={`${buttonStyles.primary} flex items-center gap-2`}
                   >
                     {generatingPermitPack ? (
                       <>
