@@ -39,6 +39,14 @@ function JobsPageContent() {
   const [templates, setTemplates] = useState<Array<{ id: string; name: string }>>([])
   const [loadingTemplates, setLoadingTemplates] = useState(false)
 
+  // Initialize filters from URL params
+  useEffect(() => {
+    const source = searchParams.get('source') || ''
+    const templateId = searchParams.get('templateId') || ''
+    setFilterTemplateSource(source)
+    setFilterTemplateId(templateId)
+  }, [searchParams])
+
   // Load templates for filter dropdown
   useEffect(() => {
     const loadTemplates = async () => {
