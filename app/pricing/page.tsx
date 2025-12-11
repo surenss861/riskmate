@@ -6,6 +6,7 @@ import { motion } from 'framer-motion'
 import RiskMateLogo from '@/components/RiskMateLogo'
 import { ErrorModal } from '@/components/dashboard/ErrorModal'
 import { subscriptionsApi } from '@/lib/api'
+import { cardStyles, buttonStyles } from '@/lib/styles/design-system'
 
 type PlanCode = 'starter' | 'pro' | 'business'
 
