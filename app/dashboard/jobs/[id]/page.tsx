@@ -569,7 +569,7 @@ export default function JobDetailPage() {
                     <div className="text-center py-6 border border-white/10 rounded-lg bg-black/20">
                       <p className="text-sm text-white/50 mb-2">No hazards identified yet</p>
                       <p className="text-xs text-white/40">
-                        Apply a template or add hazards manually to get started
+                        Quick-load a template or add hazards manually to get started
                       </p>
                     </div>
                   )}
