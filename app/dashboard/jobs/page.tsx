@@ -189,6 +189,14 @@ function JobsPageContent() {
     })
   }
 
+  if (loading && jobs.length === 0) {
+    return (
+      <div className="min-h-screen bg-[#050505] text-white flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#F97316]" />
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-[#050505] text-white">
       <DashboardNavbar email={user?.email} onLogout={() => router.push('/')} />
