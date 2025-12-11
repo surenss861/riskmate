@@ -17,6 +17,7 @@ import { DashboardOverview } from '@/components/dashboard/DashboardOverview'
 import { Changelog } from '@/components/dashboard/Changelog'
 import { OnboardingWizard } from '@/components/onboarding/OnboardingWizard'
 import Link from 'next/link'
+import { getRiskBadgeClass, getStatusBadgeClass } from '@/lib/styles/design-system'
 
 interface Job {
   id: string
@@ -129,21 +130,6 @@ export default function DashboardPage() {
     const supabase = createSupabaseBrowserClient()
     await supabase.auth.signOut()
     router.push('/login')
-  }
-
-  const getRiskBadgeColor = (riskLevel: string | null) => {
-    switch (riskLevel) {
-      case 'critical':
-        return 'bg-red-500/20 text-red-400 border-red-500/30'
-      case 'high':
-        return 'bg-orange-500/20 text-orange-400 border-orange-500/30'
-      case 'medium':
-        return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
-      case 'low':
-        return 'bg-green-500/20 text-green-400 border-green-500/30'
-      default:
-        return 'bg-gray-500/20 text-gray-400 border-gray-500/30'
-    }
   }
 
   const getStatusColor = (status: string) => {
@@ -581,10 +567,10 @@ export default function DashboardPage() {
                           >
                             {job.client_name}
                           </Link>
-                          <span className={`text-xs px-2 py-1 rounded border ${getRiskBadgeColor(job.risk_level)}`}>
+                          <span className={getRiskBadgeClass(job.risk_level)}>
                             {job.risk_level?.toUpperCase() || 'NO SCORE'}
                           </span>
-                          <span className={`text-xs ${getStatusColor(job.status)}`}>
+                          <span className={getStatusBadgeClass(job.status)}>
                             {job.status.replace('_', ' ').toUpperCase()}
                           </span>
                         </div>

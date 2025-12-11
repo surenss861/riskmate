@@ -103,3 +103,30 @@ export const emptyStateStyles = {
   action: buttonStyles.primary,
 }
 
+// Helper functions for badges
+export const getRiskBadgeClass = (riskLevel: string | null): string => {
+  if (!riskLevel) return `${badgeStyles.base} ${badgeStyles.risk.low}`
+  const level = riskLevel.toLowerCase()
+  if (level === 'critical' || level === 'very high') return `${badgeStyles.base} ${badgeStyles.risk.critical}`
+  if (level === 'high') return `${badgeStyles.base} ${badgeStyles.risk.high}`
+  if (level === 'medium' || level === 'moderate') return `${badgeStyles.base} ${badgeStyles.risk.medium}`
+  return `${badgeStyles.base} ${badgeStyles.risk.low}`
+}
+
+export const getStatusBadgeClass = (status: string | null): string => {
+  if (!status) return `${badgeStyles.base} ${badgeStyles.status.active}`
+  const statusLower = status.toLowerCase()
+  if (statusLower === 'completed' || statusLower === 'done') return `${badgeStyles.base} ${badgeStyles.status.completed}`
+  if (statusLower === 'on-hold' || statusLower === 'on hold' || statusLower === 'paused') return `${badgeStyles.base} ${badgeStyles.status['on-hold']}`
+  if (statusLower === 'cancelled' || statusLower === 'canceled') return `${badgeStyles.base} ${badgeStyles.status.cancelled}`
+  return `${badgeStyles.base} ${badgeStyles.status.active}`
+}
+
+export const getRiskBadgeClassFromScore = (score: number | null): string => {
+  if (score === null) return `${badgeStyles.base} bg-gray-500/20 text-gray-400 border-gray-500/30`
+  if (score >= 71) return `${badgeStyles.base} ${badgeStyles.risk.critical}`
+  if (score >= 41) return `${badgeStyles.base} ${badgeStyles.risk.high}`
+  if (score >= 21) return `${badgeStyles.base} ${badgeStyles.risk.medium}`
+  return `${badgeStyles.base} ${badgeStyles.risk.low}`
+}
+
