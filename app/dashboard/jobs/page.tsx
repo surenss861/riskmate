@@ -32,8 +32,8 @@ function JobsPageContent() {
   const [jobs, setJobs] = useState<Job[]>([])
   const [filterStatus, setFilterStatus] = useState<string>('')
   const [filterRiskLevel, setFilterRiskLevel] = useState<string>('')
-  const [filterTemplateSource, setFilterTemplateSource] = useState<string>(searchParams.get('source') || '') // 'all', 'template', 'manual'
-  const [filterTemplateId, setFilterTemplateId] = useState<string>(searchParams.get('templateId') || '')
+  const [filterTemplateSource, setFilterTemplateSource] = useState<string>('')
+  const [filterTemplateId, setFilterTemplateId] = useState<string>('')
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
   const [templates, setTemplates] = useState<Array<{ id: string; name: string }>>([])
