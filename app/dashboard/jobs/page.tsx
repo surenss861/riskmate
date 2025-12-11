@@ -189,9 +189,10 @@ const JobsPageContent = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[#050505] text-white">
-      <DashboardNavbar email={user?.email} onLogout={() => router.push('/')} />
-      <div className="mx-auto max-w-7xl px-6 py-14">
+    <>
+      <div className="min-h-screen bg-[#050505] text-white">
+        <DashboardNavbar email={user?.email} onLogout={() => router.push('/')} />
+        <div className="mx-auto max-w-7xl px-6 py-14">
         <motion.div
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
