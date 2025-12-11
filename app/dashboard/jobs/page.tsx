@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, Suspense } from 'react'
+import React, { useEffect, useState, useCallback, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
@@ -24,7 +24,7 @@ interface Job {
   applied_template_type?: 'hazard' | 'job' | null
 }
 
-function JobsPageContent(): JSX.Element {
+const JobsPageContent: React.FC = () => {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [user, setUser] = useState<any>(null)
