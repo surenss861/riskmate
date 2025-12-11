@@ -32,6 +32,7 @@ export function EvidenceVerification({
   const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all')
   const [rejectingId, setRejectingId] = useState<string | null>(null)
   const [rejectionReason, setRejectionReason] = useState('')
+  const [showRejectModal, setShowRejectModal] = useState<string | null>(null)
 
   const canVerify = userRole === 'owner' || userRole === 'admin'
 
@@ -42,13 +43,13 @@ export function EvidenceVerification({
 
   const handleReject = async (id: string) => {
     if (!rejectionReason.trim()) {
-      alert('Please provide a reason for rejection')
-      return
+      return // Modal will handle validation
     }
     setRejectingId(id)
     try {
       await onVerify(id, 'rejected', rejectionReason)
       setRejectionReason('')
+      setShowRejectModal(null)
     } finally {
       setRejectingId(null)
     }
@@ -147,12 +148,7 @@ export function EvidenceVerification({
                       Approve
                     </button>
                     <button
-                      onClick={() => {
-                        const reason = prompt('Rejection reason:')
-                        if (reason) {
-                          handleReject(item.id)
-                        }
-                      }}
+                      onClick={() => setShowRejectModal(item.id)}
                       className="px-3 py-1 text-xs bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/30 transition-colors"
                     >
                       Reject

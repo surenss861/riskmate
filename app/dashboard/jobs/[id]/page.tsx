@@ -191,6 +191,9 @@ export default function JobDetailPage() {
           // Open download URL in new tab
           window.open(response.data.downloadUrl, '_blank')
           
+          // Show success toast
+          setToast({ message: 'Permit Pack ready — downloaded to your device.', type: 'success' })
+          
           // Reload permit packs list
           if (subscriptionTier === 'business') {
             jobsApi.getPermitPacks(jobId).then((packsResponse) => {

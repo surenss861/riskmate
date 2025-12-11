@@ -11,6 +11,17 @@ interface Worker {
   checkedIn: boolean
   checkedInAt?: string
   jobsAssigned: number
+  avatarUrl?: string
+}
+
+// Helper to get initials for avatar
+const getInitials = (name: string) => {
+  return name
+    .split(' ')
+    .map((n) => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2)
 }
 
 interface JobAssignmentProps {
@@ -75,7 +86,25 @@ export function JobAssignment({
             >
               <div className="flex items-center justify-between">
                 <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
+                  <div className="flex items-center gap-3 mb-1">
+                    {/* Avatar */}
+                    <div className="relative group">
+                      {worker.avatarUrl ? (
+                        <img
+                          src={worker.avatarUrl}
+                          alt={worker.name}
+                          className="w-8 h-8 rounded-full border border-white/10 object-cover"
+                        />
+                      ) : (
+                        <div className="w-8 h-8 rounded-full border border-white/10 bg-[#F97316]/20 flex items-center justify-center text-xs font-semibold text-[#F97316]">
+                          {getInitials(worker.name)}
+                        </div>
+                      )}
+                      {/* Hover Tooltip */}
+                      <div className="absolute left-0 top-full mt-2 px-2 py-1 bg-[#121212] border border-white/10 rounded-lg text-xs text-white whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-10">
+                        {worker.name} • {worker.email}
+                      </div>
+                    </div>
                     <h4 className="text-sm font-semibold text-white">{worker.name}</h4>
                     <span className="text-xs px-2 py-0.5 rounded-lg border border-white/10 bg-[#121212] text-white/70">
                       {worker.role}
