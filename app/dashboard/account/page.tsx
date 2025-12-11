@@ -192,7 +192,7 @@ export default function AccountPage() {
   if (loading) {
     return (
       <ProtectedRoute>
-        <div className="min-h-screen bg-[#050505] text-white">
+        <div className="min-h-screen bg-[#0A0A0A] text-white">
           <DashboardNavbar email={userEmail} onLogout={handleLogout} />
           <div className="flex items-center justify-center min-h-[60vh]">
             <div className="text-center space-y-4">
@@ -208,7 +208,7 @@ export default function AccountPage() {
   if (!profile) {
     return (
       <ProtectedRoute>
-        <div className="min-h-screen bg-[#050505] text-white">
+        <div className="min-h-screen bg-[#0A0A0A] text-white">
           <DashboardNavbar email={userEmail} onLogout={handleLogout} />
           <div className="flex items-center justify-center min-h-[60vh]">
             <div className="text-center space-y-4">
@@ -228,7 +228,7 @@ export default function AccountPage() {
 
   return (
     <ProtectedRoute>
-      <div className="min-h-screen bg-[#050505] text-white">
+      <div className="min-h-screen bg-[#0A0A0A] text-white">
         <DashboardNavbar email={userEmail} onLogout={handleLogout} />
 
         <main className="mx-auto max-w-7xl px-6 py-14">
