@@ -27,6 +27,7 @@ interface Job {
 function JobsPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [jobs, setJobs] = useState<Job[]>([])
