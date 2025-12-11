@@ -305,17 +305,14 @@ export default function DashboardPage() {
 
   return (
     <ProtectedRoute>
-      <div className="relative min-h-screen overflow-hidden bg-[#050505] text-white">
-        {/* Ambient Gradient Backdrop */}
+      <div className="relative min-h-screen overflow-hidden bg-[#0A0A0A] text-white">
+        {/* Ambient Gradient Backdrop - Subtle like landing page */}
         <div
           aria-hidden="true"
           className="pointer-events-none absolute inset-0 -z-10"
         >
-          <div className="absolute -top-40 left-1/2 h-[620px] w-[620px] -translate-x-1/2 rounded-full bg-[#F97316]/10 blur-[180px]" />
-          <div className="absolute left-[-20%] top-1/3 h-[420px] w-[420px] rounded-full bg-[#38BDF8]/10 blur-[160px]" />
-          <div className="absolute right-[-10%] bottom-[-15%] h-[520px] w-[520px] rounded-full bg-[#A855F7]/10 blur-[200px]" />
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.06),_transparent_55%)]" />
-            </div>
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(249,115,22,0.05),_transparent_55%)]" />
+        </div>
 
         <DashboardNavbar email={user?.email} onLogout={handleLogout} />
 

@@ -34,7 +34,7 @@ export function JobsPageContentView(props: JobsPageContentProps) {
   const router = useRouter()
   
   return (
-    <div className="min-h-screen bg-[#050505] text-white">
+        <div className="min-h-screen bg-[#0A0A0A] text-white">
       <DashboardNavbar email={props.user?.email} onLogout={() => router.push('/')} />
       <div className="mx-auto max-w-7xl px-6 py-14">
         <motion.div
