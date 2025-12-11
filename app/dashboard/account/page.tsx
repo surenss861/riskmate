@@ -10,6 +10,7 @@ import { TemplatesManager } from '@/components/dashboard/TemplatesManager'
 import { ErrorModal } from '@/components/dashboard/ErrorModal'
 import { subscriptionsApi } from '@/lib/api'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
+import { cardStyles, buttonStyles, spacing, typography } from '@/lib/styles/design-system'
 
 interface Profile {
   id: string
@@ -246,16 +247,16 @@ export default function AccountPage() {
             )}
 
             {/* Profile Section */}
-            <div className="bg-white/5 border border-white/10 rounded-xl p-6">
+            <div className={`${cardStyles.base} ${cardStyles.padding.md}`}>
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-semibold text-white">Profile</h2>
                 {!editingProfile && (
-                  <button
-                    onClick={() => setEditingProfile(true)}
-                    className="px-4 py-2 text-sm text-white border border-white/10 hover:border-white/30 rounded-lg transition-colors"
-                  >
-                    Edit
-                  </button>
+                    <button
+                      onClick={() => setEditingProfile(true)}
+                      className={buttonStyles.secondary}
+                    >
+                      Edit
+                    </button>
                 )}
               </div>
 
@@ -285,7 +286,7 @@ export default function AccountPage() {
                     <button
                       onClick={handleUpdateProfile}
                       disabled={updating}
-                      className="rounded-lg bg-[#F97316] px-6 py-3 text-black font-semibold hover:bg-[#FB923C] disabled:opacity-50 disabled:cursor-not-allowed"
+                      className={buttonStyles.primary}
                     >
                       {updating ? 'Saving...' : 'Save'}
                     </button>
@@ -298,7 +299,7 @@ export default function AccountPage() {
                         })
                       }}
                       disabled={updating}
-                      className="rounded-lg border border-white/10 px-6 py-3 text-white font-semibold hover:border-white/30 disabled:opacity-50"
+                      className={buttonStyles.secondary}
                     >
                       Cancel
                     </button>
@@ -328,13 +329,13 @@ export default function AccountPage() {
 
             {/* Organization Section */}
             {organization && (
-              <div className="bg-white/5 border border-white/10 rounded-xl p-6">
+              <div className={`${cardStyles.base} ${cardStyles.padding.md}`}>
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-xl font-semibold text-white">Organization</h2>
                   {!editingOrg && (
                     <button
                       onClick={() => setEditingOrg(true)}
-                      className="px-4 py-2 text-sm text-white border border-white/10 hover:border-white/30 rounded-lg transition-colors"
+                      className={buttonStyles.secondary}
                     >
                       Edit
                     </button>
@@ -357,7 +358,7 @@ export default function AccountPage() {
                       <button
                         onClick={handleUpdateOrganization}
                         disabled={updating}
-                        className="rounded-lg bg-[#F97316] px-6 py-3 text-black font-semibold hover:bg-[#FB923C] disabled:opacity-50 disabled:cursor-not-allowed"
+                        className={buttonStyles.primary}
                       >
                         {updating ? 'Saving...' : 'Save'}
                       </button>
@@ -367,7 +368,7 @@ export default function AccountPage() {
                           setOrgForm({ name: organization.name })
                         }}
                         disabled={updating}
-                        className="rounded-lg border border-white/10 px-6 py-3 text-white font-semibold hover:border-white/30 disabled:opacity-50"
+                        className={buttonStyles.secondary}
                       >
                         Cancel
                       </button>
@@ -383,7 +384,7 @@ export default function AccountPage() {
             )}
 
             {/* Plan & Billing Section */}
-            <div className="bg-white/5 border border-white/10 rounded-xl p-6">
+            <div className={`${cardStyles.base} ${cardStyles.padding.md}`}>
               <h2 className="text-xl font-semibold text-white mb-4">Plan & Billing</h2>
               {subscription ? (
                 <div className="space-y-4">
@@ -416,7 +417,7 @@ export default function AccountPage() {
                   <div className="flex gap-3 pt-4">
                     <Link
                       href="/dashboard/account/change-plan"
-                      className="rounded-lg bg-[#F97316] px-6 py-3 text-black font-semibold hover:bg-[#FB923C] transition-colors inline-block text-center"
+                      className={`${buttonStyles.primary} inline-block text-center`}
                     >
                       Change Plan
                     </Link>
@@ -430,7 +431,7 @@ export default function AccountPage() {
                             setError(err?.message || 'Failed to open billing portal')
                           }
                         }}
-                        className="rounded-lg border border-white/10 px-6 py-3 text-white font-semibold hover:border-white/30"
+                        className={buttonStyles.secondary}
                       >
                         Manage Billing
                       </button>
@@ -440,12 +441,12 @@ export default function AccountPage() {
               ) : (
                 <div className="space-y-4">
                   <p className="text-white/60">No active subscription</p>
-                  <button
-                    onClick={() => router.push('/pricing')}
-                    className="rounded-lg bg-[#F97316] px-6 py-3 text-black font-semibold hover:bg-[#FB923C]"
-                  >
-                    View Pricing Plans
-                  </button>
+                    <button
+                      onClick={() => router.push('/pricing')}
+                      className={buttonStyles.primary}
+                    >
+                      View Pricing Plans
+                    </button>
                 </div>
               )}
             </div>
@@ -456,7 +457,7 @@ export default function AccountPage() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.3 }}
-                className="mt-8"
+                className={spacing.section}
               >
                 <TemplatesManager 
                   organizationId={organization.id} 

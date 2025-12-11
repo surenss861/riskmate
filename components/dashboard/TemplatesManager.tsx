@@ -9,6 +9,7 @@ import { TemplateUpgradeModal } from './TemplateUpgradeModal'
 import { TemplateDetailDrawer } from './TemplateDetailDrawer'
 import { trackEvent } from '@/lib/posthog'
 import { Check } from 'lucide-react'
+import { cardStyles, buttonStyles, tabStyles, typography } from '@/lib/styles/design-system'
 
 interface HazardTemplate {
   id: string
@@ -284,7 +285,7 @@ export function TemplatesManager({ organizationId, subscriptionTier = 'starter' 
   }
 
   return (
-    <div className="rounded-xl border border-white/10 bg-[#121212]/80 backdrop-blur-sm p-6">
+    <div className={`${cardStyles.base} ${cardStyles.padding.md}`}>
       {/* Header */}
       <div className="flex items-start justify-between mb-6">
         <div className="flex-1">
@@ -317,30 +318,26 @@ export function TemplatesManager({ organizationId, subscriptionTier = 'starter' 
         </div>
         <button
           onClick={handleNewTemplate}
-          className="px-4 py-2 bg-[#F97316] hover:bg-[#FB923C] text-black rounded-lg font-semibold text-sm transition-colors flex items-center gap-2"
+          className={`${buttonStyles.primary} flex items-center gap-2`}
         >
           + New Template
         </button>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 mb-6 border-b border-white/10">
+      <div className={tabStyles.container}>
         <button
           onClick={() => setActiveTab('hazard')}
-          className={`px-4 py-2 text-sm font-medium transition-colors ${
-            activeTab === 'hazard'
-              ? 'text-[#F97316] border-b-2 border-[#F97316]'
-              : 'text-white/60 hover:text-white'
+          className={`${tabStyles.item} ${
+            activeTab === 'hazard' ? tabStyles.active : tabStyles.inactive
           }`}
         >
           Hazard Templates
         </button>
         <button
           onClick={() => setActiveTab('job')}
-          className={`px-4 py-2 text-sm font-medium transition-colors ${
-            activeTab === 'job'
-              ? 'text-[#F97316] border-b-2 border-[#F97316]'
-              : 'text-white/60 hover:text-white'
+          className={`${tabStyles.item} ${
+            activeTab === 'job' ? tabStyles.active : tabStyles.inactive
           }`}
         >
           Job Templates
@@ -383,7 +380,7 @@ export function TemplatesManager({ organizationId, subscriptionTier = 'starter' 
           )}
           <button
             onClick={handleNewTemplate}
-            className="px-4 py-2 bg-[#F97316] hover:bg-[#FB923C] text-black rounded-lg font-semibold text-sm transition-colors"
+            className={buttonStyles.primary}
           >
             + New Template
           </button>
