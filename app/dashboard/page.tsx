@@ -540,6 +540,7 @@ export default function DashboardPage() {
                 </p>
                 <button
                   onClick={() => router.push('/dashboard/jobs/new')}
+                  onMouseEnter={() => router.prefetch('/dashboard/jobs/new')}
                   className="rounded-2xl bg-[#F97316] px-6 py-3 font-semibold text-black transition-all hover:bg-[#FB923C]"
                 >
                   Create Job
