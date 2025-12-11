@@ -404,10 +404,7 @@ function JobsPageContent() {
         </div>
       </div>
     </div>
-    )
-  }
-
-  return renderContent()
+  )
 }
 
 export default function JobsPage() {
