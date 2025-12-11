@@ -190,7 +190,7 @@ export default function NewJobPage() {
       // Redirect to job detail page
       router.push(`/dashboard/jobs/${response.data.id}`)
     } catch (err: any) {
-      setError(err.message || 'Failed to create job')
+      setError('Couldn\'t create that job. Your information is still here — check the form and try again.')
       setLoading(false)
     }
   }

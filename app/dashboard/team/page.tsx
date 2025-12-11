@@ -75,7 +75,7 @@ export default function TeamPage() {
         }
       } catch (err: any) {
         console.error('Failed to load team:', err)
-        setError(err?.message || 'Failed to load team')
+        setError('Couldn\'t load your team. Refresh the page to try again.')
       } finally {
         setLoading(false)
       }
@@ -119,7 +119,7 @@ export default function TeamPage() {
       setInviteRole('member')
     } catch (err: any) {
       console.error('Failed to invite:', err)
-      setError(err?.message || 'Failed to send invite')
+      setError('Couldn\'t send that invite. Check the email address and try again.')
     } finally {
       setInviting(false)
     }
@@ -142,7 +142,7 @@ export default function TeamPage() {
       setTeam(data)
     } catch (err: any) {
       console.error('Failed to remove member:', err)
-      setError(err?.message || 'Failed to remove team member')
+      setError('Couldn\'t remove that member. Try again in a moment.')
     } finally {
       setRemoving(null)
       setMemberToRemove(null)
@@ -158,7 +158,7 @@ export default function TeamPage() {
       setTeam(data)
     } catch (err: any) {
       console.error('Failed to revoke invite:', err)
-      setError(err?.message || 'Failed to revoke invite')
+      setError('Couldn\'t revoke that invite. Try again in a moment.')
     } finally {
       setRevoking(null)
     }
@@ -173,7 +173,7 @@ export default function TeamPage() {
   if (loading) {
     return (
       <ProtectedRoute>
-        <div className="min-h-screen bg-[#050505] text-white">
+        <div className="min-h-screen bg-[#0A0A0A] text-white">
           <DashboardNavbar email={userEmail} onLogout={handleLogout} />
           <div className="flex items-center justify-center min-h-[60vh]">
             <div className="text-center space-y-4">
@@ -189,7 +189,7 @@ export default function TeamPage() {
   if (!team) {
     return (
       <ProtectedRoute>
-        <div className="min-h-screen bg-[#050505] text-white">
+        <div className="min-h-screen bg-[#0A0A0A] text-white">
           <DashboardNavbar email={userEmail} onLogout={handleLogout} />
           <div className="flex items-center justify-center min-h-[60vh]">
             <div className="text-center space-y-4">
@@ -209,7 +209,7 @@ export default function TeamPage() {
 
   return (
     <ProtectedRoute>
-      <div className="min-h-screen bg-[#050505] text-white">
+      <div className="min-h-screen bg-[#0A0A0A] text-white">
         <DashboardNavbar email={userEmail} onLogout={handleLogout} />
 
         <main className="mx-auto max-w-7xl px-6 py-14">

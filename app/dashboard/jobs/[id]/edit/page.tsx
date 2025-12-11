@@ -135,7 +135,7 @@ export default function EditJobPage() {
       }
     } catch (err: any) {
       console.error('Failed to upload document:', err)
-      setError(err.message || 'Failed to upload photo')
+      setError('Couldn\'t upload that photo. Make sure it\'s an image under 10MB and try again.')
     } finally {
       setUploading(false)
     }
@@ -158,7 +158,7 @@ export default function EditJobPage() {
       // Redirect to job detail page
       router.push(`/dashboard/jobs/${jobId}`)
     } catch (err: any) {
-      setError(err.message || 'Failed to update job')
+      setError('Couldn\'t save those changes. Your edits are still here — try again.')
       setSaving(false)
     }
   }

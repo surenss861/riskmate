@@ -175,7 +175,7 @@ export default function AccountPage() {
       setEditingOrg(false)
     } catch (err: any) {
       console.error('Failed to update organization:', err)
-      setError(err?.message || 'Failed to update organization')
+      setError('Couldn\'t save that change. Your data is still here — try again.')
     } finally {
       setUpdating(false)
     }

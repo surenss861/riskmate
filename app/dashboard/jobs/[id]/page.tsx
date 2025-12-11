@@ -326,7 +326,7 @@ export default function JobDetailPage() {
       loadJob() // Reload to get fresh data
     } catch (err: any) {
       console.error('Failed to apply template:', err)
-      setError(err.message || 'Failed to apply template')
+      setError(err.message || 'Couldn\'t load that template. Nothing was lost — try again in a moment.')
     }
   }
 

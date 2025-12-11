@@ -214,7 +214,7 @@ export default function JobsPage() {
     <ProtectedRoute>
       <Suspense
         fallback={
-          <div className="min-h-screen bg-[#050505] text-white flex items-center justify-center">
+          <div className="min-h-screen bg-[#0A0A0A] text-white flex items-center justify-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#F97316]" />
           </div>
         }

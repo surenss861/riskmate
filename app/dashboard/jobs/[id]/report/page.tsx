@@ -205,7 +205,7 @@ export default function JobReportPage() {
         return
       } else {
         console.error('No PDF URL or base64 data available')
-        setExportError('Report generated but no PDF data available. Please check the console for details.')
+          setExportError('Report generated but couldn\'t download it. Try refreshing the page and exporting again.')
       }
     } catch (err: any) {
       console.error('Failed to export PDF', err)
@@ -221,7 +221,7 @@ export default function JobReportPage() {
   if (!jobId) {
     return (
       <ProtectedRoute>
-        <div className="min-h-screen bg-[#050505] text-white flex items-center justify-center">
+        <div className="min-h-screen bg-[#0A0A0A] text-white flex items-center justify-center">
           <div className="text-center space-y-4">
             <p className="text-lg text-white/70">Job not found.</p>
             <button
@@ -239,7 +239,7 @@ export default function JobReportPage() {
   if (isLoading) {
     return (
       <ProtectedRoute>
-        <div className="min-h-screen bg-[#050505] text-white flex items-center justify-center">
+        <div className="min-h-screen bg-[#0A0A0A] text-white flex items-center justify-center">
           <div className="text-center space-y-4">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#F97316] mx-auto" />
             <p className="text-white/60">Building job report…</p>
@@ -252,7 +252,7 @@ export default function JobReportPage() {
   if (error || !data) {
     return (
       <ProtectedRoute>
-        <div className="min-h-screen bg-[#050505] text-white flex items-center justify-center">
+        <div className="min-h-screen bg-[#0A0A0A] text-white flex items-center justify-center">
           <div className="text-center space-y-4">
             <p className="text-lg text-white/70">Unable to load this report.</p>
             <button
@@ -269,7 +269,7 @@ export default function JobReportPage() {
 
   return (
     <ProtectedRoute>
-      <div className="relative min-h-screen overflow-hidden bg-[#050505] text-white">
+      <div className="relative min-h-screen overflow-hidden bg-[#0A0A0A] text-white">
         <div className="pointer-events-none absolute inset-0 -z-10">
           <div className="absolute -top-40 left-1/2 h-[620px] w-[620px] -translate-x-1/2 rounded-full bg-[#F97316]/15 blur-[200px]" />
           <div className="absolute left-[-20%] top-1/3 h-[420px] w-[420px] rounded-full bg-[#38BDF8]/15 blur-[180px]" />

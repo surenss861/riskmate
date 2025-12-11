@@ -143,7 +143,7 @@ export default function ChangePlanPage() {
   if (loading) {
     return (
       <ProtectedRoute>
-        <div className="min-h-screen bg-[#050505] text-white flex items-center justify-center">
+        <div className="min-h-screen bg-[#0A0A0A] text-white flex items-center justify-center">
           <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-[#F97316]" />
         </div>
       </ProtectedRoute>
@@ -152,7 +152,7 @@ export default function ChangePlanPage() {
 
   return (
     <ProtectedRoute>
-      <div className="min-h-screen bg-[#050505] text-white">
+      <div className="min-h-screen bg-[#0A0A0A] text-white">
         <DashboardNavbar email={user?.email} onLogout={() => router.push('/logout')} />
 
         <div className="relative mx-auto max-w-7xl px-6 py-14">
