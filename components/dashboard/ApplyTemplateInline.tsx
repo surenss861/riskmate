@@ -265,6 +265,9 @@ export function ApplyTemplateInline({
       ) : filteredTemplates.length === 0 ? (
         <div className="text-center py-12 border border-white/10 rounded-lg bg-black/20">
           <p className="text-sm text-white/70 mb-2">No templates found</p>
+          <p className="text-xs text-white/50">
+            Try adjusting your search or create a new template from this job.
+          </p>
           <p className="text-xs text-white/40">
             {searchQuery ? 'Try a different search term' : 'Create templates in Account Settings'}
           </p>

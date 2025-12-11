@@ -357,6 +357,12 @@ export function TemplatesManager({ organizationId, subscriptionTier = 'starter' 
             <>
               <p className="text-sm font-medium text-white mb-2">
                 No hazard templates yet
+                <p className="text-xs text-white/50 mt-2 max-w-md mx-auto">
+                  Create a hazard bundle (like "Electrical Work" or "Roof Tear-Off") and reuse it across jobs.
+                </p>
+                <p className="text-xs text-white/40 mt-1">
+                  Examples: "Residential Roof Tear-Off", "Panel Upgrade", "Confined Space Entry"
+                </p>
               </p>
               <p className="text-xs text-white/60 mb-3 max-w-md mx-auto">
                 Create a hazard bundle (e.g., &apos;Electrical Work&apos; or &apos;Roof Tear-Off&apos;) and reuse it across jobs.
@@ -369,6 +375,9 @@ export function TemplatesManager({ organizationId, subscriptionTier = 'starter' 
             <>
               <p className="text-sm font-medium text-white mb-2">
                 No job templates yet
+                <p className="text-xs text-white/50 mt-2 max-w-md mx-auto">
+                  Save your go-to job setups so your team can spin up jobs in 30 seconds.
+                </p>
               </p>
               <p className="text-xs text-white/60 mb-3 max-w-md mx-auto">
                 Save whole job setups with hazards + mitigations pre-loaded.

@@ -587,7 +587,10 @@ export default function JobDetailPage() {
                     </div>
                 {totalCount === 0 ? (
                   <p className="text-sm text-[#A1A1A1]">
-                    No mitigation items yet. Update risk factors to generate checklist.
+                    <p className="text-sm text-white/50 mb-2">No checklist items yet</p>
+                    <p className="text-xs text-white/40">
+                      Add hazards to automatically generate your safety checklist.
+                    </p>
                   </p>
                 ) : (
                   <div className="space-y-2">
