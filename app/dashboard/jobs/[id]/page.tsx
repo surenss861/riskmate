@@ -15,7 +15,7 @@ import { VersionHistory } from '@/components/dashboard/VersionHistory'
 import { JobAssignment } from '@/components/dashboard/JobAssignment'
 import { EvidenceVerification } from '@/components/dashboard/EvidenceVerification'
 import { TemplatesManager, TemplateModal, TemplateModalProps } from '@/components/dashboard/TemplatesManager'
-import { ApplyTemplateModal } from '@/components/dashboard/ApplyTemplateModal'
+import { ApplyTemplateInline } from '@/components/dashboard/ApplyTemplateInline'
 import { ErrorModal } from '@/components/dashboard/ErrorModal'
 import { optimizePhoto } from '@/lib/utils/photoOptimization'
 import { getGPSLocation } from '@/lib/utils/gpsMetadata'
@@ -817,9 +817,9 @@ export default function JobDetailPage() {
         }}
         type="permit-pack"
       />
-      {/* Apply Template Modal */}
+      {/* Apply Template Inline */}
       {showApplyTemplate && organizationId && (
-        <ApplyTemplateModal
+        <ApplyTemplateInline
           jobId={jobId}
           organizationId={organizationId}
           currentRiskFactorCodes={currentRiskFactorCodes}
