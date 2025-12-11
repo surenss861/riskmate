@@ -81,6 +81,7 @@ export default function JobDetailPage() {
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
   const [riskFactors, setRiskFactors] = useState<any[]>([])
   const [prefillTemplateData, setPrefillTemplateData] = useState<{ name: string; trade?: string; hazardIds: string[] } | null>(null)
+  const [appliedTemplate, setAppliedTemplate] = useState<{ id: string; name: string; type: 'hazard' | 'job' } | null>(null)
 
   const loadJob = useCallback(async () => {
     try {

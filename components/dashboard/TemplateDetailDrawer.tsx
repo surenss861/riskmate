@@ -62,7 +62,7 @@ export function TemplateDetailDrawer({
 
   useEffect(() => {
     loadRecentJobs()
-  }, [template.id, type])
+  }, [template.id, type, organizationId])
 
   const loadRecentJobs = async () => {
     try {
