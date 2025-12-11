@@ -188,7 +188,8 @@ function JobsPageContent() {
     })
   }
 
-  return (
+  const renderContent = () => {
+    return (
     <div className="min-h-screen bg-[#050505] text-white">
       <DashboardNavbar email={user?.email} onLogout={() => router.push('/')} />
       <div className="mx-auto max-w-7xl px-6 py-14">
