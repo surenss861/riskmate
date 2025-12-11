@@ -662,6 +662,17 @@ export default function JobDetailPage() {
             </motion.div>
           </div>
 
+          {/* Apply Template Inline - Full Width Section */}
+          {showApplyTemplate && organizationId && (
+            <ApplyTemplateInline
+              jobId={jobId}
+              organizationId={organizationId}
+              currentRiskFactorCodes={currentRiskFactorCodes}
+              onClose={() => setShowApplyTemplate(false)}
+              onApply={handleApplyTemplate}
+            />
+          )}
+
           {/* Permit Packs Section (Business Plan Only) */}
           {subscriptionTier === 'business' && (
             <motion.div
@@ -817,16 +828,6 @@ export default function JobDetailPage() {
         }}
         type="permit-pack"
       />
-      {/* Apply Template Inline */}
-      {showApplyTemplate && organizationId && (
-        <ApplyTemplateInline
-          jobId={jobId}
-          organizationId={organizationId}
-          currentRiskFactorCodes={currentRiskFactorCodes}
-          onClose={() => setShowApplyTemplate(false)}
-          onApply={handleApplyTemplate}
-        />
-      )}
 
       {/* Create Template Modal */}
       {showCreateTemplate && organizationId && riskFactors.length > 0 && (
