@@ -66,101 +66,144 @@ export function EvidenceVerification({
   }
 
   return (
-    <div className="rounded-lg border border-white/10 bg-[#121212]/80 backdrop-blur-sm p-6">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h3 className="text-lg font-semibold text-white">Evidence Verification</h3>
-          <p className="text-xs text-white/50 mt-0.5">
-            Review and approve or reject photos, documents, and mitigation items.
-          </p>
-        </div>
-        <div className="flex gap-2">
-          {(['all', 'pending', 'approved', 'rejected'] as const).map((f) => (
-            <button
-              key={f}
-              onClick={() => setFilter(f)}
-              className={`px-3 py-1 text-xs rounded-lg transition-colors ${
-                filter === f
-                  ? 'bg-[#F97316] text-black font-semibold'
-                  : 'bg-white/5 text-white/70 hover:bg-white/10'
-              }`}
-            >
-              {f.charAt(0).toUpperCase() + f.slice(1)}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="space-y-3">
-        {filteredItems.length === 0 ? (
-          <div className="text-center py-8 text-white/50">
-            <p className="text-sm">No {filter === 'all' ? '' : filter} evidence items</p>
+    <>
+      <div className="rounded-lg border border-white/10 bg-[#121212]/80 backdrop-blur-sm p-6">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h3 className="text-lg font-semibold text-white">Evidence Verification</h3>
+            <p className="text-xs text-white/50 mt-0.5">
+              Review and approve or reject photos, documents, and mitigation items.
+            </p>
           </div>
-        ) : (
-          filteredItems.map((item) => (
-            <motion.div
-              key={item.id}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="p-4 rounded-lg border border-white/10 bg-[#121212]/60"
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-xs px-2 py-0.5 rounded-lg border border-white/10 bg-[#121212] text-white/70">
-                      {item.type}
-                    </span>
-                    <span
-                      className={`text-xs px-2 py-0.5 rounded-lg border ${
-                        item.status === 'approved'
-                          ? 'bg-green-500/20 text-green-400 border-green-500/30'
-                          : item.status === 'rejected'
-                          ? 'bg-red-500/20 text-red-400 border-red-500/30'
-                          : 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
-                      }`}
-                    >
-                      {item.status}
-                    </span>
+          <div className="flex gap-2">
+            {(['all', 'pending', 'approved', 'rejected'] as const).map((f) => (
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
+                className={`px-3 py-1 text-xs rounded-lg transition-colors ${
+                  filter === f
+                    ? 'bg-[#F97316] text-black font-semibold'
+                    : 'bg-white/5 text-white/70 hover:bg-white/10'
+                }`}
+              >
+                {f.charAt(0).toUpperCase() + f.slice(1)}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          {filteredItems.length === 0 ? (
+            <div className="text-center py-8 text-white/50">
+              <p className="text-sm">No {filter === 'all' ? '' : filter} evidence items</p>
+            </div>
+          ) : (
+            filteredItems.map((item) => (
+              <motion.div
+                key={item.id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="p-4 rounded-lg border border-white/10 bg-[#121212]/60"
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-xs px-2 py-0.5 rounded-lg border border-white/10 bg-[#121212] text-white/70">
+                        {item.type}
+                      </span>
+                      <span
+                        className={`text-xs px-2 py-0.5 rounded-lg border ${
+                          item.status === 'approved'
+                            ? 'bg-green-500/20 text-green-400 border-green-500/30'
+                            : item.status === 'rejected'
+                            ? 'bg-red-500/20 text-red-400 border-red-500/30'
+                            : 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
+                        }`}
+                      >
+                        {item.status}
+                      </span>
+                    </div>
+                    <h4 className="text-sm font-semibold text-white mb-1">{item.name}</h4>
+                    <p className="text-xs text-white/50">
+                      Submitted by {item.submittedBy} on{' '}
+                      {new Date(item.submittedAt).toLocaleDateString()}
+                    </p>
+                    {item.verifiedBy && (
+                      <p className="text-xs text-white/50 mt-1">
+                        Verified by {item.verifiedBy} on{' '}
+                        {new Date(item.verifiedAt!).toLocaleDateString()}
+                      </p>
+                    )}
+                    {item.rejectionReason && (
+                      <p className="text-xs text-red-400 mt-1">
+                        Reason: {item.rejectionReason}
+                      </p>
+                    )}
                   </div>
-                  <h4 className="text-sm font-semibold text-white mb-1">{item.name}</h4>
-                  <p className="text-xs text-white/50">
-                    Submitted by {item.submittedBy} on{' '}
-                    {new Date(item.submittedAt).toLocaleDateString()}
-                  </p>
-                  {item.verifiedBy && (
-                    <p className="text-xs text-white/50 mt-1">
-                      Verified by {item.verifiedBy} on{' '}
-                      {new Date(item.verifiedAt!).toLocaleDateString()}
-                    </p>
-                  )}
-                  {item.rejectionReason && (
-                    <p className="text-xs text-red-400 mt-1">
-                      Reason: {item.rejectionReason}
-                    </p>
+                  {item.status === 'pending' && (
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => onVerify(item.id, 'approved')}
+                        className="px-3 py-1 text-xs bg-green-500/20 text-green-400 border border-green-500/30 rounded-lg hover:bg-green-500/30 transition-colors"
+                      >
+                        Approve
+                      </button>
+                      <button
+                        onClick={() => setShowRejectModal(item.id)}
+                        className="px-3 py-1 text-xs bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/30 transition-colors"
+                      >
+                        Reject
+                      </button>
+                    </div>
                   )}
                 </div>
-                {item.status === 'pending' && (
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => onVerify(item.id, 'approved')}
-                      className="px-3 py-1 text-xs bg-green-500/20 text-green-400 border border-green-500/30 rounded-lg hover:bg-green-500/30 transition-colors"
-                    >
-                      Approve
-                    </button>
-                    <button
-                      onClick={() => setShowRejectModal(item.id)}
-                      className="px-3 py-1 text-xs bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/30 transition-colors"
-                    >
-                      Reject
-                    </button>
-                  </div>
-                )}
-              </div>
-            </motion.div>
-          ))
-        )}
+              </motion.div>
+            ))
+          )}
+        </div>
       </div>
-    </div>
+
+      {/* Rejection Modal */}
+      {showRejectModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="w-full max-w-md rounded-lg border border-white/10 bg-[#121212]/80 backdrop-blur-sm p-6"
+          >
+            <h3 className="text-lg font-semibold text-white mb-2">Reject Evidence</h3>
+            <p className="text-sm text-white/60 mb-4">
+              Why are you rejecting this evidence? (Optional but recommended)
+            </p>
+            <textarea
+              value={rejectionReason}
+              onChange={(e) => setRejectionReason(e.target.value)}
+              placeholder="e.g., Photo quality too low, missing required documentation..."
+              className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-[#F97316] resize-none"
+              rows={3}
+              autoFocus
+            />
+            <div className="flex gap-3 mt-4">
+              <button
+                onClick={() => {
+                  setShowRejectModal(null)
+                  setRejectionReason('')
+                }}
+                className="flex-1 px-4 py-2 border border-white/20 bg-transparent text-white/70 rounded-lg hover:bg-white/5 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleReject(showRejectModal)}
+                disabled={rejectingId === showRejectModal}
+                className="flex-1 px-4 py-2 bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/30 transition-colors disabled:opacity-50"
+              >
+                {rejectingId === showRejectModal ? 'Rejecting...' : 'Reject'}
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+    </>
   )
 }
-
