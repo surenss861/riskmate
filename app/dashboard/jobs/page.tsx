@@ -24,7 +24,7 @@ interface Job {
   applied_template_type?: 'hazard' | 'job' | null
 }
 
-export default function JobsPage() {
+function JobsPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [user, setUser] = useState<any>(null)
@@ -394,6 +394,19 @@ export default function JobsPage() {
           )}
         </div>
       </div>
+  )
+}
+
+export default function JobsPage() {
+  return (
+    <ProtectedRoute>
+      <Suspense fallback={
+        <div className="min-h-screen bg-[#050505] text-white flex items-center justify-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#F97316]" />
+        </div>
+      }>
+        <JobsPageContent />
+      </Suspense>
     </ProtectedRoute>
   )
 }
