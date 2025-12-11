@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { DashboardNavbar } from '@/components/dashboard/DashboardNavbar'
 import { DataGrid } from '@/components/dashboard/DataGrid'
+import { typography } from '@/lib/styles/design-system'
 
 interface JobsPageContentProps {
   user: any
