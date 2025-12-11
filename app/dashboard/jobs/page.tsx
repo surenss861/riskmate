@@ -394,7 +394,6 @@ function JobsPageContent() {
         </div>
       </div>
     </div>
-    </>
   )
 }
 
