@@ -405,6 +405,8 @@ function JobsPageContent() {
       </div>
     </div>
   )
+
+  return content
 }
 
 export default function JobsPage() {
