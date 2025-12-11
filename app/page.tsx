@@ -190,7 +190,7 @@ export default function HomePage() {
               </motion.span>
             </motion.h1>
             <motion.p 
-              className="text-xl text-[#A1A1A1] mb-8 max-w-2xl mx-auto"
+              className="text-xl md:text-2xl text-[#A1A1A1] mb-10 max-w-2xl mx-auto leading-relaxed"
               data-string=""
               data-string-parallax="0.01"
               initial={{ opacity: 0, y: 20 }}

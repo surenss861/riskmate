@@ -78,7 +78,7 @@ export default function PricingPage() {
         <div className="grid md:grid-cols-3 gap-6 mb-16">
           {/* Starter */}
           <motion.div
-            className="bg-[#121212] border border-white/10 rounded-xl p-8"
+            className={`${cardStyles.base} ${cardStyles.padding.lg}`}
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.2 }}
