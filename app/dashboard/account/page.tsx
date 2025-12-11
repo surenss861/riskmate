@@ -235,8 +235,8 @@ export default function AccountPage() {
           <div className="space-y-8">
             {/* Header */}
             <div>
-              <h1 className="text-4xl font-bold text-white mb-2">Account Settings</h1>
-              <p className="text-white/60">Manage your profile and organization settings</p>
+              <h1 className={`${typography.h1} mb-2`}>Account Settings</h1>
+              <p className={typography.bodyMuted}>Manage your profile and organization settings</p>
             </div>
 
             {/* Error Message */}
@@ -249,7 +249,7 @@ export default function AccountPage() {
             {/* Profile Section */}
             <div className={`${cardStyles.base} ${cardStyles.padding.md}`}>
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-semibold text-white">Profile</h2>
+                <h2 className={typography.h3}>Profile</h2>
                 {!editingProfile && (
                     <button
                       onClick={() => setEditingProfile(true)}
@@ -331,7 +331,7 @@ export default function AccountPage() {
             {organization && (
               <div className={`${cardStyles.base} ${cardStyles.padding.md}`}>
                 <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-xl font-semibold text-white">Organization</h2>
+                  <h2 className={typography.h3}>Organization</h2>
                   {!editingOrg && (
                     <button
                       onClick={() => setEditingOrg(true)}
@@ -385,7 +385,7 @@ export default function AccountPage() {
 
             {/* Plan & Billing Section */}
             <div className={`${cardStyles.base} ${cardStyles.padding.md}`}>
-              <h2 className="text-xl font-semibold text-white mb-4">Plan & Billing</h2>
+              <h2 className={`${typography.h3} mb-4`}>Plan & Billing</h2>
               {subscription ? (
                 <div className="space-y-4">
                   <div>

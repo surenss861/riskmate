@@ -16,7 +16,7 @@ import { JobAssignment } from '@/components/dashboard/JobAssignment'
 import { EvidenceVerification } from '@/components/dashboard/EvidenceVerification'
 import { TemplatesManager, TemplateModal, TemplateModalProps } from '@/components/dashboard/TemplatesManager'
 import { ApplyTemplateInline } from '@/components/dashboard/ApplyTemplateInline'
-import { buttonStyles, cardStyles } from '@/lib/styles/design-system'
+import { buttonStyles, cardStyles, typography } from '@/lib/styles/design-system'
 import { ErrorModal } from '@/components/dashboard/ErrorModal'
 import { optimizePhoto } from '@/lib/utils/photoOptimization'
 import { getGPSLocation } from '@/lib/utils/gpsMetadata'
@@ -514,7 +514,7 @@ export default function JobDetailPage() {
                 <div className="pt-6 border-t border-white/10 mt-8">
                   <div className="flex items-center justify-between mb-4">
                     <div>
-                      <h3 className="text-lg font-semibold text-white mb-1">Risk & Hazards</h3>
+                      <h3 className={`${typography.h4} mb-1`}>Risk & Hazards</h3>
                       <p className="text-xs text-white/50">
                         {job.risk_score_detail?.factors.length || 0} hazard{job.risk_score_detail?.factors.length !== 1 ? 's' : ''} identified
                       </p>
@@ -580,7 +580,7 @@ export default function JobDetailPage() {
                 <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
                   <div className="p-8 rounded-xl border border-white/10 bg-[#121212]/80 backdrop-blur-sm h-full">
                     <div className="mb-6">
-                      <h2 className="text-2xl font-semibold mb-2 text-white">Mitigation Checklist</h2>
+                      <h2 className={`${typography.h2} mb-2`}>Mitigation Checklist</h2>
                       <p className="text-sm text-white/60">
                         These are the safety actions required to reduce the job&apos;s overall risk.
                       </p>
@@ -627,7 +627,7 @@ export default function JobDetailPage() {
 
             <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }}>
               <div className="p-8 rounded-xl border border-white/10 bg-[#121212]/80 backdrop-blur-sm h-full flex flex-col">
-                <h2 className="text-2xl font-semibold mb-6 text-white">Job Details</h2>
+                <h2 className={`${typography.h2} mb-6`}>Job Details</h2>
 
                 <div className="space-y-4 mb-8 flex-1">
                   {job.description && (
@@ -688,7 +688,7 @@ export default function JobDetailPage() {
               <div className="p-8 rounded-xl border border-white/10 bg-[#121212]/80 backdrop-blur-sm">
                 <div className="flex items-center justify-between mb-6">
                   <div>
-                    <h2 className="text-2xl font-semibold mb-2 text-white">Permit Packs</h2>
+                    <h2 className={`${typography.h2} mb-2`}>Permit Packs</h2>
                     <p className="text-sm text-[#A1A1A1]">
                       Downloadable ZIP bundles containing all job documents, photos, and compliance materials
                     </p>

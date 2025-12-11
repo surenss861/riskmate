@@ -290,7 +290,7 @@ export function TemplatesManager({ organizationId, subscriptionTier = 'starter' 
       <div className="flex items-start justify-between mb-6">
         <div className="flex-1">
           <div className="flex items-center gap-3 mb-2">
-            <h3 className="text-lg font-semibold text-white">Templates</h3>
+            <h3 className={typography.h4}>Templates</h3>
             {subscriptionTier === 'pro' || subscriptionTier === 'business' ? (
               <span className="px-2 py-0.5 text-xs font-medium bg-[#F97316]/20 text-[#F97316] rounded border border-[#F97316]/30 flex items-center gap-1">
                 <Check size={12} />

@@ -44,12 +44,12 @@ export function JobsPageContentView(props: JobsPageContentProps) {
         >
           <div className="flex items-center justify-between">
             <div>
-              <Link href="/dashboard/jobs" className="font-display text-4xl font-bold text-white md:text-5xl hover:text-[#F97316] transition-colors">
-                Job Roaster
-              </Link>
-              <p className="mt-2 text-white/60">
-                Your centralized job hub — track progress, hazards, documents, and generate audit-ready reports.
-              </p>
+                  <Link href="/dashboard/jobs" className={`${typography.h1} hover:text-[#F97316] transition-colors`}>
+                    Job Roaster
+                  </Link>
+                  <p className={`mt-2 ${typography.bodyMuted}`}>
+                    Your centralized job hub — track progress, hazards, documents, and generate audit-ready reports.
+                  </p>
             </div>
               <button
                 onClick={() => router.push('/dashboard/jobs/new')}
