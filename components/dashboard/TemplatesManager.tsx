@@ -559,6 +559,21 @@ export function TemplateModal({
 }: TemplateModalProps) {
   const [loading, setLoading] = useState(false)
   const [mounted, setMounted] = useState(false)
+  
+  // Initialize form data - prioritize prefillData over template
+  const [formData, setFormData] = useState({
+    name: prefillData?.name || template?.name || '',
+    trade: prefillData?.trade || (template as HazardTemplate)?.trade || '',
+    description: (template as HazardTemplate)?.description || '',
+    job_type: (template as JobTemplate)?.job_type || '',
+    client_type: (template as JobTemplate)?.client_type || 'residential',
+  })
+  const [selectedHazards, setSelectedHazards] = useState<string[]>(
+    prefillData?.hazardIds || (type === 'hazard' ? (template as HazardTemplate)?.hazard_ids || [] : [])
+  )
+  const [searchQuery, setSearchQuery] = useState('')
+  const [selectedSeverities, setSelectedSeverities] = useState<string[]>([])
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([])
 
   // Ensure we're in the browser before rendering portal
   useEffect(() => {
@@ -572,31 +587,6 @@ export function TemplateModal({
       document.body.style.overflow = 'unset'
     }
   }, [])
-
-  // Don't render until mounted (SSR safety)
-  if (!mounted) return null
-
-  const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (e.target === e.currentTarget) {
-      onClose()
-    }
-  }
-
-  const handleContentClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    e.stopPropagation()
-  }
-  
-  // Initialize form data - prioritize prefillData over template
-  const [formData, setFormData] = useState({
-    name: prefillData?.name || template?.name || '',
-    trade: prefillData?.trade || (template as HazardTemplate)?.trade || '',
-    description: (template as HazardTemplate)?.description || '',
-    job_type: (template as JobTemplate)?.job_type || '',
-    client_type: (template as JobTemplate)?.client_type || 'residential',
-  })
-  const [selectedHazards, setSelectedHazards] = useState<string[]>(
-    prefillData?.hazardIds || (type === 'hazard' ? (template as HazardTemplate)?.hazard_ids || [] : [])
-  )
   
   // Update form when prefillData changes
   useEffect(() => {
@@ -609,9 +599,6 @@ export function TemplateModal({
       setSelectedHazards(prefillData.hazardIds || [])
     }
   }, [prefillData])
-  const [searchQuery, setSearchQuery] = useState('')
-  const [selectedSeverities, setSelectedSeverities] = useState<string[]>([])
-  const [selectedCategories, setSelectedCategories] = useState<string[]>([])
 
   // Get unique categories from risk factors
   const availableCategories = useMemo(() => {
@@ -626,6 +613,19 @@ export function TemplateModal({
   const selectedHazardDetails = useMemo(() => {
     return riskFactors.filter((f) => selectedHazards.includes(f.id))
   }, [selectedHazards, riskFactors])
+
+  // Don't render until mounted (SSR safety)
+  if (!mounted) return null
+
+  const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.target === e.currentTarget) {
+      onClose()
+    }
+  }
+
+  const handleContentClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    e.stopPropagation()
+  }
 
   const filteredFactors = riskFactors.filter((factor) => {
     const matchesSearch = factor.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
