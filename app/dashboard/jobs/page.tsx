@@ -24,7 +24,7 @@ interface Job {
   applied_template_type?: 'hazard' | 'job' | null
 }
 
-function JobsPageContent() {
+const JobsPageContent = () => {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [user, setUser] = useState<any>(null)
@@ -188,7 +188,8 @@ function JobsPageContent() {
     })
   }
 
-  return <div className="min-h-screen bg-[#050505] text-white">
+  return (
+    <div className="min-h-screen bg-[#050505] text-white">
       <DashboardNavbar email={user?.email} onLogout={() => router.push('/')} />
       <div className="mx-auto max-w-7xl px-6 py-14">
         <motion.div
@@ -403,7 +404,8 @@ function JobsPageContent() {
         </div>
       </div>
     </div>
-  }
+  )
+}
 
 export default function JobsPage() {
   return (
