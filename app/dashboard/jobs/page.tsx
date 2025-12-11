@@ -24,7 +24,7 @@ interface Job {
   applied_template_type?: 'hazard' | 'job' | null
 }
 
-const JobsPageContent: React.FC = () => {
+function JobsPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [user, setUser] = useState<any>(null)
