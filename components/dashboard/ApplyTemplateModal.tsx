@@ -167,7 +167,6 @@ export function ApplyTemplateModal({
       
       // Track template application
       const { trackTemplateApplied } = await import('@/lib/posthog')
-      const supabase = createSupabaseBrowserClient()
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
         const { data: userRow } = await supabase
