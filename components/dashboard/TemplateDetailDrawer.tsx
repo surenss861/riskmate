@@ -62,6 +62,7 @@ export function TemplateDetailDrawer({
 
   useEffect(() => {
     loadRecentJobs()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [template.id, type, organizationId])
 
   const loadRecentJobs = async () => {

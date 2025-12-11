@@ -106,6 +106,8 @@ export const jobsApi = {
     has_subcontractors?: boolean;
     subcontractor_count?: number;
     insurance_status?: string;
+    applied_template_id?: string | null;
+    applied_template_type?: 'hazard' | 'job' | null;
   }) => {
     return apiRequest<{ data: any }>('/api/jobs', {
       method: 'POST',
