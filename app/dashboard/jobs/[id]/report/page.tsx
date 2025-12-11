@@ -178,7 +178,7 @@ export default function JobReportPage() {
           return
         } else {
           console.error('Failed to create blob from base64')
-          setExportError('Failed to create PDF file. Please try again.')
+          setExportError('Couldn\'t create the PDF file. Your report is still here — try exporting again.')
         }
       } else if (pdf_url) {
         // Fallback to URL download

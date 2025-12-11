@@ -135,7 +135,7 @@ export default function ChangePlanPage() {
       }
     } catch (err: any) {
       console.error('Failed to switch plan:', err)
-      setError(err?.message || 'Failed to switch plan. Please try again.')
+      setError('Couldn\'t switch your plan. Your current plan is still active — try again in a moment.')
       setSwitching(null)
     }
   }
