@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { motion } from 'framer-motion'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { riskApi } from '@/lib/api'
@@ -560,6 +561,12 @@ export function TemplateModal({
   onSaveAndApply,
 }: TemplateModalProps) {
   const [loading, setLoading] = useState(false)
+  const [mounted, setMounted] = useState(false)
+
+  // Ensure we're in the browser before rendering portal
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   // Prevent body scroll when modal is open
   useEffect(() => {
@@ -568,6 +575,19 @@ export function TemplateModal({
       document.body.style.overflow = 'unset'
     }
   }, [])
+
+  // Don't render until mounted (SSR safety)
+  if (!mounted) return null
+
+  const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.target === e.currentTarget) {
+      onClose()
+    }
+  }
+
+  const handleContentClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    e.stopPropagation()
+  }
   
   // Initialize form data - prioritize prefillData over template
   const [formData, setFormData] = useState({
@@ -718,29 +738,16 @@ export function TemplateModal({
     }
   }
 
-  return (
+  return createPortal(
     <div 
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm overflow-y-auto"
-      onClick={(e) => {
-        // Close modal when clicking backdrop
-        if (e.target === e.currentTarget) {
-          onClose()
-        }
-      }}
-      onWheel={(e) => {
-        // Prevent scroll propagation to body
-        e.stopPropagation()
-      }}
-      onTouchMove={(e) => {
-        // Prevent touch scroll propagation to body
-        e.stopPropagation()
-      }}
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm"
+      onClick={handleBackdropClick}
     >
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
-        onClick={(e) => e.stopPropagation()}
-        className="bg-[#121212] border border-white/10 rounded-xl p-6 w-full max-w-4xl my-8 max-h-[calc(100vh-4rem)] overflow-y-auto"
+        onClick={handleContentClick}
+        className="relative mx-4 my-8 w-full max-w-4xl rounded-xl border border-white/10 bg-[#121212] shadow-2xl p-6 max-h-[calc(100vh-4rem)] overflow-y-auto"
       >
         <div className="flex items-center justify-between mb-4">
           <div>
@@ -1032,6 +1039,7 @@ export function TemplateModal({
           </div>
         </form>
       </motion.div>
-    </div>
+    </div>,
+    document.body
   )
 }
