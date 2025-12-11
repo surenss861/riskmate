@@ -46,7 +46,7 @@ export function VersionHistory({ jobId, entries }: VersionHistoryProps) {
 
   if (entries.length === 0) {
     return (
-      <div className="rounded-xl border border-white/10 bg-[#121212]/80 backdrop-blur-sm p-6">
+      <div className="rounded-lg border border-white/10 bg-[#121212]/80 backdrop-blur-sm p-6">
         <h3 className="text-lg font-semibold text-white mb-2">Version History</h3>
         <p className="text-sm text-white/50">No changes recorded yet</p>
       </div>
@@ -54,7 +54,7 @@ export function VersionHistory({ jobId, entries }: VersionHistoryProps) {
   }
 
   return (
-    <div className="rounded-xl border border-white/10 bg-[#121212]/80 backdrop-blur-sm p-6">
+    <div className="rounded-lg border border-white/10 bg-[#121212]/80 backdrop-blur-sm p-6">
       <div className="flex items-center justify-between mb-4">
         <div>
           <h3 className="text-lg font-semibold text-white">Version History</h3>
@@ -79,7 +79,7 @@ export function VersionHistory({ jobId, entries }: VersionHistoryProps) {
             initial={{ opacity: 0, x: -10 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: index * 0.05 }}
-            className="flex items-start gap-3 p-3 rounded-lg bg-white/5 border border-white/5"
+            className="flex items-start gap-3 p-3 rounded-lg bg-[#121212]/60 border border-white/10"
           >
             <span className="text-lg">{getChangeIcon(entry.changeType)}</span>
             <div className="flex-1 min-w-0">

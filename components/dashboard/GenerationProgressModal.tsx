@@ -105,7 +105,7 @@ export function GenerationProgressModal({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm"
+            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
           />
 
           {/* Modal */}
@@ -114,7 +114,7 @@ export function GenerationProgressModal({
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative w-full max-w-md rounded-2xl border border-white/10 bg-[#121212] p-8 shadow-2xl"
+              className="relative w-full max-w-md rounded-lg border border-white/10 bg-[#121212]/80 backdrop-blur-sm p-8"
             >
               <div className="mb-6 text-center">
                 <h3 className="text-2xl font-semibold text-white mb-2">

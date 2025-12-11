@@ -56,7 +56,7 @@ export function EvidenceVerification({
 
   if (!canVerify) {
     return (
-      <div className="rounded-xl border border-white/10 bg-[#121212]/80 backdrop-blur-sm p-6">
+      <div className="rounded-lg border border-white/10 bg-[#121212]/80 backdrop-blur-sm p-6">
         <p className="text-sm text-white/50">
           Only owners and admins can verify evidence.
         </p>
@@ -65,7 +65,7 @@ export function EvidenceVerification({
   }
 
   return (
-    <div className="rounded-xl border border-white/10 bg-[#121212]/80 backdrop-blur-sm p-6">
+    <div className="rounded-lg border border-white/10 bg-[#121212]/80 backdrop-blur-sm p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h3 className="text-lg font-semibold text-white">Evidence Verification</h3>
@@ -101,16 +101,16 @@ export function EvidenceVerification({
               key={item.id}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="p-4 rounded-lg border border-white/10 bg-white/5"
+              className="p-4 rounded-lg border border-white/10 bg-[#121212]/60"
             >
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-2">
-                    <span className="text-xs px-2 py-0.5 rounded border bg-white/5 text-white/70">
+                    <span className="text-xs px-2 py-0.5 rounded-lg border border-white/10 bg-[#121212] text-white/70">
                       {item.type}
                     </span>
                     <span
-                      className={`text-xs px-2 py-0.5 rounded border ${
+                      className={`text-xs px-2 py-0.5 rounded-lg border ${
                         item.status === 'approved'
                           ? 'bg-green-500/20 text-green-400 border-green-500/30'
                           : item.status === 'rejected'
@@ -142,7 +142,7 @@ export function EvidenceVerification({
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => onVerify(item.id, 'approved')}
-                      className="px-3 py-1 text-xs bg-green-500/20 text-green-400 border border-green-500/30 rounded hover:bg-green-500/30 transition-colors"
+                      className="px-3 py-1 text-xs bg-green-500/20 text-green-400 border border-green-500/30 rounded-lg hover:bg-green-500/30 transition-colors"
                     >
                       Approve
                     </button>
@@ -153,7 +153,7 @@ export function EvidenceVerification({
                           handleReject(item.id)
                         }
                       }}
-                      className="px-3 py-1 text-xs bg-red-500/20 text-red-400 border border-red-500/30 rounded hover:bg-red-500/30 transition-colors"
+                      className="px-3 py-1 text-xs bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/30 transition-colors"
                     >
                       Reject
                     </button>

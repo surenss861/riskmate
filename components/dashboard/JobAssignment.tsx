@@ -39,7 +39,7 @@ export function JobAssignment({
   const assignedWorkers = workers.filter((w) => w.jobsAssigned > 0)
 
   return (
-    <div className="rounded-xl border border-white/10 bg-[#121212]/80 backdrop-blur-sm p-6">
+    <div className="rounded-lg border border-white/10 bg-[#121212]/80 backdrop-blur-sm p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h3 className="text-lg font-semibold text-white">Job Assignment</h3>
@@ -59,7 +59,7 @@ export function JobAssignment({
 
       <div className="space-y-3">
         {assignedWorkers.length === 0 ? (
-          <div className="text-center py-8 border border-white/10 rounded-lg bg-black/20">
+          <div className="text-center py-8 border border-white/10 rounded-lg bg-[#121212]/40">
             <p className="text-sm text-white/50 mb-2">No workers assigned</p>
             <p className="text-xs text-white/40">
               {canManage
@@ -71,13 +71,13 @@ export function JobAssignment({
           assignedWorkers.map((worker) => (
             <div
               key={worker.id}
-              className="p-4 rounded-lg border border-white/10 bg-white/5"
+              className="p-4 rounded-lg border border-white/10 bg-[#121212]/60"
             >
               <div className="flex items-center justify-between">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
                     <h4 className="text-sm font-semibold text-white">{worker.name}</h4>
-                    <span className="text-xs px-2 py-0.5 rounded border bg-white/5 text-white/70">
+                    <span className="text-xs px-2 py-0.5 rounded-lg border border-white/10 bg-[#121212] text-white/70">
                       {worker.role}
                     </span>
                     {worker.checkedIn && (
@@ -97,14 +97,14 @@ export function JobAssignment({
                   {!worker.checkedIn ? (
                     <button
                       onClick={() => onCheckIn(worker.id)}
-                      className="px-3 py-1 text-xs bg-green-500/20 text-green-400 border border-green-500/30 rounded hover:bg-green-500/30 transition-colors"
+                      className="px-3 py-1 text-xs bg-green-500/20 text-green-400 border border-green-500/30 rounded-lg hover:bg-green-500/30 transition-colors"
                     >
                       Check In
                     </button>
                   ) : (
                     <button
                       onClick={() => onCheckOut(worker.id)}
-                      className="px-3 py-1 text-xs bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 rounded hover:bg-yellow-500/30 transition-colors"
+                      className="px-3 py-1 text-xs bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 rounded-lg hover:bg-yellow-500/30 transition-colors"
                     >
                       Check Out
                     </button>
@@ -112,7 +112,7 @@ export function JobAssignment({
                   {canManage && (
                     <button
                       onClick={() => onUnassign(worker.id)}
-                      className="px-3 py-1 text-xs bg-red-500/20 text-red-400 border border-red-500/30 rounded hover:bg-red-500/30 transition-colors"
+                      className="px-3 py-1 text-xs bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/30 transition-colors"
                     >
                       Remove
                     </button>
