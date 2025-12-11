@@ -405,8 +405,6 @@ function JobsPageContent(): React.ReactElement {
       </div>
     </div>
   )
-
-  return content
 }
 
 export default function JobsPage() {
