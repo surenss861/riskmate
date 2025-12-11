@@ -466,9 +466,8 @@ export default function DashboardPage() {
               initial={{ opacity: 0, y: 18 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.12, duration: 0.45 }}
-              className="relative mb-10 overflow-hidden rounded-3xl border border-white/10 bg-black/40 p-7 shadow-[0_26px_90px_rgba(8,8,24,0.5)] backdrop-blur-2xl"
+              className="relative mb-10 rounded-lg border border-white/10 bg-[#121212]/80 backdrop-blur-sm p-6"
             >
-              <span className="pointer-events-none absolute -right-28 top-[-90px] h-56 w-56 rounded-full bg-[#F97316]/16 blur-[140px]" />
               <h2 className="text-xl font-semibold text-white">Top Hazards (Last 30 Days)</h2>
               <p className="mt-1 text-sm text-white/60">
                 The most frequent risk signatures across your active projects.
@@ -477,7 +476,7 @@ export default function DashboardPage() {
                 {hazards.map((hazard) => (
                   <div
                     key={hazard.code}
-                    className="rounded-2xl border border-white/12 bg-white/5 px-4 py-2 text-sm text-white transition hover:border-white/25 hover:bg-white/10"
+                    className="px-4 py-2 bg-[#121212] rounded-lg border border-white/5 text-sm text-white transition hover:border-white/10"
                   >
                     <span className="font-medium">{hazard.name}</span>
                     <span className="ml-2 text-xs text-white/55">({hazard.count}x)</span>
@@ -502,7 +501,7 @@ export default function DashboardPage() {
                 <select
                   value={filterStatus}
                   onChange={(e) => setFilterStatus(e.target.value)}
-                  className="rounded-xl border border-white/10 bg-black/40 px-4 py-2 text-sm text-white transition focus:outline-none focus:ring-2 focus:ring-[#F97316]/60"
+                  className="rounded-lg border border-white/10 bg-[#121212]/80 px-4 py-2 text-sm text-white transition focus:outline-none focus:ring-2 focus:ring-[#F97316]/60"
                 >
                   <option value="">All Status</option>
                   <option value="draft">Draft</option>
@@ -514,7 +513,7 @@ export default function DashboardPage() {
                 <select
                   value={filterRiskLevel}
                   onChange={(e) => setFilterRiskLevel(e.target.value)}
-                  className="rounded-xl border border-white/10 bg-black/40 px-4 py-2 text-sm text-white transition focus:outline-none focus:ring-2 focus:ring-[#F97316]/60"
+                  className="rounded-lg border border-white/10 bg-[#121212]/80 px-4 py-2 text-sm text-white transition focus:outline-none focus:ring-2 focus:ring-[#F97316]/60"
                 >
                   <option value="">All Risk Levels</option>
                   <option value="low">Low</option>
@@ -534,7 +533,7 @@ export default function DashboardPage() {
                 <button
                   onClick={() => router.push('/dashboard/jobs/new')}
                   onMouseEnter={() => router.prefetch('/dashboard/jobs/new')}
-                  className="rounded-2xl bg-[#F97316] px-6 py-3 font-semibold text-black transition-all hover:bg-[#FB923C]"
+                  className="rounded-lg bg-[#F97316] px-6 py-3 font-semibold text-black transition-all hover:bg-[#FB923C]"
                 >
                   Create Job
                 </button>
