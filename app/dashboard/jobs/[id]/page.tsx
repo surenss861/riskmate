@@ -3,7 +3,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { jobsApi, subscriptionsApi, riskApi } from '@/lib/api'
+import { jobsApi } from '@/lib/api'
+import { useRiskFactors, usePlan } from '@/lib/cache'
 import { Toast } from '@/components/dashboard/Toast'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import RiskMateLogo from '@/components/RiskMateLogo'
@@ -64,7 +65,6 @@ export default function JobDetailPage() {
   const [job, setJob] = useState<Job | null>(null)
   const [loading, setLoading] = useState(true)
   const [updatingMitigation, setUpdatingMitigation] = useState<string | null>(null)
-  const [subscriptionTier, setSubscriptionTier] = useState<string | null>(null)
   const [generatingPermitPack, setGeneratingPermitPack] = useState(false)
   const [permitPacks, setPermitPacks] = useState<Array<{
     id: string
@@ -80,9 +80,13 @@ export default function JobDetailPage() {
   const [showCreateTemplate, setShowCreateTemplate] = useState(false)
   const [organizationId, setOrganizationId] = useState<string | null>(null)
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
-  const [riskFactors, setRiskFactors] = useState<any[]>([])
   const [prefillTemplateData, setPrefillTemplateData] = useState<{ name: string; trade?: string; hazardIds: string[] } | null>(null)
   const [appliedTemplate, setAppliedTemplate] = useState<{ id: string; name: string; type: 'hazard' | 'job' } | null>(null)
+  
+  // Use cached hooks
+  const { data: riskFactors = [] } = useRiskFactors(organizationId || undefined)
+  const { data: subscriptionData } = usePlan(organizationId)
+  const subscriptionTier = subscriptionData?.tier || null
 
   const loadJob = useCallback(async () => {
     try {
@@ -125,47 +129,30 @@ export default function JobDetailPage() {
     }
   }, [jobId, loadJob])
 
-  // Load subscription tier, permit packs, organization ID, and risk factors
+  // Load organization ID (subscription and risk factors are cached)
   useEffect(() => {
-    const loadData = async () => {
-      try {
-        const response = await subscriptionsApi.get()
-        setSubscriptionTier(response.data?.tier || null)
-
-        // Load risk factors for template creation
-        const riskResponse = await riskApi.getFactors()
-        setRiskFactors(riskResponse.data)
-
-        // Load organization ID
-        const { createSupabaseBrowserClient } = await import('@/lib/supabase/client')
-        const supabase = createSupabaseBrowserClient()
-        const { data: { user } } = await supabase.auth.getUser()
-        if (user) {
-          const { data: userRow } = await supabase
-            .from('users')
-            .select('organization_id')
-            .eq('id', user.id)
-            .single()
-          if (userRow?.organization_id) {
-            setOrganizationId(userRow.organization_id)
-          }
+    const loadOrgId = async () => {
+      const { createSupabaseBrowserClient } = await import('@/lib/supabase/client')
+      const supabase = createSupabaseBrowserClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        const { data: userRow } = await supabase
+          .from('users')
+          .select('organization_id')
+          .eq('id', user.id)
+          .single()
+        if (userRow?.organization_id) {
+          setOrganizationId(userRow.organization_id)
         }
-
-        // Prefetch permit pack history if Business plan
-        if (response.data?.tier === 'business' && jobId) {
-          router.prefetch(`/dashboard/jobs/${jobId}`)
-        }
-      } catch (err) {
-        console.error('Failed to load data:', err)
       }
     }
-    loadData()
-  }, [jobId, router])
+    loadOrgId()
+  }, [])
 
   // Load permit packs for Business plan users
   useEffect(() => {
     const loadPermitPacks = async () => {
-      if (subscriptionTier === 'business' && jobId) {
+      if (subscriptionTier === 'business' && jobId && organizationId) {
         setLoadingPermitPacks(true)
         try {
           const response = await jobsApi.getPermitPacks(jobId)
@@ -178,7 +165,7 @@ export default function JobDetailPage() {
       }
     }
     loadPermitPacks()
-  }, [subscriptionTier, jobId])
+  }, [subscriptionTier, jobId, organizationId, subscriptionData])
 
   const handleGeneratePermitPack = async () => {
     if (!jobId) return

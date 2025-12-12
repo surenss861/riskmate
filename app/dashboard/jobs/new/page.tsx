@@ -3,7 +3,9 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { jobsApi, riskApi } from '@/lib/api'
+import { jobsApi } from '@/lib/api'
+import { useRiskFactors, useTemplates } from '@/lib/cache'
+import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import RiskMateLogo from '@/components/RiskMateLogo'
 import { buttonStyles, cardStyles, inputStyles, spacing, typography } from '@/lib/styles/design-system'
@@ -20,11 +22,14 @@ interface RiskFactor {
 export default function NewJobPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
-  const [riskFactors, setRiskFactors] = useState<RiskFactor[]>([])
   const [selectedRiskFactors, setSelectedRiskFactors] = useState<string[]>([])
   const [selectedTemplate, setSelectedTemplate] = useState<string>('')
-  const [jobTemplates, setJobTemplates] = useState<any[]>([])
-  const [hazardTemplates, setHazardTemplates] = useState<any[]>([])
+  const [organizationId, setOrganizationId] = useState<string | null>(null)
+  
+  // Use cached hooks
+  const { data: riskFactors = [], isLoading: loadingRiskFactors } = useRiskFactors()
+  const { data: jobTemplates = [], isLoading: loadingJobTemplates } = useTemplates(organizationId, 'job')
+  const { data: hazardTemplates = [], isLoading: loadingHazardTemplates } = useTemplates(organizationId, 'hazard')
   const [formData, setFormData] = useState({
     client_name: '',
     client_type: 'residential',
@@ -39,9 +44,22 @@ export default function NewJobPage() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    loadRiskFactors()
-    loadTemplates()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Load organization ID for template fetching
+    const loadOrgId = async () => {
+      const supabase = createSupabaseBrowserClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        const { data: userRow } = await supabase
+          .from('users')
+          .select('organization_id')
+          .eq('id', user.id)
+          .single()
+        if (userRow?.organization_id) {
+          setOrganizationId(userRow.organization_id)
+        }
+      }
+    }
+    loadOrgId()
   }, [])
 
   useEffect(() => {
@@ -51,51 +69,7 @@ export default function NewJobPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedTemplate])
 
-  const loadRiskFactors = async () => {
-    try {
-      const response = await riskApi.getFactors()
-      setRiskFactors(response.data)
-    } catch (err: any) {
-      console.error('Failed to load risk factors:', err)
-    }
-  }
-
-  const loadTemplates = async () => {
-    try {
-      const { createSupabaseBrowserClient } = await import('@/lib/supabase/client')
-      const supabase = createSupabaseBrowserClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-
-      const { data: userRow } = await supabase
-        .from('users')
-        .select('organization_id')
-        .eq('id', user.id)
-        .single()
-
-      if (!userRow?.organization_id) return
-
-      // Load job templates
-      const { data: jobTemplatesData } = await supabase
-        .from('job_templates')
-        .select('*')
-        .eq('organization_id', userRow.organization_id)
-        .eq('archived', false)
-
-      setJobTemplates(jobTemplatesData || [])
-
-      // Load hazard templates
-      const { data: hazardTemplatesData } = await supabase
-        .from('hazard_templates')
-        .select('*')
-        .eq('organization_id', userRow.organization_id)
-        .eq('archived', false)
-
-      setHazardTemplates(hazardTemplatesData || [])
-    } catch (err) {
-      console.error('Failed to load templates:', err)
-    }
-  }
+  // Templates and risk factors are now loaded via cached hooks
 
   const applyTemplate = async (templateId: string) => {
     try {
@@ -434,13 +408,15 @@ export default function NewJobPage() {
                   Complete your safety assessment by selecting all hazards that apply to this job. Risk score and required controls will be generated automatically. This creates your audit-ready compliance trail.
                 </p>
 
-                {Object.entries(groupedFactors).map(([category, factors]) => (
-                  <div key={category} className="mb-6">
+                {Object.entries(groupedFactors).map(([category, factors]) => {
+                  const categoryFactors = (factors as RiskFactor[]) || []
+                  return (
+                    <div key={category} className="mb-6">
                     <h3 className="text-sm font-semibold text-[#A1A1A1] uppercase mb-3">
                       {category}
                     </h3>
                     <div className="grid md:grid-cols-2 gap-3">
-                      {factors.map((factor) => {
+                      {categoryFactors.map((factor) => {
                         const isSelected = selectedRiskFactors.includes(factor.code)
                         return (
                           <label
@@ -482,8 +458,9 @@ export default function NewJobPage() {
                         )
                       })}
                     </div>
-                  </div>
-                ))}
+                    </div>
+                  )
+                })}
 
                 {selectedRiskFactors.length > 0 && (
                   <div className="mt-6 p-4 bg-[#F97316]/10 border border-[#F97316]/20 rounded-lg">

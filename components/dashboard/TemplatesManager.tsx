@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { motion } from 'framer-motion'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
-import { riskApi } from '@/lib/api'
+import { useRiskFactors, useTemplates, cacheInvalidation } from '@/lib/cache'
 import { TemplateUpgradeModal } from './TemplateUpgradeModal'
 import { TemplateDetailDrawer } from './TemplateDetailDrawer'
 import { trackEvent } from '@/lib/posthog'
@@ -62,24 +62,16 @@ export function TemplatesManager({ organizationId, subscriptionTier = 'starter' 
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showUpgradeModal, setShowUpgradeModal] = useState(false)
   const [editingTemplate, setEditingTemplate] = useState<HazardTemplate | JobTemplate | null>(null)
-  const [riskFactors, setRiskFactors] = useState<RiskFactor[]>([])
   const [templateUsageCounts, setTemplateUsageCounts] = useState<Record<string, number>>({})
   const [selectedTemplateForDetail, setSelectedTemplateForDetail] = useState<HazardTemplate | JobTemplate | null>(null)
 
+  // Use cached risk factors
+  const { data: riskFactors = [] } = useRiskFactors(organizationId)
+
   useEffect(() => {
     loadTemplates()
-    loadRiskFactors()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab])
-
-  const loadRiskFactors = async () => {
-    try {
-      const response = await riskApi.getFactors()
-      setRiskFactors(response.data)
-    } catch (err) {
-      console.error('Failed to load risk factors:', err)
-    }
-  }
 
   const loadTemplates = async () => {
     setLoading(true)
@@ -226,6 +218,8 @@ export function TemplatesManager({ organizationId, subscriptionTier = 'starter' 
         .eq('id', templateId)
 
       if (error) throw error
+      // Invalidate cache
+      cacheInvalidation.templates(organizationId)
       loadTemplates()
     } catch (err: any) {
       console.error('Failed to archive template:', err)
@@ -256,6 +250,8 @@ export function TemplatesManager({ organizationId, subscriptionTier = 'starter' 
       const { error } = await supabase.from(table).insert(newTemplate)
 
       if (error) throw error
+      // Invalidate cache
+      cacheInvalidation.templates(organizationId)
       loadTemplates()
     } catch (err: any) {
       console.error('Failed to duplicate template:', err)
