@@ -1,34 +1,44 @@
 'use client'
 
+import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { modalStyles, buttonStyles, spacing, shadows } from '@/lib/styles/design-system'
 
 interface ConfirmModalProps {
   isOpen: boolean
   title: string
   message: string
-  confirmText?: string
-  cancelText?: string
-  confirmColor?: 'red' | 'orange' | 'blue'
-  onConfirm: () => void
+  consequence?: string // Optional callout for what will happen
+  confirmLabel: string // Explicit action label (e.g., "Archive Template", not "Confirm")
+  onConfirm: () => void | Promise<void>
   onCancel: () => void
+  destructive?: boolean // If true, confirm button is red outline
 }
 
 export function ConfirmModal({
   isOpen,
   title,
   message,
-  confirmText = 'Confirm',
-  cancelText = 'Cancel',
-  confirmColor = 'red',
+  consequence,
+  confirmLabel,
   onConfirm,
   onCancel,
+  destructive = true,
 }: ConfirmModalProps) {
-  const confirmButtonClass =
-    confirmColor === 'red'
-      ? 'bg-red-500 hover:bg-red-600 text-white'
-      : confirmColor === 'orange'
-      ? 'bg-[#F97316] hover:bg-[#FB923C] text-black'
-      : 'bg-blue-500 hover:bg-blue-600 text-white'
+  const [confirming, setConfirming] = useState(false)
+
+  const handleConfirm = async () => {
+    setConfirming(true)
+    try {
+      await onConfirm()
+      onCancel() // Close modal after successful confirm
+    } catch (err) {
+      console.error('Confirm action failed:', err)
+      // Keep modal open on error
+    } finally {
+      setConfirming(false)
+    }
+  }
 
   return (
     <AnimatePresence>
@@ -40,7 +50,7 @@ export function ConfirmModal({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onCancel}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
+            className={modalStyles.backdrop}
           />
           
           {/* Modal */}
@@ -50,31 +60,46 @@ export function ConfirmModal({
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-[#121212] border border-white/20 rounded-2xl p-8 max-w-md w-full shadow-2xl pointer-events-auto"
+              className={`${modalStyles.container} max-w-md w-full ${shadows.raised} pointer-events-auto`}
             >
               {/* Title */}
-              <h3 className="text-2xl font-bold text-white mb-4">
+              <h3 className={`${modalStyles.title} ${spacing.normal}`}>
                 {title}
               </h3>
 
               {/* Message */}
-              <p className="text-white/70 mb-6">
+              <p className={`text-white/70 ${spacing.normal}`}>
                 {message}
               </p>
 
-              {/* Buttons */}
-              <div className="flex gap-3">
+              {/* Consequence Callout (if provided) */}
+              {consequence && (
+                <div className={`bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 ${spacing.normal}`}>
+                  <p className="text-sm text-yellow-400">
+                    {consequence}
+                  </p>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className={`flex gap-3 ${spacing.normal}`}>
                 <button
                   onClick={onCancel}
-                  className="flex-1 px-6 py-3 border border-white/20 text-white rounded-lg hover:bg-white/10 transition-colors"
+                  disabled={confirming}
+                  className={`flex-1 ${buttonStyles.secondary} ${buttonStyles.sizes.lg} disabled:opacity-50 disabled:cursor-not-allowed`}
                 >
-                  {cancelText}
+                  Cancel
                 </button>
                 <button
-                  onClick={onConfirm}
-                  className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-colors ${confirmButtonClass}`}
+                  onClick={handleConfirm}
+                  disabled={confirming}
+                  className={`flex-1 px-4 py-2 rounded-lg text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                    destructive
+                      ? 'border border-red-500/50 text-red-400 hover:bg-red-500/10 hover:border-red-500/70'
+                      : buttonStyles.primary
+                  } ${buttonStyles.sizes.lg}`}
                 >
-                  {confirmText}
+                  {confirming ? 'Processing...' : confirmLabel}
                 </button>
               </div>
             </motion.div>
@@ -84,4 +109,3 @@ export function ConfirmModal({
     </AnimatePresence>
   )
 }
-

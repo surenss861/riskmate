@@ -17,7 +17,7 @@ import { DashboardOverview } from '@/components/dashboard/DashboardOverview'
 import { Changelog } from '@/components/dashboard/Changelog'
 import { OnboardingWizard } from '@/components/onboarding/OnboardingWizard'
 import Link from 'next/link'
-import { getRiskBadgeClass, getStatusBadgeClass, buttonStyles, spacing } from '@/lib/styles/design-system'
+import { getRiskBadgeClass, getStatusBadgeClass, buttonStyles, spacing, typography } from '@/lib/styles/design-system'
 
 interface Job {
   id: string
@@ -331,7 +331,7 @@ export default function DashboardPage() {
               <p className="text-xs uppercase tracking-[0.42em] text-white/50">
                 Control Center
               </p>
-              <h1 className="mt-3 font-display text-4xl font-bold text-white md:text-5xl">
+              <h1 className={`${typography.h1} ${spacing.section}`}>
                 Operations Dashboard
               </h1>
               <div className="mt-4 h-[2px] w-24 bg-gradient-to-r from-[#F97316] via-[#FFC857] to-transparent animate-soft-float" />
@@ -498,7 +498,7 @@ export default function DashboardPage() {
           >
             <div className="flex items-center justify-between border-b border-white/10 px-6 py-6">
               <Link href="/dashboard/jobs">
-                <h2 className="text-2xl font-semibold text-white hover:text-[#F97316] transition-colors cursor-pointer">Job Roaster</h2>
+                <h2 className={`${typography.h2} hover:text-[#F97316] transition-colors cursor-pointer`}>Job Roaster</h2>
               </Link>
               <div className="flex gap-3">
                 <select

@@ -151,8 +151,15 @@ export function DataGrid<T extends { id: string }>({
           <tbody className="divide-y divide-white/5">
             {filteredData.length === 0 ? (
               <tr>
-                <td colSpan={columns.length} className="px-4 py-8 text-center text-white/50">
-                  No data found
+                <td colSpan={columns.length} className="px-4 py-12 text-center">
+                  <div className="flex flex-col items-center gap-2">
+                    <p className="text-sm font-medium text-white">No data found</p>
+                    <p className="text-xs text-white/50 max-w-md">
+                      {searchTerm 
+                        ? 'Try adjusting your search terms'
+                        : 'This table will show data when available'}
+                    </p>
+                  </div>
                 </td>
               </tr>
             ) : (
@@ -174,16 +181,20 @@ export function DataGrid<T extends { id: string }>({
                       borderLeftColor: highlight || undefined,
                     }}
                   >
-                    {columns.map((column) => (
-                      <td
-                        key={column.id}
-                        className="px-4 py-3 text-sm text-white/80"
-                      >
-                        {column.render
-                          ? column.render(column.accessor(row), row)
-                          : String(column.accessor(row) || '')}
-                      </td>
-                    ))}
+                    {columns.map((column) => {
+                      const value = column.accessor(row)
+                      const isNumeric = typeof value === 'number' || (typeof value === 'string' && /^\d+$/.test(value))
+                      return (
+                        <td
+                          key={column.id}
+                          className={`px-4 py-3 text-sm text-white/80 h-12 ${isNumeric ? 'text-right' : 'text-left'}`}
+                        >
+                          {column.render
+                            ? column.render(value, row)
+                            : String(value || '')}
+                        </td>
+                      )
+                    })}
                   </motion.tr>
                 )
               })

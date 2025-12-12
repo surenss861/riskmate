@@ -533,8 +533,8 @@ export default function JobDetailPage() {
                 await jobsApi.update(jobId, { client_name: newValue })
                 setJob({ ...job, client_name: newValue })
               }}
-              className="text-5xl font-bold mb-3 font-display block"
-              inputClassName="text-5xl font-bold"
+              className={`${typography.h1} ${spacing.section}`}
+              inputClassName={typography.h1}
             />
             <div className="flex items-center gap-3 mb-1">
               <p className="text-xl text-[#A1A1A1]">{job.location}</p>

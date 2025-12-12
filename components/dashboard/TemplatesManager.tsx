@@ -10,6 +10,7 @@ import { TemplateDetailDrawer } from './TemplateDetailDrawer'
 import { trackEvent } from '@/lib/posthog'
 import { Check } from 'lucide-react'
 import { cardStyles, buttonStyles, tabStyles, typography, modalStyles, spacing, shadows } from '@/lib/styles/design-system'
+import { ConfirmModal } from './ConfirmModal'
 
 interface HazardTemplate {
   id: string
@@ -199,15 +200,14 @@ export function TemplatesManager({ organizationId, subscriptionTier = 'starter' 
     return { current: total, limit: 3, isUnlimited: false }
   }, [subscriptionTier, hazardTemplates.length, jobTemplates.length])
 
-  const handleArchive = async (templateId: string) => {
+  const handleArchive = (templateId: string) => {
     const usageCount = templateUsageCounts[templateId] || 0
-    
-    if (usageCount > 0) {
-      if (!confirm(`This template is used in ${usageCount} job${usageCount !== 1 ? 's' : ''}. Archiving will hide it from new jobs but existing jobs will still reference it. Continue?`)) return
-    } else {
-      if (!confirm('Are you sure you want to archive this template?')) return
-    }
+    setArchiveConfirm({ templateId, usageCount })
+  }
 
+  const confirmArchive = async () => {
+    if (!archiveConfirm) return
+    
     try {
       const supabase = createSupabaseBrowserClient()
       const table = activeTab === 'hazard' ? 'hazard_templates' : 'job_templates'
@@ -215,15 +215,17 @@ export function TemplatesManager({ organizationId, subscriptionTier = 'starter' 
       const { error } = await supabase
         .from(table)
         .update({ archived: true, updated_at: new Date().toISOString() })
-        .eq('id', templateId)
+        .eq('id', archiveConfirm.templateId)
 
       if (error) throw error
       // Invalidate cache
       cacheInvalidation.templates(organizationId)
       loadTemplates()
+      setArchiveConfirm(null)
     } catch (err: any) {
       console.error('Failed to archive template:', err)
-      alert('Failed to archive template')
+      // Error will be shown via toast/error handler
+      throw err
     }
   }
 
