@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { motion } from 'framer-motion'
+import { modalStyles, buttonStyles, spacing, shadows, inputStyles } from '@/lib/styles/design-system'
 
 interface EvidenceItem {
   id: string
