@@ -17,7 +17,7 @@ import { DashboardOverview } from '@/components/dashboard/DashboardOverview'
 import { Changelog } from '@/components/dashboard/Changelog'
 import { OnboardingWizard } from '@/components/onboarding/OnboardingWizard'
 import Link from 'next/link'
-import { getRiskBadgeClass, getStatusBadgeClass, buttonStyles } from '@/lib/styles/design-system'
+import { getRiskBadgeClass, getStatusBadgeClass, buttonStyles, spacing } from '@/lib/styles/design-system'
 
 interface Job {
   id: string
@@ -322,7 +322,7 @@ export default function DashboardPage() {
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.45 }}
-            className="relative mb-12 flex flex-wrap items-center justify-between gap-6 rounded-lg border border-white/10 bg-[#121212]/80 backdrop-blur-sm px-8 py-10"
+            className={`relative ${spacing.section} flex flex-wrap items-center justify-between ${spacing.gap.relaxed} rounded-lg border border-white/10 bg-[#121212]/80 backdrop-blur-sm px-8 py-10`}
           >
             <div className="relative max-w-xl">
               <p className="text-xs uppercase tracking-[0.42em] text-white/50">
@@ -376,7 +376,7 @@ export default function DashboardPage() {
               initial={{ opacity: 0, y: 18 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1, duration: 0.45 }}
-              className="mb-12 rounded-lg border border-white/10 bg-[#121212]/80 backdrop-blur-sm px-8 py-10 text-center"
+              className={`${spacing.section} rounded-lg border border-white/10 bg-[#121212]/80 backdrop-blur-sm px-8 py-10 text-center`}
             >
               <p className="text-xs uppercase tracking-[0.36em] text-white/45">Analytics</p>
               <h2 className="mt-3 text-3xl font-semibold text-white">Upgrade to unlock live analytics</h2>
@@ -403,10 +403,10 @@ export default function DashboardPage() {
               initial={{ opacity: 0, y: 18 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1, duration: 0.45 }}
-              className="mb-10 space-y-6"
+              className={`${spacing.relaxed} ${spacing.gap.relaxed}`}
             >
             <KpiGrid items={kpiItems} />
-            <div className="grid gap-6 xl:grid-cols-[2fr_1fr]">
+            <div className={`grid ${spacing.gap.relaxed} xl:grid-cols-[2fr_1fr]`}>
               <TrendChart
                 data={analyticsData.trend}
                 rangeDays={analyticsRange}
@@ -466,7 +466,7 @@ export default function DashboardPage() {
               initial={{ opacity: 0, y: 18 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.12, duration: 0.45 }}
-              className="relative mb-10 rounded-lg border border-white/10 bg-[#121212]/80 backdrop-blur-sm p-6"
+              className={`relative ${spacing.relaxed} rounded-lg border border-white/10 bg-[#121212]/80 backdrop-blur-sm p-6`}
             >
               <h2 className="text-xl font-semibold text-white">Top Hazards (Last 30 Days)</h2>
               <p className="mt-1 text-sm text-white/60">

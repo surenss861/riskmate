@@ -143,7 +143,7 @@ export function DataGrid<T extends { id: string }>({
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-white/5">
+          <tbody className="divide-y divide-white/5"
             {filteredData.length === 0 ? (
               <tr>
                 <td colSpan={columns.length} className="px-4 py-8 text-center text-white/50">

@@ -5,23 +5,43 @@
  * to ensure consistency across the entire application.
  */
 
-// Card Styles
+// Shadow System (Week 2: 3 levels only)
+export const shadows = {
+  flat: '', // No shadow - default cards
+  raised: 'shadow-[0_4px_12px_rgba(0,0,0,0.3)]', // Modals, dropdowns
+  focused: 'shadow-[0_0_0_2px_rgba(249,115,22,0.2)]', // Active/hover focus
+}
+
+// Card Styles (Week 2: consistent structure)
 export const cardStyles = {
   base: 'rounded-lg border border-white/10 bg-[#121212]/80 backdrop-blur-sm',
-  elevated: 'rounded-lg border border-white/10 bg-[#121212]/80 backdrop-blur-sm shadow-[0_8px_24px_rgba(0,0,0,0.4)]',
+  elevated: `rounded-lg border border-white/10 bg-[#121212]/80 backdrop-blur-sm ${shadows.raised}`,
   flat: 'rounded-lg border border-white/10 bg-[#0A0A0A]',
   padding: {
-    sm: 'p-4',
-    md: 'p-6',
-    lg: 'p-8',
+    sm: 'p-4', // 16px - compact
+    md: 'p-6', // 24px - standard
+    lg: 'p-8', // 32px - spacious
   },
 }
 
-// Button Styles
+// Motion System (Week 2: slower, premium feel)
+export const motion = {
+  // Transition timing (premium = slightly slower)
+  fast: 'transition-all duration-150 ease-out',
+  normal: 'transition-all duration-200 ease-out',
+  slow: 'transition-all duration-300 ease-out',
+  
+  // Specific transitions
+  hover: 'transition-colors duration-200 ease-out',
+  focus: 'transition-all duration-150 ease-out',
+  expand: 'transition-all duration-300 ease-out',
+}
+
+// Button Styles (Week 2: firm hover, clear disabled)
 export const buttonStyles = {
-  primary: 'inline-flex items-center justify-center rounded-lg bg-[#F97316] px-4 py-2 text-sm font-semibold text-black hover:bg-[#FB923C] transition-colors disabled:opacity-50 disabled:cursor-not-allowed',
-  secondary: 'inline-flex items-center justify-center rounded-lg border border-white/20 bg-transparent px-4 py-2 text-sm font-medium text-white/90 hover:bg-white/5 hover:border-white/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed',
-  tertiary: 'inline-flex items-center justify-center rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/70 hover:bg-white/10 hover:border-white/15 transition-colors disabled:opacity-50 disabled:cursor-not-allowed',
+  primary: `inline-flex items-center justify-center rounded-lg bg-[#F97316] px-4 py-2 text-sm font-semibold text-black hover:bg-[#FB923C] ${motion.hover} disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-[#F97316]`,
+  secondary: `inline-flex items-center justify-center rounded-lg border border-white/20 bg-transparent px-4 py-2 text-sm font-medium text-white/90 hover:bg-white/5 hover:border-white/30 ${motion.hover} disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent`,
+  tertiary: `inline-flex items-center justify-center rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/70 hover:bg-white/10 hover:border-white/15 ${motion.hover} disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white/5`,
   sizes: {
     sm: 'px-3 py-1.5 text-xs',
     md: 'px-4 py-2 text-sm',
@@ -29,17 +49,32 @@ export const buttonStyles = {
   },
 }
 
-// Spacing Scale
+// Spacing Scale (Week 2: Enterprise-grade rhythm)
 export const spacing = {
-  section: 'mb-8', // Space between major sections
-  card: 'p-6 md:p-8', // Standard card padding
-  button: 'px-4 py-2', // Standard button padding
-  input: 'px-4 py-2', // Standard input padding
+  // Vertical spacing (predictable rhythm)
+  tight: 'mb-2', // 8px - tight grouping
+  normal: 'mb-4', // 16px - standard content spacing
+  relaxed: 'mb-6', // 24px - section breaks
+  section: 'mb-8', // 32px - major section breaks
+  
+  // Horizontal spacing
   gap: {
-    sm: 'gap-2',
-    md: 'gap-4',
-    lg: 'gap-6',
+    tight: 'gap-2', // 8px
+    normal: 'gap-4', // 16px
+    relaxed: 'gap-6', // 24px
   },
+  
+  // Padding (consistent card structure)
+  padding: {
+    tight: 'p-4', // 16px - compact cards
+    normal: 'p-6', // 24px - standard cards
+    relaxed: 'p-8', // 32px - spacious cards
+  },
+  
+  // Legacy (deprecated, use above)
+  card: 'p-6',
+  button: 'px-4 py-2',
+  input: 'px-4 py-2',
 }
 
 // Typography
@@ -79,26 +114,28 @@ export const tabStyles = {
   inactive: 'text-white/60 hover:text-white',
 }
 
-// Modal Styles
+// Modal Styles (Week 2: consistent max-width, clear separation)
 export const modalStyles = {
-  backdrop: 'fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm',
-  container: 'relative mx-4 my-8 w-full max-w-4xl rounded-lg border border-white/10 bg-[#121212]/80 backdrop-blur-sm p-6 max-h-[calc(100vh-4rem)] overflow-y-auto',
-  header: 'flex items-center justify-between mb-6',
+  backdrop: `fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm ${motion.normal}`,
+  container: `relative mx-4 my-8 w-full max-w-4xl rounded-lg border border-white/10 bg-[#121212]/80 backdrop-blur-sm p-6 max-h-[calc(100vh-4rem)] overflow-y-auto ${shadows.raised}`,
+  header: `flex items-center justify-between ${spacing.relaxed}`,
   title: 'text-xl font-semibold text-white',
-  closeButton: 'text-white/60 hover:text-white transition-colors',
+  closeButton: `text-white/60 hover:text-white ${motion.hover}`,
+  footer: `flex items-center justify-end gap-3 ${spacing.relaxed} pt-6 border-t border-white/10`,
 }
 
-// Input Styles
+// Input Styles (Week 2: consistent height, subtle focus)
 export const inputStyles = {
-  base: 'w-full px-4 py-3 rounded-lg border border-white/10 bg-[#121212]/60 text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-[#F97316]/60 focus:border-[#F97316]/30 transition-colors',
-  textarea: 'w-full px-4 py-3 rounded-lg border border-white/10 bg-[#121212]/60 text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-[#F97316]/60 focus:border-[#F97316]/30 transition-colors resize-none',
-  select: 'w-full px-4 py-3 rounded-lg border border-white/10 bg-[#121212]/60 text-white focus:outline-none focus:ring-2 focus:ring-[#F97316]/60 focus:border-[#F97316]/30 transition-colors',
+  base: `w-full px-4 py-3 rounded-lg border border-white/10 bg-[#121212]/60 text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-[#F97316]/50 focus:border-[#F97316]/30 ${motion.focus}`,
+  textarea: `w-full px-4 py-3 rounded-lg border border-white/10 bg-[#121212]/60 text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-[#F97316]/50 focus:border-[#F97316]/30 ${motion.focus} resize-none`,
+  select: `w-full px-4 py-3 rounded-lg border border-white/10 bg-[#121212]/60 text-white focus:outline-none focus:ring-2 focus:ring-[#F97316]/50 focus:border-[#F97316]/30 ${motion.focus}`,
 }
 
-// Divider Styles
+// Divider Styles (Week 2: subtle, used sparingly)
 export const dividerStyles = {
-  horizontal: 'border-t border-white/10',
-  vertical: 'border-l border-white/10',
+  horizontal: 'border-t border-white/5', // Reduced opacity
+  vertical: 'border-l border-white/5',
+  section: 'border-t border-white/10 mt-8 pt-8', // Section breaks only
 }
 
 // Empty State Styles

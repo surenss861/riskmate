@@ -16,7 +16,7 @@ import { JobAssignment } from '@/components/dashboard/JobAssignment'
 import { EvidenceVerification } from '@/components/dashboard/EvidenceVerification'
 import { TemplatesManager, TemplateModal, TemplateModalProps } from '@/components/dashboard/TemplatesManager'
 import { ApplyTemplateInline } from '@/components/dashboard/ApplyTemplateInline'
-import { buttonStyles, cardStyles, typography, emptyStateStyles } from '@/lib/styles/design-system'
+import { buttonStyles, cardStyles, typography, emptyStateStyles, spacing, dividerStyles } from '@/lib/styles/design-system'
 import { ErrorModal } from '@/components/dashboard/ErrorModal'
 import { optimizePhoto } from '@/lib/utils/photoOptimization'
 import { getGPSLocation } from '@/lib/utils/gpsMetadata'
@@ -420,7 +420,7 @@ export default function JobDetailPage() {
         </header>
 
         <div className="max-w-7xl mx-auto px-6 py-12">
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className={spacing.section}>
             <EditableText
               value={job.client_name}
               onSave={async (newValue) => {
@@ -473,7 +473,7 @@ export default function JobDetailPage() {
             </p>
           </motion.div>
 
-          <div className="grid lg:grid-cols-3 gap-6">
+          <div className={`grid lg:grid-cols-3 ${spacing.gap.relaxed}`}>
             <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }}>
               <div className={`${cardStyles.base} ${cardStyles.padding.lg} border ${getScoreBg(job.risk_score)}`}>
                 <div className="text-center mb-8">
@@ -494,7 +494,7 @@ export default function JobDetailPage() {
                 </div>
 
                 {job.risk_score_detail && job.risk_score_detail.factors.length > 0 && (
-                  <div className="space-y-3 mb-8">
+                    <div className={`${spacing.gap.normal} ${spacing.section}`}>
                     {job.risk_score_detail.factors.map((factor, i) => (
                       <div key={i} className="flex items-center gap-3 text-sm">
                         <div className="w-2 h-2 rounded-full bg-[#F97316]" />
@@ -523,8 +523,8 @@ export default function JobDetailPage() {
                 )}
 
                 {/* Risk & Hazards Section */}
-                <div className="pt-6 border-t border-white/10 mt-8">
-                  <div className="flex items-center justify-between mb-4">
+                <div className={dividerStyles.section}>
+                  <div className={`flex items-center justify-between ${spacing.normal}`}>
                     <div>
                       <h3 className={`${typography.h4} mb-1`}>Risk & Hazards</h3>
                       <p className="text-xs text-white/50">
@@ -561,7 +561,7 @@ export default function JobDetailPage() {
                     )}
                   </div>
                   {job.risk_score_detail && job.risk_score_detail.factors.length > 0 ? (
-                    <div className="space-y-2">
+                    <div className={spacing.gap.tight}>
                       {job.risk_score_detail.factors.map((factor, i) => (
                         <div
                           key={i}
@@ -591,8 +591,8 @@ export default function JobDetailPage() {
 
                 <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
                   <div className={`${cardStyles.base} ${cardStyles.padding.lg} h-full`}>
-                    <div className="mb-6">
-                      <h2 className={`${typography.h2} mb-2`}>Mitigation Checklist</h2>
+                    <div className={spacing.relaxed}>
+                      <h2 className={`${typography.h2} ${spacing.tight}`}>Mitigation Checklist</h2>
                       <p className="text-sm text-white/60">
                         These are the safety actions required to reduce the job&apos;s overall risk.
                       </p>
