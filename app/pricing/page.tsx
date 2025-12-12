@@ -16,6 +16,7 @@ function PricingContent() {
   const fromDemo = searchParams.get('from') === 'demo'
   const [loading, setLoading] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [highlightedPlan, setHighlightedPlan] = useState<PlanCode | null>(fromDemo ? 'business' : null)
 
   const handleCheckout = async (plan: PlanCode) => {
     setLoading(plan)
@@ -81,11 +82,15 @@ function PricingContent() {
         <div className="grid md:grid-cols-3 gap-6 mb-16">
           {/* Starter */}
           <motion.div
-            className={`${cardStyles.base} ${cardStyles.padding.lg}`}
+            className={`${cardStyles.base} ${cardStyles.padding.lg} ${
+              highlightedPlan === 'starter' ? 'border-[#F97316] border-2' : ''
+            }`}
+            style={highlightedPlan === 'starter' ? { boxShadow: '0 0 30px rgba(249, 115, 22, 0.15)' } : {}}
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.2 }}
             whileHover={{ y: -3 }}
+            onClick={() => setHighlightedPlan('starter')}
           >
             <h3 className="text-2xl font-semibold mb-2">Starter</h3>
             <div className="mb-2">
@@ -121,16 +126,25 @@ function PricingContent() {
 
           {/* Pro */}
           <motion.div
-            className="bg-[#121212] border-2 border-[#F97316] rounded-xl p-8 relative"
-            style={{ boxShadow: '0 0 40px rgba(249, 115, 22, 0.25)' }}
+            className={`bg-[#121212] border-2 rounded-xl p-8 relative ${
+              highlightedPlan === 'pro' ? 'border-[#F97316]' : highlightedPlan === 'business' && fromDemo ? 'border-white/10' : 'border-[#F97316]'
+            }`}
+            style={highlightedPlan === 'pro' ? { boxShadow: '0 0 30px rgba(249, 115, 22, 0.15)' } : highlightedPlan === 'business' && fromDemo ? {} : { boxShadow: '0 0 40px rgba(249, 115, 22, 0.25)' }}
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.3 }}
             whileHover={{ y: -3 }}
+            onClick={() => setHighlightedPlan('pro')}
           >
-            <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 bg-[#F97316] text-black text-xs font-semibold rounded-full">
-              Most Popular
-            </div>
+            {highlightedPlan === 'pro' ? (
+              <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 bg-[#F97316] text-black text-xs font-semibold rounded-full">
+                Selected
+              </div>
+            ) : (
+              <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 bg-[#F97316] text-black text-xs font-semibold rounded-full">
+                Most Popular
+              </div>
+            )}
             <h3 className="text-2xl font-semibold mb-2 mt-2">Pro</h3>
             <div className="mb-2">
               <span className="text-4xl font-bold">$59</span>
@@ -171,15 +185,16 @@ function PricingContent() {
           {/* Business */}
           <motion.div
             className={`bg-[#121212] border rounded-xl p-8 relative ${
-              fromDemo ? 'border-[#F97316] border-2' : 'border-white/10'
+              highlightedPlan === 'business' ? 'border-[#F97316] border-2' : 'border-white/10'
             }`}
-            style={fromDemo ? { boxShadow: '0 0 40px rgba(249, 115, 22, 0.25)' } : {}}
+            style={highlightedPlan === 'business' ? { boxShadow: '0 0 30px rgba(249, 115, 22, 0.15)' } : {}}
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.4 }}
             whileHover={{ y: -3 }}
+            onClick={() => setHighlightedPlan('business')}
           >
-            {fromDemo ? (
+            {highlightedPlan === 'business' && fromDemo ? (
               <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 bg-[#F97316] text-black text-xs font-semibold rounded-full">
                 Shown in Demo
               </div>
@@ -194,7 +209,7 @@ function PricingContent() {
               <span className="text-white/60">/mo</span>
             </div>
             <p className="text-sm text-white/60 mb-2">per business</p>
-            {fromDemo && (
+            {highlightedPlan === 'business' && fromDemo && (
               <p className="text-xs text-[#F97316]/80 mb-4 italic">
                 This is the plan shown in the demo.
               </p>

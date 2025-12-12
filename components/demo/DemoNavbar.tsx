@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import RiskMateLogo from '@/components/RiskMateLogo'
 import { buttonStyles } from '@/lib/styles/design-system'
@@ -10,12 +11,21 @@ interface DemoNavbarProps {
 
 export function DemoNavbar({ onRestart }: DemoNavbarProps) {
   const router = useRouter()
+  const [copied, setCopied] = useState(false)
 
   const handleRestart = () => {
     if (onRestart) {
       onRestart()
     } else {
       router.push('/demo')
+    }
+  }
+
+  const handleCopyLink = async () => {
+    if (typeof window !== 'undefined') {
+      await navigator.clipboard.writeText(window.location.href)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
     }
   }
 
@@ -30,6 +40,13 @@ export function DemoNavbar({ onRestart }: DemoNavbarProps) {
           <p className="text-xs text-white/50 hidden sm:block">
             Actions are simulated for demonstration purposes.
           </p>
+          <button
+            onClick={handleCopyLink}
+            className={`${buttonStyles.secondary} ${buttonStyles.sizes.sm} text-xs`}
+            title="Copy demo link"
+          >
+            {copied ? 'Link copied' : 'Copy Demo Link'}
+          </button>
           <button
             onClick={handleRestart}
             className={`${buttonStyles.secondary} ${buttonStyles.sizes.sm} text-xs`}

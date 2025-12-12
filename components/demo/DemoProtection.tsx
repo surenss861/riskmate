@@ -44,7 +44,7 @@ export function DemoProtection({ children }: { children: React.ReactNode }) {
     // Create a calm, non-intrusive message
     const message = document.createElement('div')
     message.className = 'fixed bottom-4 left-1/2 -translate-x-1/2 z-50 bg-[#121212] border border-white/20 text-white px-4 py-3 rounded-lg shadow-lg text-sm'
-    message.textContent = 'This action is disabled in demo mode.'
+    message.textContent = 'Disabled in demo mode. No data is saved.'
     
     document.body.appendChild(message)
     

@@ -52,7 +52,7 @@ export function DemoGuide({ currentStep, onComplete }: DemoGuideProps) {
   const isComplete = currentStep === 6
 
   return (
-    <div className="w-80 border-l border-white/10 bg-[#121212]/40 backdrop-blur-sm p-6 sticky top-[73px] h-[calc(100vh-73px)] overflow-y-auto">
+    <div className="w-80 border-l border-white/10 bg-[#121212]/40 backdrop-blur-sm p-6 sticky top-[73px] h-[calc(100vh-73px)] overflow-y-auto flex flex-col">
       <div className="mb-6">
         <h3 className="text-sm font-semibold text-white mb-1">Demo Guide</h3>
         <p className="text-xs text-white/50">
@@ -188,6 +188,13 @@ export function DemoGuide({ currentStep, onComplete }: DemoGuideProps) {
           <p>Starting demo...</p>
         </div>
       )}
+
+      {/* Trust Footer */}
+      <div className="mt-auto pt-6 border-t border-white/10">
+        <p className="text-xs text-white/40 text-center leading-relaxed">
+          Demo mode simulates actions locally. Real RiskMate logs every action with timestamps and actor names.
+        </p>
+      </div>
     </div>
   )
 }

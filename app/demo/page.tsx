@@ -1,31 +1,68 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { DemoGuide } from '@/components/demo/DemoGuide'
 import { DemoJobDetail } from '@/components/demo/DemoJobDetail'
 import { DemoNavbar } from '@/components/demo/DemoNavbar'
 import { DemoProtection } from '@/components/demo/DemoProtection'
+import { ConfirmModal } from '@/components/dashboard/ConfirmModal'
 import { typography, buttonStyles, spacing } from '@/lib/styles/design-system'
 
 // Demo data (hardcoded, safe)
 const DEMO_ORG_ID = 'demo-org-123'
 const DEMO_JOB_ID = 'demo-job-123'
 
+const DEMO_STORAGE_KEY = 'riskmate-demo-state'
+
 export default function DemoPage() {
   const router = useRouter()
   const [demoStarted, setDemoStarted] = useState(false)
   const [currentStep, setCurrentStep] = useState<number | null>(null)
+  const [showRestartConfirm, setShowRestartConfirm] = useState(false)
+
+  // Load demo state from localStorage on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(DEMO_STORAGE_KEY)
+      if (saved) {
+        try {
+          const { demoStarted: savedStarted, currentStep: savedStep } = JSON.parse(saved)
+          if (savedStarted && savedStep) {
+            setDemoStarted(true)
+            setCurrentStep(savedStep)
+          }
+        } catch (e) {
+          // Invalid saved state, ignore
+        }
+      }
+    }
+  }, [])
+
+  // Save demo state to localStorage whenever it changes
+  useEffect(() => {
+    if (typeof window !== 'undefined' && demoStarted) {
+      localStorage.setItem(DEMO_STORAGE_KEY, JSON.stringify({ demoStarted, currentStep }))
+    }
+  }, [demoStarted, currentStep])
 
   const handleStartDemo = () => {
     setDemoStarted(true)
     setCurrentStep(1)
   }
 
-  const handleRestartDemo = () => {
+  const handleRestartClick = () => {
+    setShowRestartConfirm(true)
+  }
+
+  const handleRestartConfirm = () => {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem(DEMO_STORAGE_KEY)
+    }
     setDemoStarted(false)
     setCurrentStep(null)
+    setShowRestartConfirm(false)
   }
 
   if (!demoStarted) {
@@ -59,7 +96,7 @@ export default function DemoPage() {
   return (
     <DemoProtection>
       <div className="min-h-screen bg-[#0A0A0A] text-white">
-        <DemoNavbar onRestart={handleRestartDemo} />
+        <DemoNavbar onRestart={handleRestartClick} />
         <div className="flex">
           {/* Main Demo Content */}
           <div className="flex-1">
@@ -82,6 +119,15 @@ export default function DemoPage() {
             }}
           />
         </div>
+        <ConfirmModal
+          isOpen={showRestartConfirm}
+          title="Restart demo?"
+          message="This resets demo progress. Nothing is saved."
+          confirmLabel="Restart"
+          onConfirm={handleRestartConfirm}
+          onCancel={() => setShowRestartConfirm(false)}
+          destructive={false}
+        />
       </div>
     </DemoProtection>
   )
