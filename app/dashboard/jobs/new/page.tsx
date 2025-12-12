@@ -299,7 +299,7 @@ export default function NewJobPage() {
                       onChange={(e) =>
                         setFormData({ ...formData, client_name: e.target.value })
                       }
-                      className="w-full px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white placeholder:text-[#A1A1A1] focus:outline-none focus:ring-2 focus:ring-[#F97316]"
+                      className={inputStyles.base}
                       placeholder="Downtown Office Complex"
                     />
                   </div>
@@ -315,7 +315,7 @@ export default function NewJobPage() {
                       onChange={(e) =>
                         setFormData({ ...formData, location: e.target.value })
                       }
-                      className="w-full px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white placeholder:text-[#A1A1A1] focus:outline-none focus:ring-2 focus:ring-[#F97316]"
+                      className={inputStyles.base}
                       placeholder="123 Main St, Suite 400"
                     />
                   </div>
@@ -402,7 +402,7 @@ export default function NewJobPage() {
                         setFormData({ ...formData, description: e.target.value })
                       }
                       rows={4}
-                      className="w-full px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white placeholder:text-[#A1A1A1] focus:outline-none focus:ring-2 focus:ring-[#F97316]"
+                      className={inputStyles.base}
                       placeholder="Additional details about the job..."
                     />
                   </div>

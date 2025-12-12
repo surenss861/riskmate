@@ -257,7 +257,7 @@ export default function EditJobPage() {
                       onChange={(e) =>
                         setFormData({ ...formData, client_name: e.target.value })
                       }
-                      className="w-full px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white placeholder:text-[#A1A1A1] focus:outline-none focus:ring-2 focus:ring-[#F97316]"
+                      className={inputStyles.base}
                       placeholder="Downtown Office Complex"
                     />
                   </div>
@@ -273,7 +273,7 @@ export default function EditJobPage() {
                       onChange={(e) =>
                         setFormData({ ...formData, location: e.target.value })
                       }
-                      className="w-full px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white placeholder:text-[#A1A1A1] focus:outline-none focus:ring-2 focus:ring-[#F97316]"
+                      className={inputStyles.base}
                       placeholder="123 Main St, Suite 400"
                     />
                   </div>
@@ -288,7 +288,7 @@ export default function EditJobPage() {
                       onChange={(e) =>
                         setFormData({ ...formData, client_type: e.target.value })
                       }
-                      className="w-full px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-[#F97316]"
+                      className={inputStyles.select}
                     >
                       <option value="residential">Residential</option>
                       <option value="commercial">Commercial</option>
@@ -307,7 +307,7 @@ export default function EditJobPage() {
                       onChange={(e) =>
                         setFormData({ ...formData, job_type: e.target.value })
                       }
-                      className="w-full px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-[#F97316]"
+                      className={inputStyles.select}
                     >
                       <option value="repair">Repair</option>
                       <option value="installation">Installation</option>
@@ -328,7 +328,7 @@ export default function EditJobPage() {
                       onChange={(e) =>
                         setFormData({ ...formData, start_date: e.target.value })
                       }
-                      className="w-full px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-[#F97316]"
+                      className={inputStyles.select}
                     />
                   </div>
 
@@ -341,7 +341,7 @@ export default function EditJobPage() {
                       onChange={(e) =>
                         setFormData({ ...formData, insurance_status: e.target.value })
                       }
-                      className="w-full px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-[#F97316]"
+                      className={inputStyles.select}
                     >
                       <option value="pending">Pending</option>
                       <option value="verified">Verified</option>
@@ -360,7 +360,7 @@ export default function EditJobPage() {
                         setFormData({ ...formData, description: e.target.value })
                       }
                       rows={4}
-                      className="w-full px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white placeholder:text-[#A1A1A1] focus:outline-none focus:ring-2 focus:ring-[#F97316]"
+                      className={inputStyles.base}
                       placeholder="Additional details about the job..."
                     />
                   </div>
@@ -376,7 +376,7 @@ export default function EditJobPage() {
                             has_subcontractors: e.target.checked,
                           })
                         }
-                        className="w-5 h-5 rounded border-white/20 bg-black/40 text-[#F97316] focus:ring-[#F97316]"
+                        className="w-5 h-5 rounded border-white/20 bg-[#121212]/60 text-[#F97316] focus:ring-[#F97316]"
                       />
                       <span className="text-sm">This job involves subcontractors</span>
                     </label>
@@ -397,7 +397,7 @@ export default function EditJobPage() {
                             subcontractor_count: parseInt(e.target.value) || 0,
                           })
                         }
-                        className="w-full px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-[#F97316]"
+                        className={inputStyles.select}
                       />
                     </div>
                   )}
@@ -462,7 +462,7 @@ export default function EditJobPage() {
                     {photos.map((photo) => (
                       <div
                         key={photo.id}
-                        className="bg-black/40 border border-white/10 rounded-lg overflow-hidden cursor-pointer hover:border-white/20 transition-colors"
+                        className="bg-[#121212]/60 border border-white/10 rounded-lg overflow-hidden cursor-pointer hover:border-white/20 transition-colors"
                         onClick={() => {
                           if (photo.url) {
                             setSelectedImage({

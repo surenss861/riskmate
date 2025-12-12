@@ -88,6 +88,13 @@ export const modalStyles = {
   closeButton: 'text-white/60 hover:text-white transition-colors',
 }
 
+// Input Styles
+export const inputStyles = {
+  base: 'w-full px-4 py-3 rounded-lg border border-white/10 bg-[#121212]/60 text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-[#F97316]/60 focus:border-[#F97316]/30 transition-colors',
+  textarea: 'w-full px-4 py-3 rounded-lg border border-white/10 bg-[#121212]/60 text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-[#F97316]/60 focus:border-[#F97316]/30 transition-colors resize-none',
+  select: 'w-full px-4 py-3 rounded-lg border border-white/10 bg-[#121212]/60 text-white focus:outline-none focus:ring-2 focus:ring-[#F97316]/60 focus:border-[#F97316]/30 transition-colors',
+}
+
 // Divider Styles
 export const dividerStyles = {
   horizontal: 'border-t border-white/10',

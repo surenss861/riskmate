@@ -616,7 +616,7 @@ export default function JobDetailPage() {
                           checked={item.done}
                           onChange={() => toggleMitigation(item.id, item.done)}
                           disabled={updatingMitigation === item.id}
-                          className="mt-1 w-5 h-5 rounded border-white/20 bg-black/40 text-[#F97316] focus:ring-[#F97316] focus:ring-2 disabled:opacity-50"
+                          className="mt-1 w-5 h-5 rounded border-white/20 bg-[#121212]/60 text-[#F97316] focus:ring-[#F97316] focus:ring-2 disabled:opacity-50"
                         />
                         <span
                           className={`flex-1 text-sm ${
