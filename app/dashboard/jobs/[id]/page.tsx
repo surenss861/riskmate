@@ -111,6 +111,7 @@ export default function JobDetailPage() {
   const [loadingEvidence, setLoadingEvidence] = useState(false)
   const [showVersionHistory, setShowVersionHistory] = useState(false)
   const [loadingVersionHistory, setLoadingVersionHistory] = useState(false)
+  const [isOnline, setIsOnline] = useState(true)
   const [versionHistoryEntries, setVersionHistoryEntries] = useState<Array<{
     id: string
     field: string
