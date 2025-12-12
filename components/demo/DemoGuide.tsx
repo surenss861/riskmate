@@ -84,7 +84,7 @@ export function DemoGuide({ currentStep, onComplete }: DemoGuideProps) {
             </div>
             <h4 className="text-lg font-semibold text-white mb-2">Demo Complete</h4>
             <p className="text-sm text-white/60 mb-6">
-              You've seen how RiskMate documents risk with complete audit trails.
+              You&apos;ve seen how RiskMate documents risk with complete audit trails.
             </p>
           </div>
           <div className="space-y-3">

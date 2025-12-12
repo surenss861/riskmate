@@ -6,6 +6,7 @@ import { motion } from 'framer-motion'
 import { DemoGuide } from '@/components/demo/DemoGuide'
 import { DemoJobDetail } from '@/components/demo/DemoJobDetail'
 import { DemoNavbar } from '@/components/demo/DemoNavbar'
+import { DemoProtection } from '@/components/demo/DemoProtection'
 import { typography, buttonStyles, spacing } from '@/lib/styles/design-system'
 
 // Demo data (hardcoded, safe)
