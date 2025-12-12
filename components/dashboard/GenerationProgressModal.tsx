@@ -106,16 +106,17 @@ export function GenerationProgressModal({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className={modalStyles.backdrop}
+            className={`${modalStyles.backdrop} z-[80]`}
           />
 
           {/* Modal */}
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 pointer-events-none">
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className={`relative w-full max-w-md ${modalStyles.container} ${shadows.raised}`}
+              onClick={(e) => e.stopPropagation()}
+              className={`relative w-full max-w-md ${modalStyles.container} ${shadows.raised} pointer-events-auto`}
             >
               <div className={`${spacing.relaxed} text-center`}>
                 <h3 className={`${modalStyles.title} ${spacing.tight}`}>
