@@ -6,6 +6,7 @@ import { motion } from 'framer-motion'
 import { jobsApi, riskApi } from '@/lib/api'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import RiskMateLogo from '@/components/RiskMateLogo'
+import { buttonStyles, cardStyles, inputStyles } from '@/lib/styles/design-system'
 
 interface RiskFactor {
   id: string

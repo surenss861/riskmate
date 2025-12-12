@@ -17,7 +17,7 @@ import { DashboardOverview } from '@/components/dashboard/DashboardOverview'
 import { Changelog } from '@/components/dashboard/Changelog'
 import { OnboardingWizard } from '@/components/onboarding/OnboardingWizard'
 import Link from 'next/link'
-import { getRiskBadgeClass, getStatusBadgeClass } from '@/lib/styles/design-system'
+import { getRiskBadgeClass, getStatusBadgeClass, buttonStyles } from '@/lib/styles/design-system'
 
 interface Job {
   id: string

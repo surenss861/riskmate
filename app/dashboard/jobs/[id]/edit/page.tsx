@@ -8,7 +8,7 @@ import ProtectedRoute from '@/components/ProtectedRoute'
 import RiskMateLogo from '@/components/RiskMateLogo'
 import Image from 'next/image'
 import { ImageModal } from '@/components/report/ImageModal'
-import { buttonStyles, cardStyles, typography } from '@/lib/styles/design-system'
+import { buttonStyles, cardStyles, typography, inputStyles } from '@/lib/styles/design-system'
 
 interface RiskFactor {
   id: string

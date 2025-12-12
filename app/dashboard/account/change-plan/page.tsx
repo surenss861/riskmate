@@ -8,6 +8,7 @@ import ProtectedRoute from '@/components/ProtectedRoute'
 import { DashboardNavbar } from '@/components/dashboard/DashboardNavbar'
 import { subscriptionsApi } from '@/lib/api'
 import { ErrorModal } from '@/components/dashboard/ErrorModal'
+import { cardStyles } from '@/lib/styles/design-system'
 
 type PlanCode = 'starter' | 'pro' | 'business'
 
