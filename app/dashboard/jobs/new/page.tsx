@@ -6,7 +6,7 @@ import { motion } from 'framer-motion'
 import { jobsApi, riskApi } from '@/lib/api'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import RiskMateLogo from '@/components/RiskMateLogo'
-import { buttonStyles, cardStyles, inputStyles } from '@/lib/styles/design-system'
+import { buttonStyles, cardStyles, inputStyles, spacing, typography } from '@/lib/styles/design-system'
 
 interface RiskFactor {
   id: string
@@ -249,18 +249,18 @@ export default function NewJobPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4 }}
           >
-            <h1 className="text-4xl font-bold mb-2 font-display">Create New Job</h1>
-            <p className="text-[#A1A1A1] mb-8">
+            <h1 className={`${typography.h1} ${spacing.tight}`}>Create New Job</h1>
+            <p className={`${typography.bodyMuted} ${spacing.section}`}>
               Enter job details and select risk factors to get an instant risk score
             </p>
 
             {error && (
-              <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400">
+              <div className={`${spacing.relaxed} p-4 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400`}>
                 {error}
               </div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-8">
+            <form onSubmit={handleSubmit} className={spacing.gap.relaxed}>
               {/* Template Selector */}
               {jobTemplates.length > 0 && (
                 <div className={`${cardStyles.base} ${cardStyles.padding.md}`}>
@@ -279,7 +279,7 @@ export default function NewJobPage() {
                       </option>
                     ))}
                   </select>
-                  <p className="text-xs text-white/50 mt-2">
+                  <p className={`text-xs text-white/50 ${spacing.tight}`}>
                     Select a template to pre-fill job details and hazards
                   </p>
                 </div>
@@ -287,10 +287,10 @@ export default function NewJobPage() {
 
               {/* Basic Job Info */}
               <div className={`${cardStyles.base} ${cardStyles.padding.lg}`}>
-                <h2 className="text-2xl font-semibold mb-6">Job Information</h2>
-                <div className="grid md:grid-cols-2 gap-6">
+                <h2 className={`${typography.h2} ${spacing.relaxed}`}>Job Information</h2>
+                <div className={`grid md:grid-cols-2 ${spacing.gap.relaxed}`}>
                   <div>
-                    <label className="block text-sm font-medium mb-2">
+                    <label className={`block text-sm font-medium ${spacing.tight}`}>
                       Client Name *
                     </label>
                     <input
@@ -306,7 +306,7 @@ export default function NewJobPage() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium mb-2">
+                    <label className={`block text-sm font-medium ${spacing.tight}`}>
                       Location *
                     </label>
                     <input
@@ -322,7 +322,7 @@ export default function NewJobPage() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium mb-2">
+                    <label className={`block text-sm font-medium ${spacing.tight}`}>
                       Client Type *
                     </label>
                     <select
@@ -341,7 +341,7 @@ export default function NewJobPage() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium mb-2">
+                    <label className={`block text-sm font-medium ${spacing.tight}`}>
                       Job Type *
                     </label>
                     <select
@@ -362,7 +362,7 @@ export default function NewJobPage() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium mb-2">
+                    <label className={`block text-sm font-medium ${spacing.tight}`}>
                       Start Date
                     </label>
                     <input
@@ -376,7 +376,7 @@ export default function NewJobPage() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium mb-2">
+                    <label className={`block text-sm font-medium ${spacing.tight}`}>
                       Insurance Status
                     </label>
                     <select
@@ -394,7 +394,7 @@ export default function NewJobPage() {
                   </div>
 
                   <div className="md:col-span-2">
-                    <label className="block text-sm font-medium mb-2">
+                    <label className={`block text-sm font-medium ${spacing.tight}`}>
                       Description
                     </label>
                     <textarea
@@ -429,8 +429,8 @@ export default function NewJobPage() {
 
               {/* Risk Factors - Safety Checklist */}
               <div className={`${cardStyles.base} ${cardStyles.padding.lg}`}>
-                <h2 className="text-2xl font-semibold mb-4">Hazard Checklist</h2>
-                <p className="text-sm text-[#A1A1A1] mb-6">
+                <h2 className={`${typography.h2} ${spacing.normal}`}>Hazard Checklist</h2>
+                <p className={`text-sm text-[#A1A1A1] ${spacing.relaxed}`}>
                   Complete your safety assessment by selecting all hazards that apply to this job. Risk score and required controls will be generated automatically. This creates your audit-ready compliance trail.
                 </p>
 

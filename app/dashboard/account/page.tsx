@@ -10,7 +10,7 @@ import { TemplatesManager } from '@/components/dashboard/TemplatesManager'
 import { ErrorModal } from '@/components/dashboard/ErrorModal'
 import { subscriptionsApi } from '@/lib/api'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
-import { cardStyles, buttonStyles, spacing, typography } from '@/lib/styles/design-system'
+import { cardStyles, buttonStyles, spacing, typography, dividerStyles } from '@/lib/styles/design-system'
 
 interface Profile {
   id: string
@@ -232,10 +232,10 @@ export default function AccountPage() {
         <DashboardNavbar email={userEmail} onLogout={handleLogout} />
 
         <main className="mx-auto max-w-7xl px-6 py-14">
-          <div className="space-y-8">
+          <div className={spacing.gap.relaxed}>
             {/* Header */}
             <div>
-              <h1 className={`${typography.h1} mb-2`}>Account Settings</h1>
+              <h1 className={`${typography.h1} ${spacing.tight}`}>Account Settings</h1>
               <p className={typography.bodyMuted}>Manage your profile and organization settings</p>
             </div>
 
@@ -248,7 +248,7 @@ export default function AccountPage() {
 
             {/* Profile Section */}
             <div className={`${cardStyles.base} ${cardStyles.padding.md}`}>
-              <div className="flex items-center justify-between mb-4">
+              <div className={`flex items-center justify-between ${spacing.normal}`}>
                 <h2 className={typography.h3}>Profile</h2>
                 {!editingProfile && (
                     <button
@@ -261,9 +261,9 @@ export default function AccountPage() {
               </div>
 
               {editingProfile ? (
-                <div className="space-y-4">
+                <div className={spacing.gap.normal}>
                   <div>
-                    <label className="block text-sm text-white/60 mb-2">Full Name</label>
+                    <label className={`block text-sm text-white/60 ${spacing.tight}`}>Full Name</label>
                     <input
                       type="text"
                       value={profileForm.full_name}
@@ -273,7 +273,7 @@ export default function AccountPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm text-white/60 mb-2">Phone</label>
+                    <label className={`block text-sm text-white/60 ${spacing.tight}`}>Phone</label>
                     <input
                       type="tel"
                       value={profileForm.phone}
@@ -306,7 +306,7 @@ export default function AccountPage() {
                   </div>
                 </div>
               ) : (
-                <div className="space-y-3">
+                <div className={spacing.gap.normal}>
                   <div>
                     <div className="text-sm text-white/60">Email</div>
                     <div className="text-white">{profile.email}</div>
@@ -330,7 +330,7 @@ export default function AccountPage() {
             {/* Organization Section */}
             {organization && (
               <div className={`${cardStyles.base} ${cardStyles.padding.md}`}>
-                <div className="flex items-center justify-between mb-4">
+                <div className={`flex items-center justify-between ${spacing.normal}`}>
                   <h2 className={typography.h3}>Organization</h2>
                   {!editingOrg && (
                     <button
@@ -343,9 +343,9 @@ export default function AccountPage() {
                 </div>
 
                 {editingOrg ? (
-                  <div className="space-y-4">
+                  <div className={spacing.gap.normal}>
                     <div>
-                      <label className="block text-sm text-white/60 mb-2">Organization Name</label>
+                      <label className={`block text-sm text-white/60 ${spacing.tight}`}>Organization Name</label>
                       <input
                         type="text"
                         value={orgForm.name}
@@ -385,9 +385,9 @@ export default function AccountPage() {
 
             {/* Plan & Billing Section */}
             <div className={`${cardStyles.base} ${cardStyles.padding.md}`}>
-              <h2 className={`${typography.h3} mb-4`}>Plan & Billing</h2>
+              <h2 className={`${typography.h3} ${spacing.normal}`}>Plan & Billing</h2>
               {subscription ? (
-                <div className="space-y-4">
+                <div className={spacing.gap.normal}>
                   <div>
                     <div className="text-sm text-white/60">Current Plan</div>
                     <div className="text-white font-semibold">
@@ -414,7 +414,7 @@ export default function AccountPage() {
                       </div>
                     </div>
                   )}
-                  <div className="flex gap-3 pt-4">
+                  <div className={`flex ${spacing.gap.normal} ${spacing.normal}`}>
                     <Link
                       href="/dashboard/account/change-plan"
                       className={`${buttonStyles.primary} inline-block text-center`}
@@ -439,7 +439,7 @@ export default function AccountPage() {
                   </div>
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div className={spacing.gap.normal}>
                   <p className="text-white/60">No active subscription</p>
                     <button
                       onClick={() => router.push('/pricing')}

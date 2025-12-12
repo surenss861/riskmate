@@ -214,16 +214,16 @@ export default function TeamPage() {
         <DashboardNavbar email={userEmail} onLogout={handleLogout} />
 
         <main className="mx-auto max-w-7xl px-6 py-14">
-          <div className="space-y-8">
+          <div className={spacing.gap.relaxed}>
             {/* Header */}
             <div>
-              <h1 className="text-4xl font-bold text-white mb-2">Team Management</h1>
+              <h1 className={`${typography.h1} ${spacing.tight}`}>Team Management</h1>
               <p className="text-white/60">Manage your team members and invites</p>
             </div>
 
             {/* Seat Usage */}
             <div className={`${cardStyles.base} ${cardStyles.padding.md}`}>
-              <div className="flex items-center justify-between mb-4">
+              <div className={`flex items-center justify-between ${spacing.normal}`}>
                 <h2 className="text-xl font-semibold text-white">Seat Usage</h2>
                 {team.seats.limit !== null && (
                   <span className="text-sm text-white/60">
@@ -244,7 +244,7 @@ export default function TeamPage() {
                 <p className="text-sm text-white/60">Unlimited seats</p>
               )}
               {seatLimitReached && (
-                <div className="mt-4 p-4 bg-orange-500/20 border border-orange-500/30 rounded-lg">
+                <div className={`${spacing.normal} p-4 bg-orange-500/20 border border-orange-500/30 rounded-lg`}>
                   <p className="text-sm text-orange-400">
                     Seat limit reached. Upgrade your plan to add more team members.
                   </p>
@@ -261,9 +261,9 @@ export default function TeamPage() {
 
             {/* Invite Form */}
             <div className={`${cardStyles.base} ${cardStyles.padding.md}`}>
-              <h2 className="text-xl font-semibold text-white mb-4">Invite Team Member</h2>
-              <form onSubmit={handleInvite} className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <h2 className={`${typography.h3} ${spacing.normal}`}>Invite Team Member</h2>
+              <form onSubmit={handleInvite} className={spacing.gap.normal}>
+                <div className={`grid grid-cols-1 md:grid-cols-3 ${spacing.gap.normal}`}>
                   <div className="md:col-span-2">
                     <input
                       type="email"
@@ -299,7 +299,7 @@ export default function TeamPage() {
 
             {/* Team Members */}
             <div className={`${cardStyles.base} ${cardStyles.padding.md}`}>
-              <h2 className="text-xl font-semibold text-white mb-4">Team Members</h2>
+              <h2 className={`${typography.h3} ${spacing.normal}`}>Team Members</h2>
               {team.members.length === 0 ? (
                 <p className="text-white/60">No team members yet.</p>
               ) : (
@@ -343,7 +343,7 @@ export default function TeamPage() {
             {/* Pending Invites */}
             {team.invites.length > 0 && (
               <div className={`${cardStyles.base} ${cardStyles.padding.md}`}>
-                <h2 className="text-xl font-semibold text-white mb-4">Pending Invites</h2>
+                <h2 className={`${typography.h3} ${spacing.normal}`}>Pending Invites</h2>
                 <div className="space-y-3">
                   {team.invites.map((invite) => (
                     <div

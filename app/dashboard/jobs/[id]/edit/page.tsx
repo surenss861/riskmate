@@ -8,7 +8,7 @@ import ProtectedRoute from '@/components/ProtectedRoute'
 import RiskMateLogo from '@/components/RiskMateLogo'
 import Image from 'next/image'
 import { ImageModal } from '@/components/report/ImageModal'
-import { buttonStyles, cardStyles, typography, inputStyles } from '@/lib/styles/design-system'
+import { buttonStyles, cardStyles, typography, inputStyles, spacing } from '@/lib/styles/design-system'
 
 interface RiskFactor {
   id: string
@@ -230,22 +230,22 @@ export default function EditJobPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4 }}
           >
-            <h1 className="text-4xl font-bold mb-2 font-display">Edit Job</h1>
-            <p className="text-[#A1A1A1] mb-8">
+            <h1 className={`${typography.h1} ${spacing.tight}`}>Edit Job</h1>
+            <p className={`${typography.bodyMuted} ${spacing.section}`}>
               Update job details and risk factors
             </p>
 
             {error && (
-              <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400">
+              <div className={`${spacing.relaxed} p-4 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400`}>
                 {error}
               </div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-8">
+            <form onSubmit={handleSubmit} className={spacing.gap.relaxed}>
               {/* Basic Job Info */}
               <div className={`${cardStyles.base} ${cardStyles.padding.lg}`}>
-                <h2 className="text-2xl font-semibold mb-6">Job Information</h2>
-                <div className="grid md:grid-cols-2 gap-6">
+                <h2 className={`${typography.h2} ${spacing.relaxed}`}>Job Information</h2>
+                <div className={`grid md:grid-cols-2 ${spacing.gap.relaxed}`}>
                   <div>
                     <label className="block text-sm font-medium mb-2">
                       Client Name *

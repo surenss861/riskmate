@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { DashboardNavbar } from '@/components/dashboard/DashboardNavbar'
 import { DataGrid } from '@/components/dashboard/DataGrid'
-import { typography, buttonStyles } from '@/lib/styles/design-system'
+import { typography, buttonStyles, spacing } from '@/lib/styles/design-system'
 
 interface JobsPageContentProps {
   user: any
@@ -41,14 +41,14 @@ export function JobsPageContentView(props: JobsPageContentProps) {
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.45 }}
-          className="mb-8"
+          className={spacing.section}
         >
           <div className="flex items-center justify-between">
             <div>
                   <Link href="/dashboard/jobs" className={`${typography.h1} hover:text-[#F97316] transition-colors`}>
                     Job Roaster
                   </Link>
-                  <p className={`mt-2 ${typography.bodyMuted}`}>
+                  <p className={`${spacing.tight} ${typography.bodyMuted}`}>
                     Your centralized job hub — track progress, hazards, documents, and generate audit-ready reports.
                   </p>
             </div>
@@ -66,7 +66,7 @@ export function JobsPageContentView(props: JobsPageContentProps) {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.45, delay: 0.1 }}
-          className="mb-6 flex flex-wrap gap-4"
+          className={`${spacing.relaxed} flex flex-wrap ${spacing.gap.normal}`}
         >
           <select
             value={props.filterStatus}
@@ -143,11 +143,11 @@ export function JobsPageContentView(props: JobsPageContentProps) {
               animate={{ opacity: 1 }}
               className="rounded-2xl border border-white/10 bg-black/35 p-12 text-center"
             >
-              <p className="text-white/60 mb-2">No jobs yet</p>
-              <p className="text-sm text-white/40 mb-6">Create your first job to generate your first safety report.</p>
+              <p className={`text-white/60 ${spacing.tight}`}>No jobs yet</p>
+              <p className={`text-sm text-white/40 ${spacing.relaxed}`}>Create your first job to generate your first safety report.</p>
               <button
                 onClick={() => router.push('/dashboard/jobs/new')}
-                className="mt-4 rounded-lg bg-[#F97316] px-6 py-2 font-medium text-black hover:bg-[#FB923C]"
+                className={`${spacing.normal} ${buttonStyles.primary} ${buttonStyles.sizes.lg}`}
               >
                 Create Job
               </button>
@@ -227,7 +227,7 @@ export function JobsPageContentView(props: JobsPageContentProps) {
 
         {/* Pagination */}
         {props.totalPages > 1 && (
-          <div className="mt-8 flex items-center justify-center gap-2">
+          <div className={`${spacing.section} flex items-center justify-center ${spacing.gap.tight}`}>
             <button
               onClick={() => props.onPageChange(Math.max(1, props.page - 1))}
               disabled={props.page === 1}
