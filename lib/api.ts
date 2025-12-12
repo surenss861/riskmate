@@ -200,6 +200,31 @@ export const jobsApi = {
       }>;
     }>(`/api/jobs/${id}/permit-packs`);
   },
+
+  assignWorker: async (jobId: string, workerId: string) => {
+    return apiRequest<{ data: any }>(`/api/jobs/${jobId}/assign`, {
+      method: 'POST',
+      body: JSON.stringify({ worker_id: workerId }),
+    });
+  },
+
+  unassignWorker: async (jobId: string, workerId: string) => {
+    return apiRequest<{ success: boolean; message: string }>(`/api/jobs/${jobId}/assign`, {
+      method: 'DELETE',
+      body: JSON.stringify({ worker_id: workerId }),
+    });
+  },
+
+  verifyEvidence: async (jobId: string, docId: string, status: 'approved' | 'rejected', reason?: string) => {
+    return apiRequest<{ success: boolean; data: any }>(`/api/jobs/${jobId}/evidence/${docId}/verify`, {
+      method: 'POST',
+      body: JSON.stringify({ status, reason }),
+    });
+  },
+
+  getAuditLog: async (jobId: string) => {
+    return apiRequest<{ data: any[] }>(`/api/jobs/${jobId}/audit`);
+  },
 };
 
 // Risk API
