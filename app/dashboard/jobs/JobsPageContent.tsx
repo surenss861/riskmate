@@ -1,6 +1,6 @@
 'use client'
 
-import React from 'react'
+import React, { useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
@@ -32,6 +32,32 @@ interface JobsPageContentProps {
 
 export function JobsPageContentView(props: JobsPageContentProps) {
   const router = useRouter()
+  const prefetchTimeouts = useRef<Map<string, NodeJS.Timeout>>(new Map())
+
+  const handleJobHover = (jobId: string) => {
+    // Clear any existing timeout for this job
+    const existingTimeout = prefetchTimeouts.current.get(jobId)
+    if (existingTimeout) {
+      clearTimeout(existingTimeout)
+    }
+
+    // Prefetch after 150ms hover delay
+    const timeout = setTimeout(() => {
+      router.prefetch(`/dashboard/jobs/${jobId}`)
+      prefetchTimeouts.current.delete(jobId)
+    }, 150)
+
+    prefetchTimeouts.current.set(jobId, timeout)
+  }
+
+  const handleJobHoverEnd = (jobId: string) => {
+    // Clear timeout if user stops hovering before prefetch
+    const timeout = prefetchTimeouts.current.get(jobId)
+    if (timeout) {
+      clearTimeout(timeout)
+      prefetchTimeouts.current.delete(jobId)
+    }
+  }
   
   return (
         <div className="min-h-screen bg-[#0A0A0A] text-white">
@@ -166,6 +192,8 @@ export function JobsPageContentView(props: JobsPageContentProps) {
                 render: (value: string, job: any) => (
                   <button
                     onClick={() => router.push(`/dashboard/jobs/${job.id}`)}
+                    onMouseEnter={() => handleJobHover(job.id)}
+                    onMouseLeave={() => handleJobHoverEnd(job.id)}
                     className="text-white hover:text-[#F97316] transition-colors font-semibold"
                   >
                     {value}
@@ -219,6 +247,8 @@ export function JobsPageContentView(props: JobsPageContentProps) {
               },
             ]}
             onRowClick={(job: any) => router.push(`/dashboard/jobs/${job.id}`)}
+            onRowHover={(job: any) => handleJobHover(job.id)}
+            onRowHoverEnd={(job: any) => handleJobHoverEnd(job.id)}
             rowHighlight={(job: any) => {
               if (job.risk_score && job.risk_score > 80) return 'red-500'
               if (job.risk_score && job.risk_score > 60) return 'orange-500'

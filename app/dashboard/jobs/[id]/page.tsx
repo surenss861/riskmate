@@ -150,12 +150,17 @@ export default function JobDetailPage() {
             setOrganizationId(userRow.organization_id)
           }
         }
+
+        // Prefetch permit pack history if Business plan
+        if (response.data?.tier === 'business' && jobId) {
+          router.prefetch(`/dashboard/jobs/${jobId}`)
+        }
       } catch (err) {
         console.error('Failed to load data:', err)
       }
     }
     loadData()
-  }, [])
+  }, [jobId, router])
 
   // Load permit packs for Business plan users
   useEffect(() => {

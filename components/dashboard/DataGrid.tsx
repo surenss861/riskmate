@@ -27,6 +27,8 @@ export function DataGrid<T extends { id: string }>({
   data,
   columns,
   onRowClick,
+  onRowHover,
+  onRowHoverEnd,
   stickyHeader = true,
   rowHighlight,
   savedViews = [],
@@ -161,6 +163,8 @@ export function DataGrid<T extends { id: string }>({
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.02 }}
                     onClick={() => onRowClick?.(row)}
+                    onMouseEnter={() => onRowHover?.(row)}
+                    onMouseLeave={() => onRowHoverEnd?.(row)}
                     className={`hover:bg-white/5 ${motionStyles.hover} ${
                       onRowClick ? 'cursor-pointer' : ''
                     } ${highlight ? `border-l-4 border-l-${highlight}` : ''}`}
