@@ -147,9 +147,12 @@ export default function HomePage() {
                   router.push('/demo')
                   setMobileMenuOpen(false)
                 }}
-                className="block w-full text-left text-white/70 hover:text-white transition-colors py-2"
+                className="block w-full text-left text-white/70 hover:text-white transition-colors py-2 flex items-center gap-1.5"
               >
-                See It in Action
+                Demo
+                <span className="px-1.5 py-0.5 text-xs bg-[#F97316]/20 text-[#F97316] border border-[#F97316]/30 rounded">
+                  Interactive
+                </span>
               </button>
               <button
                 onClick={() => {
