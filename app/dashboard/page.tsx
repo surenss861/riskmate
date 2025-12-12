@@ -128,6 +128,9 @@ export default function DashboardPage() {
 
   const handleLogout = async () => {
     const supabase = createSupabaseBrowserClient()
+    // Clear cache on logout
+    const { cacheInvalidation } = await import('@/lib/cache')
+    cacheInvalidation.clearAll()
     await supabase.auth.signOut()
     router.push('/login')
   }
