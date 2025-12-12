@@ -8,7 +8,7 @@ import { InviteSuccessModal } from '@/components/dashboard/InviteSuccessModal'
 import { ConfirmModal } from '@/components/dashboard/ConfirmModal'
 import { teamApi } from '@/lib/api'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
-import { buttonStyles, cardStyles, typography, badgeStyles, emptyStateStyles } from '@/lib/styles/design-system'
+import { buttonStyles, cardStyles, typography, badgeStyles, emptyStateStyles, spacing } from '@/lib/styles/design-system'
 
 interface TeamMember {
   id: string
