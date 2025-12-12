@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { modalStyles, buttonStyles, spacing, shadows } from '@/lib/styles/design-system'
 
@@ -8,14 +9,25 @@ interface ErrorModalProps {
   title?: string
   message: string
   onClose: () => void
+  onRetry?: () => void | Promise<void>
+  retryLabel?: string
+  showBackButton?: boolean
+  onBack?: () => void
+  backLabel?: string
 }
 
 export function ErrorModal({
   isOpen,
-  title = 'Error',
+  title = 'Something went wrong',
   message,
   onClose,
+  onRetry,
+  retryLabel = 'Try Again',
+  showBackButton = false,
+  onBack,
+  backLabel = 'Back to Jobs',
 }: ErrorModalProps) {
+  const [retrying, setRetrying] = useState(false)
   return (
     <AnimatePresence>
       {isOpen && (
@@ -67,13 +79,45 @@ export function ErrorModal({
                 {message}
               </p>
 
-              {/* Close Button */}
-              <button
-                onClick={onClose}
-                className={`w-full ${buttonStyles.primary} ${buttonStyles.sizes.lg}`}
-              >
-                OK
-              </button>
+              {/* Action Buttons */}
+              <div className={`flex gap-3 ${spacing.normal}`}>
+                {showBackButton && onBack && (
+                  <button
+                    onClick={onBack}
+                    className={`flex-1 ${buttonStyles.secondary} ${buttonStyles.sizes.lg}`}
+                  >
+                    {backLabel}
+                  </button>
+                )}
+                {onRetry && (
+                  <button
+                    onClick={async () => {
+                      setRetrying(true)
+                      try {
+                        await onRetry()
+                        onClose()
+                      } catch (err) {
+                        // Keep modal open if retry fails
+                        console.error('Retry failed:', err)
+                      } finally {
+                        setRetrying(false)
+                      }
+                    }}
+                    disabled={retrying}
+                    className={`flex-1 ${buttonStyles.primary} ${buttonStyles.sizes.lg} disabled:opacity-50 disabled:cursor-not-allowed`}
+                  >
+                    {retrying ? 'Retrying...' : retryLabel}
+                  </button>
+                )}
+                {!onRetry && (
+                  <button
+                    onClick={onClose}
+                    className={`w-full ${buttonStyles.primary} ${buttonStyles.sizes.lg}`}
+                  >
+                    OK
+                  </button>
+                )}
+              </div>
             </motion.div>
           </div>
         </>

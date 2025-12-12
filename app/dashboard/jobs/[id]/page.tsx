@@ -9,7 +9,7 @@ import { Toast } from '@/components/dashboard/Toast'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import RiskMateLogo from '@/components/RiskMateLogo'
 import { GenerationProgressModal } from '@/components/dashboard/GenerationProgressModal'
-import { DashboardSkeleton } from '@/components/dashboard/SkeletonLoader'
+import { DashboardSkeleton, SkeletonLoader } from '@/components/dashboard/SkeletonLoader'
 import { EditableText } from '@/components/dashboard/EditableText'
 import { EditableSelect } from '@/components/dashboard/EditableSelect'
 import { VersionHistory } from '@/components/dashboard/VersionHistory'
@@ -64,6 +64,8 @@ export default function JobDetailPage() {
 
   const [job, setJob] = useState<Job | null>(null)
   const [loading, setLoading] = useState(true)
+  const [loadingSecondary, setLoadingSecondary] = useState(true) // For secondary sections
+  const [skeletonMinTime, setSkeletonMinTime] = useState(true) // Minimum 300ms skeleton display
   const [updatingMitigation, setUpdatingMitigation] = useState<string | null>(null)
   const [generatingPermitPack, setGeneratingPermitPack] = useState(false)
   const [permitPacks, setPermitPacks] = useState<Array<{
@@ -93,6 +95,7 @@ export default function JobDetailPage() {
     jobsAssigned: number
     avatarUrl?: string
   }>>([])
+  const [loadingWorkers, setLoadingWorkers] = useState(false)
   const [evidenceItems, setEvidenceItems] = useState<Array<{
     id: string
     type: 'photo' | 'document' | 'mitigation'
@@ -105,6 +108,45 @@ export default function JobDetailPage() {
     verifiedAt?: string
     rejectionReason?: string
   }>>([])
+  const [loadingEvidence, setLoadingEvidence] = useState(false)
+  const [showVersionHistory, setShowVersionHistory] = useState(false)
+  const [loadingVersionHistory, setLoadingVersionHistory] = useState(false)
+  const [versionHistoryEntries, setVersionHistoryEntries] = useState<Array<{
+    id: string
+    field: string
+    oldValue: string | null
+    newValue: string | null
+    changedBy: string
+    changedAt: string
+    changeType: 'created' | 'updated' | 'deleted'
+    actionType?: string
+    metadata?: any
+  }>>([])
+
+  const loadVersionHistory = async () => {
+    if (loadingVersionHistory || !jobId) return
+    setLoadingVersionHistory(true)
+    try {
+      const response = await jobsApi.getAuditLog(jobId)
+      // Transform audit log entries to version history format
+      const entries = (response.data || []).map((entry: any) => ({
+        id: entry.id,
+        field: entry.target_type || 'job',
+        oldValue: null,
+        newValue: null,
+        changedBy: entry.actor_name || 'System',
+        changedAt: entry.created_at,
+        changeType: entry.event_name?.includes('created') ? 'created' : entry.event_name?.includes('deleted') ? 'deleted' : 'updated',
+        actionType: entry.event_name,
+        metadata: entry.metadata || {},
+      }))
+      setVersionHistoryEntries(entries)
+    } catch (err) {
+      console.error('Failed to load version history:', err)
+    } finally {
+      setLoadingVersionHistory(false)
+    }
+  }
   
   // Use cached hooks
   const { data: riskFactors = [] } = useRiskFactors(organizationId || undefined)
@@ -112,6 +154,7 @@ export default function JobDetailPage() {
   const subscriptionTier = subscriptionData?.tier || null
 
   const loadJob = useCallback(async () => {
+    const startTime = Date.now()
     try {
       const response = await jobsApi.get(jobId)
       setJob(response.data)
@@ -139,10 +182,24 @@ export default function JobDetailPage() {
         setAppliedTemplate(null)
       }
       
-      setLoading(false)
+      // Ensure minimum skeleton display time (300ms)
+      const elapsed = Date.now() - startTime
+      const remaining = Math.max(0, 300 - elapsed)
+      setTimeout(() => {
+        setLoading(false)
+        // Load secondary sections after primary content is visible
+        setTimeout(() => {
+          setLoadingSecondary(false)
+        }, 100)
+      }, remaining)
     } catch (err: any) {
       console.error('Failed to load job:', err)
-      setLoading(false)
+      const elapsed = Date.now() - startTime
+      const remaining = Math.max(0, 300 - elapsed)
+      setTimeout(() => {
+        setLoading(false)
+        setLoadingSecondary(false)
+      }, remaining)
     }
   }, [jobId])
 
@@ -151,6 +208,19 @@ export default function JobDetailPage() {
       loadJob()
     }
   }, [jobId, loadJob])
+
+  // Monitor online/offline status
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true)
+    const handleOffline = () => setIsOnline(false)
+    window.addEventListener('online', handleOnline)
+    window.addEventListener('offline', handleOffline)
+    setIsOnline(navigator.onLine)
+    return () => {
+      window.removeEventListener('online', handleOnline)
+      window.removeEventListener('offline', handleOffline)
+    }
+  }, [])
 
   // Load organization ID (subscription and risk factors are cached)
   useEffect(() => {
@@ -172,10 +242,10 @@ export default function JobDetailPage() {
     loadOrgId()
   }, [])
 
-  // Load permit packs for Business plan users
+  // Load permit packs for Business plan users (lazy - only when section is visible)
   useEffect(() => {
     const loadPermitPacks = async () => {
-      if (subscriptionTier === 'business' && jobId && organizationId) {
+      if (subscriptionTier === 'business' && jobId && organizationId && !loadingSecondary) {
         setLoadingPermitPacks(true)
         try {
           const response = await jobsApi.getPermitPacks(jobId)
@@ -188,7 +258,7 @@ export default function JobDetailPage() {
       }
     }
     loadPermitPacks()
-  }, [subscriptionTier, jobId, organizationId, subscriptionData])
+  }, [subscriptionTier, jobId, organizationId, subscriptionData, loadingSecondary])
 
   const handleGeneratePermitPack = async () => {
     if (!jobId) return
@@ -808,9 +878,21 @@ export default function JobDetailPage() {
                 transition={{ delay: 0.5 }}
                 className="mt-8"
               >
-                <JobAssignment
-                  jobId={jobId}
-                  workers={workers}
+                {loadingWorkers ? (
+                  <div className={`${cardStyles.base} ${cardStyles.padding.lg}`}>
+                    <div className="mb-6">
+                      <SkeletonLoader variant="text" lines={2} className="mb-2" />
+                    </div>
+                    <div className="space-y-3">
+                      {[1, 2].map((i) => (
+                        <SkeletonLoader key={i} variant="card" height="80px" />
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <JobAssignment
+                    jobId={jobId}
+                    workers={workers}
                   onAssign={async (workerId) => {
                     try {
                       await jobsApi.assignWorker(jobId, workerId)
@@ -873,8 +955,9 @@ export default function JobDetailPage() {
                     // TODO: Implement check-out API
                     console.log('Check out worker:', workerId)
                   }}
-                  userRole={userRole}
-                />
+                    userRole={userRole}
+                  />
+                )}
               </motion.div>
 
               {/* Evidence Verification */}
@@ -884,9 +967,21 @@ export default function JobDetailPage() {
                 transition={{ delay: 0.6 }}
                 className="mt-8"
               >
-                <EvidenceVerification
-                  jobId={jobId}
-                  items={evidenceItems}
+                {loadingEvidence ? (
+                  <div className={`${cardStyles.base} ${cardStyles.padding.lg}`}>
+                    <div className="mb-6">
+                      <SkeletonLoader variant="text" lines={2} className="mb-2" />
+                    </div>
+                    <div className="space-y-3">
+                      {[1, 2, 3].map((i) => (
+                        <SkeletonLoader key={i} variant="card" height="100px" />
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <EvidenceVerification
+                    jobId={jobId}
+                    items={evidenceItems}
                   onVerify={async (id, status, reason) => {
                     try {
                       await jobsApi.verifyEvidence(jobId, id, status, reason)
@@ -946,21 +1041,41 @@ export default function JobDetailPage() {
                       throw err
                     }
                   }}
-                  userRole={userRole}
-                />
+                    userRole={userRole}
+                  />
+                )}
               </motion.div>
 
-              {/* Version History */}
+              {/* Version History - Lazy Load */}
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.7 }}
                 className="mt-8"
+                onMouseEnter={() => {
+                  if (!showVersionHistory && !loadingVersionHistory) {
+                    setShowVersionHistory(true)
+                    loadVersionHistory()
+                  }
+                }}
               >
-                <VersionHistory
-                  jobId={jobId}
-                  entries={[]} // TODO: Fetch from audit_logs API
-                />
+                {loadingVersionHistory ? (
+                  <div className={`${cardStyles.base} ${cardStyles.padding.lg}`}>
+                    <div className="mb-6">
+                      <SkeletonLoader variant="text" lines={2} className="mb-2" />
+                    </div>
+                    <div className="space-y-3">
+                      {[1, 2, 3, 4].map((i) => (
+                        <SkeletonLoader key={i} variant="card" height="60px" />
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <VersionHistory
+                    jobId={jobId}
+                    entries={versionHistoryEntries}
+                  />
+                )}
               </motion.div>
         </div>
       </div>
@@ -1006,9 +1121,19 @@ export default function JobDetailPage() {
 
       <ErrorModal
         isOpen={error !== null}
-        title="Error"
+        title="Something went wrong"
         message={error || ''}
         onClose={() => setError(null)}
+        onRetry={async () => {
+          setError(null)
+          await loadJob()
+        }}
+        retryLabel="Reload Job"
+        showBackButton={true}
+        onBack={() => {
+          setError(null)
+          router.push('/dashboard/jobs')
+        }}
       />
     </ProtectedRoute>
   )

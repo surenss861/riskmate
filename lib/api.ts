@@ -72,6 +72,31 @@ async function apiRequest<T>(
     if (isJson && data?.error && process.env.NODE_ENV === 'development') {
       console.error('API Error Details:', data.error);
     }
+    
+    // Auto-retry for read operations (GET) on network errors (status 0 or 5xx)
+    if (options.method === 'GET' && (response.status === 0 || response.status >= 500)) {
+      // Retry once after short delay
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      try {
+        const retryResponse = await fetch(url, {
+          ...options,
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token && { Authorization: `Bearer ${token}` }),
+            ...options.headers,
+          },
+        })
+        if (retryResponse.ok) {
+          const retryContentType = retryResponse.headers.get('content-type')
+          const retryIsJson = retryContentType?.includes('application/json')
+          const retryData = retryIsJson ? await retryResponse.json() : await retryResponse.text()
+          return retryData as T
+        }
+      } catch (retryErr) {
+        // If retry also fails, throw original error
+      }
+    }
+    
     throw error;
   }
 
