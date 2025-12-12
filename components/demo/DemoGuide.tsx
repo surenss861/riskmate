@@ -190,9 +190,12 @@ export function DemoGuide({ currentStep, onComplete }: DemoGuideProps) {
       )}
 
       {/* Trust Footer */}
-      <div className="mt-auto pt-6 border-t border-white/10">
+      <div className="mt-auto pt-6 border-t border-white/10 space-y-2">
         <p className="text-xs text-white/40 text-center leading-relaxed">
           Demo mode simulates actions locally. Real RiskMate logs every action with timestamps and actor names.
+        </p>
+        <p className="text-xs text-white/50 text-center leading-relaxed font-medium">
+          This demo simulates the workflow. In production, these actions are saved, permissioned, and logged to an immutable audit trail.
         </p>
       </div>
     </div>
