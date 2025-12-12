@@ -526,6 +526,71 @@ getPermitPacks(jobId: string): Promise<{ data: PermitPack[] }>
 
 ---
 
+---
+
+## 11. Non-Goals & Boundaries
+
+### What This Spec Does NOT Cover
+
+**Cross-Organization Data Access:**
+- We do not support cross-org data access under any condition.
+- All queries are strictly scoped by `organization_id`.
+- No shared workspaces or cross-tenant features.
+
+**Real-Time Collaboration:**
+- Job assignments are not real-time synchronized.
+- Evidence verification requires page refresh to see updates.
+- Version history is append-only (no live streaming).
+
+**Bulk Operations:**
+- Evidence verification is one document at a time.
+- Job assignments are one worker at a time.
+- No bulk approve/reject or bulk assignment endpoints.
+
+**Historical Data Modification:**
+- Audit logs are immutable (append-only).
+- Once verified, evidence status cannot be changed without new verification record.
+- Permit packs are generated snapshots (cannot edit after generation).
+
+**External Integrations:**
+- No webhook support for assignment/verification events.
+- No API for third-party systems to query audit logs.
+- No export formats beyond ZIP (no direct database dumps).
+
+### Why These Boundaries Exist
+
+These limitations are **intentional design decisions** for:
+- **Security:** Prevents data leakage and unauthorized access
+- **Compliance:** Ensures audit trail integrity
+- **Simplicity:** Reduces attack surface and maintenance burden
+- **Performance:** Keeps queries fast and predictable
+
+---
+
+## 12. Glossary
+
+**Job Assignment** — The act of linking a worker (user) to a specific job for accountability and tracking purposes.
+
+**Evidence** — Any photo, document, or file uploaded to a job that serves as proof of work, compliance, or safety measures.
+
+**Evidence Verification** — The process by which supervisors/admins approve or reject uploaded evidence, with optional rejection reasons.
+
+**Permit Pack** — A ZIP archive containing all job documentation (PDFs, CSVs, photos, documents) generated for permit applications, inspections, or audits.
+
+**Version History** — The complete, immutable audit log of all changes made to a job, including who made them and when.
+
+**Audit Log** — An append-only record of all meaningful state changes, used for compliance, legal, and insurance purposes.
+
+**RLS (Row Level Security)** — Database-level security that ensures users can only access data from their organization, enforced at the query level.
+
+**Organization Context** — The `organization_id` that scopes all queries and operations, preventing cross-tenant data access.
+
+**Actor** — The user who performed an action, recorded in audit logs for accountability.
+
+**Target** — The resource (job, document, etc.) that was affected by an action, recorded in audit logs.
+
+---
+
 **Last Updated:** January 15, 2025  
 **Status:** ✅ Production Ready  
 **Version:** 1.0
