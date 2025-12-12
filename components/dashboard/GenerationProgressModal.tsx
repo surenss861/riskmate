@@ -2,6 +2,7 @@
 
 import { motion, AnimatePresence } from 'framer-motion'
 import { useEffect, useState } from 'react'
+import { modalStyles, spacing, shadows } from '@/lib/styles/design-system'
 
 interface GenerationStep {
   id: string
@@ -105,7 +106,7 @@ export function GenerationProgressModal({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
+            className={modalStyles.backdrop}
           />
 
           {/* Modal */}
@@ -114,10 +115,10 @@ export function GenerationProgressModal({
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative w-full max-w-md rounded-lg border border-white/10 bg-[#121212]/80 backdrop-blur-sm p-8"
+              className={`relative w-full max-w-md ${modalStyles.container} ${shadows.raised}`}
             >
-              <div className="mb-6 text-center">
-                <h3 className="text-2xl font-semibold text-white mb-2">
+              <div className={`${spacing.relaxed} text-center`}>
+                <h3 className={`${modalStyles.title} ${spacing.tight}`}>
                   Generating {type === 'pdf' ? 'PDF Report' : 'Permit Pack'}
                 </h3>
                 <p className="text-sm text-white/60">
@@ -126,7 +127,7 @@ export function GenerationProgressModal({
               </div>
 
               {/* Progress Bar */}
-              <div className="mb-8">
+              <div className={spacing.section}>
                 <div className="h-2 w-full rounded-full bg-white/5 overflow-hidden">
                   <motion.div
                     className="h-full bg-gradient-to-r from-[#F97316] to-[#FF8A3D]"
@@ -141,7 +142,7 @@ export function GenerationProgressModal({
               </div>
 
               {/* Steps List */}
-              <div className="space-y-3">
+              <div className={spacing.gap.normal}>
                 {steps.map((step, index) => (
                   <motion.div
                     key={step.id}

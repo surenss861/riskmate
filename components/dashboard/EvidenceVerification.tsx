@@ -165,38 +165,38 @@ export function EvidenceVerification({
 
       {/* Rejection Modal */}
       {showRejectModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+        <div className={modalStyles.backdrop}>
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="w-full max-w-md rounded-lg border border-white/10 bg-[#121212]/80 backdrop-blur-sm p-6"
+            className={`w-full max-w-md ${modalStyles.container} ${shadows.raised}`}
           >
-            <h3 className="text-lg font-semibold text-white mb-2">Reject Evidence</h3>
-            <p className="text-sm text-white/60 mb-4">
+            <h3 className={`${modalStyles.title} ${spacing.tight}`}>Reject Evidence</h3>
+            <p className={`text-sm text-white/60 ${spacing.normal}`}>
               Why are you rejecting this evidence? (Optional but recommended)
             </p>
             <textarea
               value={rejectionReason}
               onChange={(e) => setRejectionReason(e.target.value)}
               placeholder="e.g., Photo quality too low, missing required documentation..."
-              className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-[#F97316] resize-none"
+              className={inputStyles.textarea}
               rows={3}
               autoFocus
             />
-            <div className="flex gap-3 mt-4">
+            <div className={`flex ${spacing.gap.normal} ${spacing.normal}`}>
               <button
                 onClick={() => {
                   setShowRejectModal(null)
                   setRejectionReason('')
                 }}
-                className="flex-1 px-4 py-2 border border-white/20 bg-transparent text-white/70 rounded-lg hover:bg-white/5 transition-colors"
+                className={`flex-1 ${buttonStyles.secondary}`}
               >
                 Cancel
               </button>
               <button
                 onClick={() => handleReject(showRejectModal)}
                 disabled={rejectingId === showRejectModal}
-                className="flex-1 px-4 py-2 bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/30 transition-colors disabled:opacity-50"
+                className="flex-1 px-4 py-2 bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/30 transition-colors disabled:opacity-40"
               >
                 {rejectingId === showRejectModal ? 'Rejecting...' : 'Reject'}
               </button>

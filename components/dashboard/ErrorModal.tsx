@@ -1,6 +1,7 @@
 'use client'
 
 import { motion, AnimatePresence } from 'framer-motion'
+import { modalStyles, buttonStyles, spacing, shadows } from '@/lib/styles/design-system'
 
 interface ErrorModalProps {
   isOpen: boolean
@@ -25,7 +26,7 @@ export function ErrorModal({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
+            className={modalStyles.backdrop}
           />
           
           {/* Modal */}
@@ -35,10 +36,10 @@ export function ErrorModal({
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-[#121212] border border-red-500/30 rounded-2xl p-8 max-w-md w-full shadow-2xl pointer-events-auto"
+              className={`${modalStyles.container} border-red-500/30 max-w-md w-full ${shadows.raised} pointer-events-auto`}
             >
               {/* Error Icon */}
-              <div className="flex justify-center mb-6">
+              <div className={`flex justify-center ${spacing.relaxed}`}>
                 <div className="w-16 h-16 rounded-full bg-red-500/20 flex items-center justify-center">
                   <svg
                     className="w-8 h-8 text-red-400"
@@ -57,19 +58,19 @@ export function ErrorModal({
               </div>
 
               {/* Title */}
-              <h3 className="text-2xl font-bold text-white text-center mb-4">
+              <h3 className={`${modalStyles.title} text-center ${spacing.normal}`}>
                 {title}
               </h3>
 
               {/* Message */}
-              <p className="text-white/70 text-center mb-6">
+              <p className={`text-white/70 text-center ${spacing.relaxed}`}>
                 {message}
               </p>
 
               {/* Close Button */}
               <button
                 onClick={onClose}
-                className="w-full rounded-lg bg-[#F97316] px-6 py-3 text-black font-semibold hover:bg-[#FB923C] transition-colors"
+                className={`w-full ${buttonStyles.primary} ${buttonStyles.sizes.lg}`}
               >
                 OK
               </button>

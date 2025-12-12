@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import { motion } from 'framer-motion'
+import { spacing, dividerStyles, motion as motionStyles } from '@/lib/styles/design-system'
 
 interface Column<T> {
   id: string
@@ -160,7 +161,7 @@ export function DataGrid<T extends { id: string }>({
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.02 }}
                     onClick={() => onRowClick?.(row)}
-                    className={`hover:bg-white/5 transition-colors ${
+                    className={`hover:bg-white/5 ${motionStyles.hover} ${
                       onRowClick ? 'cursor-pointer' : ''
                     } ${highlight ? `border-l-4 border-l-${highlight}` : ''}`}
                     style={{

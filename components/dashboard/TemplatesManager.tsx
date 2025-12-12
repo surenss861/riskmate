@@ -9,7 +9,7 @@ import { TemplateUpgradeModal } from './TemplateUpgradeModal'
 import { TemplateDetailDrawer } from './TemplateDetailDrawer'
 import { trackEvent } from '@/lib/posthog'
 import { Check } from 'lucide-react'
-import { cardStyles, buttonStyles, tabStyles, typography } from '@/lib/styles/design-system'
+import { cardStyles, buttonStyles, tabStyles, typography, modalStyles, spacing, shadows } from '@/lib/styles/design-system'
 
 interface HazardTemplate {
   id: string
