@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
 import RiskMateLogo from '@/components/RiskMateLogo'
 import { ErrorModal } from '@/components/dashboard/ErrorModal'
@@ -10,8 +10,10 @@ import { cardStyles, buttonStyles } from '@/lib/styles/design-system'
 
 type PlanCode = 'starter' | 'pro' | 'business'
 
-export default function PricingPage() {
+function PricingContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const fromDemo = searchParams.get('from') === 'demo'
   const [loading, setLoading] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -168,21 +170,35 @@ export default function PricingPage() {
 
           {/* Business */}
           <motion.div
-            className="bg-[#121212] border border-white/10 rounded-xl p-8 relative"
+            className={`bg-[#121212] border rounded-xl p-8 relative ${
+              fromDemo ? 'border-[#F97316] border-2' : 'border-white/10'
+            }`}
+            style={fromDemo ? { boxShadow: '0 0 40px rgba(249, 115, 22, 0.25)' } : {}}
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.4 }}
             whileHover={{ y: -3 }}
           >
-            <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 bg-white/10 text-white text-xs font-semibold rounded-full border border-white/20">
-              Audit-Ready
-            </div>
+            {fromDemo ? (
+              <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 bg-[#F97316] text-black text-xs font-semibold rounded-full">
+                Shown in Demo
+              </div>
+            ) : (
+              <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 bg-white/10 text-white text-xs font-semibold rounded-full border border-white/20">
+                Audit-Ready
+              </div>
+            )}
             <h3 className="text-2xl font-semibold mb-2 mt-2">Business</h3>
             <div className="mb-2">
               <span className="text-4xl font-bold">$129</span>
               <span className="text-white/60">/mo</span>
             </div>
-            <p className="text-sm text-white/60 mb-6">per business</p>
+            <p className="text-sm text-white/60 mb-2">per business</p>
+            {fromDemo && (
+              <p className="text-xs text-[#F97316]/80 mb-4 italic">
+                This is the plan shown in the demo.
+              </p>
+            )}
             <ul className="space-y-3 mb-8">
               <li className="flex items-start">
                 <span className="text-[#F97316] mr-2">✓</span>
@@ -436,6 +452,21 @@ export default function PricingPage() {
         onClose={() => setError(null)}
       />
     </div>
+  )
+}
+
+export default function PricingPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-[#050505] text-white flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-semibold mb-2">Loading pricing...</h1>
+          <p className="text-white/60">Please wait</p>
+        </div>
+      </div>
+    }>
+      <PricingContent />
+    </Suspense>
   )
 }
 

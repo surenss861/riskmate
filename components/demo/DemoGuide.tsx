@@ -89,7 +89,7 @@ export function DemoGuide({ currentStep, onComplete }: DemoGuideProps) {
           </div>
           <div className="space-y-3">
             <a
-              href="/pricing"
+              href="/pricing?from=demo"
               className={`${buttonStyles.primary} ${buttonStyles.sizes.lg} w-full block text-center`}
             >
               View Pricing
@@ -98,7 +98,7 @@ export function DemoGuide({ currentStep, onComplete }: DemoGuideProps) {
               href="mailto:sales@riskmate.com"
               className={`${buttonStyles.secondary} ${buttonStyles.sizes.lg} w-full block text-center`}
             >
-              Talk to Us About RiskMate
+              Talk to Us
             </a>
           </div>
         </motion.div>

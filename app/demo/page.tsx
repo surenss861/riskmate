@@ -23,6 +23,11 @@ export default function DemoPage() {
     setCurrentStep(1)
   }
 
+  const handleRestartDemo = () => {
+    setDemoStarted(false)
+    setCurrentStep(null)
+  }
+
   if (!demoStarted) {
     return (
       <div className="min-h-screen bg-[#0A0A0A] text-white flex items-center justify-center px-6">
@@ -54,7 +59,7 @@ export default function DemoPage() {
   return (
     <DemoProtection>
       <div className="min-h-screen bg-[#0A0A0A] text-white">
-        <DemoNavbar />
+        <DemoNavbar onRestart={handleRestartDemo} />
         <div className="flex">
           {/* Main Demo Content */}
           <div className="flex-1">
