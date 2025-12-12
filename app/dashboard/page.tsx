@@ -470,7 +470,7 @@ export default function DashboardPage() {
             >
               <h2 className="text-xl font-semibold text-white">Top Hazards (Last 30 Days)</h2>
               <p className="mt-1 text-sm text-white/60">
-                The most frequent risk signatures across your active projects.
+                The most frequent risk signatures across your active jobs.
               </p>
               <div className="mt-5 flex flex-wrap gap-3">
                 {hazards.map((hazard) => (
