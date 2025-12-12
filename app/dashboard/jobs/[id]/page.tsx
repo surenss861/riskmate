@@ -701,8 +701,8 @@ export default function JobDetailPage() {
                 <div className="flex items-center justify-between mb-6">
                   <div>
                     <h2 className={`${typography.h2} mb-2`}>Permit Packs</h2>
-                    <p className="text-sm text-[#A1A1A1]">
-                      Downloadable ZIP bundles containing all job documents, photos, and compliance materials
+                    <p className="text-sm text-white/60">
+                      Bundle all job documentation into a single ZIP file for inspectors, permit offices, or insurers. Everything is timestamped and audit-ready.
                     </p>
                   </div>
                   <button
