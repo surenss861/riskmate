@@ -191,7 +191,7 @@ export default function NewJobPage() {
       // Redirect to job detail page
       router.push(`/dashboard/jobs/${response.data.id}`)
     } catch (err: any) {
-      setError('Couldn\'t create that job. Your information is still here — check the form and try again.')
+      setError('We couldn\'t create that job. Your information is still here — check the form and try again. If this continues, refresh the page.')
       setLoading(false)
     }
   }

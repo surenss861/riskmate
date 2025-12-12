@@ -146,7 +146,10 @@ export function VersionHistory({ jobId, entries }: VersionHistoryProps) {
     return (
       <div className="rounded-lg border border-white/10 bg-[#121212]/80 backdrop-blur-sm p-6">
         <h3 className="text-lg font-semibold text-white mb-2">Version History</h3>
-        <p className="text-sm text-white/50">No changes recorded yet</p>
+        <p className="text-sm text-white font-medium mb-2">No activity recorded yet</p>
+        <p className="text-xs text-white/60 max-w-md">
+          Every change to this job is logged here automatically. This creates an audit trail for compliance, insurance, and legal protection. Activity will appear as you work on the job.
+        </p>
       </div>
     )
   }

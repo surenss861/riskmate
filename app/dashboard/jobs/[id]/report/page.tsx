@@ -212,7 +212,7 @@ export default function JobReportPage() {
       console.error('Failed to export PDF', err)
       const errorMessage = err?.message || err?.detail || 'Failed to export PDF'
       console.error('Error details:', err)
-      setExportError(errorMessage)
+      setExportError(`We couldn't generate the PDF report. Your job data is safe — try again in a moment. If this continues, check your internet connection.`)
     } finally {
       setExporting(false)
     }

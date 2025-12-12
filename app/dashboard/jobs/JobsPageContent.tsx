@@ -143,13 +143,15 @@ export function JobsPageContentView(props: JobsPageContentProps) {
               animate={{ opacity: 1 }}
               className="rounded-2xl border border-white/10 bg-black/35 p-12 text-center"
             >
-              <p className={`text-white/60 ${spacing.tight}`}>No jobs yet</p>
-              <p className={`text-sm text-white/40 ${spacing.relaxed}`}>Create your first job to generate your first safety report.</p>
+              <p className={`text-white font-medium ${spacing.tight}`}>No jobs yet</p>
+              <p className={`text-sm text-white/60 ${spacing.normal} max-w-md mx-auto`}>
+                Jobs are where you track safety, document hazards, and generate audit-ready reports. Create your first job to get started.
+              </p>
               <button
                 onClick={() => router.push('/dashboard/jobs/new')}
                 className={`${spacing.normal} ${buttonStyles.primary} ${buttonStyles.sizes.lg}`}
               >
-                Create Job
+                Create Your First Job
               </button>
             </motion.div>
         ) : (

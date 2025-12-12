@@ -76,7 +76,7 @@ export default function TeamPage() {
         }
       } catch (err: any) {
         console.error('Failed to load team:', err)
-        setError('Couldn\'t load your team. Refresh the page to try again.')
+        setError('We couldn\'t load your team. Refresh the page to try again. Your data is safe.')
       } finally {
         setLoading(false)
       }
@@ -120,7 +120,7 @@ export default function TeamPage() {
       setInviteRole('member')
     } catch (err: any) {
       console.error('Failed to invite:', err)
-      setError('Couldn\'t send that invite. Check the email address and try again.')
+      setError('We couldn\'t send that invite. Check the email address and try again. Make sure the email is valid and not already on your team.')
     } finally {
       setInviting(false)
     }
@@ -143,7 +143,7 @@ export default function TeamPage() {
       setTeam(data)
     } catch (err: any) {
       console.error('Failed to remove member:', err)
-      setError('Couldn\'t remove that member. Try again in a moment.')
+      setError('We couldn\'t remove that member. Try again in a moment. If this continues, they may have active assignments that need to be handled first.')
     } finally {
       setRemoving(null)
       setMemberToRemove(null)
@@ -159,7 +159,7 @@ export default function TeamPage() {
       setTeam(data)
     } catch (err: any) {
       console.error('Failed to revoke invite:', err)
-      setError('Couldn\'t revoke that invite. Try again in a moment.')
+      setError('We couldn\'t revoke that invite. Try again in a moment. If the invite was already accepted, you\'ll need to remove the member instead.')
     } finally {
       setRevoking(null)
     }

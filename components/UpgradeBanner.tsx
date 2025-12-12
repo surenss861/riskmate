@@ -41,8 +41,8 @@ export default function UpgradeBanner({
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
           <h3 className="text-lg font-semibold mb-1 text-[#F97316]">Upgrade to {upgradeName}</h3>
-          <p className="text-sm text-[#A1A1A1]">
-            {message}
+          <p className="text-sm text-white/70">
+            {message} This feature is available on the {upgradeName} plan.
           </p>
         </div>
         <StripeCheckout

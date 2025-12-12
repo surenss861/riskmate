@@ -208,9 +208,9 @@ export default function JobDetailPage() {
       console.error('Failed to generate permit pack:', err)
       setShowProgressModal(false)
       if (err.code === 'FEATURE_RESTRICTED') {
-        setError('Permit Pack Generator is only available for Business plan subscribers. Upgrade to Business to access this feature.')
+        setError('Permit Packs are available on the Business plan. This feature bundles all job documentation into a single ZIP file for inspectors and permit offices. Upgrade to Business to access this feature.')
       } else {
-        setError('Couldn\'t generate permit pack. Nothing was lost — try again in a moment.')
+        setError('We couldn\'t generate the permit pack. Your job data is safe — try again in a moment. If this continues, check your internet connection.')
       }
     } finally {
       setGeneratingPermitPack(false)
@@ -329,7 +329,7 @@ export default function JobDetailPage() {
       loadJob() // Reload to get fresh data
     } catch (err: any) {
       console.error('Failed to apply template:', err)
-      setError(err.message || 'Couldn\'t load that template. Nothing was lost — try again in a moment.')
+      setError(err.message || 'We couldn\'t load that template. Your job data is safe — try again in a moment.')
     }
   }
 
@@ -395,7 +395,7 @@ export default function JobDetailPage() {
                 onClick={() => router.push(`/dashboard/jobs/${jobId}/report`)}
                 className={buttonStyles.secondary}
               >
-                View Report
+                View Audit-Ready Report
               </button>
               {subscriptionTier === 'business' && (
                 <button
@@ -488,8 +488,8 @@ export default function JobDetailPage() {
                       {job.risk_score_detail.factors.length} risk factor{job.risk_score_detail.factors.length !== 1 ? 's' : ''} detected
                     </div>
                   )}
-                  <p className="text-xs text-white/50 mt-3">
-                    Scores update automatically as hazards and mitigations change.
+                  <p className="text-xs text-white/60 mt-3 max-w-xs mx-auto">
+                    Calculated from identified hazards. Higher scores require more safety controls. This score is logged with timestamp for compliance and insurance purposes.
                   </p>
                 </div>
 
@@ -555,7 +555,7 @@ export default function JobDetailPage() {
                           onClick={() => setShowApplyTemplate(true)}
                           className={buttonStyles.primary}
                         >
-                          Quick-Load Template
+                          Apply Template
                         </button>
                       </div>
                     )}
@@ -579,9 +579,9 @@ export default function JobDetailPage() {
                     </div>
                   ) : (
                     <div className={`${emptyStateStyles.container} py-6`}>
-                      <p className="text-sm text-white/50 mb-2">No hazards identified yet</p>
-                      <p className="text-xs text-white/40">
-                        Quick-load a template or add hazards manually to get started
+                      <p className="text-sm text-white font-medium mb-2">No hazards identified yet</p>
+                      <p className="text-xs text-white/60 max-w-md mx-auto">
+                        Hazards determine your risk score and generate required safety controls. Apply a template or select hazards manually to begin your assessment.
                       </p>
                     </div>
                   )}
@@ -598,12 +598,12 @@ export default function JobDetailPage() {
                       </p>
                     </div>
                 {totalCount === 0 ? (
-                  <p className="text-sm text-[#A1A1A1]">
-                    <p className="text-sm text-white/50 mb-2">No checklist items yet</p>
-                    <p className="text-xs text-white/40">
-                      Add hazards to automatically generate your safety checklist.
+                  <div className={`${emptyStateStyles.container} py-6`}>
+                    <p className="text-sm text-white font-medium mb-2">No checklist items yet</p>
+                    <p className="text-xs text-white/60 max-w-md mx-auto">
+                      Your safety checklist is generated automatically from identified hazards. Add hazards above to see required controls.
                     </p>
-                  </p>
+                  </div>
                 ) : (
                   <div className="space-y-2">
                     {job.mitigation_items.map((item) => (
@@ -730,10 +730,17 @@ export default function JobDetailPage() {
                   </div>
                 ) : permitPacks.length === 0 ? (
                   <div className={`${emptyStateStyles.container} py-8`}>
-                    <p className="text-sm text-[#A1A1A1] mb-2">No permit packs generated yet</p>
-                    <p className="text-xs text-[#A1A1A1]/70">
-                      Click &quot;Generate New Pack&quot; to create your first permit pack
+                    <p className="text-sm text-white font-medium mb-2">No permit packs generated yet</p>
+                    <p className="text-xs text-white/60 max-w-md mx-auto mb-4">
+                      Permit packs bundle all job documentation into a single ZIP file for inspectors, insurers, or permit offices. Everything is timestamped and audit-ready.
                     </p>
+                    <button
+                      onClick={handleGeneratePermitPack}
+                      disabled={generatingPermitPack}
+                      className={`${buttonStyles.primary} ${buttonStyles.sizes.md}`}
+                    >
+                      {generatingPermitPack ? 'Generating...' : 'Generate Your First Permit Pack'}
+                    </button>
                   </div>
                 ) : (
                   <div className="space-y-3">

@@ -95,8 +95,17 @@ export function EvidenceVerification({
 
         <div className="space-y-3">
           {filteredItems.length === 0 ? (
-            <div className="text-center py-8 text-white/50">
-              <p className="text-sm">No {filter === 'all' ? '' : filter} evidence items</p>
+            <div className="text-center py-8 border border-white/10 rounded-lg bg-[#121212]/40">
+              <p className="text-sm text-white font-medium mb-2">
+                {filter === 'all' ? 'No evidence uploaded yet' : `No ${filter} evidence`}
+              </p>
+              <p className="text-xs text-white/60 max-w-md mx-auto">
+                {filter === 'all' 
+                  ? 'Upload photos and documents to document site conditions. All evidence is timestamped and can be verified by managers for compliance.'
+                  : filter === 'pending'
+                  ? 'No evidence waiting for review. Approved or rejected items are shown in their respective tabs.'
+                  : `No ${filter} evidence items. Upload evidence to start the verification process.`}
+              </p>
             </div>
           ) : (
             filteredItems.map((item) => (

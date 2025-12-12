@@ -71,11 +71,11 @@ export function JobAssignment({
       <div className="space-y-3">
         {assignedWorkers.length === 0 ? (
           <div className="text-center py-8 border border-white/10 rounded-lg bg-[#121212]/40">
-            <p className="text-sm text-white/50 mb-2">No workers assigned</p>
-            <p className="text-xs text-white/40">
+            <p className="text-sm text-white font-medium mb-2">No workers assigned</p>
+            <p className="text-xs text-white/60 max-w-md mx-auto">
               {canManage
-                ? 'Assign workers to track who\'s working on this job'
-                : 'No workers have been assigned to this job yet'}
+                ? 'Assign workers to track accountability and create an audit trail of who worked on this job. All assignments are logged for compliance.'
+                : 'No workers have been assigned to this job yet. Only owners and admins can manage assignments.'}
             </p>
           </div>
         ) : (
