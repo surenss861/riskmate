@@ -284,7 +284,7 @@ export default function JobDetailPage() {
             <p className="text-[#A1A1A1] mb-4">Job not found</p>
             <button
               onClick={() => router.push('/dashboard')}
-              className="px-6 py-3 bg-[#F97316] hover:bg-[#FB923C] rounded-lg text-black font-semibold transition-colors"
+              className={`${buttonStyles.primary} ${buttonStyles.sizes.lg}`}
             >
               Back to Dashboard
             </button>
@@ -475,7 +475,7 @@ export default function JobDetailPage() {
 
           <div className="grid lg:grid-cols-3 gap-6">
             <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }}>
-              <div className={`p-8 rounded-xl border ${getScoreBg(job.risk_score)} bg-[#121212]/80 backdrop-blur-sm`}>
+              <div className={`${cardStyles.base} ${cardStyles.padding.lg} border ${getScoreBg(job.risk_score)}`}>
                 <div className="text-center mb-8">
                   <div className={`text-8xl font-bold mb-3 ${getScoreColor(job.risk_score)}`}>
                     {job.risk_score ?? '—'}
@@ -565,7 +565,7 @@ export default function JobDetailPage() {
                       {job.risk_score_detail.factors.map((factor, i) => (
                         <div
                           key={i}
-                          className="flex items-center gap-3 p-3 rounded-lg border border-white/10 bg-black/20"
+                          className={`flex items-center gap-3 p-3 rounded-lg border border-white/10 ${cardStyles.flat}`}
                         >
                           <div className="w-2 h-2 rounded-full bg-[#F97316]" />
                           <div className="flex-1">
@@ -578,7 +578,7 @@ export default function JobDetailPage() {
                       ))}
                     </div>
                   ) : (
-                    <div className="text-center py-6 border border-white/10 rounded-lg bg-black/20">
+                    <div className={`${emptyStateStyles.container} py-6`}>
                       <p className="text-sm text-white/50 mb-2">No hazards identified yet</p>
                       <p className="text-xs text-white/40">
                         Quick-load a template or add hazards manually to get started
@@ -590,7 +590,7 @@ export default function JobDetailPage() {
             </motion.div>
 
                 <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-                  <div className="p-8 rounded-xl border border-white/10 bg-[#121212]/80 backdrop-blur-sm h-full">
+                  <div className={`${cardStyles.base} ${cardStyles.padding.lg} h-full`}>
                     <div className="mb-6">
                       <h2 className={`${typography.h2} mb-2`}>Mitigation Checklist</h2>
                       <p className="text-sm text-white/60">
@@ -638,7 +638,7 @@ export default function JobDetailPage() {
             </motion.div>
 
             <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }}>
-              <div className="p-8 rounded-xl border border-white/10 bg-[#121212]/80 backdrop-blur-sm h-full flex flex-col">
+              <div className={`${cardStyles.base} ${cardStyles.padding.lg} h-full flex flex-col`}>
                 <h2 className={`${typography.h2} mb-6`}>Job Details</h2>
 
                 <div className="space-y-4 mb-8 flex-1">
@@ -697,7 +697,7 @@ export default function JobDetailPage() {
               transition={{ delay: 0.4 }}
               className="mt-8"
             >
-              <div className="p-8 rounded-xl border border-white/10 bg-[#121212]/80 backdrop-blur-sm">
+              <div className={`${cardStyles.base} ${cardStyles.padding.lg}`}>
                 <div className="flex items-center justify-between mb-6">
                   <div>
                     <h2 className={`${typography.h2} mb-2`}>Permit Packs</h2>
@@ -729,7 +729,7 @@ export default function JobDetailPage() {
                     <p className="text-sm text-[#A1A1A1]">Loading permit packs...</p>
                   </div>
                 ) : permitPacks.length === 0 ? (
-                  <div className="text-center py-8 border border-white/10 rounded-lg bg-black/20">
+                  <div className={`${emptyStateStyles.container} py-8`}>
                     <p className="text-sm text-[#A1A1A1] mb-2">No permit packs generated yet</p>
                     <p className="text-xs text-[#A1A1A1]/70">
                       Click &quot;Generate New Pack&quot; to create your first permit pack
@@ -740,7 +740,7 @@ export default function JobDetailPage() {
                     {permitPacks.map((pack) => (
                       <div
                         key={pack.id}
-                        className="flex items-center justify-between p-4 rounded-lg border border-white/10 bg-black/20 hover:bg-black/30 transition-colors"
+                        className={`flex items-center justify-between p-4 rounded-lg border border-white/10 ${cardStyles.flat} hover:bg-[#121212]/60 transition-colors`}
                       >
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 rounded-lg bg-[#F97316]/20 flex items-center justify-center">

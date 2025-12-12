@@ -262,7 +262,7 @@ export default function NewJobPage() {
             <form onSubmit={handleSubmit} className="space-y-8">
               {/* Template Selector */}
               {jobTemplates.length > 0 && (
-                <div className="bg-[#121212]/80 backdrop-blur-sm border border-white/10 rounded-xl p-6">
+                <div className={`${cardStyles.base} ${cardStyles.padding.md}`}>
                   <label className="block text-sm font-medium mb-2">
                     Start from Template (Optional)
                   </label>
@@ -285,7 +285,7 @@ export default function NewJobPage() {
               )}
 
               {/* Basic Job Info */}
-              <div className="bg-[#121212]/80 backdrop-blur-sm border border-white/10 rounded-xl p-8">
+              <div className={`${cardStyles.base} ${cardStyles.padding.lg}`}>
                 <h2 className="text-2xl font-semibold mb-6">Job Information</h2>
                 <div className="grid md:grid-cols-2 gap-6">
                   <div>
@@ -427,7 +427,7 @@ export default function NewJobPage() {
               </div>
 
               {/* Risk Factors - Safety Checklist */}
-              <div className="bg-[#121212]/80 backdrop-blur-sm border border-white/10 rounded-xl p-8">
+              <div className={`${cardStyles.base} ${cardStyles.padding.lg}`}>
                 <h2 className="text-2xl font-semibold mb-4">Hazard Checklist</h2>
                 <p className="text-sm text-[#A1A1A1] mb-6">
                   Complete your safety assessment by selecting all hazards that apply to this job. Risk score and required controls will be generated automatically. This creates your audit-ready compliance trail.
@@ -505,7 +505,7 @@ export default function NewJobPage() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="flex-1 px-6 py-3 bg-[#F97316] hover:bg-[#FB923C] disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-black font-semibold transition-colors"
+                  className={`${buttonStyles.primary} ${buttonStyles.sizes.lg} flex-1`}
                 >
                   {loading ? 'Creating...' : 'Create Job & Calculate Risk'}
                 </button>

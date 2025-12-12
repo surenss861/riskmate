@@ -8,6 +8,7 @@ import { InviteSuccessModal } from '@/components/dashboard/InviteSuccessModal'
 import { ConfirmModal } from '@/components/dashboard/ConfirmModal'
 import { teamApi } from '@/lib/api'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
+import { buttonStyles, cardStyles, typography, badgeStyles, emptyStateStyles } from '@/lib/styles/design-system'
 
 interface TeamMember {
   id: string
@@ -196,7 +197,7 @@ export default function TeamPage() {
               <p className="text-white/70">{error || 'Failed to load team'}</p>
               <button
                 onClick={() => router.push('/dashboard')}
-                className="rounded-lg bg-[#F97316] px-6 py-3 text-black font-semibold hover:bg-[#FB923C]"
+                className={`${buttonStyles.primary} ${buttonStyles.sizes.lg}`}
               >
                 Back to Dashboard
               </button>
@@ -221,7 +222,7 @@ export default function TeamPage() {
             </div>
 
             {/* Seat Usage */}
-            <div className="bg-white/5 border border-white/10 rounded-xl p-6">
+            <div className={`${cardStyles.base} ${cardStyles.padding.md}`}>
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-semibold text-white">Seat Usage</h2>
                 {team.seats.limit !== null && (
@@ -253,13 +254,13 @@ export default function TeamPage() {
 
             {/* Error Message */}
             {error && (
-              <div className="bg-red-500/20 border border-red-500/30 rounded-xl p-4">
+              <div className="bg-red-500/20 border border-red-500/30 rounded-lg p-4">
                 <p className="text-sm text-red-400">{error}</p>
               </div>
             )}
 
             {/* Invite Form */}
-            <div className="bg-white/5 border border-white/10 rounded-xl p-6">
+            <div className={`${cardStyles.base} ${cardStyles.padding.md}`}>
               <h2 className="text-xl font-semibold text-white mb-4">Invite Team Member</h2>
               <form onSubmit={handleInvite} className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -297,7 +298,7 @@ export default function TeamPage() {
             </div>
 
             {/* Team Members */}
-            <div className="bg-white/5 border border-white/10 rounded-xl p-6">
+            <div className={`${cardStyles.base} ${cardStyles.padding.md}`}>
               <h2 className="text-xl font-semibold text-white mb-4">Team Members</h2>
               {team.members.length === 0 ? (
                 <p className="text-white/60">No team members yet.</p>
@@ -341,7 +342,7 @@ export default function TeamPage() {
 
             {/* Pending Invites */}
             {team.invites.length > 0 && (
-              <div className="bg-white/5 border border-white/10 rounded-xl p-6">
+              <div className={`${cardStyles.base} ${cardStyles.padding.md}`}>
                 <h2 className="text-xl font-semibold text-white mb-4">Pending Invites</h2>
                 <div className="space-y-3">
                   {team.invites.map((invite) => (

@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { DashboardNavbar } from '@/components/dashboard/DashboardNavbar'
 import { DataGrid } from '@/components/dashboard/DataGrid'
-import { typography } from '@/lib/styles/design-system'
+import { typography, buttonStyles } from '@/lib/styles/design-system'
 
 interface JobsPageContentProps {
   user: any
@@ -54,7 +54,7 @@ export function JobsPageContentView(props: JobsPageContentProps) {
             </div>
               <button
                 onClick={() => router.push('/dashboard/jobs/new')}
-                className="rounded-xl bg-gradient-to-r from-[#F97316] via-[#FF8A3D] to-[#FFD166] px-6 py-3 font-semibold text-black shadow-[0_18px_40px_rgba(249,115,22,0.35)] transition-transform hover:scale-105"
+                className={`${buttonStyles.primary} ${buttonStyles.sizes.lg} transition-transform hover:scale-105`}
               >
                 + Create Job
               </button>

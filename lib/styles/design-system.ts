@@ -7,9 +7,9 @@
 
 // Card Styles
 export const cardStyles = {
-  base: 'rounded-2xl border border-white/10 bg-[#121212]/80 backdrop-blur-sm',
-  elevated: 'rounded-2xl border border-white/10 bg-[#121212]/80 backdrop-blur-sm shadow-[0_18px_45px_rgba(0,0,0,0.65)]',
-  flat: 'rounded-2xl border border-white/10 bg-[#050505]',
+  base: 'rounded-lg border border-white/10 bg-[#121212]/80 backdrop-blur-sm',
+  elevated: 'rounded-lg border border-white/10 bg-[#121212]/80 backdrop-blur-sm shadow-[0_8px_24px_rgba(0,0,0,0.4)]',
+  flat: 'rounded-lg border border-white/10 bg-[#0A0A0A]',
   padding: {
     sm: 'p-4',
     md: 'p-6',
@@ -81,8 +81,8 @@ export const tabStyles = {
 
 // Modal Styles
 export const modalStyles = {
-  backdrop: 'fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm',
-  container: 'relative mx-4 my-8 w-full max-w-4xl rounded-xl border border-white/10 bg-[#121212] shadow-2xl p-6 max-h-[calc(100vh-4rem)] overflow-y-auto',
+  backdrop: 'fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm',
+  container: 'relative mx-4 my-8 w-full max-w-4xl rounded-lg border border-white/10 bg-[#121212]/80 backdrop-blur-sm p-6 max-h-[calc(100vh-4rem)] overflow-y-auto',
   header: 'flex items-center justify-between mb-6',
   title: 'text-xl font-semibold text-white',
   closeButton: 'text-white/60 hover:text-white transition-colors',

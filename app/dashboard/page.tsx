@@ -350,7 +350,7 @@ export default function DashboardPage() {
             <div className="relative flex flex-col items-end gap-3">
             <button
               onClick={() => router.push('/dashboard/jobs/new')}
-              className="px-6 py-3 bg-[#F97316] text-black rounded-lg hover:bg-[#FB923C] transition-all font-semibold text-base"
+              className={`${buttonStyles.primary} ${buttonStyles.sizes.lg}`}
             >
               + New Job
             </button>
@@ -386,7 +386,7 @@ export default function DashboardPage() {
               <div className="mt-6 flex flex-col gap-3 items-center">
                 <button
                   onClick={() => router.push('/pricing#business')}
-                  className="px-6 py-3 bg-[#F97316] text-black rounded-lg hover:bg-[#FB923C] transition-all font-semibold text-sm"
+                  className={`${buttonStyles.primary} ${buttonStyles.sizes.md}`}
                 >
                   Explore Business Plan
                 </button>
@@ -533,7 +533,7 @@ export default function DashboardPage() {
                 <button
                   onClick={() => router.push('/dashboard/jobs/new')}
                   onMouseEnter={() => router.prefetch('/dashboard/jobs/new')}
-                  className="rounded-lg bg-[#F97316] px-6 py-3 font-semibold text-black transition-all hover:bg-[#FB923C]"
+                  className={`${buttonStyles.primary} ${buttonStyles.sizes.lg}`}
                 >
                   Create Job
                 </button>

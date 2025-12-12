@@ -215,7 +215,7 @@ export default function AccountPage() {
               <p className="text-white/70">{error || 'Failed to load account'}</p>
               <button
                 onClick={() => router.push('/dashboard')}
-                className="rounded-lg bg-[#F97316] px-6 py-3 text-black font-semibold hover:bg-[#FB923C]"
+                className={`${buttonStyles.primary} ${buttonStyles.sizes.lg}`}
               >
                 Back to Dashboard
               </button>
@@ -241,7 +241,7 @@ export default function AccountPage() {
 
             {/* Error Message */}
             {error && (
-              <div className="bg-red-500/20 border border-red-500/30 rounded-xl p-4">
+              <div className="bg-red-500/20 border border-red-500/30 rounded-lg p-4">
                 <p className="text-sm text-red-400">{error}</p>
               </div>
             )}

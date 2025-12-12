@@ -9,6 +9,7 @@ import { ReportView } from '@/components/report/ReportView'
 import { ErrorModal } from '@/components/dashboard/ErrorModal'
 import { reportsApi } from '@/lib/api'
 import { useFullJob } from '@/hooks/useFullJob'
+import { buttonStyles, cardStyles, typography, dividerStyles } from '@/lib/styles/design-system'
 
 const base64ToBlob = (base64: string, contentType = 'application/pdf') => {
   if (typeof window === 'undefined') return null
