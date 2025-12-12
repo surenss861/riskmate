@@ -1,293 +1,519 @@
-# RiskMate — Premium Backend Feature Specification
+# RiskMate Premium Backend Spec
 
-**Permit Packs • Job Assignment • Evidence Verification • Version History**
-
-RiskMate's premium features are now fully implemented across frontend + backend + database, with authentication, RLS, and audit logging in place for enterprise-grade safety.
-
-Below is the complete backend spec for each feature.
+**Features:** Job Assignment • Evidence Verification • Version History • Permit Packs  
+**Status:** Fully Implemented • Production-Ready
 
 ---
 
-## 1️⃣ Job Assignment Backend Specification
+## 1. Job Assignment — Backend Spec
 
-### Purpose
+### 1.1 Purpose
 
-Allows managers/admins to assign workers to jobs, define responsibility, and track job ownership.
+Assign specific workers to a job so accountability is explicit and auditable.
 
-### Endpoints
+### 1.2 API Endpoints
 
-#### ➤ POST /api/jobs/[id]/assign
+#### POST /api/jobs/:jobId/assign
 
 Assign a worker to a job.
 
-**Body:**
+**Request body:**
 ```json
 {
   "worker_id": "uuid-string"
 }
 ```
 
-**Validations:**
-- User must belong to the same organization
-- User must be owner/admin
-- Job must belong to org
-- Worker must be a valid org member
+**Behavior:**
 
-**Side Effects:**
-- Creates row in `job_assignments`
-- Writes audit log entry: `worker.assigned`
-- Returns updated assigned workers list
+Validates:
+- Authenticated user
+- User belongs to the same `organization_id` as the job
+- User role is `owner` or `admin`
+- `worker_id` exists and belongs to the same org
 
-#### ➤ DELETE /api/jobs/[id]/assign
+Inserts row into `job_assignments`:
+- `job_id`
+- `user_id` (the worker)
+- `role` (default: 'worker')
+- `assigned_at`
+
+Writes audit log:
+- `event_name` = `'worker.assigned'`
+- `target_type` = `'job'`
+- `target_id` = `jobId`
+- `metadata` = `{ worker_id, worker_name }`
+
+Returns updated assignment data with worker details.
+
+#### DELETE /api/jobs/:jobId/assign
 
 Unassign a worker from a job.
 
-**Body:**
+**Request body:**
 ```json
 {
   "worker_id": "uuid-string"
 }
 ```
 
-**Side Effects:**
-- Removes assignment from table
-- Audit log entry: `worker.unassigned`
+**Behavior:**
 
-### Database Schema
+Same auth/org checks as POST.
 
-Uses existing `job_assignments` table:
+Deletes row in `job_assignments` where `job_id = jobId AND user_id = worker_id`.
+
+Writes audit log:
+- `event_name` = `'worker.unassigned'`
+- `metadata` = `{ worker_id, worker_name }`
+
+Returns success confirmation.
+
+### 1.3 Database Schema — `job_assignments`
 
 | Column | Type | Notes |
 |--------|------|-------|
-| `id` | uuid | Primary key |
-| `job_id` | uuid | Foreign key to jobs |
-| `user_id` | uuid | Foreign key to users (the worker) |
+| `id` | uuid (PK) | Default `gen_random_uuid()` |
+| `job_id` | uuid | FK → `jobs.id` |
+| `user_id` | uuid | FK → `users.id` |
 | `role` | text | Worker role (e.g., 'worker', 'lead tech') |
-| `assigned_at` | timestamptz | Assignment timestamp |
+| `assigned_at` | timestamptz | Default `now()` |
 
-**RLS** ✔️ — Locked to organization_id via job relationship.
+**Indexes:**
+- `idx_job_assignments_job_id`
+- `idx_job_assignments_user_id`
+
+### 1.4 RLS Policies
+
+All queries are scoped by `organization_id` via joins to `jobs` and `users`.
+
+- Only members of the org can see assignments for their jobs.
+- **Write access:**
+  - `role IN ('owner', 'admin')` can create/delete assignments.
+  - `member` can read but not modify.
+
+### 1.5 Audit Logging
+
+Each change is written to `audit_logs`:
+
+```json
+{
+  "event_name": "worker.assigned" | "worker.unassigned",
+  "target_type": "job",
+  "target_id": "jobId",
+  "actor_id": "actorId",
+  "metadata": {
+    "worker_id": "uuid-string",
+    "worker_name": "John Doe"
+  },
+  "created_at": "timestamp"
+}
+```
 
 ---
 
-## 2️⃣ Evidence Verification Backend Specification
+## 2. Evidence Verification — Backend Spec
 
-### Purpose
+### 2.1 Purpose
 
-Supervisors/admins approve or reject evidence uploaded by field workers.
+Let supervisors validate worker evidence (photos/docs) with approve/reject flows and reasons, for compliance and audits.
 
-### New Table: `evidence_verifications`
+### 2.2 Migration — `evidence_verifications` Table
 
 **Migration:** `20250115000000_add_evidence_verifications.sql`
 
 | Column | Type | Notes |
 |--------|------|-------|
-| `id` | uuid | Primary key |
-| `job_id` | uuid | Foreign key (jobs) |
-| `document_id` | uuid | Foreign key (documents) |
-| `organization_id` | uuid | Foreign key (organizations) |
+| `id` | uuid (PK) | Default `gen_random_uuid()` |
+| `job_id` | uuid | FK → `jobs.id` |
+| `document_id` | uuid | FK → `documents.id` |
+| `organization_id` | uuid | FK → `organizations.id` |
 | `status` | text | `'pending'`, `'approved'`, or `'rejected'` |
-| `reviewed_by` | uuid | User performing verification |
+| `reviewed_by` | uuid | FK → `users.id` |
 | `reviewed_at` | timestamptz | Verification timestamp |
-| `rejection_reason` | text | Optional rejection explanation |
-| `created_at` | timestamptz | Record creation |
-| `updated_at` | timestamptz | Last update |
+| `rejection_reason` | text | Optional; recommended when rejected |
+| `created_at` | timestamptz | Default `now()` |
+| `updated_at` | timestamptz | Auto-updated on change |
 
-**RLS Policies:**
-- Only Owner/Admin can write
-- All job members can read verification state
-- Enforced via `organization_id`
+**Indexes:**
+- `idx_evidence_verifications_document_id`
+- `idx_evidence_verifications_job_id`
+- `idx_evidence_verifications_organization_id`
+- `idx_evidence_verifications_status`
 
-### Endpoints
+### 2.3 RLS Policies
 
-#### ➤ POST /api/jobs/[id]/evidence/[docId]/verify
+**Read:**
+- Any user in the job's organization can see verification status.
 
-Approve or reject evidence.
+**Write:**
+- Only `owner` or `admin` can insert/update.
+- Enforced via `organization_id` on `jobs` and `users`.
 
-**Body:**
+### 2.4 API Endpoint
+
+#### POST /api/jobs/:jobId/evidence/:docId/verify
+
+**Request body:**
 ```json
 {
   "status": "approved" | "rejected",
-  "reason": "optional text"
+  "reason": "optional rejection text"
 }
 ```
 
 **Rules:**
-- Only admin/owner can verify
-- Rejection reason is optional but recommended
-- Must belong to same org
-- Document must belong to the job
 
-**Side Effects:**
-- Inserts/updates record in `evidence_verifications`
-- Audit log entry: `evidence.approved` or `evidence.rejected`
+Auth user must:
+- belong to the same org,
+- have role `owner` or `admin`.
+
+`status = 'rejected'` → `reason` is optional but recommended.
+
+`document_id` must belong to the job.
+
+**Behavior:**
+
+Upserts into `evidence_verifications` for `(job_id, document_id)`:
+- `status`, `rejection_reason`, `reviewed_by`, `reviewed_at`, `updated_at`.
+
+Writes audit log:
+- `event_name` = `'evidence.approved'` or `'evidence.rejected'`
+- `metadata` = `{ document_id, document_name, status, rejection_reason }`
+
+Returns verification record.
 
 ---
 
-## 3️⃣ Version History Backend Specification
+## 3. Version History — Backend Spec
 
-### Purpose
+### 3.1 Purpose
 
-Provide a fully traceable audit log for every job. This is critical for:
-- Insurance claims
-- Legal disputes
-- Compliance certifications
-- Enterprise customers
+Provide a complete, immutable job history for legal, compliance, and insurance purposes.
 
-### Existing Endpoint
+### 3.2 Existing Audit Log Table (`audit_logs`)
 
-#### ➤ GET /api/jobs/:id/audit
+**Fields (simplified):**
 
-Returns complete ordered timeline of job events.
+```typescript
+{
+  id: uuid
+  organization_id: uuid
+  actor_id: uuid | null
+  actor_name: string | null
+  event_name: string
+  target_type: string
+  target_id: uuid | null
+  metadata: jsonb
+  created_at: timestamptz
+}
+```
 
-**Response:**
+### 3.3 Tracked Action Types
+
+**Examples (not exhaustive):**
+
+- `job.created`
+- `job.updated`
+- `job.status_changed`
+- `worker.assigned`
+- `worker.unassigned`
+- `hazard.added`
+- `hazard.removed`
+- `mitigation.completed`
+- `document.uploaded`
+- `evidence.approved`
+- `evidence.rejected`
+- `report.generated`
+- `permit_pack.generated`
+- `template.applied`
+- `template.created`
+- `template.archived`
+
+### 3.4 API Endpoint
+
+#### GET /api/jobs/:jobId/audit
+
+**Behavior:**
+
+- Auth required.
+- User must belong to job's organization.
+- Returns ordered list of audit entries for that job:
+  - Sorted `created_at DESC`.
+  - Filtered to job-related events.
+  - Limited to 100 most recent entries.
+
+**Response (simplified):**
+
 ```json
 {
   "data": [
     {
       "id": "uuid",
-      "event_name": "template.applied",
-      "target_type": "job",
-      "target_id": "job-uuid",
-      "actor_id": "user-uuid",
+      "event_name": "mitigation.completed",
+      "actor_id": "uuid",
+      "target_type": "mitigation",
+      "target_id": "uuid",
       "metadata": {
-        "template_id": "...",
-        "template_name": "..."
+        "title": "Install guardrail",
+        "job_id": "uuid"
       },
-      "created_at": "2025-01-15T10:30:00Z"
-    },
-    ...
+      "created_at": "2025-01-15T10:00:00Z"
+    }
   ]
 }
 ```
 
-**Tracked Actions Include:**
-- `job.created`
-- `template.applied`
-- `hazard.added` / `hazard.removed`
-- `mitigation.completed`
-- `worker.assigned` / `worker.unassigned`
-- `document.uploaded`
-- `evidence.approved` / `evidence.rejected`
-- `report.generated`
-- `permit_pack.generated`
-- `status_changed`
+### 3.5 Frontend Integration
 
-**Audit logs follow consistent structure and always include:**
-- `actor_id` — Who performed the action
-- `created_at` — Timestamp
-- `event_name` — Action type
-- `metadata` — Action-specific data
-- `target_type` — What was affected (job, document, etc.)
-- `target_id` — Specific resource ID
+**New client helper:**
 
-### Frontend Integration
-
-**Added to `lib/api.ts`:**
 ```typescript
 getAuditLog(jobId: string): Promise<{ data: AuditLogEntry[] }>
 ```
 
+**Used to power the Version History / Timeline UI with:**
+- Date grouping (Today, Yesterday, specific dates)
+- Lucide icons by action type
+- Clickable references (e.g., "View template", "View evidence")
+
 ---
 
-## 4️⃣ Permit Packs Backend Specification
+## 4. Permit Packs — Backend Spec
 
-### Purpose
+### 4.1 Purpose
 
-Generate a full ZIP bundle containing everything related to the job for compliance, client delivery, or insurance purposes.
+Generate a single ZIP containing everything needed for permit applications, inspections, or audits.
 
-### Endpoints
+### 4.2 API Endpoints
 
-#### ➤ POST /api/jobs/[id]/permit-pack
+#### POST /api/jobs/:jobId/permit-pack
 
-Triggers generation of a comprehensive ZIP archive containing:
+**Behavior:**
 
-- **PDF snapshot** — Full job risk report
-- **hazard-checklist.csv** — All identified hazards
-- **controls-summary.csv** — Mitigation items status
-- **signatures.csv** — All collected signatures
-- **metadata.json** — Job metadata
-- **job-details.json** — Complete job information
-- **before/after/during photos** — Organized by category
-- **uploaded documents** — All supporting files
+- Auth required.
+- Plan gating enforced (Business plan only).
+- Validates org access + permissions.
 
-ZIP is uploaded to Supabase Storage and a signed download URL is returned.
+**Backend flow:**
+
+1. Fetches job, hazards, mitigations, evidence, documents, signatures, etc.
+2. (Re)generates latest Risk Snapshot PDF if needed.
+3. Builds CSVs:
+   - `hazard_checklist.csv`
+   - `controls_applied.csv`
+   - (optionally) `signatures.csv`
+4. Builds JSON:
+   - `job_details.json` (job metadata)
+   - `metadata.json` (generation info, organization, timestamps)
+5. Pulls photos into structured folders (`before`/`during`/`after`).
+6. Pulls documents into `/documents`.
+7. Streams ZIP with `archiver` (or similar) to Supabase Storage:
+   - Path: `{organization_id}/permit-packs/{jobId}_{timestamp}.zip`
+8. Returns signed download URL.
+9. Writes audit log:
+   - `event_name` = `'permit_pack.generated'`
+   - `metadata` = `{ file_path, size, file_name }`
 
 **Response:**
+
 ```json
 {
   "success": true,
   "data": {
     "downloadUrl": "https://...",
-    "filePath": "org-id/job-id/permit-pack-...zip",
+    "filePath": "org-id/permit-packs/job-id_timestamp.zip",
     "size": 1234567
   }
 }
 ```
 
-#### ➤ GET /api/jobs/[id]/permit-packs
+#### GET /api/jobs/:jobId/permit-packs
 
-Returns a list of all generated permit packs for the job.
+**Behavior:**
 
-**Response:**
+Returns list of all previously generated permit packs for the job:
+
 ```json
 {
   "data": [
     {
       "id": "uuid",
       "version": 1,
-      "file_path": "...",
+      "file_path": "org/permit-packs/...",
       "generated_at": "2025-01-15T...",
-      "generated_by": "user-uuid",
+      "generated_by": "uuid",
       "downloadUrl": "https://..."
-    },
-    ...
+    }
   ]
 }
 ```
 
-### Backend Logic Overview
+### 4.3 ZIP Contents Breakdown
 
-The implementation includes:
-- File path generation with versioning
-- PDFKit rendering for risk snapshot
-- CSV generation for structured data
-- Photo gathering & sorting by category
-- ZIP assembly using `archiver`
-- Upload to Supabase Storage
-- Signed URL creation (1-hour expiry)
-- Audit log entry: `permit_pack.generated`
+**Structure:**
 
-**Plan Restriction:** Business tier only.
+```
+permit-pack-{jobId}-{date}.zip
+├── risk_snapshot.pdf
+├── hazard_checklist.csv
+├── controls_applied.csv
+├── job_details.json
+├── metadata.json
+├── documents/
+│   ├── insurance_certificate.pdf
+│   └── ...
+└── photos/
+    ├── before/
+    ├── during/
+    └── after/
+```
+
+**Guarantees:**
+
+- Every permit pack is reproducible from stored data.
+- Every generation is logged & traceable.
+- ZIP is uploaded to Supabase Storage with signed URLs.
 
 ---
 
-## 5️⃣ Updated API Client (Frontend ↔ Backend Integration)
+## 5. System Status Matrix
 
-### Added to `lib/api.ts`
+### 5.1 Feature Completion
 
-#### Assignment API
-```typescript
-assignWorker(jobId: string, workerId: string): Promise<{ data: Assignment }>
-unassignWorker(jobId: string, workerId: string): Promise<{ success: boolean }>
+| Feature | Frontend | Backend | Database | RLS | Audit Log |
+|---------|----------|---------|----------|-----|-----------|
+| **Job Assignment** | ✅ | ✅ | Existing table | ✅ | ✅ |
+| **Evidence Verification** | ✅ | ✅ | New table + RLS | ✅ | ✅ |
+| **Version History** | ✅ | ✅ | Existing logs | ✅ | ✅ |
+| **Permit Packs** | ✅ | ✅ | Uses existing | N/A | ✅ |
+
+**All four are fully wired end-to-end:**
+
+```
+UI → API client → API routes → DB + RLS → Audit logs
 ```
 
-#### Evidence Verification
+---
+
+## 6. Security & Compliance Model
+
+### 6.1 Authentication
+
+All endpoints require a valid session (Supabase auth or equivalent).
+
+**Session contains:**
+- `user_id`
+- `organization_id`
+- `role` (`owner`/`admin`/`member`)
+- `subscription_tier`
+
+### 6.2 RLS Enforcement
+
+Every query runs under Row-Level Security.
+
+**Queries are scoped by `organization_id`:**
+- Jobs → `jobs.organization_id`
+- Documents → join to `jobs`
+- Evidence → join to `jobs`
+- Assignments → join to `jobs` + `users`
+
+**No cross-org leakage is possible via direct queries.**
+
+### 6.3 Role-Based Access
+
+**Owner/Admin:**
+- Full access to premium features (job assignment, evidence verification, permit packs).
+
+**Member:**
+- Can upload evidence.
+- Can see verification status.
+- Cannot verify evidence or change assignments.
+
+### 6.4 Audit Logging Standards
+
+Every "meaningful" state change writes an audit event:
+
+- Includes `organization_id`, `actor_id`, `event_name`, `target_type`, `target_id`, `metadata`, `created_at`.
+- Logs are append-only.
+- Used by Version History UI and compliance workflows.
+
+### 6.5 Error Handling Patterns
+
+- **Auth failures** → `401 Unauthorized`
+- **Org/role mismatches** → `403 Forbidden`
+- **Resource not found** → `404 Not Found`
+- **Plan restrictions** (e.g., Permit Pack on Starter) → `403 Forbidden` with `FEATURE_RESTRICTED` code
+- **Validation issues** → `400 Bad Request` with message
+- **Server errors** → `500 Internal Server Error` + generic safe message
+
+---
+
+## 7. API Endpoint Summary
+
+| Endpoint | Method | Auth | Role | Plan |
+|----------|--------|------|------|------|
+| `/api/jobs/:jobId/assign` | POST | ✅ | owner/admin | Any |
+| `/api/jobs/:jobId/assign` | DELETE | ✅ | owner/admin | Any |
+| `/api/jobs/:jobId/evidence/:docId/verify` | POST | ✅ | owner/admin | Any |
+| `/api/jobs/:jobId/audit` | GET | ✅ | org members | Any |
+| `/api/jobs/:jobId/permit-pack` | POST | ✅ | owner/admin | Business |
+| `/api/jobs/:jobId/permit-packs` | GET | ✅ | org members | Business |
+
+---
+
+## 8. Ready For
+
+These specs + implementations are strong enough for:
+
+### Developer Onboarding
+New devs can understand flows, tables, and responsibilities quickly.
+
+### Investor & Enterprise Buyer Documentation
+Shows you're not a toy app; you've got audit trails, RLS, and compliance.
+
+### Compliance / Legal / Insurance Reviews
+Evidence, approvals, job assignments, and permit packs are all tracked, immutable, and explainable.
+
+### Internal Technical Documentation
+Can live in `/docs/premium-backend.md` or similar with zero edits.
+
+---
+
+## 9. Database Migrations
+
+### New Migration Created
+- `20250115000000_add_evidence_verifications.sql` — Creates `evidence_verifications` table with RLS policies, indexes, and triggers
+
+### Existing Tables Used
+- `job_assignments` — Job worker assignments (from `20251128000000_comprehensive_schema_restructure.sql`)
+- `audit_logs` — Version history / audit trail (from `20251109000200_add_audit_logs.sql`)
+- `documents` — Evidence files
+- `jobs` — Job records
+
+---
+
+## 10. Frontend API Client Methods
+
+**Added to `lib/api.ts`:**
+
 ```typescript
+// Job Assignment
+assignWorker(jobId: string, workerId: string): Promise<{ data: Assignment }>
+unassignWorker(jobId: string, workerId: string): Promise<{ success: boolean }>
+
+// Evidence Verification
 verifyEvidence(
   jobId: string,
   docId: string,
   status: 'approved' | 'rejected',
   reason?: string
 ): Promise<{ success: boolean; data: Verification }>
-```
 
-#### Audit Log
-```typescript
+// Version History
 getAuditLog(jobId: string): Promise<{ data: AuditLogEntry[] }>
-```
 
-#### Permit Packs
-```typescript
+// Permit Packs
 generatePermitPack(jobId: string): Promise<{ success: boolean; data: PermitPack }>
 getPermitPacks(jobId: string): Promise<{ data: PermitPack[] }>
 ```
@@ -300,93 +526,6 @@ getPermitPacks(jobId: string): Promise<{ data: PermitPack[] }>
 
 ---
 
-## 6️⃣ Full System Status
-
-| Feature | Frontend | Backend | Database | RLS | Audit Log |
-|---------|----------|---------|----------|-----|-----------|
-| **Permit Packs** | ✅ | ✅ | Existing | N/A | ✅ Yes |
-| **Job Assignment** | ✅ | ✅ | Existing | ✅ Yes | ✅ Yes |
-| **Evidence Verification** | ✅ | ✅ | New migration | ✅ Yes | ✅ Yes |
-| **Version History** | ✅ | ✅ | Existing | ✅ Yes | ✅ Yes |
-
----
-
-## 7️⃣ Security & Compliance Features
-
-### Authentication
-- All endpoints require valid JWT token
-- Organization context verified on every request
-- User permissions checked before operations
-
-### Row Level Security (RLS)
-- All tables enforce organization-level isolation
-- Users can only access data from their organization
-- Admin/Owner roles enforced at database level
-
-### Audit Logging
-- Every critical action is logged
-- Includes actor, timestamp, action, and metadata
-- Immutable audit trail for compliance
-- Supports legal and insurance requirements
-
-### Error Handling
-- Consistent error response format
-- Proper HTTP status codes
-- Detailed error messages in development
-- Sanitized errors in production
-
----
-
-## 8️⃣ RiskMate Now Meets Enterprise Expectations
-
-These backend implementations enable:
-
-✔ **Insurance-grade evidence tracking** — Full verification workflow with rejection reasons  
-✔ **Supervisor-level responsibility logs** — Clear assignment and accountability  
-✔ **Legally defensible audit trails** — Complete, timestamped history of all changes  
-✔ **Complete compliance documentation workflows** — Permit packs with all job artifacts  
-✔ **Multi-role operational oversight** — Role-based permissions throughout  
-✔ **Scalable org-level permission structures** — RLS ensures data isolation  
-
-**This is enterprise software quality.**
-
----
-
-## 9️⃣ API Endpoint Summary
-
-| Method | Endpoint | Purpose | Auth Required | Plan Tier |
-|--------|----------|---------|---------------|-----------|
-| POST | `/api/jobs/[id]/assign` | Assign worker | ✅ | Pro+ |
-| DELETE | `/api/jobs/[id]/assign` | Unassign worker | ✅ | Pro+ |
-| POST | `/api/jobs/[id]/evidence/[docId]/verify` | Verify evidence | ✅ | Business |
-| GET | `/api/jobs/[id]/audit` | Get audit log | ✅ | All |
-| POST | `/api/jobs/[id]/permit-pack` | Generate pack | ✅ | Business |
-| GET | `/api/jobs/[id]/permit-packs` | List packs | ✅ | Business |
-
----
-
-## 🔟 Database Migrations
-
-### New Migration Created
-- `20250115000000_add_evidence_verifications.sql` — Creates `evidence_verifications` table with RLS policies
-
-### Existing Tables Used
-- `job_assignments` — Job worker assignments
-- `audit_logs` — Version history / audit trail
-- `documents` — Evidence files
-- `jobs` — Job records
-
----
-
-## 📚 Related Documentation
-
-- [Frontend Premium Features Specification](./PREMIUM_FEATURES.md) (if exists)
-- [API Client Reference](../lib/api.ts)
-- [Database Schema](../supabase/migrations/)
-
----
-
 **Last Updated:** January 15, 2025  
 **Status:** ✅ Production Ready  
 **Version:** 1.0
-
