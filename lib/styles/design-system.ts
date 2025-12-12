@@ -148,8 +148,8 @@ export const tabStyles = {
 
 // Modal Styles (Week 2: consistent max-width, clear separation)
 export const modalStyles = {
-  backdrop: `fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm ${motion.normal}`,
-  container: `relative mx-4 my-8 w-full max-w-4xl rounded-lg border border-white/10 bg-[#121212]/80 backdrop-blur-sm p-6 max-h-[calc(100vh-4rem)] overflow-y-auto ${shadows.raised}`,
+  backdrop: `fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm`,
+  container: `relative mx-4 my-8 w-full max-w-4xl rounded-lg border border-white/10 bg-[#121212] p-6 max-h-[calc(100vh-4rem)] overflow-y-auto ${shadows.raised}`,
   header: `flex items-center justify-between ${spacing.relaxed}`,
   title: 'text-xl font-semibold text-white',
   closeButton: `text-white/60 hover:text-white ${motion.hover}`,
