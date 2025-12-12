@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import * as React from 'react'
 import { motion } from 'framer-motion'
 
 interface Worker {
@@ -44,10 +45,53 @@ export function JobAssignment({
   userRole,
 }: JobAssignmentProps) {
   const [assigning, setAssigning] = useState<string | null>(null)
+  const [unassigning, setUnassigning] = useState<string | null>(null)
   const [showAssignModal, setShowAssignModal] = useState(false)
+  const [optimisticWorkers, setOptimisticWorkers] = useState<Worker[]>(workers)
+  const [pendingWorkerIds, setPendingWorkerIds] = useState<Set<string>>(new Set())
+
+  // Sync optimistic workers with prop changes
+  React.useEffect(() => {
+    setOptimisticWorkers(workers)
+  }, [workers])
 
   const canManage = userRole === 'owner' || userRole === 'admin'
-  const assignedWorkers = workers.filter((w) => w.jobsAssigned > 0)
+  const assignedWorkers = optimisticWorkers.filter((w) => w.jobsAssigned > 0)
+
+  const handleUnassign = async (workerId: string) => {
+    // Prevent double-click spam
+    if (pendingWorkerIds.has(workerId)) return
+    
+    const worker = optimisticWorkers.find((w) => w.id === workerId)
+    if (!worker) return
+
+    // Optimistic update - remove immediately
+    setPendingWorkerIds((prev) => new Set(prev).add(workerId))
+    setUnassigning(workerId)
+    const previousWorkers = [...optimisticWorkers]
+    setOptimisticWorkers((prev) => 
+      prev.map((w) => 
+        w.id === workerId 
+          ? { ...w, jobsAssigned: Math.max(0, w.jobsAssigned - 1) }
+          : w
+      )
+    )
+
+    try {
+      await onUnassign(workerId)
+    } catch (err) {
+      // Rollback on error
+      setOptimisticWorkers(previousWorkers)
+      console.error('Failed to unassign worker:', err)
+    } finally {
+      setUnassigning(null)
+      setPendingWorkerIds((prev) => {
+        const next = new Set(prev)
+        next.delete(workerId)
+        return next
+      })
+    }
+  }
 
   return (
     <div className="rounded-lg border border-white/10 bg-[#121212]/80 backdrop-blur-sm p-6">
@@ -140,10 +184,11 @@ export function JobAssignment({
                   )}
                   {canManage && (
                     <button
-                      onClick={() => onUnassign(worker.id)}
-                      className="px-3 py-1 text-xs bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/30 transition-colors"
+                      onClick={() => handleUnassign(worker.id)}
+                      disabled={unassigning === worker.id || pendingWorkerIds.has(worker.id)}
+                      className="px-3 py-1 text-xs bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      Remove
+                      {unassigning === worker.id ? 'Removing...' : 'Remove'}
                     </button>
                   )}
                 </div>

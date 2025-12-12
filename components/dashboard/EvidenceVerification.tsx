@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import * as React from 'react'
 import { motion } from 'framer-motion'
 import { modalStyles, buttonStyles, spacing, shadows, inputStyles } from '@/lib/styles/design-system'
 
@@ -32,27 +33,100 @@ export function EvidenceVerification({
 }: EvidenceVerificationProps) {
   const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all')
   const [rejectingId, setRejectingId] = useState<string | null>(null)
+  const [verifyingId, setVerifyingId] = useState<string | null>(null)
   const [rejectionReason, setRejectionReason] = useState('')
   const [showRejectModal, setShowRejectModal] = useState<string | null>(null)
+  const [optimisticItems, setOptimisticItems] = useState<EvidenceItem[]>(items)
+  const [pendingItemIds, setPendingItemIds] = useState<Set<string>>(new Set())
+
+  // Sync optimistic items with prop changes
+  React.useEffect(() => {
+    setOptimisticItems(items)
+  }, [items])
 
   const canVerify = userRole === 'owner' || userRole === 'admin'
 
-  const filteredItems = items.filter((item) => {
+  const filteredItems = optimisticItems.filter((item) => {
     if (filter === 'all') return true
     return item.status === filter
   })
+
+  const handleApprove = async (id: string) => {
+    // Prevent double-click spam
+    if (pendingItemIds.has(id)) return
+
+    const item = optimisticItems.find((i) => i.id === id)
+    if (!item) return
+
+    // Optimistic update - approve immediately
+    setPendingItemIds((prev) => new Set(prev).add(id))
+    setVerifyingId(id)
+    const previousItems = [...optimisticItems]
+    setOptimisticItems((prev) =>
+      prev.map((i) =>
+        i.id === id
+          ? { ...i, status: 'approved' as const, verifiedBy: 'You', verifiedAt: new Date().toISOString() }
+          : i
+      )
+    )
+
+    try {
+      await onVerify(id, 'approved')
+    } catch (err) {
+      // Rollback on error
+      setOptimisticItems(previousItems)
+      console.error('Failed to approve evidence:', err)
+    } finally {
+      setVerifyingId(null)
+      setPendingItemIds((prev) => {
+        const next = new Set(prev)
+        next.delete(id)
+        return next
+      })
+    }
+  }
 
   const handleReject = async (id: string) => {
     if (!rejectionReason.trim()) {
       return // Modal will handle validation
     }
+    
+    // Prevent double-click spam
+    if (pendingItemIds.has(id)) return
+
+    const item = optimisticItems.find((i) => i.id === id)
+    if (!item) return
+
+    // Optimistic update - reject immediately, close modal
+    setPendingItemIds((prev) => new Set(prev).add(id))
     setRejectingId(id)
+    const previousItems = [...optimisticItems]
+    const reason = rejectionReason.trim()
+    setOptimisticItems((prev) =>
+      prev.map((i) =>
+        i.id === id
+          ? { ...i, status: 'rejected' as const, verifiedBy: 'You', verifiedAt: new Date().toISOString(), rejectionReason: reason }
+          : i
+      )
+    )
+    setRejectionReason('')
+    setShowRejectModal(null)
+
     try {
-      await onVerify(id, 'rejected', rejectionReason)
-      setRejectionReason('')
-      setShowRejectModal(null)
+      await onVerify(id, 'rejected', reason)
+    } catch (err) {
+      // Rollback on error
+      setOptimisticItems(previousItems)
+      setShowRejectModal(id) // Reopen modal on error
+      setRejectionReason(reason) // Restore reason
+      console.error('Failed to reject evidence:', err)
     } finally {
       setRejectingId(null)
+      setPendingItemIds((prev) => {
+        const next = new Set(prev)
+        next.delete(id)
+        return next
+      })
     }
   }
 
@@ -153,14 +227,16 @@ export function EvidenceVerification({
                   {item.status === 'pending' && (
                     <div className="flex items-center gap-2">
                       <button
-                        onClick={() => onVerify(item.id, 'approved')}
-                        className="px-3 py-1 text-xs bg-green-500/20 text-green-400 border border-green-500/30 rounded-lg hover:bg-green-500/30 transition-colors"
+                        onClick={() => handleApprove(item.id)}
+                        disabled={verifyingId === item.id || pendingItemIds.has(item.id)}
+                        className="px-3 py-1 text-xs bg-green-500/20 text-green-400 border border-green-500/30 rounded-lg hover:bg-green-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        Approve
+                        {verifyingId === item.id ? 'Approving...' : 'Approve'}
                       </button>
                       <button
                         onClick={() => setShowRejectModal(item.id)}
-                        className="px-3 py-1 text-xs bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/30 transition-colors"
+                        disabled={verifyingId === item.id || pendingItemIds.has(item.id)}
+                        className="px-3 py-1 text-xs bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         Reject
                       </button>

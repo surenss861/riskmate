@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { jobsApi } from '@/lib/api'
+import { jobsApi, teamApi } from '@/lib/api'
 import { useRiskFactors, usePlan } from '@/lib/cache'
 import { Toast } from '@/components/dashboard/Toast'
 import ProtectedRoute from '@/components/ProtectedRoute'
@@ -82,6 +82,29 @@ export default function JobDetailPage() {
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
   const [prefillTemplateData, setPrefillTemplateData] = useState<{ name: string; trade?: string; hazardIds: string[] } | null>(null)
   const [appliedTemplate, setAppliedTemplate] = useState<{ id: string; name: string; type: 'hazard' | 'job' } | null>(null)
+  const [userRole, setUserRole] = useState<'owner' | 'admin' | 'member'>('member')
+  const [workers, setWorkers] = useState<Array<{
+    id: string
+    name: string
+    email: string
+    role: string
+    checkedIn: boolean
+    checkedInAt?: string
+    jobsAssigned: number
+    avatarUrl?: string
+  }>>([])
+  const [evidenceItems, setEvidenceItems] = useState<Array<{
+    id: string
+    type: 'photo' | 'document' | 'mitigation'
+    name: string
+    url?: string
+    status: 'pending' | 'approved' | 'rejected'
+    submittedBy: string
+    submittedAt: string
+    verifiedBy?: string
+    verifiedAt?: string
+    rejectionReason?: string
+  }>>([])
   
   // Use cached hooks
   const { data: riskFactors = [] } = useRiskFactors(organizationId || undefined)
@@ -241,6 +264,11 @@ export default function JobDetailPage() {
           mitigation_items: previousState,
         })
       }
+      // Show error toast
+      setToast({ 
+        message: 'Couldn\'t save that. Your data is safe — retrying helps.', 
+        type: 'error' 
+      })
     } finally {
       setUpdatingMitigation(null)
     }
@@ -782,14 +810,60 @@ export default function JobDetailPage() {
               >
                 <JobAssignment
                   jobId={jobId}
-                  workers={[]} // TODO: Fetch from team API
+                  workers={workers}
                   onAssign={async (workerId) => {
-                    // TODO: Implement assignment API
-                    console.log('Assign worker:', workerId)
+                    try {
+                      await jobsApi.assignWorker(jobId, workerId)
+                      // Refresh workers list
+                      const { createSupabaseBrowserClient } = await import('@/lib/supabase/client')
+                      const supabase = createSupabaseBrowserClient()
+                      const { data: teamData } = await teamApi.get()
+                      const { data: assignments } = await supabase
+                        .from('job_assignments')
+                        .select('user_id')
+                        .eq('job_id', jobId)
+                      const assignedUserIds = new Set(assignments?.map(a => a.user_id) || [])
+                      const workersList = teamData.members.map((member: any) => ({
+                        id: member.id,
+                        name: member.full_name || member.email,
+                        email: member.email,
+                        role: member.role,
+                        checkedIn: false,
+                        jobsAssigned: assignedUserIds.has(member.id) ? 1 : 0,
+                      }))
+                      setWorkers(workersList)
+                      setToast({ message: 'Worker assigned successfully.', type: 'success' })
+                    } catch (err) {
+                      setToast({ message: 'Couldn\'t assign that worker. Try again.', type: 'error' })
+                      throw err
+                    }
                   }}
                   onUnassign={async (workerId) => {
-                    // TODO: Implement unassignment API
-                    console.log('Unassign worker:', workerId)
+                    try {
+                      await jobsApi.unassignWorker(jobId, workerId)
+                      // Refresh workers list
+                      const { createSupabaseBrowserClient } = await import('@/lib/supabase/client')
+                      const supabase = createSupabaseBrowserClient()
+                      const { data: teamData } = await teamApi.get()
+                      const { data: assignments } = await supabase
+                        .from('job_assignments')
+                        .select('user_id')
+                        .eq('job_id', jobId)
+                      const assignedUserIds = new Set(assignments?.map(a => a.user_id) || [])
+                      const workersList = teamData.members.map((member: any) => ({
+                        id: member.id,
+                        name: member.full_name || member.email,
+                        email: member.email,
+                        role: member.role,
+                        checkedIn: false,
+                        jobsAssigned: assignedUserIds.has(member.id) ? 1 : 0,
+                      }))
+                      setWorkers(workersList)
+                      setToast({ message: 'Worker unassigned successfully.', type: 'success' })
+                    } catch (err) {
+                      setToast({ message: 'Couldn\'t unassign that worker. Try again.', type: 'error' })
+                      throw err
+                    }
                   }}
                   onCheckIn={async (workerId) => {
                     // TODO: Implement check-in API
@@ -799,7 +873,7 @@ export default function JobDetailPage() {
                     // TODO: Implement check-out API
                     console.log('Check out worker:', workerId)
                   }}
-                  userRole="admin" // TODO: Get from user context
+                  userRole={userRole}
                 />
               </motion.div>
 
@@ -812,12 +886,67 @@ export default function JobDetailPage() {
               >
                 <EvidenceVerification
                   jobId={jobId}
-                  items={[]} // TODO: Fetch from documents/mitigations API
+                  items={evidenceItems}
                   onVerify={async (id, status, reason) => {
-                    // TODO: Implement verification API
-                    console.log('Verify evidence:', id, status, reason)
+                    try {
+                      await jobsApi.verifyEvidence(jobId, id, status, reason)
+                      // Refresh evidence list
+                      const { createSupabaseBrowserClient } = await import('@/lib/supabase/client')
+                      const supabase = createSupabaseBrowserClient()
+                      const { data: documents } = await supabase
+                        .from('documents')
+                        .select('*, evidence_verifications(status, reviewed_by, reviewed_at, rejection_reason)')
+                        .eq('job_id', jobId)
+                      const { data: mitigations } = await supabase
+                        .from('mitigation_items')
+                        .select('*, documents(*)')
+                        .eq('job_id', jobId)
+                      const evidenceList: typeof evidenceItems = []
+                      documents?.forEach((doc: any) => {
+                        const verification = doc.evidence_verifications?.[0]
+                        evidenceList.push({
+                          id: doc.id,
+                          type: doc.file_type?.startsWith('image/') ? 'photo' : 'document',
+                          name: doc.file_name || 'Untitled',
+                          url: doc.file_path,
+                          status: verification?.status || 'pending',
+                          submittedBy: doc.uploaded_by || 'Unknown',
+                          submittedAt: doc.created_at,
+                          verifiedBy: verification?.reviewed_by,
+                          verifiedAt: verification?.reviewed_at,
+                          rejectionReason: verification?.rejection_reason,
+                        })
+                      })
+                      mitigations?.forEach((mit: any) => {
+                        mit.documents?.forEach((photo: any) => {
+                          const verification = photo.evidence_verifications?.[0]
+                          evidenceList.push({
+                            id: photo.id,
+                            type: 'mitigation',
+                            name: `Mitigation: ${mit.title}`,
+                            url: photo.file_path,
+                            status: verification?.status || 'pending',
+                            submittedBy: photo.uploaded_by || 'Unknown',
+                            submittedAt: photo.created_at,
+                            verifiedBy: verification?.reviewed_by,
+                            verifiedAt: verification?.reviewed_at,
+                            rejectionReason: verification?.rejection_reason,
+                          })
+                        })
+                      })
+                      setEvidenceItems(evidenceList)
+                      setToast({ 
+                        message: status === 'approved' 
+                          ? 'Evidence approved successfully.' 
+                          : 'Evidence rejected.', 
+                        type: 'success' 
+                      })
+                    } catch (err) {
+                      setToast({ message: 'Couldn\'t verify that evidence. Try again.', type: 'error' })
+                      throw err
+                    }
                   }}
-                  userRole="admin" // TODO: Get from user context
+                  userRole={userRole}
                 />
               </motion.div>
 
