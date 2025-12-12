@@ -207,6 +207,18 @@ export function JobAssignment({
           ))
         )}
       </div>
+
+      {/* Unassign Confirmation Modal */}
+      <ConfirmModal
+        isOpen={unassignConfirm !== null}
+        title="Unassign Worker"
+        message={`Remove ${unassignConfirm?.workerName} from this job? They will no longer appear in the assigned workers list.`}
+        consequence="This action is logged for audit purposes."
+        confirmLabel="Unassign Worker"
+        onConfirm={confirmUnassign}
+        onCancel={() => setUnassignConfirm(null)}
+        destructive={true}
+      />
     </div>
   )
 }

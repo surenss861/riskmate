@@ -551,7 +551,7 @@ export default function DashboardPage() {
                     initial={{ opacity: 0, y: 18 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.05 * index }}
-                    whileHover={{ backgroundColor: 'rgba(255,255,255,0.06)', scale: 1.01 }}
+                    whileHover={{ backgroundColor: 'rgba(255,255,255,0.06)' }}
                     className="group px-6 py-5 transition duration-200"
                   >
                     <div className="flex items-center justify-between">

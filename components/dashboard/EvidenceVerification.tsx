@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import * as React from 'react'
 import { motion } from 'framer-motion'
-import { modalStyles, buttonStyles, spacing, shadows, inputStyles } from '@/lib/styles/design-system'
+import { modalStyles, buttonStyles, spacing, shadows, inputStyles, badgeStyles } from '@/lib/styles/design-system'
 import { ConfirmModal } from './ConfirmModal'
 
 interface EvidenceItem {
@@ -205,15 +205,22 @@ export function EvidenceVerification({
                         {item.type}
                       </span>
                       <span
-                        className={`text-xs px-2 py-0.5 rounded-lg border ${
+                        className={`${badgeStyles.base} ${
                           item.status === 'approved'
-                            ? 'bg-green-500/20 text-green-400 border-green-500/30'
+                            ? badgeStyles.verification.approved
                             : item.status === 'rejected'
-                            ? 'bg-red-500/20 text-red-400 border-red-500/30'
-                            : 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
+                            ? badgeStyles.verification.rejected
+                            : badgeStyles.verification.pending
                         }`}
+                        title={
+                          item.status === 'approved'
+                            ? 'This evidence has been approved for compliance'
+                            : item.status === 'rejected'
+                            ? `Rejected: ${item.rejectionReason || 'No reason provided'}`
+                            : 'This evidence is pending verification'
+                        }
                       >
-                        {item.status}
+                        {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
                       </span>
                     </div>
                     <h4 className="text-sm font-semibold text-white mb-1">{item.name}</h4>
