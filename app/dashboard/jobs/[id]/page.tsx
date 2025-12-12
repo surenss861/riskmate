@@ -130,6 +130,8 @@ export default function JobDetailPage() {
     try {
       const response = await jobsApi.getAuditLog(jobId)
       // Transform audit log entries to version history format
+      type ValidActionType = 'job_created' | 'hazard_added' | 'hazard_removed' | 'mitigation_completed' | 'photo_uploaded' | 'evidence_approved' | 'evidence_rejected' | 'template_applied' | 'worker_assigned' | 'worker_unassigned' | 'status_changed' | 'pdf_generated'
+      
       const entries = (response.data || []).map((entry: any) => {
         let changeType: 'created' | 'updated' | 'deleted' = 'updated'
         if (entry.event_name?.includes('created')) {
@@ -139,31 +141,34 @@ export default function JobDetailPage() {
         }
         
         // Map event_name to valid actionType union
-        const validActionTypes = [
-          'job_created',
-          'hazard_added',
-          'hazard_removed',
-          'mitigation_completed',
-          'photo_uploaded',
-          'evidence_approved',
-          'evidence_rejected',
-          'template_applied',
-          'worker_assigned',
-          'worker_unassigned',
-          'status_changed',
-          'pdf_generated',
-        ] as const
+        const eventName = entry.event_name || ''
+        let actionType: ValidActionType | undefined = undefined
         
-        let actionType: typeof validActionTypes[number] | undefined = undefined
-        if (entry.event_name) {
-          // Try to match event_name to valid actionType
-          const matched = validActionTypes.find(type => 
-            entry.event_name.includes(type.replace('_', '')) || 
-            entry.event_name === type
-          )
-          if (matched) {
-            actionType = matched
-          }
+        // Map common event names to actionTypes
+        if (eventName.includes('job.created') || eventName === 'job_created') {
+          actionType = 'job_created'
+        } else if (eventName.includes('hazard.added') || eventName === 'hazard_added') {
+          actionType = 'hazard_added'
+        } else if (eventName.includes('hazard.removed') || eventName === 'hazard_removed') {
+          actionType = 'hazard_removed'
+        } else if (eventName.includes('mitigation.completed') || eventName === 'mitigation_completed') {
+          actionType = 'mitigation_completed'
+        } else if (eventName.includes('photo.uploaded') || eventName === 'photo_uploaded') {
+          actionType = 'photo_uploaded'
+        } else if (eventName.includes('evidence.approved') || eventName === 'evidence_approved') {
+          actionType = 'evidence_approved'
+        } else if (eventName.includes('evidence.rejected') || eventName === 'evidence_rejected') {
+          actionType = 'evidence_rejected'
+        } else if (eventName.includes('template.applied') || eventName === 'template_applied') {
+          actionType = 'template_applied'
+        } else if (eventName.includes('worker.assigned') || eventName === 'worker_assigned' || eventName.includes('assignment.created')) {
+          actionType = 'worker_assigned'
+        } else if (eventName.includes('worker.unassigned') || eventName === 'worker_unassigned' || eventName.includes('assignment.removed')) {
+          actionType = 'worker_unassigned'
+        } else if (eventName.includes('status.changed') || eventName === 'status_changed') {
+          actionType = 'status_changed'
+        } else if (eventName.includes('pdf.generated') || eventName === 'pdf_generated' || eventName.includes('permit_pack.generated')) {
+          actionType = 'pdf_generated'
         }
         
         return {
@@ -174,7 +179,7 @@ export default function JobDetailPage() {
           changedBy: entry.actor_name || 'System',
           changedAt: entry.created_at,
           changeType,
-          actionType,
+          actionType: actionType as ValidActionType | undefined,
           metadata: entry.metadata || {},
         }
       })
