@@ -120,7 +120,7 @@ export default function JobDetailPage() {
     changedBy: string
     changedAt: string
     changeType: 'created' | 'updated' | 'deleted'
-    actionType?: string
+    actionType?: 'job_created' | 'hazard_added' | 'hazard_removed' | 'mitigation_completed' | 'photo_uploaded' | 'evidence_approved' | 'evidence_rejected' | 'template_applied' | 'worker_assigned' | 'worker_unassigned' | 'status_changed' | 'pdf_generated'
     metadata?: any
   }>>([])
 
