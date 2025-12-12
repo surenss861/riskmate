@@ -69,9 +69,12 @@ export default function HomePage() {
             <div className="hidden md:flex items-center gap-4">
               <button
                 onClick={() => router.push('/demo')}
-                className="text-white/70 hover:text-white transition-colors text-sm relative group"
+                className="text-white/70 hover:text-white transition-colors text-sm relative group flex items-center gap-1.5"
               >
-                See It in Action
+                Demo
+                <span className="px-1.5 py-0.5 text-xs bg-[#F97316]/20 text-[#F97316] border border-[#F97316]/30 rounded">
+                  Interactive
+                </span>
                 <span className="absolute bottom-0 left-0 w-0 h-[1px] bg-white group-hover:w-full transition-all duration-300" />
               </button>
               <button
@@ -98,6 +101,38 @@ export default function HomePage() {
           </div>
 
           {/* Mobile Menu Drawer */}
+          {mobileMenuOpen && (
+            <motion.div
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="md:hidden fixed top-[73px] left-0 w-full bg-black/95 backdrop-blur-xl border-b border-white/10 py-4 px-6"
+            >
+              <div className="flex flex-col gap-3">
+                <button
+                  onClick={() => {
+                    router.push('/demo')
+                    setMobileMenuOpen(false)
+                  }}
+                  className="text-white/70 hover:text-white transition-colors text-sm flex items-center gap-1.5"
+                >
+                  Demo
+                  <span className="px-1.5 py-0.5 text-xs bg-[#F97316]/20 text-[#F97316] border border-[#F97316]/30 rounded">
+                    Interactive
+                  </span>
+                </button>
+                <button
+                  onClick={() => {
+                    router.push('/signup')
+                    setMobileMenuOpen(false)
+                  }}
+                  className="px-4 py-2 bg-[#F97316] hover:bg-[#FB923C] text-white rounded-md font-medium text-sm transition-colors"
+                >
+                  Start Free →
+                </button>
+              </div>
+            </motion.div>
+          )}
           {mobileMenuOpen && (
             <motion.div
               className="md:hidden absolute top-full left-0 right-0 bg-black/95 backdrop-blur-xl border-b border-white/10"
@@ -1019,9 +1054,12 @@ export default function HomePage() {
             <div className="flex gap-6 flex-wrap justify-center">
               <button
                 onClick={() => router.push('/demo')}
-                className="hover:text-white transition-colors"
+                className="hover:text-white transition-colors flex items-center gap-1.5"
               >
-                See It in Action
+                Demo
+                <span className="px-1.5 py-0.5 text-xs bg-[#F97316]/20 text-[#F97316] border border-[#F97316]/30 rounded">
+                  Interactive
+                </span>
               </button>
               <a href="#pricing" className="hover:text-white transition-colors">Pricing</a>
               <a href="/privacy" className="hover:text-white transition-colors">Privacy</a>

@@ -42,6 +42,15 @@ function PricingContent() {
           <RiskMateLogo size="md" showText />
           <div className="flex items-center gap-3">
             <button
+              onClick={() => router.push('/demo')}
+              className="rounded-lg border border-white/10 px-4 py-2 text-sm text-white/70 transition hover:border-white/30 hover:text-white flex items-center gap-1.5"
+            >
+              Demo
+              <span className="px-1.5 py-0.5 text-xs bg-[#F97316]/20 text-[#F97316] border border-[#F97316]/30 rounded">
+                Interactive
+              </span>
+            </button>
+            <button
               onClick={() => router.push('/login')}
               className="rounded-lg border border-white/10 px-4 py-2 text-sm text-white/70 transition hover:border-white/30 hover:text-white"
             >

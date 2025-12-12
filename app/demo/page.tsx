@@ -134,11 +134,22 @@ export default function DemoPage() {
           <p className={`text-lg text-white/70 ${spacing.relaxed} max-w-xl mx-auto`}>
             A guided walkthrough of RiskMate&apos;s core compliance workflow. No signup required.
           </p>
+          <div className={`${spacing.normal} space-y-2`}>
+            <p className="text-sm text-white/50 max-w-md mx-auto">
+              <strong className="text-white/70">What is this?</strong> An interactive demonstration of RiskMate&apos;s compliance documentation system.
+            </p>
+            <p className="text-sm text-white/50 max-w-md mx-auto">
+              <strong className="text-white/70">What you&apos;ll see:</strong> Complete workflow from job creation to audit-ready reports.
+            </p>
+            <p className="text-sm text-white/50 max-w-md mx-auto">
+              <strong className="text-white/70">Is it safe?</strong> All actions are simulated locally. No data is saved or transmitted.
+            </p>
+          </div>
           <button
             onClick={handleStartDemo}
             className={`${buttonStyles.primary} ${buttonStyles.sizes.lg} ${spacing.normal}`}
           >
-            Start Interactive Demo
+            Start Demo Walkthrough
           </button>
           <p className="text-xs text-white/40 mt-4">
             All actions are simulated. No data is saved.
