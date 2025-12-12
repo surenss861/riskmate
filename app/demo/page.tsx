@@ -22,28 +22,36 @@ export default function DemoPage() {
   const [currentStep, setCurrentStep] = useState<number | null>(null)
   const [showRestartConfirm, setShowRestartConfirm] = useState(false)
 
-  // Load demo state from localStorage on mount
+  // Load demo state from localStorage on mount (error-proofed)
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem(DEMO_STORAGE_KEY)
-      if (saved) {
-        try {
-          const { demoStarted: savedStarted, currentStep: savedStep } = JSON.parse(saved)
-          if (savedStarted && savedStep) {
-            setDemoStarted(true)
-            setCurrentStep(savedStep)
+      try {
+        const saved = localStorage.getItem(DEMO_STORAGE_KEY)
+        if (saved) {
+          try {
+            const { demoStarted: savedStarted, currentStep: savedStep } = JSON.parse(saved)
+            if (savedStarted && savedStep) {
+              setDemoStarted(true)
+              setCurrentStep(savedStep)
+            }
+          } catch (e) {
+            // Invalid saved state, ignore
           }
-        } catch (e) {
-          // Invalid saved state, ignore
         }
+      } catch (e) {
+        // localStorage blocked (private mode, etc.) - demo still works, just doesn't persist
       }
     }
   }, [])
 
-  // Save demo state to localStorage whenever it changes
+  // Save demo state to localStorage whenever it changes (error-proofed)
   useEffect(() => {
     if (typeof window !== 'undefined' && demoStarted) {
-      localStorage.setItem(DEMO_STORAGE_KEY, JSON.stringify({ demoStarted, currentStep }))
+      try {
+        localStorage.setItem(DEMO_STORAGE_KEY, JSON.stringify({ demoStarted, currentStep }))
+      } catch (e) {
+        // localStorage blocked - demo still works, just doesn't persist
+      }
     }
   }, [demoStarted, currentStep])
 
@@ -52,13 +60,60 @@ export default function DemoPage() {
     setCurrentStep(1)
   }
 
+  // Handle browser back/forward navigation
+  useEffect(() => {
+    const handlePopState = () => {
+      // Restore state from localStorage on navigation
+      if (typeof window !== 'undefined') {
+        try {
+          const saved = localStorage.getItem(DEMO_STORAGE_KEY)
+          if (saved) {
+            const { demoStarted: savedStarted, currentStep: savedStep } = JSON.parse(saved)
+            if (savedStarted && savedStep) {
+              setDemoStarted(true)
+              setCurrentStep(savedStep)
+            } else {
+              setDemoStarted(false)
+              setCurrentStep(null)
+            }
+          }
+        } catch (e) {
+          // localStorage blocked or invalid - continue
+        }
+      }
+    }
+
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [])
+
+  // Optional: Clear demo state on page unload if user explicitly restarted
+  // This prevents "half-finished demo" vibes when returning later
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      // Only clear if user explicitly restarted (not just navigating away)
+      // We'll track this via a flag set on restart confirm
+      // For now, we keep state - user can manually restart if needed
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [])
+
   const handleRestartClick = () => {
-    setShowRestartConfirm(true)
+    // Prevent double-trigger by checking if modal is already open
+    if (!showRestartConfirm) {
+      setShowRestartConfirm(true)
+    }
   }
 
   const handleRestartConfirm = () => {
     if (typeof window !== 'undefined') {
-      localStorage.removeItem(DEMO_STORAGE_KEY)
+      try {
+        localStorage.removeItem(DEMO_STORAGE_KEY)
+      } catch (e) {
+        // localStorage blocked - continue anyway
+      }
     }
     setDemoStarted(false)
     setCurrentStep(null)

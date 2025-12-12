@@ -82,7 +82,7 @@ function PricingContent() {
         <div className="grid md:grid-cols-3 gap-6 mb-16">
           {/* Starter */}
           <motion.div
-            className={`${cardStyles.base} ${cardStyles.padding.lg} ${
+            className={`${cardStyles.base} ${cardStyles.padding.lg} transition-all duration-200 ${
               highlightedPlan === 'starter' ? 'border-[#F97316] border-2' : ''
             }`}
             style={highlightedPlan === 'starter' ? { boxShadow: '0 0 30px rgba(249, 115, 22, 0.15)' } : {}}
@@ -126,7 +126,7 @@ function PricingContent() {
 
           {/* Pro */}
           <motion.div
-            className={`bg-[#121212] border-2 rounded-xl p-8 relative ${
+            className={`bg-[#121212] border-2 rounded-xl p-8 relative transition-all duration-200 ${
               highlightedPlan === 'pro' ? 'border-[#F97316]' : highlightedPlan === 'business' && fromDemo ? 'border-white/10' : 'border-[#F97316]'
             }`}
             style={highlightedPlan === 'pro' ? { boxShadow: '0 0 30px rgba(249, 115, 22, 0.15)' } : highlightedPlan === 'business' && fromDemo ? {} : { boxShadow: '0 0 40px rgba(249, 115, 22, 0.25)' }}
@@ -137,9 +137,14 @@ function PricingContent() {
             onClick={() => setHighlightedPlan('pro')}
           >
             {highlightedPlan === 'pro' ? (
-              <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 bg-[#F97316] text-black text-xs font-semibold rounded-full">
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.2 }}
+                className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 bg-[#F97316] text-black text-xs font-semibold rounded-full"
+              >
                 Selected
-              </div>
+              </motion.div>
             ) : (
               <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 bg-[#F97316] text-black text-xs font-semibold rounded-full">
                 Most Popular
@@ -184,7 +189,7 @@ function PricingContent() {
 
           {/* Business */}
           <motion.div
-            className={`bg-[#121212] border rounded-xl p-8 relative ${
+            className={`bg-[#121212] border rounded-xl p-8 relative transition-all duration-200 ${
               highlightedPlan === 'business' ? 'border-[#F97316] border-2' : 'border-white/10'
             }`}
             style={highlightedPlan === 'business' ? { boxShadow: '0 0 30px rgba(249, 115, 22, 0.15)' } : {}}
@@ -195,9 +200,14 @@ function PricingContent() {
             onClick={() => setHighlightedPlan('business')}
           >
             {highlightedPlan === 'business' && fromDemo ? (
-              <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 bg-[#F97316] text-black text-xs font-semibold rounded-full">
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.2 }}
+                className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 bg-[#F97316] text-black text-xs font-semibold rounded-full"
+              >
                 Shown in Demo
-              </div>
+              </motion.div>
             ) : (
               <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 bg-white/10 text-white text-xs font-semibold rounded-full border border-white/20">
                 Audit-Ready
@@ -210,9 +220,15 @@ function PricingContent() {
             </div>
             <p className="text-sm text-white/60 mb-2">per business</p>
             {highlightedPlan === 'business' && fromDemo && (
-              <p className="text-xs text-[#F97316]/80 mb-4 italic">
+              <motion.p
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.2 }}
+                className="text-xs text-[#F97316]/80 mb-4 italic"
+              >
                 This is the plan shown in the demo.
-              </p>
+              </motion.p>
             )}
             <ul className="space-y-3 mb-8">
               <li className="flex items-start">
