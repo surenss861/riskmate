@@ -52,9 +52,11 @@ export function JobsPageContentView(props: JobsPageContentProps) {
     const timeout = setTimeout(() => {
       if (activePrefetches.current.size < MAX_CONCURRENT_PREFETCHES) {
         activePrefetches.current.add(jobId)
-        router.prefetch(`/dashboard/jobs/${jobId}`).finally(() => {
+        router.prefetch(`/dashboard/jobs/${jobId}`)
+        // Clean up after a delay (prefetch is synchronous in Next.js)
+        setTimeout(() => {
           activePrefetches.current.delete(jobId)
-        })
+        }, 1000) // Remove from active set after 1s
       }
       prefetchTimeouts.current.delete(jobId)
     }, 150)

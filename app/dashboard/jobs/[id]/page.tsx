@@ -129,17 +129,26 @@ export default function JobDetailPage() {
     try {
       const response = await jobsApi.getAuditLog(jobId)
       // Transform audit log entries to version history format
-      const entries = (response.data || []).map((entry: any) => ({
-        id: entry.id,
-        field: entry.target_type || 'job',
-        oldValue: null,
-        newValue: null,
-        changedBy: entry.actor_name || 'System',
-        changedAt: entry.created_at,
-        changeType: entry.event_name?.includes('created') ? 'created' : entry.event_name?.includes('deleted') ? 'deleted' : 'updated',
-        actionType: entry.event_name,
-        metadata: entry.metadata || {},
-      }))
+      const entries = (response.data || []).map((entry: any) => {
+        let changeType: 'created' | 'updated' | 'deleted' = 'updated'
+        if (entry.event_name?.includes('created')) {
+          changeType = 'created'
+        } else if (entry.event_name?.includes('deleted')) {
+          changeType = 'deleted'
+        }
+        
+        return {
+          id: entry.id,
+          field: entry.target_type || 'job',
+          oldValue: null,
+          newValue: null,
+          changedBy: entry.actor_name || 'System',
+          changedAt: entry.created_at,
+          changeType,
+          actionType: entry.event_name,
+          metadata: entry.metadata || {},
+        }
+      })
       setVersionHistoryEntries(entries)
     } catch (err) {
       console.error('Failed to load version history:', err)
