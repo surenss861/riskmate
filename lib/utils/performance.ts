@@ -17,7 +17,7 @@ let markers: Map<string, number> = new Map()
 export const performance = {
   mark: (name: string) => {
     if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
-      markers.set(name, performance.now())
+      markers.set(name, window.performance?.now() || Date.now())
       if (window.performance?.mark) {
         window.performance.mark(name)
       }
@@ -27,7 +27,7 @@ export const performance = {
   measure: (name: string, startMark: string, endMark?: string) => {
     if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
       const start = markers.get(startMark)
-      const end = endMark ? markers.get(endMark) : performance.now()
+      const end = endMark ? markers.get(endMark) : (window.performance?.now() || Date.now())
       
       if (start && end) {
         const duration = end - start

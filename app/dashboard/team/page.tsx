@@ -397,9 +397,8 @@ export default function TeamPage() {
           isOpen={showRemoveConfirm}
           title="Remove Team Member"
           message="Are you sure you want to remove this team member? This action cannot be undone."
-          confirmText="Remove"
-          cancelText="Cancel"
-          confirmColor="red"
+          confirmLabel="Remove"
+          destructive={true}
           onConfirm={confirmRemoveMember}
           onCancel={() => {
             setShowRemoveConfirm(false)

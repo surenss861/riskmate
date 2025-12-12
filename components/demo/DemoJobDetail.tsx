@@ -34,20 +34,29 @@ const DEMO_WORKERS = [
   { id: '2', name: 'Sarah Johnson', email: 'sarah@demo.com', role: 'Safety Manager', jobsAssigned: 0 },
 ]
 
-const DEMO_EVIDENCE = [
+type DemoEvidenceItem = {
+  id: string
+  type: 'photo' | 'document'
+  name: string
+  status: 'pending' | 'approved' | 'rejected'
+  submittedBy: string
+  submittedAt: string
+}
+
+const DEMO_EVIDENCE: DemoEvidenceItem[] = [
   {
     id: '1',
-    type: 'photo' as const,
+    type: 'photo',
     name: 'Site condition - Before',
-    status: 'pending' as const,
+    status: 'pending',
     submittedBy: 'John Smith',
     submittedAt: new Date().toISOString(),
   },
   {
     id: '2',
-    type: 'document' as const,
+    type: 'document',
     name: 'Asbestos test report',
-    status: 'pending' as const,
+    status: 'pending',
     submittedBy: 'Sarah Johnson',
     submittedAt: new Date().toISOString(),
   },
@@ -206,10 +215,9 @@ export function DemoJobDetail({ jobId, currentStep, onStepComplete }: DemoJobDet
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className={spacing.section}>
         <EditableText
           value={job.client_name}
-          onSave={() => {}}
+          onSave={async () => {}}
           className={`${typography.h1} ${spacing.section}`}
           inputClassName={typography.h1}
-          readOnly
         />
         <p className="text-xl text-[#A1A1A1] mb-4">{job.location}</p>
         <div className="flex items-center gap-3">
@@ -428,6 +436,7 @@ export function DemoJobDetail({ jobId, currentStep, onStepComplete }: DemoJobDet
               isOpen={true}
               type="permit-pack"
               onComplete={() => {}}
+              onClose={() => setGeneratingPermitPack(false)}
             />
           )}
         </motion.div>

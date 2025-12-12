@@ -65,6 +65,7 @@ export function TemplatesManager({ organizationId, subscriptionTier = 'starter' 
   const [editingTemplate, setEditingTemplate] = useState<HazardTemplate | JobTemplate | null>(null)
   const [templateUsageCounts, setTemplateUsageCounts] = useState<Record<string, number>>({})
   const [selectedTemplateForDetail, setSelectedTemplateForDetail] = useState<HazardTemplate | JobTemplate | null>(null)
+  const [archiveConfirm, setArchiveConfirm] = useState<{ templateId: string; usageCount: number } | null>(null)
 
   // Use cached risk factors
   const { data: riskFactors = [] } = useRiskFactors(organizationId)

@@ -131,7 +131,7 @@ export function DemoGuide({ currentStep, onComplete }: DemoGuideProps) {
             <div className="w-full bg-black/40 rounded-full h-2">
               <motion.div
                 initial={{ width: 0 }}
-                animate={{ width: `${(currentStep / DEMO_STEPS.length) * 100}%` }}
+                animate={{ width: `${((currentStep || 0) / DEMO_STEPS.length) * 100}%` }}
                 className="bg-[#F97316] h-2 rounded-full"
               />
             </div>
@@ -139,18 +139,20 @@ export function DemoGuide({ currentStep, onComplete }: DemoGuideProps) {
 
           {/* Step List */}
           <div className="space-y-2">
-            {DEMO_STEPS.map((step, index) => (
+            {DEMO_STEPS.map((step, index) => {
+              const stepNum = currentStep || 0
+              return (
               <div
                 key={step.id}
                 className={`flex items-center gap-2 text-xs ${
-                  index + 1 < currentStep
+                  index + 1 < stepNum
                     ? 'text-white/40'
-                    : index + 1 === currentStep
+                    : index + 1 === stepNum
                     ? 'text-white'
                     : 'text-white/30'
                 }`}
               >
-                {index + 1 < currentStep ? (
+                {index + 1 < stepNum ? (
                   <div className="w-5 h-5 rounded-full bg-green-500/20 flex items-center justify-center">
                     <svg
                       className="w-3 h-3 text-green-400"
@@ -169,7 +171,7 @@ export function DemoGuide({ currentStep, onComplete }: DemoGuideProps) {
                 ) : (
                   <div
                     className={`w-5 h-5 rounded-full border ${
-                      index + 1 === currentStep
+                      index + 1 === stepNum
                         ? 'bg-[#F97316]/20 border-[#F97316]/30'
                         : 'bg-white/5 border-white/10'
                     }`}
@@ -177,7 +179,8 @@ export function DemoGuide({ currentStep, onComplete }: DemoGuideProps) {
                 )}
                 <span>{step.title}</span>
               </div>
-            ))}
+              )
+            })}
           </div>
         </motion.div>
       ) : (

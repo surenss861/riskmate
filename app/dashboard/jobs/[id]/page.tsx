@@ -132,7 +132,19 @@ export default function JobDetailPage() {
       // Transform audit log entries to version history format
       type ValidActionType = 'job_created' | 'hazard_added' | 'hazard_removed' | 'mitigation_completed' | 'photo_uploaded' | 'evidence_approved' | 'evidence_rejected' | 'template_applied' | 'worker_assigned' | 'worker_unassigned' | 'status_changed' | 'pdf_generated'
       
-      const entries = (response.data || []).map((entry: any) => {
+      type VersionHistoryEntry = {
+        id: string
+        field: string
+        oldValue: string | null
+        newValue: string | null
+        changedBy: string
+        changedAt: string
+        changeType: 'created' | 'updated' | 'deleted'
+        actionType?: ValidActionType
+        metadata?: any
+      }
+      
+      const entries: VersionHistoryEntry[] = (response.data || []).map((entry: any): VersionHistoryEntry => {
         let changeType: 'created' | 'updated' | 'deleted' = 'updated'
         if (entry.event_name?.includes('created')) {
           changeType = 'created'
@@ -179,7 +191,7 @@ export default function JobDetailPage() {
           changedBy: entry.actor_name || 'System',
           changedAt: entry.created_at,
           changeType,
-          actionType: actionType as ValidActionType | undefined,
+          actionType,
           metadata: entry.metadata || {},
         }
       })
