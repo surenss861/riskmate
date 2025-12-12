@@ -4,6 +4,7 @@ import { useState } from 'react'
 import * as React from 'react'
 import { motion } from 'framer-motion'
 import { modalStyles, buttonStyles, spacing, shadows, inputStyles } from '@/lib/styles/design-system'
+import { ConfirmModal } from './ConfirmModal'
 
 interface EvidenceItem {
   id: string
@@ -38,6 +39,7 @@ export function EvidenceVerification({
   const [showRejectModal, setShowRejectModal] = useState<string | null>(null)
   const [optimisticItems, setOptimisticItems] = useState<EvidenceItem[]>(items)
   const [pendingItemIds, setPendingItemIds] = useState<Set<string>>(new Set())
+  const [rejectConfirm, setRejectConfirm] = useState<{ id: string; name: string; reason: string } | null>(null)
 
   // Sync optimistic items with prop changes
   React.useEffect(() => {
@@ -86,22 +88,27 @@ export function EvidenceVerification({
     }
   }
 
-  const handleReject = async (id: string) => {
+  const handleRejectSubmit = () => {
     if (!rejectionReason.trim()) {
       return // Modal will handle validation
     }
+    const item = optimisticItems.find((i) => i.id === showRejectModal)
+    if (!item) return
+    setRejectConfirm({ id: item.id, name: item.name, reason: rejectionReason.trim() })
+    setShowRejectModal(null)
+  }
+
+  const confirmReject = async () => {
+    if (!rejectConfirm) return
+    const { id, reason } = rejectConfirm
     
     // Prevent double-click spam
     if (pendingItemIds.has(id)) return
 
-    const item = optimisticItems.find((i) => i.id === id)
-    if (!item) return
-
-    // Optimistic update - reject immediately, close modal
+    // Optimistic update - reject immediately
     setPendingItemIds((prev) => new Set(prev).add(id))
     setRejectingId(id)
     const previousItems = [...optimisticItems]
-    const reason = rejectionReason.trim()
     setOptimisticItems((prev) =>
       prev.map((i) =>
         i.id === id
@@ -110,7 +117,7 @@ export function EvidenceVerification({
       )
     )
     setRejectionReason('')
-    setShowRejectModal(null)
+    setRejectConfirm(null)
 
     try {
       await onVerify(id, 'rejected', reason)
@@ -119,7 +126,9 @@ export function EvidenceVerification({
       setOptimisticItems(previousItems)
       setShowRejectModal(id) // Reopen modal on error
       setRejectionReason(reason) // Restore reason
+      setRejectConfirm(null)
       console.error('Failed to reject evidence:', err)
+      throw err
     } finally {
       setRejectingId(null)
       setPendingItemIds((prev) => {
@@ -280,16 +289,34 @@ export function EvidenceVerification({
                 Cancel
               </button>
               <button
-                onClick={() => handleReject(showRejectModal)}
-                disabled={rejectingId === showRejectModal}
-                className="flex-1 px-4 py-2 bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/30 transition-colors disabled:opacity-40"
+                onClick={handleRejectSubmit}
+                disabled={!rejectionReason.trim()}
+                className="flex-1 px-4 py-2 bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/30 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                {rejectingId === showRejectModal ? 'Rejecting...' : 'Reject'}
+                Continue
               </button>
             </div>
           </motion.div>
         </div>
       )}
+
+      {/* Reject Confirmation Modal */}
+      <ConfirmModal
+        isOpen={rejectConfirm !== null}
+        title="Reject Evidence"
+        message={`Reject "${rejectConfirm?.name}"? This will mark it as rejected and require a reason for compliance.`}
+        consequence={rejectConfirm?.reason ? `Reason: ${rejectConfirm.reason}` : undefined}
+        confirmLabel="Reject Evidence"
+        onConfirm={confirmReject}
+        onCancel={() => {
+          if (rejectConfirm) {
+            setShowRejectModal(rejectConfirm.id)
+            setRejectionReason(rejectConfirm.reason)
+          }
+          setRejectConfirm(null)
+        }}
+        destructive={true}
+      />
     </>
   )
 }

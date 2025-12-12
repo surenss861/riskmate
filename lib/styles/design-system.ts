@@ -104,21 +104,38 @@ export const typography = {
   label: 'text-sm font-medium text-white/80',
 }
 
-// Badge Styles
+// Badge Styles (Week 5: Unified, consistent, semantic)
 export const badgeStyles = {
+  // Week 5: Same size, same radius everywhere
+  base: 'px-2 py-1 rounded-lg text-xs font-medium border',
+  
   risk: {
     critical: 'bg-red-500/20 text-red-400 border-red-500/30',
     high: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
     medium: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
     low: 'bg-green-500/20 text-green-400 border-green-500/30',
   },
+  
   status: {
     active: 'bg-green-500/20 text-green-400 border-green-500/30',
     completed: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
     'on-hold': 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
     cancelled: 'bg-red-500/20 text-red-400 border-red-500/30',
   },
-  base: 'px-2 py-1 rounded text-xs font-medium border',
+  
+  // Week 5: Evidence verification badges (Pending/Approved/Rejected)
+  verification: {
+    pending: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
+    approved: 'bg-green-500/20 text-green-400 border-green-500/30',
+    rejected: 'bg-red-500/20 text-red-400 border-red-500/30',
+  },
+  
+  // Week 5: Plan badges
+  plan: {
+    starter: 'bg-white/5 text-white/70 border-white/10',
+    pro: 'bg-[#F97316]/20 text-[#F97316] border-[#F97316]/30',
+    business: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
+  },
 }
 
 // Tab Styles

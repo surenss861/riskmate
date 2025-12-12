@@ -99,7 +99,7 @@ export function JobsPageContentView(props: JobsPageContentProps) {
             </div>
               <button
                 onClick={() => router.push('/dashboard/jobs/new')}
-                className={`${buttonStyles.primary} ${buttonStyles.sizes.lg} transition-transform hover:scale-105`}
+                className={`${buttonStyles.primary} ${buttonStyles.sizes.lg}`}
               >
                 + Create Job
               </button>

@@ -509,6 +509,26 @@ export function TemplatesManager({ organizationId, subscriptionTier = 'starter' 
         currentCount={templateLimitInfo.current}
         limit={templateLimitInfo.limit}
       />
+
+      {/* Archive Confirmation Modal */}
+      <ConfirmModal
+        isOpen={archiveConfirm !== null}
+        title="Archive Template"
+        message={
+          archiveConfirm && archiveConfirm.usageCount > 0
+            ? `This template is used in ${archiveConfirm.usageCount} job${archiveConfirm.usageCount !== 1 ? 's' : ''}. Archiving will hide it from new jobs, but existing jobs will continue to reference it.`
+            : 'This will hide the template from new jobs. You can restore it later if needed.'
+        }
+        consequence={
+          archiveConfirm && archiveConfirm.usageCount > 0
+            ? `Existing jobs using this template will not be affected.`
+            : undefined
+        }
+        confirmLabel="Archive Template"
+        onConfirm={confirmArchive}
+        onCancel={() => setArchiveConfirm(null)}
+        destructive={false}
+      />
     </div>
   )
 }

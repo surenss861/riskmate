@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import * as React from 'react'
 import { motion } from 'framer-motion'
+import { ConfirmModal } from './ConfirmModal'
 
 interface Worker {
   id: string
@@ -49,6 +50,7 @@ export function JobAssignment({
   const [showAssignModal, setShowAssignModal] = useState(false)
   const [optimisticWorkers, setOptimisticWorkers] = useState<Worker[]>(workers)
   const [pendingWorkerIds, setPendingWorkerIds] = useState<Set<string>>(new Set())
+  const [unassignConfirm, setUnassignConfirm] = useState<{ workerId: string; workerName: string } | null>(null)
 
   // Sync optimistic workers with prop changes
   React.useEffect(() => {
@@ -58,12 +60,18 @@ export function JobAssignment({
   const canManage = userRole === 'owner' || userRole === 'admin'
   const assignedWorkers = optimisticWorkers.filter((w) => w.jobsAssigned > 0)
 
-  const handleUnassign = async (workerId: string) => {
-    // Prevent double-click spam
-    if (pendingWorkerIds.has(workerId)) return
-    
+  const handleUnassign = (workerId: string) => {
     const worker = optimisticWorkers.find((w) => w.id === workerId)
     if (!worker) return
+    setUnassignConfirm({ workerId, workerName: worker.name })
+  }
+
+  const confirmUnassign = async () => {
+    if (!unassignConfirm) return
+    const { workerId } = unassignConfirm
+    
+    // Prevent double-click spam
+    if (pendingWorkerIds.has(workerId)) return
 
     // Optimistic update - remove immediately
     setPendingWorkerIds((prev) => new Set(prev).add(workerId))
@@ -79,10 +87,12 @@ export function JobAssignment({
 
     try {
       await onUnassign(workerId)
+      setUnassignConfirm(null)
     } catch (err) {
       // Rollback on error
       setOptimisticWorkers(previousWorkers)
       console.error('Failed to unassign worker:', err)
+      throw err
     } finally {
       setUnassigning(null)
       setPendingWorkerIds((prev) => {
