@@ -73,7 +73,14 @@ export function JobsPageContentView(props: JobsPageContentProps) {
   
   return (
         <div className="min-h-screen bg-[#0A0A0A] text-white">
-      <DashboardNavbar email={props.user?.email} onLogout={() => router.push('/')} />
+      <DashboardNavbar 
+        email={props.user?.email} 
+        onLogout={async () => {
+          const { cacheInvalidation } = await import('@/lib/cache')
+          cacheInvalidation.clearAll()
+          router.push('/')
+        }} 
+      />
       <div className="mx-auto max-w-7xl px-6 py-14">
         <motion.div
           initial={{ opacity: 0, y: 24 }}
