@@ -155,9 +155,25 @@ export default function JobDetailPage() {
 
   const loadJob = useCallback(async () => {
     const startTime = Date.now()
+    // Performance marker
+    if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+      window.performance?.mark('job-detail-load-start')
+    }
     try {
       const response = await jobsApi.get(jobId)
       setJob(response.data)
+      
+      // Performance measurement
+      if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+        const loadTime = Date.now() - startTime
+        window.performance?.mark('job-detail-load-end')
+        window.performance?.measure('job-detail-load', 'job-detail-load-start', 'job-detail-load-end')
+        if (loadTime > 800) {
+          console.warn(`⚠️ Job detail load took ${loadTime}ms (budget: 800ms)`)
+        } else {
+          console.log(`✅ Job detail load: ${loadTime}ms`)
+        }
+      }
       
       // Load applied template info if exists
       if (response.data.applied_template_id && response.data.applied_template_type) {

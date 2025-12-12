@@ -37,6 +37,21 @@ export const motion = {
   expand: 'transition-all duration-300 ease-out',
 }
 
+// Week 5: Standardized hover states (no bouncy motion)
+export const hoverStates = {
+  // Cards: subtle background change
+  card: 'hover:bg-[#121212]/90 transition-colors duration-200 ease-out',
+  // Rows: subtle background change
+  row: 'hover:bg-white/5 transition-colors duration-200 ease-out',
+  // Badges: subtle border/background change
+  badge: 'hover:border-white/20 transition-colors duration-200 ease-out',
+  // Tabs: color change only
+  tab: 'hover:text-white transition-colors duration-200 ease-out',
+  // Buttons: already defined in buttonStyles
+  // Icon buttons: subtle scale (no bounce)
+  iconButton: 'hover:bg-white/10 active:scale-95 transition-all duration-150 ease-out',
+}
+
 // Button Styles (Week 2: firm hover, clear disabled)
 export const buttonStyles = {
   primary: `inline-flex items-center justify-center rounded-lg bg-[#F97316] px-4 py-2 text-sm font-semibold text-black hover:bg-[#FB923C] ${motion.hover} disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-[#F97316]`,

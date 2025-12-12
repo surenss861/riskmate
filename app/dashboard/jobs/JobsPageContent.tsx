@@ -33,6 +33,8 @@ interface JobsPageContentProps {
 export function JobsPageContentView(props: JobsPageContentProps) {
   const router = useRouter()
   const prefetchTimeouts = useRef<Map<string, NodeJS.Timeout>>(new Map())
+  const activePrefetches = useRef<Set<string>>(new Set())
+  const MAX_CONCURRENT_PREFETCHES = 2
 
   const handleJobHover = (jobId: string) => {
     // Clear any existing timeout for this job
@@ -41,9 +43,19 @@ export function JobsPageContentView(props: JobsPageContentProps) {
       clearTimeout(existingTimeout)
     }
 
+    // Skip if already prefetching or at max concurrency
+    if (activePrefetches.current.has(jobId) || activePrefetches.current.size >= MAX_CONCURRENT_PREFETCHES) {
+      return
+    }
+
     // Prefetch after 150ms hover delay
     const timeout = setTimeout(() => {
-      router.prefetch(`/dashboard/jobs/${jobId}`)
+      if (activePrefetches.current.size < MAX_CONCURRENT_PREFETCHES) {
+        activePrefetches.current.add(jobId)
+        router.prefetch(`/dashboard/jobs/${jobId}`).finally(() => {
+          activePrefetches.current.delete(jobId)
+        })
+      }
       prefetchTimeouts.current.delete(jobId)
     }, 150)
 
