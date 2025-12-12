@@ -17,6 +17,8 @@ interface DataGridProps<T> {
   data: T[]
   columns: Column<T>[]
   onRowClick?: (row: T) => void
+  onRowHover?: (row: T) => void
+  onRowHoverEnd?: (row: T) => void
   stickyHeader?: boolean
   rowHighlight?: (row: T) => string | null
   savedViews?: Array<{ id: string; name: string; filters: any }>
