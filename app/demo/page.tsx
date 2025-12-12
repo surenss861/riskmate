@@ -34,7 +34,7 @@ export default function DemoPage() {
             See how serious contractors document risk.
           </h1>
           <p className={`text-lg text-white/70 ${spacing.relaxed} max-w-xl mx-auto`}>
-            A guided walkthrough of RiskMate's core compliance workflow. No signup required.
+            A guided walkthrough of RiskMate&apos;s core compliance workflow. No signup required.
           </p>
           <button
             onClick={handleStartDemo}
