@@ -925,7 +925,7 @@ export default function JobDetailPage() {
                       // Refresh workers list
                       const { createSupabaseBrowserClient } = await import('@/lib/supabase/client')
                       const supabase = createSupabaseBrowserClient()
-                      const { data: teamData } = await teamApi.get()
+                      const teamData = await teamApi.get()
                       const { data: assignments } = await supabase
                         .from('job_assignments')
                         .select('user_id')
@@ -952,7 +952,7 @@ export default function JobDetailPage() {
                       // Refresh workers list
                       const { createSupabaseBrowserClient } = await import('@/lib/supabase/client')
                       const supabase = createSupabaseBrowserClient()
-                      const { data: teamData } = await teamApi.get()
+                      const teamData = await teamApi.get()
                       const { data: assignments } = await supabase
                         .from('job_assignments')
                         .select('user_id')
