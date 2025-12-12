@@ -138,6 +138,34 @@ export default function JobDetailPage() {
           changeType = 'deleted'
         }
         
+        // Map event_name to valid actionType union
+        const validActionTypes = [
+          'job_created',
+          'hazard_added',
+          'hazard_removed',
+          'mitigation_completed',
+          'photo_uploaded',
+          'evidence_approved',
+          'evidence_rejected',
+          'template_applied',
+          'worker_assigned',
+          'worker_unassigned',
+          'status_changed',
+          'pdf_generated',
+        ] as const
+        
+        let actionType: typeof validActionTypes[number] | undefined = undefined
+        if (entry.event_name) {
+          // Try to match event_name to valid actionType
+          const matched = validActionTypes.find(type => 
+            entry.event_name.includes(type.replace('_', '')) || 
+            entry.event_name === type
+          )
+          if (matched) {
+            actionType = matched
+          }
+        }
+        
         return {
           id: entry.id,
           field: entry.target_type || 'job',
@@ -146,7 +174,7 @@ export default function JobDetailPage() {
           changedBy: entry.actor_name || 'System',
           changedAt: entry.created_at,
           changeType,
-          actionType: entry.event_name,
+          actionType,
           metadata: entry.metadata || {},
         }
       })
