@@ -336,7 +336,7 @@ export default function JobDetailPage() {
 
     // Guard: Don't proceed if subscription isn't loaded or isn't Business
     if (loadingPlan) {
-      setToast({ message: 'Loading subscription information...', type: 'info' })
+      // Subscription still loading, wait for it to complete
       return
     }
     
