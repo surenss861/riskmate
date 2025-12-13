@@ -101,7 +101,8 @@ function PricingContent() {
             whileHover={{ y: -3 }}
             onClick={() => setHighlightedPlan('starter')}
           >
-            <h3 className="text-2xl font-semibold mb-2">Starter</h3>
+            <h3 className="text-2xl font-semibold mb-1">Starter</h3>
+            <p className="text-sm text-white/50 mb-4">Solo contractors & small crews</p>
             <div className="mb-2">
               <span className="text-4xl font-bold">$29</span>
               <span className="text-white/60">/mo</span>
@@ -122,7 +123,7 @@ function PricingContent() {
               </li>
               <li className="flex items-start">
                 <span className="text-[#F97316] mr-2">✓</span>
-                <span className="text-white/70">Shareable job reports (view-only links)</span>
+                <span className="text-white/70">View-only reports</span>
               </li>
             </ul>
             <button
@@ -159,7 +160,8 @@ function PricingContent() {
                 Most Popular
               </div>
             )}
-            <h3 className="text-2xl font-semibold mb-2 mt-2">Pro</h3>
+            <h3 className="text-2xl font-semibold mb-1 mt-2">Pro</h3>
+            <p className="text-sm text-white/50 mb-4">Growing teams managing active jobs</p>
             <div className="mb-2">
               <span className="text-4xl font-bold">$59</span>
               <span className="text-white/60">/mo</span>
@@ -168,11 +170,11 @@ function PricingContent() {
             <ul className="space-y-3 mb-8">
               <li className="flex items-start">
                 <span className="text-[#F97316] mr-2">✓</span>
-                <span className="text-white/70">Unlimited jobs</span>
+                <span className="text-white font-semibold">Unlimited jobs</span>
               </li>
               <li className="flex items-start">
                 <span className="text-[#F97316] mr-2">✓</span>
-                <span className="text-white/70">Up to 5 team seats</span>
+                <span className="text-white font-semibold">Up to 5 team seats</span>
               </li>
               <li className="flex items-start">
                 <span className="text-[#F97316] mr-2">✓</span>
@@ -180,7 +182,7 @@ function PricingContent() {
               </li>
               <li className="flex items-start">
                 <span className="text-[#F97316] mr-2">✓</span>
-                <span className="text-white/70">Live reports + client share links</span>
+                <span className="text-white/70">Live, shareable reports</span>
               </li>
               <li className="flex items-start">
                 <span className="text-[#F97316] mr-2">✓</span>
@@ -192,13 +194,13 @@ function PricingContent() {
               disabled={loading !== null}
               className="w-full px-6 py-3 bg-[#F97316] text-black rounded-lg font-semibold hover:bg-[#FB923C] disabled:opacity-50"
             >
-              {loading === 'pro' ? 'Processing...' : 'Get Started →'}
+              {loading === 'pro' ? 'Processing...' : 'Start Pro →'}
             </button>
           </motion.div>
 
           {/* Business */}
           <motion.div
-            className={`bg-[#121212] border rounded-xl p-8 relative transition-all duration-200 ${
+            className={`bg-gradient-to-b from-[#121212] via-[#1a1a1a] to-[#121212] border rounded-xl p-8 relative transition-all duration-200 ${
               highlightedPlan === 'business' ? 'border-[#F97316] border-2' : 'border-white/10'
             }`}
             style={highlightedPlan === 'business' ? { boxShadow: '0 0 30px rgba(249, 115, 22, 0.15)' } : {}}
@@ -222,12 +224,15 @@ function PricingContent() {
                 Audit-Ready
               </div>
             )}
-            <h3 className="text-2xl font-semibold mb-2 mt-2">Business</h3>
+            <div className="border-t-2 border-[#F97316]/30 mb-4 -mx-8 -mt-8"></div>
+            <h3 className="text-2xl font-semibold mb-1 mt-2">Business</h3>
+            <p className="text-sm text-white/50 mb-4">Companies facing inspections & insurers</p>
             <div className="mb-2">
               <span className="text-4xl font-bold">$129</span>
               <span className="text-white/60">/mo</span>
             </div>
-            <p className="text-sm text-white/60 mb-2">per business</p>
+            <p className="text-sm text-white/60 mb-1">per business</p>
+            <p className="text-xs text-white/50 mb-6 italic">Used by teams that need inspection-safe documentation.</p>
             {highlightedPlan === 'business' && fromDemo && (
               <motion.p
                 initial={{ opacity: 0, height: 0 }}
@@ -246,7 +251,7 @@ function PricingContent() {
               </li>
               <li className="flex items-start">
                 <span className="text-[#F97316] mr-2">✓</span>
-                <span className="text-white/70">Permit Pack Generator (ZIP bundle)</span>
+                <span className="text-white font-semibold">Permit Pack Generator (ZIP bundle)</span>
               </li>
               <li className="flex items-start">
                 <span className="text-[#F97316] mr-2">✓</span>
@@ -254,7 +259,7 @@ function PricingContent() {
               </li>
               <li className="flex items-start">
                 <span className="text-[#F97316] mr-2">✓</span>
-                <span className="text-white/70">Versioned audit logs (compliance history)</span>
+                <span className="text-white font-semibold">Immutable audit history</span>
               </li>
               <li className="flex items-start">
                 <span className="text-[#F97316] mr-2">✓</span>
@@ -266,9 +271,8 @@ function PricingContent() {
               disabled={loading !== null}
               className="w-full px-6 py-3 border border-[#F97316] text-[#F97316] rounded-lg hover:bg-[#F97316]/10 transition-colors font-semibold disabled:opacity-50"
             >
-              {loading === 'business' ? 'Processing...' : 'Upgrade to Business →'}
+              {loading === 'business' ? 'Processing...' : 'Start Business →'}
             </button>
-            <p className="text-xs text-white/50 mt-2 text-center">Get advanced compliance & support</p>
           </motion.div>
         </div>
 
@@ -311,10 +315,16 @@ function PricingContent() {
                   <td className="p-4 text-center text-[#F97316]">Branded</td>
                 </tr>
                 <tr className="border-b border-white/5">
-                  <td className="p-4 text-white/70">Live report links</td>
+                  <td className="p-4 text-white/70">Report sharing</td>
+                  <td className="p-4 text-center text-white/70">View-only</td>
+                  <td className="p-4 text-center text-[#F97316]">Live, shareable</td>
+                  <td className="p-4 text-center text-[#F97316]">Live, shareable</td>
+                </tr>
+                <tr className="border-b border-white/5">
+                  <td className="p-4 text-white/70">Audit history</td>
                   <td className="p-4 text-center text-white/40">—</td>
-                  <td className="p-4 text-center text-[#F97316]">✓</td>
-                  <td className="p-4 text-center text-[#F97316]">✓</td>
+                  <td className="p-4 text-center text-white/40">—</td>
+                  <td className="p-4 text-center text-[#F97316]">Immutable</td>
                 </tr>
                 <tr className="border-b border-white/5">
                   <td className="p-4 text-white/70">Priority support</td>
@@ -324,12 +334,6 @@ function PricingContent() {
                 </tr>
                 <tr className="border-b border-white/5">
                   <td className="p-4 text-white/70">Permit Pack Generator</td>
-                  <td className="p-4 text-center text-white/40">—</td>
-                  <td className="p-4 text-center text-white/40">—</td>
-                  <td className="p-4 text-center text-[#F97316]">✓</td>
-                </tr>
-                <tr className="border-b border-white/5">
-                  <td className="p-4 text-white/70">Audit log versioning</td>
                   <td className="p-4 text-center text-white/40">—</td>
                   <td className="p-4 text-center text-white/40">—</td>
                   <td className="p-4 text-center text-[#F97316]">✓</td>
