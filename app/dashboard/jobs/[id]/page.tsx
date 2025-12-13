@@ -205,7 +205,7 @@ export default function JobDetailPage() {
   
   // Use cached hooks
   const { data: riskFactors = [] } = useRiskFactors(organizationId || undefined)
-  const { data: subscriptionData } = usePlan(organizationId)
+  const { data: subscriptionData, isLoading: loadingPlan } = usePlan(organizationId)
   const subscriptionTier = subscriptionData?.tier || null
 
   const loadJob = useCallback(async () => {
@@ -334,6 +334,17 @@ export default function JobDetailPage() {
   const handleGeneratePermitPack = async () => {
     if (!jobId) return
 
+    // Guard: Don't proceed if subscription isn't loaded or isn't Business
+    if (loadingPlan) {
+      setToast({ message: 'Loading subscription information...', type: 'info' })
+      return
+    }
+    
+    if (!subscriptionData || subscriptionTier !== 'business') {
+      setError('Permit Packs are available on the Business plan. This feature bundles all job documentation into a single ZIP file for inspectors and permit offices. Upgrade to Business to access this feature.')
+      return
+    }
+
     setGeneratingPermitPack(true)
     setError(null)
     setShowProgressModal(true)
@@ -351,11 +362,11 @@ export default function JobDetailPage() {
           setToast({ message: 'Permit Pack ready — downloaded to your device.', type: 'success' })
           
           // Reload permit packs list
-          if (subscriptionTier === 'business') {
-            jobsApi.getPermitPacks(jobId).then((packsResponse) => {
-              setPermitPacks(packsResponse.data || [])
-            })
-          }
+          jobsApi.getPermitPacks(jobId).then((packsResponse) => {
+            setPermitPacks(packsResponse.data || [])
+          }).catch((err) => {
+            console.error('Failed to reload permit packs:', err)
+          })
         }, 1000)
       } else {
         throw new Error('Failed to generate permit pack')
@@ -363,7 +374,22 @@ export default function JobDetailPage() {
     } catch (err: any) {
       console.error('Failed to generate permit pack:', err)
       setShowProgressModal(false)
-      if (err.code === 'FEATURE_RESTRICTED') {
+      
+      // Check error response for specific error codes
+      // The apiRequest function sets err.code from data.code
+      const errorCode = err?.code
+      const errorMessage = err?.message || ''
+      
+      // Log full error for debugging
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Permit pack error details:', {
+          code: errorCode,
+          message: errorMessage,
+          fullError: err,
+        })
+      }
+      
+      if (errorCode === 'FEATURE_RESTRICTED' || errorMessage?.includes('Business plan') || errorMessage?.includes('only available for Business')) {
         setError('Permit Packs are available on the Business plan. This feature bundles all job documentation into a single ZIP file for inspectors and permit offices. Upgrade to Business to access this feature.')
       } else {
         setError('We couldn\'t generate the permit pack. Your job data is safe — try again in a moment. If this continues, check your internet connection.')
