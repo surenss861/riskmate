@@ -129,7 +129,7 @@ export function JobAssignment({
             <p className="text-xs text-white/60 max-w-md mx-auto">
               {canManage
                 ? 'Assign workers to track accountability and create an audit trail of who worked on this job. All assignments are logged for compliance.'
-                : 'No workers have been assigned to this job yet. Only owners and admins can manage assignments.'}
+                : 'No workers have been assigned to this job yet. Assignments are restricted to owners and admins for audit integrity.'}
             </p>
           </div>
         ) : (

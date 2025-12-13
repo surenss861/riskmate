@@ -552,12 +552,7 @@ export default function JobDetailPage() {
             >
               ← Back to Dashboard
             </button>
-              <button
-                onClick={() => router.push(`/dashboard/jobs/${jobId}/report`)}
-                className={buttonStyles.secondary}
-              >
-                View Audit-Ready Report
-              </button>
+            <div className="flex items-center gap-3">
               {subscriptionTier === 'business' && (
                 <button
                   onClick={handleGeneratePermitPack}
@@ -576,6 +571,13 @@ export default function JobDetailPage() {
                   )}
                 </button>
               )}
+              <button
+                onClick={() => router.push(`/dashboard/jobs/${jobId}/report`)}
+                className={buttonStyles.secondary}
+              >
+                View Audit-Ready Report
+              </button>
+            </div>
             </div>
           </div>
         </header>
@@ -636,20 +638,21 @@ export default function JobDetailPage() {
 
           <div className={`grid lg:grid-cols-3 ${spacing.gap.relaxed}`}>
             <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }}>
-              <div className={`${cardStyles.base} ${cardStyles.padding.lg} border ${getScoreBg(job.risk_score)}`}>
-                <div className="text-center mb-8">
-                  <div className={`text-8xl font-bold mb-3 ${getScoreColor(job.risk_score)}`}>
+              <div className={`${cardStyles.base} p-10 border ${getScoreBg(job.risk_score)}`}>
+                <div className="text-center mb-10">
+                  <div className={`text-9xl font-bold mb-4 ${getScoreColor(job.risk_score)}`}>
                     {job.risk_score ?? '—'}
                   </div>
-                  <div className="text-2xl font-semibold mb-2 text-white">
+                  <div className="text-2xl font-semibold mb-3 text-white">
                     {job.risk_level ? `${job.risk_level.toUpperCase()} Risk` : 'No Score'}
                   </div>
                   {job.risk_score_detail && (
-                    <div className="text-sm text-[#A1A1A1]">
+                    <div className="text-sm text-[#A1A1A1] mb-4">
                       {job.risk_score_detail.factors.length} risk factor{job.risk_score_detail.factors.length !== 1 ? 's' : ''} detected
                     </div>
                   )}
-                  <p className="text-xs text-white/60 mt-3 max-w-xs mx-auto">
+                  <div className="border-t border-white/10 pt-4 mb-4"></div>
+                  <p className="text-xs text-white/60 max-w-xs mx-auto">
                     Calculated from identified hazards. Higher scores require more safety controls. This score is logged with timestamp for compliance and insurance purposes.
                   </p>
                 </div>
@@ -750,14 +753,14 @@ export default function JobDetailPage() {
               </div>
             </motion.div>
 
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-                  <div className={`${cardStyles.base} ${cardStyles.padding.lg} h-full`}>
-                    <div className={spacing.relaxed}>
-                      <h2 className={`${typography.h2} ${spacing.tight}`}>Mitigation Checklist</h2>
-                      <p className="text-sm text-white/60">
-                        These are the safety actions required to reduce the job&apos;s overall risk.
-                      </p>
-                    </div>
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+              <div className={`${cardStyles.base} ${cardStyles.padding.lg} h-full`}>
+                <div className={spacing.relaxed}>
+                  <h2 className={`${typography.h2} ${spacing.tight}`}>Mitigation Checklist</h2>
+                  <p className="text-sm text-white/60">
+                    These are the safety actions required to reduce the job&apos;s overall risk.
+                  </p>
+                </div>
                 {totalCount === 0 ? (
                   <div className={`${emptyStateStyles.container} py-6`}>
                     <p className="text-sm text-white font-medium mb-2">No checklist items yet</p>
@@ -767,70 +770,77 @@ export default function JobDetailPage() {
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    {job.mitigation_items.map((item) => (
-                      <label
-                        key={item.id}
-                        className="flex items-start gap-3 p-4 rounded-lg hover:bg-white/5 transition-colors cursor-pointer border border-transparent hover:border-white/5"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={item.done}
-                          onChange={() => toggleMitigation(item.id, item.done)}
-                          disabled={updatingMitigation === item.id}
-                          className="mt-1 w-5 h-5 rounded border-white/20 bg-[#121212]/60 text-[#F97316] focus:ring-[#F97316] focus:ring-2 disabled:opacity-50"
-                        />
-                        <span
-                          className={`flex-1 text-sm ${
-                            item.done ? 'line-through text-[#A1A1A1]/50' : 'text-[#A1A1A1]'
+                    {job.mitigation_items.map((item, index) => (
+                      <div key={item.id}>
+                        <label
+                          className={`flex items-start gap-3 p-4 rounded-lg hover:bg-white/5 transition-colors cursor-pointer border border-transparent hover:border-white/5 ${
+                            item.done ? 'opacity-100' : 'opacity-90'
                           }`}
                         >
-                          {item.title}
-                        </span>
-                      </label>
+                          <input
+                            type="checkbox"
+                            checked={item.done}
+                            onChange={() => toggleMitigation(item.id, item.done)}
+                            disabled={updatingMitigation === item.id}
+                            className="mt-1 w-5 h-5 rounded border-white/20 bg-[#121212]/60 text-[#F97316] focus:ring-[#F97316] focus:ring-2 disabled:opacity-50"
+                          />
+                          <span
+                            className={`flex-1 text-sm ${
+                              item.done ? 'line-through text-[#A1A1A1]/50' : 'text-[#A1A1A1]'
+                            }`}
+                          >
+                            {item.title}
+                          </span>
+                        </label>
+                        {/* Subtle grouping spacing every 4-5 items */}
+                        {(index + 1) % 5 === 0 && index < job.mitigation_items.length - 1 && (
+                          <div className="h-2"></div>
+                        )}
+                      </div>
                     ))}
                   </div>
                 )}
-                    {totalCount > 0 && (
-                      <p className="text-sm text-[#A1A1A1] mt-6 pt-6 border-t border-white/10">
-                        Mark mitigations complete only after verifying the action was performed on-site.
-                      </p>
-                    )}
+                {totalCount > 0 && (
+                  <p className="text-sm text-[#A1A1A1] mt-6 pt-6 border-t border-white/10">
+                    Mark mitigations complete only after verifying the action was performed on-site.
+                  </p>
+                )}
               </div>
             </motion.div>
 
             <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }}>
-              <div className={`${cardStyles.base} ${cardStyles.padding.lg} h-full flex flex-col`}>
-                <h2 className={`${typography.h2} mb-6`}>Job Details</h2>
+              <div className={`${cardStyles.base} ${cardStyles.padding.lg} h-full flex flex-col bg-[#121212]/60 border-white/5`}>
+                <h2 className={`${typography.h2} mb-6 text-white/80`}>Job Details</h2>
 
                 <div className="space-y-4 mb-8 flex-1">
                   {job.description && (
                     <div>
-                      <div className="text-xs text-[#A1A1A1] uppercase mb-1">Description</div>
-                      <div className="text-sm text-white">{job.description}</div>
+                      <div className="text-xs text-white/40 uppercase mb-1">Description</div>
+                      <div className="text-sm text-white/90">{job.description}</div>
                     </div>
                   )}
                   <div>
-                    <div className="text-xs text-[#A1A1A1] uppercase mb-1">Created</div>
-                    <div className="text-sm text-white">
+                    <div className="text-xs text-white/40 uppercase mb-1">Created</div>
+                    <div className="text-sm text-white/90">
                       {new Date(job.created_at).toLocaleDateString()}
                     </div>
                   </div>
                   <div>
-                    <div className="text-xs text-[#A1A1A1] uppercase mb-1">Status</div>
-                    <div className="text-sm text-white capitalize">{job.status}</div>
+                    <div className="text-xs text-white/40 uppercase mb-1">Status</div>
+                    <div className="text-sm text-white/90 capitalize">{job.status}</div>
                   </div>
                 </div>
 
                 <div className="pt-6 border-t border-white/10 space-y-3">
                   <button
                     onClick={() => router.push(`/dashboard/jobs/${jobId}/report`)}
-                    className={`${buttonStyles.primary} w-full`}
+                    className={`${buttonStyles.secondary} w-full`}
                   >
                     View Live Report →
                   </button>
                   <button
                     onClick={() => router.push(`/dashboard/jobs/${jobId}/edit`)}
-                    className={`${buttonStyles.secondary} w-full`}
+                    className={`${buttonStyles.secondary} w-full opacity-70 hover:opacity-100`}
                   >
                     Edit Job Details
                   </button>
@@ -856,7 +866,7 @@ export default function JobDetailPage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.4 }}
-              className="mt-8"
+              className="mt-12"
             >
               <div className={`${cardStyles.base} ${cardStyles.padding.lg}`}>
                 <div className="flex items-center justify-between mb-6">
@@ -947,7 +957,7 @@ export default function JobDetailPage() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.5 }}
-                className="mt-8"
+                className="mt-12"
               >
                 {loadingWorkers ? (
                   <div className={`${cardStyles.base} ${cardStyles.padding.lg}`}>
@@ -1036,7 +1046,7 @@ export default function JobDetailPage() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.6 }}
-                className="mt-8"
+                className="mt-12"
               >
                 {loadingEvidence ? (
                   <div className={`${cardStyles.base} ${cardStyles.padding.lg}`}>
