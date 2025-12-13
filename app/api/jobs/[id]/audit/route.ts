@@ -1,17 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getOrganizationContext, verifyJobOwnership } from '@/lib/utils/organizationGuard'
-import { generatePermitPack } from '@/lib/utils/permitPack'
 import { getOrgEntitlements, assertEntitled, EntitlementError } from '@/lib/entitlements'
 import { logFeatureUsage } from '@/lib/featureLogging'
+import { createSupabaseServerClient } from '@/lib/supabase/server'
 
 export const runtime = 'nodejs'
 
 /**
- * POST /api/jobs/[id]/permit-pack
- * Generate a comprehensive permit pack ZIP for a job
+ * GET /api/jobs/[id]/audit
+ * Get version history / audit log for a job
  * Business plan feature only
  */
-export async function POST(
+export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -21,17 +21,17 @@ export async function POST(
   try {
     await verifyJobOwnership(jobId, organization_id)
 
-    // Get entitlements (single source of truth)
+    // Get entitlements
     const entitlements = await getOrgEntitlements(organization_id)
 
-    // Assert entitlement (throws EntitlementError if not allowed)
+    // Assert entitlement
     try {
-      assertEntitled(entitlements, 'permit_packs')
+      assertEntitled(entitlements, 'version_history')
     } catch (err) {
       if (err instanceof EntitlementError) {
         // Log denied attempt
         await logFeatureUsage({
-          feature: 'permit_pack',
+          feature: 'version_history',
           action: 'denied',
           allowed: false,
           organizationId: organization_id,
@@ -45,7 +45,7 @@ export async function POST(
           },
           targetType: 'job',
           targetId: jobId,
-          logUsage: false, // Don't log usage for denied attempts
+          logUsage: false,
         })
 
         return NextResponse.json(
@@ -59,17 +59,24 @@ export async function POST(
       throw err
     }
 
-    // Generate permit pack
-    const result = await generatePermitPack({
-      jobId,
-      organizationId: organization_id,
-      userId: user_id,
-    })
+    // Fetch audit logs
+    const supabase = await createSupabaseServerClient()
+    const { data: auditLogs, error } = await supabase
+      .from('audit_logs')
+      .select('*')
+      .eq('organization_id', organization_id)
+      .or(`target_id.eq.${jobId},metadata->>job_id.eq.${jobId}`)
+      .order('created_at', { ascending: false })
+      .limit(100)
 
-    // Log successful usage (audit + usage logs)
+    if (error) {
+      throw error
+    }
+
+    // Log successful access
     await logFeatureUsage({
-      feature: 'permit_pack',
-      action: 'generated',
+      feature: 'version_history',
+      action: 'accessed',
       allowed: true,
       organizationId: organization_id,
       actorId: user_id,
@@ -78,7 +85,7 @@ export async function POST(
         subscription_status: entitlements.status,
         period_end: entitlements.period_end,
         job_id: jobId,
-        file_size: result.size,
+        entries_count: auditLogs?.length || 0,
       },
       targetType: 'job',
       targetId: jobId,
@@ -86,25 +93,18 @@ export async function POST(
     })
 
     return NextResponse.json({
-      success: true,
-      data: {
-        downloadUrl: result.downloadUrl,
-        filePath: result.filePath,
-        size: result.size,
-      },
+      data: auditLogs || [],
     })
   } catch (error: any) {
-    // Handle entitlement errors (already logged)
     if (error instanceof EntitlementError) {
       throw error
     }
 
-    // Handle other errors
-    console.error('Permit pack generation failed:', error)
+    console.error('Failed to fetch audit log:', error)
     return NextResponse.json(
       {
-        error: error.message || 'Failed to generate permit pack',
-        code: 'GENERATION_FAILED',
+        error: error.message || 'Failed to fetch audit log',
+        code: 'FETCH_FAILED',
       },
       { status: 500 }
     )

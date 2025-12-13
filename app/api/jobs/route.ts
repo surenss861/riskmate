@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { calculateRiskScore, generateMitigationItems } from '@/lib/utils/riskScoring'
+import { getOrgEntitlements } from '@/lib/entitlements'
+import { logFeatureUsage } from '@/lib/featureLogging'
 
 export const runtime = 'nodejs'
 
@@ -148,33 +150,45 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Check subscription limits (Starter: 3 jobs/month)
-    const { data: subscription } = await supabase
-      .from('subscriptions')
-      .select('tier, current_period_start')
-      .eq('organization_id', organization_id)
-      .eq('status', 'active')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
+    // Check subscription limits using entitlements system
+    const entitlements = await getOrgEntitlements(organization_id)
 
-    const tier = subscription?.tier || 'starter'
-    const periodStart = subscription?.current_period_start
-      ? new Date(subscription.current_period_start)
-      : new Date(new Date().getFullYear(), new Date().getMonth(), 1)
+    // Check job creation limit
+    if (entitlements.jobs_monthly_limit !== null) {
+      // Get period start from subscription or default to current month
+      const periodStart = entitlements.period_end
+        ? new Date(new Date(entitlements.period_end).getTime() - 30 * 24 * 60 * 60 * 1000) // 30 days before period end
+        : new Date(new Date().getFullYear(), new Date().getMonth(), 1)
 
-    if (tier === 'starter') {
       const { count } = await supabase
         .from('jobs')
         .select('*', { count: 'exact', head: true })
         .eq('organization_id', organization_id)
         .gte('created_at', periodStart.toISOString())
 
-      if ((count || 0) >= 3) {
+      if ((count || 0) >= entitlements.jobs_monthly_limit) {
+        // Log denied attempt
+        await logFeatureUsage({
+          feature: 'job_creation',
+          action: 'denied',
+          allowed: false,
+          organizationId: organization_id,
+          actorId: userId,
+          metadata: {
+            plan_tier: entitlements.tier,
+            subscription_status: entitlements.status,
+            period_end: entitlements.period_end,
+            reason: `Job limit reached (${entitlements.jobs_monthly_limit} jobs/month on ${entitlements.tier} plan)`,
+            current_count: count || 0,
+            limit: entitlements.jobs_monthly_limit,
+          },
+          logUsage: false,
+        })
+
         return NextResponse.json(
           {
             code: 'JOB_LIMIT',
-            message: 'Starter plan limit reached (3 jobs/month). Upgrade to Pro for unlimited jobs.',
+            message: `${entitlements.tier === 'starter' ? 'Starter' : 'Plan'} limit reached (${entitlements.jobs_monthly_limit} jobs/month). Upgrade to Pro for unlimited jobs.`,
           },
           { status: 403 }
         )
