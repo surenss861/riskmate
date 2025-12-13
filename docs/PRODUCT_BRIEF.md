@@ -1,378 +1,152 @@
 # RiskMate Product Brief
 
+**For:** Executives, Buyers, Investors  
 **Version:** 1.0  
-**Date:** 2025-01-15  
-**Status:** Enterprise-Ready
+**Last Updated:** January 15, 2025
 
 ---
 
 ## What RiskMate Does
 
-### Core Functionality
+RiskMate is **compliance software for contractors** that documents workplace safety, calculates risk scores, and generates audit-ready reports for inspectors, insurers, and legal protection.
 
-**Job-Based Risk Management**
-- Create jobs with client details, location, and type
-- Automatically calculate risk scores based on identified hazards
-- Generate required safety controls (mitigations)
-- Track mitigation completion
-- Generate audit-ready reports
-
-**Template System**
-- Save hazard combinations as templates
-- Save job configurations as templates
-- Apply templates to new jobs instantly
-- Standardize safety across projects
-
-**Evidence Management**
-- Upload photos and documents
-- Manager-only verification workflow
-- Approve or reject evidence with reasons
-- Complete evidence library per job
-
-**Worker Assignment**
-- Assign workers to jobs
-- Track accountability
-- View assignment history
-- Check-in/check-out (future)
-
-**Compliance & Audit**
-- Complete version history (audit trail)
-- Permit pack generation (Business plan)
-- Exportable reports
-- Read-only audit logs
-
-**Team Management**
-- Invite team members
-- Role-based permissions (Owner/Admin/Member)
-- Organization-level data isolation
+**Core Value:** Turn safety documentation from a liability into a competitive advantage.
 
 ---
 
-## What RiskMate Deliberately Does NOT Do
+## Who It's For
 
-### Out of Scope
-
-**❌ Project Management**
-- No Gantt charts
-- No task dependencies
-- No resource allocation
-- No scheduling
-
-**❌ Financial Management**
-- No invoicing
-- No payment tracking
-- No budget management
-- No cost estimation
-
-**❌ Communication Tools**
-- No chat/messaging
-- No notifications (beyond toasts)
-- No email integration
-- No Slack/Teams integration
-
-**❌ Mobile App**
-- Web-first design
-- Responsive for mobile browsers
-- No native iOS/Android apps
-
-**❌ Advanced Analytics**
-- No predictive analytics
-- No machine learning
-- No AI recommendations
-- Basic reporting only
-
-**❌ Integrations**
-- No third-party integrations
-- No API for external systems
-- No webhooks
-- Self-contained system
-
-**❌ Custom Workflows**
-- Fixed workflow structure
-- No custom fields
-- No workflow builder
-- Standardized process only
+**Primary:** Construction contractors, tradespeople, project managers  
+**Secondary:** Safety officers, compliance managers, insurance brokers  
+**Enterprise:** Multi-site contractors, general contractors, safety consultancies
 
 ---
 
-## Who RiskMate Is For
+## The Problem We Solve
 
-### Primary Users
-
-**Contractors (Small to Medium)**
-- Residential contractors
-- Commercial contractors
-- Specialty trades (roofing, electrical, plumbing)
-- General contractors
-
-**Safety Managers**
-- On-site safety coordinators
-- Compliance officers
-- Risk management professionals
-
-**Project Managers**
-- Job site supervisors
-- Foremen
-- Team leads
-
-### Use Cases
-
-**Compliance Documentation**
-- OSHA compliance
-- WSIB compliance
-- Insurance requirements
-- Permit applications
-
-**Risk Management**
-- Job site risk assessment
-- Hazard identification
-- Safety control tracking
-- Incident prevention
-
-**Audit Preparation**
-- Inspector readiness
-- Insurance claim support
-- Legal documentation
-- Due diligence
+1. **Inspector Anxiety:** "Did I document everything? Will this hold up in court?"
+2. **Insurance Claims:** "We need proof of safety measures taken."
+3. **Legal Protection:** "Show me the audit trail of who did what, when."
+4. **Repeat Work:** "I do the same job type 50 times—why recreate the safety plan each time?"
 
 ---
 
-## Who RiskMate Is NOT For
+## How RiskMate Works (Simple)
 
-### Not a Fit
+1. **Create Job** → Enter client, location, job type
+2. **Identify Hazards** → Select from 100+ workplace hazards (or use template)
+3. **Auto-Calculate Risk** → System generates risk score (0-100) and required safety controls
+4. **Track Mitigation** → Check off safety measures as completed
+5. **Upload Evidence** → Photos, documents, permits
+6. **Generate Report** → One-click PDF for inspectors/insurers
+7. **Permit Pack** (Business) → ZIP archive with everything for permit offices
 
-**❌ Large Enterprises**
-- No enterprise SSO
-- No custom integrations
-- No dedicated support
-- No SLA guarantees (yet)
-
-**❌ Non-Contractors**
-- Not for office workers
-- Not for retail businesses
-- Not for service-only businesses
-- Construction/trades focus
-
-**❌ DIY Users**
-- Requires team structure
-- Manager approval workflows
-- Not for individual use
-- Organization-based
-
-**❌ Price-Sensitive Buyers**
-- Premium pricing ($49-$149/month)
-- No free tier
-- No discounts
-- Value-focused, not cost-focused
-
-**❌ Feature Requesters**
-- Scope is locked
-- No custom development
-- Standardized workflows only
-- "What you see is what you get"
+**Result:** Complete, timestamped, audit-ready documentation in minutes instead of hours.
 
 ---
 
-## Pricing Confidence
+## Key Differentiators
 
-### No Discounts Policy
-
-**Why:**
-- Product is complete and enterprise-ready
-- Pricing reflects value, not cost
-- Discounts devalue the product
-- Serious buyers pay full price
-
-**What to Say:**
-> "Our pricing is $49/month for Starter, $99/month for Pro, and $149/month for Business. This reflects the value of enterprise-grade compliance documentation. We don't offer discounts because the product is worth the price."
-
-### No Apology Language
-
-**Avoid:**
-- "It's a bit expensive, but..."
-- "We're still working on..."
-- "Sorry about..."
-- "We're planning to add..."
-
-**Instead:**
-- "This is how serious contractors document risk."
-- "The product is complete and enterprise-ready."
-- "This is what inspectors and insurers need to see."
-- "RiskMate is built for compliance, not convenience."
-
-### Pricing Tiers
-
-**Starter ($49/month)**
-- 5 jobs
-- 2 templates
-- Basic reporting
-- Team management
-
-**Pro ($99/month)**
-- Unlimited jobs
-- Unlimited templates
-- Advanced reporting
-- Job assignment
-
-**Business ($149/month)**
-- Everything in Pro
-- Permit packs
-- Evidence verification
-- Version history
-
-**Enterprise (Custom)**
-- Custom pricing
-- Dedicated support
-- SLA guarantees
-- Custom integrations (future)
+✅ **Automated Risk Scoring** — No manual calculations, inspector-trusted algorithm  
+✅ **Template System** — Save repeat work, standardize safety across jobs  
+✅ **Evidence Verification** — Manager approval workflow for compliance  
+✅ **Complete Audit Trail** — Every action logged with who/when/why  
+✅ **Permit Packs** — One-click ZIP for permit applications  
+✅ **Inspector-Safe** — Designed to pass real inspections, not just look good
 
 ---
 
-## Value Proposition
+## Pricing & Plans
 
-### For Contractors
+| Plan | Price | Jobs | Features |
+|------|-------|------|----------|
+| **Starter** | $29/mo | 10/month | Risk assessment, PDF reports, 3 seats |
+| **Pro** | $79/mo | Unlimited | All Starter + Analytics, 10 seats |
+| **Business** | $129/mo | Unlimited | All Pro + Permit Packs, Unlimited seats |
 
-**"Document risk like a professional, not a startup."**
-
-- Complete compliance documentation
-- Inspector-ready reports
-- Audit-proof audit trails
-- Professional credibility
-
-### For Safety Managers
-
-**"Stop worrying about compliance. Start proving it."**
-
-- Manager-only approval workflows
-- Complete accountability
-- Evidence verification
-- Version history
-
-### For Insurers
-
-**"See exactly what happened, when, and who was involved."**
-
-- Complete audit trail
-- Evidence documentation
-- Worker accountability
-- Permit packs
+**Target Customer:** Pro ($79/mo) for most contractors, Business ($129/mo) for multi-site operations.
 
 ---
 
-## Competitive Positioning
+## Outcomes (What Buyers Get)
 
-### Not Competing On
+**For Contractors:**
+- Pass inspections faster (complete documentation)
+- Win insurance claims (proof of safety measures)
+- Reduce legal risk (immutable audit trail)
+- Save time (templates, automation)
 
-**❌ Price**
-- Not the cheapest option
-- Value over cost
-- Premium positioning
+**For Safety Officers:**
+- Standardize safety across teams
+- Track compliance in real-time
+- Generate reports for management
+- Verify evidence before submission
 
-**❌ Features**
-- Not the most features
-- Focused feature set
-- Quality over quantity
-
-**❌ Flexibility**
-- Not the most customizable
-- Standardized workflows
-- Consistency over flexibility
-
-### Competing On
-
-**✅ Compliance**
-- Built for audits
-- Inspector-ready
-- Legal defensibility
-
-**✅ Quality**
-- Enterprise-grade polish
-- Consistent UX
-- Professional credibility
-
-**✅ Trust**
-- Complete audit trails
-- Manager oversight
-- Accountability
+**For Enterprise:**
+- Multi-site visibility
+- Role-based access control
+- Complete audit trail for compliance
+- Permit pack generation for permit offices
 
 ---
 
-## Founder Confidence Statements
+## Trust Signals
 
-### Practice Saying These
-
-**When Asked About Price:**
-> "This is how serious contractors document risk. The pricing reflects the value of enterprise-grade compliance documentation."
-
-**When Asked About Features:**
-> "RiskMate is complete and enterprise-ready. We've locked scope to ensure quality and consistency."
-
-**When Asked About Customization:**
-> "We've standardized workflows to ensure compliance and consistency. This is what inspectors and insurers need to see."
-
-**When Asked About Competition:**
-> "RiskMate is built for compliance, not convenience. We compete on quality and trust, not features or price."
-
-**When Asked About Roadmap:**
-> "The product is complete. We're focused on sales and customer success, not new features."
+✅ **Audit-Ready:** Every action logged with timestamp and actor  
+✅ **Immutable History:** Version history cannot be edited or deleted  
+✅ **Evidence Chain:** Photos/documents linked to jobs with verification workflow  
+✅ **Inspector-Tested:** Designed with real inspection workflows in mind  
+✅ **Data Isolation:** Row-Level Security ensures no cross-org data leakage  
+✅ **Compliance-First:** Built for legal/insurance/regulatory requirements
 
 ---
 
-## Success Metrics
+## What We Don't Do (Boundaries)
 
-### Product Metrics
-- ✅ Feature complete
-- ✅ Scope locked
-- ✅ Performance polished
-- ✅ UX consistent
-- ✅ Legally defensible
-- ✅ Demo-ready
+❌ **Real-time Collaboration** — No live editing, no presence indicators  
+❌ **Bulk Operations** — One job at a time, one evidence item at a time  
+❌ **External Integrations** — No webhooks, no third-party API access  
+❌ **Historical Editing** — Audit logs are append-only, cannot be modified  
+❌ **Cross-Organization Access** — Strict data isolation, no shared workspaces
 
-### Sales Metrics (Target)
-- Demo-to-trial conversion: 30%+
-- Trial-to-paid conversion: 20%+
-- Average deal size: $99/month (Pro)
-- Enterprise deals: $149+/month (Business)
-
-### Customer Metrics (Target)
-- Customer satisfaction: 4.5+/5
-- Net Promoter Score: 50+
-- Churn rate: <5% monthly
-- Expansion revenue: 20%+
+**Why:** These boundaries ensure security, compliance, and audit integrity.
 
 ---
 
-## Summary
+## Demo
 
-**RiskMate is:**
-- Complete
-- Enterprise-ready
-- Compliance-focused
-- Trustworthy
-- Professional
+**Interactive Demo:** `/demo` — No signup required, guided walkthrough of core workflow.
 
-**RiskMate is not:**
-- A project management tool
-- A financial system
-- A communication platform
-- A mobile app
-- A custom development shop
+**What It Shows:**
+1. Create Job
+2. Apply Template
+3. Assign Worker
+4. Approve Evidence
+5. Generate Permit Pack
+6. View Version History
 
-**RiskMate is for:**
-- Serious contractors
-- Safety managers
-- Compliance-focused teams
-- Professional organizations
-
-**RiskMate is not for:**
-- Price-sensitive buyers
-- Feature requesters
-- DIY users
-- Large enterprises (yet)
+**Demo Data:** Simulated locally, no real data saved.
 
 ---
 
-**Remember:** You're not selling software. You're selling peace of mind.
+## Technical Foundation
 
-**This is how serious contractors document risk.**
+- **Security:** Row-Level Security (RLS) at database level
+- **Audit:** Immutable audit logs for every action
+- **Compliance:** GDPR-ready, data export/deletion available
+- **Performance:** Optimized for speed (caching, prefetching, optimistic UI)
+- **Reliability:** Daily backups, point-in-time recovery
 
+---
+
+## Next Steps for Buyers
+
+1. **Try Demo:** `/demo` — See it in action (5 minutes)
+2. **Start Free Trial:** Sign up, create first job (no credit card)
+3. **Talk to Sales:** For enterprise needs, custom pricing, or questions
+
+---
+
+**Questions?** Contact: sales@riskmate.com  
+**Documentation:** See `DEVELOPER_CONTRACT.md` for technical details  
+**Compliance:** See `COMPLIANCE_APPENDIX.md` for audit/legal details

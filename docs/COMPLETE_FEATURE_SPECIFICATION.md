@@ -28,6 +28,15 @@
 
 **Purpose:** Create a new safety job with client details, location, and initial risk assessment.
 
+**Contract:**
+
+- **Inputs:** Client name, type, location, description, job type, dates (optional), risk factor codes (optional), organization context (from session)
+- **Outputs:** Job record in `jobs` table, risk score calculation (if hazards selected), mitigation items generated (if hazards selected), audit log: `job.created`
+- **Invariants:** Job always belongs to user's organization, job always has `created_by` = current user, risk score is 0-100 (capped), if hazards selected then risk score must be calculated, if risk score calculated then mitigation items must be generated
+- **Audit Events:** `job.created` (with metadata: client_name, job_type, location, risk_factor_count)
+- **Plan/Role Gates:** Any authenticated user can create jobs. Starter plan: 10 jobs/month limit (hard). Pro/Business: Unlimited.
+- **Failure Modes:** Plan limit reached → `403` with `JOB_LIMIT` code. Invalid data → `400` with validation errors. Auth failure → `401` Unauthorized. Server error → `500` with generic message.
+
 **How It Works:**
 
 1. **User Flow:**
@@ -233,6 +242,17 @@
 
 **Purpose:** Comprehensive database of workplace hazards with severity ratings.
 
+**Contract:**
+
+- **Inputs:** Risk factor library (from database), user selections (risk factor codes)
+- **Outputs:** Risk factors displayed, grouped by category, with severity badges
+- **Invariants:** All risk factors must be active (`is_active = true`), severity must be one of: low/medium/high/critical, categories are predefined
+- **Audit Events:** None (library is read-only, selections logged via `hazards.updated`)
+- **Plan/Role Gates:** Available on all plans, no role restrictions
+- **Failure Modes:** Library fetch error → `500` with message: "Failed to load risk factors". Empty library → Returns empty array (not an error).
+
+---
+
 **How It Works:**
 
 1. **Risk Factor Structure:**
@@ -279,6 +299,17 @@
 ### 2.2 Risk Score Calculation
 
 **Purpose:** Quantify job risk using weighted algorithm.
+
+**Contract:**
+
+- **Inputs:** Array of risk factor codes, risk factor library (from database)
+- **Outputs:** `overall_score` (0-100), `risk_level` ('low' | 'medium' | 'high' | 'critical'), `factors` array with weights
+- **Invariants:** Score is sum of severity weights capped at 100, risk level determined by thresholds (Low: 0-40, Medium: 41-70, High: 71-90, Critical: 91-100), every selected factor must exist and be active, calculation is deterministic (same inputs = same output)
+- **Audit Events:** None (calculation is internal, logged via `hazards.updated`)
+- **Plan/Role Gates:** Available on all plans, no role restrictions
+- **Failure Modes:** Invalid factor codes → `400` with message: "Invalid risk factor codes provided". No factors selected → Returns score 0, level 'low' (not an error). Calculation error → `500` with message: "Failed to calculate risk score".
+
+---
 
 **Algorithm:**
 
@@ -357,6 +388,17 @@
 
 **Purpose:** Automatically create safety checklist from identified hazards.
 
+**Contract:**
+
+- **Inputs:** Job ID, array of risk factor codes, risk factor library with `mitigation_steps`
+- **Outputs:** Mitigation items inserted into `mitigation_items` table, one item per mitigation step (or default if no steps defined)
+- **Invariants:** Every selected risk factor must have mitigation items generated, items must belong to job, items must reference risk_factor_id, items start as `done = false`
+- **Audit Events:** None (generation is internal, completion logged via `mitigation.completed`)
+- **Plan/Role Gates:** Available on all plans, no role restrictions (automatic on job creation/update)
+- **Failure Modes:** Generation error → `500` with message: "Failed to generate mitigation items". No factors selected → No items generated (not an error).
+
+---
+
 **How It Works:**
 
 1. **Generation Process:**
@@ -398,6 +440,17 @@
 ### 3.2 Mitigation Completion
 
 **Purpose:** Track which safety measures have been completed.
+
+**Contract:**
+
+- **Inputs:** Job ID, mitigation item ID, new completion state (true/false)
+- **Outputs:** `mitigation_items.done` updated, `mitigation_items.is_completed` updated, `jobs.updated_at` updated, audit log: `mitigation.completed` or `mitigation.uncompleted`
+- **Invariants:** Mitigation item must belong to job, job must belong to user's organization, completion state is boolean, audit log always written on state change
+- **Audit Events:** `mitigation.completed` (when checked), `mitigation.uncompleted` (when unchecked)
+- **Plan/Role Gates:** Any authenticated user can complete mitigations, no plan restrictions
+- **Failure Modes:** Item not found → `404` with message: "Mitigation item not found". Job not found → `404` with message: "Job not found". Auth failure → `401` Unauthorized. Update error → `500` with message: "Failed to update mitigation".
+
+---
 
 **How It Works:**
 
@@ -587,6 +640,17 @@
 
 **Purpose:** Attach photos and documents to jobs for compliance.
 
+**Contract:**
+
+- **Inputs:** Job ID, file(s) (photos or PDFs), organization context
+- **Outputs:** Files uploaded to Supabase Storage, metadata saved to `documents` table, photos optimized (compression, GPS extraction), audit log: `evidence.uploaded`
+- **Invariants:** Files must belong to job, job must belong to user's organization, file paths are unique per organization/job, GPS metadata extracted if available
+- **Audit Events:** `evidence.uploaded` (with metadata: document_id, file_name, file_type, file_size)
+- **Plan/Role Gates:** Any authenticated user can upload evidence, no plan restrictions
+- **Failure Modes:** File too large → `400` with message: "File size exceeds limit". Invalid file type → `400` with message: "Invalid file type". Upload error → `500` with message: "Failed to upload document".
+
+---
+
 **How It Works:**
 
 1. **Upload Flow:**
@@ -629,6 +693,17 @@
 ### 5.2 Evidence Verification (Premium)
 
 **Purpose:** Manager approval workflow for uploaded evidence.
+
+**Contract:**
+
+- **Inputs:** Job ID, document ID, status ('approved' | 'rejected'), rejection reason (optional, recommended for rejections)
+- **Outputs:** `evidence_verifications` record upserted, status/reviewed_by/reviewed_at updated, audit log: `evidence.approved` or `evidence.rejected`
+- **Invariants:** Document must belong to job, job must belong to user's organization, user must be owner/admin (enforced), status must be 'approved' or 'rejected', rejection reason recommended but not required
+- **Audit Events:** `evidence.approved` (with metadata: document_id, document_name), `evidence.rejected` (with metadata: document_id, document_name, rejection_reason)
+- **Plan/Role Gates:** Owner/admin only, available on all plans
+- **Failure Modes:** Insufficient permissions → `403` with message: "Only owners and admins can verify evidence". Document not found → `404` with message: "Document not found". Invalid status → `400` with message: "Status must be 'approved' or 'rejected'". Auth failure → `401` Unauthorized.
+
+---
 
 **How It Works:**
 
@@ -689,6 +764,17 @@
 ### 6.1 Job Assignment
 
 **Purpose:** Assign workers to jobs for accountability tracking.
+
+**Contract:**
+
+- **Inputs:** Job ID, worker ID (user ID)
+- **Outputs:** `job_assignments` record inserted, audit log: `worker.assigned`
+- **Invariants:** Worker must belong to same organization, job must belong to same organization, user must be owner/admin (enforced), assignment is idempotent (duplicate assignment = no-op)
+- **Audit Events:** `worker.assigned` (with metadata: worker_id, worker_name), `worker.unassigned` (with metadata: worker_id, worker_name)
+- **Plan/Role Gates:** Owner/admin only, available on all plans
+- **Failure Modes:** Insufficient permissions → `403` with message: "Only owners and admins can assign workers". Worker not found → `404` with message: "Worker not found". Worker in different org → `403` with message: "Worker must belong to your organization". Job not found → `404` with message: "Job not found".
+
+---
 
 **How It Works:**
 
@@ -800,6 +886,17 @@
 ### 6.3 Permit Packs (Business Plan Only)
 
 **Purpose:** Generate comprehensive ZIP archive for permit applications.
+
+**Contract:**
+
+- **Inputs:** Job ID, organization context
+- **Outputs:** ZIP file generated (PDF, CSVs, JSON, photos, documents), ZIP uploaded to Supabase Storage, signed download URL returned, audit log: `permit_pack.generated`
+- **Invariants:** Job must belong to user's organization, user must be owner/admin, user must have Business plan, ZIP is reproducible (same job = same contents), ZIP is immutable (cannot be edited after generation)
+- **Audit Events:** `permit_pack.generated` (with metadata: file_path, size, file_name)
+- **Plan/Role Gates:** Owner/admin only, Business plan only
+- **Failure Modes:** Insufficient plan → `403` with `FEATURE_RESTRICTED` code, message: "Permit Pack Generator is only available for Business plan subscribers". Insufficient permissions → `403` with message: "Only owners and admins can generate permit packs". Job not found → `404` with message: "Job not found". Generation error → `500` with message: "Failed to generate permit pack".
+
+---
 
 **How It Works:**
 
@@ -1358,6 +1455,28 @@ GET /api/analytics/summary
 - All tables scoped by `organization_id`
 - Foreign keys enforce referential integrity
 - RLS policies enforce access control
+
+---
+
+## Feature Contract Format
+
+**Note:** All features above follow this contract format. For complete contract specifications, see `DEVELOPER_CONTRACT.md`.
+
+**Contract Headers Include:**
+- **Inputs:** What user/system provides
+- **Outputs:** What changes + what's produced
+- **Invariants:** What must always be true
+- **Audit Events:** Exact event names written
+- **Plan/Role Gates:** One-line gate description
+- **Failure Modes:** What can go wrong + UI copy expectation
+
+---
+
+## Related Documentation
+
+- **Product Brief:** `PRODUCT_BRIEF.md` — For executives, buyers, investors
+- **Developer Contract:** `DEVELOPER_CONTRACT.md` — For engineers, API consumers
+- **Compliance Appendix:** `COMPLIANCE_APPENDIX.md` — For legal, compliance, insurance reviewers
 
 ---
 
