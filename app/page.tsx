@@ -841,7 +841,8 @@ export default function HomePage() {
               transition={{ duration: 0.6, delay: 0.2 }}
               whileHover={{ y: -3, backgroundColor: '#1a1a1a' }}
             >
-              <h3 className="text-2xl font-semibold mb-2">Starter</h3>
+              <h3 className="text-2xl font-semibold mb-1">Starter</h3>
+              <p className="text-sm text-white/50 mb-4">Solo contractors & small crews</p>
               <div className="mb-2">
                 <span className="text-4xl font-bold">$29</span>
                 <span className="text-[#A1A1A1]">/mo</span>
@@ -862,7 +863,7 @@ export default function HomePage() {
                 </li>
                 <li className="flex items-start">
                   <span className="text-[#F97316] mr-2">✓</span>
-                <span className="text-[#A1A1A1]">Shareable job reports (view-only links)</span>
+                <span className="text-[#A1A1A1]">View-only reports</span>
                 </li>
               </ul>
               <button
@@ -884,7 +885,8 @@ export default function HomePage() {
               whileHover={{ y: -3, backgroundColor: '#1a1a1a' }}
             >
               <div className="text-xs font-semibold text-[#F97316] mb-2">Most Popular</div>
-              <h3 className="text-2xl font-semibold mb-2">Pro</h3>
+              <h3 className="text-2xl font-semibold mb-1">Pro</h3>
+              <p className="text-sm text-white/50 mb-4">Growing teams managing active jobs</p>
               <div className="mb-2">
                 <span className="text-4xl font-bold">$59</span>
                 <span className="text-[#A1A1A1]">/mo</span>
@@ -893,11 +895,11 @@ export default function HomePage() {
               <ul className="space-y-3 mb-8">
                 <li className="flex items-start">
                   <span className="text-[#F97316] mr-2">✓</span>
-                  <span className="text-[#A1A1A1]">Unlimited jobs</span>
+                  <span className="text-white font-semibold">Unlimited jobs</span>
                 </li>
                 <li className="flex items-start">
                   <span className="text-[#F97316] mr-2">✓</span>
-                <span className="text-[#A1A1A1]">Up to 5 team seats</span>
+                <span className="text-white font-semibold">Up to 5 team seats</span>
               </li>
               <li className="flex items-start">
                 <span className="text-[#F97316] mr-2">✓</span>
@@ -905,7 +907,7 @@ export default function HomePage() {
                 </li>
                 <li className="flex items-start">
                   <span className="text-[#F97316] mr-2">✓</span>
-                <span className="text-[#A1A1A1]">Live reports + client share links</span>
+                <span className="text-[#A1A1A1]">Live, shareable reports</span>
                 </li>
                 <li className="flex items-start">
                   <span className="text-[#F97316] mr-2">✓</span>
@@ -916,13 +918,13 @@ export default function HomePage() {
                 onClick={() => router.push('/signup?plan=pro')}
                 className="w-full px-6 py-3 bg-[#F97316] text-black rounded-lg hover:bg-[#FB923C] transition-colors font-semibold btn-primary"
               >
-                Get Started →
+                Start Pro →
               </button>
             </motion.div>
 
             {/* Business */}
             <motion.div 
-            className="card p-8 bg-[#121212] rounded-xl border border-white/5 md:order-3 relative"
+            className="card p-8 bg-gradient-to-b from-[#121212] via-[#1a1a1a] to-[#121212] rounded-xl border border-white/5 md:order-3 relative"
             style={{ boxShadow: '0 0 55px rgba(250, 204, 85, 0.25)' }}
               initial={{ opacity: 0, y: 30 }}
               whileInView={{ opacity: 1, y: 0 }}
@@ -930,13 +932,16 @@ export default function HomePage() {
               transition={{ duration: 0.6, delay: 0.4 }}
               whileHover={{ y: -3, backgroundColor: '#1a1a1a' }}
             >
+            <div className="border-t-2 border-[#FACC15]/30 mb-4 -mx-8 -mt-8"></div>
             <div className="text-xs font-semibold text-[#FACC15] mb-2">Audit-Ready</div>
-              <h3 className="text-2xl font-semibold mb-2">Business</h3>
+              <h3 className="text-2xl font-semibold mb-1">Business</h3>
+              <p className="text-sm text-white/50 mb-4">Companies facing inspections & insurers</p>
               <div className="mb-2">
                 <span className="text-4xl font-bold">$129</span>
                 <span className="text-[#A1A1A1]">/mo</span>
               </div>
-              <p className="text-xs text-[#A1A1A1] mb-6">per business</p>
+              <p className="text-xs text-[#A1A1A1] mb-1">per business</p>
+              <p className="text-xs text-white/50 mb-6 italic">Used by teams that need inspection-safe documentation.</p>
               <ul className="space-y-3 mb-8">
                 <li className="flex items-start">
                 <span className="text-[#FACC15] mr-2">✓</span>
@@ -944,7 +949,7 @@ export default function HomePage() {
                 </li>
                 <li className="flex items-start">
                 <span className="text-[#FACC15] mr-2">✓</span>
-                <span className="text-[#A1A1A1]">Permit Pack Generator (ZIP bundle)</span>
+                <span className="text-white font-semibold">Permit Pack Generator (ZIP bundle)</span>
               </li>
               <li className="flex items-start">
                 <span className="text-[#FACC15] mr-2">✓</span>
@@ -952,7 +957,7 @@ export default function HomePage() {
                 </li>
                 <li className="flex items-start">
                 <span className="text-[#FACC15] mr-2">✓</span>
-                <span className="text-[#A1A1A1]">Versioned audit logs (compliance history)</span>
+                <span className="text-white font-semibold">Immutable audit history</span>
                 </li>
                 <li className="flex items-start">
                 <span className="text-[#FACC15] mr-2">✓</span>
@@ -961,10 +966,9 @@ export default function HomePage() {
               </ul>
               <button
                 onClick={() => router.push('/signup?plan=business')}
-              className="w-full px-6 py-3 border border-[#FACC15]/40 text-[#FACC15] rounded-lg hover:bg-[#FACC15]/10 transition-colors font-semibold flex flex-col items-center gap-1"
+              className="w-full px-6 py-3 border border-[#FACC15]/40 text-[#FACC15] rounded-lg hover:bg-[#FACC15]/10 transition-colors font-semibold"
               >
-              <span>Upgrade to Business →</span>
-              <span className="text-xs text-[#FACC15]/80 font-normal">Get advanced compliance & support</span>
+              Start Business →
               </button>
             </motion.div>
           </div>
