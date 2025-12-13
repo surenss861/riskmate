@@ -638,118 +638,125 @@ export default function JobDetailPage() {
 
           <div className={`grid lg:grid-cols-3 ${spacing.gap.relaxed}`}>
             <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }}>
-              <div className={`${cardStyles.base} p-10 border ${getScoreBg(job.risk_score)}`}>
-                <div className="text-center mb-10">
-                  <div className={`text-9xl font-bold mb-4 ${getScoreColor(job.risk_score)}`}>
-                    {job.risk_score ?? '—'}
-                  </div>
-                  <div className="text-2xl font-semibold mb-3 text-white">
-                    {job.risk_level ? `${job.risk_level.toUpperCase()} Risk` : 'No Score'}
-                  </div>
-                  {job.risk_score_detail && (
-                    <div className="text-sm text-[#A1A1A1] mb-4">
-                      {job.risk_score_detail.factors.length} risk factor{job.risk_score_detail.factors.length !== 1 ? 's' : ''} detected
+              <div className={`${cardStyles.base} p-10 border ${getScoreBg(job.risk_score)} flex flex-col h-full`}>
+                {/* Growable Content Section */}
+                <div className="flex-1">
+                  <div className="text-center mb-10">
+                    <div className={`text-9xl font-bold mb-4 ${getScoreColor(job.risk_score)}`}>
+                      {job.risk_score ?? '—'}
                     </div>
-                  )}
-                  <div className="border-t border-white/10 pt-4 mb-4"></div>
-                  <p className="text-xs text-white/60 max-w-xs mx-auto">
-                    Calculated from identified hazards. Higher scores require more safety controls. This score is logged with timestamp for compliance and insurance purposes.
-                  </p>
-                </div>
-
-                {job.risk_score_detail && job.risk_score_detail.factors.length > 0 && (
-                    <div className={`${spacing.gap.normal} ${spacing.section}`}>
-                    {job.risk_score_detail.factors.map((factor, i) => (
-                      <div key={i} className="flex items-center gap-3 text-sm">
-                        <div className="w-2 h-2 rounded-full bg-[#F97316]" />
-                        <span className="text-[#A1A1A1]">{factor.name}</span>
-                        <span className="text-xs text-[#A1A1A1]/70 ml-auto">+{factor.weight}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {totalCount > 0 && (
-                  <div className="pt-6 border-t border-white/10">
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="text-sm text-[#A1A1A1]">Mitigation Progress</span>
-                      <span className="text-sm font-semibold text-white">
-                        {completedCount}/{totalCount}
-                      </span>
+                    <div className="text-2xl font-semibold mb-3 text-white">
+                      {job.risk_level ? `${job.risk_level.toUpperCase()} Risk` : 'No Score'}
                     </div>
-                    <div className="w-full bg-black/40 rounded-full h-2.5 overflow-hidden">
-                      <div
-                        className="bg-[#F97316] h-2.5 rounded-full transition-all duration-500"
-                        style={{ width: `${totalCount > 0 ? (completedCount / totalCount) * 100 : 0}%` }}
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {/* Risk & Hazards Section */}
-                <div className={dividerStyles.section}>
-                  <div className={`flex items-center justify-between ${spacing.normal}`}>
-                    <div>
-                      <h3 className={`${typography.h4} mb-1`}>Risk & Hazards</h3>
-                      <p className="text-xs text-white/50">
-                        {job.risk_score_detail?.factors.length || 0} hazard{job.risk_score_detail?.factors.length !== 1 ? 's' : ''} identified
-                      </p>
-                    </div>
-                    {organizationId && (
-                      <div className="flex items-center gap-2">
-                        {!job.applied_template_id && job.risk_score_detail && job.risk_score_detail.factors.length > 0 && (
-                          <button
-                            onClick={handleSaveAsTemplate}
-                            className={buttonStyles.tertiary}
-                            title="Save this job setup as a reusable template"
-                          >
-                            💾 Save as Template
-                          </button>
-                        )}
-                        <button
-                          onClick={() => {
-                            setPrefillTemplateData(null)
-                            setShowCreateTemplate(true)
-                          }}
-                          className={buttonStyles.tertiary}
-                        >
-                          + Create Template
-                        </button>
-                        <button
-                          onClick={() => setShowApplyTemplate(true)}
-                          className={buttonStyles.primary}
-                        >
-                          Apply Template
-                        </button>
+                    {job.risk_score_detail && (
+                      <div className="text-sm text-[#A1A1A1] mb-4">
+                        {job.risk_score_detail.factors.length} risk factor{job.risk_score_detail.factors.length !== 1 ? 's' : ''} detected
                       </div>
                     )}
+                    <div className="border-t border-white/10 pt-4 mb-4"></div>
+                    <p className="text-xs text-white/60 max-w-xs mx-auto">
+                      Calculated from identified hazards. Higher scores require more safety controls. This score is logged with timestamp for compliance and insurance purposes.
+                    </p>
                   </div>
-                  {job.risk_score_detail && job.risk_score_detail.factors.length > 0 ? (
-                    <div className={spacing.gap.tight}>
+
+                  {job.risk_score_detail && job.risk_score_detail.factors.length > 0 && (
+                      <div className={`${spacing.gap.normal} ${spacing.section}`}>
                       {job.risk_score_detail.factors.map((factor, i) => (
-                        <div
-                          key={i}
-                          className={`flex items-center gap-3 p-3 rounded-lg border border-white/10 ${cardStyles.flat}`}
-                        >
+                        <div key={i} className="flex items-center gap-3 text-sm">
                           <div className="w-2 h-2 rounded-full bg-[#F97316]" />
-                          <div className="flex-1">
-                            <div className="text-sm text-white">{factor.name}</div>
-                            <div className="text-xs text-white/50 mt-0.5">
-                              {factor.severity} severity • +{factor.weight} points
-                            </div>
-                          </div>
+                          <span className="text-[#A1A1A1]">{factor.name}</span>
+                          <span className="text-xs text-[#A1A1A1]/70 ml-auto">+{factor.weight}</span>
                         </div>
                       ))}
                     </div>
-                  ) : (
-                    <div className={`${emptyStateStyles.container} py-6`}>
-                      <p className="text-sm text-white font-medium mb-2">No hazards identified yet</p>
-                      <p className="text-xs text-white/60 max-w-md mx-auto">
-                        Hazards determine your risk score and generate required safety controls. Apply a template or select hazards manually to begin your assessment.
-                      </p>
+                  )}
+
+                  {totalCount > 0 && (
+                    <div className="pt-6 border-t border-white/10">
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-sm text-[#A1A1A1]">Mitigation Progress</span>
+                        <span className="text-sm font-semibold text-white">
+                          {completedCount}/{totalCount}
+                        </span>
+                      </div>
+                      <div className="w-full bg-black/40 rounded-full h-2.5 overflow-hidden">
+                        <div
+                          className="bg-[#F97316] h-2.5 rounded-full transition-all duration-500"
+                          style={{ width: `${totalCount > 0 ? (completedCount / totalCount) * 100 : 0}%` }}
+                        />
+                      </div>
                     </div>
                   )}
+
+                  {/* Risk & Hazards Section */}
+                  <div className={dividerStyles.section}>
+                    <div className={`flex items-center justify-between ${spacing.normal}`}>
+                      <div>
+                        <h3 className={`${typography.h4} mb-1`}>Risk & Hazards</h3>
+                        <p className="text-xs text-white/50">
+                          {job.risk_score_detail?.factors.length || 0} hazard{job.risk_score_detail?.factors.length !== 1 ? 's' : ''} identified
+                        </p>
+                      </div>
+                    </div>
+                    {job.risk_score_detail && job.risk_score_detail.factors.length > 0 ? (
+                      <div className={spacing.gap.tight}>
+                        {job.risk_score_detail.factors.map((factor, i) => (
+                          <div
+                            key={i}
+                            className={`flex items-center gap-3 p-3 rounded-lg border border-white/10 ${cardStyles.flat}`}
+                          >
+                            <div className="w-2 h-2 rounded-full bg-[#F97316]" />
+                            <div className="flex-1">
+                              <div className="text-sm text-white">{factor.name}</div>
+                              <div className="text-xs text-white/50 mt-0.5">
+                                {factor.severity} severity • +{factor.weight} points
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className={`${emptyStateStyles.container} py-6`}>
+                        <p className="text-sm text-white font-medium mb-2">No hazards identified yet</p>
+                        <p className="text-xs text-white/60 max-w-md mx-auto">
+                          Hazards determine your risk score and generate required safety controls. Apply a template or select hazards manually to begin your assessment.
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 </div>
+
+                {/* Action Footer - Pinned Inside Card */}
+                {organizationId && (
+                  <div className="mt-6 pt-4 border-t border-white/10">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <button
+                        onClick={() => setShowApplyTemplate(true)}
+                        className={buttonStyles.primary}
+                      >
+                        Apply Template
+                      </button>
+                      <button
+                        onClick={() => {
+                          setPrefillTemplateData(null)
+                          setShowCreateTemplate(true)
+                        }}
+                        className={buttonStyles.secondary}
+                      >
+                        + Create Template
+                      </button>
+                      {!job.applied_template_id && job.risk_score_detail && job.risk_score_detail.factors.length > 0 && (
+                        <button
+                          onClick={handleSaveAsTemplate}
+                          className={buttonStyles.tertiary}
+                          title="Save this job setup as a reusable template"
+                        >
+                          💾 Save as Template
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             </motion.div>
 
