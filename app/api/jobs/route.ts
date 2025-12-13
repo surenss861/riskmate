@@ -226,6 +226,28 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Log successful job creation
+    await logFeatureUsage({
+      feature: 'job_creation',
+      action: 'created',
+      allowed: true,
+      organizationId: organization_id,
+      actorId: userId,
+      metadata: {
+        plan_tier: entitlements.tier,
+        subscription_status: entitlements.status,
+        period_end: entitlements.period_end,
+        job_id: job.id,
+        client_name,
+        job_type,
+        location,
+        risk_factors_count: risk_factor_codes?.length || 0,
+      },
+      targetType: 'job',
+      targetId: job.id,
+      logUsage: true,
+    })
+
     // Calculate risk score if risk factors provided
     let riskScoreResult = null
     if (risk_factor_codes && risk_factor_codes.length > 0) {
