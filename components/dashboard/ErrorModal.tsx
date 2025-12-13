@@ -38,7 +38,7 @@ export function ErrorModal({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className={`${modalStyles.backdrop} z-[80]`}
+            className="fixed inset-0 z-[80] bg-black/60 backdrop-blur-sm"
           />
           
           {/* Modal */}
