@@ -1235,7 +1235,7 @@ export default function JobDetailPage() {
 
       <ErrorModal
         isOpen={error !== null}
-        title="Something went wrong"
+        title={error?.includes('Business plan') ? 'Plan Upgrade Required' : 'Error'}
         message={error || ''}
         onClose={() => setError(null)}
         onRetry={async () => {
