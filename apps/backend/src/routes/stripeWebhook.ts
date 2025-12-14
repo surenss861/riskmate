@@ -161,6 +161,34 @@ export async function stripeWebhookHandler(req: Request, res: Response) {
     return res.status(400).send(`Webhook Error: ${err?.message}`);
   }
 
+  // Idempotency check: skip if already processed
+  const { data: existingEvent } = await supabase
+    .from("stripe_webhook_events")
+    .select("id, processed_at")
+    .eq("stripe_event_id", event.id)
+    .maybeSingle();
+
+  if (existingEvent) {
+    // Already processed, return success (idempotent)
+    console.log(`Stripe event ${event.id} already processed at ${existingEvent.processed_at}`);
+    return res.json({ received: true, skipped: true });
+  }
+
+  // Record event as processing
+  const { error: insertError } = await supabase
+    .from("stripe_webhook_events")
+    .insert({
+      stripe_event_id: event.id,
+      event_type: event.type,
+      metadata: event.data.object,
+    });
+
+  if (insertError && insertError.code !== "23505") {
+    // 23505 = unique violation (race condition, another process already inserted)
+    // Other errors are real problems
+    console.error("Failed to record webhook event:", insertError);
+  }
+
   try {
     switch (event.type) {
       case "checkout.session.completed": {

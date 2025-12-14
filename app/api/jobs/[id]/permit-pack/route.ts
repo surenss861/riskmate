@@ -3,6 +3,7 @@ import { getOrganizationContext, verifyJobOwnership } from '@/lib/utils/organiza
 import { generatePermitPack } from '@/lib/utils/permitPack'
 import { getOrgEntitlements, assertEntitled, EntitlementError } from '@/lib/entitlements'
 import { logFeatureUsage } from '@/lib/featureLogging'
+import { getRequestId } from '@/lib/featureEvents'
 
 export const runtime = 'nodejs'
 
@@ -18,10 +19,14 @@ export async function POST(
   const { organization_id, user_id } = await getOrganizationContext()
   const { id: jobId } = await params
 
+  // Get request ID from header or generate
+  const requestId = request.headers.get('x-request-id') || getRequestId()
+
   try {
     await verifyJobOwnership(jobId, organization_id)
 
-    // Get entitlements (single source of truth)
+    // Get entitlements ONCE at request start (request-scoped snapshot)
+    // Never re-fetch mid-request to ensure consistency
     const entitlements = await getOrgEntitlements(organization_id)
 
     // Assert entitlement (throws EntitlementError if not allowed)
@@ -29,29 +34,34 @@ export async function POST(
       assertEntitled(entitlements, 'permit_packs')
     } catch (err) {
       if (err instanceof EntitlementError) {
-        // Log denied attempt
+        // Log denied attempt with standardized schema
         await logFeatureUsage({
-          feature: 'permit_pack',
+          feature: 'permit_packs',
           action: 'denied',
           allowed: false,
           organizationId: organization_id,
           actorId: user_id,
-          metadata: {
-            plan_tier: entitlements.tier,
-            subscription_status: entitlements.status,
-            period_end: entitlements.period_end,
-            reason: `Feature requires Business plan (current: ${entitlements.tier}, status: ${entitlements.status})`,
+          entitlements, // Pass snapshot (no re-fetch)
+          source: 'api',
+          requestId,
+          resourceType: 'job',
+          resourceId: jobId,
+          reason: err.message,
+          additionalMetadata: {
             job_id: jobId,
           },
-          targetType: 'job',
-          targetId: jobId,
-          logUsage: false, // Don't log usage for denied attempts
+          logUsage: false,
         })
 
         return NextResponse.json(
           {
             error: err.message,
             code: 'FEATURE_RESTRICTED',
+            denial_code: entitlements.status === 'past_due' 
+              ? 'SUBSCRIPTION_PAST_DUE'
+              : entitlements.status === 'canceled' && entitlements.period_end && new Date(entitlements.period_end) < new Date()
+              ? 'SUBSCRIPTION_CANCELED_PERIOD_ENDED'
+              : 'PLAN_TIER_INSUFFICIENT',
           },
           { status: 403 }
         )
@@ -66,22 +76,22 @@ export async function POST(
       userId: user_id,
     })
 
-    // Log successful usage (audit + usage logs)
+    // Log successful usage with standardized schema
     await logFeatureUsage({
-      feature: 'permit_pack',
+      feature: 'permit_packs',
       action: 'generated',
       allowed: true,
       organizationId: organization_id,
       actorId: user_id,
-      metadata: {
-        plan_tier: entitlements.tier,
-        subscription_status: entitlements.status,
-        period_end: entitlements.period_end,
+      entitlements, // Pass snapshot (no re-fetch)
+      source: 'api',
+      requestId,
+      resourceType: 'job',
+      resourceId: jobId,
+      additionalMetadata: {
         job_id: jobId,
         file_size: result.size,
       },
-      targetType: 'job',
-      targetId: jobId,
       logUsage: true,
     })
 

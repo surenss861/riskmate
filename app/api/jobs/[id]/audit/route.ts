@@ -3,6 +3,7 @@ import { getOrganizationContext, verifyJobOwnership } from '@/lib/utils/organiza
 import { getOrgEntitlements, assertEntitled, EntitlementError } from '@/lib/entitlements'
 import { logFeatureUsage } from '@/lib/featureLogging'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { getRequestId } from '@/lib/featureEvents'
 
 export const runtime = 'nodejs'
 
@@ -18,10 +19,13 @@ export async function GET(
   const { organization_id, user_id } = await getOrganizationContext()
   const { id: jobId } = await params
 
+  // Get request ID from header or generate
+  const requestId = request.headers.get('x-request-id') || getRequestId()
+
   try {
     await verifyJobOwnership(jobId, organization_id)
 
-    // Get entitlements
+    // Get entitlements ONCE at request start (request-scoped snapshot)
     const entitlements = await getOrgEntitlements(organization_id)
 
     // Assert entitlement
@@ -29,22 +33,22 @@ export async function GET(
       assertEntitled(entitlements, 'version_history')
     } catch (err) {
       if (err instanceof EntitlementError) {
-        // Log denied attempt
+        // Log denied attempt with standardized schema
         await logFeatureUsage({
           feature: 'version_history',
           action: 'denied',
           allowed: false,
           organizationId: organization_id,
           actorId: user_id,
-          metadata: {
-            plan_tier: entitlements.tier,
-            subscription_status: entitlements.status,
-            period_end: entitlements.period_end,
-            reason: `Feature requires Business plan (current: ${entitlements.tier}, status: ${entitlements.status})`,
+          entitlements, // Pass snapshot (no re-fetch)
+          source: 'api',
+          requestId,
+          resourceType: 'job',
+          resourceId: jobId,
+          reason: err.message,
+          additionalMetadata: {
             job_id: jobId,
           },
-          targetType: 'job',
-          targetId: jobId,
           logUsage: false,
         })
 
@@ -52,6 +56,11 @@ export async function GET(
           {
             error: err.message,
             code: 'FEATURE_RESTRICTED',
+            denial_code: entitlements.status === 'past_due' 
+              ? 'SUBSCRIPTION_PAST_DUE'
+              : entitlements.status === 'canceled' && entitlements.period_end && new Date(entitlements.period_end) < new Date()
+              ? 'SUBSCRIPTION_CANCELED_PERIOD_ENDED'
+              : 'PLAN_TIER_INSUFFICIENT',
           },
           { status: 403 }
         )
@@ -73,22 +82,22 @@ export async function GET(
       throw error
     }
 
-    // Log successful access
+    // Log successful access with standardized schema
     await logFeatureUsage({
       feature: 'version_history',
       action: 'accessed',
       allowed: true,
       organizationId: organization_id,
       actorId: user_id,
-      metadata: {
-        plan_tier: entitlements.tier,
-        subscription_status: entitlements.status,
-        period_end: entitlements.period_end,
+      entitlements, // Pass snapshot (no re-fetch)
+      source: 'api',
+      requestId,
+      resourceType: 'job',
+      resourceId: jobId,
+      additionalMetadata: {
         job_id: jobId,
         entries_count: auditLogs?.length || 0,
       },
-      targetType: 'job',
-      targetId: jobId,
       logUsage: true,
     })
 

@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { calculateRiskScore, generateMitigationItems } from '@/lib/utils/riskScoring'
 import { getOrgEntitlements } from '@/lib/entitlements'
 import { logFeatureUsage } from '@/lib/featureLogging'
+import { getRequestId } from '@/lib/featureEvents'
 
 export const runtime = 'nodejs'
 
@@ -150,7 +151,10 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Check subscription limits using entitlements system
+    // Get request ID from header or generate
+    const requestId = request.headers.get('x-request-id') || getRequestId()
+
+    // Get entitlements ONCE at request start (request-scoped snapshot)
     const entitlements = await getOrgEntitlements(organization_id)
 
     // Check job creation limit
@@ -167,18 +171,19 @@ export async function POST(request: NextRequest) {
         .gte('created_at', periodStart.toISOString())
 
       if ((count || 0) >= entitlements.jobs_monthly_limit) {
-        // Log denied attempt
+        // Log denied attempt with standardized schema
         await logFeatureUsage({
           feature: 'job_creation',
-          action: 'denied',
+          action: 'limit_denied',
           allowed: false,
           organizationId: organization_id,
           actorId: userId,
-          metadata: {
-            plan_tier: entitlements.tier,
-            subscription_status: entitlements.status,
-            period_end: entitlements.period_end,
-            reason: `Job limit reached (${entitlements.jobs_monthly_limit} jobs/month on ${entitlements.tier} plan)`,
+          entitlements, // Pass snapshot (no re-fetch)
+          source: 'api',
+          requestId,
+          denialCode: 'MONTHLY_LIMIT_REACHED',
+          reason: `Job limit reached (${entitlements.jobs_monthly_limit} jobs/month on ${entitlements.tier} plan)`,
+          additionalMetadata: {
             current_count: count || 0,
             limit: entitlements.jobs_monthly_limit,
           },
@@ -188,6 +193,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(
           {
             code: 'JOB_LIMIT',
+            denial_code: 'MONTHLY_LIMIT_REACHED',
             message: `${entitlements.tier === 'starter' ? 'Starter' : 'Plan'} limit reached (${entitlements.jobs_monthly_limit} jobs/month). Upgrade to Pro for unlimited jobs.`,
           },
           { status: 403 }
@@ -226,25 +232,25 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Log successful job creation
+    // Log successful job creation with standardized schema
     await logFeatureUsage({
       feature: 'job_creation',
       action: 'created',
       allowed: true,
       organizationId: organization_id,
       actorId: userId,
-      metadata: {
-        plan_tier: entitlements.tier,
-        subscription_status: entitlements.status,
-        period_end: entitlements.period_end,
+      entitlements, // Pass snapshot (no re-fetch)
+      source: 'api',
+      requestId,
+      resourceType: 'job',
+      resourceId: job.id,
+      additionalMetadata: {
         job_id: job.id,
         client_name,
         job_type,
         location,
         risk_factors_count: risk_factor_codes?.length || 0,
       },
-      targetType: 'job',
-      targetId: job.id,
       logUsage: true,
     })
 
