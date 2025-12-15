@@ -9,7 +9,7 @@
  */
 
 import { createSupabaseServerClient } from '@/lib/supabase/server'
-import { applyPlanToOrganization } from '@/apps/backend/src/routes/stripeWebhook'
+import { applyPlanToOrganization } from '@/lib/utils/subscriptionSync'
 
 const stripeFactory = (): any => {
   if (!process.env.STRIPE_SECRET_KEY) {
@@ -101,11 +101,11 @@ export async function reconcileOrganizationSubscription(
 
     await applyPlanToOrganization(
       organizationId,
-      planCode as any,
+      planCode as 'starter' | 'pro' | 'business',
       {
         stripeCustomerId: typeof stripeSubscription.customer === 'string' 
           ? stripeSubscription.customer 
-          : null,
+          : (stripeSubscription.customer as any)?.id || null,
         stripeSubscriptionId: stripeSubscription.id,
         currentPeriodStart: stripeSubscription.current_period_start,
         currentPeriodEnd: stripeSubscription.current_period_end,
