@@ -400,9 +400,9 @@ export default function DashboardPage() {
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.45 }}
-            className={`relative ${spacing.section} flex flex-wrap items-center justify-between ${spacing.gap.relaxed} rounded-lg border border-white/10 bg-[#121212]/80 backdrop-blur-sm px-8 py-10`}
+            className={`relative ${spacing.section} flex flex-wrap items-start justify-between ${spacing.gap.relaxed} rounded-lg border border-white/10 bg-[#121212]/80 backdrop-blur-sm px-8 py-10`}
           >
-            <div className="relative max-w-xl">
+            <div className="relative max-w-xl flex-1">
               <p className="text-xs uppercase tracking-[0.42em] text-white/50">
                 Control Center
               </p>
@@ -424,28 +424,31 @@ export default function DashboardPage() {
                   Compliance trail
                 </span>
               </div>
-              
-              {/* KPI Strip - Quantitative signals */}
-              <div className="mt-8 pt-6 border-t border-white/5">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                  <div>
-                    <div className="text-2xl font-semibold text-white mb-0.5">{kpiMetrics.activeJobs}</div>
-                    <div className="text-xs text-white/50 uppercase tracking-wider">Active Jobs</div>
+            </div>
+            
+            {/* Vertical divider - Bloomberg terminal style */}
+            <div className="hidden lg:block border-l border-white/5 h-full min-h-[200px] mx-8" />
+            
+            {/* KPI Strip - Quantitative signals */}
+            <div className="flex-1 min-w-[280px]">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                <div>
+                  <div className="text-2xl font-semibold text-white mb-0.5">{kpiMetrics.activeJobs}</div>
+                  <div className="text-xs text-white/50 uppercase tracking-wider">Active Jobs</div>
+                </div>
+                <div>
+                  <div className="text-2xl font-semibold text-white mb-0.5">{kpiMetrics.openRisks}</div>
+                  <div className="text-xs text-white/50 uppercase tracking-wider">Open Risks</div>
+                </div>
+                <div>
+                  <div className="text-2xl font-semibold text-white mb-0.5">
+                    {kpiMetrics.avgRiskScore !== null ? kpiMetrics.avgRiskScore : '—'}
                   </div>
-                  <div>
-                    <div className="text-2xl font-semibold text-white mb-0.5">{kpiMetrics.openRisks}</div>
-                    <div className="text-xs text-white/50 uppercase tracking-wider">Open Risks</div>
-                  </div>
-                  <div>
-                    <div className="text-2xl font-semibold text-white mb-0.5">
-                      {kpiMetrics.avgRiskScore !== null ? kpiMetrics.avgRiskScore : '—'}
-                    </div>
-                    <div className="text-xs text-white/50 uppercase tracking-wider">Avg Risk Score</div>
-                  </div>
-                  <div>
-                    <div className="text-2xl font-semibold text-white mb-0.5">—</div>
-                    <div className="text-xs text-white/50 uppercase tracking-wider">Audit Events · 30d</div>
-                  </div>
+                  <div className="text-xs text-white/50 uppercase tracking-wider">Avg Risk Score</div>
+                </div>
+                <div>
+                  <div className="text-2xl font-semibold text-white mb-0.5">—</div>
+                  <div className="text-xs text-white/50 uppercase tracking-wider">Audit Events (Last 30 Days)</div>
                 </div>
               </div>
             </div>
@@ -601,8 +604,8 @@ export default function DashboardPage() {
                   <h2 className={`${typography.h2} hover:text-[#F97316] transition-colors cursor-pointer`}>Job Roster</h2>
                 </Link>
               </div>
-              <div className="flex items-center gap-4">
-                <span className="text-xs text-white/40 uppercase tracking-wider">Filter</span>
+              <div className="flex flex-col items-end gap-2">
+                <span className="text-xs text-white/40 uppercase tracking-wide">FILTERS</span>
                 <div className="flex gap-4">
                   <select
                     value={filterStatus}
@@ -635,7 +638,7 @@ export default function DashboardPage() {
               <div className="px-12 py-16 text-center">
                 <p className="mb-2 text-white font-medium">No active jobs</p>
                 <p className="mb-6 text-sm text-white/60">
-                  Create a job to begin compliance tracking.
+                  Create a job to begin compliance tracking and audit logging.
                 </p>
                 <button
                   onClick={() => router.push('/operations/jobs/new')}
@@ -656,8 +659,16 @@ export default function DashboardPage() {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.05 * index }}
                     whileHover={{ backgroundColor: 'rgba(255,255,255,0.06)' }}
-                    className="group px-6 py-3.5 transition duration-200"
+                    className="group relative px-6 py-3.5 transition duration-200"
                   >
+                    {/* Visual scan spine - left indicator bar */}
+                    <div className={`absolute left-0 top-0 bottom-0 w-0.5 ${
+                      (job.risk_level || '').toLowerCase() === 'low' ? 'bg-green-400/10' :
+                      (job.risk_level || '').toLowerCase() === 'medium' ? 'bg-yellow-400/10' :
+                      (job.risk_level || '').toLowerCase() === 'high' ? 'bg-orange-400/10' :
+                      (job.risk_level || '').toLowerCase() === 'critical' ? 'bg-red-400/10' :
+                      'bg-white/5'
+                    }`} />
                     <div className="flex items-center justify-between">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-3 mb-1.5">
@@ -694,9 +705,9 @@ export default function DashboardPage() {
                       </div>
                       {job.risk_score !== null && (
                         <div className="text-right ml-6 flex-shrink-0">
-                          <div className="flex items-baseline justify-end gap-2 mb-0.5">
+                          <div className="flex items-baseline justify-end gap-1.5 mb-0.5">
                             <div className="text-3xl font-bold text-white">{job.risk_score}</div>
-                            {/* Risk indicator dot */}
+                            {/* Risk indicator dot - inline */}
                             <div className={`w-2 h-2 rounded-full ${
                               (job.risk_level || '').toLowerCase() === 'low' ? 'bg-green-400' :
                               (job.risk_level || '').toLowerCase() === 'medium' ? 'bg-yellow-400' :
