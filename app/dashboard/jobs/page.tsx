@@ -130,9 +130,19 @@ const JobsPageContent = () => {
 
       const { data: jobsData, count, error } = await query
 
-      if (error) throw error
+      if (error) {
+        console.error('Failed to fetch jobs from database:', error)
+        throw error
+      }
 
-      setJobs(jobsData || [])
+      // Ensure jobsData is an array and set jobs
+      if (Array.isArray(jobsData)) {
+        setJobs(jobsData)
+      } else {
+        console.warn('Jobs query returned non-array data:', jobsData)
+        setJobs([])
+      }
+      
       setTotalPages(Math.ceil((count || 0) / 50))
       setLoading(false)
     } catch (err: any) {

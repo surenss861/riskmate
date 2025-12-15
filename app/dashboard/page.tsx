@@ -88,12 +88,19 @@ export default function DashboardPage() {
       }
 
       // Load jobs
+      // Fetch jobs from database for Job Roaster
       const jobsResponse = await jobsApi.list({
         status: filterStatus || undefined,
         risk_level: filterRiskLevel || undefined,
-        limit: 20,
+        limit: 50, // Increased limit to show more jobs
       })
-      setJobs(jobsResponse.data)
+      
+      if (jobsResponse?.data) {
+        setJobs(jobsResponse.data)
+      } else {
+        console.error('Jobs API returned no data:', jobsResponse)
+        setJobs([])
+      }
 
       // Load subscription and hazards (only for owners/admins)
       if (role !== 'member') {
