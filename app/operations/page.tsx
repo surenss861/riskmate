@@ -404,11 +404,11 @@ export default function DashboardPage() {
                 Control Center
               </p>
               <h1 className={`${typography.h1} ${spacing.section}`}>
-                Operations Dashboard
+                Operations Control Center
               </h1>
               <div className="mt-4 h-[2px] w-24 bg-gradient-to-r from-[#F97316] via-[#FFC857] to-transparent animate-soft-float" />
-              <p className="mt-4 text-base text-white/65">
-                Your safety activity at a glance — stay ahead of risks before they become problems.
+              <p className="mt-4 text-base text-white/70">
+                Real-time visibility into job risk, compliance, and audit readiness.
               </p>
               <div className="mt-6 flex flex-wrap gap-3 text-sm">
                 <span className="px-4 py-2 bg-[#121212] rounded-lg border border-white/5">
@@ -426,22 +426,22 @@ export default function DashboardPage() {
               <div className="mt-8 pt-6 border-t border-white/5">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                   <div>
-                    <div className="text-2xl font-semibold text-white mb-1">{kpiMetrics.activeJobs}</div>
+                    <div className="text-2xl font-semibold text-white mb-0.5">{kpiMetrics.activeJobs}</div>
                     <div className="text-xs text-white/50 uppercase tracking-wider">Active Jobs</div>
                   </div>
                   <div>
-                    <div className="text-2xl font-semibold text-white mb-1">{kpiMetrics.openRisks}</div>
+                    <div className="text-2xl font-semibold text-white mb-0.5">{kpiMetrics.openRisks}</div>
                     <div className="text-xs text-white/50 uppercase tracking-wider">Open Risks</div>
                   </div>
                   <div>
-                    <div className="text-2xl font-semibold text-white mb-1">
+                    <div className="text-2xl font-semibold text-white mb-0.5">
                       {kpiMetrics.avgRiskScore !== null ? kpiMetrics.avgRiskScore : '—'}
                     </div>
                     <div className="text-xs text-white/50 uppercase tracking-wider">Avg Risk Score</div>
                   </div>
                   <div>
-                    <div className="text-2xl font-semibold text-white mb-1">—</div>
-                    <div className="text-xs text-white/50 uppercase tracking-wider">Audit Events (30d)</div>
+                    <div className="text-2xl font-semibold text-white mb-0.5">—</div>
+                    <div className="text-xs text-white/50 uppercase tracking-wider">Audit Events · 30d</div>
                   </div>
                 </div>
               </div>
@@ -592,21 +592,21 @@ export default function DashboardPage() {
             transition={{ delay: 0.18, duration: 0.45 }}
             className="rounded-lg border border-white/10 bg-[#121212]/80 backdrop-blur-sm"
           >
-            <div className="flex items-center justify-between border-b border-white/10 px-6 py-6">
+            <div className="flex items-center justify-between border-b border-white/10 px-6 py-5">
               <div className="flex-1">
                 <Link href="/operations/jobs">
                   <h2 className={`${typography.h2} hover:text-[#F97316] transition-colors cursor-pointer`}>Job Roster</h2>
                 </Link>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-4">
                 <span className="text-xs text-white/40 uppercase tracking-wider">Filter</span>
-                <div className="flex gap-3">
+                <div className="flex gap-4">
                   <select
                     value={filterStatus}
                     onChange={(e) => setFilterStatus(e.target.value)}
-                    className="rounded-lg border border-white/5 bg-[#121212]/80 px-4 py-2 text-sm text-white/80 transition focus:outline-none focus:ring-1 focus:ring-white/20"
+                    className="rounded-lg border border-white/3 bg-[#121212]/80 px-4 py-2 text-sm text-white/80 transition focus:outline-none focus:ring-1 focus:ring-white/15"
                   >
-                    <option value="">All Status</option>
+                    <option value="">Status: All</option>
                     <option value="draft">Draft</option>
                     <option value="pending">Pending</option>
                     <option value="in_progress">In Progress</option>
@@ -616,9 +616,9 @@ export default function DashboardPage() {
                   <select
                     value={filterRiskLevel}
                     onChange={(e) => setFilterRiskLevel(e.target.value)}
-                    className="rounded-lg border border-white/5 bg-[#121212]/80 px-4 py-2 text-sm text-white/80 transition focus:outline-none focus:ring-1 focus:ring-white/20"
+                    className="rounded-lg border border-white/3 bg-[#121212]/80 px-4 py-2 text-sm text-white/80 transition focus:outline-none focus:ring-1 focus:ring-white/15"
                   >
-                    <option value="">All Risk Levels</option>
+                    <option value="">Risk: All</option>
                     <option value="low">Low</option>
                     <option value="medium">Medium</option>
                     <option value="high">High</option>
@@ -653,34 +653,34 @@ export default function DashboardPage() {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.05 * index }}
                     whileHover={{ backgroundColor: 'rgba(255,255,255,0.06)' }}
-                    className="group px-6 py-4 transition duration-200"
+                    className="group px-6 py-3.5 transition duration-200"
                   >
                     <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-4 mb-1.5">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-3 mb-1.5">
                           <Link
                             href={`/operations/jobs/${job.id}`}
-                            className="text-lg font-semibold text-white hover:text-[#F97316] transition-colors cursor-pointer"
+                            className="text-lg font-bold text-white hover:text-[#F97316] transition-colors cursor-pointer"
                           >
                             {job.client_name}
                           </Link>
-                          <span className={getRiskBadgeClass(job.risk_level)}>
+                          <span className={`${getRiskBadgeClass(job.risk_level)} text-xs px-2 py-0.5`}>
                             {job.risk_level?.toUpperCase() || 'NO SCORE'}
                           </span>
-                          <span className={getStatusBadgeClass(job.status)}>
+                          <span className={`${getStatusBadgeClass(job.status)} text-xs px-2 py-0.5`}>
                             {job.status.replace('_', ' ').toUpperCase()}
                           </span>
                         </div>
-                        <div className="text-sm text-white/70 mb-1">
+                        <div className="text-sm text-white/70 mb-0.5">
                           {job.job_type} • {job.location}
                         </div>
-                        <div className="text-xs text-white/50 mb-1">
+                        <div className="text-xs text-white/50 mb-0.5">
                           Created {new Date(job.created_at).toLocaleDateString()}
                         </div>
                         {/* Next Required Action Hint */}
                         {(job as any).incompleteMitigations > 0 && (
                           <div className="text-xs text-white/50">
-                            {(job as any).incompleteMitigations} mitigation item{((job as any).incompleteMitigations !== 1) ? 's' : ''} remaining
+                            {(job as any).incompleteMitigations} action{((job as any).incompleteMitigations !== 1) ? 's' : ''} required
                           </div>
                         )}
                         {(job as any).permitPacksAvailable && !(job as any).incompleteMitigations && (
@@ -690,21 +690,19 @@ export default function DashboardPage() {
                         )}
                       </div>
                       {job.risk_score !== null && (
-                        <div className="text-right flex items-center gap-3">
-                          <div>
-                            <div className="flex items-baseline gap-2">
-                              <div className="text-3xl font-bold text-white">{job.risk_score}</div>
-                              {/* Risk indicator dot */}
-                              <div className={`w-2 h-2 rounded-full ${
-                                (job.risk_level || '').toLowerCase() === 'low' ? 'bg-green-400' :
-                                (job.risk_level || '').toLowerCase() === 'medium' ? 'bg-yellow-400' :
-                                (job.risk_level || '').toLowerCase() === 'high' ? 'bg-orange-400' :
-                                (job.risk_level || '').toLowerCase() === 'critical' ? 'bg-red-400' :
-                                'bg-white/20'
-                              }`} />
-                            </div>
-                            <div className="text-xs text-white/50 mt-0.5">Risk Score</div>
+                        <div className="text-right ml-6 flex-shrink-0">
+                          <div className="flex items-baseline justify-end gap-2 mb-0.5">
+                            <div className="text-3xl font-bold text-white">{job.risk_score}</div>
+                            {/* Risk indicator dot */}
+                            <div className={`w-2 h-2 rounded-full ${
+                              (job.risk_level || '').toLowerCase() === 'low' ? 'bg-green-400' :
+                              (job.risk_level || '').toLowerCase() === 'medium' ? 'bg-yellow-400' :
+                              (job.risk_level || '').toLowerCase() === 'high' ? 'bg-orange-400' :
+                              (job.risk_level || '').toLowerCase() === 'critical' ? 'bg-red-400' :
+                              'bg-white/20'
+                            }`} />
                           </div>
+                          <div className="text-xs text-white/50">Risk Score</div>
                         </div>
                       )}
                     </div>

@@ -73,12 +73,12 @@ export function DashboardNavbar({ email, onLogout }: DashboardNavbarProps) {
                     key={item.href}
                     href={item.href}
                     className={`relative text-sm font-medium transition-colors ${
-                      isActive ? 'text-white' : 'text-white/60 hover:text-white'
+                      isActive ? 'text-white' : 'text-white/70 hover:text-white'
                     }`}
                   >
                     {item.label}
                     {isActive && (
-                      <span className="absolute -bottom-2 left-0 right-0 h-0.5 rounded-full bg-[#F97316]" />
+                      <span className="absolute -bottom-2.5 left-0 right-0 h-[2px] rounded-full bg-[#F97316]" />
                     )}
                   </Link>
                 )
@@ -92,10 +92,9 @@ export function DashboardNavbar({ email, onLogout }: DashboardNavbarProps) {
           {onLogout && (
             <button
               onClick={onLogout}
-              className="group relative overflow-hidden rounded-lg border border-white/15 px-5 py-2 text-sm font-medium text-white transition-all hover:border-white/30"
+              className="rounded-lg border border-white/10 px-4 py-2 text-sm font-medium text-white/50 transition-all hover:border-white/20 hover:text-white/70"
             >
-              <span className="relative z-10">Logout</span>
-              <span className="absolute inset-0 translate-y-full bg-white/10 transition-transform duration-300 group-hover:translate-y-0" />
+              Logout
             </button>
           )}
         </div>

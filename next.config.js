@@ -1,4 +1,6 @@
 /** @type {import('next').NextConfig} */
+// NOTE: /dashboard intentionally renamed to /operations
+// for enterprise language consistency
 const nextConfig = {
   reactStrictMode: true,
   images: {
