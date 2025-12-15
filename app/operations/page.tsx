@@ -411,7 +411,7 @@ export default function DashboardPage() {
               </h1>
               <div className="mt-4 h-[2px] w-24 bg-gradient-to-r from-[#F97316] via-[#FFC857] to-transparent animate-soft-float" />
               <p className="mt-4 text-base text-white/70">
-                Real-time visibility into job risk, compliance, and audit readiness.
+                Live operational view of risk and compliance.
               </p>
               <div className="mt-6 flex flex-wrap gap-3 text-sm">
                 <span className="px-4 py-2 bg-[#121212] rounded-lg border border-white/5">
@@ -433,22 +433,22 @@ export default function DashboardPage() {
             <div className="flex-1 min-w-[280px]">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                 <div>
-                  <div className="text-2xl font-semibold text-white mb-0.5">{kpiMetrics.activeJobs}</div>
-                  <div className="text-xs text-white/50 uppercase tracking-wider">Active Jobs</div>
+                  <div className="text-xl font-semibold text-white mb-0.5">{kpiMetrics.activeJobs}</div>
+                  <div className="text-xs text-white/50 uppercase tracking-wide">Active Jobs</div>
                 </div>
                 <div>
-                  <div className="text-2xl font-semibold text-white mb-0.5">{kpiMetrics.openRisks}</div>
-                  <div className="text-xs text-white/50 uppercase tracking-wider">Open Risks</div>
+                  <div className="text-xl font-semibold text-white mb-0.5">{kpiMetrics.openRisks}</div>
+                  <div className="text-xs text-white/50 uppercase tracking-wide">Open Risks</div>
                 </div>
                 <div>
-                  <div className="text-2xl font-semibold text-white mb-0.5">
+                  <div className="text-xl font-semibold text-white mb-0.5">
                     {kpiMetrics.avgRiskScore !== null ? kpiMetrics.avgRiskScore : '—'}
                   </div>
-                  <div className="text-xs text-white/50 uppercase tracking-wider">Avg Risk Score</div>
+                  <div className="text-xs text-white/50 uppercase tracking-wide">Avg Risk Score</div>
                 </div>
                 <div>
-                  <div className="text-2xl font-semibold text-white mb-0.5">—</div>
-                  <div className="text-xs text-white/50 uppercase tracking-wider">Audit Events (Last 30 Days)</div>
+                  <div className="text-xl font-semibold text-white mb-0.5">—</div>
+                  <div className="text-xs text-white/50 uppercase tracking-wide">Audit Events (Last 30 Days)</div>
                 </div>
               </div>
             </div>
@@ -612,7 +612,7 @@ export default function DashboardPage() {
                     onChange={(e) => setFilterStatus(e.target.value)}
                     className="rounded-lg border border-white/3 bg-[#121212]/80 px-4 py-2 text-sm text-white/80 transition focus:outline-none focus:ring-1 focus:ring-white/15"
                   >
-                    <option value="">Status: All</option>
+                    <option value="">Status (All)</option>
                     <option value="draft">Draft</option>
                     <option value="pending">Pending</option>
                     <option value="in_progress">In Progress</option>
@@ -624,7 +624,7 @@ export default function DashboardPage() {
                     onChange={(e) => setFilterRiskLevel(e.target.value)}
                     className="rounded-lg border border-white/3 bg-[#121212]/80 px-4 py-2 text-sm text-white/80 transition focus:outline-none focus:ring-1 focus:ring-white/15"
                   >
-                    <option value="">Risk: All</option>
+                    <option value="">Risk (All)</option>
                     <option value="low">Low</option>
                     <option value="medium">Medium</option>
                     <option value="high">High</option>
@@ -663,10 +663,10 @@ export default function DashboardPage() {
                   >
                     {/* Visual scan spine - left indicator bar */}
                     <div className={`absolute left-0 top-0 bottom-0 w-0.5 ${
-                      (job.risk_level || '').toLowerCase() === 'low' ? 'bg-green-400/10' :
-                      (job.risk_level || '').toLowerCase() === 'medium' ? 'bg-yellow-400/10' :
-                      (job.risk_level || '').toLowerCase() === 'high' ? 'bg-orange-400/10' :
-                      (job.risk_level || '').toLowerCase() === 'critical' ? 'bg-red-400/10' :
+                      (job.risk_level || '').toLowerCase() === 'low' ? 'bg-green-400/8' :
+                      (job.risk_level || '').toLowerCase() === 'medium' ? 'bg-yellow-400/8' :
+                      (job.risk_level || '').toLowerCase() === 'high' ? 'bg-orange-400/8' :
+                      (job.risk_level || '').toLowerCase() === 'critical' ? 'bg-red-400/8' :
                       'bg-white/5'
                     }`} />
                     <div className="flex items-center justify-between">
@@ -674,7 +674,7 @@ export default function DashboardPage() {
                         <div className="flex items-center gap-3 mb-1.5">
                           <Link
                             href={`/operations/jobs/${job.id}`}
-                            className="text-lg font-bold text-white hover:text-[#F97316] transition-colors cursor-pointer"
+                            className="text-lg font-extrabold text-white hover:text-[#F97316] transition-colors cursor-pointer"
                           >
                             {job.client_name}
                           </Link>
@@ -685,10 +685,10 @@ export default function DashboardPage() {
                             {job.status.replace('_', ' ').toUpperCase()}
                           </span>
                         </div>
-                        <div className="text-sm text-white/70 mb-0.5">
+                        <div className="text-sm text-white/55 mb-0.5">
                           {job.job_type} • {job.location}
                         </div>
-                        <div className="text-xs text-white/50 mb-0.5">
+                        <div className="text-xs text-white/55 mb-0.5">
                           Created {new Date(job.created_at).toLocaleDateString()}
                         </div>
                         {/* Next Required Action Hint */}
