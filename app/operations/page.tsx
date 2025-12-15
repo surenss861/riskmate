@@ -1,4 +1,7 @@
 'use client'
+// NOTE: This page was moved from /dashboard to /operations
+// for enterprise language consistency (Operations Control Center)
+
 
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
