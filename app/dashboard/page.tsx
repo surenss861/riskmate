@@ -87,19 +87,23 @@ export default function DashboardPage() {
         }
       }
 
-      // Load jobs
-      // Fetch jobs from database for Job Roaster
-      const jobsResponse = await jobsApi.list({
-        status: filterStatus || undefined,
-        risk_level: filterRiskLevel || undefined,
-        limit: 50, // Increased limit to show more jobs
-      })
-      
-      if (jobsResponse?.data) {
-        setJobs(jobsResponse.data)
-      } else {
-        console.error('Jobs API returned no data:', jobsResponse)
-        setJobs([])
+      // Load jobs from database for Job Roaster
+      try {
+        const jobsResponse = await jobsApi.list({
+          status: filterStatus || undefined,
+          risk_level: filterRiskLevel || undefined,
+          limit: 50, // Show more jobs in Job Roaster
+        })
+        
+        if (jobsResponse?.data && Array.isArray(jobsResponse.data)) {
+          setJobs(jobsResponse.data)
+        } else {
+          console.warn('Jobs API returned invalid data format:', jobsResponse)
+          setJobs([])
+        }
+      } catch (jobsError: any) {
+        console.error('Failed to load jobs for Job Roaster:', jobsError)
+        setJobs([]) // Set empty array on error to show empty state
       }
 
       // Load subscription and hazards (only for owners/admins)
