@@ -65,6 +65,10 @@ export default function DashboardPage() {
       const { data: { user } } = await supabase.auth.getUser()
       setUser(user)
 
+      // Variables for subscription and organization
+      let subscriptionData: any = null
+      let organizationId: string | null = null
+
       // Load user role and onboarding status
       let role = 'member'
       if (user) {
