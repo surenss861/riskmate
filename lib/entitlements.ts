@@ -51,13 +51,25 @@ export class EntitlementError extends Error {
 
 /**
  * Get organization subscription from database (source of truth)
+ * 
+ * Checks both org_subscriptions and subscriptions tables.
+ * Prioritizes org_subscriptions.plan_code, then subscriptions.tier.
+ * This matches the subscriptions API behavior.
  */
 export async function getOrgSubscription(
   organizationId: string
 ): Promise<OrgSubscription | null> {
   const supabase = await createSupabaseServerClient()
   
-  const { data: subscription, error } = await supabase
+  // Get plan from org_subscriptions (primary source)
+  const { data: orgSubscription, error: orgSubError } = await supabase
+    .from('org_subscriptions')
+    .select('plan_code, status, current_period_start, current_period_end, stripe_subscription_id, stripe_customer_id')
+    .eq('organization_id', organizationId)
+    .maybeSingle()
+
+  // Get subscription for billing period and Stripe info
+  const { data: subscription, error: subError } = await supabase
     .from('subscriptions')
     .select('tier, status, current_period_start, current_period_end, organization_id, stripe_subscription_id, stripe_customer_id')
     .eq('organization_id', organizationId)
@@ -65,25 +77,57 @@ export async function getOrgSubscription(
     .limit(1)
     .maybeSingle()
 
-  if (error && error.code !== 'PGRST116') {
-    // PGRST116 = no rows found (expected for new orgs)
-    console.error('Failed to fetch subscription:', error)
-    return null
+  // Handle errors (PGRST116 = no rows found, which is OK)
+  if (orgSubError && orgSubError.code !== 'PGRST116') {
+    console.error('Failed to fetch org_subscriptions:', orgSubError)
+  }
+  if (subError && subError.code !== 'PGRST116') {
+    console.error('Failed to fetch subscriptions:', subError)
   }
 
-  if (!subscription) {
-    return null
+  // Prioritize org_subscriptions.plan_code, then subscriptions.tier
+  const tier = (orgSubscription?.plan_code as PlanTier) || 
+               (subscription?.tier as PlanTier) || 
+               'starter'
+
+  // Use status from subscriptions if available, otherwise org_subscriptions
+  // If tier is business/pro but status is missing, default to 'active' (assume active subscription)
+  let status: SubscriptionStatus = (subscription?.status as SubscriptionStatus) || 
+                                   (orgSubscription?.status as SubscriptionStatus) || 
+                                   null
+  
+  // If we have a tier but no status, assume active (common for new subscriptions)
+  if (!status && tier !== 'starter') {
+    status = 'active'
+  }
+  
+  // Final fallback
+  if (!status) {
+    status = 'none'
   }
 
-  return {
-    tier: (subscription.tier as PlanTier) || 'starter',
-    status: (subscription.status as SubscriptionStatus) || 'none',
-    current_period_start: subscription.current_period_start,
-    current_period_end: subscription.current_period_end,
-    organization_id: subscription.organization_id,
-    stripe_subscription_id: subscription.stripe_subscription_id,
-    stripe_customer_id: subscription.stripe_customer_id,
+  // Use period dates from either source (prefer subscription if both exist)
+  const current_period_start = subscription?.current_period_start || orgSubscription?.current_period_start || null
+  const current_period_end = subscription?.current_period_end || orgSubscription?.current_period_end || null
+
+  // Use Stripe IDs from either source (prefer subscription if both exist)
+  const stripe_subscription_id = subscription?.stripe_subscription_id || orgSubscription?.stripe_subscription_id || null
+  const stripe_customer_id = subscription?.stripe_customer_id || orgSubscription?.stripe_customer_id || null
+
+  // If we have at least a tier, return subscription object
+  if (tier !== 'starter' || orgSubscription || subscription) {
+    return {
+      tier,
+      status,
+      current_period_start,
+      current_period_end,
+      organization_id: organizationId,
+      stripe_subscription_id,
+      stripe_customer_id,
+    }
   }
+
+  return null
 }
 
 /**
@@ -115,16 +159,34 @@ export function getEntitlements(
 
   const { tier, status, current_period_end } = subscription
 
+  // Normalize status (handle null/undefined)
+  // If status is 'none' but tier is business/pro, assume active (common for new subscriptions)
+  const effectiveStatus = status === 'none' && tier !== 'starter' ? 'active' : status
+  
   // Check if subscription is active
-  const isActive = status === 'active' || status === 'trialing'
+  // Allow 'active', 'trialing', or 'none' with non-starter tier (assume active)
+  const isActive = effectiveStatus === 'active' || effectiveStatus === 'trialing'
   
   // Check if canceled subscription is still in period
-  const isCanceledButInPeriod = status === 'canceled' && current_period_end
+  const isCanceledButInPeriod = effectiveStatus === 'canceled' && current_period_end
     ? new Date(current_period_end) > new Date()
     : false
 
   // Effective access: active, trialing, or canceled but still in period
   const hasAccess = isActive || isCanceledButInPeriod
+
+  // Debug logging in development
+  if (process.env.NODE_ENV === 'development' && tier === 'business' && !hasAccess) {
+    console.warn('Business plan access denied:', {
+      tier,
+      status: effectiveStatus,
+      originalStatus: status,
+      current_period_end,
+      isActive,
+      isCanceledButInPeriod,
+      hasAccess,
+    })
+  }
 
   // Feature entitlements
   const permit_packs = hasAccess && tier === 'business'
