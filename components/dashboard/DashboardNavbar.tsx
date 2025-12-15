@@ -12,9 +12,9 @@ interface DashboardNavbarProps {
 }
 
 const ALL_NAV_ITEMS = [
-  { label: 'Overview', href: '/dashboard', roles: ['owner', 'admin', 'member'] },
-  { label: 'Account', href: '/dashboard/account', roles: ['owner', 'admin'] },
-  { label: 'Team', href: '/dashboard/team', roles: ['owner', 'admin'] },
+  { label: 'Operations', href: '/operations', roles: ['owner', 'admin', 'member'] },
+  { label: 'Account', href: '/operations/account', roles: ['owner', 'admin'] },
+  { label: 'Team', href: '/operations/team', roles: ['owner', 'admin'] },
 ]
 
 export function DashboardNavbar({ email, onLogout }: DashboardNavbarProps) {

@@ -71,7 +71,7 @@ export default function TeamPage() {
 
         // Redirect members to dashboard
         if (data.current_user_role === 'member') {
-          router.push('/dashboard')
+          router.push('/operations')
           return
         }
       } catch (err: any) {
@@ -196,7 +196,7 @@ export default function TeamPage() {
             <div className="text-center space-y-4">
               <p className="text-white/70">{error || 'Failed to load team'}</p>
               <button
-                onClick={() => router.push('/dashboard')}
+                onClick={() => router.push('/operations')}
                 className={`${buttonStyles.primary} ${buttonStyles.sizes.lg}`}
               >
                 Back to Dashboard

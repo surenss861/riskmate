@@ -106,7 +106,7 @@ export function OnboardingWizard({ isOpen, onComplete, onSkip }: OnboardingWizar
           </p>
           <button
             onClick={() => {
-              router.push('/dashboard/jobs/new')
+              router.push('/operations/jobs/new')
               onComplete()
             }}
             className="w-full px-6 py-3 bg-[#F97316] hover:bg-[#FB923C] text-black rounded-lg font-semibold transition-colors"

@@ -52,7 +52,7 @@ export function JobsPageContentView(props: JobsPageContentProps) {
     const timeout = setTimeout(() => {
       if (activePrefetches.current.size < MAX_CONCURRENT_PREFETCHES) {
         activePrefetches.current.add(jobId)
-        router.prefetch(`/dashboard/jobs/${jobId}`)
+        router.prefetch(`/operations/jobs/${jobId}`)
         // Clean up after a delay (prefetch is synchronous in Next.js)
         setTimeout(() => {
           activePrefetches.current.delete(jobId)
@@ -92,15 +92,15 @@ export function JobsPageContentView(props: JobsPageContentProps) {
         >
           <div className="flex items-center justify-between">
             <div>
-                  <Link href="/dashboard/jobs" className={`${typography.h1} hover:text-[#F97316] transition-colors`}>
-                    Job Roaster
+                  <Link href="/operations/jobs" className={`${typography.h1} hover:text-[#F97316] transition-colors`}>
+                    Job Roster
                   </Link>
                   <p className={`${spacing.tight} ${typography.bodyMuted}`}>
                     Your centralized job hub — track progress, hazards, documents, and generate audit-ready reports.
                   </p>
             </div>
               <button
-                onClick={() => router.push('/dashboard/jobs/new')}
+                onClick={() => router.push('/operations/jobs/new')}
                 className={`${buttonStyles.primary} ${buttonStyles.sizes.lg}`}
               >
                 + Create Job
@@ -195,7 +195,7 @@ export function JobsPageContentView(props: JobsPageContentProps) {
                 Jobs are where you track safety, document hazards, and generate audit-ready reports. Create your first job to get started.
               </p>
               <button
-                onClick={() => router.push('/dashboard/jobs/new')}
+                onClick={() => router.push('/operations/jobs/new')}
                 className={`${spacing.normal} ${buttonStyles.primary} ${buttonStyles.sizes.lg}`}
               >
                 Create Your First Job
@@ -212,7 +212,7 @@ export function JobsPageContentView(props: JobsPageContentProps) {
                 sortable: true,
                 render: (value: string, job: any) => (
                   <button
-                    onClick={() => router.push(`/dashboard/jobs/${job.id}`)}
+                    onClick={() => router.push(`/operations/jobs/${job.id}`)}
                     onMouseEnter={() => handleJobHover(job.id)}
                     onMouseLeave={() => handleJobHoverEnd(job.id)}
                     className="text-white hover:text-[#F97316] transition-colors font-semibold"
@@ -267,7 +267,7 @@ export function JobsPageContentView(props: JobsPageContentProps) {
                 sortable: true,
               },
             ]}
-            onRowClick={(job: any) => router.push(`/dashboard/jobs/${job.id}`)}
+            onRowClick={(job: any) => router.push(`/operations/jobs/${job.id}`)}
             onRowHover={(job: any) => handleJobHover(job.id)}
             onRowHoverEnd={(job: any) => handleJobHoverEnd(job.id)}
             rowHighlight={(job: any) => {

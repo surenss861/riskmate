@@ -470,7 +470,7 @@ export default function JobDetailPage() {
           <div className="text-center">
             <p className="text-[#A1A1A1] mb-4">Job not found</p>
             <button
-              onClick={() => router.push('/dashboard')}
+              onClick={() => router.push('/operations')}
               className={`${buttonStyles.primary} ${buttonStyles.sizes.lg}`}
             >
               Back to Dashboard
@@ -573,7 +573,7 @@ export default function JobDetailPage() {
             </div>
             <div className="flex items-center gap-3">
             <button
-              onClick={() => router.push('/dashboard')}
+              onClick={() => router.push('/operations')}
               className="text-sm text-[#A1A1A1] hover:text-white transition-colors"
             >
               ← Back to Dashboard
@@ -598,7 +598,7 @@ export default function JobDetailPage() {
                 </button>
               )}
               <button
-                onClick={() => router.push(`/dashboard/jobs/${jobId}/report`)}
+                onClick={() => router.push(`/operations/jobs/${jobId}/report`)}
                 className={buttonStyles.secondary}
               >
                 View Audit-Ready Report
@@ -628,7 +628,7 @@ export default function JobDetailPage() {
                   <button
                     onClick={() => {
                       // Open template in Account page (new tab)
-                      window.open(`/dashboard/account#template-${appliedTemplate.id}`, '_blank')
+                      window.open(`/operations/account#template-${appliedTemplate.id}`, '_blank')
                     }}
                     className="text-[#F97316] hover:text-[#FB923C] underline text-xs"
                   >
@@ -866,13 +866,13 @@ export default function JobDetailPage() {
 
                 <div className="pt-6 border-t border-white/10 space-y-3">
                   <button
-                    onClick={() => router.push(`/dashboard/jobs/${jobId}/report`)}
+                    onClick={() => router.push(`/operations/jobs/${jobId}/report`)}
                     className={`${buttonStyles.secondary} w-full`}
                   >
                     View Live Report →
                   </button>
                   <button
-                    onClick={() => router.push(`/dashboard/jobs/${jobId}/edit`)}
+                    onClick={() => router.push(`/operations/jobs/${jobId}/edit`)}
                     className={`${buttonStyles.secondary} w-full opacity-70 hover:opacity-100`}
                   >
                     Edit Job Details
@@ -1246,7 +1246,7 @@ export default function JobDetailPage() {
         showBackButton={true}
         onBack={() => {
           setError(null)
-          router.push('/dashboard/jobs')
+          router.push('/operations/jobs')
         }}
       />
     </ProtectedRoute>

@@ -143,7 +143,7 @@ export function TemplateDetailDrawer({
               {usageCount > 0 && (
                 <button
                   onClick={() => {
-                    router.push(`/dashboard/jobs?source=template&templateId=${template.id}`)
+                    router.push(`/operations/jobs?source=template&templateId=${template.id}`)
                     onClose()
                   }}
                   className="text-xs text-[#F97316] hover:text-[#FB923C] flex items-center gap-1 mt-2"
@@ -202,7 +202,7 @@ export function TemplateDetailDrawer({
                       <button
                         key={job.id}
                         onClick={() => {
-                          router.push(`/dashboard/jobs/${job.id}`)
+                          router.push(`/operations/jobs/${job.id}`)
                           onClose()
                         }}
                         className="w-full text-left p-3 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 transition-colors"

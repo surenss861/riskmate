@@ -73,7 +73,7 @@ export default function AccountPage() {
 
         // Redirect members to dashboard
         if (userData.role === 'member') {
-          router.push('/dashboard')
+          router.push('/operations')
           return
         }
 
@@ -214,7 +214,7 @@ export default function AccountPage() {
             <div className="text-center space-y-4">
               <p className="text-white/70">{error || 'Failed to load account'}</p>
               <button
-                onClick={() => router.push('/dashboard')}
+                onClick={() => router.push('/operations')}
                 className={`${buttonStyles.primary} ${buttonStyles.sizes.lg}`}
               >
                 Back to Dashboard
@@ -416,7 +416,7 @@ export default function AccountPage() {
                   )}
                   <div className={`flex ${spacing.gap.normal} ${spacing.normal}`}>
                     <Link
-                      href="/dashboard/account/change-plan"
+                      href="/operations/account/change-plan"
                       className={`${buttonStyles.primary} inline-block text-center`}
                     >
                       Change Plan

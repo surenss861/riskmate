@@ -64,7 +64,7 @@ export function DashboardOverview({
           </p>
         </div>
         <Link
-          href="/dashboard/jobs"
+          href="/operations/jobs"
           className="text-sm text-[#F97316] hover:text-[#FB923C] transition-colors"
         >
           View All Jobs →
@@ -95,7 +95,7 @@ export function DashboardOverview({
               todaysJobs.slice(0, 3).map((job) => (
                 <Link
                   key={job.id}
-                  href={`/dashboard/jobs/${job.id}`}
+                  href={`/operations/jobs/${job.id}`}
                   className="block p-2 rounded-lg hover:bg-white/5 transition-colors"
                 >
                   <div className="flex items-center justify-between">
@@ -133,7 +133,7 @@ export function DashboardOverview({
               jobsAtRisk.slice(0, 3).map((job) => (
                 <Link
                   key={job.id}
-                  href={`/dashboard/jobs/${job.id}`}
+                  href={`/operations/jobs/${job.id}`}
                   className="block p-2 rounded-lg hover:bg-white/5 transition-colors"
                 >
                   <div className="flex items-center justify-between">
@@ -169,7 +169,7 @@ export function DashboardOverview({
               recentEvidence.slice(0, 3).map((evidence) => (
                 <Link
                   key={evidence.id}
-                  href={`/dashboard/jobs/${evidence.job_id}`}
+                  href={`/operations/jobs/${evidence.job_id}`}
                   className="block p-2 rounded-lg hover:bg-white/5 transition-colors"
                 >
                   <div className="flex items-center justify-between">
@@ -205,7 +205,7 @@ export function DashboardOverview({
               incompleteMitigations.slice(0, 3).map((mitigation) => (
                 <Link
                   key={mitigation.id}
-                  href={`/dashboard/jobs/${mitigation.job_id}`}
+                  href={`/operations/jobs/${mitigation.job_id}`}
                   className="block p-2 rounded-lg hover:bg-white/5 transition-colors"
                 >
                   <div className="flex flex-col gap-1">

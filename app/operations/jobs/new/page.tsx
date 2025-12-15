@@ -163,7 +163,7 @@ export default function NewJobPage() {
       }
 
       // Redirect to job detail page
-      router.push(`/dashboard/jobs/${response.data.id}`)
+      router.push(`/operations/jobs/${response.data.id}`)
     } catch (err: any) {
       setError('We couldn\'t create that job. Your information is still here — check the form and try again. If this continues, refresh the page.')
       setLoading(false)
@@ -209,7 +209,7 @@ export default function NewJobPage() {
               <RiskMateLogo size="sm" showText={true} />
             </div>
             <button
-              onClick={() => router.push('/dashboard')}
+              onClick={() => router.push('/operations')}
               className="text-sm text-[#A1A1A1] hover:text-white transition-colors"
             >
               ← Back to Dashboard
@@ -475,7 +475,7 @@ export default function NewJobPage() {
               <div className="flex gap-4">
                 <button
                   type="button"
-                  onClick={() => router.push('/dashboard')}
+                  onClick={() => router.push('/operations')}
                   className="px-6 py-3 border border-white/10 rounded-lg hover:bg-white/5 transition-colors"
                 >
                   Cancel

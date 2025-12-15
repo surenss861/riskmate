@@ -10,6 +10,20 @@ const nextConfig = {
       },
     ],
   },
+  async redirects() {
+    return [
+      {
+        source: '/dashboard',
+        destination: '/operations',
+        permanent: true,
+      },
+      {
+        source: '/dashboard/:path*',
+        destination: '/operations/:path*',
+        permanent: true,
+      },
+    ]
+  },
   async rewrites() {
     return [
       {

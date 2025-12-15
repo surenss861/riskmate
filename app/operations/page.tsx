@@ -87,39 +87,78 @@ export default function DashboardPage() {
         }
       }
 
-      // Load jobs from database for Job Roaster
+      // Load subscription first (needed for permit pack hints)
+      if (role !== 'member') {
+        try {
+          const subResponse = await subscriptionsApi.get()
+          subscriptionData = subResponse.data
+          setSubscription(subResponse.data)
+        } catch (err) {
+          // Subscription might not exist yet
+        }
+      }
+      
+      // Get organization_id for jobs query
+      if (user) {
+        const { data: userRow } = await supabase
+          .from('users')
+          .select('organization_id')
+          .eq('id', user.id)
+          .maybeSingle()
+        organizationId = userRow?.organization_id || null
+      }
+
+      // Load jobs from database for Job Roster
       try {
         const jobsResponse = await jobsApi.list({
           status: filterStatus || undefined,
           risk_level: filterRiskLevel || undefined,
-          limit: 50, // Show more jobs in Job Roaster
+          limit: 50, // Show more jobs in Job Roster
         })
         
         if (jobsResponse?.data && Array.isArray(jobsResponse.data)) {
-          setJobs(jobsResponse.data)
+          // Fetch additional data for next action hints (mitigation items, permit packs)
+          const jobsWithHints = await Promise.all(
+            jobsResponse.data.map(async (job: Job) => {
+              try {
+                // Get incomplete mitigation count
+                const { count: incompleteCount } = await supabase
+                  .from('mitigation_items')
+                  .select('*', { count: 'exact', head: true })
+                  .eq('job_id', job.id)
+                  .eq('done', false)
+                
+                // Check if permit pack is available (Business plan only)
+                const permitPacksAvailable = subscriptionData?.tier === 'business'
+                
+                return {
+                  ...job,
+                  incompleteMitigations: incompleteCount || 0,
+                  permitPacksAvailable,
+                }
+              } catch (err) {
+                // If fetch fails, return job without hints
+                return { ...job, incompleteMitigations: 0, permitPacksAvailable: false }
+              }
+            })
+          )
+          setJobs(jobsWithHints)
         } else {
           console.warn('Jobs API returned invalid data format:', jobsResponse)
           setJobs([])
         }
       } catch (jobsError: any) {
-        console.error('Failed to load jobs for Job Roaster:', jobsError)
+        console.error('Failed to load jobs for Job Roster:', jobsError)
         setJobs([]) // Set empty array on error to show empty state
       }
 
-      // Load subscription and hazards (only for owners/admins)
+      // Load hazards (only for owners/admins)
       if (role !== 'member') {
-      try {
-        const subResponse = await subscriptionsApi.get()
-        setSubscription(subResponse.data)
-      } catch (err) {
-        // Subscription might not exist yet
-      }
-
-      try {
-        const hazardsResponse = await riskApi.getSummary()
-        setHazards(hazardsResponse.hazards || [])
-      } catch (err) {
-        // Ignore errors
+        try {
+          const hazardsResponse = await riskApi.getSummary()
+          setHazards(hazardsResponse.hazards || [])
+        } catch (err) {
+          // Ignore errors
         }
       }
 
@@ -309,6 +348,24 @@ export default function DashboardPage() {
     }))
   }, [analyticsData.trend])
 
+  // Calculate KPI metrics for hero card
+  const kpiMetrics = useMemo(() => {
+    const activeJobs = jobs.filter(j => j.status === 'active' || j.status === 'in_progress').length
+    const openRisks = jobs.filter(j => j.risk_score !== null && j.risk_score > 75).length
+    const avgRiskScore = jobs.length > 0 && jobs.some(j => j.risk_score !== null)
+      ? Math.round(jobs.filter(j => j.risk_score !== null).reduce((sum, j) => sum + (j.risk_score || 0), 0) / jobs.filter(j => j.risk_score !== null).length)
+      : null
+    // Audit events count would need to fetch from audit_logs - for now use placeholder
+    const auditEvents30d = null // Would need to fetch from audit_logs table
+    
+    return {
+      activeJobs,
+      openRisks,
+      avgRiskScore,
+      auditEvents30d,
+    }
+  }, [jobs])
+
   if (loading) {
     return (
       <ProtectedRoute>
@@ -360,16 +417,40 @@ export default function DashboardPage() {
                   Compliance trail
                 </span>
               </div>
+              
+              {/* KPI Strip - Quantitative signals */}
+              <div className="mt-8 pt-6 border-t border-white/5">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                  <div>
+                    <div className="text-2xl font-semibold text-white mb-1">{kpiMetrics.activeJobs}</div>
+                    <div className="text-xs text-white/50 uppercase tracking-wider">Active Jobs</div>
+                  </div>
+                  <div>
+                    <div className="text-2xl font-semibold text-white mb-1">{kpiMetrics.openRisks}</div>
+                    <div className="text-xs text-white/50 uppercase tracking-wider">Open Risks</div>
+                  </div>
+                  <div>
+                    <div className="text-2xl font-semibold text-white mb-1">
+                      {kpiMetrics.avgRiskScore !== null ? kpiMetrics.avgRiskScore : '—'}
+                    </div>
+                    <div className="text-xs text-white/50 uppercase tracking-wider">Avg Risk Score</div>
+                  </div>
+                  <div>
+                    <div className="text-2xl font-semibold text-white mb-1">—</div>
+                    <div className="text-xs text-white/50 uppercase tracking-wider">Audit Events (30d)</div>
+                  </div>
+                </div>
+              </div>
             </div>
             <div className="relative flex flex-col items-end gap-3">
             <button
-              onClick={() => router.push('/dashboard/jobs/new')}
+              onClick={() => router.push('/operations/jobs/new')}
               className={`${buttonStyles.primary} ${buttonStyles.sizes.lg}`}
             >
               + New Job
             </button>
               <Link
-                href="/dashboard/jobs"
+                href="/operations/jobs"
                 className="inline-flex items-center gap-2 px-6 py-3 border border-white/10 rounded-lg hover:border-white/20 transition-colors font-medium text-sm"
               >
                 View job roster →
@@ -508,45 +589,50 @@ export default function DashboardPage() {
             className="rounded-lg border border-white/10 bg-[#121212]/80 backdrop-blur-sm"
           >
             <div className="flex items-center justify-between border-b border-white/10 px-6 py-6">
-              <Link href="/dashboard/jobs">
-                <h2 className={`${typography.h2} hover:text-[#F97316] transition-colors cursor-pointer`}>Job Roaster</h2>
-              </Link>
-              <div className="flex gap-3">
-                <select
-                  value={filterStatus}
-                  onChange={(e) => setFilterStatus(e.target.value)}
-                  className="rounded-lg border border-white/10 bg-[#121212]/80 px-4 py-2 text-sm text-white transition focus:outline-none focus:ring-2 focus:ring-[#F97316]/60"
-                >
-                  <option value="">All Status</option>
-                  <option value="draft">Draft</option>
-                  <option value="pending">Pending</option>
-                  <option value="in_progress">In Progress</option>
-                  <option value="completed">Completed</option>
-                  <option value="cancelled">Cancelled</option>
-                </select>
-                <select
-                  value={filterRiskLevel}
-                  onChange={(e) => setFilterRiskLevel(e.target.value)}
-                  className="rounded-lg border border-white/10 bg-[#121212]/80 px-4 py-2 text-sm text-white transition focus:outline-none focus:ring-2 focus:ring-[#F97316]/60"
-                >
-                  <option value="">All Risk Levels</option>
-                  <option value="low">Low</option>
-                  <option value="medium">Medium</option>
-                  <option value="high">High</option>
-                  <option value="critical">Critical</option>
-                </select>
+              <div className="flex-1">
+                <Link href="/operations/jobs">
+                  <h2 className={`${typography.h2} hover:text-[#F97316] transition-colors cursor-pointer`}>Job Roster</h2>
+                </Link>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-white/40 uppercase tracking-wider">Filter</span>
+                <div className="flex gap-3">
+                  <select
+                    value={filterStatus}
+                    onChange={(e) => setFilterStatus(e.target.value)}
+                    className="rounded-lg border border-white/5 bg-[#121212]/80 px-4 py-2 text-sm text-white/80 transition focus:outline-none focus:ring-1 focus:ring-white/20"
+                  >
+                    <option value="">All Status</option>
+                    <option value="draft">Draft</option>
+                    <option value="pending">Pending</option>
+                    <option value="in_progress">In Progress</option>
+                    <option value="completed">Completed</option>
+                    <option value="cancelled">Cancelled</option>
+                  </select>
+                  <select
+                    value={filterRiskLevel}
+                    onChange={(e) => setFilterRiskLevel(e.target.value)}
+                    className="rounded-lg border border-white/5 bg-[#121212]/80 px-4 py-2 text-sm text-white/80 transition focus:outline-none focus:ring-1 focus:ring-white/20"
+                  >
+                    <option value="">All Risk Levels</option>
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                    <option value="critical">Critical</option>
+                  </select>
+                </div>
               </div>
             </div>
 
             {jobs.length === 0 ? (
               <div className="px-12 py-16 text-center">
-                <p className="mb-2 text-white/60">No jobs yet</p>
-                <p className="mb-6 text-sm text-white/40">
-                  Create your first job to generate your first safety report.
+                <p className="mb-2 text-white font-medium">No active jobs</p>
+                <p className="mb-6 text-sm text-white/60">
+                  Create a job to begin compliance tracking.
                 </p>
                 <button
-                  onClick={() => router.push('/dashboard/jobs/new')}
-                  onMouseEnter={() => router.prefetch('/dashboard/jobs/new')}
+                  onClick={() => router.push('/operations/jobs/new')}
+                  onMouseEnter={() => router.prefetch('/operations/jobs/new')}
                   className={`${buttonStyles.primary} ${buttonStyles.sizes.lg}`}
                 >
                   Create Job
@@ -563,14 +649,14 @@ export default function DashboardPage() {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.05 * index }}
                     whileHover={{ backgroundColor: 'rgba(255,255,255,0.06)' }}
-                    className="group px-6 py-5 transition duration-200"
+                    className="group px-6 py-4 transition duration-200"
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex-1">
-                        <div className="flex items-center gap-4 mb-2">
+                        <div className="flex items-center gap-4 mb-1.5">
                           <Link
-                            href={`/dashboard/jobs/${job.id}`}
-                            className="text-lg font-semibold hover:text-[#F97316] transition-colors cursor-pointer"
+                            href={`/operations/jobs/${job.id}`}
+                            className="text-lg font-semibold text-white hover:text-[#F97316] transition-colors cursor-pointer"
                           >
                             {job.client_name}
                           </Link>
@@ -581,17 +667,40 @@ export default function DashboardPage() {
                             {job.status.replace('_', ' ').toUpperCase()}
                           </span>
                         </div>
-                        <div className="text-sm text-[#A1A1A1] mb-1">
+                        <div className="text-sm text-white/70 mb-1">
                           {job.job_type} • {job.location}
                         </div>
-                        <div className="text-xs text-[#A1A1A1]">
+                        <div className="text-xs text-white/50 mb-1">
                           Created {new Date(job.created_at).toLocaleDateString()}
                         </div>
+                        {/* Next Required Action Hint */}
+                        {(job as any).incompleteMitigations > 0 && (
+                          <div className="text-xs text-white/50">
+                            {(job as any).incompleteMitigations} mitigation item{((job as any).incompleteMitigations !== 1) ? 's' : ''} remaining
+                          </div>
+                        )}
+                        {(job as any).permitPacksAvailable && !(job as any).incompleteMitigations && (
+                          <div className="text-xs text-white/50">
+                            Permit pack available
+                          </div>
+                        )}
                       </div>
                       {job.risk_score !== null && (
-                        <div className="text-right">
-                          <div className="text-3xl font-bold">{job.risk_score}</div>
-                          <div className="text-xs text-white/50">Risk Score</div>
+                        <div className="text-right flex items-center gap-3">
+                          <div>
+                            <div className="flex items-baseline gap-2">
+                              <div className="text-3xl font-bold text-white">{job.risk_score}</div>
+                              {/* Risk indicator dot */}
+                              <div className={`w-2 h-2 rounded-full ${
+                                (job.risk_level || '').toLowerCase() === 'low' ? 'bg-green-400' :
+                                (job.risk_level || '').toLowerCase() === 'medium' ? 'bg-yellow-400' :
+                                (job.risk_level || '').toLowerCase() === 'high' ? 'bg-orange-400' :
+                                (job.risk_level || '').toLowerCase() === 'critical' ? 'bg-red-400' :
+                                'bg-white/20'
+                              }`} />
+                            </div>
+                            <div className="text-xs text-white/50 mt-0.5">Risk Score</div>
+                          </div>
                         </div>
                       )}
                     </div>

@@ -7,7 +7,7 @@ import { useRouter, usePathname } from 'next/navigation'
  * Demo Protection Component
  * Prevents navigation outside demo-safe routes
  * Shows calm message for disabled actions
- * Blocks all production routes (/dashboard, /api, etc.)
+ * Blocks all production routes (/operations, /api, etc.)
  */
 const ALLOWED_ROUTES = ['/demo', '/pricing']
 
@@ -28,7 +28,7 @@ export function DemoProtection({ children }: { children: React.ReactNode }) {
 
       // Block dashboard, API, account, and any other production routes
       const isBlocked = 
-        pathname.startsWith('/dashboard') ||
+        pathname.startsWith('/operations') ||
         pathname.startsWith('/api') ||
         pathname.startsWith('/account') ||
         pathname.startsWith('/login') ||
@@ -54,7 +54,7 @@ export function DemoProtection({ children }: { children: React.ReactNode }) {
       // Check for dangerous actions
       if (
         target.closest('[data-demo-disabled]') ||
-        target.closest('a[href^="/dashboard"]') ||
+        target.closest('a[href^="/operations"]') ||
         target.closest('a[href^="/api"]') ||
         target.closest('a[href^="/account"]') ||
         target.closest('a[href^="/login"]') ||

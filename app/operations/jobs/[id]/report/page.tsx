@@ -226,7 +226,7 @@ export default function JobReportPage() {
           <div className="text-center space-y-4">
             <p className="text-lg text-white/70">Job not found.</p>
             <button
-              onClick={() => router.push('/dashboard')}
+              onClick={() => router.push('/operations')}
               className="rounded-lg bg-[#F97316] px-6 py-3 text-black font-semibold hover:bg-[#FB923C]"
             >
               Back to Dashboard
@@ -257,7 +257,7 @@ export default function JobReportPage() {
           <div className="text-center space-y-4">
             <p className="text-lg text-white/70">Unable to load this report.</p>
             <button
-              onClick={() => router.push('/dashboard')}
+              onClick={() => router.push('/operations')}
               className="rounded-lg bg-[#F97316] px-6 py-3 text-black font-semibold hover:bg-[#FB923C]"
             >
               Back to Dashboard
@@ -282,13 +282,13 @@ export default function JobReportPage() {
             <RiskMateLogo size="md" showText />
             <div className="flex items-center gap-3">
               <button
-                onClick={() => router.push(`/dashboard/jobs/${jobId}`)}
+                onClick={() => router.push(`/operations/jobs/${jobId}`)}
                 className="rounded-lg border border-white/10 px-4 py-2 text-sm text-white/70 transition hover:border-white/30 hover:text-white"
               >
                 ← Back to Job
               </button>
               <button
-                onClick={() => router.push(`/dashboard/jobs/${jobId}/edit`)}
+                onClick={() => router.push(`/operations/jobs/${jobId}/edit`)}
                 className="rounded-lg border border-white/10 px-4 py-2 text-sm text-white transition hover:border-white/30 hover:bg-white/5"
               >
                 Edit Job

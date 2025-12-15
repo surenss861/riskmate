@@ -25,7 +25,7 @@ function ThankYouContent() {
             // Subscription is already active, treat as success
             setLoading(false)
             setTimeout(() => {
-              router.push('/dashboard')
+              router.push('/operations')
             }, 3000)
             return
           }
@@ -43,7 +43,7 @@ function ThankYouContent() {
         setLoading(false)
         // Redirect to dashboard after 3 seconds
         setTimeout(() => {
-          router.push('/dashboard')
+          router.push('/operations')
         }, 3000)
       } catch (err: any) {
         console.error('Failed to confirm checkout:', err)
@@ -78,7 +78,7 @@ function ThankYouContent() {
               <p className="text-white/60 mb-6 max-w-md mx-auto">{error}</p>
               <div className="flex gap-4 justify-center">
                 <button
-                  onClick={() => router.push('/dashboard')}
+                  onClick={() => router.push('/operations')}
                   className="rounded-lg bg-[#F97316] px-8 py-4 text-black font-semibold hover:bg-[#FB923C]"
                 >
                   Check Dashboard
@@ -99,7 +99,7 @@ function ThankYouContent() {
                 Your subscription has been activated. You&apos;ll be redirected to your dashboard shortly.
               </p>
               <button
-                onClick={() => router.push('/dashboard')}
+                onClick={() => router.push('/operations')}
                 className="rounded-lg bg-[#F97316] px-8 py-4 text-black font-semibold hover:bg-[#FB923C]"
               >
                 Go to Dashboard Now

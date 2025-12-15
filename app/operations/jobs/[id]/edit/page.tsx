@@ -157,7 +157,7 @@ export default function EditJobPage() {
       })
 
       // Redirect to job detail page
-      router.push(`/dashboard/jobs/${jobId}`)
+      router.push(`/operations/jobs/${jobId}`)
     } catch (err: any) {
       setError('Couldn\'t save those changes. Your edits are still here — try again.')
       setSaving(false)
@@ -216,7 +216,7 @@ export default function EditJobPage() {
               <RiskMateLogo size="sm" showText={true} />
             </div>
             <button
-              onClick={() => router.push(`/dashboard/jobs/${jobId}`)}
+              onClick={() => router.push(`/operations/jobs/${jobId}`)}
               className="text-sm text-[#A1A1A1] hover:text-white transition-colors"
             >
               ← Back to Job
@@ -618,7 +618,7 @@ export default function EditJobPage() {
               <div className="flex gap-4">
                 <button
                   type="button"
-                  onClick={() => router.push(`/dashboard/jobs/${jobId}`)}
+                  onClick={() => router.push(`/operations/jobs/${jobId}`)}
                   className="px-6 py-3 border border-white/10 rounded-lg hover:bg-white/5 transition-colors"
                 >
                   Cancel

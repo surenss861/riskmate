@@ -54,7 +54,7 @@ export default function SignupPage() {
       }
 
       // Redirect to dashboard
-      router.push('/dashboard')
+      router.push('/operations')
     } catch (err: any) {
       setError(err.message || 'Failed to create account')
       setLoading(false)

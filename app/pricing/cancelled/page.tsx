@@ -31,7 +31,7 @@ export default function CancelledPage() {
               View Pricing Again
             </button>
             <button
-              onClick={() => router.push('/dashboard')}
+              onClick={() => router.push('/operations')}
               className="rounded-lg border border-white/10 px-8 py-4 text-white font-semibold hover:border-white/30"
             >
               Back to Dashboard

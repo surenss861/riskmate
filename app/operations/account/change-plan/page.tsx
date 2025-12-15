@@ -130,7 +130,7 @@ export default function ChangePlanPage() {
         window.location.href = response.url
       } else if (response.success) {
         // Plan switched successfully (e.g., to free)
-        router.push('/dashboard/account')
+        router.push('/operations/account')
       } else {
         throw new Error('Failed to switch plan')
       }
@@ -164,7 +164,7 @@ export default function ChangePlanPage() {
             className="mb-8"
           >
             <button
-              onClick={() => router.push('/dashboard/account')}
+              onClick={() => router.push('/operations/account')}
               className="text-white/60 hover:text-white mb-4 flex items-center gap-2 transition-colors"
             >
               ← Back to Account
