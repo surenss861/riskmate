@@ -18,7 +18,11 @@ All error responses include:
   "request_id": "uuid-v4",
   "severity": "error" | "warn" | "info",
   "category": "pagination" | "entitlements" | "auth" | "validation" | "internal",
+  "classification": "user_action_required" | "system_transient" | "developer_bug",
+  "retryable": true | false,
+  "retry_strategy": "none" | "immediate" | "exponential_backoff" | "after_retry_after",
   "support_hint": "Short actionable guidance",
+  "support_url": "/support/runbooks/...",
   "internal_message": "Detailed internal message (dev mode only)",
   // ... additional fields based on error type
 }
@@ -32,11 +36,14 @@ All error responses include:
 - **`request_id`** (string, required): Unique request identifier for correlation (echoes `X-Request-ID` header if provided)
 - **`severity`** (string, required): Error severity level (`error`, `warn`, `info`)
 - **`category`** (string, required): Error category for grouping (`pagination`, `entitlements`, `auth`, `validation`, `internal`)
-- **`support_hint`** (string, optional): Short, actionable guidance (documentation_url provides detailed help)
+- **`classification`** (string, required): Error classification for compliance and triage (`user_action_required`, `system_transient`, `developer_bug`)
+- **`retryable`** (boolean, required): Whether the client can retry this request
+- **`retry_strategy`** (string, required): Retry strategy to use (`none`, `immediate`, `exponential_backoff`, `after_retry_after`)
+- **`support_hint`** (string, optional): Short, actionable guidance
+- **`support_url`** (string, optional): Direct link to runbook section for this error code (procurement/security friendly)
 - **`internal_message`** (string, optional): Detailed internal message (only in development mode)
 - **`documentation_url`** (string, optional): Link to relevant documentation
 - **`retry_after_seconds`** (number, optional): Seconds to wait before retrying (for rate-limited operations)
-- **`retryable`** (boolean, required): Whether the client can retry this request (true for 5xx and rate-limited errors, false for 4xx client errors)
 
 ## Error Code Namespaces
 
@@ -67,8 +74,11 @@ Error codes use namespaces for clarity and organization:
   "request_id": "550e8400-e29b-41d4-a716-446655440000",
   "severity": "warn",
   "category": "pagination",
+  "classification": "developer_bug",
   "retryable": false,
+  "retry_strategy": "none",
   "support_hint": "Remove cursor param or switch to page-based pagination",
+  "support_url": "/support/runbooks/pagination#cursor-not-supported",
   "sort": "status_asc",
   "reason": "Status sorting uses in-memory ordering which is incompatible with cursor pagination",
   "documentation_url": "/docs/pagination#status-sorting",
@@ -96,7 +106,11 @@ Error codes use namespaces for clarity and organization:
   "request_id": "uuid-v4",
   "severity": "warn",
   "category": "entitlements",
+  "classification": "user_action_required",
+  "retryable": false,
+  "retry_strategy": "none",
   "support_hint": "Upgrade plan or wait for monthly limit reset",
+  "support_url": "/support/runbooks/entitlements#job-limit-reached",
   "limit": 10,
   "current_count": 10,
   "plan": "starter"
@@ -122,7 +136,11 @@ Error codes use namespaces for clarity and organization:
   "request_id": "uuid-v4",
   "severity": "warn",
   "category": "entitlements",
+  "classification": "user_action_required",
+  "retryable": false,
+  "retry_strategy": "none",
   "support_hint": "Update payment method in billing settings",
+  "support_url": "/support/runbooks/entitlements#plan-past-due",
   "subscription_status": "past_due"
 }
 ```
@@ -195,7 +213,11 @@ Error codes use namespaces for clarity and organization:
   "request_id": "uuid-v4",
   "severity": "warn",
   "category": "auth",
+  "classification": "user_action_required",
+  "retryable": false,
+  "retry_strategy": "none",
   "support_hint": "This action requires owner role. Contact your organization owner",
+  "support_url": "/support/runbooks/auth#role-forbidden",
   "required_role": "owner",
   "current_role": "admin"
 }
@@ -219,7 +241,10 @@ Error codes use namespaces for clarity and organization:
   "error_id": "uuid-v4",
   "request_id": "uuid-v4",
   "severity": "error",
-  "category": "internal"
+  "category": "internal",
+  "classification": "system_transient",
+  "retryable": true,
+  "retry_strategy": "exponential_backoff"
 }
 ```
 
@@ -257,9 +282,13 @@ Every API response (success or error) includes a `request_id` field. This enable
 ```http
 X-Request-ID: 550e8400-e29b-41d4-a716-446655440000
 X-Error-ID: 660e8400-e29b-41d4-a716-446655440001
+traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
+X-Traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
 ```
 
-**Echo Behavior:** If a client sends `X-Request-ID` header, the server will reuse it. Otherwise, a new UUID is generated. This helps when upstream gateways already stamp IDs.
+**Echo Behavior:** 
+- If a client sends `X-Request-ID` header, the server will reuse it. Otherwise, a new UUID is generated.
+- If a client sends `traceparent` header (W3C Trace Context), it is echoed in both `traceparent` and `X-Traceparent` headers.
 
 **Error ID Header:** The `X-Error-ID` header is always set in error responses. Some clients log headers more reliably than response bodies, making this useful for error correlation.
 
@@ -267,12 +296,54 @@ X-Error-ID: 660e8400-e29b-41d4-a716-446655440001
 
 The API supports W3C Trace Context propagation for enterprise observability stacks:
 
-**Header:**
+**Headers:**
 ```http
 traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
+X-Traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
 ```
 
-If a reverse proxy or edge sends `traceparent` header, it will be propagated in the response. This enables integration with distributed tracing systems (Jaeger, Zipkin, Datadog, etc.).
+If a reverse proxy or edge sends `traceparent` header, it will be **explicitly echoed** in both `traceparent` and `X-Traceparent` response headers. Some tracing systems grab headers faster than body fields, making correlation dead simple. This enables integration with distributed tracing systems (Jaeger, Zipkin, Datadog, etc.).
+
+## Error Classification
+
+Every error includes a `classification` field for compliance and triage:
+
+- **`user_action_required`**: User must take action (payment, upgrade, role change, etc.)
+- **`system_transient`**: Temporary system issue (typically 5xx errors, retryable)
+- **`developer_bug`**: Client misconfiguration or bug (e.g., invalid pagination params)
+
+This helps:
+- **Triage:** Route errors to the right team (support vs engineering)
+- **Customer messaging:** Show appropriate UI based on classification
+- **Compliance:** Document error handling procedures
+
+## Retry Strategy
+
+Every error includes both `retryable` (boolean) and `retry_strategy` (string):
+
+- **`none`**: Do not retry (4xx client errors)
+- **`immediate`**: Retry immediately (rare, for explicitly marked retryable codes)
+- **`exponential_backoff`**: Retry with exponential backoff (5xx server errors)
+- **`after_retry_after`**: Wait for `retry_after_seconds` then retry (rate-limited errors)
+
+This enables SDKs to behave perfectly without custom logic:
+
+```typescript
+if (error.retryable) {
+  switch (error.retry_strategy) {
+    case 'exponential_backoff':
+      await retryWithBackoff(() => makeRequest());
+      break;
+    case 'after_retry_after':
+      await sleep(error.retry_after_seconds * 1000);
+      await makeRequest();
+      break;
+    case 'immediate':
+      await makeRequest(); // Retry immediately
+      break;
+  }
+}
+```
 
 ## Error ID
 

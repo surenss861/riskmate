@@ -37,10 +37,12 @@ export const requestIdMiddleware = (
   (req as RequestWithId).requestId = requestId;
   
   // Propagate W3C Trace Context if present (for enterprise observability stacks)
+  // Explicitly echo traceparent header for correlation (some tracing systems grab headers faster than body fields)
   const traceParent = parseTraceParent(req.headers['traceparent'] as string);
   if (traceParent) {
     (req as RequestWithId).traceParent = traceParent;
-    res.setHeader('traceparent', traceParent);
+    res.setHeader('traceparent', traceParent); // Explicit echo for correlation
+    res.setHeader('X-Traceparent', traceParent); // Also set X-Traceparent for systems that prefer X- prefix
   }
   
   // Attach to response header for client correlation

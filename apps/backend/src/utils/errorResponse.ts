@@ -29,6 +29,15 @@ export const ERROR_CATEGORIES = {
 } as const;
 
 /**
+ * Error classifications for compliance and triage
+ */
+export const ERROR_CLASSIFICATIONS = {
+  USER_ACTION_REQUIRED: "user_action_required", // User must take action (payment, upgrade, etc.)
+  SYSTEM_TRANSIENT: "system_transient", // Temporary system issue (retryable)
+  DEVELOPER_BUG: "developer_bug", // Client misconfiguration or bug
+} as const;
+
+/**
  * Support hints for common error codes
  * Short, actionable guidance (documentation_url does the heavy lifting)
  * NOTE: All error codes must be registered here (even if hint is null)
@@ -53,6 +62,50 @@ export const SUPPORT_HINTS: Record<string, string | null> = {
   PLAN_INACTIVE: "Reactivate subscription or upgrade plan",
   ROLE_FORBIDDEN: "This action requires owner role. Contact your organization owner",
   FEATURE_NOT_ALLOWED: "Upgrade plan to access this feature",
+} as const;
+
+/**
+ * Support URLs (runbook links) for error codes
+ * Points directly to the exact runbook section for that code
+ * Procurement/security folks love "documented incident response"
+ */
+export const SUPPORT_URLS: Record<string, string> = {
+  // Pagination errors
+  PAGINATION_CURSOR_NOT_SUPPORTED: "/support/runbooks/pagination#cursor-not-supported",
+  
+  // Entitlement errors
+  ENTITLEMENTS_JOB_LIMIT_REACHED: "/support/runbooks/entitlements#job-limit-reached",
+  ENTITLEMENTS_PLAN_PAST_DUE: "/support/runbooks/entitlements#plan-past-due",
+  ENTITLEMENTS_PLAN_INACTIVE: "/support/runbooks/entitlements#plan-inactive",
+  ENTITLEMENTS_FEATURE_NOT_ALLOWED: "/support/runbooks/entitlements#feature-not-allowed",
+  
+  // Auth errors
+  AUTH_ROLE_FORBIDDEN: "/support/runbooks/auth#role-forbidden",
+} as const;
+
+/**
+ * Error code to classification mapping
+ */
+const ERROR_CLASSIFICATION_MAP: Record<string, string> = {
+  // User action required
+  ENTITLEMENTS_JOB_LIMIT_REACHED: ERROR_CLASSIFICATIONS.USER_ACTION_REQUIRED,
+  ENTITLEMENTS_PLAN_PAST_DUE: ERROR_CLASSIFICATIONS.USER_ACTION_REQUIRED,
+  ENTITLEMENTS_PLAN_INACTIVE: ERROR_CLASSIFICATIONS.USER_ACTION_REQUIRED,
+  ENTITLEMENTS_FEATURE_NOT_ALLOWED: ERROR_CLASSIFICATIONS.USER_ACTION_REQUIRED,
+  AUTH_ROLE_FORBIDDEN: ERROR_CLASSIFICATIONS.USER_ACTION_REQUIRED,
+  JOB_LIMIT_REACHED: ERROR_CLASSIFICATIONS.USER_ACTION_REQUIRED,
+  PLAN_PAST_DUE: ERROR_CLASSIFICATIONS.USER_ACTION_REQUIRED,
+  PLAN_INACTIVE: ERROR_CLASSIFICATIONS.USER_ACTION_REQUIRED,
+  ROLE_FORBIDDEN: ERROR_CLASSIFICATIONS.USER_ACTION_REQUIRED,
+  FEATURE_NOT_ALLOWED: ERROR_CLASSIFICATIONS.USER_ACTION_REQUIRED,
+  
+  // Developer bug (client misconfiguration)
+  PAGINATION_CURSOR_NOT_SUPPORTED: ERROR_CLASSIFICATIONS.DEVELOPER_BUG,
+  CURSOR_NOT_SUPPORTED_FOR_SORT: ERROR_CLASSIFICATIONS.DEVELOPER_BUG,
+  
+  // System transient (default for 5xx)
+  INTERNAL_SERVER_ERROR: ERROR_CLASSIFICATIONS.SYSTEM_TRANSIENT,
+  UNKNOWN_ERROR: ERROR_CLASSIFICATIONS.SYSTEM_TRANSIENT,
 } as const;
 
 /**
@@ -90,26 +143,30 @@ const RETRYABLE_ERROR_CODES = new Set([
 ]);
 
 /**
- * Determine if an error is retryable based on status code and error code
+ * Determine retry strategy based on status code, error code, and retry_after_seconds
  */
-function isRetryable(statusCode: number, code: string, hasRetryAfter?: boolean): boolean {
-  // 5xx errors are generally retryable (server errors)
+function getRetryStrategy(
+  statusCode: number,
+  code: string,
+  hasRetryAfter?: boolean
+): { retryable: boolean; retry_strategy: "none" | "immediate" | "exponential_backoff" | "after_retry_after" } {
+  // 5xx errors: exponential backoff (server errors)
   if (statusCode >= 500) {
-    return true;
+    return { retryable: true, retry_strategy: "exponential_backoff" };
   }
   
-  // Rate-limited errors with retry_after are retryable
+  // Rate-limited errors with retry_after: wait for retry_after
   if (hasRetryAfter) {
-    return true;
+    return { retryable: true, retry_strategy: "after_retry_after" };
   }
   
-  // Explicitly marked retryable codes
+  // Explicitly marked retryable codes: immediate retry
   if (RETRYABLE_ERROR_CODES.has(code)) {
-    return true;
+    return { retryable: true, retry_strategy: "immediate" };
   }
   
-  // 4xx client errors are generally NOT retryable
-  return false;
+  // 4xx client errors: not retryable
+  return { retryable: false, retry_strategy: "none" };
 }
 
 /**
@@ -142,8 +199,15 @@ export function createErrorResponse(options: ErrorResponseOptions): { response: 
   // Get category from map or use provided one
   const errorCategory = category || ERROR_CATEGORY_MAP[code] || ERROR_CATEGORIES.INTERNAL;
 
-  // Determine if error is retryable
-  const retryable = isRetryable(statusCode, code, retry_after_seconds !== undefined);
+  // Determine retry strategy
+  const { retryable, retry_strategy } = getRetryStrategy(statusCode, code, retry_after_seconds !== undefined);
+
+  // Get classification for compliance and triage
+  const classification = ERROR_CLASSIFICATION_MAP[code] || 
+    (statusCode >= 500 ? ERROR_CLASSIFICATIONS.SYSTEM_TRANSIENT : ERROR_CLASSIFICATIONS.DEVELOPER_BUG);
+
+  // Get support URL (runbook link)
+  const supportUrl = SUPPORT_URLS[code];
 
   // Build response (user-safe message only in production)
   const response: any = {
@@ -153,8 +217,11 @@ export function createErrorResponse(options: ErrorResponseOptions): { response: 
     request_id: requestId,
     severity: errorSeverity,
     category: errorCategory,
+    classification,
     retryable,
+    retry_strategy,
     ...(hint && { support_hint: hint }),
+    ...(supportUrl && { support_url: supportUrl }),
     ...(retry_after_seconds !== undefined && { retry_after_seconds }),
     ...additionalFields,
   };
