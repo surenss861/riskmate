@@ -22,10 +22,13 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
     let sortField = 'created_at';
     let sortDirection: 'asc' | 'desc' = 'desc';
     let useStatusOrdering = false;
+    let sortMode: 'created_desc' | 'created_asc' | 'risk_desc' | 'risk_asc' | 'status_asc' | 'status_desc' = 'created_desc';
+    
     if (sort) {
       const sortStr = String(sort);
       if (sortStr.includes('_')) {
         const [field, dir] = sortStr.split('_');
+        sortMode = `${field}_${dir}` as any;
         if (field === 'status') {
           useStatusOrdering = true;
           sortDirection = dir === 'asc' ? 'asc' : 'desc';
@@ -36,10 +39,19 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
       }
     }
 
-    // Parse cursor pagination (cursor = created_at + id for deterministic pagination)
+    // Parse cursor pagination
+    // Cursor format varies by sort mode:
+    // - created_desc/created_asc: "created_at|id"
+    // - risk_desc/risk_asc: "risk_score|created_at|id"
+    // - status_asc/status_desc: DISABLED (use offset only - in-memory sort incompatible with cursor)
     const { cursor, limit: limitParam } = authReq.query;
     const pageNum = parseInt(page as string, 10);
     const limitNum = limitParam ? parseInt(limitParam as string, 10) : parseInt(limit as string, 10) || 20;
+    
+    // Cursor pagination is only safe for sorts that match SQL ordering
+    // status_asc uses in-memory sorting, so cursor pagination would be inconsistent
+    const supportsCursorPagination = !useStatusOrdering;
+    const useCursor = cursor && supportsCursorPagination;
     
     // Deterministic status order: draft → in_progress → completed → archived
     const statusOrder = ['draft', 'in_progress', 'completed', 'archived', 'cancelled', 'on_hold'];
@@ -54,14 +66,43 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
       .eq("organization_id", organization_id)
       .is("deleted_at", null); // Always exclude deleted
     
-    // Cursor-based pagination (more efficient at scale)
-    // Cursor format: "created_at|id" (ISO timestamp|UUID)
-    if (cursor) {
+    // Cursor-based pagination (per-sort cursor keys for consistency)
+    if (useCursor) {
       try {
-        const [cursorTimestamp, cursorId] = String(cursor).split('|');
-        if (cursorTimestamp && cursorId) {
-          // Get jobs created before cursor, or same timestamp but id < cursorId
-          query = query.or(`created_at.lt.${cursorTimestamp},and(created_at.eq.${cursorTimestamp},id.lt.${cursorId})`);
+        const cursorStr = String(cursor);
+        
+        if (sortField === 'created_at') {
+          // created_desc/created_asc: cursor = "created_at|id"
+          const [cursorTimestamp, cursorId] = cursorStr.split('|');
+          if (cursorTimestamp && cursorId) {
+            if (sortDirection === 'desc') {
+              // created_desc: jobs created before cursor, or same timestamp but id < cursorId
+              query = query.or(`created_at.lt.${cursorTimestamp},and(created_at.eq.${cursorTimestamp},id.lt.${cursorId})`);
+            } else {
+              // created_asc: jobs created after cursor, or same timestamp but id > cursorId
+              query = query.or(`created_at.gt.${cursorTimestamp},and(created_at.eq.${cursorTimestamp},id.gt.${cursorId})`);
+            }
+          }
+        } else if (sortField === 'risk_score') {
+          // risk_desc/risk_asc: cursor = "risk_score|created_at|id"
+          const parts = cursorStr.split('|');
+          if (parts.length === 3) {
+            const [cursorRisk, cursorTimestamp, cursorId] = parts;
+            const cursorRiskNum = parseFloat(cursorRisk);
+            if (!isNaN(cursorRiskNum) && cursorTimestamp && cursorId) {
+              if (sortDirection === 'desc') {
+                // risk_desc: risk < cursor OR (risk = cursor AND created < cursor) OR (risk = cursor AND created = cursor AND id < cursorId)
+                query = query.or(
+                  `risk_score.lt.${cursorRiskNum},and(risk_score.eq.${cursorRiskNum},created_at.lt.${cursorTimestamp}),and(risk_score.eq.${cursorRiskNum},created_at.eq.${cursorTimestamp},id.lt.${cursorId})`
+                );
+              } else {
+                // risk_asc: risk > cursor OR (risk = cursor AND created > cursor) OR (risk = cursor AND created = cursor AND id > cursorId)
+                query = query.or(
+                  `risk_score.gt.${cursorRiskNum},and(risk_score.eq.${cursorRiskNum},created_at.gt.${cursorTimestamp}),and(risk_score.eq.${cursorRiskNum},created_at.eq.${cursorTimestamp},id.gt.${cursorId})`
+                );
+              }
+            }
+          }
         }
       } catch (e) {
         // Invalid cursor format, fall back to offset pagination
@@ -69,20 +110,32 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
       }
     }
     
-    // Apply sorting
+    // Apply sorting (SQL-based for cursor-compatible sorts)
     if (useStatusOrdering) {
-      // For status sorting, we'll sort in memory after fetching (PostgreSQL doesn't support custom order easily)
-      // For now, use created_at as primary sort, then sort by status in memory
-      query = query.order("created_at", { ascending: sortDirection === 'asc' });
+      // For status sorting, we'll sort in memory after fetching
+      // Cursor pagination is disabled for status_asc to prevent drift
+      query = query.order("created_at", { ascending: false }); // Pre-sort by created_at DESC for consistency
     } else {
-      query = query.order(sortField, { ascending: sortDirection === 'asc' });
+      // For created_at and risk_score, use SQL ordering (cursor-compatible)
+      if (sortField === 'risk_score') {
+        // Multi-column sort: risk_score, then created_at, then id (for deterministic cursor)
+        query = query.order(sortField, { ascending: sortDirection === 'asc' });
+        query = query.order("created_at", { ascending: sortDirection === 'asc' });
+        query = query.order("id", { ascending: sortDirection === 'asc' });
+      } else {
+        // Single-column sort: created_at, then id (for deterministic cursor)
+        query = query.order(sortField, { ascending: sortDirection === 'asc' });
+        query = query.order("id", { ascending: sortDirection === 'asc' });
+      }
     }
     
     // Apply pagination
-    if (!cursor) {
+    if (!useCursor) {
+      // Offset pagination (used for status_asc or when cursor is not provided)
       const offset = (pageNum - 1) * limitNum;
       query = query.range(offset, offset + limitNum - 1);
     } else {
+      // Cursor pagination (for created_desc, created_asc, risk_desc, risk_asc)
       query = query.limit(limitNum);
     }
     
@@ -109,12 +162,36 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
         .select("id, client_name, job_type, location, status, risk_score, risk_level, created_at, updated_at, applied_template_id, applied_template_type")
         .eq("organization_id", organization_id);
       
-      // Apply cursor or offset pagination
-      if (cursor) {
+      // Apply cursor or offset pagination (fallback mode - simplified)
+      if (useCursor) {
         try {
-          const [cursorTimestamp, cursorId] = String(cursor).split('|');
-          if (cursorTimestamp && cursorId) {
-            fallbackQuery = fallbackQuery.or(`created_at.lt.${cursorTimestamp},and(created_at.eq.${cursorTimestamp},id.lt.${cursorId})`);
+          const cursorStr = String(cursor);
+          if (sortField === 'created_at') {
+            const [cursorTimestamp, cursorId] = cursorStr.split('|');
+            if (cursorTimestamp && cursorId) {
+              if (sortDirection === 'desc') {
+                fallbackQuery = fallbackQuery.or(`created_at.lt.${cursorTimestamp},and(created_at.eq.${cursorTimestamp},id.lt.${cursorId})`);
+              } else {
+                fallbackQuery = fallbackQuery.or(`created_at.gt.${cursorTimestamp},and(created_at.eq.${cursorTimestamp},id.gt.${cursorId})`);
+              }
+            }
+          } else if (sortField === 'risk_score') {
+            const parts = cursorStr.split('|');
+            if (parts.length === 3) {
+              const [cursorRisk, cursorTimestamp, cursorId] = parts;
+              const cursorRiskNum = parseFloat(cursorRisk);
+              if (!isNaN(cursorRiskNum) && cursorTimestamp && cursorId) {
+                if (sortDirection === 'desc') {
+                  fallbackQuery = fallbackQuery.or(
+                    `risk_score.lt.${cursorRiskNum},and(risk_score.eq.${cursorRiskNum},created_at.lt.${cursorTimestamp}),and(risk_score.eq.${cursorRiskNum},created_at.eq.${cursorTimestamp},id.lt.${cursorId})`
+                  );
+                } else {
+                  fallbackQuery = fallbackQuery.or(
+                    `risk_score.gt.${cursorRiskNum},and(risk_score.eq.${cursorRiskNum},created_at.gt.${cursorTimestamp}),and(risk_score.eq.${cursorRiskNum},created_at.eq.${cursorTimestamp},id.gt.${cursorId})`
+                  );
+                }
+              }
+            }
           }
         } catch (e) {
           // Invalid cursor, fall back to offset
@@ -122,12 +199,19 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
       }
       
       if (useStatusOrdering) {
-        fallbackQuery = fallbackQuery.order("created_at", { ascending: sortDirection === 'asc' });
+        fallbackQuery = fallbackQuery.order("created_at", { ascending: false });
       } else {
-        fallbackQuery = fallbackQuery.order(sortField, { ascending: sortDirection === 'asc' });
+        if (sortField === 'risk_score') {
+          fallbackQuery = fallbackQuery.order(sortField, { ascending: sortDirection === 'asc' });
+          fallbackQuery = fallbackQuery.order("created_at", { ascending: sortDirection === 'asc' });
+          fallbackQuery = fallbackQuery.order("id", { ascending: sortDirection === 'asc' });
+        } else {
+          fallbackQuery = fallbackQuery.order(sortField, { ascending: sortDirection === 'asc' });
+          fallbackQuery = fallbackQuery.order("id", { ascending: sortDirection === 'asc' });
+        }
       }
       
-      if (!cursor) {
+      if (!useCursor) {
         const offset = (pageNum - 1) * limitNum;
         fallbackQuery = fallbackQuery.range(offset, offset + limitNum - 1);
       } else {
@@ -182,11 +266,19 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
       }));
     }
     
-    // Generate next cursor for cursor pagination
+    // Generate next cursor for cursor pagination (per-sort cursor keys)
     let nextCursor: string | null = null;
-    if (cursor && jobs && jobs.length === limitNum) {
+    if (useCursor && jobs && jobs.length === limitNum) {
       const lastJob = jobs[jobs.length - 1];
-      nextCursor = `${lastJob.created_at}|${lastJob.id}`;
+      
+      if (sortField === 'created_at') {
+        // created_desc/created_asc: cursor = "created_at|id"
+        nextCursor = `${lastJob.created_at}|${lastJob.id}`;
+      } else if (sortField === 'risk_score') {
+        // risk_desc/risk_asc: cursor = "risk_score|created_at|id"
+        const riskScore = lastJob.risk_score ?? 0;
+        nextCursor = `${riskScore}|${lastJob.created_at}|${lastJob.id}`;
+      }
     }
 
     // Get total count for pagination

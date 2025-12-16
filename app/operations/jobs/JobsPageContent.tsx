@@ -108,20 +108,27 @@ export function JobsPageContentView(props: JobsPageContentProps) {
     
     setLoading(true)
     
-    // Store previous cache state for rollback
-    const previousData = props.mutateData?.currentData ? { ...props.mutateData.currentData } : null
+    // Store previous cache state for rollback (snapshot)
+    const previousData = props.mutateData?.currentData ? JSON.parse(JSON.stringify(props.mutateData.currentData)) : null
     
     // Optimistic update: remove job from list immediately
-    if (props.mutateData?.currentData) {
-      const optimisticData = {
-        ...props.mutateData.currentData,
-        data: props.mutateData.currentData.data.filter((job: any) => job.id !== archiveModal.jobId),
-        pagination: {
-          ...props.mutateData.currentData.pagination,
-          total: (props.mutateData.currentData.pagination?.total || 0) - 1,
-        },
-      }
-      props.mutateData.mutate(optimisticData, false) // Update cache optimistically, don't revalidate yet
+    // Use functional mutate to prevent race conditions with concurrent updates
+    if (props.mutateData?.mutate) {
+      props.mutateData.mutate((current: any) => {
+        if (!current) return current
+        return {
+          ...current,
+          data: (current.data || []).filter((job: any) => job.id !== archiveModal.jobId),
+          pagination: {
+            ...current.pagination,
+            total: Math.max(0, (current.pagination?.total || 0) - 1),
+          },
+        }
+      }, { 
+        optimisticData: true,
+        rollbackOnError: true,
+        revalidate: false, // Don't revalidate yet, wait for API response
+      })
     }
     
     try {
@@ -134,9 +141,9 @@ export function JobsPageContentView(props: JobsPageContentProps) {
       setToast({ message: 'Job archived successfully', type: 'success' })
       setArchiveModal({ isOpen: false, jobId: null, jobName: '' })
     } catch (err: any) {
-      // On error, restore previous cache state (rollback)
-      if (previousData && props.mutateData) {
-        props.mutateData.mutate(previousData, false)
+      // Rollback is handled by SWR's rollbackOnError, but we also restore previous state explicitly
+      if (previousData && props.mutateData?.mutate) {
+        props.mutateData.mutate(previousData, { revalidate: false })
       }
       // Then revalidate to ensure consistency
       props.onJobArchived()
@@ -158,20 +165,27 @@ export function JobsPageContentView(props: JobsPageContentProps) {
     
     setLoading(true)
     
-    // Store previous cache state for rollback
-    const previousData = props.mutateData?.currentData ? { ...props.mutateData.currentData } : null
+    // Store previous cache state for rollback (snapshot)
+    const previousData = props.mutateData?.currentData ? JSON.parse(JSON.stringify(props.mutateData.currentData)) : null
     
     // Optimistic update: remove job from list immediately
-    if (props.mutateData?.currentData) {
-      const optimisticData = {
-        ...props.mutateData.currentData,
-        data: props.mutateData.currentData.data.filter((job: any) => job.id !== deleteModal.jobId),
-        pagination: {
-          ...props.mutateData.currentData.pagination,
-          total: (props.mutateData.currentData.pagination?.total || 0) - 1,
-        },
-      }
-      props.mutateData.mutate(optimisticData, false) // Update cache optimistically, don't revalidate yet
+    // Use functional mutate to prevent race conditions with concurrent updates
+    if (props.mutateData?.mutate) {
+      props.mutateData.mutate((current: any) => {
+        if (!current) return current
+        return {
+          ...current,
+          data: (current.data || []).filter((job: any) => job.id !== deleteModal.jobId),
+          pagination: {
+            ...current.pagination,
+            total: Math.max(0, (current.pagination?.total || 0) - 1),
+          },
+        }
+      }, { 
+        optimisticData: true,
+        rollbackOnError: true,
+        revalidate: false, // Don't revalidate yet, wait for API response
+      })
     }
     
     try {
@@ -184,9 +198,9 @@ export function JobsPageContentView(props: JobsPageContentProps) {
       setToast({ message: 'Job deleted successfully', type: 'success' })
       setDeleteModal({ isOpen: false, jobId: null, jobName: '' })
     } catch (err: any) {
-      // On error, restore previous cache state (rollback)
-      if (previousData && props.mutateData) {
-        props.mutateData.mutate(previousData, false)
+      // Rollback is handled by SWR's rollbackOnError, but we also restore previous state explicitly
+      if (previousData && props.mutateData?.mutate) {
+        props.mutateData.mutate(previousData, { revalidate: false })
       }
       // Then revalidate to ensure consistency
       props.onJobDeleted()

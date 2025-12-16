@@ -215,8 +215,8 @@ describe('GET /api/jobs', () => {
   })
 
   describe('Cursor pagination', () => {
-    it('should support cursor-based pagination', async () => {
-      const firstPage = await fetch(`${API_URL}/api/jobs?limit=10`, {
+    it('should support cursor-based pagination for created_desc', async () => {
+      const firstPage = await fetch(`${API_URL}/api/jobs?limit=10&sort=created_desc`, {
         headers: {
           'Authorization': `Bearer ${authToken}`,
         },
@@ -224,7 +224,7 @@ describe('GET /api/jobs', () => {
       const firstData = await firstPage.json()
       
       if (firstData.pagination?.cursor) {
-        const secondPage = await fetch(`${API_URL}/api/jobs?limit=10&cursor=${firstData.pagination.cursor}`, {
+        const secondPage = await fetch(`${API_URL}/api/jobs?limit=10&sort=created_desc&cursor=${firstData.pagination.cursor}`, {
           headers: {
             'Authorization': `Bearer ${authToken}`,
           },
@@ -235,9 +235,118 @@ describe('GET /api/jobs', () => {
         const firstIds = new Set(firstData.data.map((j: any) => j.id))
         const secondIds = new Set(secondData.data.map((j: any) => j.id))
         
-        // No overlap
+        // No overlap (pagination stability)
         const intersection = [...firstIds].filter(id => secondIds.has(id))
         expect(intersection.length).toBe(0)
+      }
+    })
+
+    it('should support cursor-based pagination for risk_desc', async () => {
+      const firstPage = await fetch(`${API_URL}/api/jobs?limit=10&sort=risk_desc`, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+        },
+      })
+      const firstData = await firstPage.json()
+      
+      if (firstData.pagination?.cursor) {
+        const secondPage = await fetch(`${API_URL}/api/jobs?limit=10&sort=risk_desc&cursor=${firstData.pagination.cursor}`, {
+          headers: {
+            'Authorization': `Bearer ${authToken}`,
+          },
+        })
+        const secondData = await secondPage.json()
+        
+        // Second page should have different jobs
+        const firstIds = new Set(firstData.data.map((j: any) => j.id))
+        const secondIds = new Set(secondData.data.map((j: any) => j.id))
+        
+        // No overlap (pagination stability)
+        const intersection = [...firstIds].filter(id => secondIds.has(id))
+        expect(intersection.length).toBe(0)
+      }
+    })
+
+    it('should NOT use cursor pagination for status_asc (uses offset only)', async () => {
+      const firstPage = await fetch(`${API_URL}/api/jobs?limit=10&sort=status_asc`, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+        },
+      })
+      const firstData = await firstPage.json()
+      
+      // status_asc should not return cursor (cursor pagination disabled)
+      expect(firstData.pagination?.cursor).toBeUndefined()
+      
+      // Should use offset pagination instead
+      expect(firstData.pagination?.page).toBeDefined()
+    })
+
+    it('should have no gaps or overlaps between pages (created_desc)', async () => {
+      // Fetch first page
+      const firstPage = await fetch(`${API_URL}/api/jobs?limit=5&sort=created_desc`, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+        },
+      })
+      const firstData = await firstPage.json()
+      
+      if (firstData.pagination?.cursor && firstData.data.length > 0) {
+        // Fetch second page
+        const secondPage = await fetch(`${API_URL}/api/jobs?limit=5&sort=created_desc&cursor=${firstData.pagination.cursor}`, {
+          headers: {
+            'Authorization': `Bearer ${authToken}`,
+          },
+        })
+        const secondData = await secondPage.json()
+        
+        // Verify no overlaps
+        const firstIds = new Set(firstData.data.map((j: any) => j.id))
+        const secondIds = new Set(secondData.data.map((j: any) => j.id))
+        const intersection = [...firstIds].filter(id => secondIds.has(id))
+        expect(intersection.length).toBe(0)
+        
+        // Verify no gaps: last item of first page should be > first item of second page (for created_desc)
+        if (firstData.data.length > 0 && secondData.data.length > 0) {
+          const lastFirst = new Date(firstData.data[firstData.data.length - 1].created_at).getTime()
+          const firstSecond = new Date(secondData.data[0].created_at).getTime()
+          // For created_desc, last of first page should be >= first of second page
+          expect(lastFirst).toBeGreaterThanOrEqual(firstSecond)
+        }
+      }
+    })
+
+    it('should have no gaps or overlaps between pages (risk_desc)', async () => {
+      // Fetch first page
+      const firstPage = await fetch(`${API_URL}/api/jobs?limit=5&sort=risk_desc`, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+        },
+      })
+      const firstData = await firstPage.json()
+      
+      if (firstData.pagination?.cursor && firstData.data.length > 0) {
+        // Fetch second page
+        const secondPage = await fetch(`${API_URL}/api/jobs?limit=5&sort=risk_desc&cursor=${firstData.pagination.cursor}`, {
+          headers: {
+            'Authorization': `Bearer ${authToken}`,
+          },
+        })
+        const secondData = await secondPage.json()
+        
+        // Verify no overlaps
+        const firstIds = new Set(firstData.data.map((j: any) => j.id))
+        const secondIds = new Set(secondData.data.map((j: any) => j.id))
+        const intersection = [...firstIds].filter(id => secondIds.has(id))
+        expect(intersection.length).toBe(0)
+        
+        // Verify no gaps: last item of first page should have risk_score >= first item of second page
+        if (firstData.data.length > 0 && secondData.data.length > 0) {
+          const lastFirst = firstData.data[firstData.data.length - 1].risk_score ?? 0
+          const firstSecond = secondData.data[0].risk_score ?? 0
+          // For risk_desc, last of first page should have risk_score >= first of second page
+          expect(lastFirst).toBeGreaterThanOrEqual(firstSecond)
+        }
       }
     })
   })
