@@ -10,7 +10,9 @@ All error responses include:
 {
   "message": "Human-readable error message",
   "code": "ERROR_CODE",
+  "error_id": "uuid-v4",
   "request_id": "uuid-v4",
+  "support_hint": "Short actionable guidance",
   // ... additional fields based on error type
 }
 ```
@@ -19,11 +21,87 @@ All error responses include:
 
 - **`message`** (string, required): Human-readable error description
 - **`code`** (string, required): Machine-readable error code (uppercase, underscore-separated)
-- **`request_id`** (string, required): Unique request identifier for correlation
+- **`error_id`** (string, required): Unique error instance identifier (for error aggregation/tracking)
+- **`request_id`** (string, required): Unique request identifier for correlation (echoes `X-Request-ID` header if provided)
+- **`support_hint`** (string, optional): Short, actionable guidance (documentation_url provides detailed help)
 - **`documentation_url`** (string, optional): Link to relevant documentation
 - **`retry_after_seconds`** (number, optional): Seconds to wait before retrying (for rate-limited operations)
 
 ## Error Codes
+
+### `JOB_LIMIT_REACHED`
+
+**Status:** `403 Forbidden`
+
+**When:** Monthly job creation limit has been reached for the current plan.
+
+**Response:**
+```json
+{
+  "message": "Plan job limit reached. Upgrade your plan to create more jobs.",
+  "code": "JOB_LIMIT_REACHED",
+  "error_id": "uuid-v4",
+  "request_id": "uuid-v4",
+  "support_hint": "Upgrade plan or wait for monthly limit reset",
+  "limit": 10,
+  "current_count": 10
+}
+```
+
+**Client Handling:**
+- Check `limit` and `current_count` to display upgrade prompt
+- Wait for monthly reset or upgrade plan
+
+---
+
+### `PLAN_PAST_DUE`
+
+**Status:** `402 Payment Required`
+
+**When:** Subscription payment is past due.
+
+**Response:**
+```json
+{
+  "message": "Your subscription is not active. Update billing to create new jobs.",
+  "code": "PLAN_PAST_DUE",
+  "error_id": "uuid-v4",
+  "request_id": "uuid-v4",
+  "support_hint": "Update payment method in billing settings",
+  "subscription_status": "past_due"
+}
+```
+
+**Client Handling:**
+- Redirect to billing/payment settings
+- Display payment update prompt
+
+---
+
+### `ROLE_FORBIDDEN`
+
+**Status:** `403 Forbidden`
+
+**When:** User lacks required role for the operation.
+
+**Response:**
+```json
+{
+  "message": "Only organization owners can delete jobs",
+  "code": "ROLE_FORBIDDEN",
+  "error_id": "uuid-v4",
+  "request_id": "uuid-v4",
+  "support_hint": "This action requires owner role. Contact your organization owner",
+  "required_role": "owner",
+  "current_role": "admin"
+}
+```
+
+**Client Handling:**
+- Hide/disable action for insufficient roles
+- Display role requirement message
+
+---
 
 ### `CURSOR_NOT_SUPPORTED_FOR_SORT`
 
@@ -36,11 +114,13 @@ All error responses include:
 {
   "message": "Cursor pagination is not supported for status sorting. Use offset pagination (page parameter) instead.",
   "code": "CURSOR_NOT_SUPPORTED_FOR_SORT",
+  "error_id": "660e8400-e29b-41d4-a716-446655440001",
+  "request_id": "550e8400-e29b-41d4-a716-446655440000",
+  "support_hint": "Remove cursor param or switch to page-based pagination",
   "sort": "status_asc",
   "reason": "Status sorting uses in-memory ordering which is incompatible with cursor pagination",
   "documentation_url": "/docs/pagination#status-sorting",
   "allowed_pagination_modes": ["offset"],
-  "request_id": "550e8400-e29b-41d4-a716-446655440000",
   "retry_after_seconds": 3600
 }
 ```
@@ -120,7 +200,16 @@ X-Request-ID: 550e8400-e29b-41d4-a716-446655440000
 }
 ```
 
-Clients can include their own request ID via the `X-Request-ID` header, which will be used if provided.
+**Echo Behavior:** If a client sends `X-Request-ID` header, the server will reuse it. Otherwise, a new UUID is generated. This helps when upstream gateways already stamp IDs.
+
+## Error ID
+
+Every error response includes an `error_id` field separate from `request_id`:
+
+- **`request_id`**: Ties to one HTTP request
+- **`error_id`**: Ties to the error instance/classification (useful for error aggregation)
+
+This enables tracking error patterns across multiple requests.
 
 ## Rate Limiting
 
@@ -142,10 +231,29 @@ This indicates when the next log entry will be written (not when the request can
 4. **Read `documentation_url`** for detailed guidance
 5. **Respect `retry_after_seconds`** for rate-limited operations
 
+## Support Console
+
+All 4xx/5xx errors are automatically logged with structured JSON:
+
+```json
+{
+  "level": "warn",
+  "status": 403,
+  "code": "JOB_LIMIT_REACHED",
+  "request_id": "550e8400-e29b-41d4-a716-446655440000",
+  "organization_id": "org-uuid",
+  "message": "Plan job limit reached...",
+  "timestamp": "2025-01-16T10:30:00Z"
+}
+```
+
+This enables instant support correlation: request_id → logs → audit trail → Stripe webhook correlation.
+
 ## Support
 
 When reporting errors, always include:
 - `request_id` from the error response
+- `error_id` from the error response (for error tracking)
 - `code` field
 - Request parameters (sanitized)
 - Client version/environment

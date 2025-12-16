@@ -2,51 +2,87 @@ import { NextFunction, Response } from "express";
 import { supabase } from "../lib/supabaseClient";
 import { AuthenticatedRequest } from "./auth";
 import { PlanFeature } from "../auth/planRules";
+import { createErrorResponse, logErrorForSupport } from "../utils/errorResponse";
+import { RequestWithId } from "./requestId";
 
 const ACTIVE_STATUSES = new Set(["active", "trialing", "free"]);
 
 export function requireFeature(feature: PlanFeature) {
-  return (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  return (req: AuthenticatedRequest & RequestWithId, res: Response, next: NextFunction) => {
+    const requestId = req.requestId || 'unknown';
+    const organizationId = req.user.organization_id;
+    
     const status = req.user.subscriptionStatus;
     if (!ACTIVE_STATUSES.has(status)) {
-      return res.status(402).json({
+      const code = status === "past_due" ? "PLAN_PAST_DUE" : "PLAN_INACTIVE";
+      const errorResponse = createErrorResponse({
         message: "Your subscription is not active. Please update billing to unlock this feature.",
-        code: status === "past_due" ? "PLAN_PAST_DUE" : "PLAN_INACTIVE",
+        code,
+        requestId,
+        statusCode: 402,
+        subscription_status: status,
       });
+      
+      logErrorForSupport(402, code, requestId, organizationId, errorResponse.message);
+      
+      return res.status(402).json(errorResponse);
     }
 
     if (!req.user.features.includes(feature)) {
-      return res.status(403).json({
+      const errorResponse = createErrorResponse({
         message: "Feature not available on your plan",
         code: "FEATURE_NOT_ALLOWED",
+        requestId,
+        statusCode: 403,
         feature,
       });
+      
+      logErrorForSupport(403, "FEATURE_NOT_ALLOWED", requestId, organizationId, errorResponse.message);
+      
+      return res.status(403).json(errorResponse);
     }
     next();
   };
 }
 
 export async function enforceJobLimit(
-  req: AuthenticatedRequest,
+  req: AuthenticatedRequest & RequestWithId,
   res: Response,
   next: NextFunction
 ) {
   try {
+    const requestId = req.requestId || 'unknown';
+    const organizationId = req.user.organization_id;
+    
     const status = req.user.subscriptionStatus;
     if (status === "past_due" || status === "canceled") {
-      return res.status(402).json({
+      const code = status === "past_due" ? "PLAN_PAST_DUE" : "PLAN_INACTIVE";
+      const errorResponse = createErrorResponse({
         message: "Your subscription is not active. Update billing to create new jobs.",
-        code: "PLAN_INACTIVE",
+        code,
+        requestId,
+        statusCode: 402,
+        subscription_status: status,
       });
+      
+      logErrorForSupport(402, code, requestId, organizationId, errorResponse.message);
+      
+      return res.status(402).json(errorResponse);
     }
 
     const limit = req.user.jobsMonthlyLimit;
     if (limit === 0) {
-      return res.status(403).json({
+      const errorResponse = createErrorResponse({
         message: "Your current plan does not allow job creation. Please upgrade your plan.",
         code: "JOB_LIMIT_REACHED",
+        requestId,
+        statusCode: 403,
         limit,
       });
+      
+      logErrorForSupport(403, "JOB_LIMIT_REACHED", requestId, organizationId, errorResponse.message);
+      
+      return res.status(403).json(errorResponse);
     }
 
     if (!limit) {
@@ -69,11 +105,18 @@ export async function enforceJobLimit(
     }
 
     if ((count ?? 0) >= limit) {
-      return res.status(403).json({
+      const errorResponse = createErrorResponse({
         message: "Plan job limit reached. Upgrade your plan to create more jobs.",
         code: "JOB_LIMIT_REACHED",
+        requestId,
+        statusCode: 403,
         limit,
+        current_count: count || 0,
       });
+      
+      logErrorForSupport(403, "JOB_LIMIT_REACHED", requestId, organizationId, errorResponse.message);
+      
+      return res.status(403).json(errorResponse);
     }
 
     next();

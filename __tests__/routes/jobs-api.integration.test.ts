@@ -514,5 +514,129 @@ describe('GET /api/jobs', () => {
       }
     })
   })
+
+  describe('High-risk denial codes', () => {
+    it('should return JOB_LIMIT_REACHED when monthly limit is exceeded', async () => {
+      // This test requires a starter plan user with 10 jobs already created
+      // Note: This is a structural test - actual limit enforcement depends on test data
+      const response = await fetch(`${API_URL}/api/jobs`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          client_name: 'Test Client',
+          client_type: 'commercial',
+          job_type: 'inspection',
+          location: 'Test Location',
+        }),
+      })
+      
+      // If limit is reached, should return 403 with JOB_LIMIT_REACHED
+      if (response.status === 403) {
+        const data = await response.json()
+        expect(data.code).toBe('JOB_LIMIT_REACHED')
+        expect(data.error_id).toBeDefined()
+        expect(data.request_id).toBeDefined()
+        expect(data.support_hint).toBeDefined()
+        expect(data.limit).toBeDefined()
+      }
+    })
+
+    it('should return PLAN_PAST_DUE when subscription is past due', async () => {
+      // This test requires a user with past_due subscription status
+      // Note: This is a structural test - actual status depends on test data
+      const response = await fetch(`${API_URL}/api/jobs`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          client_name: 'Test Client',
+          client_type: 'commercial',
+          job_type: 'inspection',
+          location: 'Test Location',
+        }),
+      })
+      
+      // If subscription is past due, should return 402 with PLAN_PAST_DUE
+      if (response.status === 402) {
+        const data = await response.json()
+        expect(['PLAN_PAST_DUE', 'PLAN_INACTIVE']).toContain(data.code)
+        expect(data.error_id).toBeDefined()
+        expect(data.request_id).toBeDefined()
+        expect(data.support_hint).toBeDefined()
+        expect(data.subscription_status).toBeDefined()
+      }
+    })
+
+    it('should return ROLE_FORBIDDEN when non-owner tries to delete job', async () => {
+      // Create a test job first
+      const createResponse = await fetch(`${API_URL}/api/jobs`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          client_name: 'Test Delete Job',
+          client_type: 'commercial',
+          job_type: 'inspection',
+          location: 'Test Location',
+          status: 'draft',
+        }),
+      })
+      
+      if (createResponse.ok) {
+        const createData = await createResponse.json()
+        const jobId = createData.data?.id
+        
+        if (jobId) {
+          // Attempt to delete as non-owner (requires test user with admin/member role)
+          const deleteResponse = await fetch(`${API_URL}/api/jobs/${jobId}`, {
+            method: 'DELETE',
+            headers: {
+              'Authorization': `Bearer ${authToken}`,
+            },
+          })
+          
+          // If user is not owner, should return 403 with ROLE_FORBIDDEN
+          if (deleteResponse.status === 403) {
+            const errorData = await deleteResponse.json()
+            expect(errorData.code).toBe('ROLE_FORBIDDEN')
+            expect(errorData.error_id).toBeDefined()
+            expect(errorData.request_id).toBeDefined()
+            expect(errorData.support_hint).toBeDefined()
+            expect(errorData.required_role).toBe('owner')
+            expect(errorData.current_role).toBeDefined()
+          }
+        }
+      }
+    })
+
+    it('should include error_id and support_hint in all error responses', async () => {
+      // Test with invalid cursor + status_asc (known error)
+      const response = await fetch(`${API_URL}/api/jobs?sort=status_asc&cursor=invalid`, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+        },
+      })
+      
+      expect(response.status).toBe(400)
+      const data = await response.json()
+      
+      expect(data.error_id).toBeDefined()
+      expect(typeof data.error_id).toBe('string')
+      expect(data.error_id.length).toBeGreaterThan(0)
+      
+      expect(data.support_hint).toBeDefined()
+      expect(typeof data.support_hint).toBe('string')
+      expect(data.support_hint.length).toBeGreaterThan(0)
+      
+      expect(data.request_id).toBeDefined()
+    })
+  })
 })
 

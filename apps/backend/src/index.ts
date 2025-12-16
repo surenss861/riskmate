@@ -107,11 +107,33 @@ app.use((req, res) => {
 
 // Error handler
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  console.error("Error:", err);
   const requestId = (req as RequestWithId).requestId || 'unknown';
-  res.status(err.status || 500).json({
+  const statusCode = err.status || 500;
+  const organizationId = (req as any).user?.organization_id;
+  
+  // Structured logging for support console (4xx/5xx)
+  if (statusCode >= 400) {
+    const code = err.code || (statusCode >= 500 ? "INTERNAL_SERVER_ERROR" : "UNKNOWN_ERROR");
+    console.log(
+      JSON.stringify({
+        level: statusCode >= 500 ? "error" : "warn",
+        status: statusCode,
+        code,
+        request_id: requestId,
+        organization_id: organizationId || "unknown",
+        message: err.message || "Internal server error",
+        timestamp: new Date().toISOString(),
+      })
+    );
+  }
+  
+  console.error("Error:", err);
+  
+  res.status(statusCode).json({
     message: err.message || "Internal server error",
+    code: err.code || (statusCode >= 500 ? "INTERNAL_SERVER_ERROR" : "UNKNOWN_ERROR"),
     request_id: requestId,
+    error_id: err.error_id || require("crypto").randomUUID(),
   });
 });
 
