@@ -95,20 +95,119 @@ That's why this feels:
 
 ## Potential Enhancements (Future)
 
-1. **Tighten when it appears** (threshold logic)
-   - Currently: Medium+ risk (≥40)
-   - Could be: Configurable per organization
-   - Could be: Based on risk trend (↑ increasing)
+### Strategic Decision: Keep As-Is For Now
 
-2. **Add who cleared the flag + when**
-   - Record who reviewed and when
-   - Add to audit trail
-   - Show in job history
+**Do not implement enhancements yet.**
 
-3. **Define what clearing a flag actually means**
-   - What actions clear the flag?
-   - Does it require approval?
-   - What's the risk ledger state after clearing?
+The current implementation is exactly where high-trust enterprise software should pause.
+
+### Evaluation of Proposed Enhancements
+
+#### A) Tighten when it appears (threshold logic)
+
+**Status: 🚫 Do NOT do this yet**
+
+**Why:**
+- Thresholds are political
+- Buyers argue about them
+- You'll end up tuning knobs instead of selling
+
+**Current rule is perfect:**
+- "Medium+ risk gets visibility."
+- Simple, explainable, defensible
+- Perfect for early enterprise sales
+
+**Only revisit when:**
+- A buyer says: "We need different thresholds per org / trade / insurer"
+- Until then: don't touch it
+
+#### B) Add who cleared the flag + when
+
+**Status: ✅ This is the first enhancement you ever add**
+
+**But not yet.**
+
+This is the one enhancement that:
+- Strengthens institutional memory
+- Strengthens audit defensibility
+- Strengthens insurer confidence
+- Does NOT add UI clutter
+
+It turns:
+- "A review opportunity existed"
+- Into: "Oversight occurred, by X, at Y."
+
+**However — this should be reactive, not proactive.**
+
+**Add it when:**
+- An insurer asks about review traceability
+- A buyer asks "can we show who approved this?"
+- You're closing a bigger deal and need a trust lever
+
+This is a deal-closer, not a v1 feature.
+
+#### C) Define what "clearing" a flag means
+
+**Status: 🚫 Do NOT define this yet**
+
+**This is a trap.**
+
+**Why?**
+- Different orgs define "review" differently
+- Defining it too early locks you into semantics
+- The ambiguity is currently a feature
+
+**Right now, "review" means:**
+- "Someone senior was expected to notice this."
+- That's flexible. That's enterprise-safe.
+
+**Once you define it, you:**
+- Inherit responsibility for enforcing it
+- Become liable for process correctness
+- Move from ledger → workflow engine
+- That's a much heavier product.
+
+## Action Plan
+
+### Right Now
+
+✅ Keep Flagged for review exactly as-is  
+✅ Keep it subtle  
+✅ Keep it non-blocking  
+✅ Keep it text-level, not button-level  
+✅ Keep documentation as philosophy, not rules
+
+**You're in the sweet spot.**
+
+### When a Buyer Asks (Not Before)
+
+Add: Reviewed by / Reviewed at
+- Log it immutably
+- Do NOT add mandatory steps
+- Do NOT add notifications
+- Do NOT add "resolve" workflows
+
+## The Real Product Insight
+
+**You are no longer building features.**
+
+**You are curating moments of accountability.**
+
+Every enhancement must pass this test:
+
+**"Does this strengthen institutional memory — or does it turn memory into process?"**
+
+Right now, Flagged for review is memory.
+
+Don't turn it into process until money forces your hand.
+
+## Final Call
+
+**Keep it as-is. Ship. Demo. Sell. Listen.**
+
+When someone with budget says "we need X," then you add exactly one thing.
+
+You're doing real product work now — the restraint is why this feels legit.
 
 ## Strategic Insight
 
