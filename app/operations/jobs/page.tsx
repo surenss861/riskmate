@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useCallback, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import useSWR from 'swr'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import { jobsApi } from '@/lib/api'
@@ -86,72 +87,110 @@ const JobsPageContent = () => {
     loadTemplates()
   }, [])
 
-  const loadJobs = useCallback(async () => {
-    try {
-      setLoading(true)
+  // Load user and role once
+  useEffect(() => {
+    const loadUser = async () => {
       const supabase = createSupabaseBrowserClient()
       const { data: { user } } = await supabase.auth.getUser()
       setUser(user)
 
-      if (!user) return
-
-      // Get user role for permissions
-      const { data: userRow } = await supabase
-        .from('users')
-        .select('organization_id, role')
-        .eq('id', user.id)
-        .single()
-
-      if (!userRow?.organization_id) return
-      
-      // Set user role
-      if (userRow.role) {
-        setUserRole(userRow.role as 'owner' | 'admin' | 'member')
+      if (user) {
+        const { data: userRow } = await supabase
+          .from('users')
+          .select('role')
+          .eq('id', user.id)
+          .single()
+        
+        if (userRow?.role) {
+          setUserRole(userRow.role as 'owner' | 'admin' | 'member')
+        }
       }
+    }
+    loadUser()
+  }, [])
 
-      // Use authenticated API endpoint (same source of truth as backend)
-      // This ensures consistent filtering, auth, and archive/delete handling
-      const response = await jobsApi.list({
-        page,
-        limit: 50,
-        status: filterStatus || undefined,
-        risk_level: filterRiskLevel || undefined,
-      })
+  // SWR fetcher function (stable reference)
+  const fetcher = useCallback(async (key: string) => {
+    // Use authenticated API endpoint (same source of truth as backend)
+    // This ensures consistent filtering, auth, and archive/delete handling
+    const response = await jobsApi.list({
+      page,
+      limit: 50,
+      status: filterStatus || undefined,
+      risk_level: filterRiskLevel || undefined,
+    })
 
-      const jobsData = response.data || []
-      
-      // Apply template filters client-side (since API doesn't support them yet)
-      let filteredJobs = jobsData
-      
-      if (filterTemplateSource === 'template') {
-        filteredJobs = filteredJobs.filter(job => job.applied_template_id !== null)
-      } else if (filterTemplateSource === 'manual') {
-        filteredJobs = filteredJobs.filter(job => job.applied_template_id === null)
-      }
-      
-      if (filterTemplateId) {
-        filteredJobs = filteredJobs.filter(job => job.applied_template_id === filterTemplateId)
-      }
+    // Log source of truth in dev mode
+    if (process.env.NODE_ENV === 'development' && response._meta) {
+      console.log('[Jobs API] Source of truth:', response._meta)
+    }
 
-      // Ensure jobsData is an array and set jobs
-      if (Array.isArray(filteredJobs)) {
-        setJobs(filteredJobs)
-      } else {
-        console.warn('Jobs query returned non-array data:', filteredJobs)
-        setJobs([])
-      }
-      
-      // Calculate total pages from API pagination or filtered count
-      const totalCount = response.pagination?.total || filteredJobs.length
-      setTotalPages(Math.ceil(totalCount / 50))
-      setLoading(false)
-    } catch (err: any) {
-      console.error('Failed to load jobs:', err)
-      setLoading(false)
-      // Don't throw - just show empty state
+    return response
+  }, [page, filterStatus, filterRiskLevel])
+
+  // SWR key for caching (includes template filters in key for proper cache invalidation)
+  const swrKey = `jobs-list-${page}-${filterStatus}-${filterRiskLevel}-${filterTemplateSource}-${filterTemplateId}`
+
+  // Use SWR for caching and automatic revalidation
+  const { data: response, error, isLoading, mutate } = useSWR(
+    swrKey,
+    fetcher,
+    {
+      revalidateOnFocus: true,
+      revalidateOnReconnect: true,
+      dedupingInterval: 5000, // Dedupe requests within 5 seconds
+    }
+  )
+
+  // Process response data
+  useEffect(() => {
+    if (!response) return
+    
+    const jobsData = response.data || []
+    
+    // Apply template filters client-side (since API doesn't support them yet)
+    let filteredJobs = jobsData
+    
+    if (filterTemplateSource === 'template') {
+      filteredJobs = filteredJobs.filter(job => job.applied_template_id !== null)
+    } else if (filterTemplateSource === 'manual') {
+      filteredJobs = filteredJobs.filter(job => job.applied_template_id === null)
+    }
+    
+    if (filterTemplateId) {
+      filteredJobs = filteredJobs.filter(job => job.applied_template_id === filterTemplateId)
+    }
+
+    // Ensure jobsData is an array and set jobs
+    if (Array.isArray(filteredJobs)) {
+      setJobs(filteredJobs)
+    } else {
+      console.warn('Jobs query returned non-array data:', filteredJobs)
       setJobs([])
     }
-  }, [page, filterStatus, filterRiskLevel, filterTemplateSource, filterTemplateId])
+    
+    // Calculate total pages from API pagination or filtered count
+    const totalCount = response.pagination?.total || filteredJobs.length
+    setTotalPages(Math.ceil(totalCount / 50))
+  }, [response, filterTemplateSource, filterTemplateId])
+
+  // Handle errors
+  useEffect(() => {
+    if (error) {
+      console.error('Failed to load jobs:', error)
+      setJobs([])
+    }
+  }, [error])
+
+  // Sync loading state
+  useEffect(() => {
+    setLoading(isLoading)
+  }, [isLoading])
+
+  // Legacy loadJobs callback for archive/delete callbacks (triggers SWR revalidation)
+  const loadJobs = useCallback(() => {
+    mutate() // Trigger SWR revalidation
+  }, [mutate])
 
   useEffect(() => {
     loadJobs()

@@ -105,14 +105,29 @@ async function apiRequest<T>(
 
 // Jobs API
 export const jobsApi = {
-  list: async (params?: { page?: number; limit?: number; status?: string; risk_level?: string }) => {
+  list: async (params?: { 
+    page?: number; 
+    limit?: number; 
+    status?: string; 
+    risk_level?: string;
+    include_archived?: boolean;
+  }) => {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.set('page', params.page.toString());
     if (params?.limit) queryParams.set('limit', params.limit.toString());
     if (params?.status) queryParams.set('status', params.status);
     if (params?.risk_level) queryParams.set('risk_level', params.risk_level);
+    if (params?.include_archived) queryParams.set('include_archived', 'true');
     
-    return apiRequest<{ data: any[]; pagination: any }>(`/api/jobs?${queryParams}`);
+    return apiRequest<{ 
+      data: any[]; 
+      pagination: any;
+      _meta?: {
+        source: string;
+        include_archived: boolean;
+        organization_id: string;
+      };
+    }>(`/api/jobs?${queryParams}`);
   },
 
   get: async (id: string) => {

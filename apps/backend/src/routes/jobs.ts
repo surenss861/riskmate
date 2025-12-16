@@ -15,7 +15,8 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
   const authReq = req as AuthenticatedRequest;
   try {
     const { organization_id } = authReq.user;
-    const { page = 1, limit = 20, status, risk_level } = authReq.query;
+    const { page = 1, limit = 20, status, risk_level, include_archived } = authReq.query;
+    const includeArchived = include_archived === 'true' || include_archived === '1';
 
     const pageNum = parseInt(page as string, 10);
     const limitNum = parseInt(limit as string, 10);
@@ -25,10 +26,14 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
       .from("jobs")
       .select("id, client_name, job_type, location, status, risk_score, risk_level, created_at, updated_at, applied_template_id, applied_template_type")
       .eq("organization_id", organization_id)
-      .is("archived_at", null)
-      .is("deleted_at", null)
+      .is("deleted_at", null) // Always exclude deleted
       .order("created_at", { ascending: false })
       .range(offset, offset + limitNum - 1);
+    
+    // Only exclude archived if not explicitly including them
+    if (!includeArchived) {
+      query = query.is("archived_at", null);
+    }
 
     if (status) {
       query = query.eq("status", status);
@@ -50,6 +55,16 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
         .order("created_at", { ascending: false })
         .range(offset, offset + limitNum - 1);
       
+      // Only exclude archived if not explicitly including them (fallback mode)
+      if (!includeArchived) {
+        // Try to filter archived, but if column doesn't exist, continue without filter
+        try {
+          fallbackQuery = fallbackQuery.is("archived_at", null);
+        } catch (e) {
+          // Column doesn't exist, continue without filter
+        }
+      }
+      
       if (status) {
         fallbackQuery = fallbackQuery.eq("status", status);
       }
@@ -69,8 +84,12 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
       .from("jobs")
       .select("*", { count: "exact", head: true })
       .eq("organization_id", organization_id)
-      .is("archived_at", null)
-      .is("deleted_at", null);
+      .is("deleted_at", null); // Always exclude deleted
+    
+    // Only exclude archived if not explicitly including them
+    if (!includeArchived) {
+      countQuery = countQuery.is("archived_at", null);
+    }
 
     if (status) {
       countQuery = countQuery.eq("status", status);
@@ -111,6 +130,14 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
         total: count || 0,
         totalPages: Math.ceil((count || 0) / limitNum),
       },
+      // Dev-only: indicate source of truth
+      ...(process.env.NODE_ENV === 'development' && {
+        _meta: {
+          source: 'authenticated_api',
+          include_archived: includeArchived,
+          organization_id: organization_id,
+        },
+      }),
     });
   } catch (err: any) {
     console.error("Jobs fetch failed:", err);
