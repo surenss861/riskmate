@@ -23,7 +23,7 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
 
     let query = supabase
       .from("jobs")
-      .select("id, client_name, job_type, location, status, risk_score, risk_level, created_at, updated_at")
+      .select("id, client_name, job_type, location, status, risk_score, risk_level, created_at, updated_at, applied_template_id, applied_template_type")
       .eq("organization_id", organization_id)
       .is("archived_at", null)
       .is("deleted_at", null)
@@ -45,7 +45,7 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
       console.warn('Archive/delete columns not found - retrying without filters (migration may not be applied yet)');
       let fallbackQuery = supabase
         .from("jobs")
-        .select("id, client_name, job_type, location, status, risk_score, risk_level, created_at, updated_at")
+        .select("id, client_name, job_type, location, status, risk_score, risk_level, created_at, updated_at, applied_template_id, applied_template_type")
         .eq("organization_id", organization_id)
         .order("created_at", { ascending: false })
         .range(offset, offset + limitNum - 1);

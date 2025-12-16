@@ -95,6 +95,7 @@ const JobsPageContent = () => {
 
       if (!user) return
 
+      // Get user role for permissions
       const { data: userRow } = await supabase
         .from('users')
         .select('organization_id, role')
@@ -108,86 +109,47 @@ const JobsPageContent = () => {
         setUserRole(userRow.role as 'owner' | 'admin' | 'member')
       }
 
-      // Build query with template filters
-      // Try with archive/delete filters first, fallback if columns don't exist (migration not applied)
-      let query = supabase
-        .from('jobs')
-        .select('id, client_name, job_type, location, status, risk_score, risk_level, created_at, updated_at, applied_template_id, applied_template_type', { count: 'exact' })
-        .eq('organization_id', userRow.organization_id)
-        .is('archived_at', null)
-        .is('deleted_at', null)
-        .order('created_at', { ascending: false })
-        .range((page - 1) * 50, page * 50 - 1)
+      // Use authenticated API endpoint (same source of truth as backend)
+      // This ensures consistent filtering, auth, and archive/delete handling
+      const response = await jobsApi.list({
+        page,
+        limit: 50,
+        status: filterStatus || undefined,
+        risk_level: filterRiskLevel || undefined,
+      })
 
-      if (filterStatus) {
-        query = query.eq('status', filterStatus)
-      }
-
-      if (filterRiskLevel) {
-        query = query.eq('risk_level', filterRiskLevel)
-      }
-
-      if (filterTemplateSource === 'template') {
-        query = query.not('applied_template_id', 'is', null)
-      } else if (filterTemplateSource === 'manual') {
-        query = query.is('applied_template_id', null)
-      }
-
-      if (filterTemplateId) {
-        query = query.eq('applied_template_id', filterTemplateId)
-      }
-
-      let { data: jobsData, count, error } = await query
+      const jobsData = response.data || []
       
-      // If error is due to missing columns (migration not applied), retry without archive/delete filters
-      if (error && (error.message?.includes('archived_at') || error.message?.includes('deleted_at') || error.code === 'PGRST116')) {
-        console.warn('Archive/delete columns not found - retrying without filters (migration may not be applied yet)')
-        let fallbackQuery = supabase
-          .from('jobs')
-          .select('id, client_name, job_type, location, status, risk_score, risk_level, created_at, updated_at, applied_template_id, applied_template_type', { count: 'exact' })
-          .eq('organization_id', userRow.organization_id)
-          .order('created_at', { ascending: false })
-          .range((page - 1) * 50, page * 50 - 1)
-        
-        if (filterStatus) {
-          fallbackQuery = fallbackQuery.eq('status', filterStatus)
-        }
-        if (filterRiskLevel) {
-          fallbackQuery = fallbackQuery.eq('risk_level', filterRiskLevel)
-        }
-        if (filterTemplateSource === 'template') {
-          fallbackQuery = fallbackQuery.not('applied_template_id', 'is', null)
-        } else if (filterTemplateSource === 'manual') {
-          fallbackQuery = fallbackQuery.is('applied_template_id', null)
-        }
-        if (filterTemplateId) {
-          fallbackQuery = fallbackQuery.eq('applied_template_id', filterTemplateId)
-        }
-        
-        const fallbackResult = await fallbackQuery
-        jobsData = fallbackResult.data
-        count = fallbackResult.count
-        error = fallbackResult.error
+      // Apply template filters client-side (since API doesn't support them yet)
+      let filteredJobs = jobsData
+      
+      if (filterTemplateSource === 'template') {
+        filteredJobs = filteredJobs.filter(job => job.applied_template_id !== null)
+      } else if (filterTemplateSource === 'manual') {
+        filteredJobs = filteredJobs.filter(job => job.applied_template_id === null)
       }
-
-      if (error) {
-        console.error('Failed to fetch jobs from database:', error)
-        throw error
+      
+      if (filterTemplateId) {
+        filteredJobs = filteredJobs.filter(job => job.applied_template_id === filterTemplateId)
       }
 
       // Ensure jobsData is an array and set jobs
-      if (Array.isArray(jobsData)) {
-        setJobs(jobsData)
+      if (Array.isArray(filteredJobs)) {
+        setJobs(filteredJobs)
       } else {
-        console.warn('Jobs query returned non-array data:', jobsData)
+        console.warn('Jobs query returned non-array data:', filteredJobs)
         setJobs([])
       }
       
-      setTotalPages(Math.ceil((count || 0) / 50))
+      // Calculate total pages from API pagination or filtered count
+      const totalCount = response.pagination?.total || filteredJobs.length
+      setTotalPages(Math.ceil(totalCount / 50))
       setLoading(false)
     } catch (err: any) {
       console.error('Failed to load jobs:', err)
       setLoading(false)
+      // Don't throw - just show empty state
+      setJobs([])
     }
   }, [page, filterStatus, filterRiskLevel, filterTemplateSource, filterTemplateId])
 
