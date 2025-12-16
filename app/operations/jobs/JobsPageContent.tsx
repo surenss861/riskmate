@@ -468,6 +468,8 @@ export function JobsPageContentView(props: JobsPageContentProps) {
         ) : (
           <DataGrid
             data={props.jobs}
+            stickyColumns={['client_name', 'risk_score']}
+            enableKeyboardShortcuts={true}
             columns={[
               {
                 id: 'client_name',
@@ -519,6 +521,7 @@ export function JobsPageContentView(props: JobsPageContentProps) {
                 header: 'Risk Score',
                 accessor: (job: any) => job.risk_score ?? '—',
                 sortable: true,
+                width: '120px',
                 render: (value: string | number, job: any) => {
                   const RiskTooltip = () => {
                     const [showTooltip, setShowTooltip] = useState(false)
@@ -658,8 +661,13 @@ export function JobsPageContentView(props: JobsPageContentProps) {
 
         {/* Audit Narrative Footer */}
         {props.jobs.length > 0 && (
-          <div className="mt-4 text-xs text-white/30 text-center">
-            All job records are immutable once audit activity exists.
+          <div className="mt-4 flex items-center justify-between text-xs">
+            <div className="text-white/30">
+              All job records are immutable once audit activity exists.
+            </div>
+            <div className="text-white/40 italic">
+              Export-ready for insurer & regulatory review
+            </div>
           </div>
         )}
 

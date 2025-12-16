@@ -23,6 +23,8 @@ interface DataGridProps<T> {
   rowHighlight?: (row: T) => string | null
   savedViews?: Array<{ id: string; name: string; filters: any }>
   onSaveView?: (name: string, filters: any) => void
+  stickyColumns?: string[] // Column IDs to keep sticky on horizontal scroll
+  enableKeyboardShortcuts?: boolean // Enable keyboard shortcuts (/, F, Enter, Esc)
 }
 
 export function DataGrid<T extends { id: string }>({
@@ -35,11 +37,15 @@ export function DataGrid<T extends { id: string }>({
   rowHighlight,
   savedViews = [],
   onSaveView,
+  stickyColumns = [],
+  enableKeyboardShortcuts = false,
 }: DataGridProps<T>) {
   const [sortColumn, setSortColumn] = useState<string | null>(null)
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedView, setSelectedView] = useState<string | null>(null)
+  const [filtersVisible, setFiltersVisible] = useState(false)
+  const searchInputRef = React.useRef<HTMLInputElement>(null)
 
   const sortedData = useMemo(() => {
     if (!sortColumn) return data
@@ -77,8 +83,40 @@ export function DataGrid<T extends { id: string }>({
     } else {
       setSortColumn(columnId)
       setSortDirection('asc')
+    }
   }
-}
+
+  // Keyboard shortcuts
+  React.useEffect(() => {
+    if (!enableKeyboardShortcuts) return
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if typing in input/textarea
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return
+      }
+
+      // / focuses search
+      if (e.key === '/' && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault()
+        searchInputRef.current?.focus()
+      }
+
+      // F opens/closes filters (if filters exist)
+      if (e.key === 'f' && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+        e.preventDefault()
+        setFiltersVisible(!filtersVisible)
+      }
+
+      // Esc collapses expanded rows (handled in DataGridRows)
+      if (e.key === 'Escape') {
+        // This will be handled by the parent component if needed
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [enableKeyboardShortcuts, filtersVisible])
 
 // Separate component for rows to allow hooks
 function DataGridRows<T extends { id: string }>({
@@ -88,6 +126,8 @@ function DataGridRows<T extends { id: string }>({
   onRowClick,
   onRowHover,
   onRowHoverEnd,
+  stickyColumns = [],
+  enableKeyboardShortcuts = false,
 }: {
   data: T[]
   columns: Column<T>[]
@@ -95,8 +135,11 @@ function DataGridRows<T extends { id: string }>({
   onRowClick?: (row: T) => void
   onRowHover?: (row: T) => void
   onRowHoverEnd?: (row: T) => void
+  stickyColumns?: string[]
+  enableKeyboardShortcuts?: boolean
 }) {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
+  const [selectedRowIndex, setSelectedRowIndex] = useState<number | null>(null)
   
   const toggleRow = (rowId: string) => {
     setExpandedRows(prev => {
@@ -109,6 +152,40 @@ function DataGridRows<T extends { id: string }>({
       return next
     })
   }
+
+  // Keyboard shortcuts for row navigation
+  React.useEffect(() => {
+    if (!enableKeyboardShortcuts) return
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if typing in input/textarea
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return
+      }
+
+      // Enter opens selected row
+      if (e.key === 'Enter' && selectedRowIndex !== null) {
+        e.preventDefault()
+        const row = data[selectedRowIndex]
+        if (row) {
+          toggleRow(row.id)
+          onRowClick?.(row)
+        }
+      }
+
+      // Esc collapses all expanded rows
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        setExpandedRows(new Set())
+        setSelectedRowIndex(null)
+      }
+
+      // Arrow keys for row selection (optional, can be added later)
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [enableKeyboardShortcuts, selectedRowIndex, data, onRowClick])
   
   return (
     <>
@@ -139,10 +216,24 @@ function DataGridRows<T extends { id: string }>({
               {columns.map((column) => {
                 const value = column.accessor(row)
                 const isNumeric = typeof value === 'number' || (typeof value === 'string' && /^\d+$/.test(value))
+                const isSticky = stickyColumns.includes(column.id)
                 return (
                   <td
                     key={column.id}
-                    className={`px-4 py-3 text-sm text-white/80 h-12 ${isNumeric ? 'text-right' : 'text-left'}`}
+                    className={`px-4 py-3 text-sm text-white/80 h-12 ${isNumeric ? 'text-right' : 'text-left'} ${
+                      isSticky ? 'sticky left-0 z-10 bg-[#121212]/80' : ''
+                    }`}
+                    style={{
+                      ...(isSticky && { 
+                        left: stickyColumns.slice(0, stickyColumns.indexOf(column.id)).reduce((acc, id) => {
+                          const col = columns.find(c => c.id === id)
+                          if (!col?.width) return acc + 200
+                          // Parse width (handles "200px", "200", etc.)
+                          const widthNum = parseInt(String(col.width).replace('px', '')) || 200
+                          return acc + widthNum
+                        }, 0)
+                      })
+                    }}
                   >
                     {column.render
                       ? column.render(value, row)
@@ -209,13 +300,21 @@ function DataGridRows<T extends { id: string }>({
       {/* Toolbar */}
       <div className="p-4 border-b border-white/10 flex items-center justify-between gap-4">
         <div className="flex items-center gap-3 flex-1">
-          <input
-            type="text"
-            placeholder="Search..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="flex-1 max-w-md bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-[#F97316]/50"
-          />
+          <div className="relative flex-1 max-w-md">
+            <input
+              ref={searchInputRef}
+              type="text"
+              placeholder={enableKeyboardShortcuts ? "Search... (Press / to focus)" : "Search..."}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-[#F97316]/50"
+            />
+            {enableKeyboardShortcuts && (
+              <div className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-white/30 pointer-events-none">
+                /
+              </div>
+            )}
+          </div>
           {savedViews.length > 0 && (
             <select
               value={selectedView || ''}
@@ -251,25 +350,39 @@ function DataGridRows<T extends { id: string }>({
             className={`bg-black/20 ${stickyHeader ? 'sticky top-0 z-10' : ''}`}
           >
             <tr>
-              {columns.map((column) => (
-                <th
-                  key={column.id}
-                  className={`px-4 py-3 text-left text-xs font-semibold text-white/70 uppercase tracking-wider ${
-                    column.sortable ? 'cursor-pointer hover:text-white' : ''
-                  }`}
-                  style={{ width: column.width }}
-                  onClick={() => column.sortable && handleSort(column.id)}
-                >
-                  <div className="flex items-center gap-2">
-                    {column.header}
-                    {column.sortable && sortColumn === column.id && (
-                      <span className="text-[#F97316]">
-                        {sortDirection === 'asc' ? '↑' : '↓'}
-                      </span>
-                    )}
-                  </div>
-                </th>
-              ))}
+              {columns.map((column) => {
+                const isSticky = stickyColumns.includes(column.id)
+                return (
+                  <th
+                    key={column.id}
+                    className={`px-4 py-3 text-left text-xs font-semibold text-white/70 uppercase tracking-wider ${
+                      column.sortable ? 'cursor-pointer hover:text-white' : ''
+                    } ${isSticky ? 'sticky left-0 z-20 bg-black/20' : ''}`}
+                    style={{ 
+                      width: column.width,
+                      ...(isSticky && { 
+                        left: stickyColumns.slice(0, stickyColumns.indexOf(column.id)).reduce((acc, id) => {
+                          const col = columns.find(c => c.id === id)
+                          if (!col?.width) return acc + 200
+                          // Parse width (handles "200px", "200", etc.)
+                          const widthNum = parseInt(String(col.width).replace('px', '')) || 200
+                          return acc + widthNum
+                        }, 0)
+                      })
+                    }}
+                    onClick={() => column.sortable && handleSort(column.id)}
+                  >
+                    <div className="flex items-center gap-2">
+                      {column.header}
+                      {column.sortable && sortColumn === column.id && (
+                        <span className="text-[#F97316]">
+                          {sortDirection === 'asc' ? '↑' : '↓'}
+                        </span>
+                      )}
+                    </div>
+                  </th>
+                )
+              })}
             </tr>
           </thead>
           <tbody className="divide-y divide-white/5">
@@ -294,6 +407,8 @@ function DataGridRows<T extends { id: string }>({
                 onRowClick={onRowClick}
                 onRowHover={onRowHover}
                 onRowHoverEnd={onRowHoverEnd}
+                stickyColumns={stickyColumns}
+                enableKeyboardShortcuts={enableKeyboardShortcuts}
               />
             )}
           </tbody>
