@@ -325,8 +325,9 @@ export function JobsPageContentView(props: JobsPageContentProps) {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.45, delay: 0.1 }}
-          className={`${spacing.relaxed} flex flex-wrap ${spacing.gap.normal}`}
+          className={`${spacing.relaxed}`}
         >
+          <div className="flex flex-wrap gap-3 mb-3">
           <select
             value={props.filterStatus}
             onChange={(e) => {
@@ -388,6 +389,34 @@ export function JobsPageContentView(props: JobsPageContentProps) {
                 </option>
               ))}
             </select>
+          )}
+          </div>
+          {/* Filter Summary */}
+          {(props.filterStatus || props.filterRiskLevel || props.filterTemplateSource || props.filterTemplateId) && (
+            <div className="flex items-center gap-2 text-sm text-white/50 mb-2">
+              <span>Filtered by:</span>
+              {props.filterStatus && (
+                <span className="px-2 py-0.5 bg-white/5 rounded text-white/70 capitalize">{props.filterStatus}</span>
+              )}
+              {props.filterRiskLevel && (
+                <span className="px-2 py-0.5 bg-white/5 rounded text-white/70 capitalize">{props.filterRiskLevel} Risk</span>
+              )}
+              {props.filterTemplateSource && (
+                <span className="px-2 py-0.5 bg-white/5 rounded text-white/70 capitalize">{props.filterTemplateSource === 'template' ? 'From Template' : 'Manual'}</span>
+              )}
+              <button
+                onClick={() => {
+                  props.onFilterStatusChange('')
+                  props.onFilterRiskLevelChange('')
+                  props.onFilterTemplateSourceChange('')
+                  props.onFilterTemplateIdChange('')
+                  props.onPageChange(1)
+                }}
+                className="px-2 py-0.5 text-xs text-white/60 hover:text-white/80 underline"
+              >
+                Reset all
+              </button>
+            </div>
           )}
         </motion.div>
 
@@ -490,16 +519,102 @@ export function JobsPageContentView(props: JobsPageContentProps) {
                 header: 'Risk Score',
                 accessor: (job: any) => job.risk_score ?? '—',
                 sortable: true,
-                render: (value: string | number, job: any) => (
-                  <div className="text-right">
-                    <div className="text-lg font-bold text-white">{value}</div>
-                    {job.risk_level && (
-                      <div className={`text-xs ${props.getRiskColor(job.risk_level)}`}>
-                        {job.risk_level.toUpperCase()}
+                render: (value: string | number, job: any) => {
+                  const RiskTooltip = () => {
+                    const [showTooltip, setShowTooltip] = useState(false)
+                    const tooltipRef = useRef<HTMLDivElement>(null)
+                    
+                    React.useEffect(() => {
+                      const handleClickOutside = (event: MouseEvent) => {
+                        if (tooltipRef.current && !tooltipRef.current.contains(event.target as Node)) {
+                          setShowTooltip(false)
+                        }
+                      }
+                      if (showTooltip) {
+                        document.addEventListener('mousedown', handleClickOutside)
+                        return () => document.removeEventListener('mousedown', handleClickOutside)
+                      }
+                    }, [showTooltip])
+                    
+                    const getRiskExplanation = () => {
+                      if (!job.risk_score || job.risk_score === 0) {
+                        return 'No risk factors identified. Job is compliant.'
+                      }
+                      if (job.risk_score >= 90) {
+                        return 'Critical risk due to unresolved high-severity hazards and missing safety protocols.'
+                      }
+                      if (job.risk_score >= 70) {
+                        return 'Elevated risk due to unresolved hazards and incomplete safety documentation.'
+                      }
+                      if (job.risk_score >= 40) {
+                        return 'Moderate risk due to some unresolved hazards or missing equipment checks.'
+                      }
+                      return 'Low risk with minor items requiring attention.'
+                    }
+                    
+                    return (
+                      <div className="relative text-right" ref={tooltipRef}>
+                        <div 
+                          className="cursor-help"
+                          onMouseEnter={() => setShowTooltip(true)}
+                          onMouseLeave={() => setShowTooltip(false)}
+                          onClick={() => setShowTooltip(!showTooltip)}
+                        >
+                          <div className="text-lg font-bold text-white">{value}</div>
+                          {job.risk_level && (
+                            <div className={`text-xs ${props.getRiskColor(job.risk_level)}`}>
+                              {job.risk_level.toUpperCase()}
+                            </div>
+                          )}
+                        </div>
+                        {showTooltip && (
+                          <div className="absolute right-0 top-full mt-2 z-20 w-64 p-3 bg-[#1A1A1A] border border-white/10 rounded-lg shadow-lg text-left text-xs text-white/80">
+                            <div className="font-semibold text-white mb-1">Risk Explanation</div>
+                            <div>{getRiskExplanation()}</div>
+                            {job.risk_score && job.risk_score > 0 && (
+                              <div className="mt-2 pt-2 border-t border-white/10 text-white/60">
+                                Score: {job.risk_score}/100
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                ),
+                    )
+                  }
+                  
+                  return <RiskTooltip />
+                },
+              },
+              {
+                id: 'next_action',
+                header: 'Next Action',
+                accessor: (job: any) => {
+                  // Derive next action from job state
+                  if (job.status === 'draft') {
+                    return 'Complete job setup'
+                  }
+                  if (job.status === 'in_progress' && job.risk_score && job.risk_score >= 70) {
+                    return 'Resolve high-risk hazards'
+                  }
+                  if (job.status === 'in_progress' && job.risk_score && job.risk_score >= 40) {
+                    return 'Review mitigation plan'
+                  }
+                  if (job.status === 'in_progress') {
+                    return 'Complete safety checklist'
+                  }
+                  if (job.status === 'completed') {
+                    return '—'
+                  }
+                  if (job.status === 'archived') {
+                    return '—'
+                  }
+                  return '—'
+                },
+                sortable: false,
+                render: (value: string, job: any) => {
+                  if (value === '—') return <span className="text-xs text-white/30">—</span>
+                  return <span className="text-xs text-white/60">{value}</span>
+                },
               },
               {
                 id: 'created_at',
@@ -539,6 +654,13 @@ export function JobsPageContentView(props: JobsPageContentProps) {
               return null
             }}
           />
+        )}
+
+        {/* Audit Narrative Footer */}
+        {props.jobs.length > 0 && (
+          <div className="mt-4 text-xs text-white/30 text-center">
+            All job records are immutable once audit activity exists.
+          </div>
         )}
 
         {/* Pagination */}

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import React, { useState, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { spacing, dividerStyles, motion as motionStyles } from '@/lib/styles/design-system'
 
@@ -77,8 +77,132 @@ export function DataGrid<T extends { id: string }>({
     } else {
       setSortColumn(columnId)
       setSortDirection('asc')
-    }
   }
+}
+
+// Separate component for rows to allow hooks
+function DataGridRows<T extends { id: string }>({
+  data,
+  columns,
+  rowHighlight,
+  onRowClick,
+  onRowHover,
+  onRowHoverEnd,
+}: {
+  data: T[]
+  columns: Column<T>[]
+  rowHighlight?: (row: T) => string | null
+  onRowClick?: (row: T) => void
+  onRowHover?: (row: T) => void
+  onRowHoverEnd?: (row: T) => void
+}) {
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
+  
+  const toggleRow = (rowId: string) => {
+    setExpandedRows(prev => {
+      const next = new Set(prev)
+      if (next.has(rowId)) {
+        next.delete(rowId)
+      } else {
+        next.add(rowId)
+      }
+      return next
+    })
+  }
+  
+  return (
+    <>
+      {data.map((row, index) => {
+        const highlight = rowHighlight ? rowHighlight(row) : null
+        const isExpanded = expandedRows.has(row.id)
+        const rowData = row as any // Type assertion for dynamic properties
+        
+        return (
+          <React.Fragment key={row.id}>
+            <motion.tr
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.02 }}
+              onClick={() => {
+                toggleRow(row.id)
+                onRowClick?.(row)
+              }}
+              onMouseEnter={() => onRowHover?.(row)}
+              onMouseLeave={() => onRowHoverEnd?.(row)}
+              className={`hover:bg-white/5 ${motionStyles.hover} ${
+                onRowClick ? 'cursor-pointer' : ''
+              } ${highlight ? 'border-l-[3px]' : ''}`}
+              style={{
+                borderLeftColor: highlight || undefined,
+              }}
+            >
+              {columns.map((column) => {
+                const value = column.accessor(row)
+                const isNumeric = typeof value === 'number' || (typeof value === 'string' && /^\d+$/.test(value))
+                return (
+                  <td
+                    key={column.id}
+                    className={`px-4 py-3 text-sm text-white/80 h-12 ${isNumeric ? 'text-right' : 'text-left'}`}
+                  >
+                    {column.render
+                      ? column.render(value, row)
+                      : String(value || '')}
+                  </td>
+                )
+              })}
+            </motion.tr>
+            {isExpanded && (
+              <tr>
+                <td colSpan={columns.length} className="px-4 py-4 bg-black/20 border-t border-white/5">
+                  <div className="grid grid-cols-3 gap-4 text-sm">
+                    <div>
+                      <div className="text-xs text-white/50 mb-2 uppercase tracking-wider">Top Hazards</div>
+                      <div className="text-white/70">
+                        {rowData.risk_score && rowData.risk_score > 0 ? (
+                          <div className="space-y-1">
+                            <div className="text-white/60">Risk factors identified</div>
+                            <div className="text-xs text-white/40">View details for full list</div>
+                          </div>
+                        ) : (
+                          <div className="text-white/40">No hazards identified</div>
+                        )}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-white/50 mb-2 uppercase tracking-wider">Compliance Status</div>
+                      <div className="text-white/70">
+                        {rowData.status === 'completed' ? (
+                          <span className="text-green-400/80">Compliant</span>
+                        ) : rowData.status === 'in_progress' ? (
+                          <span className="text-amber-400/80">In Progress</span>
+                        ) : (
+                          <span className="text-white/60">Draft</span>
+                        )}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-white/50 mb-2 uppercase tracking-wider">Last Activity</div>
+                      <div className="text-white/70">
+                        {rowData.updated_at ? (
+                          <div>
+                            <div className="text-xs">{new Date(rowData.updated_at).toLocaleDateString()}</div>
+                            <div className="text-xs text-white/40">{new Date(rowData.updated_at).toLocaleTimeString()}</div>
+                          </div>
+                        ) : (
+                          <div className="text-white/40">No activity</div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            )}
+          </React.Fragment>
+        )
+      })}
+    </>
+  )
+}
 
   return (
     <div className="rounded-lg border border-white/10 bg-[#121212]/80 backdrop-blur-sm overflow-hidden">
@@ -163,41 +287,14 @@ export function DataGrid<T extends { id: string }>({
                 </td>
               </tr>
             ) : (
-              filteredData.map((row, index) => {
-                const highlight = rowHighlight ? rowHighlight(row) : null
-                return (
-                  <motion.tr
-                    key={row.id}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.02 }}
-                    onClick={() => onRowClick?.(row)}
-                    onMouseEnter={() => onRowHover?.(row)}
-                    onMouseLeave={() => onRowHoverEnd?.(row)}
-                    className={`hover:bg-white/5 ${motionStyles.hover} ${
-                      onRowClick ? 'cursor-pointer' : ''
-                    } ${highlight ? 'border-l-[3px]' : ''}`}
-                    style={{
-                      borderLeftColor: highlight || undefined,
-                    }}
-                  >
-                    {columns.map((column) => {
-                      const value = column.accessor(row)
-                      const isNumeric = typeof value === 'number' || (typeof value === 'string' && /^\d+$/.test(value))
-                      return (
-                        <td
-                          key={column.id}
-                          className={`px-4 py-3 text-sm text-white/80 h-12 ${isNumeric ? 'text-right' : 'text-left'}`}
-                        >
-                          {column.render
-                            ? column.render(value, row)
-                            : String(value || '')}
-                        </td>
-                      )
-                    })}
-                  </motion.tr>
-                )
-              })
+              <DataGridRows 
+                data={filteredData}
+                columns={columns}
+                rowHighlight={rowHighlight}
+                onRowClick={onRowClick}
+                onRowHover={onRowHover}
+                onRowHoverEnd={onRowHoverEnd}
+              />
             )}
           </tbody>
         </table>
