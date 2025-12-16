@@ -130,6 +130,49 @@ Created database function for future SQL-based status sorting:
 - [x] No overlaps between pages
 - [x] No gaps between pages
 
+## Hardening (Post-Fix)
+
+### 1. Cursor Capability Lock
+
+**Backend validation:** Explicitly rejects cursor param when `sort=status_*`
+
+```typescript
+if (cursor && useStatusOrdering) {
+  return res.status(400).json({
+    message: "Cursor pagination is not supported for status sorting...",
+    code: "CURSOR_NOT_SUPPORTED_FOR_SORT",
+    sort: sortMode,
+    reason: "Status sorting uses in-memory ordering which is incompatible with cursor pagination",
+  });
+}
+```
+
+**Benefits:**
+- Prevents misuse at API level
+- Clear error message for developers
+- Type-safe error code for frontend handling
+
+### 2. Pagination Mode in Dev Meta
+
+**Exposed in `_meta` (dev mode only, requires `?debug=1`):**
+
+```json
+{
+  "_meta": {
+    "pagination_mode": "cursor" | "offset",
+    "cursor_supported": true | false,
+    "sort": "risk_desc",
+    "sort_field": "risk_score",
+    "sort_direction": "desc"
+  }
+}
+```
+
+**Benefits:**
+- Makes debugging trivial
+- Clear visibility into pagination behavior
+- Helps identify pagination issues in development
+
 ## Production Readiness
 
 ✅ **Safe to deploy:**
@@ -137,6 +180,8 @@ Created database function for future SQL-based status sorting:
 - No pagination drift for `created_desc` and `risk_desc`
 - `status_asc` uses safe offset pagination
 - Optimistic updates are race-condition safe
+- **Cursor capability locked per sort mode**
+- **Pagination mode exposed for debugging**
 
 ---
 

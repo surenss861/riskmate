@@ -282,6 +282,33 @@ describe('GET /api/jobs', () => {
       expect(firstData.pagination?.page).toBeDefined()
     })
 
+    it('should reject cursor param when sort=status_asc', async () => {
+      const response = await fetch(`${API_URL}/api/jobs?limit=10&sort=status_asc&cursor=test`, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+        },
+      })
+      const data = await response.json()
+      
+      expect(response.status).toBe(400)
+      expect(data.code).toBe('CURSOR_NOT_SUPPORTED_FOR_SORT')
+      expect(data.message).toContain('Cursor pagination is not supported')
+      expect(data.sort).toBe('status_asc')
+    })
+
+    it('should reject cursor param when sort=status_desc', async () => {
+      const response = await fetch(`${API_URL}/api/jobs?limit=10&sort=status_desc&cursor=test`, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+        },
+      })
+      const data = await response.json()
+      
+      expect(response.status).toBe(400)
+      expect(data.code).toBe('CURSOR_NOT_SUPPORTED_FOR_SORT')
+      expect(data.sort).toBe('status_desc')
+    })
+
     it('should have no gaps or overlaps between pages (created_desc)', async () => {
       // Fetch first page
       const firstPage = await fetch(`${API_URL}/api/jobs?limit=5&sort=created_desc`, {
@@ -358,7 +385,7 @@ describe('GET /api/jobs', () => {
     })
 
     it('should include _meta only with ?debug=1 in dev', async () => {
-      const withDebug = await fetch(`${API_URL}/api/jobs?debug=1`, {
+      const withDebug = await fetch(`${API_URL}/api/jobs?debug=1&sort=risk_desc`, {
         headers: {
           'Authorization': `Bearer ${authToken}`,
         },
@@ -374,7 +401,40 @@ describe('GET /api/jobs', () => {
       
       // In dev mode, _meta should appear with debug=1
       if (process.env.NODE_ENV === 'development') {
-        // Note: This depends on actual implementation
+        expect(withDebugData._meta).toBeDefined()
+        expect(withDebugData._meta.pagination_mode).toBeDefined()
+        expect(['cursor', 'offset']).toContain(withDebugData._meta.pagination_mode)
+        expect(withDebugData._meta.sort).toBeDefined()
+        expect(withDebugData._meta.cursor_supported).toBeDefined()
+      }
+      
+      // Without debug flag, _meta should not appear
+      expect(withoutDebugData._meta).toBeUndefined()
+    })
+
+    it('should expose pagination_mode in _meta (dev only)', async () => {
+      // Test cursor mode
+      const cursorResponse = await fetch(`${API_URL}/api/jobs?debug=1&sort=created_desc&limit=10`, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+        },
+      })
+      const cursorData = await cursorResponse.json()
+      
+      // Test offset mode
+      const offsetResponse = await fetch(`${API_URL}/api/jobs?debug=1&sort=status_asc&limit=10`, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+        },
+      })
+      const offsetData = await offsetResponse.json()
+      
+      if (process.env.NODE_ENV === 'development') {
+        expect(cursorData._meta?.pagination_mode).toBe('cursor')
+        expect(cursorData._meta?.cursor_supported).toBe(true)
+        
+        expect(offsetData._meta?.pagination_mode).toBe('offset')
+        expect(offsetData._meta?.cursor_supported).toBe(false)
       }
     })
   })

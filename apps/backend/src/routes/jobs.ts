@@ -51,6 +51,17 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
     // Cursor pagination is only safe for sorts that match SQL ordering
     // status_asc uses in-memory sorting, so cursor pagination would be inconsistent
     const supportsCursorPagination = !useStatusOrdering;
+    
+    // Hardening: Explicitly reject cursor param when sort=status_* (prevents misuse)
+    if (cursor && useStatusOrdering) {
+      return res.status(400).json({
+        message: "Cursor pagination is not supported for status sorting. Use offset pagination (page parameter) instead.",
+        code: "CURSOR_NOT_SUPPORTED_FOR_SORT",
+        sort: sortMode,
+        reason: "Status sorting uses in-memory ordering which is incompatible with cursor pagination",
+      });
+    }
+    
     const useCursor = cursor && supportsCursorPagination;
     
     // Deterministic status order: draft → in_progress → completed → archived
@@ -334,14 +345,17 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
         cursor: nextCursor || undefined,
         hasMore: nextCursor !== null,
       },
-      // Dev-only: indicate source of truth (requires both NODE_ENV and debug flag)
+      // Dev-only: indicate source of truth and pagination mode (requires both NODE_ENV and debug flag)
       ...(process.env.NODE_ENV === 'development' && authReq.query.debug === '1' && {
         _meta: {
           source: 'authenticated_api',
           include_archived: includeArchived,
           organization_id: organization_id,
+          sort: sortMode,
           sort_field: useStatusOrdering ? 'status' : sortField,
           sort_direction: sortDirection,
+          pagination_mode: useCursor ? 'cursor' : 'offset',
+          cursor_supported: supportsCursorPagination,
         },
       }),
     });
