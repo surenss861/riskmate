@@ -459,10 +459,17 @@ describe('GET /api/jobs', () => {
       expect(typeof data.request_id).toBe('string')
       expect(data.request_id.length).toBeGreaterThan(0)
       
-      // Verify header is also set
+      // Verify headers are also set
       const requestIdHeader = response.headers.get('X-Request-ID')
       expect(requestIdHeader).toBeDefined()
       expect(requestIdHeader).toBe(data.request_id)
+      
+      // Verify error ID header (for error responses)
+      if (response.status >= 400) {
+        const errorIdHeader = response.headers.get('X-Error-ID')
+        expect(errorIdHeader).toBeDefined()
+        expect(errorIdHeader).toBe(data.error_id)
+      }
     })
 
     it('should simulate client fallback behavior end-to-end', async () => {
@@ -646,6 +653,15 @@ describe('GET /api/jobs', () => {
       expect(data.support_hint.length).toBeGreaterThan(0)
       
       expect(data.request_id).toBeDefined()
+      
+      // Verify retryable field
+      expect(data.retryable).toBeDefined()
+      expect(typeof data.retryable).toBe('boolean')
+      
+      // Verify error ID header
+      const errorIdHeader = response.headers.get('X-Error-ID')
+      expect(errorIdHeader).toBeDefined()
+      expect(errorIdHeader).toBe(data.error_id)
     })
 
     it('should handle unknown errors with request_id and error_id', async () => {
@@ -668,13 +684,20 @@ describe('GET /api/jobs', () => {
       expect(data.code).toBeDefined()
       expect(data.message).toBeDefined()
       
-      // Should have severity and category
+      // Should have severity, category, and retryable
       if (data.severity) {
         expect(['error', 'warn', 'info']).toContain(data.severity)
       }
       if (data.category) {
         expect(['pagination', 'entitlements', 'auth', 'validation', 'internal']).toContain(data.category)
       }
+      expect(data.retryable).toBeDefined()
+      expect(typeof data.retryable).toBe('boolean')
+      
+      // Verify error ID header
+      const errorIdHeader = response.headers.get('X-Error-ID')
+      expect(errorIdHeader).toBeDefined()
+      expect(errorIdHeader).toBe(data.error_id)
     })
 
     it('should include severity and category in error responses', async () => {

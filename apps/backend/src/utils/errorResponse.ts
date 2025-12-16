@@ -79,9 +79,44 @@ const ERROR_CATEGORY_MAP: Record<string, string> = {
 } as const;
 
 /**
- * Generate a formatted error response
+ * Error codes that are retryable (client can retry the request)
+ * Generally: 5xx errors and rate-limited 4xx errors are retryable
+ * 4xx client errors (validation, auth, entitlements) are NOT retryable
  */
-export function createErrorResponse(options: ErrorResponseOptions) {
+const RETRYABLE_ERROR_CODES = new Set([
+  "INTERNAL_SERVER_ERROR",
+  "UNKNOWN_ERROR",
+  // Rate-limited errors (if retry_after_seconds is provided, it's retryable)
+]);
+
+/**
+ * Determine if an error is retryable based on status code and error code
+ */
+function isRetryable(statusCode: number, code: string, hasRetryAfter?: boolean): boolean {
+  // 5xx errors are generally retryable (server errors)
+  if (statusCode >= 500) {
+    return true;
+  }
+  
+  // Rate-limited errors with retry_after are retryable
+  if (hasRetryAfter) {
+    return true;
+  }
+  
+  // Explicitly marked retryable codes
+  if (RETRYABLE_ERROR_CODES.has(code)) {
+    return true;
+  }
+  
+  // 4xx client errors are generally NOT retryable
+  return false;
+}
+
+/**
+ * Generate a formatted error response
+ * Returns both the response object and errorId for header setting
+ */
+export function createErrorResponse(options: ErrorResponseOptions): { response: any; errorId: string } {
   const {
     message,
     internalMessage,
@@ -91,6 +126,7 @@ export function createErrorResponse(options: ErrorResponseOptions) {
     supportHint,
     severity,
     category,
+    retry_after_seconds,
     ...additionalFields
   } = options;
 
@@ -106,6 +142,9 @@ export function createErrorResponse(options: ErrorResponseOptions) {
   // Get category from map or use provided one
   const errorCategory = category || ERROR_CATEGORY_MAP[code] || ERROR_CATEGORIES.INTERNAL;
 
+  // Determine if error is retryable
+  const retryable = isRetryable(statusCode, code, retry_after_seconds !== undefined);
+
   // Build response (user-safe message only in production)
   const response: any = {
     message, // Always user-safe
@@ -114,7 +153,9 @@ export function createErrorResponse(options: ErrorResponseOptions) {
     request_id: requestId,
     severity: errorSeverity,
     category: errorCategory,
+    retryable,
     ...(hint && { support_hint: hint }),
+    ...(retry_after_seconds !== undefined && { retry_after_seconds }),
     ...additionalFields,
   };
 
@@ -123,12 +164,13 @@ export function createErrorResponse(options: ErrorResponseOptions) {
     response.internal_message = internalMessage;
   }
 
-  return response;
+  return { response, errorId };
 }
 
 /**
  * Log error for support console (4xx/5xx)
  * Includes both user-safe message and internal message (if provided)
+ * Also includes error budget metrics (route, org, status) for monitoring
  */
 export function logErrorForSupport(
   statusCode: number,
@@ -138,7 +180,8 @@ export function logErrorForSupport(
   message: string,
   internalMessage?: string,
   category?: string,
-  severity?: "error" | "warn" | "info"
+  severity?: "error" | "warn" | "info",
+  route?: string
 ) {
   // Only log 4xx and 5xx
   if (statusCode >= 400) {
@@ -159,6 +202,20 @@ export function logErrorForSupport(
     // Include internal message in logs (always, for debugging)
     if (internalMessage) {
       logEntry.internal_message = internalMessage;
+    }
+
+    // Include route for error budget tracking (helps identify problematic endpoints)
+    if (route) {
+      logEntry.route = route;
+    }
+
+    // Error budget metric: track 5xx errors by route + org
+    if (statusCode >= 500) {
+      logEntry.error_budget = {
+        route: route || "unknown",
+        organization_id: organizationId || "unknown",
+        status: statusCode,
+      };
     }
 
     console.log(JSON.stringify(logEntry));

@@ -36,6 +36,7 @@ All error responses include:
 - **`internal_message`** (string, optional): Detailed internal message (only in development mode)
 - **`documentation_url`** (string, optional): Link to relevant documentation
 - **`retry_after_seconds`** (number, optional): Seconds to wait before retrying (for rate-limited operations)
+- **`retryable`** (boolean, required): Whether the client can retry this request (true for 5xx and rate-limited errors, false for 4xx client errors)
 
 ## Error Code Namespaces
 
@@ -66,6 +67,7 @@ Error codes use namespaces for clarity and organization:
   "request_id": "550e8400-e29b-41d4-a716-446655440000",
   "severity": "warn",
   "category": "pagination",
+  "retryable": false,
   "support_hint": "Remove cursor param or switch to page-based pagination",
   "sort": "status_asc",
   "reason": "Status sorting uses in-memory ordering which is incompatible with cursor pagination",
@@ -251,12 +253,15 @@ Every API response (success or error) includes a `request_id` field. This enable
 - **Audit Trail:** Track requests across distributed systems
 - **Debugging:** Correlate frontend errors with backend logs
 
-**Header:**
+**Headers:**
 ```http
 X-Request-ID: 550e8400-e29b-41d4-a716-446655440000
+X-Error-ID: 660e8400-e29b-41d4-a716-446655440001
 ```
 
 **Echo Behavior:** If a client sends `X-Request-ID` header, the server will reuse it. Otherwise, a new UUID is generated. This helps when upstream gateways already stamp IDs.
+
+**Error ID Header:** The `X-Error-ID` header is always set in error responses. Some clients log headers more reliably than response bodies, making this useful for error correlation.
 
 ## W3C Trace Context
 
@@ -324,6 +329,49 @@ When reporting errors, always include:
 - Request parameters (sanitized)
 - Client version/environment
 
+## Legacy Code Deprecation
+
+The following legacy error codes are deprecated and will be removed in v2.0.0:
+
+| Legacy Code | New Code | Removal Date |
+|------------|----------|--------------|
+| `CURSOR_NOT_SUPPORTED_FOR_SORT` | `PAGINATION_CURSOR_NOT_SUPPORTED` | v2.0.0 (2025-07-01) |
+| `JOB_LIMIT_REACHED` | `ENTITLEMENTS_JOB_LIMIT_REACHED` | v2.0.0 (2025-07-01) |
+| `PLAN_PAST_DUE` | `ENTITLEMENTS_PLAN_PAST_DUE` | v2.0.0 (2025-07-01) |
+| `PLAN_INACTIVE` | `ENTITLEMENTS_PLAN_INACTIVE` | v2.0.0 (2025-07-01) |
+| `ROLE_FORBIDDEN` | `AUTH_ROLE_FORBIDDEN` | v2.0.0 (2025-07-01) |
+| `FEATURE_NOT_ALLOWED` | `ENTITLEMENTS_FEATURE_NOT_ALLOWED` | v2.0.0 (2025-07-01) |
+
+**Migration Guide:**
+- Clients should update to use the new namespaced codes
+- Legacy codes will continue to work until v2.0.0
+- Both codes may appear in responses during the transition period
+- Support hints and behavior remain identical
+
+## Error Budget Metrics
+
+All 5xx errors automatically include error budget tracking in logs:
+
+```json
+{
+  "error_budget": {
+    "route": "/api/jobs",
+    "organization_id": "org-uuid",
+    "status": 500
+  }
+}
+```
+
+This enables monitoring and alerting on:
+- 5xx error rate by route
+- 5xx error rate by organization
+- Overall error budget consumption
+
+**Query Examples:**
+- `count 5xx errors by route in last 24h`
+- `top 10 orgs by 5xx error count`
+- `error budget consumption by route`
+
 ## Versioning
 
 This is **v1.0.0** of the error contract. Future versions will be documented in separate files (e.g., `API_ERRORS_v2.md`). Breaking changes will increment the major version.
@@ -331,5 +379,6 @@ This is **v1.0.0** of the error contract. Future versions will be documented in 
 ---
 
 **Contract Status:** ✅ Frozen (stable)  
-**Breaking Changes:** None allowed without major version bump
+**Breaking Changes:** None allowed without major version bump  
+**Tagged As:** `errors-v1.0.0`
 

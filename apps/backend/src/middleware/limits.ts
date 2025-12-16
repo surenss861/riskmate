@@ -15,7 +15,7 @@ export function requireFeature(feature: PlanFeature) {
     const status = req.user.subscriptionStatus;
     if (!ACTIVE_STATUSES.has(status)) {
       const code = status === "past_due" ? "ENTITLEMENTS_PLAN_PAST_DUE" : "ENTITLEMENTS_PLAN_INACTIVE";
-      const errorResponse = createErrorResponse({
+      const { response: errorResponse, errorId } = createErrorResponse({
         message: "Your subscription is not active. Please update billing to unlock this feature.",
         internalMessage: `Feature access denied: subscription_status=${status}, feature=${feature}`,
         code,
@@ -25,13 +25,16 @@ export function requireFeature(feature: PlanFeature) {
         feature,
       });
       
-      logErrorForSupport(402, code, requestId, organizationId, errorResponse.message, errorResponse.internal_message, errorResponse.category, errorResponse.severity);
+      // Set error ID in response header
+      res.setHeader('X-Error-ID', errorId);
+      
+      logErrorForSupport(402, code, requestId, organizationId, errorResponse.message, errorResponse.internal_message, errorResponse.category, errorResponse.severity, req.path);
       
       return res.status(402).json(errorResponse);
     }
 
     if (!req.user.features.includes(feature)) {
-      const errorResponse = createErrorResponse({
+      const { response: errorResponse, errorId } = createErrorResponse({
         message: "Feature not available on your plan",
         internalMessage: `Feature access denied: feature=${feature}, plan=${req.user.plan}`,
         code: "ENTITLEMENTS_FEATURE_NOT_ALLOWED",
@@ -41,7 +44,10 @@ export function requireFeature(feature: PlanFeature) {
         plan: req.user.plan,
       });
       
-      logErrorForSupport(403, "ENTITLEMENTS_FEATURE_NOT_ALLOWED", requestId, organizationId, errorResponse.message, errorResponse.internal_message, errorResponse.category, errorResponse.severity);
+      // Set error ID in response header
+      res.setHeader('X-Error-ID', errorId);
+      
+      logErrorForSupport(403, "ENTITLEMENTS_FEATURE_NOT_ALLOWED", requestId, organizationId, errorResponse.message, errorResponse.internal_message, errorResponse.category, errorResponse.severity, req.path);
       
       return res.status(403).json(errorResponse);
     }
@@ -61,7 +67,7 @@ export async function enforceJobLimit(
     const status = req.user.subscriptionStatus;
     if (status === "past_due" || status === "canceled") {
       const code = status === "past_due" ? "ENTITLEMENTS_PLAN_PAST_DUE" : "ENTITLEMENTS_PLAN_INACTIVE";
-      const errorResponse = createErrorResponse({
+      const { response: errorResponse, errorId } = createErrorResponse({
         message: "Your subscription is not active. Update billing to create new jobs.",
         internalMessage: `Job creation blocked: subscription_status=${status}`,
         code,
@@ -70,14 +76,17 @@ export async function enforceJobLimit(
         subscription_status: status,
       });
       
-      logErrorForSupport(402, code, requestId, organizationId, errorResponse.message, errorResponse.internal_message, errorResponse.category, errorResponse.severity);
+      // Set error ID in response header
+      res.setHeader('X-Error-ID', errorId);
+      
+      logErrorForSupport(402, code, requestId, organizationId, errorResponse.message, errorResponse.internal_message, errorResponse.category, errorResponse.severity, req.path);
       
       return res.status(402).json(errorResponse);
     }
 
     const limit = req.user.jobsMonthlyLimit;
     if (limit === 0) {
-      const errorResponse = createErrorResponse({
+      const { response: errorResponse, errorId } = createErrorResponse({
         message: "Your current plan does not allow job creation. Please upgrade your plan.",
         internalMessage: `Job limit check: limit=${limit}, plan=${req.user.plan}`,
         code: "ENTITLEMENTS_JOB_LIMIT_REACHED",
@@ -87,7 +96,10 @@ export async function enforceJobLimit(
         plan: req.user.plan,
       });
       
-      logErrorForSupport(403, "ENTITLEMENTS_JOB_LIMIT_REACHED", requestId, organizationId, errorResponse.message, errorResponse.internal_message, errorResponse.category, errorResponse.severity);
+      // Set error ID in response header
+      res.setHeader('X-Error-ID', errorId);
+      
+      logErrorForSupport(403, "ENTITLEMENTS_JOB_LIMIT_REACHED", requestId, organizationId, errorResponse.message, errorResponse.internal_message, errorResponse.category, errorResponse.severity, req.path);
       
       return res.status(403).json(errorResponse);
     }
@@ -112,7 +124,7 @@ export async function enforceJobLimit(
     }
 
     if ((count ?? 0) >= limit) {
-      const errorResponse = createErrorResponse({
+      const { response: errorResponse, errorId } = createErrorResponse({
         message: "Plan job limit reached. Upgrade your plan to create more jobs.",
         internalMessage: `Job limit exceeded: limit=${limit}, current=${count || 0}, plan=${req.user.plan}`,
         code: "ENTITLEMENTS_JOB_LIMIT_REACHED",
@@ -123,7 +135,10 @@ export async function enforceJobLimit(
         plan: req.user.plan,
       });
       
-      logErrorForSupport(403, "ENTITLEMENTS_JOB_LIMIT_REACHED", requestId, organizationId, errorResponse.message, errorResponse.internal_message, errorResponse.category, errorResponse.severity);
+      // Set error ID in response header
+      res.setHeader('X-Error-ID', errorId);
+      
+      logErrorForSupport(403, "ENTITLEMENTS_JOB_LIMIT_REACHED", requestId, organizationId, errorResponse.message, errorResponse.internal_message, errorResponse.category, errorResponse.severity, req.path);
       
       return res.status(403).json(errorResponse);
     }

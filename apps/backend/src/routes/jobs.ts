@@ -89,7 +89,7 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
       const lastLogged = logCursorMisuse(organization_id, sortMode);
       const retryAfterSeconds = lastLogged ? Math.ceil((CURSOR_MISUSE_LOG_TTL_MS - (Date.now() - lastLogged)) / 1000) : 0;
       
-      const errorResponse = createErrorResponse({
+      const { response: errorResponse, errorId } = createErrorResponse({
         message: "Cursor pagination is not supported for status sorting. Use offset pagination (page parameter) instead.",
         internalMessage: `Cursor pagination attempted with sort=${sortMode} (in-memory sort incompatible with cursor)`,
         code: "PAGINATION_CURSOR_NOT_SUPPORTED",
@@ -102,7 +102,10 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
         ...(retryAfterSeconds > 0 && { retry_after_seconds: retryAfterSeconds }),
       });
       
-      logErrorForSupport(400, "PAGINATION_CURSOR_NOT_SUPPORTED", requestId, organization_id, errorResponse.message, errorResponse.internal_message, errorResponse.category, errorResponse.severity);
+      // Set error ID in response header (some clients log headers more reliably)
+      res.setHeader('X-Error-ID', errorId);
+      
+      logErrorForSupport(400, "PAGINATION_CURSOR_NOT_SUPPORTED", requestId, organization_id, errorResponse.message, errorResponse.internal_message, errorResponse.category, errorResponse.severity, '/api/jobs');
       
       return res.status(400).json(errorResponse);
     }
@@ -1153,7 +1156,7 @@ jobsRouter.delete("/:id", authenticate as unknown as express.RequestHandler, asy
     // Only owners can delete jobs
     if (role !== "owner") {
       const requestId = (authReq as RequestWithId).requestId || 'unknown';
-      const errorResponse = createErrorResponse({
+      const { response: errorResponse, errorId } = createErrorResponse({
         message: "Only organization owners can delete jobs",
         internalMessage: `Delete attempt by user with role=${role}, required=owner`,
         code: "AUTH_ROLE_FORBIDDEN",
@@ -1163,7 +1166,10 @@ jobsRouter.delete("/:id", authenticate as unknown as express.RequestHandler, asy
         current_role: role || "unknown",
       });
       
-      logErrorForSupport(403, "AUTH_ROLE_FORBIDDEN", requestId, organization_id, errorResponse.message, errorResponse.internal_message, errorResponse.category, errorResponse.severity);
+      // Set error ID in response header
+      res.setHeader('X-Error-ID', errorId);
+      
+      logErrorForSupport(403, "AUTH_ROLE_FORBIDDEN", requestId, organization_id, errorResponse.message, errorResponse.internal_message, errorResponse.category, errorResponse.severity, '/api/jobs/:id');
       
       return res.status(403).json(errorResponse);
     }

@@ -115,13 +115,16 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
   // Use error response utility for consistent formatting
   const { createErrorResponse, logErrorForSupport } = require("./utils/errorResponse");
   
-  const errorResponse = createErrorResponse({
+  const { response: errorResponse, errorId } = createErrorResponse({
     message: err.message || "Internal server error",
     internalMessage: err.stack || err.toString(),
     code,
     requestId,
     statusCode,
   });
+  
+  // Set error ID in response header
+  res.setHeader('X-Error-ID', errorId);
   
   // Structured logging for support console (4xx/5xx)
   logErrorForSupport(
@@ -132,7 +135,8 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
     errorResponse.message,
     errorResponse.internal_message,
     errorResponse.category,
-    errorResponse.severity
+    errorResponse.severity,
+    req.path
   );
   
   console.error("Error:", err);
