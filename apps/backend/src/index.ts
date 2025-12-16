@@ -110,31 +110,34 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
   const requestId = (req as RequestWithId).requestId || 'unknown';
   const statusCode = err.status || 500;
   const organizationId = (req as any).user?.organization_id;
+  const code = err.code || (statusCode >= 500 ? "INTERNAL_SERVER_ERROR" : "UNKNOWN_ERROR");
+  
+  // Use error response utility for consistent formatting
+  const { createErrorResponse, logErrorForSupport } = require("./utils/errorResponse");
+  
+  const errorResponse = createErrorResponse({
+    message: err.message || "Internal server error",
+    internalMessage: err.stack || err.toString(),
+    code,
+    requestId,
+    statusCode,
+  });
   
   // Structured logging for support console (4xx/5xx)
-  if (statusCode >= 400) {
-    const code = err.code || (statusCode >= 500 ? "INTERNAL_SERVER_ERROR" : "UNKNOWN_ERROR");
-    console.log(
-      JSON.stringify({
-        level: statusCode >= 500 ? "error" : "warn",
-        status: statusCode,
-        code,
-        request_id: requestId,
-        organization_id: organizationId || "unknown",
-        message: err.message || "Internal server error",
-        timestamp: new Date().toISOString(),
-      })
-    );
-  }
+  logErrorForSupport(
+    statusCode,
+    code,
+    requestId,
+    organizationId,
+    errorResponse.message,
+    errorResponse.internal_message,
+    errorResponse.category,
+    errorResponse.severity
+  );
   
   console.error("Error:", err);
   
-  res.status(statusCode).json({
-    message: err.message || "Internal server error",
-    code: err.code || (statusCode >= 500 ? "INTERNAL_SERVER_ERROR" : "UNKNOWN_ERROR"),
-    request_id: requestId,
-    error_id: err.error_id || require("crypto").randomUUID(),
-  });
+  res.status(statusCode).json(errorResponse);
 });
 
 app.listen(PORT, () => {

@@ -291,12 +291,14 @@ describe('GET /api/jobs', () => {
       const data = await response.json()
       
       expect(response.status).toBe(400)
-      expect(data.code).toBe('CURSOR_NOT_SUPPORTED_FOR_SORT')
+      expect(['PAGINATION_CURSOR_NOT_SUPPORTED', 'CURSOR_NOT_SUPPORTED_FOR_SORT']).toContain(data.code) // Support legacy code
       expect(data.message).toContain('Cursor pagination is not supported')
       expect(data.sort).toBe('status_asc')
       expect(data.documentation_url).toBe('/docs/pagination#status-sorting')
       expect(data.allowed_pagination_modes).toEqual(['offset'])
       expect(data.reason).toContain('in-memory ordering')
+      expect(data.severity).toBe('warn')
+      expect(data.category).toBe('pagination')
     })
 
     it('should reject cursor param when sort=status_desc', async () => {
@@ -308,10 +310,12 @@ describe('GET /api/jobs', () => {
       const data = await response.json()
       
       expect(response.status).toBe(400)
-      expect(data.code).toBe('CURSOR_NOT_SUPPORTED_FOR_SORT')
+      expect(['PAGINATION_CURSOR_NOT_SUPPORTED', 'CURSOR_NOT_SUPPORTED_FOR_SORT']).toContain(data.code) // Support legacy code
       expect(data.sort).toBe('status_desc')
       expect(data.documentation_url).toBe('/docs/pagination#status-sorting')
       expect(data.allowed_pagination_modes).toEqual(['offset'])
+      expect(data.severity).toBe('warn')
+      expect(data.category).toBe('pagination')
     })
 
     it('should have no gaps or overlaps between pages (created_desc)', async () => {
@@ -533,14 +537,16 @@ describe('GET /api/jobs', () => {
         }),
       })
       
-      // If limit is reached, should return 403 with JOB_LIMIT_REACHED
+      // If limit is reached, should return 403 with ENTITLEMENTS_JOB_LIMIT_REACHED
       if (response.status === 403) {
         const data = await response.json()
-        expect(data.code).toBe('JOB_LIMIT_REACHED')
+        expect(['ENTITLEMENTS_JOB_LIMIT_REACHED', 'JOB_LIMIT_REACHED']).toContain(data.code) // Support legacy code
         expect(data.error_id).toBeDefined()
         expect(data.request_id).toBeDefined()
         expect(data.support_hint).toBeDefined()
         expect(data.limit).toBeDefined()
+        expect(data.severity).toBe('warn')
+        expect(data.category).toBe('entitlements')
       }
     })
 
@@ -561,14 +567,16 @@ describe('GET /api/jobs', () => {
         }),
       })
       
-      // If subscription is past due, should return 402 with PLAN_PAST_DUE
+      // If subscription is past due, should return 402 with ENTITLEMENTS_PLAN_PAST_DUE
       if (response.status === 402) {
         const data = await response.json()
-        expect(['PLAN_PAST_DUE', 'PLAN_INACTIVE']).toContain(data.code)
+        expect(['ENTITLEMENTS_PLAN_PAST_DUE', 'ENTITLEMENTS_PLAN_INACTIVE', 'PLAN_PAST_DUE', 'PLAN_INACTIVE']).toContain(data.code) // Support legacy codes
         expect(data.error_id).toBeDefined()
         expect(data.request_id).toBeDefined()
         expect(data.support_hint).toBeDefined()
         expect(data.subscription_status).toBeDefined()
+        expect(data.severity).toBe('warn')
+        expect(data.category).toBe('entitlements')
       }
     })
 
@@ -605,12 +613,14 @@ describe('GET /api/jobs', () => {
           // If user is not owner, should return 403 with ROLE_FORBIDDEN
           if (deleteResponse.status === 403) {
             const errorData = await deleteResponse.json()
-            expect(errorData.code).toBe('ROLE_FORBIDDEN')
+            expect(['AUTH_ROLE_FORBIDDEN', 'ROLE_FORBIDDEN']).toContain(errorData.code) // Support legacy code
             expect(errorData.error_id).toBeDefined()
             expect(errorData.request_id).toBeDefined()
             expect(errorData.support_hint).toBeDefined()
             expect(errorData.required_role).toBe('owner')
             expect(errorData.current_role).toBeDefined()
+            expect(errorData.severity).toBe('warn')
+            expect(errorData.category).toBe('auth')
           }
         }
       }
@@ -636,6 +646,67 @@ describe('GET /api/jobs', () => {
       expect(data.support_hint.length).toBeGreaterThan(0)
       
       expect(data.request_id).toBeDefined()
+    })
+
+    it('should handle unknown errors with request_id and error_id', async () => {
+      // Simulate an unknown error by hitting an invalid endpoint
+      // This tests the error handler fallback path
+      const response = await fetch(`${API_URL}/api/jobs/invalid-endpoint-that-does-not-exist`, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+        },
+      })
+      
+      // Should return 404 or 500, but always with request_id and error_id
+      expect([404, 500]).toContain(response.status)
+      
+      const data = await response.json()
+      
+      // Unknown errors should still include these fields
+      expect(data.request_id).toBeDefined()
+      expect(data.error_id).toBeDefined()
+      expect(data.code).toBeDefined()
+      expect(data.message).toBeDefined()
+      
+      // Should have severity and category
+      if (data.severity) {
+        expect(['error', 'warn', 'info']).toContain(data.severity)
+      }
+      if (data.category) {
+        expect(['pagination', 'entitlements', 'auth', 'validation', 'internal']).toContain(data.category)
+      }
+    })
+
+    it('should include severity and category in error responses', async () => {
+      const response = await fetch(`${API_URL}/api/jobs?sort=status_asc&cursor=test`, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+        },
+      })
+      
+      expect(response.status).toBe(400)
+      const data = await response.json()
+      
+      expect(data.severity).toBeDefined()
+      expect(['error', 'warn', 'info']).toContain(data.severity)
+      
+      expect(data.category).toBeDefined()
+      expect(['pagination', 'entitlements', 'auth', 'validation', 'internal']).toContain(data.category)
+    })
+
+    it('should propagate W3C Trace Context if provided', async () => {
+      const traceParent = '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01'
+      
+      const response = await fetch(`${API_URL}/api/jobs?limit=10`, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'traceparent': traceParent,
+        },
+      })
+      
+      // Should echo traceparent in response header
+      const responseTraceParent = response.headers.get('traceparent')
+      expect(responseTraceParent).toBe(traceParent)
     })
   })
 })

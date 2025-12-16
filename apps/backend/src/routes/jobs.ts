@@ -91,7 +91,8 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
       
       const errorResponse = createErrorResponse({
         message: "Cursor pagination is not supported for status sorting. Use offset pagination (page parameter) instead.",
-        code: "CURSOR_NOT_SUPPORTED_FOR_SORT",
+        internalMessage: `Cursor pagination attempted with sort=${sortMode} (in-memory sort incompatible with cursor)`,
+        code: "PAGINATION_CURSOR_NOT_SUPPORTED",
         requestId,
         statusCode: 400,
         sort: sortMode,
@@ -101,7 +102,7 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
         ...(retryAfterSeconds > 0 && { retry_after_seconds: retryAfterSeconds }),
       });
       
-      logErrorForSupport(400, "CURSOR_NOT_SUPPORTED_FOR_SORT", requestId, organization_id, errorResponse.message);
+      logErrorForSupport(400, "PAGINATION_CURSOR_NOT_SUPPORTED", requestId, organization_id, errorResponse.message, errorResponse.internal_message, errorResponse.category, errorResponse.severity);
       
       return res.status(400).json(errorResponse);
     }
@@ -1154,14 +1155,15 @@ jobsRouter.delete("/:id", authenticate as unknown as express.RequestHandler, asy
       const requestId = (authReq as RequestWithId).requestId || 'unknown';
       const errorResponse = createErrorResponse({
         message: "Only organization owners can delete jobs",
-        code: "ROLE_FORBIDDEN",
+        internalMessage: `Delete attempt by user with role=${role}, required=owner`,
+        code: "AUTH_ROLE_FORBIDDEN",
         requestId,
         statusCode: 403,
         required_role: "owner",
         current_role: role || "unknown",
       });
       
-      logErrorForSupport(403, "ROLE_FORBIDDEN", requestId, organization_id, errorResponse.message);
+      logErrorForSupport(403, "AUTH_ROLE_FORBIDDEN", requestId, organization_id, errorResponse.message, errorResponse.internal_message, errorResponse.category, errorResponse.severity);
       
       return res.status(403).json(errorResponse);
     }
