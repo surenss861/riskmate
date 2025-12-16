@@ -38,7 +38,29 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
       query = query.eq("risk_level", risk_level);
     }
 
-    const { data: jobs, error } = await query;
+    let { data: jobs, error } = await query;
+    
+    // If error is due to missing columns (migration not applied), retry without archive/delete filters
+    if (error && (error.message?.includes('archived_at') || error.message?.includes('deleted_at') || (error as any).code === 'PGRST116')) {
+      console.warn('Archive/delete columns not found - retrying without filters (migration may not be applied yet)');
+      let fallbackQuery = supabase
+        .from("jobs")
+        .select("id, client_name, job_type, location, status, risk_score, risk_level, created_at, updated_at")
+        .eq("organization_id", organization_id)
+        .order("created_at", { ascending: false })
+        .range(offset, offset + limitNum - 1);
+      
+      if (status) {
+        fallbackQuery = fallbackQuery.eq("status", status);
+      }
+      if (risk_level) {
+        fallbackQuery = fallbackQuery.eq("risk_level", risk_level);
+      }
+      
+      const fallbackResult = await fallbackQuery;
+      jobs = fallbackResult.data;
+      error = fallbackResult.error;
+    }
 
     if (error) throw error;
 
@@ -58,7 +80,26 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
       countQuery = countQuery.eq("risk_level", risk_level);
     }
 
-    const { count, error: countError } = await countQuery;
+    let { count, error: countError } = await countQuery;
+    
+    // If error is due to missing columns, retry without archive/delete filters
+    if (countError && (countError.message?.includes('archived_at') || countError.message?.includes('deleted_at') || (countError as any).code === 'PGRST116')) {
+      let fallbackCountQuery = supabase
+        .from("jobs")
+        .select("*", { count: "exact", head: true })
+        .eq("organization_id", organization_id);
+      
+      if (status) {
+        fallbackCountQuery = fallbackCountQuery.eq("status", status);
+      }
+      if (risk_level) {
+        fallbackCountQuery = fallbackCountQuery.eq("risk_level", risk_level);
+      }
+      
+      const fallbackCountResult = await fallbackCountQuery;
+      count = fallbackCountResult.count;
+      countError = fallbackCountResult.error;
+    }
 
     if (countError) throw countError;
 

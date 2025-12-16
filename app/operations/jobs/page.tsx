@@ -108,7 +108,8 @@ const JobsPageContent = () => {
         setUserRole(userRow.role as 'owner' | 'admin' | 'member')
       }
 
-      // Build query with template filters (exclude archived and deleted jobs)
+      // Build query with template filters
+      // Try with archive/delete filters first, fallback if columns don't exist (migration not applied)
       let query = supabase
         .from('jobs')
         .select('id, client_name, job_type, location, status, risk_score, risk_level, created_at, updated_at, applied_template_id, applied_template_type', { count: 'exact' })
@@ -136,7 +137,38 @@ const JobsPageContent = () => {
         query = query.eq('applied_template_id', filterTemplateId)
       }
 
-      const { data: jobsData, count, error } = await query
+      let { data: jobsData, count, error } = await query
+      
+      // If error is due to missing columns (migration not applied), retry without archive/delete filters
+      if (error && (error.message?.includes('archived_at') || error.message?.includes('deleted_at') || error.code === 'PGRST116')) {
+        console.warn('Archive/delete columns not found - retrying without filters (migration may not be applied yet)')
+        let fallbackQuery = supabase
+          .from('jobs')
+          .select('id, client_name, job_type, location, status, risk_score, risk_level, created_at, updated_at, applied_template_id, applied_template_type', { count: 'exact' })
+          .eq('organization_id', userRow.organization_id)
+          .order('created_at', { ascending: false })
+          .range((page - 1) * 50, page * 50 - 1)
+        
+        if (filterStatus) {
+          fallbackQuery = fallbackQuery.eq('status', filterStatus)
+        }
+        if (filterRiskLevel) {
+          fallbackQuery = fallbackQuery.eq('risk_level', filterRiskLevel)
+        }
+        if (filterTemplateSource === 'template') {
+          fallbackQuery = fallbackQuery.not('applied_template_id', 'is', null)
+        } else if (filterTemplateSource === 'manual') {
+          fallbackQuery = fallbackQuery.is('applied_template_id', null)
+        }
+        if (filterTemplateId) {
+          fallbackQuery = fallbackQuery.eq('applied_template_id', filterTemplateId)
+        }
+        
+        const fallbackResult = await fallbackQuery
+        jobsData = fallbackResult.data
+        count = fallbackResult.count
+        error = fallbackResult.error
+      }
 
       if (error) {
         console.error('Failed to fetch jobs from database:', error)
