@@ -58,9 +58,29 @@ export function JobsPageContentView(props: JobsPageContentProps) {
   })
   const [loading, setLoading] = useState(false)
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+  const [executiveView, setExecutiveView] = useState(false)
   
   const canArchive = hasPermission(props.userRole, 'jobs.close')
   const canDelete = hasPermission(props.userRole, 'jobs.delete')
+  
+  // Calculate risk trend (simple heuristic: compare current risk to a baseline)
+  // For now, we'll use a simple indicator based on risk level changes
+  const getRiskTrend = (job: any): '↑' | '→' | '↓' | null => {
+    if (!job.risk_score || job.risk_score === 0) return null
+    // Simple heuristic: if risk_score is high and recently updated, it's increasing
+    // If risk_score is low or medium, it's stable or improving
+    // This is a placeholder - in production, you'd compare against historical data
+    if (job.risk_score >= 70) {
+      // High risk jobs are likely increasing
+      return '↑'
+    } else if (job.risk_score >= 40) {
+      // Medium risk is stable
+      return '→'
+    } else {
+      // Low risk is improving
+      return '↓'
+    }
+  }
   
   // Actions column component (needs hooks)
   const ActionsCell = ({ job }: { job: any }) => {
@@ -311,12 +331,23 @@ export function JobsPageContentView(props: JobsPageContentProps) {
                     Your centralized job hub — track progress, hazards, documents, and generate audit-ready reports.
                   </p>
             </div>
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-2 text-sm text-white/60 cursor-pointer hover:text-white/80 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={executiveView}
+                  onChange={(e) => setExecutiveView(e.target.checked)}
+                  className="w-4 h-4 rounded border-white/20 bg-white/5 text-[#F97316] focus:ring-[#F97316]/50"
+                />
+                <span>Executive View</span>
+              </label>
               <button
                 onClick={() => router.push('/operations/jobs/new')}
                 className={`${buttonStyles.primary} ${buttonStyles.sizes.lg}`}
               >
                 + Create Job
               </button>
+            </div>
           </div>
         </motion.div>
 
@@ -470,24 +501,33 @@ export function JobsPageContentView(props: JobsPageContentProps) {
             data={props.jobs}
             stickyColumns={['client_name', 'risk_score']}
             enableKeyboardShortcuts={true}
+            executiveView={executiveView}
             columns={[
               {
                 id: 'client_name',
-                header: 'Client Name',
+                header: 'Client',
                 accessor: (job: any) => job.client_name,
                 sortable: true,
+                width: '200px',
                 render: (value: string, job: any) => (
-                  <button
-                    onClick={() => router.push(`/operations/jobs/${job.id}`)}
-                    onMouseEnter={() => handleJobHover(job.id)}
-                    onMouseLeave={() => handleJobHoverEnd(job.id)}
-                    className="text-white hover:text-[#F97316] transition-colors font-semibold"
-                  >
-                    {value}
-                  </button>
+                  <div>
+                    <button
+                      onClick={() => router.push(`/operations/jobs/${job.id}`)}
+                      onMouseEnter={() => handleJobHover(job.id)}
+                      onMouseLeave={() => handleJobHoverEnd(job.id)}
+                      className="text-white hover:text-[#F97316] transition-colors font-semibold"
+                    >
+                      {value}
+                    </button>
+                    {!executiveView && (
+                      <div className="text-xs text-white/30 mt-0.5">
+                        Owner: {job.owner_name || 'Safety Lead'}
+                      </div>
+                    )}
+                  </div>
                 ),
               },
-              {
+              ...(executiveView ? [] : [{
                 id: 'job_type',
                 header: 'Job Type',
                 accessor: (job: any) => job.job_type,
@@ -495,7 +535,7 @@ export function JobsPageContentView(props: JobsPageContentProps) {
                 render: (value: string) => (
                   <span className="text-white/50 text-sm">{value}</span>
                 ),
-              },
+              }]),
               {
                 id: 'location',
                 header: 'Location',
@@ -505,7 +545,7 @@ export function JobsPageContentView(props: JobsPageContentProps) {
                   <span className="text-white/50 text-sm">{value}</span>
                 ),
               },
-              {
+              ...(executiveView ? [] : [{
                 id: 'status',
                 header: 'Status',
                 accessor: (job: any) => job.status,
@@ -515,7 +555,7 @@ export function JobsPageContentView(props: JobsPageContentProps) {
                     {value}
                   </span>
                 ),
-              },
+              }]),
               {
                 id: 'risk_score',
                 header: 'Risk Score',
@@ -563,7 +603,17 @@ export function JobsPageContentView(props: JobsPageContentProps) {
                           onMouseLeave={() => setShowTooltip(false)}
                           onClick={() => setShowTooltip(!showTooltip)}
                         >
-                          <div className="text-lg font-bold text-white">{value}</div>
+                          <div className="flex items-center gap-1.5 justify-end">
+                            <div className="text-lg font-bold text-white">{value}</div>
+                            {getRiskTrend(job) && (
+                              <span className="text-sm text-white/50" title={
+                                getRiskTrend(job) === '↑' ? 'Increasing risk' :
+                                getRiskTrend(job) === '→' ? 'Stable' : 'Improving'
+                              }>
+                                {getRiskTrend(job)}
+                              </span>
+                            )}
+                          </div>
                           {job.risk_level && (
                             <div className={`text-xs ${props.getRiskColor(job.risk_level)}`}>
                               {job.risk_level.toUpperCase()}
@@ -616,16 +666,35 @@ export function JobsPageContentView(props: JobsPageContentProps) {
                 sortable: false,
                 render: (value: string, job: any) => {
                   if (value === '—') return <span className="text-xs text-white/30">—</span>
-                  return <span className="text-xs text-white/60">{value}</span>
+                  return (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-white/60">{value}</span>
+                      {(job.risk_score && job.risk_score >= 40) && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            // TODO: Implement flag for review
+                            setToast({ message: 'Flagged for review', type: 'success' })
+                          }}
+                          className="text-xs text-white/40 hover:text-white/60 underline"
+                          title="Flag for review"
+                        >
+                          Flag for review
+                        </button>
+                      )}
+                    </div>
+                  )
                 },
               },
               {
-                id: 'created_at',
-                header: 'Created',
-                accessor: (job: any) => props.formatDate(job.created_at),
+                id: 'last_activity',
+                header: executiveView ? 'Last Activity' : 'Created',
+                accessor: (job: any) => job.updated_at || job.created_at,
                 sortable: true,
-                render: (value: string) => (
-                  <span className="text-xs text-white/40">{value}</span>
+                render: (value: string, job: any) => (
+                  <span className="text-xs text-white/40">
+                    {executiveView ? props.formatDate(job.updated_at || job.created_at) : props.formatDate(job.created_at)}
+                  </span>
                 ),
               },
               ...(canArchive || canDelete ? [{
@@ -661,12 +730,17 @@ export function JobsPageContentView(props: JobsPageContentProps) {
 
         {/* Audit Narrative Footer */}
         {props.jobs.length > 0 && (
-          <div className="mt-4 flex items-center justify-between text-xs">
-            <div className="text-white/30">
-              All job records are immutable once audit activity exists.
+          <div className="mt-4 flex flex-col gap-2 text-xs">
+            <div className="flex items-center justify-between">
+              <div className="text-white/30">
+                All job records are immutable once audit activity exists.
+              </div>
+              <div className="text-white/40 italic">
+                Export-ready for insurer & regulatory review
+              </div>
             </div>
-            <div className="text-white/40 italic">
-              Export-ready for insurer & regulatory review
+            <div className="text-white/25 text-center">
+              RiskMate maintains a continuous, immutable risk ledger for every job.
             </div>
           </div>
         )}

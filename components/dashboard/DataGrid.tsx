@@ -25,6 +25,7 @@ interface DataGridProps<T> {
   onSaveView?: (name: string, filters: any) => void
   stickyColumns?: string[] // Column IDs to keep sticky on horizontal scroll
   enableKeyboardShortcuts?: boolean // Enable keyboard shortcuts (/, F, Enter, Esc)
+  executiveView?: boolean // Executive view mode (reduced density, simplified columns)
 }
 
 export function DataGrid<T extends { id: string }>({
@@ -39,6 +40,7 @@ export function DataGrid<T extends { id: string }>({
   onSaveView,
   stickyColumns = [],
   enableKeyboardShortcuts = false,
+  executiveView = false,
 }: DataGridProps<T>) {
   const [sortColumn, setSortColumn] = useState<string | null>(null)
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
@@ -218,11 +220,11 @@ function DataGridRows<T extends { id: string }>({
                 const isNumeric = typeof value === 'number' || (typeof value === 'string' && /^\d+$/.test(value))
                 const isSticky = stickyColumns.includes(column.id)
                 return (
-                  <td
-                    key={column.id}
-                    className={`px-4 py-3 text-sm text-white/80 h-12 ${isNumeric ? 'text-right' : 'text-left'} ${
-                      isSticky ? 'sticky left-0 z-10 bg-[#121212]/80' : ''
-                    }`}
+                        <td
+                          key={column.id}
+                          className={`px-4 ${executiveView ? 'py-4' : 'py-3'} text-sm text-white/80 ${executiveView ? 'h-16' : 'h-12'} ${isNumeric ? 'text-right' : 'text-left'} ${
+                            isSticky ? 'sticky left-0 z-10 bg-[#121212]/80' : ''
+                          }`}
                     style={{
                       ...(isSticky && { 
                         left: stickyColumns.slice(0, stickyColumns.indexOf(column.id)).reduce((acc, id) => {
