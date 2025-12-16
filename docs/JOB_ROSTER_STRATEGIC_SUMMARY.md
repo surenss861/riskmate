@@ -87,9 +87,42 @@ This screen is now:
 
 ## What IS Worth Doing Next (When Ready)
 
-1. **Job detail page** mirrors this same restraint
-2. **Export / PDF flow** that matches the language we introduced
-3. **One insurer-style demo script** ("Here's how we reduce exposure")
+Only things that reinforce the ledger:
+
+1. **Immutable event timeline per job** → "Risk changed because…"
+2. **Export flows** that look boring and official
+3. **Read-only auditor / insurer access mode**
+4. **Incident → risk delta linkage**
+
+Notice: still no flashy stuff.
+
+## Strategic Frameworks
+
+### Defense Against Feature Creep
+
+Any future idea must answer:
+
+**"Does this strengthen the risk ledger, or dilute it?"**
+
+If it dilutes → no.
+
+### Sales Narrative Language
+
+Pitch RiskMate as:
+- "A system of record for operational risk"
+- "A continuous, immutable risk ledger"
+- "Pre-loss intelligence, not post-incident paperwork"
+
+That's insurer language, not contractor SaaS language.
+
+### Pricing Justification
+
+Charge more because:
+- You're not saving time
+- You're reducing exposure
+- You're preventing legal pain
+
+That's budget-holder logic.
 
 ## The Strategic Win
 
@@ -98,6 +131,20 @@ This screen is now:
 This is no longer "early SaaS UI."
 
 This is **enterprise-grade internal software** — the kind companies depend on to not get sued.
+
+### The Core Philosophy
+
+**We're no longer designing screens.**
+
+**We're designing institutional memory.**
+
+That's why this feels:
+- Expensive
+- Serious
+- Non-DIY
+- Insurable
+
+You're building something companies depend on **when things go wrong** — not when things are easy.
 
 ---
 
