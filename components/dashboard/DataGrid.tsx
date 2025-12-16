@@ -176,7 +176,7 @@ export function DataGrid<T extends { id: string }>({
                     onMouseLeave={() => onRowHoverEnd?.(row)}
                     className={`hover:bg-white/5 ${motionStyles.hover} ${
                       onRowClick ? 'cursor-pointer' : ''
-                    } ${highlight ? `border-l-4 border-l-${highlight}` : ''}`}
+                    } ${highlight ? 'border-l-[3px]' : ''}`}
                     style={{
                       borderLeftColor: highlight || undefined,
                     }}

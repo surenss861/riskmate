@@ -61,6 +61,68 @@ export function JobsPageContentView(props: JobsPageContentProps) {
   
   const canArchive = hasPermission(props.userRole, 'jobs.close')
   const canDelete = hasPermission(props.userRole, 'jobs.delete')
+  
+  // Actions column component (needs hooks)
+  const ActionsCell = ({ job }: { job: any }) => {
+    const [showMoreMenu, setShowMoreMenu] = useState(false)
+    const menuRef = useRef<HTMLDivElement>(null)
+    
+    React.useEffect(() => {
+      const handleClickOutside = (event: MouseEvent) => {
+        if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+          setShowMoreMenu(false)
+        }
+      }
+      if (showMoreMenu) {
+        document.addEventListener('mousedown', handleClickOutside)
+        return () => document.removeEventListener('mousedown', handleClickOutside)
+      }
+    }, [showMoreMenu])
+    
+    const hasArchive = canArchive && job.status !== 'archived'
+    const hasDelete = canDelete && job.status === 'draft'
+    
+    if (!hasArchive && !hasDelete) return null
+    
+    return (
+      <div className="relative flex items-center gap-2" onClick={(e) => e.stopPropagation()} ref={menuRef}>
+        {hasArchive && (
+          <button
+            onClick={() => handleArchive(job.id, job.client_name)}
+            className="px-3 py-1 text-xs text-white/70 hover:text-white border border-white/10 rounded hover:bg-white/5 transition-colors"
+            title="Archive job (preserves records for audit and compliance)"
+          >
+            Archive
+          </button>
+        )}
+        {hasDelete && (
+          <>
+            <button
+              onClick={() => setShowMoreMenu(!showMoreMenu)}
+              className="px-2 py-1 text-xs text-white/50 hover:text-white/70 transition-colors"
+              title="More actions"
+            >
+              ⋯
+            </button>
+            {showMoreMenu && (
+              <div className="absolute right-0 top-full mt-1 bg-[#1A1A1A] border border-white/10 rounded-lg shadow-lg z-10 min-w-[140px]">
+                <button
+                  onClick={() => {
+                    setShowMoreMenu(false)
+                    handleDelete(job.id, job.client_name)
+                  }}
+                  className="w-full px-3 py-2 text-left text-xs text-red-400/70 hover:text-red-400 hover:bg-red-500/10 transition-colors first:rounded-t-lg last:rounded-b-lg"
+                  title="Delete job (available only for draft jobs without audit data)"
+                >
+                  Delete
+                </button>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    )
+  }
 
   const handleJobHover = (jobId: string) => {
     // Clear any existing timeout for this job
@@ -238,10 +300,13 @@ export function JobsPageContentView(props: JobsPageContentProps) {
           className={spacing.section}
         >
           <div className="flex items-center justify-between">
-            <div>
-                  <Link href="/operations/jobs" className={`${typography.h1} hover:text-[#F97316] transition-colors`}>
-                    Job Roster
-                  </Link>
+            <div className="flex-1">
+                  <div className="flex items-center gap-3">
+                    <Link href="/operations/jobs" className={`${typography.h1} hover:text-[#F97316] transition-colors`}>
+                      Job Roster
+                    </Link>
+                    <span className="text-xs text-white/40 font-normal">Audit-safe view</span>
+                  </div>
                   <p className={`${spacing.tight} ${typography.bodyMuted}`}>
                     Your centralized job hub — track progress, hazards, documents, and generate audit-ready reports.
                   </p>
@@ -337,16 +402,39 @@ export function JobsPageContentView(props: JobsPageContentProps) {
               animate={{ opacity: 1 }}
               className="rounded-2xl border border-white/10 bg-black/35 p-12 text-center"
             >
-              <p className={`text-white font-medium ${spacing.tight}`}>No jobs yet</p>
-              <p className={`text-sm text-white/60 ${spacing.normal} max-w-md mx-auto`}>
-                Jobs are where you track safety, document hazards, and generate audit-ready reports. Create your first job to get started.
-              </p>
-              <button
-                onClick={() => router.push('/operations/jobs/new')}
-                className={`${spacing.normal} ${buttonStyles.primary} ${buttonStyles.sizes.lg}`}
-              >
-                Create Your First Job
-              </button>
+              {props.filterStatus || props.filterRiskLevel || props.filterTemplateSource || props.filterTemplateId ? (
+                <>
+                  <p className={`text-white font-medium ${spacing.tight}`}>No jobs match these filters</p>
+                  <p className={`text-sm text-white/60 ${spacing.normal} max-w-md mx-auto`}>
+                    Try adjusting your filters or clear them to see all jobs.
+                  </p>
+                  <button
+                    onClick={() => {
+                      props.onFilterStatusChange('')
+                      props.onFilterRiskLevelChange('')
+                      props.onFilterTemplateSourceChange('')
+                      props.onFilterTemplateIdChange('')
+                      props.onPageChange(1)
+                    }}
+                    className={`${spacing.normal} px-4 py-2 text-sm text-white/70 hover:text-white border border-white/10 rounded-lg hover:bg-white/5 transition-colors`}
+                  >
+                    Clear Filters
+                  </button>
+                </>
+              ) : (
+                <>
+                  <p className={`text-white font-medium ${spacing.tight}`}>No jobs yet</p>
+                  <p className={`text-sm text-white/60 ${spacing.normal} max-w-md mx-auto`}>
+                    Jobs are where you track safety, document hazards, and generate audit-ready reports. Create your first job to get started.
+                  </p>
+                  <button
+                    onClick={() => router.push('/operations/jobs/new')}
+                    className={`${spacing.normal} ${buttonStyles.primary} ${buttonStyles.sizes.lg}`}
+                  >
+                    Create Your First Job
+                  </button>
+                </>
+              )}
             </motion.div>
         ) : (
           <DataGrid
@@ -373,12 +461,18 @@ export function JobsPageContentView(props: JobsPageContentProps) {
                 header: 'Job Type',
                 accessor: (job: any) => job.job_type,
                 sortable: true,
+                render: (value: string) => (
+                  <span className="text-white/50 text-sm">{value}</span>
+                ),
               },
               {
                 id: 'location',
                 header: 'Location',
                 accessor: (job: any) => job.location,
                 sortable: true,
+                render: (value: string) => (
+                  <span className="text-white/50 text-sm">{value}</span>
+                ),
               },
               {
                 id: 'status',
@@ -386,7 +480,7 @@ export function JobsPageContentView(props: JobsPageContentProps) {
                 accessor: (job: any) => job.status,
                 sortable: true,
                 render: (value: string) => (
-                  <span className={`px-2 py-1 rounded text-xs font-medium ${props.getStatusColor(value)}`}>
+                  <span className={`px-2 py-0.5 rounded text-xs font-normal ${props.getStatusColor(value)} opacity-80`}>
                     {value}
                   </span>
                 ),
@@ -412,43 +506,36 @@ export function JobsPageContentView(props: JobsPageContentProps) {
                 header: 'Created',
                 accessor: (job: any) => props.formatDate(job.created_at),
                 sortable: true,
+                render: (value: string) => (
+                  <span className="text-xs text-white/40">{value}</span>
+                ),
               },
               ...(canArchive || canDelete ? [{
                 id: 'actions',
                 header: 'Actions',
                 accessor: () => '',
                 sortable: false,
-                width: '120px',
-                render: (_: any, job: any) => (
-                  <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                    {canArchive && job.status !== 'archived' && (
-                      <button
-                        onClick={() => handleArchive(job.id, job.client_name)}
-                        className="px-3 py-1 text-xs text-white/70 hover:text-white border border-white/10 rounded hover:bg-white/5 transition-colors"
-                        title="Archive job (preserves records for audit and compliance)"
-                      >
-                        Archive
-                      </button>
-                    )}
-                    {canDelete && job.status === 'draft' && (
-                      <button
-                        onClick={() => handleDelete(job.id, job.client_name)}
-                        className="px-3 py-1 text-xs text-red-400/70 hover:text-red-400 border border-red-500/20 rounded hover:bg-red-500/10 transition-colors"
-                        title="Delete job (available only for draft jobs without audit data)"
-                      >
-                        Delete
-                      </button>
-                    )}
-                  </div>
-                ),
+                width: '100px',
+                render: (_: any, job: any) => <ActionsCell job={job} />,
               }] : []),
             ]}
             onRowClick={(job: any) => router.push(`/operations/jobs/${job.id}`)}
             onRowHover={(job: any) => handleJobHover(job.id)}
             onRowHoverEnd={(job: any) => handleJobHoverEnd(job.id)}
             rowHighlight={(job: any) => {
-              if (job.risk_score && job.risk_score > 80) return 'red-500'
-              if (job.risk_score && job.risk_score > 60) return 'orange-500'
+              // Risk spine: subtle left border based on risk level
+              if (job.risk_level === 'critical' || (job.risk_score && job.risk_score >= 90)) {
+                return 'rgba(239, 68, 68, 0.1)' // red at 10% opacity
+              }
+              if (job.risk_level === 'high' || (job.risk_score && job.risk_score >= 70)) {
+                return 'rgba(251, 146, 60, 0.1)' // amber at 10% opacity
+              }
+              if (job.risk_level === 'medium' || (job.risk_score && job.risk_score >= 40)) {
+                return 'rgba(251, 191, 36, 0.08)' // yellow at 8% opacity
+              }
+              if (job.risk_level === 'low' || (job.risk_score !== null && job.risk_score < 40)) {
+                return 'rgba(34, 197, 94, 0.08)' // green at 8% opacity
+              }
               return null
             }}
           />
