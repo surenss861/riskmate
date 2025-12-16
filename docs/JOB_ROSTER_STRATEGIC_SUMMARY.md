@@ -146,8 +146,51 @@ That's why this feels:
 
 You're building something companies depend on **when things go wrong** — not when things are easy.
 
+## How to Use This Document
+
+### Required Reading For:
+- New contributors
+- Future hires
+- Sales narratives
+- Product roadmap planning
+
+### Decision Framework
+
+**Any roadmap item must answer, in writing:**
+
+**"How does this strengthen the risk ledger?"**
+
+If it can't answer that → it doesn't ship.
+
+### Language to Use Verbatim
+
+Use this language in:
+- Demos
+- Pitch decks
+- Insurer conversations
+- Sales calls
+
+**Key phrases:**
+- "System of record for operational risk"
+- "Continuous, immutable risk ledger"
+- "Pre-loss intelligence, not post-incident paperwork"
+- "Reducing exposure, not saving time"
+- "Preventing legal pain, not productivity hacks"
+
+### Governance
+
+This document is not a retrospective — it's a **governance artifact**.
+
+It defines what RiskMate is allowed to become.
+
+It ensures:
+- Restraint stays intentional
+- "Boring" remains a feature
+- Records stay sacred
+- The system always remembers
+
 ---
 
 **Last Updated:** 2025-01-16  
-**Status:** ✅ Enterprise-Grade Complete
+**Status:** ✅ Enterprise-Grade Complete | Governance Artifact
 
