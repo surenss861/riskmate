@@ -8,6 +8,7 @@ import { DashboardNavbar } from '@/components/dashboard/DashboardNavbar'
 import { DataGrid } from '@/components/dashboard/DataGrid'
 import { ConfirmationModal } from '@/components/dashboard/ConfirmationModal'
 import { Toast } from '@/components/dashboard/Toast'
+import { JobRosterSelect } from '@/components/dashboard/JobRosterSelect'
 import { jobsApi } from '@/lib/api'
 import { typography, buttonStyles, spacing } from '@/lib/styles/design-system'
 import { hasPermission } from '@/lib/utils/permissions'
@@ -373,68 +374,71 @@ export function JobsPageContentView(props: JobsPageContentProps) {
           className={`${spacing.relaxed}`}
         >
           <div className="flex flex-wrap gap-3 mb-3">
-          <select
-            value={props.filterStatus}
-            onChange={(e) => {
-              props.onFilterStatusChange(e.target.value)
-              props.onPageChange(1)
-            }}
-            className="rounded-lg border border-white/15 bg-white/5 px-4 py-2 text-sm text-white focus:border-white/25 focus:outline-none"
-          >
-            <option value="">All Statuses</option>
-            <option value="active">Active</option>
-            <option value="completed">Completed</option>
-            <option value="on-hold">On Hold</option>
-            <option value="cancelled">Cancelled</option>
-          </select>
-
-          <select
-            value={props.filterRiskLevel}
-            onChange={(e) => {
-              props.onFilterRiskLevelChange(e.target.value)
-              props.onPageChange(1)
-            }}
-            className="rounded-lg border border-white/15 bg-white/5 px-4 py-2 text-sm text-white focus:border-white/25 focus:outline-none"
-          >
-            <option value="">All Risk Levels</option>
-            <option value="low">Low</option>
-            <option value="medium">Medium</option>
-            <option value="high">High</option>
-            <option value="critical">Critical</option>
-          </select>
-
-          <select
-            value={props.filterTemplateSource}
-            onChange={(e) => {
-              props.onFilterTemplateSourceChange(e.target.value)
-              props.onFilterTemplateIdChange('')
-              props.onPageChange(1)
-            }}
-            className="rounded-lg border border-white/15 bg-white/5 px-4 py-2 text-sm text-white focus:border-white/25 focus:outline-none"
-          >
-            <option value="">All Sources</option>
-            <option value="template">From Template</option>
-            <option value="manual">Manual</option>
-          </select>
-
-          {props.filterTemplateSource === 'template' && props.templates.length > 0 && (
-            <select
-              value={props.filterTemplateId}
-              onChange={(e) => {
-                props.onFilterTemplateIdChange(e.target.value)
+            <JobRosterSelect
+              value={props.filterStatus}
+              onValueChange={(value) => {
+                props.onFilterStatusChange(value)
                 props.onPageChange(1)
               }}
-              className="rounded-lg border border-white/15 bg-white/5 px-4 py-2 text-sm text-white focus:border-white/25 focus:outline-none"
-              disabled={props.loadingTemplates}
-            >
-              <option value="">All Templates</option>
-              {props.templates.map((template) => (
-                <option key={template.id} value={template.id}>
-                  {template.name}
-                </option>
-              ))}
-            </select>
-          )}
+              placeholder="All Statuses"
+              options={[
+                { label: 'All Statuses', value: '' },
+                { label: 'Active', value: 'active' },
+                { label: 'Completed', value: 'completed' },
+                { label: 'On Hold', value: 'on-hold' },
+                { label: 'Cancelled', value: 'cancelled' },
+              ]}
+            />
+
+            <JobRosterSelect
+              value={props.filterRiskLevel}
+              onValueChange={(value) => {
+                props.onFilterRiskLevelChange(value)
+                props.onPageChange(1)
+              }}
+              placeholder="All Risk Levels"
+              options={[
+                { label: 'All Risk Levels', value: '' },
+                { label: 'Low', value: 'low' },
+                { label: 'Medium', value: 'medium' },
+                { label: 'High', value: 'high' },
+                { label: 'Critical', value: 'critical' },
+              ]}
+            />
+
+            <JobRosterSelect
+              value={props.filterTemplateSource}
+              onValueChange={(value) => {
+                props.onFilterTemplateSourceChange(value)
+                props.onFilterTemplateIdChange('')
+                props.onPageChange(1)
+              }}
+              placeholder="All Sources"
+              options={[
+                { label: 'All Sources', value: '' },
+                { label: 'From Template', value: 'template' },
+                { label: 'Manual', value: 'manual' },
+              ]}
+            />
+
+            {props.filterTemplateSource === 'template' && props.templates.length > 0 && (
+              <JobRosterSelect
+                value={props.filterTemplateId}
+                onValueChange={(value) => {
+                  props.onFilterTemplateIdChange(value)
+                  props.onPageChange(1)
+                }}
+                placeholder="All Templates"
+                disabled={props.loadingTemplates}
+                options={[
+                  { label: 'All Templates', value: '' },
+                  ...props.templates.map((template) => ({
+                    label: template.name,
+                    value: template.id,
+                  })),
+                ]}
+              />
+            )}
           </div>
           {/* Filter Summary */}
           {(props.filterStatus || props.filterRiskLevel || props.filterTemplateSource || props.filterTemplateId) && (
