@@ -158,16 +158,21 @@ const JobsPageContent = () => {
     
     const jobsData = response.data || []
     
-    // Verify template fields exist (null is valid, undefined is not)
-    // This ensures all jobs have the fields, even if they're null
+    // Ensure template fields are never undefined (always null if missing)
+    // This is critical for UI assumptions - field must exist, null is valid
     jobsData.forEach((job: any) => {
+      // Use nullish coalescing to ensure field exists
+      job.applied_template_id = job.applied_template_id ?? null
+      job.applied_template_type = job.applied_template_type ?? null
+      
+      // Verify field exists (defensive check)
       if (!('applied_template_id' in job)) {
-        console.warn('Job missing applied_template_id field:', job.id)
-        job.applied_template_id = null // Ensure field exists
+        console.error('Job missing applied_template_id field after normalization:', job.id)
+        job.applied_template_id = null
       }
       if (!('applied_template_type' in job)) {
-        console.warn('Job missing applied_template_type field:', job.id)
-        job.applied_template_type = null // Ensure field exists
+        console.error('Job missing applied_template_type field after normalization:', job.id)
+        job.applied_template_type = null
       }
     })
     

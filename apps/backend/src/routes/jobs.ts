@@ -21,26 +21,70 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
     // Parse sort parameter (e.g., "risk_desc", "created_desc", "status_asc")
     let sortField = 'created_at';
     let sortDirection: 'asc' | 'desc' = 'desc';
+    let useStatusOrdering = false;
     if (sort) {
       const sortStr = String(sort);
       if (sortStr.includes('_')) {
         const [field, dir] = sortStr.split('_');
-        sortField = field === 'risk' ? 'risk_score' : field === 'created' ? 'created_at' : field === 'status' ? 'status' : 'created_at';
-        sortDirection = dir === 'asc' ? 'asc' : 'desc';
+        if (field === 'status') {
+          useStatusOrdering = true;
+          sortDirection = dir === 'asc' ? 'asc' : 'desc';
+        } else {
+          sortField = field === 'risk' ? 'risk_score' : field === 'created' ? 'created_at' : 'created_at';
+          sortDirection = dir === 'asc' ? 'asc' : 'desc';
+        }
       }
     }
 
+    // Parse cursor pagination (cursor = created_at + id for deterministic pagination)
+    const { cursor, limit: limitParam } = authReq.query;
     const pageNum = parseInt(page as string, 10);
-    const limitNum = parseInt(limit as string, 10);
-    const offset = (pageNum - 1) * limitNum;
+    const limitNum = limitParam ? parseInt(limitParam as string, 10) : parseInt(limit as string, 10) || 20;
+    
+    // Deterministic status order: draft → in_progress → completed → archived
+    const statusOrder = ['draft', 'in_progress', 'completed', 'archived', 'cancelled', 'on_hold'];
+    const getStatusOrder = (status: string) => {
+      const index = statusOrder.indexOf(status);
+      return index >= 0 ? index : statusOrder.length; // Unknown statuses go last
+    };
 
     let query = supabase
       .from("jobs")
       .select("id, client_name, job_type, location, status, risk_score, risk_level, created_at, updated_at, applied_template_id, applied_template_type")
       .eq("organization_id", organization_id)
-      .is("deleted_at", null) // Always exclude deleted
-      .order(sortField, { ascending: sortDirection === 'asc' })
-      .range(offset, offset + limitNum - 1);
+      .is("deleted_at", null); // Always exclude deleted
+    
+    // Cursor-based pagination (more efficient at scale)
+    // Cursor format: "created_at|id" (ISO timestamp|UUID)
+    if (cursor) {
+      try {
+        const [cursorTimestamp, cursorId] = String(cursor).split('|');
+        if (cursorTimestamp && cursorId) {
+          // Get jobs created before cursor, or same timestamp but id < cursorId
+          query = query.or(`created_at.lt.${cursorTimestamp},and(created_at.eq.${cursorTimestamp},id.lt.${cursorId})`);
+        }
+      } catch (e) {
+        // Invalid cursor format, fall back to offset pagination
+        console.warn('Invalid cursor format, using offset pagination:', e);
+      }
+    }
+    
+    // Apply sorting
+    if (useStatusOrdering) {
+      // For status sorting, we'll sort in memory after fetching (PostgreSQL doesn't support custom order easily)
+      // For now, use created_at as primary sort, then sort by status in memory
+      query = query.order("created_at", { ascending: sortDirection === 'asc' });
+    } else {
+      query = query.order(sortField, { ascending: sortDirection === 'asc' });
+    }
+    
+    // Apply pagination
+    if (!cursor) {
+      const offset = (pageNum - 1) * limitNum;
+      query = query.range(offset, offset + limitNum - 1);
+    } else {
+      query = query.limit(limitNum);
+    }
     
     // Only exclude archived if not explicitly including them
     if (!includeArchived) {
@@ -63,9 +107,32 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
       let fallbackQuery = supabase
         .from("jobs")
         .select("id, client_name, job_type, location, status, risk_score, risk_level, created_at, updated_at, applied_template_id, applied_template_type")
-        .eq("organization_id", organization_id)
-        .order(sortField, { ascending: sortDirection === 'asc' })
-        .range(offset, offset + limitNum - 1);
+        .eq("organization_id", organization_id);
+      
+      // Apply cursor or offset pagination
+      if (cursor) {
+        try {
+          const [cursorTimestamp, cursorId] = String(cursor).split('|');
+          if (cursorTimestamp && cursorId) {
+            fallbackQuery = fallbackQuery.or(`created_at.lt.${cursorTimestamp},and(created_at.eq.${cursorTimestamp},id.lt.${cursorId})`);
+          }
+        } catch (e) {
+          // Invalid cursor, fall back to offset
+        }
+      }
+      
+      if (useStatusOrdering) {
+        fallbackQuery = fallbackQuery.order("created_at", { ascending: sortDirection === 'asc' });
+      } else {
+        fallbackQuery = fallbackQuery.order(sortField, { ascending: sortDirection === 'asc' });
+      }
+      
+      if (!cursor) {
+        const offset = (pageNum - 1) * limitNum;
+        fallbackQuery = fallbackQuery.range(offset, offset + limitNum - 1);
+      } else {
+        fallbackQuery = fallbackQuery.limit(limitNum);
+      }
       
       // Only exclude archived if not explicitly including them (fallback mode)
       if (!includeArchived) {
@@ -90,6 +157,37 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
     }
 
     if (error) throw error;
+    
+    // Apply deterministic status ordering if requested (in-memory sort)
+    if (useStatusOrdering && jobs) {
+      jobs = [...jobs].sort((a, b) => {
+        const aOrder = getStatusOrder(a.status);
+        const bOrder = getStatusOrder(b.status);
+        if (aOrder !== bOrder) {
+          return sortDirection === 'asc' ? aOrder - bOrder : bOrder - aOrder;
+        }
+        // If same status, sort by created_at as tiebreaker
+        const aTime = new Date(a.created_at).getTime();
+        const bTime = new Date(b.created_at).getTime();
+        return sortDirection === 'asc' ? aTime - bTime : bTime - aTime;
+      });
+    }
+    
+    // Ensure template fields are never undefined (always null if missing)
+    if (jobs) {
+      jobs = jobs.map((job: any) => ({
+        ...job,
+        applied_template_id: job.applied_template_id ?? null,
+        applied_template_type: job.applied_template_type ?? null,
+      }));
+    }
+    
+    // Generate next cursor for cursor pagination
+    let nextCursor: string | null = null;
+    if (cursor && jobs && jobs.length === limitNum) {
+      const lastJob = jobs[jobs.length - 1];
+      nextCursor = `${lastJob.created_at}|${lastJob.id}`;
+    }
 
     // Get total count for pagination
     let countQuery = supabase
@@ -137,10 +235,12 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
     res.json({
       data: jobs || [],
       pagination: {
-        page: pageNum,
+        page: cursor ? undefined : pageNum,
         limit: limitNum,
         total: count || 0,
-        totalPages: Math.ceil((count || 0) / limitNum),
+        totalPages: cursor ? undefined : Math.ceil((count || 0) / limitNum),
+        cursor: nextCursor || undefined,
+        hasMore: nextCursor !== null,
       },
       // Dev-only: indicate source of truth (requires both NODE_ENV and debug flag)
       ...(process.env.NODE_ENV === 'development' && authReq.query.debug === '1' && {
@@ -148,6 +248,8 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
           source: 'authenticated_api',
           include_archived: includeArchived,
           organization_id: organization_id,
+          sort_field: useStatusOrdering ? 'status' : sortField,
+          sort_direction: sortDirection,
         },
       }),
     });

@@ -108,11 +108,18 @@ export function JobsPageContentView(props: JobsPageContentProps) {
     
     setLoading(true)
     
+    // Store previous cache state for rollback
+    const previousData = props.mutateData?.currentData ? { ...props.mutateData.currentData } : null
+    
     // Optimistic update: remove job from list immediately
     if (props.mutateData?.currentData) {
       const optimisticData = {
         ...props.mutateData.currentData,
         data: props.mutateData.currentData.data.filter((job: any) => job.id !== archiveModal.jobId),
+        pagination: {
+          ...props.mutateData.currentData.pagination,
+          total: (props.mutateData.currentData.pagination?.total || 0) - 1,
+        },
       }
       props.mutateData.mutate(optimisticData, false) // Update cache optimistically, don't revalidate yet
     }
@@ -127,7 +134,11 @@ export function JobsPageContentView(props: JobsPageContentProps) {
       setToast({ message: 'Job archived successfully', type: 'success' })
       setArchiveModal({ isOpen: false, jobId: null, jobName: '' })
     } catch (err: any) {
-      // On error, revalidate to restore correct state
+      // On error, restore previous cache state (rollback)
+      if (previousData && props.mutateData) {
+        props.mutateData.mutate(previousData, false)
+      }
+      // Then revalidate to ensure consistency
       props.onJobArchived()
       setToast({ 
         message: err?.message || 'Failed to archive job', 
@@ -147,11 +158,18 @@ export function JobsPageContentView(props: JobsPageContentProps) {
     
     setLoading(true)
     
+    // Store previous cache state for rollback
+    const previousData = props.mutateData?.currentData ? { ...props.mutateData.currentData } : null
+    
     // Optimistic update: remove job from list immediately
     if (props.mutateData?.currentData) {
       const optimisticData = {
         ...props.mutateData.currentData,
         data: props.mutateData.currentData.data.filter((job: any) => job.id !== deleteModal.jobId),
+        pagination: {
+          ...props.mutateData.currentData.pagination,
+          total: (props.mutateData.currentData.pagination?.total || 0) - 1,
+        },
       }
       props.mutateData.mutate(optimisticData, false) // Update cache optimistically, don't revalidate yet
     }
@@ -166,7 +184,11 @@ export function JobsPageContentView(props: JobsPageContentProps) {
       setToast({ message: 'Job deleted successfully', type: 'success' })
       setDeleteModal({ isOpen: false, jobId: null, jobName: '' })
     } catch (err: any) {
-      // On error, revalidate to restore correct state
+      // On error, restore previous cache state (rollback)
+      if (previousData && props.mutateData) {
+        props.mutateData.mutate(previousData, false)
+      }
+      // Then revalidate to ensure consistency
       props.onJobDeleted()
       const errorMessage = err?.message || 'Failed to delete job'
       // Handle specific error codes
