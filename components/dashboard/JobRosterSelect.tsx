@@ -25,13 +25,26 @@ export function JobRosterSelect({
   options,
   disabled = false,
 }: JobRosterSelectProps) {
-  // Handle empty string values (Radix requires undefined for "no selection")
-  const selectValue = value === '' ? undefined : value
+  // Radix doesn't allow empty string values, so we use a special value
+  // Map empty string to "__all__" internally, but expose empty string to parent
+  const ALL_VALUE = '__all__'
+  
+  // Filter out empty string options and replace with ALL_VALUE
+  const validOptions = options.map(opt => ({
+    ...opt,
+    value: opt.value === '' ? ALL_VALUE : opt.value,
+  }))
+  
+  // Convert empty string to ALL_VALUE for Radix
+  const selectValue = value === '' ? ALL_VALUE : value
   
   return (
     <Select.Root 
       value={selectValue} 
-      onValueChange={(newValue) => onValueChange(newValue || '')} 
+      onValueChange={(newValue) => {
+        // Convert ALL_VALUE back to empty string for parent
+        onValueChange(newValue === ALL_VALUE ? '' : newValue)
+      }} 
       disabled={disabled}
     >
       <Select.Trigger
@@ -68,7 +81,7 @@ export function JobRosterSelect({
         >
           <Select.ScrollUpButton className="hidden" />
           <Select.Viewport className="p-1">
-            {options.map((option) => (
+            {validOptions.map((option) => (
               <Select.Item
                 key={option.value}
                 value={option.value}
