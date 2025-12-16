@@ -294,6 +294,9 @@ describe('GET /api/jobs', () => {
       expect(data.code).toBe('CURSOR_NOT_SUPPORTED_FOR_SORT')
       expect(data.message).toContain('Cursor pagination is not supported')
       expect(data.sort).toBe('status_asc')
+      expect(data.documentation_url).toBe('/docs/pagination#status-sorting')
+      expect(data.allowed_pagination_modes).toEqual(['offset'])
+      expect(data.reason).toContain('in-memory ordering')
     })
 
     it('should reject cursor param when sort=status_desc', async () => {
@@ -307,6 +310,8 @@ describe('GET /api/jobs', () => {
       expect(response.status).toBe(400)
       expect(data.code).toBe('CURSOR_NOT_SUPPORTED_FOR_SORT')
       expect(data.sort).toBe('status_desc')
+      expect(data.documentation_url).toBe('/docs/pagination#status-sorting')
+      expect(data.allowed_pagination_modes).toEqual(['offset'])
     })
 
     it('should have no gaps or overlaps between pages (created_desc)', async () => {

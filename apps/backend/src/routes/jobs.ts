@@ -9,6 +9,32 @@ import { enforceJobLimit } from "../middleware/limits";
 
 export const jobsRouter = express.Router();
 
+// Rate-limited logging for cursor misuse (once per organization per hour)
+// This helps identify client misconfigurations without spamming logs
+const cursorMisuseLogs = new Map<string, number>();
+const CURSOR_MISUSE_LOG_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+const logCursorMisuse = (organizationId: string, sortMode: string) => {
+  const key = `${organizationId}:${sortMode}`;
+  const lastLogged = cursorMisuseLogs.get(key);
+  const now = Date.now();
+  
+  if (!lastLogged || (now - lastLogged) > CURSOR_MISUSE_LOG_TTL_MS) {
+    console.warn(`[Cursor Misuse] Organization ${organizationId} attempted cursor pagination with sort=${sortMode}. This indicates a client misconfiguration.`);
+    cursorMisuseLogs.set(key, now);
+    
+    // Clean up old entries (simple cleanup, runs on every log)
+    if (cursorMisuseLogs.size > 1000) {
+      const cutoff = now - CURSOR_MISUSE_LOG_TTL_MS;
+      for (const [k, v] of cursorMisuseLogs.entries()) {
+        if (v < cutoff) {
+          cursorMisuseLogs.delete(k);
+        }
+      }
+    }
+  }
+};
+
 // GET /api/jobs
 // Returns paginated list of jobs for organization
 jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
@@ -54,11 +80,16 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
     
     // Hardening: Explicitly reject cursor param when sort=status_* (prevents misuse)
     if (cursor && useStatusOrdering) {
+      // Log misuse once per organization per hour (helps identify client misconfigurations)
+      logCursorMisuse(organization_id, sortMode);
+      
       return res.status(400).json({
         message: "Cursor pagination is not supported for status sorting. Use offset pagination (page parameter) instead.",
         code: "CURSOR_NOT_SUPPORTED_FOR_SORT",
         sort: sortMode,
         reason: "Status sorting uses in-memory ordering which is incompatible with cursor pagination",
+        documentation_url: "/docs/pagination#status-sorting",
+        allowed_pagination_modes: ["offset"],
       });
     }
     

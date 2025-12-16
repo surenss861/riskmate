@@ -138,11 +138,16 @@ Created database function for future SQL-based status sorting:
 
 ```typescript
 if (cursor && useStatusOrdering) {
+  // Rate-limited logging (once per organization per hour)
+  logCursorMisuse(organization_id, sortMode);
+  
   return res.status(400).json({
     message: "Cursor pagination is not supported for status sorting...",
     code: "CURSOR_NOT_SUPPORTED_FOR_SORT",
     sort: sortMode,
     reason: "Status sorting uses in-memory ordering which is incompatible with cursor pagination",
+    documentation_url: "/docs/pagination#status-sorting",
+    allowed_pagination_modes: ["offset"],
   });
 }
 ```
@@ -151,6 +156,9 @@ if (cursor && useStatusOrdering) {
 - Prevents misuse at API level
 - Clear error message for developers
 - Type-safe error code for frontend handling
+- **Documentation URL** for quick reference
+- **Allowed pagination modes** for client auto-fallback
+- **Rate-limited logging** to identify client misconfigurations (not error spam)
 
 ### 2. Pagination Mode in Dev Meta
 
