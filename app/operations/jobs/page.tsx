@@ -34,6 +34,7 @@ const JobsPageContent = () => {
   const [totalPages, setTotalPages] = useState(1)
   const [templates, setTemplates] = useState<Array<{ id: string; name: string }>>([])
   const [loadingTemplates, setLoadingTemplates] = useState(false)
+  const [userRole, setUserRole] = useState<'owner' | 'admin' | 'member'>('member')
 
   // Initialize filters from URL params
   useEffect(() => {
@@ -96,17 +97,24 @@ const JobsPageContent = () => {
 
       const { data: userRow } = await supabase
         .from('users')
-        .select('organization_id')
+        .select('organization_id, role')
         .eq('id', user.id)
         .single()
 
       if (!userRow?.organization_id) return
+      
+      // Set user role
+      if (userRow.role) {
+        setUserRole(userRow.role as 'owner' | 'admin' | 'member')
+      }
 
-      // Build query with template filters
+      // Build query with template filters (exclude archived and deleted jobs)
       let query = supabase
         .from('jobs')
         .select('id, client_name, job_type, location, status, risk_score, risk_level, created_at, updated_at, applied_template_id, applied_template_type', { count: 'exact' })
         .eq('organization_id', userRow.organization_id)
+        .is('archived_at', null)
+        .is('deleted_at', null)
         .order('created_at', { ascending: false })
         .range((page - 1) * 50, page * 50 - 1)
 
@@ -215,6 +223,9 @@ const JobsPageContent = () => {
       getRiskColor={getRiskColor}
       getStatusColor={getStatusColor}
       formatDate={formatDate}
+      userRole={userRole}
+      onJobArchived={loadJobs}
+      onJobDeleted={loadJobs}
     />
   )
 }

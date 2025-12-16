@@ -250,6 +250,29 @@ export const jobsApi = {
   getAuditLog: async (jobId: string) => {
     return apiRequest<{ data: any[] }>(`/api/jobs/${jobId}/audit`);
   },
+
+  archive: async (jobId: string) => {
+    return apiRequest<{
+      data: {
+        id: string;
+        archived_at: string;
+        status: string;
+      };
+    }>(`/api/jobs/${jobId}/archive`, {
+      method: 'POST',
+    });
+  },
+
+  delete: async (jobId: string) => {
+    return apiRequest<{
+      data: {
+        id: string;
+        deleted_at: string;
+      };
+    }>(`/api/jobs/${jobId}`, {
+      method: 'DELETE',
+    });
+  },
 };
 
 // Risk API

@@ -1,0 +1,302 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.subscriptionsRouter = void 0;
+const express_1 = __importDefault(require("express"));
+const supabaseClient_1 = require("../lib/supabaseClient");
+const auth_1 = require("../middleware/auth");
+const stripeWebhook_1 = require("./stripeWebhook");
+exports.subscriptionsRouter = express_1.default.Router();
+const STRIPE_PRICE_IDS = {
+    starter: process.env.STRIPE_PRICE_STARTER,
+    pro: process.env.STRIPE_PRICE_PRO,
+    business: process.env.STRIPE_PRICE_BUSINESS,
+};
+const STRIPE_PRODUCT_IDS = {
+    starter: process.env.STRIPE_PRODUCT_STARTER || "prod_TOfxlypTNXZNhB",
+    pro: process.env.STRIPE_PRODUCT_PRO || "prod_TOfx6fhO40IMoF",
+    business: process.env.STRIPE_PRODUCT_BUSINESS || "prod_TOfy8NLmOTOaYl",
+};
+async function resolveStripePriceId(stripe, plan) {
+    const explicitPrice = STRIPE_PRICE_IDS[plan];
+    if (explicitPrice && explicitPrice.startsWith("price_")) {
+        return explicitPrice;
+    }
+    if (explicitPrice && explicitPrice.startsWith("prod_")) {
+        STRIPE_PRODUCT_IDS[plan] = explicitPrice;
+    }
+    const productId = STRIPE_PRODUCT_IDS[plan];
+    if (!productId) {
+        throw new Error(`Stripe product ID not configured for ${plan} plan`);
+    }
+    if (productId.startsWith("price_")) {
+        return productId;
+    }
+    const product = await stripe.products.retrieve(productId, {
+        expand: ["default_price"],
+    });
+    if (!product?.default_price) {
+        throw new Error(`Stripe product ${productId} is missing a default price`);
+    }
+    if (typeof product.default_price === "string") {
+        return product.default_price;
+    }
+    return product.default_price.id;
+}
+// GET /api/subscriptions
+// Returns current subscription tier, usage, and billing period
+exports.subscriptionsRouter.get("/", auth_1.authenticate, async (req, res) => {
+    try {
+        const { organization_id } = req.user;
+        // Get plan from org_subscriptions (source of truth)
+        const { data: orgSubscription, error: orgSubError } = await supabaseClient_1.supabase
+            .from("org_subscriptions")
+            .select("plan_code, seats_limit, jobs_limit_month")
+            .eq("organization_id", organization_id)
+            .maybeSingle();
+        if (orgSubError && orgSubError.code !== "PGRST116") {
+            // PGRST116 = no rows returned
+            throw orgSubError;
+        }
+        // Get subscription for billing period and Stripe info
+        const { data: subscription, error: subError } = await supabaseClient_1.supabase
+            .from("subscriptions")
+            .select("*")
+            .eq("organization_id", organization_id)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+        if (subError && subError.code !== "PGRST116") {
+            throw subError;
+        }
+        // Load organization record for fallback metadata
+        const { data: org } = await supabaseClient_1.supabase
+            .from("organizations")
+            .select("subscription_tier, subscription_status")
+            .eq("id", organization_id)
+            .maybeSingle();
+        // Prioritize org_subscriptions.plan_code, then subscriptions.tier, then organizations.subscription_tier
+        let tier = orgSubscription?.plan_code ?? subscription?.tier ?? org?.subscription_tier ?? null;
+        let status = subscription?.status ?? org?.subscription_status ?? (tier ? "active" : "none");
+        const normalizedStatus = status ?? (tier ? "active" : "none");
+        // Use actual limits from org_subscriptions if available, otherwise calculate from tier
+        let jobsLimit = null;
+        if (orgSubscription) {
+            jobsLimit = orgSubscription.jobs_limit_month ?? null;
+        }
+        else {
+            // Fallback to tier-based limits
+            jobsLimit =
+                tier === "starter"
+                    ? 10
+                    : tier === "pro"
+                        ? null // unlimited
+                        : tier === "business"
+                            ? null // unlimited
+                            : normalizedStatus === "none"
+                                ? 0
+                                : null;
+        }
+        // Count jobs created in current billing period
+        const periodStart = subscription?.current_period_start
+            ? new Date(subscription.current_period_start)
+            : new Date(); // If no subscription, use current month
+        const { count, error: countError } = await supabaseClient_1.supabase
+            .from("jobs")
+            .select("*", { count: "exact", head: true })
+            .eq("organization_id", organization_id)
+            .gte("created_at", periodStart.toISOString());
+        if (countError)
+            throw countError;
+        // Show usage if there's a tier (plan), otherwise null
+        const usage = tier ? (count ?? 0) : null;
+        const resetDate = tier ? subscription?.current_period_end || null : null;
+        res.json({
+            data: {
+                id: subscription?.id,
+                organization_id,
+                tier,
+                status: normalizedStatus,
+                current_period_start: subscription?.current_period_start || null,
+                current_period_end: subscription?.current_period_end || null,
+                stripe_subscription_id: subscription?.stripe_subscription_id || null,
+                stripe_customer_id: subscription?.stripe_customer_id || null,
+                usage,
+                jobsLimit,
+                resetDate,
+            },
+        });
+    }
+    catch (err) {
+        console.error("Subscription fetch failed:", err);
+        res.status(500).json({ message: "Failed to fetch subscription" });
+    }
+});
+// POST /api/subscriptions/portal
+// Returns Stripe billing portal URL
+exports.subscriptionsRouter.post("/portal", auth_1.authenticate, async (req, res) => {
+    try {
+        const { organization_id } = req.user;
+        // Get subscription to find Stripe customer ID
+        const { data: subscription } = await supabaseClient_1.supabase
+            .from("subscriptions")
+            .select("stripe_customer_id")
+            .eq("organization_id", organization_id)
+            .single();
+        if (!subscription?.stripe_customer_id) {
+            return res.status(404).json({ message: "No Stripe customer found" });
+        }
+        // TODO: Call Stripe API to create billing portal session
+        // For now, return a placeholder
+        const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+        const session = await stripe.billingPortal.sessions.create({
+            customer: subscription.stripe_customer_id,
+            return_url: `${process.env.FRONTEND_URL || "http://localhost:3000"}/account`,
+        });
+        res.json({ url: session.url });
+    }
+    catch (err) {
+        console.error("Billing portal failed:", err);
+        res.status(500).json({ message: "Failed to create billing portal session" });
+    }
+});
+// POST /api/subscriptions/checkout
+// Public endpoint to create a Stripe checkout session for new signups
+exports.subscriptionsRouter.post("/checkout", async (req, res) => {
+    try {
+        const { plan, success_url, cancel_url } = req.body ?? {};
+        if (!plan || !["starter", "pro", "business"].includes(plan)) {
+            return res.status(400).json({ message: "Invalid plan selected" });
+        }
+        if (!process.env.STRIPE_SECRET_KEY) {
+            return res.status(500).json({ message: "Stripe secret key not configured" });
+        }
+        const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+        const planCode = plan;
+        const priceId = await resolveStripePriceId(stripe, planCode);
+        let organizationId = null;
+        let requestUserId = null;
+        let customerEmail;
+        const authHeader = req.headers.authorization;
+        if (authHeader?.startsWith("Bearer ")) {
+            const token = authHeader.split("Bearer ")[1];
+            const { data: sessionUser } = await supabaseClient_1.supabase.auth.getUser(token);
+            if (sessionUser?.user) {
+                requestUserId = sessionUser.user.id;
+                customerEmail = sessionUser.user.email ?? undefined;
+                const { data: userRecord } = await supabaseClient_1.supabase
+                    .from("users")
+                    .select("organization_id")
+                    .eq("id", sessionUser.user.id)
+                    .maybeSingle();
+                organizationId = userRecord?.organization_id ?? null;
+            }
+        }
+        let stripeCustomerId;
+        if (organizationId) {
+            const { data: existingSubscription } = await supabaseClient_1.supabase
+                .from("subscriptions")
+                .select("stripe_customer_id")
+                .eq("organization_id", organizationId)
+                .maybeSingle();
+            if (existingSubscription?.stripe_customer_id) {
+                stripeCustomerId = existingSubscription.stripe_customer_id;
+            }
+        }
+        const session = await stripe.checkout.sessions.create({
+            mode: "subscription",
+            billing_address_collection: "required",
+            customer: stripeCustomerId || undefined,
+            customer_email: stripeCustomerId ? undefined : customerEmail,
+            client_reference_id: organizationId || undefined,
+            line_items: [
+                {
+                    price: priceId,
+                    quantity: 1,
+                },
+            ],
+            allow_promotion_codes: true,
+            metadata: {
+                plan_code: planCode,
+                organization_id: organizationId || undefined,
+                user_id: requestUserId || undefined,
+            },
+            subscription_data: {
+                metadata: {
+                    plan_code: planCode,
+                    organization_id: organizationId || undefined,
+                    user_id: requestUserId || undefined,
+                },
+            },
+            success_url: success_url ||
+                `${process.env.FRONTEND_URL || "http://localhost:3000"}/pricing/thank-you?session_id={CHECKOUT_SESSION_ID}`,
+            cancel_url: cancel_url ||
+                `${process.env.FRONTEND_URL || "http://localhost:3000"}/pricing?checkout=cancelled`,
+        });
+        res.json({ url: session.url });
+    }
+    catch (err) {
+        console.error("Checkout session creation failed:", err);
+        res.status(500).json({ message: "Failed to start checkout", detail: err?.message });
+    }
+});
+exports.subscriptionsRouter.post("/confirm", auth_1.authenticate, async (req, res) => {
+    try {
+        const { session_id } = req.body ?? {};
+        if (!session_id) {
+            return res.status(400).json({ message: "Missing session_id" });
+        }
+        if (!process.env.STRIPE_SECRET_KEY) {
+            return res.status(500).json({ message: "Stripe secret key not configured" });
+        }
+        const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+        const session = await stripe.checkout.sessions.retrieve(session_id, {
+            expand: ["subscription"],
+        });
+        if (!session) {
+            return res.status(404).json({ message: "Checkout session not found" });
+        }
+        const metadata = session.metadata || {};
+        const planCode = metadata.plan_code;
+        const organizationId = metadata.organization_id ||
+            session.client_reference_id ||
+            (typeof session.subscription === "object"
+                ? session.subscription?.metadata?.organization_id
+                : undefined);
+        if (!planCode || !["starter", "pro", "business"].includes(planCode)) {
+            return res.status(400).json({ message: "Session missing plan information" });
+        }
+        if (!organizationId) {
+            return res.status(400).json({ message: "Session missing organization identifier" });
+        }
+        const subscription = typeof session.subscription === "object"
+            ? session.subscription
+            : session.subscription
+                ? await stripe.subscriptions.retrieve(session.subscription)
+                : null;
+        const { organization_id: requesterOrgId } = req.user;
+        if (requesterOrgId && requesterOrgId !== organizationId) {
+            return res.status(403).json({ message: "Session does not belong to this organization" });
+        }
+        await (0, stripeWebhook_1.applyPlanToOrganization)(organizationId, planCode, {
+            stripeCustomerId: typeof session.customer === "string" ? session.customer : null,
+            stripeSubscriptionId: typeof session.subscription === "string"
+                ? session.subscription
+                : subscription?.id ?? null,
+            currentPeriodStart: subscription?.current_period_start ?? null,
+            currentPeriodEnd: subscription?.current_period_end ?? null,
+        });
+        res.json({
+            status: "updated",
+            plan: planCode,
+            organization_id: organizationId,
+        });
+    }
+    catch (err) {
+        console.error("Checkout confirmation failed:", err);
+        res.status(500).json({ message: "Failed to confirm subscription", detail: err?.message });
+    }
+});
+//# sourceMappingURL=subscriptions.js.map

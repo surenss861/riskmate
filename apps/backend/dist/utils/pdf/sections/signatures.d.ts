@@ -1,0 +1,2 @@
+export declare function renderSignaturesAndCompliance(doc: PDFKit.PDFDocument, pageWidth: number, pageHeight: number, margin: number, safeAddPage: (estimatedPages?: number) => void, estimatedTotalPages: number): void;
+//# sourceMappingURL=signatures.d.ts.map

@@ -59,6 +59,20 @@ function formatTime(dateString: string): string {
   }
 }
 
+function formatUTCTime(dateString: string): string {
+  try {
+    const date = new Date(dateString)
+    return date.toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: 'UTC',
+      hour12: false,
+    }) + ' UTC'
+  } catch {
+    return ''
+  }
+}
+
 function getRiskColor(level: string | null): string {
   if (!level) return 'text-green-400'
   const lower = level.toLowerCase()
@@ -89,6 +103,15 @@ export function ReportView({
   
   const [selectedImage, setSelectedImage] = useState<{ url: string; alt: string } | null>(null)
 
+  // Get most recent audit entry for system timestamp (sorted by created_at descending)
+  const sortedAudit = [...audit].sort((a, b) => 
+    new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  )
+  const lastSystemUpdate = sortedAudit.length > 0 ? sortedAudit[0].created_at : null
+  
+  // Check if job is archived or completed (for immutable messaging)
+  const isArchivedOrCompleted = job.status === 'archived' || job.status === 'completed'
+
   return (
     <>
       <ImageModal
@@ -101,8 +124,24 @@ export function ReportView({
       {/* Header Section */}
       <div className="space-y-6">
         <div>
-          <h1 className="text-4xl font-bold text-white mb-2">{job.job_type}</h1>
-          <p className="text-white/60 text-lg">{job.location}</p>
+          <div className="flex items-start justify-between">
+            <div>
+              <h1 className="text-4xl font-bold text-white mb-2">{job.job_type}</h1>
+              <p className="text-white/60 text-lg">{job.location}</p>
+            </div>
+            {lastSystemUpdate && (
+              <div className="text-right">
+                <p className="text-xs text-white/40">
+                  Last system update: {formatUTCTime(lastSystemUpdate)}
+                </p>
+              </div>
+            )}
+          </div>
+          {isArchivedOrCompleted && (
+            <p className="text-xs text-white/40 mt-3 italic">
+              This page is immutable once archived
+            </p>
+          )}
         </div>
 
         {/* Quick Stats */}
@@ -147,15 +186,22 @@ export function ReportView({
 
       {/* Actions */}
       {!readOnly && (
-        <div className="flex gap-3">
+        <div className="space-y-3">
+          <div className="flex gap-3 items-center">
+            {onExport && (
+              <button
+                onClick={onExport}
+                disabled={exportInProgress}
+                className="rounded-lg bg-[#F97316] px-6 py-3 text-black font-semibold hover:bg-[#FB923C] disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {exportInProgress ? 'Exporting...' : 'Export PDF'}
+              </button>
+            )}
+          </div>
           {onExport && (
-            <button
-              onClick={onExport}
-              disabled={exportInProgress}
-              className="rounded-lg bg-[#F97316] px-6 py-3 text-black font-semibold hover:bg-[#FB923C] disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {exportInProgress ? 'Exporting...' : 'Export PDF'}
-            </button>
+            <p className="text-xs text-white/40">
+              This view is exportable for audits
+            </p>
           )}
         </div>
       )}

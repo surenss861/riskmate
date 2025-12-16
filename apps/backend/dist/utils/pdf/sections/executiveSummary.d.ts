@@ -1,0 +1,3 @@
+import type { JobData, RiskScoreData, MitigationItem, JobDocumentAsset } from '../types';
+export declare function renderExecutiveSummary(doc: PDFKit.PDFDocument, job: JobData, riskScore: RiskScoreData | null, mitigationItems: MitigationItem[], photos: JobDocumentAsset[], pageWidth: number, margin: number, safeAddPage: (estimatedPages?: number) => void, estimatedTotalPages: number): void;
+//# sourceMappingURL=executiveSummary.d.ts.map

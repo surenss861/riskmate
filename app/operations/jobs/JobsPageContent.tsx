@@ -1,12 +1,16 @@
 'use client'
 
-import React, { useRef } from 'react'
+import React, { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { DashboardNavbar } from '@/components/dashboard/DashboardNavbar'
 import { DataGrid } from '@/components/dashboard/DataGrid'
+import { ConfirmationModal } from '@/components/dashboard/ConfirmationModal'
+import { Toast } from '@/components/dashboard/Toast'
+import { jobsApi } from '@/lib/api'
 import { typography, buttonStyles, spacing } from '@/lib/styles/design-system'
+import { hasPermission } from '@/lib/utils/permissions'
 
 interface JobsPageContentProps {
   user: any
@@ -28,6 +32,9 @@ interface JobsPageContentProps {
   getRiskColor: (riskLevel: string | null) => string
   getStatusColor: (status: string) => string
   formatDate: (dateString: string) => string
+  userRole: 'owner' | 'admin' | 'member'
+  onJobArchived: () => void
+  onJobDeleted: () => void
 }
 
 export function JobsPageContentView(props: JobsPageContentProps) {
@@ -35,6 +42,22 @@ export function JobsPageContentView(props: JobsPageContentProps) {
   const prefetchTimeouts = useRef<Map<string, NodeJS.Timeout>>(new Map())
   const activePrefetches = useRef<Set<string>>(new Set())
   const MAX_CONCURRENT_PREFETCHES = 2
+  
+  const [archiveModal, setArchiveModal] = useState<{ isOpen: boolean; jobId: string | null; jobName: string }>({
+    isOpen: false,
+    jobId: null,
+    jobName: '',
+  })
+  const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; jobId: string | null; jobName: string }>({
+    isOpen: false,
+    jobId: null,
+    jobName: '',
+  })
+  const [loading, setLoading] = useState(false)
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+  
+  const canArchive = hasPermission(props.userRole, 'jobs.close')
+  const canDelete = hasPermission(props.userRole, 'jobs.delete')
 
   const handleJobHover = (jobId: string) => {
     // Clear any existing timeout for this job
@@ -70,6 +93,59 @@ export function JobsPageContentView(props: JobsPageContentProps) {
     if (timeout) {
       clearTimeout(timeout)
       prefetchTimeouts.current.delete(jobId)
+    }
+  }
+  
+  const handleArchive = async (jobId: string, jobName: string) => {
+    setArchiveModal({ isOpen: true, jobId, jobName })
+  }
+  
+  const confirmArchive = async () => {
+    if (!archiveModal.jobId) return
+    
+    setLoading(true)
+    try {
+      await jobsApi.archive(archiveModal.jobId)
+      setToast({ message: 'Job archived successfully', type: 'success' })
+      setArchiveModal({ isOpen: false, jobId: null, jobName: '' })
+      props.onJobArchived()
+    } catch (err: any) {
+      setToast({ 
+        message: err?.message || 'Failed to archive job', 
+        type: 'error' 
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+  
+  const handleDelete = async (jobId: string, jobName: string) => {
+    setDeleteModal({ isOpen: true, jobId, jobName })
+  }
+  
+  const confirmDelete = async () => {
+    if (!deleteModal.jobId) return
+    
+    setLoading(true)
+    try {
+      await jobsApi.delete(deleteModal.jobId)
+      setToast({ message: 'Job deleted successfully', type: 'success' })
+      setDeleteModal({ isOpen: false, jobId: null, jobName: '' })
+      props.onJobDeleted()
+    } catch (err: any) {
+      const errorMessage = err?.message || 'Failed to delete job'
+      // Handle specific error codes
+      if (err?.code === 'NOT_ELIGIBLE_FOR_DELETE' || 
+          err?.code === 'HAS_AUDIT_HISTORY' || 
+          err?.code === 'HAS_EVIDENCE' || 
+          err?.code === 'HAS_RISK_ASSESSMENT' || 
+          err?.code === 'HAS_REPORTS') {
+        setToast({ message: errorMessage, type: 'error' })
+      } else {
+        setToast({ message: errorMessage, type: 'error' })
+      }
+    } finally {
+      setLoading(false)
     }
   }
   
@@ -266,6 +342,35 @@ export function JobsPageContentView(props: JobsPageContentProps) {
                 accessor: (job: any) => props.formatDate(job.created_at),
                 sortable: true,
               },
+              ...(canArchive || canDelete ? [{
+                id: 'actions',
+                header: 'Actions',
+                accessor: () => '',
+                sortable: false,
+                width: '120px',
+                render: (_: any, job: any) => (
+                  <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                    {canArchive && job.status !== 'archived' && (
+                      <button
+                        onClick={() => handleArchive(job.id, job.client_name)}
+                        className="px-3 py-1 text-xs text-white/70 hover:text-white border border-white/10 rounded hover:bg-white/5 transition-colors"
+                        title="Archive job (preserves records for audit and compliance)"
+                      >
+                        Archive
+                      </button>
+                    )}
+                    {canDelete && job.status === 'draft' && (
+                      <button
+                        onClick={() => handleDelete(job.id, job.client_name)}
+                        className="px-3 py-1 text-xs text-red-400/70 hover:text-red-400 border border-red-500/20 rounded hover:bg-red-500/10 transition-colors"
+                        title="Delete job (available only for draft jobs without audit data)"
+                      >
+                        Delete
+                      </button>
+                    )}
+                  </div>
+                ),
+              }] : []),
             ]}
             onRowClick={(job: any) => router.push(`/operations/jobs/${job.id}`)}
             onRowHover={(job: any) => handleJobHover(job.id)}
@@ -301,6 +406,42 @@ export function JobsPageContentView(props: JobsPageContentProps) {
           </div>
         )}
       </div>
+      
+      {/* Archive Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={archiveModal.isOpen}
+        title="Archive Job"
+        message={`Archive "${archiveModal.jobName}"? This preserves records for audit and compliance. The job will become read-only.`}
+        confirmLabel="Archive"
+        cancelLabel="Cancel"
+        variant="default"
+        loading={loading}
+        onConfirm={confirmArchive}
+        onCancel={() => setArchiveModal({ isOpen: false, jobId: null, jobName: '' })}
+      />
+      
+      {/* Delete Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={deleteModal.isOpen}
+        title="Delete Job"
+        message={`Permanently delete "${deleteModal.jobName}"? This action cannot be undone. Only draft jobs without audit data can be deleted.`}
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        variant="danger"
+        loading={loading}
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteModal({ isOpen: false, jobId: null, jobName: '' })}
+      />
+      
+      {/* Toast Notification */}
+      {toast && (
+        <Toast
+          isOpen={true}
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
     </div>
   )
 }

@@ -25,6 +25,8 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
       .from("jobs")
       .select("id, client_name, job_type, location, status, risk_score, risk_level, created_at, updated_at")
       .eq("organization_id", organization_id)
+      .is("archived_at", null)
+      .is("deleted_at", null)
       .order("created_at", { ascending: false })
       .range(offset, offset + limitNum - 1);
 
@@ -44,7 +46,9 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
     let countQuery = supabase
       .from("jobs")
       .select("*", { count: "exact", head: true })
-      .eq("organization_id", organization_id);
+      .eq("organization_id", organization_id)
+      .is("archived_at", null)
+      .is("deleted_at", null);
 
     if (status) {
       countQuery = countQuery.eq("status", status);
@@ -735,6 +739,219 @@ jobsRouter.get("/:id/audit", authenticate as unknown as express.RequestHandler, 
   } catch (err: any) {
     console.error("Audit fetch failed:", err);
     res.status(500).json({ message: "Failed to fetch audit log" });
+  }
+});
+
+// POST /api/jobs/:id/archive
+// Archives a job (soft delete, read-only, preserves for audit)
+jobsRouter.post("/:id/archive", authenticate as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
+  const authReq = req as AuthenticatedRequest;
+  try {
+    const { id: userId, organization_id } = authReq.user;
+    const jobId = authReq.params.id;
+
+    // Get job and verify ownership
+    const { data: job, error: jobError } = await supabase
+      .from("jobs")
+      .select("id, status, archived_at, deleted_at")
+      .eq("id", jobId)
+      .eq("organization_id", organization_id)
+      .single();
+
+    if (jobError || !job) {
+      return res.status(404).json({ message: "Job not found" });
+    }
+
+    if (job.archived_at) {
+      return res.status(400).json({ message: "Job is already archived" });
+    }
+
+    if (job.deleted_at) {
+      return res.status(400).json({ message: "Job has been deleted" });
+    }
+
+    // Archive the job
+    const { error: updateError } = await supabase
+      .from("jobs")
+      .update({
+        status: "archived",
+        archived_at: new Date().toISOString(),
+      })
+      .eq("id", jobId);
+
+    if (updateError) {
+      throw updateError;
+    }
+
+    // Log archive event
+    await recordAuditLog({
+      organizationId: organization_id,
+      actorId: userId,
+      eventName: "job.archived",
+      targetType: "job",
+      targetId: jobId,
+      metadata: {
+        previous_status: job.status,
+      },
+    });
+
+    res.json({
+      data: {
+        id: jobId,
+        archived_at: new Date().toISOString(),
+        status: "archived",
+      },
+    });
+  } catch (err: any) {
+    console.error("Job archive failed:", err);
+    res.status(500).json({ message: "Failed to archive job" });
+  }
+});
+
+// DELETE /api/jobs/:id
+// Hard deletes a job (admin-only, strict eligibility checks)
+jobsRouter.delete("/:id", authenticate as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
+  const authReq = req as AuthenticatedRequest;
+  try {
+    const { id: userId, organization_id, role } = authReq.user;
+    const jobId = authReq.params.id;
+
+    // Only owners can delete jobs
+    if (role !== "owner") {
+      return res.status(403).json({ message: "Only organization owners can delete jobs" });
+    }
+
+    // Get job and verify ownership
+    const { data: job, error: jobError } = await supabase
+      .from("jobs")
+      .select("id, status, archived_at, deleted_at")
+      .eq("id", jobId)
+      .eq("organization_id", organization_id)
+      .single();
+
+    if (jobError || !job) {
+      return res.status(404).json({ message: "Job not found" });
+    }
+
+    if (job.deleted_at) {
+      return res.status(400).json({ message: "Job has already been deleted" });
+    }
+
+    // Strict eligibility checks
+    if (job.status !== "draft") {
+      return res.status(400).json({
+        message: "Only draft jobs can be deleted",
+        code: "NOT_ELIGIBLE_FOR_DELETE",
+      });
+    }
+
+    // Check for audit logs
+    const { data: auditLogs, error: auditError } = await supabase
+      .from("audit_logs")
+      .select("id")
+      .eq("organization_id", organization_id)
+      .or(`target_id.eq.${jobId},metadata->>job_id.eq.${jobId}`)
+      .limit(1);
+
+    if (auditError) {
+      console.error("Audit check failed:", auditError);
+    }
+
+    if (auditLogs && auditLogs.length > 0) {
+      return res.status(400).json({
+        message: "Jobs with audit history cannot be deleted",
+        code: "HAS_AUDIT_HISTORY",
+      });
+    }
+
+    // Check for evidence/documents
+    const { data: documents, error: docError } = await supabase
+      .from("documents")
+      .select("id")
+      .eq("job_id", jobId)
+      .limit(1);
+
+    if (docError) {
+      console.error("Document check failed:", docError);
+    }
+
+    if (documents && documents.length > 0) {
+      return res.status(400).json({
+        message: "Jobs with uploaded evidence cannot be deleted",
+        code: "HAS_EVIDENCE",
+      });
+    }
+
+    // Check for risk assessments
+    const { data: riskScore, error: riskError } = await supabase
+      .from("job_risk_scores")
+      .select("id")
+      .eq("job_id", jobId)
+      .limit(1);
+
+    if (riskError) {
+      console.error("Risk score check failed:", riskError);
+    }
+
+    if (riskScore && riskScore.length > 0) {
+      return res.status(400).json({
+        message: "Jobs with finalized risk assessments cannot be deleted",
+        code: "HAS_RISK_ASSESSMENT",
+      });
+    }
+
+    // Check for generated reports
+    const { data: reports, error: reportError } = await supabase
+      .from("reports")
+      .select("id")
+      .eq("job_id", jobId)
+      .limit(1);
+
+    if (reportError) {
+      console.error("Report check failed:", reportError);
+    }
+
+    if (reports && reports.length > 0) {
+      return res.status(400).json({
+        message: "Jobs with generated reports cannot be deleted",
+        code: "HAS_REPORTS",
+      });
+    }
+
+    // Soft delete the job
+    const { error: deleteError } = await supabase
+      .from("jobs")
+      .update({
+        deleted_at: new Date().toISOString(),
+      })
+      .eq("id", jobId);
+
+    if (deleteError) {
+      throw deleteError;
+    }
+
+    // Log deletion event
+    await recordAuditLog({
+      organizationId: organization_id,
+      actorId: userId,
+      eventName: "job.deleted",
+      targetType: "job",
+      targetId: jobId,
+      metadata: {
+        previous_status: job.status,
+        deletion_reason: "admin_hard_delete",
+      },
+    });
+
+    res.json({
+      data: {
+        id: jobId,
+        deleted_at: new Date().toISOString(),
+      },
+    });
+  } catch (err: any) {
+    console.error("Job deletion failed:", err);
+    res.status(500).json({ message: "Failed to delete job" });
   }
 });
 
