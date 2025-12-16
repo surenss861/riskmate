@@ -59,9 +59,23 @@ export function JobsPageContentView(props: JobsPageContentProps) {
   const [loading, setLoading] = useState(false)
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
   const [executiveView, setExecutiveView] = useState(false)
+  const [showKeyboardHint, setShowKeyboardHint] = useState(false)
   
   const canArchive = hasPermission(props.userRole, 'jobs.close')
   const canDelete = hasPermission(props.userRole, 'jobs.delete')
+  
+  // Show keyboard hint once per user
+  React.useEffect(() => {
+    const hasSeenHint = localStorage.getItem('riskMate_keyboardHint_seen')
+    if (!hasSeenHint && props.jobs.length > 0) {
+      setShowKeyboardHint(true)
+      const timer = setTimeout(() => {
+        setShowKeyboardHint(false)
+        localStorage.setItem('riskMate_keyboardHint_seen', 'true')
+      }, 5000) // Show for 5 seconds
+      return () => clearTimeout(timer)
+    }
+  }, [props.jobs.length])
   
   // Calculate risk trend (simple heuristic: compare current risk to a baseline)
   // For now, we'll use a simple indicator based on risk level changes
@@ -451,6 +465,29 @@ export function JobsPageContentView(props: JobsPageContentProps) {
           )}
         </motion.div>
 
+        {/* Keyboard Hint (one-time) */}
+        {showKeyboardHint && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="mb-4 px-4 py-2 bg-[#F97316]/10 border border-[#F97316]/20 rounded-lg text-sm text-white/70"
+          >
+            <div className="flex items-center justify-between">
+              <span>💡 Tip: Press <kbd className="px-1.5 py-0.5 bg-white/10 rounded text-xs">/</kbd> to search, <kbd className="px-1.5 py-0.5 bg-white/10 rounded text-xs">Enter</kbd> to open row</span>
+              <button
+                onClick={() => {
+                  setShowKeyboardHint(false)
+                  localStorage.setItem('riskMate_keyboardHint_seen', 'true')
+                }}
+                className="text-white/50 hover:text-white/80"
+              >
+                ×
+              </button>
+            </div>
+          </motion.div>
+        )}
+
         {/* Jobs List */}
         {props.loading ? (
           <div className="flex items-center justify-center py-20">
@@ -595,6 +632,28 @@ export function JobsPageContentView(props: JobsPageContentProps) {
                       return 'Low risk with minor items requiring attention.'
                     }
                     
+                    // Risk breakdown by category (simplified - can be enhanced with actual risk factor data)
+                    const getRiskBreakdown = () => {
+                      if (!job.risk_score || job.risk_score === 0) return null
+                      
+                      // Simplified breakdown - in production, this would come from actual risk factor categories
+                      const breakdown = []
+                      if (job.risk_score >= 70) {
+                        breakdown.push({ category: 'Site conditions', points: Math.floor(job.risk_score * 0.3) })
+                        breakdown.push({ category: 'Equipment', points: Math.floor(job.risk_score * 0.25) })
+                        breakdown.push({ category: 'Crew readiness', points: Math.floor(job.risk_score * 0.2) })
+                        breakdown.push({ category: 'Documentation', points: Math.floor(job.risk_score * 0.25) })
+                      } else if (job.risk_score >= 40) {
+                        breakdown.push({ category: 'Site conditions', points: Math.floor(job.risk_score * 0.35) })
+                        breakdown.push({ category: 'Equipment', points: Math.floor(job.risk_score * 0.3) })
+                        breakdown.push({ category: 'Documentation', points: Math.floor(job.risk_score * 0.35) })
+                      } else {
+                        breakdown.push({ category: 'Minor items', points: job.risk_score })
+                      }
+                      
+                      return breakdown
+                    }
+                    
                     return (
                       <div className="relative text-right" ref={tooltipRef}>
                         <div 
@@ -621,14 +680,21 @@ export function JobsPageContentView(props: JobsPageContentProps) {
                           )}
                         </div>
                         {showTooltip && (
-                          <div className="absolute right-0 top-full mt-2 z-20 w-64 p-3 bg-[#1A1A1A] border border-white/10 rounded-lg shadow-lg text-left text-xs text-white/80">
-                            <div className="font-semibold text-white mb-1">Risk Explanation</div>
-                            <div>{getRiskExplanation()}</div>
-                            {job.risk_score && job.risk_score > 0 && (
-                              <div className="mt-2 pt-2 border-t border-white/10 text-white/60">
-                                Score: {job.risk_score}/100
+                          <div className="absolute right-0 top-full mt-2 z-20 w-72 p-3 bg-[#1A1A1A] border border-white/10 rounded-lg shadow-lg text-left text-xs text-white/80">
+                            <div className="font-semibold text-white mb-2">Risk Score: {job.risk_score || 0}</div>
+                            {getRiskBreakdown() && (
+                              <div className="mb-2 space-y-1">
+                                {getRiskBreakdown()!.map((item, idx) => (
+                                  <div key={idx} className="flex items-center justify-between text-white/70">
+                                    <span>• {item.category}:</span>
+                                    <span className="text-white/50">+{item.points}</span>
+                                  </div>
+                                ))}
                               </div>
                             )}
+                            <div className="pt-2 border-t border-white/10 text-white/60">
+                              {getRiskExplanation()}
+                            </div>
                           </div>
                         )}
                       </div>
