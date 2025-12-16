@@ -442,6 +442,77 @@ describe('GET /api/jobs', () => {
         expect(offsetData._meta?.cursor_supported).toBe(false)
       }
     })
+
+    it('should include request_id in all responses', async () => {
+      const response = await fetch(`${API_URL}/api/jobs?limit=10`, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+        },
+      })
+      const data = await response.json()
+      
+      expect(data.request_id).toBeDefined()
+      expect(typeof data.request_id).toBe('string')
+      expect(data.request_id.length).toBeGreaterThan(0)
+      
+      // Verify header is also set
+      const requestIdHeader = response.headers.get('X-Request-ID')
+      expect(requestIdHeader).toBeDefined()
+      expect(requestIdHeader).toBe(data.request_id)
+    })
+
+    it('should simulate client fallback behavior end-to-end', async () => {
+      // Step 1: Call with cursor + status_asc → gets 400 with allowed modes
+      const errorResponse = await fetch(`${API_URL}/api/jobs?limit=10&sort=status_asc&cursor=test`, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+        },
+      })
+      const errorData = await errorResponse.json()
+      
+      expect(errorResponse.status).toBe(400)
+      expect(errorData.code).toBe('CURSOR_NOT_SUPPORTED_FOR_SORT')
+      expect(errorData.allowed_pagination_modes).toEqual(['offset'])
+      expect(errorData.request_id).toBeDefined()
+      
+      // Step 2: Auto-fallback to offset → returns 200 with data
+      const fallbackResponse = await fetch(`${API_URL}/api/jobs?limit=10&sort=status_asc&page=1&debug=1`, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+        },
+      })
+      const fallbackData = await fallbackResponse.json()
+      
+      expect(fallbackResponse.status).toBe(200)
+      expect(fallbackData.data).toBeDefined()
+      expect(Array.isArray(fallbackData.data)).toBe(true)
+      
+      // Step 3: Assert: no duplicates, no missing, and _meta.pagination_mode === "offset" (dev only)
+      if (process.env.NODE_ENV === 'development') {
+        expect(fallbackData._meta?.pagination_mode).toBe('offset')
+        expect(fallbackData._meta?.cursor_supported).toBe(false)
+      }
+      
+      // Verify no duplicates (if we have multiple pages)
+      if (fallbackData.data.length > 0) {
+        const ids = fallbackData.data.map((j: any) => j.id)
+        const uniqueIds = new Set(ids)
+        expect(uniqueIds.size).toBe(ids.length) // No duplicates
+      }
+      
+      // Verify deterministic status ordering
+      const statusOrder = ['draft', 'in_progress', 'completed', 'archived', 'cancelled', 'on_hold']
+      const getStatusOrder = (status: string) => {
+        const index = statusOrder.indexOf(status)
+        return index >= 0 ? index : statusOrder.length
+      }
+      
+      for (let i = 0; i < fallbackData.data.length - 1; i++) {
+        const currentOrder = getStatusOrder(fallbackData.data[i].status)
+        const nextOrder = getStatusOrder(fallbackData.data[i + 1].status)
+        expect(currentOrder).toBeLessThanOrEqual(nextOrder)
+      }
+    })
   })
 })
 

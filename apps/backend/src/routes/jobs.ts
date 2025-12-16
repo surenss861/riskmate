@@ -6,6 +6,7 @@ import { calculateRiskScore, generateMitigationItems } from "../utils/riskScorin
 import { notifyHighRiskJob } from "../services/notifications";
 import { buildJobReport } from "../utils/jobReport";
 import { enforceJobLimit } from "../middleware/limits";
+import { RequestWithId } from "../middleware/requestId";
 
 export const jobsRouter = express.Router();
 
@@ -14,7 +15,7 @@ export const jobsRouter = express.Router();
 const cursorMisuseLogs = new Map<string, number>();
 const CURSOR_MISUSE_LOG_TTL_MS = 60 * 60 * 1000; // 1 hour
 
-const logCursorMisuse = (organizationId: string, sortMode: string) => {
+const logCursorMisuse = (organizationId: string, sortMode: string): number => {
   const key = `${organizationId}:${sortMode}`;
   const lastLogged = cursorMisuseLogs.get(key);
   const now = Date.now();
@@ -33,12 +34,15 @@ const logCursorMisuse = (organizationId: string, sortMode: string) => {
       }
     }
   }
+  
+  return lastLogged || 0;
 };
 
 // GET /api/jobs
 // Returns paginated list of jobs for organization
 jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
-  const authReq = req as AuthenticatedRequest;
+  const authReq = req as AuthenticatedRequest & RequestWithId;
+  const requestId = authReq.requestId || 'unknown';
   try {
     const { organization_id } = authReq.user;
     const { page = 1, limit = 20, status, risk_level, include_archived, sort } = authReq.query;
@@ -81,7 +85,8 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
     // Hardening: Explicitly reject cursor param when sort=status_* (prevents misuse)
     if (cursor && useStatusOrdering) {
       // Log misuse once per organization per hour (helps identify client misconfigurations)
-      logCursorMisuse(organization_id, sortMode);
+      const lastLogged = logCursorMisuse(organization_id, sortMode);
+      const retryAfterSeconds = lastLogged ? Math.ceil((CURSOR_MISUSE_LOG_TTL_MS - (Date.now() - lastLogged)) / 1000) : 0;
       
       return res.status(400).json({
         message: "Cursor pagination is not supported for status sorting. Use offset pagination (page parameter) instead.",
@@ -90,6 +95,8 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
         reason: "Status sorting uses in-memory ordering which is incompatible with cursor pagination",
         documentation_url: "/docs/pagination#status-sorting",
         allowed_pagination_modes: ["offset"],
+        request_id: requestId,
+        ...(retryAfterSeconds > 0 && { retry_after_seconds: retryAfterSeconds }),
       });
     }
     
@@ -376,6 +383,7 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
         cursor: nextCursor || undefined,
         hasMore: nextCursor !== null,
       },
+      request_id: requestId,
       // Dev-only: indicate source of truth and pagination mode (requires both NODE_ENV and debug flag)
       ...(process.env.NODE_ENV === 'development' && authReq.query.debug === '1' && {
         _meta: {

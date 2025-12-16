@@ -10,6 +10,7 @@ import { analyticsRouter } from "./routes/analytics";
 import { legalRouter } from "./routes/legal";
 import { notificationsRouter } from "./routes/notifications";
 import { teamRouter } from "./routes/team";
+import { requestIdMiddleware, RequestWithId } from "./middleware/requestId";
 
 const app = express();
 const PORT = process.env.PORT || 5173;
@@ -70,6 +71,9 @@ app.use((req, res, next) => {
   next();
 });
 
+// Request ID middleware (must be early in the chain)
+app.use(requestIdMiddleware);
+
 app.use(cors(corsOptions));
 app.options("*", cors(corsOptions));
 
@@ -104,8 +108,10 @@ app.use((req, res) => {
 // Error handler
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   console.error("Error:", err);
+  const requestId = (req as RequestWithId).requestId || 'unknown';
   res.status(err.status || 500).json({
     message: err.message || "Internal server error",
+    request_id: requestId,
   });
 });
 
