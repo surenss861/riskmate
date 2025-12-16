@@ -15,8 +15,20 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
   const authReq = req as AuthenticatedRequest;
   try {
     const { organization_id } = authReq.user;
-    const { page = 1, limit = 20, status, risk_level, include_archived } = authReq.query;
+    const { page = 1, limit = 20, status, risk_level, include_archived, sort } = authReq.query;
     const includeArchived = include_archived === 'true' || include_archived === '1';
+    
+    // Parse sort parameter (e.g., "risk_desc", "created_desc", "status_asc")
+    let sortField = 'created_at';
+    let sortDirection: 'asc' | 'desc' = 'desc';
+    if (sort) {
+      const sortStr = String(sort);
+      if (sortStr.includes('_')) {
+        const [field, dir] = sortStr.split('_');
+        sortField = field === 'risk' ? 'risk_score' : field === 'created' ? 'created_at' : field === 'status' ? 'status' : 'created_at';
+        sortDirection = dir === 'asc' ? 'asc' : 'desc';
+      }
+    }
 
     const pageNum = parseInt(page as string, 10);
     const limitNum = parseInt(limit as string, 10);
@@ -27,7 +39,7 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
       .select("id, client_name, job_type, location, status, risk_score, risk_level, created_at, updated_at, applied_template_id, applied_template_type")
       .eq("organization_id", organization_id)
       .is("deleted_at", null) // Always exclude deleted
-      .order("created_at", { ascending: false })
+      .order(sortField, { ascending: sortDirection === 'asc' })
       .range(offset, offset + limitNum - 1);
     
     // Only exclude archived if not explicitly including them
@@ -52,7 +64,7 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
         .from("jobs")
         .select("id, client_name, job_type, location, status, risk_score, risk_level, created_at, updated_at, applied_template_id, applied_template_type")
         .eq("organization_id", organization_id)
-        .order("created_at", { ascending: false })
+        .order(sortField, { ascending: sortDirection === 'asc' })
         .range(offset, offset + limitNum - 1);
       
       // Only exclude archived if not explicitly including them (fallback mode)
@@ -130,8 +142,8 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
         total: count || 0,
         totalPages: Math.ceil((count || 0) / limitNum),
       },
-      // Dev-only: indicate source of truth
-      ...(process.env.NODE_ENV === 'development' && {
+      // Dev-only: indicate source of truth (requires both NODE_ENV and debug flag)
+      ...(process.env.NODE_ENV === 'development' && authReq.query.debug === '1' && {
         _meta: {
           source: 'authenticated_api',
           include_archived: includeArchived,

@@ -111,6 +111,8 @@ export const jobsApi = {
     status?: string; 
     risk_level?: string;
     include_archived?: boolean;
+    sort?: string;
+    debug?: boolean;
   }) => {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.set('page', params.page.toString());
@@ -118,6 +120,10 @@ export const jobsApi = {
     if (params?.status) queryParams.set('status', params.status);
     if (params?.risk_level) queryParams.set('risk_level', params.risk_level);
     if (params?.include_archived) queryParams.set('include_archived', 'true');
+    if (params?.sort) queryParams.set('sort', params.sort);
+    if (params?.debug && process.env.NODE_ENV === 'development') {
+      queryParams.set('debug', '1');
+    }
     
     return apiRequest<{ 
       data: any[]; 

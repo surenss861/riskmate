@@ -35,6 +35,9 @@ interface JobsPageContentProps {
   userRole: 'owner' | 'admin' | 'member'
   onJobArchived: () => void
   onJobDeleted: () => void
+  lastUpdated?: string
+  sourceIndicator?: string
+  mutateData?: { mutate: any; currentData: any }
 }
 
 export function JobsPageContentView(props: JobsPageContentProps) {
@@ -104,12 +107,28 @@ export function JobsPageContentView(props: JobsPageContentProps) {
     if (!archiveModal.jobId) return
     
     setLoading(true)
+    
+    // Optimistic update: remove job from list immediately
+    if (props.mutateData?.currentData) {
+      const optimisticData = {
+        ...props.mutateData.currentData,
+        data: props.mutateData.currentData.data.filter((job: any) => job.id !== archiveModal.jobId),
+      }
+      props.mutateData.mutate(optimisticData, false) // Update cache optimistically, don't revalidate yet
+    }
+    
     try {
+      // Perform archive
       await jobsApi.archive(archiveModal.jobId)
+      
+      // Revalidate to get fresh data
+      props.onJobArchived()
+      
       setToast({ message: 'Job archived successfully', type: 'success' })
       setArchiveModal({ isOpen: false, jobId: null, jobName: '' })
-      props.onJobArchived()
     } catch (err: any) {
+      // On error, revalidate to restore correct state
+      props.onJobArchived()
       setToast({ 
         message: err?.message || 'Failed to archive job', 
         type: 'error' 
@@ -127,12 +146,28 @@ export function JobsPageContentView(props: JobsPageContentProps) {
     if (!deleteModal.jobId) return
     
     setLoading(true)
+    
+    // Optimistic update: remove job from list immediately
+    if (props.mutateData?.currentData) {
+      const optimisticData = {
+        ...props.mutateData.currentData,
+        data: props.mutateData.currentData.data.filter((job: any) => job.id !== deleteModal.jobId),
+      }
+      props.mutateData.mutate(optimisticData, false) // Update cache optimistically, don't revalidate yet
+    }
+    
     try {
+      // Perform delete
       await jobsApi.delete(deleteModal.jobId)
+      
+      // Revalidate to get fresh data
+      props.onJobDeleted()
+      
       setToast({ message: 'Job deleted successfully', type: 'success' })
       setDeleteModal({ isOpen: false, jobId: null, jobName: '' })
-      props.onJobDeleted()
     } catch (err: any) {
+      // On error, revalidate to restore correct state
+      props.onJobDeleted()
       const errorMessage = err?.message || 'Failed to delete job'
       // Handle specific error codes
       if (err?.code === 'NOT_ELIGIBLE_FOR_DELETE' || 

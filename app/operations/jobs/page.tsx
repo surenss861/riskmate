@@ -120,9 +120,15 @@ const JobsPageContent = () => {
       risk_level: filterRiskLevel || undefined,
     })
 
-    // Log source of truth in dev mode
+    // Log source of truth in dev mode (only if debug flag is set)
     if (process.env.NODE_ENV === 'development' && response._meta) {
       console.log('[Jobs API] Source of truth:', response._meta)
+    }
+    
+    // Track last update time for roster header
+    if (response.data && response.data.length > 0) {
+      // Store in a way that can be accessed by the view component
+      (response as any).lastUpdated = new Date().toISOString()
     }
 
     return response
@@ -142,11 +148,28 @@ const JobsPageContent = () => {
     }
   )
 
+  // Track last updated time and source indicator
+  const [lastUpdated, setLastUpdated] = useState<string | null>(null)
+  const [sourceIndicator, setSourceIndicator] = useState<string>('')
+
   // Process response data
   useEffect(() => {
     if (!response) return
     
     const jobsData = response.data || []
+    
+    // Verify template fields exist (null is valid, undefined is not)
+    // This ensures all jobs have the fields, even if they're null
+    jobsData.forEach((job: any) => {
+      if (!('applied_template_id' in job)) {
+        console.warn('Job missing applied_template_id field:', job.id)
+        job.applied_template_id = null // Ensure field exists
+      }
+      if (!('applied_template_type' in job)) {
+        console.warn('Job missing applied_template_type field:', job.id)
+        job.applied_template_type = null // Ensure field exists
+      }
+    })
     
     // Apply template filters client-side (since API doesn't support them yet)
     let filteredJobs = jobsData
@@ -172,6 +195,20 @@ const JobsPageContent = () => {
     // Calculate total pages from API pagination or filtered count
     const totalCount = response.pagination?.total || filteredJobs.length
     setTotalPages(Math.ceil(totalCount / 50))
+    
+    // Track last updated time
+    if ((response as any).lastUpdated) {
+      setLastUpdated((response as any).lastUpdated)
+    } else {
+      setLastUpdated(new Date().toISOString())
+    }
+    
+    // Set source indicator (dev only or subtle)
+    if (process.env.NODE_ENV === 'development' && response._meta) {
+      setSourceIndicator('API')
+    } else {
+      setSourceIndicator('')
+    }
   }, [response, filterTemplateSource, filterTemplateId])
 
   // Handle errors
@@ -191,10 +228,9 @@ const JobsPageContent = () => {
   const loadJobs = useCallback(() => {
     mutate() // Trigger SWR revalidation
   }, [mutate])
-
-  useEffect(() => {
-    loadJobs()
-  }, [loadJobs])
+  
+  // Expose mutate and current response for optimistic updates
+  const getMutateData = useCallback(() => ({ mutate, currentData: response }), [mutate, response])
 
   const getRiskColor = (riskLevel: string | null) => {
     if (!riskLevel) return 'text-white/40'
@@ -259,6 +295,9 @@ const JobsPageContent = () => {
       userRole={userRole}
       onJobArchived={loadJobs}
       onJobDeleted={loadJobs}
+      lastUpdated={lastUpdated || undefined}
+      sourceIndicator={sourceIndicator}
+      mutateData={getMutateData()}
     />
   )
 }
