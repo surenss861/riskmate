@@ -26,7 +26,10 @@ export async function POST(request: NextRequest) {
 
     if (authError || !user) {
       return NextResponse.json(
-        { message: 'Unauthorized' },
+        { 
+          message: 'Your session has expired. Please refresh the page and try again.',
+          code: 'AUTH_UNAUTHORIZED'
+        },
         { status: 401 }
       )
     }

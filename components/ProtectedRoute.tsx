@@ -66,7 +66,14 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
       setLegalUpdatedAt(version.updated_at)
     } catch (err: any) {
       console.error('Failed to load legal status', err)
-      // Fallback: force modal if fetch fails
+      // Enhanced error handling: if unauthorized, redirect to login
+      // Otherwise, show modal to allow acceptance
+      if (err?.code === 'AUTH_UNAUTHORIZED' || err?.message?.includes('Unauthorized')) {
+        // Session expired - redirect to login
+        router.push('/login')
+        return
+      }
+      // For other errors, force modal to allow user to accept
       setLegalAccepted(false)
     } finally {
       setLegalChecked(true)
@@ -74,8 +81,14 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
   }
 
   const handleAccept = async () => {
-    await legalApi.accept()
-    await loadLegalStatus()
+    try {
+      await legalApi.accept()
+      // Reload status to confirm acceptance
+      await loadLegalStatus()
+    } catch (err: any) {
+      // Re-throw to let LegalModal handle the error display
+      throw err
+    }
   }
 
   if (loading) {

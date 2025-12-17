@@ -20,8 +20,20 @@ export function LegalModal({ open, version, updatedAt, onAccept }: LegalModalPro
       setError(null);
       setLoading(true);
       await onAccept();
+      // Success - modal will close automatically when legalAccepted becomes true
     } catch (err: any) {
-      setError(err?.message || 'Failed to record acceptance. Try again.');
+      // Enhanced error handling with user-friendly messages
+      let errorMessage = 'Failed to record acceptance. Please try again.';
+      
+      if (err?.code === 'AUTH_UNAUTHORIZED' || err?.message?.includes('Unauthorized')) {
+        errorMessage = 'Your session has expired. Please refresh the page and try again.';
+      } else if (err?.message) {
+        // Use the API error message if available
+        errorMessage = err.message;
+      }
+      
+      setError(errorMessage);
+      console.error('Legal acceptance error:', err);
     } finally {
       setLoading(false);
     }
@@ -81,9 +93,27 @@ export function LegalModal({ open, version, updatedAt, onAccept }: LegalModalPro
                 </Link>
               </p>
               {error && (
-                <p className="rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">
-                  {error}
-                </p>
+                <div className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+                  <div className="flex items-start gap-2">
+                    <svg
+                      className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
+                    </svg>
+                    <div>
+                      <p className="font-medium mb-1">Unable to record acceptance</p>
+                      <p className="text-red-300/80">{error}</p>
+                    </div>
+                  </div>
+                </div>
               )}
             </div>
 
