@@ -52,12 +52,21 @@ teamRouter.get("/", async (req: express.Request, res: express.Response) => {
   try {
     const organizationId = authReq.user.organization_id;
 
-    const { data: members, error: membersError } = await supabase
+    // Try to filter by account_status, fallback to archived_at if column doesn't exist
+    let membersQuery = supabase
       .from("users")
       .select("id, email, full_name, role, created_at, must_reset_password, account_status")
       .eq("organization_id", organizationId)
-      .eq("account_status", "active")
       .order("created_at", { ascending: true });
+
+    try {
+      membersQuery = membersQuery.eq("account_status", "active");
+    } catch (e) {
+      // Column doesn't exist, fallback to archived_at filter
+      membersQuery = membersQuery.is("archived_at", null);
+    }
+
+    const { data: members, error: membersError } = await membersQuery;
 
     if (membersError) {
       throw membersError;
@@ -145,12 +154,19 @@ teamRouter.post("/invite", async (req: express.Request, res: express.Response) =
     const organizationId = authReq.user.organization_id;
     const normalizedEmail = email.trim().toLowerCase();
 
-    const { data: memberCountData, error: memberCountError, count: memberCount } =
-      await supabase
-        .from("users")
-        .select("id", { count: "exact", head: true })
-        .eq("organization_id", organizationId)
-        .eq("account_status", "active");
+    // Try to filter by account_status, fallback to archived_at if column doesn't exist
+    let memberCountQuery = supabase
+      .from("users")
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", organizationId);
+
+    try {
+      memberCountQuery = memberCountQuery.eq("account_status", "active");
+    } catch (e) {
+      memberCountQuery = memberCountQuery.is("archived_at", null);
+    }
+
+    const { data: memberCountData, error: memberCountError, count: memberCount } = await memberCountQuery;
 
     if (memberCountError) {
       throw memberCountError;
@@ -357,13 +373,19 @@ teamRouter.delete("/member/:id", async (req: express.Request, res: express.Respo
     }
 
     // Check if the target member is an owner
-    const { data: targetMember, error: targetError } = await supabase
+    let targetMemberQuery = supabase
       .from("users")
       .select("id, role, email")
       .eq("id", authReq.params.id)
-      .eq("organization_id", authReq.user.organization_id)
-      .eq("account_status", "active")
-      .maybeSingle();
+      .eq("organization_id", authReq.user.organization_id);
+
+    try {
+      targetMemberQuery = targetMemberQuery.eq("account_status", "active");
+    } catch (e) {
+      targetMemberQuery = targetMemberQuery.is("archived_at", null);
+    }
+
+    const { data: targetMember, error: targetError } = await targetMemberQuery.maybeSingle();
 
     if (targetError) {
       throw targetError;
@@ -376,12 +398,19 @@ teamRouter.delete("/member/:id", async (req: express.Request, res: express.Respo
     // Prevent removing owners (only owners can remove other owners, and only if there are multiple)
     if (targetMember.role === "owner") {
       // Check if there are multiple owners
-      const { count, error: ownerCountError } = await supabase
+      let ownerCountQuery = supabase
         .from("users")
         .select("id", { count: "exact", head: true })
         .eq("organization_id", authReq.user.organization_id)
-        .eq("role", "owner")
-        .is("archived_at", null);
+        .eq("role", "owner");
+
+      try {
+        ownerCountQuery = ownerCountQuery.eq("account_status", "active");
+      } catch (e) {
+        ownerCountQuery = ownerCountQuery.is("archived_at", null);
+      }
+
+      const { count, error: ownerCountError } = await ownerCountQuery;
 
       if (ownerCountError) {
         throw ownerCountError;
@@ -402,16 +431,33 @@ teamRouter.delete("/member/:id", async (req: express.Request, res: express.Respo
     }
 
     // Deactivate access (soft delete)
+    // Try to set account_status, fallback to just archived_at if column doesn't exist
+    const updateData: any = {
+      archived_at: new Date().toISOString(),
+    };
+
+    try {
+      // Check if account_status column exists by trying to query it
+      const { error: checkError } = await supabase
+        .from("users")
+        .select("account_status")
+        .eq("id", authReq.params.id)
+        .limit(1);
+      
+      if (!checkError) {
+        // Column exists, use it
+        updateData.account_status = "deactivated";
+        updateData.deactivated_at = new Date().toISOString();
+      }
+    } catch (e) {
+      // Column doesn't exist, just use archived_at
+    }
+
     const { error } = await supabase
       .from("users")
-      .update({
-        account_status: "deactivated",
-        deactivated_at: new Date().toISOString(),
-        archived_at: new Date().toISOString(),
-      })
+      .update(updateData)
       .eq("id", authReq.params.id)
-      .eq("organization_id", authReq.user.organization_id)
-      .eq("account_status", "active");
+      .eq("organization_id", authReq.user.organization_id);
 
     if (error) {
       throw error;
