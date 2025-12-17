@@ -537,9 +537,14 @@ export default function AccountPage() {
                       }`}></div>
                       <div>
                         <h2 className={typography.h3}>Record: Billing</h2>
-                        <p className="text-xs text-white/40 mt-0.5">
-                          {billing?.managed_by === 'stripe' ? 'Managed by Stripe' : 'Managed internally'}
-                        </p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <p className="text-xs text-white/40">
+                            Source of truth: <span className="text-white/60 font-medium">Stripe</span>
+                          </p>
+                          {billing?.managed_by === 'stripe' && (
+                            <span className="text-xs text-white/30">• Updates synced automatically</span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -747,13 +752,12 @@ export default function AccountPage() {
                         Add an extra layer of security to your account
                       </p>
                       <button
-                        className={`${buttonStyles.secondary} bg-white/5 hover:bg-white/10 border-white/10`}
-                        onClick={() => {
-                          setError('2FA coming soon')
-                        }}
+                        className={`${buttonStyles.secondary} bg-white/5 border-white/10 opacity-50 cursor-not-allowed`}
+                        disabled
                       >
                         Enable 2FA
                       </button>
+                      <p className="text-xs text-white/40 mt-2">Coming soon</p>
                     </div>
 
                     {securityEvents.length > 0 && (

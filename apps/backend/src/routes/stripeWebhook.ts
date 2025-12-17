@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { supabase } from "../lib/supabaseClient";
 import { limitsFor, PlanCode } from "../auth/planRules";
+import { recordAuditLog } from "../middleware/audit";
 
 type StripeType = ReturnType<typeof require>;
 
@@ -216,6 +217,21 @@ export async function stripeWebhookHandler(req: Request, res: Response) {
           currentPeriodEnd: subscription?.current_period_end ?? null,
           status,
         });
+
+        // Log billing event
+        await recordAuditLog({
+          organizationId,
+          actorId: null, // System event
+          eventName: "billing.subscription_created",
+          targetType: "subscription",
+          targetId: typeof session.subscription === "string" ? session.subscription : null,
+          metadata: {
+            plan,
+            status,
+            stripe_customer_id: typeof session.customer === "string" ? session.customer : null,
+            source: "stripe_webhook",
+          },
+        });
         break;
       }
       case "customer.subscription.created":
@@ -223,6 +239,16 @@ export async function stripeWebhookHandler(req: Request, res: Response) {
         const subscription = event.data.object as any;
         const { plan, organizationId } = extractMetadataPlan(subscription?.metadata);
         if (!plan || !organizationId) break;
+
+        // Get previous plan for comparison
+        const { data: previousSub } = await supabase
+          .from("org_subscriptions")
+          .select("plan_code")
+          .eq("organization_id", organizationId)
+          .maybeSingle();
+
+        const previousPlan = previousSub?.plan_code || null;
+        const planChanged = previousPlan && previousPlan !== plan;
 
         await applyPlanToOrganization(organizationId, plan, {
           stripeCustomerId:
@@ -232,6 +258,22 @@ export async function stripeWebhookHandler(req: Request, res: Response) {
           currentPeriodStart: subscription.current_period_start ?? null,
           currentPeriodEnd: subscription.current_period_end ?? null,
           status: subscription.status ?? "active",
+        });
+
+        // Log billing event
+        await recordAuditLog({
+          organizationId,
+          actorId: null, // System event
+          eventName: planChanged ? "billing.plan_changed" : "billing.subscription_updated",
+          targetType: "subscription",
+          targetId: typeof subscription.id === "string" ? subscription.id : null,
+          metadata: {
+            plan,
+            previous_plan: previousPlan,
+            status: subscription.status ?? "active",
+            stripe_customer_id: typeof subscription.customer === "string" ? subscription.customer : null,
+            source: "stripe_webhook",
+          },
         });
         break;
       }
@@ -321,6 +363,20 @@ export async function stripeWebhookHandler(req: Request, res: Response) {
           currentPeriodStart: subscription.current_period_start ?? null,
           currentPeriodEnd: subscription.current_period_end ?? null,
           status: "canceled",
+        });
+
+        // Log billing event
+        await recordAuditLog({
+          organizationId,
+          actorId: null, // System event
+          eventName: "billing.subscription_canceled",
+          targetType: "subscription",
+          targetId: typeof subscription.id === "string" ? subscription.id : null,
+          metadata: {
+            plan,
+            stripe_customer_id: typeof subscription.customer === "string" ? subscription.customer : null,
+            source: "stripe_webhook",
+          },
         });
         break;
       }
