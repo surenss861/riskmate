@@ -57,7 +57,7 @@ export default function TeamPage() {
   const [revoking, setRevoking] = useState<string | null>(null)
   const [userEmail, setUserEmail] = useState<string | null>(null)
   const [inviteEmail, setInviteEmail] = useState('')
-  const [inviteRole, setInviteRole] = useState<'member' | 'admin' | 'safety_lead' | 'executive'>('member')
+  const [inviteRole, setInviteRole] = useState<'member' | 'admin' | 'safety_lead' | 'executive' | 'owner'>('member')
   const [error, setError] = useState<string | null>(null)
   const [showInviteSuccess, setShowInviteSuccess] = useState(false)
   const [inviteSuccessData, setInviteSuccessData] = useState<{ email: string; password: string } | null>(null)
