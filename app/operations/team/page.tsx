@@ -325,7 +325,7 @@ export default function TeamPage() {
                   <div>
                     <select
                       value={inviteRole}
-                      onChange={(e) => setInviteRole(e.target.value as 'member' | 'admin' | 'safety_lead' | 'executive')}
+                      onChange={(e) => setInviteRole(e.target.value as 'member' | 'admin' | 'safety_lead' | 'executive' | 'owner')}
                       className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:border-[#F97316]"
                       disabled={inviting}
                     >
