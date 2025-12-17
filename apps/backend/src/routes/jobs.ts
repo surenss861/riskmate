@@ -636,6 +636,26 @@ jobsRouter.patch("/:id", authenticate as unknown as express.RequestHandler, asyn
 
     // Role-based capability: Executives are read-only
     if (role === 'executive') {
+      // Log capability violation for audit trail
+      try {
+        await recordAuditLog({
+          organizationId: organization_id,
+          actorId: userId,
+          eventName: "auth.role_violation",
+          targetType: "job",
+          targetId: jobId,
+          metadata: {
+            role,
+            attempted_action: "update_job",
+            result: "denied",
+            reason: "Executive role is read-only",
+          },
+        });
+      } catch (auditError) {
+        // Non-fatal: log but don't fail the request
+        console.warn("Audit log failed for role violation:", auditError);
+      }
+
       return res.status(403).json({
         message: "Executives have read-only access",
         code: "AUTH_ROLE_READ_ONLY",
