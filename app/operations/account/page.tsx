@@ -36,10 +36,13 @@ export default function AccountPage() {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [organization, setOrganization] = useState<Organization | null>(null)
   const [subscription, setSubscription] = useState<any>(null)
+  const [billing, setBilling] = useState<any>(null)
+  const [securityEvents, setSecurityEvents] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [updating, setUpdating] = useState(false)
   const [userEmail, setUserEmail] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [deleteConfirmation, setDeleteConfirmation] = useState('')
   
   // Inline editing states
   const [editingField, setEditingField] = useState<string | null>(null)
@@ -104,6 +107,22 @@ export default function AccountPage() {
           setSubscription(subData.data)
         } catch (subError) {
           console.warn('Failed to load subscription:', subError)
+        }
+
+        // Load billing info
+        try {
+          const billingData = await accountApi.getBilling()
+          setBilling(billingData.data)
+        } catch (billingError) {
+          console.warn('Failed to load billing:', billingError)
+        }
+
+        // Load security events
+        try {
+          const eventsData = await accountApi.getSecurityEvents(5)
+          setSecurityEvents(eventsData.data || [])
+        } catch (eventsError) {
+          console.warn('Failed to load security events:', eventsError)
         }
       } catch (err: any) {
         console.error('Failed to load account data:', err)
@@ -294,12 +313,16 @@ export default function AccountPage() {
               {/* Profile Section */}
               {activeSection === 'profile' && (
                 <div className={`${cardStyles.base} ${cardStyles.padding.md}`}>
-                  <div className="flex items-center justify-between mb-6">
-                    <div>
-                      <h2 className={typography.h3}>Profile</h2>
-                      <p className="text-sm text-white/50 mt-1">
-                        Last updated: {formatDate(profile.updated_at)}
-                      </p>
+                  {/* Record Card Header */}
+                  <div className="flex items-center justify-between pb-4 mb-6 border-b border-white/10">
+                    <div className="flex items-center gap-3">
+                      <div className="w-2 h-2 rounded-full bg-green-500/60"></div>
+                      <div>
+                        <h2 className={typography.h3}>Record: Profile</h2>
+                        <p className="text-xs text-white/40 mt-0.5">
+                          Last updated: {formatDate(profile.updated_at)}
+                        </p>
+                      </div>
                     </div>
                   </div>
 
@@ -310,7 +333,7 @@ export default function AccountPage() {
                         Email
                       </label>
                       <div className="text-white">{profile.email}</div>
-                      <p className="text-xs text-white/40 mt-1">Email cannot be changed</p>
+                      <p className="text-xs text-white/40 mt-1">Source of truth: Managed by authentication provider</p>
                     </div>
 
                     {/* Full Name */}
@@ -417,6 +440,7 @@ export default function AccountPage() {
                         Role
                       </label>
                       <div className="text-white">{profile.role.toUpperCase()}</div>
+                      <p className="text-xs text-white/40 mt-1">Source of truth: Assigned by Organization Admin</p>
                     </div>
                   </div>
                 </div>
@@ -425,12 +449,16 @@ export default function AccountPage() {
               {/* Organization Section */}
               {activeSection === 'organization' && organization && (
                 <div className={`${cardStyles.base} ${cardStyles.padding.md}`}>
-                  <div className="flex items-center justify-between mb-6">
-                    <div>
-                      <h2 className={typography.h3}>Organization</h2>
-                      <p className="text-sm text-white/50 mt-1">
-                        Last updated: {formatDate(organization.updated_at)}
-                      </p>
+                  {/* Record Card Header */}
+                  <div className="flex items-center justify-between pb-4 mb-6 border-b border-white/10">
+                    <div className="flex items-center gap-3">
+                      <div className="w-2 h-2 rounded-full bg-green-500/60"></div>
+                      <div>
+                        <h2 className={typography.h3}>Record: Organization</h2>
+                        <p className="text-xs text-white/40 mt-0.5">
+                          Last updated: {formatDate(organization.updated_at)}
+                        </p>
+                      </div>
                     </div>
                   </div>
 
@@ -497,14 +525,106 @@ export default function AccountPage() {
               {/* Billing Section */}
               {activeSection === 'billing' && (
                 <div className={`${cardStyles.base} ${cardStyles.padding.md}`}>
-                  <div className="flex items-center justify-between mb-6">
-                    <div>
-                      <h2 className={typography.h3}>Plan & Billing</h2>
-                      <p className="text-sm text-white/50 mt-1">Contract summary</p>
+                  {/* Record Card Header */}
+                  <div className="flex items-center justify-between pb-4 mb-6 border-b border-white/10">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-2 h-2 rounded-full ${
+                        billing?.status === 'active' || billing?.status === 'trialing' 
+                          ? 'bg-green-500/60' 
+                          : billing?.status === 'past_due' 
+                          ? 'bg-red-500/60' 
+                          : 'bg-white/20'
+                      }`}></div>
+                      <div>
+                        <h2 className={typography.h3}>Record: Billing</h2>
+                        <p className="text-xs text-white/40 mt-0.5">
+                          {billing?.managed_by === 'stripe' ? 'Managed by Stripe' : 'Managed internally'}
+                        </p>
+                      </div>
                     </div>
                   </div>
 
-                  {subscription ? (
+                  {billing ? (
+                    <div className="space-y-6">
+                      <div className="grid grid-cols-2 gap-6 pb-4 border-b border-white/10">
+                        <div>
+                          <label className="block text-xs font-medium text-white/60 mb-2 uppercase tracking-wide">
+                            Current Plan
+                          </label>
+                          <div className="text-white font-semibold">
+                            {billing.tier ? billing.tier.toUpperCase() : 'No Plan'}
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-white/60 mb-2 uppercase tracking-wide">
+                            Status
+                          </label>
+                          <div className="text-white">{formatStatus(billing.status)}</div>
+                        </div>
+                      </div>
+
+                      {billing.renewal_date && (
+                        <div className="pb-4 border-b border-white/10">
+                          <label className="block text-xs font-medium text-white/60 mb-2 uppercase tracking-wide">
+                            Next Renewal
+                          </label>
+                          <div className="text-white">
+                            {new Date(billing.renewal_date).toLocaleDateString('en-US', {
+                              month: 'long',
+                              day: 'numeric',
+                              year: 'numeric',
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {billing.seats_limit !== null && (
+                        <div className="pb-4 border-b border-white/10">
+                          <label className="block text-xs font-medium text-white/60 mb-2 uppercase tracking-wide">
+                            Seats
+                          </label>
+                          <div className="text-white">
+                            {billing.seats_used} of {billing.seats_limit === null ? 'Unlimited' : billing.seats_limit}
+                          </div>
+                        </div>
+                      )}
+
+                      {billing.jobs_limit !== null && (
+                        <div className="pb-4 border-b border-white/10">
+                          <label className="block text-xs font-medium text-white/60 mb-2 uppercase tracking-wide">
+                            Monthly Job Limit
+                          </label>
+                          <div className="text-white">
+                            {billing.jobs_limit === null ? 'Unlimited' : billing.jobs_limit}
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="flex gap-3 pt-2">
+                        <Link
+                          href="/operations/account/change-plan"
+                          className={`${buttonStyles.primary} inline-block text-center`}
+                        >
+                          Change Plan
+                        </Link>
+                        {billing.stripe_customer_id && (
+                          <button
+                            onClick={async () => {
+                              try {
+                                const response = await subscriptionsApi.createPortalSession()
+                                window.location.href = response.url
+                              } catch (err: any) {
+                                setError(err?.message || 'Failed to open billing portal')
+                              }
+                            }}
+                            className={`${buttonStyles.secondary} bg-white/5 hover:bg-white/10 border-white/10`}
+                          >
+                            View Invoices
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ) : subscription ? (
                     <div className="space-y-6">
                       <div className="grid grid-cols-2 gap-6 pb-4 border-b border-white/10">
                         <div>
@@ -521,56 +641,6 @@ export default function AccountPage() {
                           </label>
                           <div className="text-white">{formatStatus(subscription.status)}</div>
                         </div>
-                      </div>
-
-                      {subscription.current_period_end && (
-                        <div className="pb-4 border-b border-white/10">
-                          <label className="block text-xs font-medium text-white/60 mb-2 uppercase tracking-wide">
-                            Renewal Date
-                          </label>
-                          <div className="text-white">
-                            {new Date(subscription.current_period_end).toLocaleDateString('en-US', {
-                              month: 'long',
-                              day: 'numeric',
-                              year: 'numeric',
-                            })}
-                          </div>
-                        </div>
-                      )}
-
-                      {subscription.jobsLimit !== null && (
-                        <div className="pb-4 border-b border-white/10">
-                          <label className="block text-xs font-medium text-white/60 mb-2 uppercase tracking-wide">
-                            Monthly Job Limit
-                          </label>
-                          <div className="text-white">
-                            {subscription.jobsLimit === null ? 'Unlimited' : subscription.jobsLimit}
-                          </div>
-                        </div>
-                      )}
-
-                      <div className="flex gap-3 pt-2">
-                        <Link
-                          href="/operations/account/change-plan"
-                          className={`${buttonStyles.primary} inline-block text-center`}
-                        >
-                          Change Plan
-                        </Link>
-                        {subscription.stripe_customer_id && (
-                          <button
-                            onClick={async () => {
-                              try {
-                                const response = await subscriptionsApi.createPortalSession()
-                                window.location.href = response.url
-                              } catch (err: any) {
-                                setError(err?.message || 'Failed to open billing portal')
-                              }
-                            }}
-                            className={`${buttonStyles.secondary} bg-white/5 hover:bg-white/10 border-white/10`}
-                          >
-                            View Invoices
-                          </button>
-                        )}
                       </div>
                     </div>
                   ) : (
@@ -604,10 +674,14 @@ export default function AccountPage() {
               {/* Security Section */}
               {activeSection === 'security' && (
                 <div className={`${cardStyles.base} ${cardStyles.padding.md}`}>
-                  <div className="flex items-center justify-between mb-6">
-                    <div>
-                      <h2 className={typography.h3}>Security</h2>
-                      <p className="text-sm text-white/50 mt-1">Account security settings</p>
+                  {/* Record Card Header */}
+                  <div className="flex items-center justify-between pb-4 mb-6 border-b border-white/10">
+                    <div className="flex items-center gap-3">
+                      <div className="w-2 h-2 rounded-full bg-green-500/60"></div>
+                      <div>
+                        <h2 className={typography.h3}>Record: Security</h2>
+                        <p className="text-xs text-white/40 mt-0.5">Account security & access</p>
+                      </div>
                     </div>
                   </div>
 
@@ -616,9 +690,14 @@ export default function AccountPage() {
                       <label className="block text-xs font-medium text-white/60 mb-2 uppercase tracking-wide">
                         Password
                       </label>
-                      <p className="text-sm text-white/60 mb-3">
+                      <p className="text-sm text-white/60 mb-1">
                         Change your password to keep your account secure
                       </p>
+                      {profile && (profile as any).password_changed_at && (
+                        <p className="text-xs text-white/40 mb-3">
+                          Last changed: {formatDate((profile as any).password_changed_at)}
+                        </p>
+                      )}
                       <button
                         className={`${buttonStyles.secondary} bg-white/5 hover:bg-white/10 border-white/10`}
                         onClick={() => {
@@ -630,7 +709,37 @@ export default function AccountPage() {
                       </button>
                     </div>
 
-                    <div>
+                    <div className="pb-4 border-b border-white/10">
+                      <label className="block text-xs font-medium text-white/60 mb-2 uppercase tracking-wide">
+                        Active Sessions
+                      </label>
+                      <p className="text-sm text-white/60 mb-3">
+                        Manage your active sessions across devices
+                      </p>
+                      <button
+                        className={`${buttonStyles.secondary} bg-white/5 hover:bg-white/10 border-white/10`}
+                        onClick={async () => {
+                          try {
+                            setUpdating(true)
+                            await accountApi.revokeSessions()
+                            setError(null)
+                            // Reload security events
+                            const eventsData = await accountApi.getSecurityEvents(5)
+                            setSecurityEvents(eventsData.data || [])
+                            alert('All sessions revoked successfully. You will need to sign in again.')
+                          } catch (err: any) {
+                            setError(err?.message || 'Failed to revoke sessions')
+                          } finally {
+                            setUpdating(false)
+                          }
+                        }}
+                        disabled={updating}
+                      >
+                        {updating ? 'Revoking...' : 'Sign Out Everywhere'}
+                      </button>
+                    </div>
+
+                    <div className="pb-4 border-b border-white/10">
                       <label className="block text-xs font-medium text-white/60 mb-2 uppercase tracking-wide">
                         Two-Factor Authentication
                       </label>
@@ -646,6 +755,31 @@ export default function AccountPage() {
                         Enable 2FA
                       </button>
                     </div>
+
+                    {securityEvents.length > 0 && (
+                      <div>
+                        <label className="block text-xs font-medium text-white/60 mb-2 uppercase tracking-wide">
+                          Recent Security Events
+                        </label>
+                        <div className="space-y-2">
+                          {securityEvents.slice(0, 5).map((event, idx) => (
+                            <div key={idx} className="p-3 bg-white/5 rounded-lg border border-white/10">
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <p className="text-sm text-white">{event.event_name}</p>
+                                  <p className="text-xs text-white/40 mt-0.5">
+                                    {formatDate(event.created_at)}
+                                  </p>
+                                </div>
+                                {event.ip_address && (
+                                  <p className="text-xs text-white/40">{event.ip_address}</p>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -653,25 +787,60 @@ export default function AccountPage() {
               {/* Danger Zone */}
               {activeSection === 'danger' && (
                 <div className={`${cardStyles.base} ${cardStyles.padding.md} border-red-500/20`}>
-                  <div className="mb-6">
-                    <h2 className={typography.h3}>Danger Zone</h2>
-                    <p className="text-sm text-white/50 mt-1">Irreversible actions</p>
+                  {/* Record Card Header */}
+                  <div className="flex items-center justify-between pb-4 mb-6 border-b border-red-500/20">
+                    <div className="flex items-center gap-3">
+                      <div className="w-2 h-2 rounded-full bg-red-500/60"></div>
+                      <div>
+                        <h2 className={typography.h3}>Danger Zone</h2>
+                        <p className="text-xs text-white/40 mt-0.5">Irreversible actions</p>
+                      </div>
+                    </div>
                   </div>
 
                   <div className="space-y-4">
                     <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-lg">
-                      <h3 className="text-sm font-semibold text-white mb-2">Delete Account</h3>
-                      <p className="text-xs text-white/60 mb-3">
-                        Permanently delete your account and all associated data. This action cannot be undone.
+                      <h3 className="text-sm font-semibold text-white mb-2">Deactivate Account</h3>
+                      <p className="text-xs text-white/60 mb-2">
+                        Request account deactivation. Your account will be disabled immediately, and all data will be retained for 30 days before permanent deletion.
                       </p>
-                      <button
-                        className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-400 rounded-lg text-sm font-medium transition-colors"
-                        onClick={() => {
-                          setError('Account deletion coming soon')
-                        }}
-                      >
-                        Delete Account
-                      </button>
+                      <p className="text-xs text-white/40 mb-4">
+                        Data export available upon request during retention period.
+                      </p>
+                      <div className="space-y-3">
+                        <input
+                          type="text"
+                          value={deleteConfirmation}
+                          onChange={(e) => setDeleteConfirmation(e.target.value)}
+                          placeholder="Type DELETE to confirm"
+                          className="w-full px-4 py-2 bg-white/5 border border-red-500/30 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-red-500/50"
+                        />
+                        <button
+                          className="w-full px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-400 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          onClick={async () => {
+                            if (deleteConfirmation !== 'DELETE') {
+                              setError('Please type DELETE to confirm')
+                              return
+                            }
+                            try {
+                              setUpdating(true)
+                              await accountApi.deactivateAccount(deleteConfirmation)
+                              setError(null)
+                              alert('Account deactivation requested. Your account will be disabled and data retained for 30 days.')
+                              setDeleteConfirmation('')
+                              // Sign out after deactivation
+                              await handleLogout()
+                            } catch (err: any) {
+                              setError(err?.message || 'Failed to deactivate account')
+                            } finally {
+                              setUpdating(false)
+                            }
+                          }}
+                          disabled={deleteConfirmation !== 'DELETE' || updating}
+                        >
+                          {updating ? 'Processing...' : 'Deactivate Account'}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>

@@ -525,5 +525,41 @@ export const accountApi = {
       body: JSON.stringify({ name }),
     });
   },
+
+  getBilling: async () => {
+    return apiRequest<{
+      data: {
+        tier: string | null;
+        status: string;
+        stripe_customer_id: string | null;
+        stripe_subscription_id: string | null;
+        current_period_start: string | null;
+        current_period_end: string | null;
+        renewal_date: string | null;
+        seats_used: number;
+        seats_limit: number | null;
+        jobs_limit: number | null;
+        managed_by: 'stripe' | 'internal';
+      };
+    }>('/api/account/billing');
+  },
+
+  revokeSessions: async () => {
+    return apiRequest<{ message: string }>('/api/account/security/revoke-sessions', {
+      method: 'POST',
+    });
+  },
+
+  getSecurityEvents: async (limit?: number) => {
+    const params = limit ? `?limit=${limit}` : '';
+    return apiRequest<{ data: any[] }>(`/api/account/security/events${params}`);
+  },
+
+  deactivateAccount: async (confirmation: string, reason?: string) => {
+    return apiRequest<{ message: string; retention_days: number }>('/api/account/deactivate', {
+      method: 'POST',
+      body: JSON.stringify({ confirmation, reason }),
+    });
+  },
 };
 
