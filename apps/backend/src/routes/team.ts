@@ -3,10 +3,36 @@ import crypto from "crypto";
 import { supabase } from "../lib/supabaseClient";
 import { authenticate, AuthenticatedRequest } from "../middleware/auth";
 import { limitsFor } from "../auth/planRules";
+import { recordAuditLog } from "../middleware/audit";
 
 export const teamRouter = express.Router();
 
-const ALLOWED_ROLES = new Set(["owner", "admin", "member"]);
+const ALLOWED_ROLES = new Set(["owner", "admin", "safety_lead", "executive", "member"]);
+
+// Helper to log team events
+async function logTeamEvent(
+  organizationId: string,
+  actorId: string,
+  eventType: string,
+  eventName: string,
+  targetUserId?: string | null,
+  targetInviteId?: string | null,
+  metadata: Record<string, unknown> = {}
+) {
+  try {
+    await supabase.from("team_events").insert({
+      organization_id: organizationId,
+      actor_id: actorId,
+      event_type: eventType,
+      event_name: eventName,
+      target_user_id: targetUserId || null,
+      target_invite_id: targetInviteId || null,
+      metadata,
+    });
+  } catch (err) {
+    console.error("Failed to log team event:", err);
+  }
+}
 
 function generateTempPassword(length = 12) {
   const charset =
@@ -28,9 +54,9 @@ teamRouter.get("/", async (req: express.Request, res: express.Response) => {
 
     const { data: members, error: membersError } = await supabase
       .from("users")
-      .select("id, email, full_name, role, created_at, must_reset_password")
+      .select("id, email, full_name, role, created_at, must_reset_password, account_status")
       .eq("organization_id", organizationId)
-      .is("archived_at", null)
+      .eq("account_status", "active")
       .order("created_at", { ascending: true });
 
     if (membersError) {
@@ -53,6 +79,20 @@ teamRouter.get("/", async (req: express.Request, res: express.Response) => {
     const seatLimit =
       authReq.user.seatsLimit ?? limitsFor(authReq.user.plan).seats ?? null;
 
+    // Calculate risk coverage (role distribution)
+    const roleCounts = {
+      owner: 0,
+      admin: 0,
+      safety_lead: 0,
+      executive: 0,
+      member: 0,
+    };
+    (members || []).forEach((member) => {
+      if (roleCounts.hasOwnProperty(member.role)) {
+        roleCounts[member.role as keyof typeof roleCounts]++;
+      }
+    });
+
     res.json({
       members: members ?? [],
       invites: invites ?? [],
@@ -63,6 +103,7 @@ teamRouter.get("/", async (req: express.Request, res: express.Response) => {
         available:
           seatLimit === null ? null : Math.max(seatLimit - activeMembers, 0),
       },
+      risk_coverage: roleCounts,
       current_user_role: authReq.user.role ?? "member",
       plan: authReq.user.plan,
     });
@@ -109,7 +150,7 @@ teamRouter.post("/invite", async (req: express.Request, res: express.Response) =
         .from("users")
         .select("id", { count: "exact", head: true })
         .eq("organization_id", organizationId)
-        .is("archived_at", null);
+        .eq("account_status", "active");
 
     if (memberCountError) {
       throw memberCountError;
@@ -199,6 +240,34 @@ teamRouter.post("/invite", async (req: express.Request, res: express.Response) =
       console.warn("Invite row insert failed:", inviteInsertError?.message);
     }
 
+    // Log team event
+    await logTeamEvent(
+      organizationId,
+      authReq.user.id,
+      "invite_sent",
+      "team.invite_sent",
+      newUserId,
+      inviteRow?.id || null,
+      {
+        email: normalizedEmail,
+        role,
+      }
+    );
+
+    // Also log to audit_logs for consistency
+    await recordAuditLog({
+      organizationId,
+      actorId: authReq.user.id,
+      eventName: "team.invite_sent",
+      targetType: "system",
+      targetId: newUserId,
+      metadata: {
+        email: normalizedEmail,
+        role,
+        invite_id: inviteRow?.id || null,
+      },
+    });
+
     res.json({
       data: inviteRow,
       temporary_password: tempPassword,
@@ -256,6 +325,19 @@ teamRouter.delete("/invite/:id", async (req: express.Request, res: express.Respo
       throw revokeError;
     }
 
+    // Log team event
+    await logTeamEvent(
+      authReq.user.organization_id,
+      authReq.user.id,
+      "invite_revoked",
+      "team.invite_revoked",
+      inviteRow?.user_id || null,
+      authReq.params.id,
+      {
+        email: inviteRow?.email || null,
+      }
+    );
+
     res.json({ status: "revoked" });
   } catch (error: any) {
     console.error("Invite revoke failed:", error);
@@ -277,10 +359,10 @@ teamRouter.delete("/member/:id", async (req: express.Request, res: express.Respo
     // Check if the target member is an owner
     const { data: targetMember, error: targetError } = await supabase
       .from("users")
-      .select("id, role")
+      .select("id, role, email")
       .eq("id", authReq.params.id)
       .eq("organization_id", authReq.user.organization_id)
-      .is("archived_at", null)
+      .eq("account_status", "active")
       .maybeSingle();
 
     if (targetError) {
@@ -319,16 +401,48 @@ teamRouter.delete("/member/:id", async (req: express.Request, res: express.Respo
       }
     }
 
+    // Deactivate access (soft delete)
     const { error } = await supabase
       .from("users")
-      .update({ archived_at: new Date().toISOString() })
+      .update({
+        account_status: "deactivated",
+        deactivated_at: new Date().toISOString(),
+        archived_at: new Date().toISOString(),
+      })
       .eq("id", authReq.params.id)
       .eq("organization_id", authReq.user.organization_id)
-      .is("archived_at", null);
+      .eq("account_status", "active");
 
     if (error) {
       throw error;
     }
+
+    // Log team event
+    await logTeamEvent(
+      authReq.user.organization_id,
+      authReq.user.id,
+      "access_revoked",
+      "team.member_removed",
+      authReq.params.id,
+      null,
+      {
+        target_role: targetMember.role,
+        target_email: targetMember.email || null,
+      }
+    );
+
+    // Also log to audit_logs
+    await recordAuditLog({
+      organizationId: authReq.user.organization_id,
+      actorId: authReq.user.id,
+      eventName: "team.member_removed",
+      targetType: "system",
+      targetId: authReq.params.id,
+      metadata: {
+        target_role: targetMember.role,
+        target_email: targetMember.email || null,
+      },
+    });
 
     res.json({ status: "removed" });
   } catch (error: any) {
@@ -345,11 +459,34 @@ teamRouter.post("/acknowledge-reset", async (req: express.Request, res: express.
       .update({ must_reset_password: false })
       .eq("id", authReq.user.id);
 
+    const { data: invite } = await supabase
+      .from("organization_invites")
+      .select("id, email, role")
+      .eq("user_id", authReq.user.id)
+      .is("accepted_at", null)
+      .maybeSingle();
+
     await supabase
       .from("organization_invites")
       .update({ accepted_at: new Date().toISOString() })
       .eq("user_id", authReq.user.id)
       .is("accepted_at", null);
+
+    // Log team event
+    if (invite) {
+      await logTeamEvent(
+        authReq.user.organization_id,
+        authReq.user.id,
+        "invite_accepted",
+        "team.invite_accepted",
+        authReq.user.id,
+        invite.id,
+        {
+          email: invite.email,
+          role: invite.role,
+        }
+      );
+    }
 
     res.json({ status: "ok" });
   } catch (error: any) {

@@ -37,6 +37,13 @@ interface TeamData {
     pending: number
     available: number | null
   }
+  risk_coverage?: {
+    owner: number
+    admin: number
+    safety_lead: number
+    executive: number
+    member: number
+  }
   current_user_role: string
   plan: string
 }
@@ -50,7 +57,7 @@ export default function TeamPage() {
   const [revoking, setRevoking] = useState<string | null>(null)
   const [userEmail, setUserEmail] = useState<string | null>(null)
   const [inviteEmail, setInviteEmail] = useState('')
-  const [inviteRole, setInviteRole] = useState<'member' | 'admin'>('member')
+  const [inviteRole, setInviteRole] = useState<'member' | 'admin' | 'safety_lead' | 'executive'>('member')
   const [error, setError] = useState<string | null>(null)
   const [showInviteSuccess, setShowInviteSuccess] = useState(false)
   const [inviteSuccessData, setInviteSuccessData] = useState<{ email: string; password: string } | null>(null)
@@ -171,6 +178,28 @@ export default function TeamPage() {
     return limit !== null && used >= limit
   }, [team])
 
+  const getRoleLabel = (role: string) => {
+    const labels: Record<string, string> = {
+      owner: 'Owner',
+      admin: 'Admin',
+      safety_lead: 'Safety Lead',
+      executive: 'Executive',
+      member: 'Member',
+    }
+    return labels[role] || role.toUpperCase()
+  }
+
+  const getRoleDescription = (role: string) => {
+    const descriptions: Record<string, string> = {
+      owner: 'Org-level authority, billing, deletion',
+      admin: 'Team management, no org-level authority',
+      safety_lead: 'Owns operational risk, sees all flagged jobs',
+      executive: 'Read-only visibility into risk & trends',
+      member: 'Can create/update jobs, no governance authority',
+    }
+    return descriptions[role] || ''
+  }
+
   if (loading) {
     return (
       <ProtectedRoute>
@@ -217,40 +246,55 @@ export default function TeamPage() {
           <div className={spacing.gap.relaxed}>
             {/* Header */}
             <div>
-              <h1 className={`${typography.h1} ${spacing.tight}`}>Team Management</h1>
-              <p className="text-white/60">Manage your team members and invites</p>
+              <h1 className={`${typography.h1} ${spacing.tight}`}>Access & Accountability</h1>
+              <p className="text-white/60">Define who can view, manage, and approve risk</p>
             </div>
 
-            {/* Seat Usage */}
-            <div className={`${cardStyles.base} ${cardStyles.padding.md}`}>
-              <div className={`flex items-center justify-between ${spacing.normal}`}>
-                <h2 className="text-xl font-semibold text-white">Seat Usage</h2>
+            {/* Risk Coverage */}
+            {team.risk_coverage && (
+              <div className={`${cardStyles.base} ${cardStyles.padding.md}`}>
+                <div className={`flex items-center justify-between ${spacing.normal} mb-4`}>
+                  <h2 className="text-xl font-semibold text-white">Risk Coverage</h2>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                  <div className="p-3 bg-white/5 rounded-lg border border-white/10">
+                    <div className="text-xs text-white/60 uppercase tracking-wide mb-1">Owners</div>
+                    <div className="text-2xl font-semibold text-white">{team.risk_coverage.owner}</div>
+                    <div className="text-xs text-white/40 mt-1">Org authority</div>
+                  </div>
+                  <div className="p-3 bg-white/5 rounded-lg border border-white/10">
+                    <div className="text-xs text-white/60 uppercase tracking-wide mb-1">Safety Leads</div>
+                    <div className="text-2xl font-semibold text-white">{team.risk_coverage.safety_lead}</div>
+                    <div className="text-xs text-white/40 mt-1">Operational risk</div>
+                  </div>
+                  <div className="p-3 bg-white/5 rounded-lg border border-white/10">
+                    <div className="text-xs text-white/60 uppercase tracking-wide mb-1">Executives</div>
+                    <div className="text-2xl font-semibold text-white">{team.risk_coverage.executive}</div>
+                    <div className="text-xs text-white/40 mt-1">Read-only visibility</div>
+                  </div>
+                  <div className="p-3 bg-white/5 rounded-lg border border-white/10">
+                    <div className="text-xs text-white/60 uppercase tracking-wide mb-1">Admins</div>
+                    <div className="text-2xl font-semibold text-white">{team.risk_coverage.admin}</div>
+                    <div className="text-xs text-white/40 mt-1">Team management</div>
+                  </div>
+                  <div className="p-3 bg-white/5 rounded-lg border border-white/10">
+                    <div className="text-xs text-white/60 uppercase tracking-wide mb-1">Members</div>
+                    <div className="text-2xl font-semibold text-white">{team.risk_coverage.member}</div>
+                    <div className="text-xs text-white/40 mt-1">Job creation</div>
+                  </div>
+                </div>
                 {team.seats.limit !== null && (
-                  <span className="text-sm text-white/60">
-                    {team.seats.used} / {team.seats.limit} used
-                  </span>
+                  <div className="mt-4 pt-4 border-t border-white/10">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-white/60">Seat usage</span>
+                      <span className="text-white">
+                        {team.seats.used} / {team.seats.limit}
+                      </span>
+                    </div>
+                  </div>
                 )}
               </div>
-              {team.seats.limit !== null ? (
-                <div className="w-full bg-white/10 rounded-full h-2">
-                  <div
-                    className="bg-[#F97316] h-2 rounded-full transition-all"
-                    style={{
-                      width: `${Math.min((team.seats.used / team.seats.limit) * 100, 100)}%`,
-                    }}
-                  />
-                </div>
-              ) : (
-                <p className="text-sm text-white/60">Unlimited seats</p>
-              )}
-              {seatLimitReached && (
-                <div className={`${spacing.normal} p-4 bg-orange-500/20 border border-orange-500/30 rounded-lg`}>
-                  <p className="text-sm text-orange-400">
-                    Seat limit reached. Upgrade your plan to add more team members.
-                  </p>
-                </div>
-              )}
-            </div>
+            )}
 
             {/* Error Message */}
             {error && (
@@ -262,6 +306,9 @@ export default function TeamPage() {
             {/* Invite Form */}
             <div className={`${cardStyles.base} ${cardStyles.padding.md}`}>
               <h2 className={`${typography.h3} ${spacing.normal}`}>Invite Team Member</h2>
+              <p className="text-xs text-white/50 mb-4">
+                Invited users inherit visibility based on role. All access is logged.
+              </p>
               <form onSubmit={handleInvite} className={spacing.gap.normal}>
                 <div className={`grid grid-cols-1 md:grid-cols-3 ${spacing.gap.normal}`}>
                   <div className="md:col-span-2">
@@ -278,13 +325,25 @@ export default function TeamPage() {
                   <div>
                     <select
                       value={inviteRole}
-                      onChange={(e) => setInviteRole(e.target.value as 'member' | 'admin')}
+                      onChange={(e) => setInviteRole(e.target.value as 'member' | 'admin' | 'safety_lead' | 'executive')}
                       className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:border-[#F97316]"
                       disabled={inviting}
                     >
                       <option value="member">Member</option>
+                      <option value="safety_lead">Safety Lead</option>
+                      <option value="executive">Executive</option>
                       <option value="admin">Admin</option>
+                      {(team.current_user_role === 'owner') && (
+                        <option value="owner">Owner</option>
+                      )}
                     </select>
+                    <p className="text-xs text-white/40 mt-1">
+                      {inviteRole === 'safety_lead' && 'Sees all flagged-for-review jobs automatically'}
+                      {inviteRole === 'executive' && 'Read-only visibility into risk & trends'}
+                      {inviteRole === 'member' && 'Can create/update jobs, no governance authority'}
+                      {inviteRole === 'admin' && 'Team management, no org-level authority'}
+                      {inviteRole === 'owner' && 'Org-level authority, billing, deletion'}
+                    </p>
                   </div>
                 </div>
                 <button
@@ -314,8 +373,8 @@ export default function TeamPage() {
                           <div className="font-semibold text-white">
                             {member.full_name || member.email}
                           </div>
-                          <span className="px-2 py-1 text-xs font-semibold rounded-full bg-white/10 text-white/70">
-                            {member.role.toUpperCase()}
+                          <span className="px-2 py-1 text-xs font-semibold rounded-full bg-white/10 text-white/70" title={getRoleDescription(member.role)}>
+                            {getRoleLabel(member.role)}
                           </span>
                           {member.must_reset_password && (
                             <span className="px-2 py-1 text-xs font-semibold rounded-full bg-yellow-500/20 text-yellow-400">
@@ -329,9 +388,9 @@ export default function TeamPage() {
                         <button
                           onClick={() => handleRemoveMember(member.id)}
                           disabled={removing === member.id}
-                          className="px-4 py-2 text-sm text-red-400 hover:text-red-300 border border-red-500/30 hover:border-red-500/50 rounded-lg transition-colors disabled:opacity-50"
+                          className="px-4 py-2 text-sm text-white/70 hover:text-white border border-white/10 hover:border-white/20 rounded-lg transition-colors disabled:opacity-50"
                         >
-                          {removing === member.id ? 'Removing...' : 'Remove'}
+                          {removing === member.id ? 'Deactivating...' : 'Deactivate Access'}
                         </button>
                       )}
                     </div>
@@ -353,8 +412,8 @@ export default function TeamPage() {
                       <div className="flex-1">
                         <div className="flex items-center gap-3">
                           <div className="font-semibold text-white">{invite.email}</div>
-                          <span className="px-2 py-1 text-xs font-semibold rounded-full bg-white/10 text-white/70">
-                            {invite.role.toUpperCase()}
+                          <span className="px-2 py-1 text-xs font-semibold rounded-full bg-white/10 text-white/70" title={getRoleDescription(invite.role)}>
+                            {getRoleLabel(invite.role)}
                           </span>
                           <span className="px-2 py-1 text-xs font-semibold rounded-full bg-blue-500/20 text-blue-400">
                             PENDING
@@ -395,9 +454,10 @@ export default function TeamPage() {
         {/* Remove Member Confirmation Modal */}
         <ConfirmModal
           isOpen={showRemoveConfirm}
-          title="Remove Team Member"
-          message="Are you sure you want to remove this team member? This action cannot be undone."
-          confirmLabel="Remove"
+          title="Deactivate Access"
+          message="This user will lose access immediately. All actions remain in the audit log."
+          consequence="This action is logged and cannot be undone. The user's account will be deactivated."
+          confirmLabel="Deactivate Access"
           destructive={true}
           onConfirm={confirmRemoveMember}
           onCancel={() => {
