@@ -8,9 +8,10 @@ import ProtectedRoute from '@/components/ProtectedRoute'
 import { DashboardNavbar } from '@/components/dashboard/DashboardNavbar'
 import { TemplatesManager } from '@/components/dashboard/TemplatesManager'
 import { ErrorModal } from '@/components/dashboard/ErrorModal'
-import { subscriptionsApi } from '@/lib/api'
+import { subscriptionsApi, accountApi } from '@/lib/api'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { cardStyles, buttonStyles, spacing, typography, dividerStyles } from '@/lib/styles/design-system'
+import { Check, X, Edit2, Save, Loader2 } from 'lucide-react'
 
 interface Profile {
   id: string
@@ -18,26 +19,32 @@ interface Profile {
   full_name: string | null
   phone: string | null
   role: string
+  updated_at?: string
 }
 
 interface Organization {
   id: string
   name: string
+  updated_at?: string
 }
+
+type SettingsSection = 'profile' | 'organization' | 'billing' | 'templates' | 'security' | 'danger'
 
 export default function AccountPage() {
   const router = useRouter()
+  const [activeSection, setActiveSection] = useState<SettingsSection>('profile')
   const [profile, setProfile] = useState<Profile | null>(null)
   const [organization, setOrganization] = useState<Organization | null>(null)
   const [subscription, setSubscription] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [updating, setUpdating] = useState(false)
   const [userEmail, setUserEmail] = useState<string | null>(null)
-  const [editingProfile, setEditingProfile] = useState(false)
-  const [editingOrg, setEditingOrg] = useState(false)
-  const [profileForm, setProfileForm] = useState({ full_name: '', phone: '' })
-  const [orgForm, setOrgForm] = useState({ name: '' })
   const [error, setError] = useState<string | null>(null)
+  
+  // Inline editing states
+  const [editingField, setEditingField] = useState<string | null>(null)
+  const [fieldValue, setFieldValue] = useState<string>('')
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
 
   useEffect(() => {
     const loadData = async () => {
@@ -57,7 +64,7 @@ export default function AccountPage() {
         // Load user profile
         const { data: userData, error: userError } = await supabase
           .from('users')
-          .select('id, email, full_name, phone, role, organization_id')
+          .select('id, email, full_name, phone, role, organization_id, updated_at')
           .eq('id', user.id)
           .single()
 
@@ -69,6 +76,7 @@ export default function AccountPage() {
           full_name: userData.full_name,
           phone: userData.phone,
           role: userData.role,
+          updated_at: userData.updated_at,
         })
 
         // Redirect members to dashboard
@@ -81,13 +89,12 @@ export default function AccountPage() {
         if (userData.organization_id) {
           const { data: orgData, error: orgError } = await supabase
             .from('organizations')
-            .select('id, name')
+            .select('id, name, updated_at')
             .eq('id', userData.organization_id)
             .single()
 
           if (!orgError && orgData) {
             setOrganization(orgData)
-            setOrgForm({ name: orgData.name })
           }
         }
 
@@ -98,12 +105,6 @@ export default function AccountPage() {
         } catch (subError) {
           console.warn('Failed to load subscription:', subError)
         }
-
-        // Initialize profile form
-        setProfileForm({
-          full_name: userData.full_name || '',
-          phone: userData.phone || '',
-        })
       } catch (err: any) {
         console.error('Failed to load account data:', err)
         setError(err?.message || 'Failed to load account data')
@@ -121,64 +122,68 @@ export default function AccountPage() {
     router.push('/')
   }
 
-  const handleUpdateProfile = async () => {
-    if (!profile) return
+  const handleInlineEdit = (field: string, currentValue: string | null) => {
+    setEditingField(field)
+    setFieldValue(currentValue || '')
+    setSaveState('idle')
+  }
+
+  const handleInlineSave = async (field: string) => {
+    if (!profile || !organization) return
 
     setUpdating(true)
+    setSaveState('saving')
     setError(null)
+
     try {
-      const supabase = createSupabaseBrowserClient()
-      const { error: updateError } = await supabase
-        .from('users')
-        .update({
-          full_name: profileForm.full_name || null,
-          phone: profileForm.phone || null,
+      if (field === 'full_name' || field === 'phone') {
+        // Update profile via backend API (includes audit logging)
+        const response = await accountApi.updateProfile({
+          [field]: fieldValue || null,
         })
-        .eq('id', profile.id)
 
-      if (updateError) throw updateError
+        setProfile({
+          ...profile,
+          [field]: fieldValue || null,
+          updated_at: new Date().toISOString(),
+        })
+      } else if (field === 'org_name') {
+        // Update organization via backend API (includes audit logging)
+        if (profile.role !== 'owner' && profile.role !== 'admin') {
+          throw new Error('Only owners and admins can update organization name')
+        }
 
-      setProfile({
-        ...profile,
-        full_name: profileForm.full_name || null,
-        phone: profileForm.phone || null,
-      })
-      setEditingProfile(false)
+        const response = await accountApi.updateOrganization(fieldValue)
+
+        setOrganization({
+          ...organization,
+          name: fieldValue,
+          updated_at: new Date().toISOString(),
+        })
+      }
+
+      setSaveState('saved')
+      setEditingField(null)
+      
+      // Reset save state after 2 seconds
+      setTimeout(() => setSaveState('idle'), 2000)
     } catch (err: any) {
-      console.error('Failed to update profile:', err)
-      setError('Couldn\'t save that change. Your data is still here — try again.')
+      console.error('Failed to update:', err)
+      setSaveState('error')
+      setError(err?.message || 'Couldn\'t save that change. Your data is still here — try again.')
+      setTimeout(() => {
+        setSaveState('idle')
+        setEditingField(null)
+      }, 3000)
     } finally {
       setUpdating(false)
     }
   }
 
-  const handleUpdateOrganization = async () => {
-    if (!organization) return
-
-    setUpdating(true)
-    setError(null)
-    try {
-      const supabase = createSupabaseBrowserClient()
-      const { error: updateError } = await supabase
-        .from('organizations')
-        .update({
-          name: orgForm.name,
-        })
-        .eq('id', organization.id)
-
-      if (updateError) throw updateError
-
-      setOrganization({
-        ...organization,
-        name: orgForm.name,
-      })
-      setEditingOrg(false)
-    } catch (err: any) {
-      console.error('Failed to update organization:', err)
-      setError('Couldn\'t save that change. Your data is still here — try again.')
-    } finally {
-      setUpdating(false)
-    }
+  const handleInlineCancel = () => {
+    setEditingField(null)
+    setFieldValue('')
+    setSaveState('idle')
   }
 
   const formatStatus = (status: string | null) => {
@@ -188,6 +193,26 @@ export default function AccountPage() {
       .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' ')
   }
+
+  const formatDate = (dateString: string | undefined | null) => {
+    if (!dateString) return 'Never'
+    return new Date(dateString).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+  }
+
+  const sidebarSections: { id: SettingsSection; label: string; icon?: string }[] = [
+    { id: 'profile', label: 'Profile' },
+    { id: 'organization', label: 'Organization' },
+    { id: 'billing', label: 'Billing' },
+    { id: 'templates', label: 'Templates' },
+    { id: 'security', label: 'Security' },
+    { id: 'danger', label: 'Danger Zone' },
+  ]
 
   if (loading) {
     return (
@@ -232,239 +257,426 @@ export default function AccountPage() {
         <DashboardNavbar email={userEmail} onLogout={handleLogout} />
 
         <main className="mx-auto max-w-7xl px-6 py-14">
-          <div className={spacing.gap.relaxed}>
-            {/* Header */}
-            <div>
-              <h1 className={`${typography.h1} ${spacing.tight}`}>Account Settings</h1>
-              <p className={typography.bodyMuted}>Manage your profile and organization settings</p>
-            </div>
-
-            {/* Error Message */}
-            {error && (
-              <div className="bg-red-500/20 border border-red-500/30 rounded-lg p-4">
-                <p className="text-sm text-red-400">{error}</p>
+          <div className="flex gap-8">
+            {/* Left Sidebar */}
+            <aside className="w-64 flex-shrink-0">
+              <div className="sticky top-24">
+                <h1 className={`${typography.h2} ${spacing.tight} mb-6`}>Settings</h1>
+                <nav className="space-y-1">
+                  {sidebarSections.map((section) => (
+                    <button
+                      key={section.id}
+                      onClick={() => setActiveSection(section.id)}
+                      className={`
+                        w-full text-left px-4 py-2.5 rounded-lg text-sm font-medium transition-colors
+                        ${
+                          activeSection === section.id
+                            ? 'bg-white/10 text-white border border-white/20'
+                            : 'text-white/60 hover:text-white hover:bg-white/5'
+                        }
+                      `}
+                    >
+                      {section.label}
+                    </button>
+                  ))}
+                </nav>
               </div>
-            )}
+            </aside>
 
-            {/* Profile Section */}
-            <div className={`${cardStyles.base} ${cardStyles.padding.md}`}>
-              <div className={`flex items-center justify-between ${spacing.normal}`}>
-                <h2 className={typography.h3}>Profile</h2>
-                {!editingProfile && (
-                    <button
-                      onClick={() => setEditingProfile(true)}
-                      className={buttonStyles.secondary}
-                    >
-                      Edit
-                    </button>
-                )}
-              </div>
-
-              {editingProfile ? (
-                <div className={spacing.gap.normal}>
-                  <div>
-                    <label className={`block text-sm text-white/60 ${spacing.tight}`}>Full Name</label>
-                    <input
-                      type="text"
-                      value={profileForm.full_name}
-                      onChange={(e) => setProfileForm({ ...profileForm, full_name: e.target.value })}
-                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-[#F97316]"
-                      placeholder="Enter your full name"
-                    />
-                  </div>
-                  <div>
-                    <label className={`block text-sm text-white/60 ${spacing.tight}`}>Phone</label>
-                    <input
-                      type="tel"
-                      value={profileForm.phone}
-                      onChange={(e) => setProfileForm({ ...profileForm, phone: e.target.value })}
-                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-[#F97316]"
-                      placeholder="Enter your phone number"
-                    />
-                  </div>
-                  <div className="flex gap-3">
-                    <button
-                      onClick={handleUpdateProfile}
-                      disabled={updating}
-                      className={buttonStyles.primary}
-                    >
-                      {updating ? 'Saving...' : 'Save'}
-                    </button>
-                    <button
-                      onClick={() => {
-                        setEditingProfile(false)
-                        setProfileForm({
-                          full_name: profile.full_name || '',
-                          phone: profile.phone || '',
-                        })
-                      }}
-                      disabled={updating}
-                      className={buttonStyles.secondary}
-                    >
-                      Cancel
-                    </button>
-                  </div>
+            {/* Main Content */}
+            <div className="flex-1 min-w-0">
+              {error && (
+                <div className="mb-6 bg-red-500/20 border border-red-500/30 rounded-lg p-4">
+                  <p className="text-sm text-red-400">{error}</p>
                 </div>
-              ) : (
-                <div className={spacing.gap.normal}>
-                  <div>
-                    <div className="text-sm text-white/60">Email</div>
-                    <div className="text-white">{profile.email}</div>
+              )}
+
+              {/* Profile Section */}
+              {activeSection === 'profile' && (
+                <div className={`${cardStyles.base} ${cardStyles.padding.md}`}>
+                  <div className="flex items-center justify-between mb-6">
+                    <div>
+                      <h2 className={typography.h3}>Profile</h2>
+                      <p className="text-sm text-white/50 mt-1">
+                        Last updated: {formatDate(profile.updated_at)}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <div className="text-sm text-white/60">Full Name</div>
-                    <div className="text-white">{profile.full_name || 'Not set'}</div>
-                  </div>
-                  <div>
-                    <div className="text-sm text-white/60">Phone</div>
-                    <div className="text-white">{profile.phone || 'Not set'}</div>
-                  </div>
-                  <div>
-                    <div className="text-sm text-white/60">Role</div>
-                    <div className="text-white">{profile.role.toUpperCase()}</div>
+
+                  <div className="space-y-6">
+                    {/* Email (read-only) */}
+                    <div className="pb-4 border-b border-white/10">
+                      <label className="block text-xs font-medium text-white/60 mb-2 uppercase tracking-wide">
+                        Email
+                      </label>
+                      <div className="text-white">{profile.email}</div>
+                      <p className="text-xs text-white/40 mt-1">Email cannot be changed</p>
+                    </div>
+
+                    {/* Full Name */}
+                    <div className="pb-4 border-b border-white/10">
+                      <label className="block text-xs font-medium text-white/60 mb-2 uppercase tracking-wide">
+                        Full Name
+                      </label>
+                      {editingField === 'full_name' ? (
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={fieldValue}
+                            onChange={(e) => setFieldValue(e.target.value)}
+                            className="flex-1 px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-[#F97316]"
+                            placeholder="Enter your full name"
+                            autoFocus
+                          />
+                          <button
+                            onClick={() => handleInlineSave('full_name')}
+                            disabled={updating}
+                            className="p-2 bg-[#F97316] hover:bg-[#FB923C] text-black rounded-lg transition-colors disabled:opacity-50"
+                          >
+                            {saveState === 'saving' ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : saveState === 'saved' ? (
+                              <Check className="h-4 w-4" />
+                            ) : (
+                              <Save className="h-4 w-4" />
+                            )}
+                          </button>
+                          <button
+                            onClick={handleInlineCancel}
+                            disabled={updating}
+                            className="p-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg transition-colors disabled:opacity-50"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between group">
+                          <div className="text-white">{profile.full_name || 'Not set'}</div>
+                          <button
+                            onClick={() => handleInlineEdit('full_name', profile.full_name)}
+                            className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-white/5 rounded transition-all"
+                          >
+                            <Edit2 className="h-4 w-4 text-white/60" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Phone */}
+                    <div className="pb-4 border-b border-white/10">
+                      <label className="block text-xs font-medium text-white/60 mb-2 uppercase tracking-wide">
+                        Phone
+                      </label>
+                      {editingField === 'phone' ? (
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="tel"
+                            value={fieldValue}
+                            onChange={(e) => setFieldValue(e.target.value)}
+                            className="flex-1 px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-[#F97316]"
+                            placeholder="Enter your phone number"
+                            autoFocus
+                          />
+                          <button
+                            onClick={() => handleInlineSave('phone')}
+                            disabled={updating}
+                            className="p-2 bg-[#F97316] hover:bg-[#FB923C] text-black rounded-lg transition-colors disabled:opacity-50"
+                          >
+                            {saveState === 'saving' ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : saveState === 'saved' ? (
+                              <Check className="h-4 w-4" />
+                            ) : (
+                              <Save className="h-4 w-4" />
+                            )}
+                          </button>
+                          <button
+                            onClick={handleInlineCancel}
+                            disabled={updating}
+                            className="p-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg transition-colors disabled:opacity-50"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between group">
+                          <div className="text-white">{profile.phone || 'Not set'}</div>
+                          <button
+                            onClick={() => handleInlineEdit('phone', profile.phone)}
+                            className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-white/5 rounded transition-all"
+                          >
+                            <Edit2 className="h-4 w-4 text-white/60" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Role (read-only) */}
+                    <div>
+                      <label className="block text-xs font-medium text-white/60 mb-2 uppercase tracking-wide">
+                        Role
+                      </label>
+                      <div className="text-white">{profile.role.toUpperCase()}</div>
+                    </div>
                   </div>
                 </div>
               )}
-            </div>
 
-            {/* Organization Section */}
-            {organization && (
-              <div className={`${cardStyles.base} ${cardStyles.padding.md}`}>
-                <div className={`flex items-center justify-between ${spacing.normal}`}>
-                  <h2 className={typography.h3}>Organization</h2>
-                  {!editingOrg && (
-                    <button
-                      onClick={() => setEditingOrg(true)}
-                      className={buttonStyles.secondary}
-                    >
-                      Edit
-                    </button>
-                  )}
-                </div>
-
-                {editingOrg ? (
-                  <div className={spacing.gap.normal}>
+              {/* Organization Section */}
+              {activeSection === 'organization' && organization && (
+                <div className={`${cardStyles.base} ${cardStyles.padding.md}`}>
+                  <div className="flex items-center justify-between mb-6">
                     <div>
-                      <label className={`block text-sm text-white/60 ${spacing.tight}`}>Organization Name</label>
-                      <input
-                        type="text"
-                        value={orgForm.name}
-                        onChange={(e) => setOrgForm({ name: e.target.value })}
-                        className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-[#F97316]"
-                        placeholder="Enter organization name"
-                      />
+                      <h2 className={typography.h3}>Organization</h2>
+                      <p className="text-sm text-white/50 mt-1">
+                        Last updated: {formatDate(organization.updated_at)}
+                      </p>
                     </div>
-                    <div className="flex gap-3">
+                  </div>
+
+                  <div className="space-y-6">
+                    {/* Organization Name */}
+                    <div>
+                      <label className="block text-xs font-medium text-white/60 mb-2 uppercase tracking-wide">
+                        Organization Name
+                      </label>
+                      {editingField === 'org_name' ? (
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={fieldValue}
+                            onChange={(e) => setFieldValue(e.target.value)}
+                            className="flex-1 px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-[#F97316]"
+                            placeholder="Enter organization name"
+                            autoFocus
+                          />
+                          <button
+                            onClick={() => handleInlineSave('org_name')}
+                            disabled={updating}
+                            className="p-2 bg-[#F97316] hover:bg-[#FB923C] text-black rounded-lg transition-colors disabled:opacity-50"
+                          >
+                            {saveState === 'saving' ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : saveState === 'saved' ? (
+                              <Check className="h-4 w-4" />
+                            ) : (
+                              <Save className="h-4 w-4" />
+                            )}
+                          </button>
+                          <button
+                            onClick={handleInlineCancel}
+                            disabled={updating}
+                            className="p-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg transition-colors disabled:opacity-50"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between group">
+                          <div className="text-white">{organization.name}</div>
+                          {(profile.role === 'owner' || profile.role === 'admin') && (
+                            <button
+                              onClick={() => handleInlineEdit('org_name', organization.name)}
+                              className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-white/5 rounded transition-all"
+                            >
+                              <Edit2 className="h-4 w-4 text-white/60" />
+                            </button>
+                          )}
+                        </div>
+                      )}
+                      {profile.role !== 'owner' && profile.role !== 'admin' && (
+                        <p className="text-xs text-white/40 mt-1">
+                          Only owners and admins can update organization name
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Billing Section */}
+              {activeSection === 'billing' && (
+                <div className={`${cardStyles.base} ${cardStyles.padding.md}`}>
+                  <div className="flex items-center justify-between mb-6">
+                    <div>
+                      <h2 className={typography.h3}>Plan & Billing</h2>
+                      <p className="text-sm text-white/50 mt-1">Contract summary</p>
+                    </div>
+                  </div>
+
+                  {subscription ? (
+                    <div className="space-y-6">
+                      <div className="grid grid-cols-2 gap-6 pb-4 border-b border-white/10">
+                        <div>
+                          <label className="block text-xs font-medium text-white/60 mb-2 uppercase tracking-wide">
+                            Current Plan
+                          </label>
+                          <div className="text-white font-semibold">
+                            {subscription.tier ? subscription.tier.toUpperCase() : 'No Plan'}
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-white/60 mb-2 uppercase tracking-wide">
+                            Status
+                          </label>
+                          <div className="text-white">{formatStatus(subscription.status)}</div>
+                        </div>
+                      </div>
+
+                      {subscription.current_period_end && (
+                        <div className="pb-4 border-b border-white/10">
+                          <label className="block text-xs font-medium text-white/60 mb-2 uppercase tracking-wide">
+                            Renewal Date
+                          </label>
+                          <div className="text-white">
+                            {new Date(subscription.current_period_end).toLocaleDateString('en-US', {
+                              month: 'long',
+                              day: 'numeric',
+                              year: 'numeric',
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {subscription.jobsLimit !== null && (
+                        <div className="pb-4 border-b border-white/10">
+                          <label className="block text-xs font-medium text-white/60 mb-2 uppercase tracking-wide">
+                            Monthly Job Limit
+                          </label>
+                          <div className="text-white">
+                            {subscription.jobsLimit === null ? 'Unlimited' : subscription.jobsLimit}
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="flex gap-3 pt-2">
+                        <Link
+                          href="/operations/account/change-plan"
+                          className={`${buttonStyles.primary} inline-block text-center`}
+                        >
+                          Change Plan
+                        </Link>
+                        {subscription.stripe_customer_id && (
+                          <button
+                            onClick={async () => {
+                              try {
+                                const response = await subscriptionsApi.createPortalSession()
+                                window.location.href = response.url
+                              } catch (err: any) {
+                                setError(err?.message || 'Failed to open billing portal')
+                              }
+                            }}
+                            className={`${buttonStyles.secondary} bg-white/5 hover:bg-white/10 border-white/10`}
+                          >
+                            View Invoices
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <p className="text-white/60">No active subscription</p>
                       <button
-                        onClick={handleUpdateOrganization}
-                        disabled={updating}
+                        onClick={() => router.push('/pricing')}
                         className={buttonStyles.primary}
                       >
-                        {updating ? 'Saving...' : 'Save'}
-                      </button>
-                      <button
-                        onClick={() => {
-                          setEditingOrg(false)
-                          setOrgForm({ name: organization.name })
-                        }}
-                        disabled={updating}
-                        className={buttonStyles.secondary}
-                      >
-                        Cancel
+                        View Pricing Plans
                       </button>
                     </div>
-                  </div>
-                ) : (
-                  <div>
-                    <div className="text-sm text-white/60">Organization Name</div>
-                    <div className="text-white">{organization.name}</div>
-                  </div>
-                )}
-              </div>
-            )}
+                  )}
+                </div>
+              )}
 
-            {/* Plan & Billing Section */}
-            <div className={`${cardStyles.base} ${cardStyles.padding.md}`}>
-              <h2 className={`${typography.h3} ${spacing.normal}`}>Plan & Billing</h2>
-              {subscription ? (
-                <div className={spacing.gap.normal}>
-                  <div>
-                    <div className="text-sm text-white/60">Current Plan</div>
-                    <div className="text-white font-semibold">
-                      {subscription.tier ? subscription.tier.toUpperCase() : 'No Plan'}
+              {/* Templates Section */}
+              {activeSection === 'templates' && organization && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.1 }}
+                >
+                  <TemplatesManager 
+                    organizationId={organization.id} 
+                    subscriptionTier={subscription?.tier || 'starter'}
+                  />
+                </motion.div>
+              )}
+
+              {/* Security Section */}
+              {activeSection === 'security' && (
+                <div className={`${cardStyles.base} ${cardStyles.padding.md}`}>
+                  <div className="flex items-center justify-between mb-6">
+                    <div>
+                      <h2 className={typography.h3}>Security</h2>
+                      <p className="text-sm text-white/50 mt-1">Account security settings</p>
                     </div>
                   </div>
-                  <div>
-                    <div className="text-sm text-white/60">Status</div>
-                    <div className="text-white">{formatStatus(subscription.status)}</div>
-                  </div>
-                  {subscription.current_period_end && (
-                    <div>
-                      <div className="text-sm text-white/60">Renewal Date</div>
-                      <div className="text-white">
-                        {new Date(subscription.current_period_end).toLocaleDateString()}
-                      </div>
-                    </div>
-                  )}
-                  {subscription.jobsLimit !== null && (
-                    <div>
-                      <div className="text-sm text-white/60">Monthly Job Limit</div>
-                      <div className="text-white">
-                        {subscription.jobsLimit === null ? 'Unlimited' : subscription.jobsLimit}
-                      </div>
-                    </div>
-                  )}
-                  <div className={`flex ${spacing.gap.normal} ${spacing.normal}`}>
-                    <Link
-                      href="/operations/account/change-plan"
-                      className={`${buttonStyles.primary} inline-block text-center`}
-                    >
-                      Change Plan
-                    </Link>
-                    {subscription.stripe_customer_id && (
+
+                  <div className="space-y-6">
+                    <div className="pb-4 border-b border-white/10">
+                      <label className="block text-xs font-medium text-white/60 mb-2 uppercase tracking-wide">
+                        Password
+                      </label>
+                      <p className="text-sm text-white/60 mb-3">
+                        Change your password to keep your account secure
+                      </p>
                       <button
-                        onClick={async () => {
-                          try {
-                            const response = await subscriptionsApi.createPortalSession()
-                            window.location.href = response.url
-                          } catch (err: any) {
-                            setError(err?.message || 'Failed to open billing portal')
-                          }
+                        className={`${buttonStyles.secondary} bg-white/5 hover:bg-white/10 border-white/10`}
+                        onClick={() => {
+                          // TODO: Implement password reset flow
+                          setError('Password reset coming soon')
                         }}
-                        className={buttonStyles.secondary}
                       >
-                        Manage Billing
+                        Change Password
                       </button>
-                    )}
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-white/60 mb-2 uppercase tracking-wide">
+                        Two-Factor Authentication
+                      </label>
+                      <p className="text-sm text-white/60 mb-3">
+                        Add an extra layer of security to your account
+                      </p>
+                      <button
+                        className={`${buttonStyles.secondary} bg-white/5 hover:bg-white/10 border-white/10`}
+                        onClick={() => {
+                          setError('2FA coming soon')
+                        }}
+                      >
+                        Enable 2FA
+                      </button>
+                    </div>
                   </div>
                 </div>
-              ) : (
-                <div className={spacing.gap.normal}>
-                  <p className="text-white/60">No active subscription</p>
-                    <button
-                      onClick={() => router.push('/pricing')}
-                      className={buttonStyles.primary}
-                    >
-                      View Pricing Plans
-                    </button>
+              )}
+
+              {/* Danger Zone */}
+              {activeSection === 'danger' && (
+                <div className={`${cardStyles.base} ${cardStyles.padding.md} border-red-500/20`}>
+                  <div className="mb-6">
+                    <h2 className={typography.h3}>Danger Zone</h2>
+                    <p className="text-sm text-white/50 mt-1">Irreversible actions</p>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-lg">
+                      <h3 className="text-sm font-semibold text-white mb-2">Delete Account</h3>
+                      <p className="text-xs text-white/60 mb-3">
+                        Permanently delete your account and all associated data. This action cannot be undone.
+                      </p>
+                      <button
+                        className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-400 rounded-lg text-sm font-medium transition-colors"
+                        onClick={() => {
+                          setError('Account deletion coming soon')
+                        }}
+                      >
+                        Delete Account
+                      </button>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
-
-            {/* Templates Manager */}
-            {organization && (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3 }}
-                className={spacing.section}
-              >
-                <TemplatesManager 
-                  organizationId={organization.id} 
-                  subscriptionTier={subscription?.tier || 'starter'}
-                />
-              </motion.div>
-            )}
           </div>
         </main>
 
@@ -479,6 +691,3 @@ export default function AccountPage() {
     </ProtectedRoute>
   )
 }
-
-
-

@@ -66,6 +66,7 @@ export function TemplatesManager({ organizationId, subscriptionTier = 'starter' 
   const [templateUsageCounts, setTemplateUsageCounts] = useState<Record<string, number>>({})
   const [selectedTemplateForDetail, setSelectedTemplateForDetail] = useState<HazardTemplate | JobTemplate | null>(null)
   const [archiveConfirm, setArchiveConfirm] = useState<{ templateId: string; usageCount: number } | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
 
   // Use cached risk factors
   const { data: riskFactors = [] } = useRiskFactors(organizationId)
@@ -262,7 +263,22 @@ export function TemplatesManager({ organizationId, subscriptionTier = 'starter' 
     }
   }
 
-  const currentTemplates = activeTab === 'hazard' ? hazardTemplates : jobTemplates
+  // Filter templates by search query
+  const filteredTemplates = useMemo(() => {
+    const templates = activeTab === 'hazard' ? hazardTemplates : jobTemplates
+    if (!searchQuery.trim()) return templates
+    
+    const query = searchQuery.toLowerCase()
+    return templates.filter((template) => {
+      const nameMatch = template.name.toLowerCase().includes(query)
+      const tradeMatch = (template as HazardTemplate).trade?.toLowerCase().includes(query) ||
+                        (template as JobTemplate).job_type?.toLowerCase().includes(query)
+      const descMatch = template.description?.toLowerCase().includes(query)
+      return nameMatch || tradeMatch || descMatch
+    })
+  }, [activeTab, hazardTemplates, jobTemplates, searchQuery])
+
+  const currentTemplates = filteredTemplates
 
   const handleNewTemplate = async () => {
     const limitCheck = await checkTemplateLimit()
@@ -331,7 +347,7 @@ export function TemplatesManager({ organizationId, subscriptionTier = 'starter' 
             activeTab === 'hazard' ? tabStyles.active : tabStyles.inactive
           }`}
         >
-          Hazard Templates
+          Hazard Templates ({hazardTemplates.length})
         </button>
         <button
           onClick={() => setActiveTab('job')}
@@ -339,9 +355,22 @@ export function TemplatesManager({ organizationId, subscriptionTier = 'starter' 
             activeTab === 'job' ? tabStyles.active : tabStyles.inactive
           }`}
         >
-          Job Templates
+          Job Templates ({jobTemplates.length})
         </button>
       </div>
+
+      {/* Search (if templates exist) */}
+      {!loading && currentTemplates.length > 0 && (
+        <div className="mb-4">
+          <input
+            type="text"
+            placeholder="Search templates..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-[#F97316] text-sm"
+          />
+        </div>
+      )}
 
       {/* Templates List */}
       {loading ? (

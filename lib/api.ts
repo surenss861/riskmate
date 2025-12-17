@@ -510,3 +510,20 @@ export const legalApi = {
     ),
 };
 
+// Account API
+export const accountApi = {
+  updateProfile: async (updates: { full_name?: string | null; phone?: string | null }) => {
+    return apiRequest<{ data: any; message: string }>('/api/account/profile', {
+      method: 'PATCH',
+      body: JSON.stringify(updates),
+    });
+  },
+
+  updateOrganization: async (name: string) => {
+    return apiRequest<{ data: any; message: string }>('/api/account/organization', {
+      method: 'PATCH',
+      body: JSON.stringify({ name }),
+    });
+  },
+};
+
