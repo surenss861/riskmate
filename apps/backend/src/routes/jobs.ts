@@ -750,8 +750,16 @@ jobsRouter.patch("/:id/mitigations/:mitigationId", authenticate as unknown as ex
   try {
     const jobId = authReq.params.id;
     const mitigationId = authReq.params.mitigationId;
-    const { organization_id } = authReq.user;
+    const { organization_id, role } = authReq.user;
     const { done } = authReq.body;
+
+    // Role-based capability: Executives are read-only
+    if (role === 'executive') {
+      return res.status(403).json({
+        message: "Executives have read-only access",
+        code: "AUTH_ROLE_READ_ONLY",
+      });
+    }
 
     if (typeof done !== "boolean") {
       return res.status(400).json({ message: "'done' boolean field is required" });
@@ -1151,9 +1159,23 @@ jobsRouter.patch("/:id/flag", authenticate as unknown as express.RequestHandler,
   const authReq = req as AuthenticatedRequest & RequestWithId;
   const requestId = authReq.requestId || 'unknown';
   try {
-    const { organization_id, id: userId } = authReq.user;
+    const { organization_id, id: userId, role } = authReq.user;
     const { id } = authReq.params;
     const { flagged } = authReq.body;
+
+    // Role-based capability: Only Safety Lead, Admin, and Owner can flag/unflag jobs
+    // Members and Executives cannot flag jobs
+    if (role === 'member' || role === 'executive') {
+      const { response: errorResponse, errorId } = createErrorResponse({
+        message: "You do not have permission to flag jobs for review",
+        internalMessage: `User ${userId} (role: ${role}) attempted to flag job ${id}`,
+        code: "AUTH_ROLE_FORBIDDEN",
+        requestId,
+        statusCode: 403,
+      });
+      res.setHeader('X-Error-ID', errorId);
+      return res.status(403).json(errorResponse);
+    }
 
     // Verify job exists and belongs to organization
     const { data: job, error: jobError } = await supabase

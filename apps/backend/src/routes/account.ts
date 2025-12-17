@@ -156,10 +156,11 @@ accountRouter.patch(
         }).response);
       }
 
-      // Check permissions (owner/admin only)
-      if (user.role !== "owner" && user.role !== "admin") {
+      // Check permissions (owner only for org name updates)
+      // Admins can manage team but not org-level settings
+      if (user.role !== "owner") {
         return res.status(403).json(createErrorResponse({
-          message: "Only owners and admins can update organization name",
+          message: "Only owners can update organization name",
           code: "AUTH_ROLE_FORBIDDEN",
           status: 403,
         }).response);

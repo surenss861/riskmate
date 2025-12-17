@@ -200,6 +200,17 @@ export default function TeamPage() {
     return descriptions[role] || ''
   }
 
+  const getRiskVisibility = (role: string) => {
+    const visibility: Record<string, string> = {
+      safety_lead: 'Flagged jobs, Executive view',
+      executive: 'Executive view, read-only',
+      owner: 'All access',
+      admin: 'Team management',
+      member: 'Job creation',
+    }
+    return visibility[role] || ''
+  }
+
   if (loading) {
     return (
       <ProtectedRoute>
@@ -383,6 +394,11 @@ export default function TeamPage() {
                           )}
                         </div>
                         <div className="text-sm text-white/60 mt-1">{member.email}</div>
+                        {(member.role === 'safety_lead' || member.role === 'executive') && (
+                          <div className="text-xs text-white/40 mt-1">
+                            Risk visibility: {getRiskVisibility(member.role)}
+                          </div>
+                        )}
                       </div>
                       {(team.current_user_role === 'owner' || team.current_user_role === 'admin') && (
                         <button
@@ -437,6 +453,13 @@ export default function TeamPage() {
                 </div>
               </div>
             )}
+
+            {/* Audit Reassurance Footer */}
+            <div className="mt-8 pt-6 border-t border-white/10">
+              <p className="text-xs text-white/40 text-center">
+                All access changes are recorded for compliance and audit review.
+              </p>
+            </div>
           </div>
         </main>
 
