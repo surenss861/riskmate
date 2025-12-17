@@ -121,7 +121,7 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
 
     let query = supabase
       .from("jobs")
-      .select("id, client_name, job_type, location, status, risk_score, risk_level, created_at, updated_at, applied_template_id, applied_template_type")
+      .select("id, client_name, job_type, location, status, risk_score, risk_level, created_at, updated_at, applied_template_id, applied_template_type, review_flag, flagged_at")
       .eq("organization_id", organization_id)
       .is("deleted_at", null); // Always exclude deleted
     
@@ -218,7 +218,7 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
       console.warn('Archive/delete columns not found - retrying without filters (migration may not be applied yet)');
       let fallbackQuery = supabase
         .from("jobs")
-        .select("id, client_name, job_type, location, status, risk_score, risk_level, created_at, updated_at, applied_template_id, applied_template_type")
+        .select("id, client_name, job_type, location, status, risk_score, risk_level, created_at, updated_at, applied_template_id, applied_template_type, review_flag, flagged_at")
         .eq("organization_id", organization_id);
       
       // Apply cursor or offset pagination (fallback mode - simplified)

@@ -295,6 +295,13 @@ export const jobsApi = {
     });
   },
 
+  flag: async (jobId: string, flagged: boolean) => {
+    return apiRequest<{ id: string; review_flag: boolean; flagged_at: string | null }>(`/api/jobs/${jobId}/flag`, {
+      method: 'PATCH',
+      body: JSON.stringify({ flagged }),
+    });
+  },
+
   delete: async (jobId: string) => {
     return apiRequest<{
       data: {

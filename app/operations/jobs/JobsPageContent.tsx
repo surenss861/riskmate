@@ -741,15 +741,32 @@ export function JobsPageContentView(props: JobsPageContentProps) {
                       <span className="text-xs text-white/60">{value}</span>
                       {(job.risk_score && job.risk_score >= 40) && (
                         <button
-                          onClick={(e) => {
+                          onClick={async (e) => {
                             e.stopPropagation()
-                            // TODO: Implement flag for review
-                            setToast({ message: 'Flagged for review', type: 'success' })
+                            try {
+                              const isFlagged = job.review_flag === true
+                              await jobsApi.flag(job.id, !isFlagged)
+                              setToast({ 
+                                message: isFlagged ? 'Review flag removed' : 'Flagged for review', 
+                                type: 'success' 
+                              })
+                              // Revalidate to get updated flag state
+                              props.onJobArchived()
+                            } catch (err: any) {
+                              setToast({ 
+                                message: err?.message || 'Failed to update review flag', 
+                                type: 'error' 
+                              })
+                            }
                           }}
-                          className="text-xs text-white/40 hover:text-white/60 underline"
-                          title="Flag for review"
+                          className={`text-xs underline transition-colors ${
+                            job.review_flag 
+                              ? 'text-white/60 hover:text-white/80' 
+                              : 'text-white/40 hover:text-white/60'
+                          }`}
+                          title={job.review_flag ? 'Remove review flag' : 'Flag for review (visible to Safety Leads and executives)'}
                         >
-                          Flag for review
+                          {job.review_flag ? '✓ Flagged' : 'Flag for review'}
                         </button>
                       )}
                     </div>
