@@ -1145,6 +1145,109 @@ jobsRouter.post("/:id/archive", authenticate as unknown as express.RequestHandle
   }
 });
 
+// PATCH /api/jobs/:id/flag
+// Flags a job for review (governance signal, not workflow)
+jobsRouter.patch("/:id/flag", authenticate as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
+  const authReq = req as AuthenticatedRequest & RequestWithId;
+  const requestId = authReq.requestId || 'unknown';
+  try {
+    const { organization_id, id: userId } = authReq.user;
+    const { id } = authReq.params;
+    const { flagged } = authReq.body;
+
+    // Verify job exists and belongs to organization
+    const { data: job, error: jobError } = await supabase
+      .from("jobs")
+      .select("id, client_name, organization_id")
+      .eq("id", id)
+      .eq("organization_id", organization_id)
+      .single();
+
+    if (jobError || !job) {
+      const { response: errorResponse, errorId } = createErrorResponse({
+        message: "Job not found",
+        internalMessage: `Job ${id} not found or access denied`,
+        code: "JOB_NOT_FOUND",
+        requestId,
+        statusCode: 404,
+      });
+      res.setHeader('X-Error-ID', errorId);
+      return res.status(404).json(errorResponse);
+    }
+
+    // Update review flag
+    const updateData: any = {
+      review_flag: flagged === true || flagged === 'true',
+    };
+
+    // Set flagged_at timestamp when flagging, clear when unflagging
+    if (updateData.review_flag) {
+      updateData.flagged_at = new Date().toISOString();
+    } else {
+      updateData.flagged_at = null;
+    }
+
+    const { data: updatedJob, error: updateError } = await supabase
+      .from("jobs")
+      .update(updateData)
+      .eq("id", id)
+      .eq("organization_id", organization_id)
+      .select("id, review_flag, flagged_at")
+      .single();
+
+    if (updateError) {
+      console.error("Flag update failed:", updateError);
+      const { response: errorResponse, errorId } = createErrorResponse({
+        message: "Failed to update review flag",
+        internalMessage: `Failed to update review flag for job ${id}: ${updateError.message}`,
+        code: "JOB_FLAG_UPDATE_FAILED",
+        requestId,
+        statusCode: 500,
+      });
+      res.setHeader('X-Error-ID', errorId);
+      logErrorForSupport(500, "JOB_FLAG_UPDATE_FAILED", requestId, organization_id, errorResponse.message, errorResponse.internal_message, errorResponse.category, errorResponse.severity, '/api/jobs/:id/flag');
+      return res.status(500).json(errorResponse);
+    }
+
+    // Log audit event
+    try {
+      await recordAuditLog({
+        organizationId: organization_id,
+        actorId: userId,
+        eventName: updateData.review_flag ? "job.flagged_for_review" : "job.unflagged",
+        targetType: "job",
+        targetId: id,
+        metadata: {
+          flagged: updateData.review_flag,
+          flagged_at: updateData.flagged_at,
+        },
+      });
+    } catch (auditError) {
+      // Non-fatal: log but don't fail the request
+      console.warn("Audit log failed for flag action:", auditError);
+    }
+
+    res.json({
+      id: updatedJob.id,
+      review_flag: updatedJob.review_flag,
+      flagged_at: updatedJob.flagged_at,
+      request_id: requestId,
+    });
+  } catch (err: any) {
+    console.error("Flag job failed:", err);
+    const { response: errorResponse, errorId } = createErrorResponse({
+      message: "Failed to flag job for review",
+      internalMessage: `Unexpected error flagging job: ${err?.message || String(err)}`,
+      code: "JOB_FLAG_ERROR",
+      requestId: authReq.requestId || 'unknown',
+      statusCode: 500,
+    });
+    res.setHeader('X-Error-ID', errorId);
+    logErrorForSupport(500, "JOB_FLAG_ERROR", authReq.requestId || 'unknown', authReq.user?.organization_id, errorResponse.message, errorResponse.internal_message, errorResponse.category, errorResponse.severity, '/api/jobs/:id/flag');
+    res.status(500).json(errorResponse);
+  }
+});
+
 // DELETE /api/jobs/:id
 // Hard deletes a job (admin-only, strict eligibility checks)
 jobsRouter.delete("/:id", authenticate as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
