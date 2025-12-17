@@ -1,8 +1,12 @@
 # RiskMate Governance Model
 
 **Version:** 1.0.0  
+**Effective Date:** January 2025  
 **Last Updated:** 2025-01-17  
 **Status:** Active
+
+> **Governance Model v1.0 – Effective January 2025**  
+> This document defines the capability-constrained risk governance system for RiskMate. All role capabilities are server-enforced at the API layer. Changes to this model will be versioned and documented.
 
 ---
 

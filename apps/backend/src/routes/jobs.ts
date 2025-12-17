@@ -763,6 +763,26 @@ jobsRouter.patch("/:id/mitigations/:mitigationId", authenticate as unknown as ex
 
     // Role-based capability: Executives are read-only
     if (role === 'executive') {
+      // Log capability violation for audit trail
+      try {
+        await recordAuditLog({
+          organizationId: organization_id,
+          actorId: authReq.user.id,
+          eventName: "auth.role_violation",
+          targetType: "mitigation",
+          targetId: mitigationId,
+          metadata: {
+            role,
+            attempted_action: "update_mitigation",
+            result: "denied",
+            reason: "Executive role is read-only",
+          },
+        });
+      } catch (auditError) {
+        // Non-fatal: log but don't fail the request
+        console.warn("Audit log failed for role violation:", auditError);
+      }
+
       return res.status(403).json({
         message: "Executives have read-only access",
         code: "AUTH_ROLE_READ_ONLY",
@@ -1174,6 +1194,26 @@ jobsRouter.patch("/:id/flag", authenticate as unknown as express.RequestHandler,
     // Role-based capability: Only Safety Lead, Admin, and Owner can flag/unflag jobs
     // Members and Executives cannot flag jobs
     if (role === 'member' || role === 'executive') {
+      // Log capability violation for audit trail
+      try {
+        await recordAuditLog({
+          organizationId: organization_id,
+          actorId: userId,
+          eventName: "auth.role_violation",
+          targetType: "job",
+          targetId: id,
+          metadata: {
+            role,
+            attempted_action: "flag_job",
+            result: "denied",
+            reason: "Role does not have flag_job capability",
+          },
+        });
+      } catch (auditError) {
+        // Non-fatal: log but don't fail the request
+        console.warn("Audit log failed for role violation:", auditError);
+      }
+
       const { response: errorResponse, errorId } = createErrorResponse({
         message: "You do not have permission to flag jobs for review",
         internalMessage: `User ${userId} (role: ${role}) attempted to flag job ${id}`,
@@ -1182,6 +1222,7 @@ jobsRouter.patch("/:id/flag", authenticate as unknown as express.RequestHandler,
         statusCode: 403,
       });
       res.setHeader('X-Error-ID', errorId);
+      logErrorForSupport(403, "AUTH_ROLE_FORBIDDEN", requestId, organization_id, errorResponse.message, errorResponse.internal_message, errorResponse.category, errorResponse.severity, '/api/jobs/:id/flag');
       return res.status(403).json(errorResponse);
     }
 

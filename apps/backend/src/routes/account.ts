@@ -159,6 +159,26 @@ accountRouter.patch(
       // Check permissions (owner only for org name updates)
       // Admins can manage team but not org-level settings
       if (user.role !== "owner") {
+        // Log capability violation for audit trail
+        try {
+          await recordAuditLog({
+            organizationId: user.organization_id,
+            actorId: userId,
+            eventName: "auth.role_violation",
+            targetType: "organization",
+            targetId: user.organization_id,
+            metadata: {
+              role: user.role,
+              attempted_action: "update_organization_name",
+              result: "denied",
+              reason: "Only owner role can update organization settings",
+            },
+          });
+        } catch (auditError) {
+          // Non-fatal: log but don't fail the request
+          console.warn("Audit log failed for role violation:", auditError);
+        }
+
         return res.status(403).json(createErrorResponse({
           message: "Only owners can update organization name",
           code: "AUTH_ROLE_FORBIDDEN",
