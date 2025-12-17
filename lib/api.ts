@@ -394,10 +394,17 @@ export const teamApi = {
         user_id?: string | null;
       }>;
       seats: { limit: number | null; used: number; pending: number; available: number | null };
+      risk_coverage?: {
+        owner: number;
+        admin: number;
+        safety_lead: number;
+        executive: number;
+        member: number;
+      };
       current_user_role: string;
       plan: string;
     }>('/api/team'),
-  invite: async (payload: { email: string; role: 'owner' | 'admin' | 'member' }) =>
+  invite: async (payload: { email: string; role: 'owner' | 'admin' | 'safety_lead' | 'executive' | 'member' }) =>
     apiRequest<{
       data: { id: string; email: string; role: string; created_at: string; user_id?: string | null } | null;
       temporary_password: string;
