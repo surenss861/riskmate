@@ -628,11 +628,19 @@ jobsRouter.patch("/:id", authenticate as unknown as express.RequestHandler, asyn
   const authReq = req as AuthenticatedRequest;
   try {
     const jobId = authReq.params.id;
-    const { organization_id, id: userId } = authReq.user;
+    const { organization_id, id: userId, role } = authReq.user;
     const updateData = authReq.body;
     const { risk_factor_codes, ...jobUpdates } = updateData;
     let updatedRiskScore: number | null = null;
     let updatedClientName: string | null = null;
+
+    // Role-based capability: Executives are read-only
+    if (role === 'executive') {
+      return res.status(403).json({
+        message: "Executives have read-only access",
+        code: "AUTH_ROLE_READ_ONLY",
+      });
+    }
 
     // Verify job belongs to organization
     const { data: existingJob, error: jobError } = await supabase
