@@ -81,6 +81,153 @@ That's it. Clean. Serious. Defensible.
 - Non-alarmist, but impossible to ignore in hindsight
 - Creates a governance checkpoint without blocking operations
 
+## Who It Goes To
+
+**"Flagged for review" goes to the role that owns risk, not the person doing the work.**
+
+In RiskMate terms, that is:
+- Safety Lead
+- Risk Manager
+- Project Executive / Ops Director
+- Org Owner (fallback)
+
+**Not:**
+- ❌ "Who created the job"
+- ❌ "Who last touched it"
+- ❌ "Everyone"
+
+It goes to the role accountable for exposure.
+
+## What "Goes To Them" Actually Means
+
+**Right now, nothing is sent. And that's good.**
+
+In enterprise systems, "goes to" does not mean:
+- ❌ Slack ping
+- ❌ Email blast
+- ❌ Notification badge
+- ❌ Task assignment
+
+It means:
+
+**"This appears in the places this role already looks."**
+
+That's how serious systems work.
+
+## The Correct Mental Model
+
+Think of Flagged for review as a **visibility signal, not a delivery mechanism**.
+
+You're not saying:
+- "Hey, do this task."
+
+You're saying:
+- **"If you are accountable for risk, this is now in your field of view."**
+
+That's the difference between:
+- Institutional software
+- Productivity apps
+
+## Clean Architecture
+
+### Step 1: Define a Single Accountable Role
+
+Pick one canonical role:
+```
+RISK_ACCOUNTABLE_ROLE = "Safety Lead"
+```
+
+Later this can be configurable, but hardcode it for now.
+
+This does two things:
+- Removes ambiguity
+- Prevents feature creep
+
+### Step 2: Make Flagged for Review a Queryable State
+
+Not a notification. A state.
+
+Example:
+```javascript
+job.review_flag = {
+  flagged: true,
+  flagged_at: timestamp,
+  reason: "risk_threshold_exceeded"
+}
+```
+
+That's it. No assignee. No workflow.
+
+### Step 3: Surface It Where That Role Lives
+
+This is where it "goes to them" without sending anything.
+
+For Safety Leads / Execs:
+- Executive View shows flagged jobs first
+- Optional filter: "Flagged for review"
+- Subtle badge or icon in Job Roster
+- Appears in any risk summary/export
+
+They discover it during normal review, which is exactly what auditors expect.
+
+## Simple v1 Implementation
+
+If you want a concrete v1 that's still clean:
+
+1. Flag sets `review_flag = true`
+2. Executive View auto-filters flagged jobs to the top
+3. Add tooltip text: "Visible to Safety Leads and executives"
+
+That alone answers:
+- Who it's for
+- Why it exists
+- How it's governed
+
+No backend routing required yet.
+
+## Optional (Later): One Quiet Nudge, Not a System
+
+When you're ready — and only then — add one of these:
+
+### Option A: Digest, not alert (recommended)
+
+Daily or weekly email:
+- "2 jobs flagged for review since last check"
+- No urgency. No panic. Just awareness.
+
+### Option B: Dashboard counter
+
+- "3 jobs awaiting review"
+- Only visible to the accountable role
+- Still no assignment. Still no task.
+
+## What You Should NOT Do
+
+🚫 Assign it to a user  
+🚫 Require acknowledgement  
+🚫 Block job progress  
+🚫 Add notifications everywhere  
+🚫 Turn it into a checklist item  
+
+Those moves shift you from:
+- Risk ledger
+- to
+- Workflow tool
+
+And insurers hate workflow theater.
+
+## The Rule to Keep Forever
+
+Only add "delivery" when a buyer asks:
+
+**"How do we prove leadership saw this?"**
+
+Then — and only then — you add:
+- `reviewed_by`
+- `reviewed_at`
+
+Still no tasks. Still no workflow.
+
 ## Why This Is Good Product Work
 
 You didn't add a feature.
@@ -208,6 +355,22 @@ Don't turn it into process until money forces your hand.
 When someone with budget says "we need X," then you add exactly one thing.
 
 You're doing real product work now — the restraint is why this feels legit.
+
+## Final Takeaway
+
+**Flagged for review doesn't go to someone.**
+
+**It shows up for the person accountable for risk.**
+
+That distinction is why this feels:
+- Serious
+- Expensive
+- Insurable
+- Non-DIY
+
+**You're designing institutional visibility, not notifications.**
+
+This is the right direction.
 
 ## Strategic Insight
 
