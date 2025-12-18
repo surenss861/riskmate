@@ -285,7 +285,7 @@ function DemoContent() {
                         >
                           View
                         </button>
-                        {(currentRole === 'owner' || currentRole === 'admin' || currentRole === 'safety_lead') && (
+                        {(currentRole === 'owner' || currentRole === 'admin' || currentRole === 'safety_lead') ? (
                           <button
                             onClick={() => {
                               // Simulate flagging - update local state
@@ -306,6 +306,10 @@ function DemoContent() {
                           >
                             {job.review_flag ? 'Unflag' : 'Flag'}
                           </button>
+                        ) : (
+                          <div className="px-3 py-1.5 text-xs text-white/40 italic" title="Requires Safety Lead/Admin/Owner role">
+                            Requires Safety Lead/Admin/Owner
+                          </div>
                         )}
                         {currentRole !== 'executive' ? (
                           <button
