@@ -4,6 +4,7 @@
  */
 
 export type DemoRole = 'owner' | 'admin' | 'safety_lead' | 'executive' | 'member'
+export type DemoScenario = 'normal' | 'audit_review' | 'incident' | 'insurance_packet'
 
 export const demoData = {
   organization: {

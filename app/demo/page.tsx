@@ -1,16 +1,79 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { DemoProvider, useDemo } from '@/lib/demo/useDemo'
 import { DashboardNavbar } from '@/components/dashboard/DashboardNavbar'
 import { DemoBanner } from '@/components/demo/DemoBanner'
 import { RoleSwitcher } from '@/components/demo/RoleSwitcher'
 import { cardStyles, typography, spacing } from '@/lib/styles/design-system'
-import { Building2, Users, FileText, Shield, Settings } from 'lucide-react'
+import { Building2, Users, FileText, Shield, Settings, X, AlertTriangle } from 'lucide-react'
+import type { DemoRole, DemoScenario } from '@/lib/demo/demoData'
+
+interface TourStep {
+  id: string
+  title: string
+  description: string
+  target: string
+  position: 'top' | 'bottom' | 'left' | 'right'
+}
+
+const tourSteps: TourStep[] = [
+  {
+    id: 'role-switcher',
+    title: 'Role-Based Capabilities',
+    description: 'Watch capabilities change instantly. Try switching to "Member" and notice which actions disappear.',
+    target: '[data-tour="role-switcher"]',
+    position: 'bottom',
+  },
+  {
+    id: 'flagged-job',
+    title: 'Flagged for Review',
+    description: 'Safety Leads and Executives see all flagged jobs automatically. This is a governance signal, not a workflow.',
+    target: '[data-tour="flagged-job"]',
+    position: 'right',
+  },
+  {
+    id: 'audit-logs',
+    title: 'Audit Trail',
+    description: 'Every action is logged, including capability violations. See auth.role_violation events proving enforcement.',
+    target: '[data-tour="audit-logs"]',
+    position: 'top',
+  },
+  {
+    id: 'billing',
+    title: 'Billing Integration',
+    description: 'Managed by Stripe. Source of truth is external, but all operational data is in RiskMate.',
+    target: '[data-tour="billing"]',
+    position: 'top',
+  },
+  {
+    id: 'security',
+    title: 'Security Events',
+    description: 'Password changes, logins, and session management are all tracked for compliance.',
+    target: '[data-tour="security"]',
+    position: 'top',
+  },
+]
 
 function DemoContent() {
-  const { data, currentRole, showDemoMessage } = useDemo()
+  const searchParams = useSearchParams()
+  const { data, currentRole, currentScenario, showDemoMessage } = useDemo()
   const [activeSection, setActiveSection] = useState<'jobs' | 'team' | 'account'>('jobs')
+  const [tourStep, setTourStep] = useState<number | null>(null)
+  const [localJobs, setLocalJobs] = useState(data.jobs)
+  
+  // Update local jobs when scenario changes
+  useEffect(() => {
+    setLocalJobs(data.jobs)
+  }, [data.jobs])
+
+  // Start tour if ?tour=1 in URL
+  useEffect(() => {
+    if (searchParams?.get('tour') === '1') {
+      setTourStep(0)
+    }
+  }, [searchParams])
 
   return (
     <div className="min-h-screen bg-[#0A0A0A] text-white">
@@ -26,8 +89,27 @@ function DemoContent() {
               Interactive product walkthrough — no authentication required
             </p>
           </div>
-          <RoleSwitcher />
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => setTourStep(0)}
+              className="px-4 py-2 bg-[#F97316] hover:bg-[#FB923C] text-black rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+            >
+              <Play className="w-4 h-4" />
+              Start Tour
+            </button>
+            <div data-tour="role-switcher">
+              <RoleSwitcher />
+            </div>
+          </div>
         </div>
+
+        <GuidedTour
+          step={tourStep}
+          steps={tourSteps}
+          onClose={() => setTourStep(null)}
+          onNext={() => setTourStep(tourStep !== null ? tourStep + 1 : 0)}
+          onPrevious={() => setTourStep(tourStep !== null ? Math.max(0, tourStep - 1) : 0)}
+        />
 
         {/* Section Navigation */}
         <div className="flex gap-4 mb-8 border-b border-white/10">
@@ -76,9 +158,10 @@ function DemoContent() {
               </p>
               
               <div className="space-y-3">
-                {data.jobs.map((job) => (
+                {localJobs.map((job) => (
                   <div
                     key={job.id}
+                    data-tour={job.review_flag ? 'flagged-job' : undefined}
                     className="p-4 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 transition-colors"
                   >
                     <div className="flex items-start justify-between">
@@ -111,7 +194,15 @@ function DemoContent() {
                         </button>
                         {(currentRole === 'owner' || currentRole === 'admin' || currentRole === 'safety_lead') && (
                           <button
-                            onClick={() => showDemoMessage('Flag job for review')}
+                            onClick={() => {
+                              // Simulate flagging - update local state
+                              setLocalJobs(localJobs.map(j => 
+                                j.id === job.id 
+                                  ? { ...j, review_flag: !j.review_flag, flagged_at: !j.review_flag ? new Date().toISOString() : null }
+                                  : j
+                              ))
+                              showDemoMessage('Flag job for review')
+                            }}
                             className="px-3 py-1.5 text-sm bg-white/10 hover:bg-white/20 border border-white/20 rounded transition-colors"
                           >
                             {job.review_flag ? 'Unflag' : 'Flag'}
@@ -119,7 +210,11 @@ function DemoContent() {
                         )}
                         {currentRole !== 'executive' && (
                           <button
-                            onClick={() => showDemoMessage('Archive job')}
+                            onClick={() => {
+                              // Simulate archiving - remove from list
+                              setLocalJobs(localJobs.filter(j => j.id !== job.id))
+                              showDemoMessage('Archive job')
+                            }}
                             className="px-3 py-1.5 text-sm bg-white/10 hover:bg-white/20 border border-white/20 rounded transition-colors"
                           >
                             Archive
@@ -231,6 +326,36 @@ function DemoContent() {
               <h2 className={`${typography.h2} mb-4`}>Account Settings</h2>
               
               <div className="space-y-6">
+                {/* Audit Summary Card */}
+                {currentScenario === 'audit_review' && (
+                  <div data-tour="audit-logs" className="p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+                    <h3 className="font-semibold text-yellow-200 mb-3 flex items-center gap-2">
+                      <AlertTriangle className="w-5 h-5" />
+                      Audit Summary
+                    </h3>
+                    <div className="grid grid-cols-3 gap-4 text-sm">
+                      <div>
+                        <div className="text-yellow-200/60">Capability Violations</div>
+                        <div className="text-2xl font-bold text-yellow-200">
+                          {data.auditLogs.filter(log => log.event_name === 'auth.role_violation').length}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-yellow-200/60">Flagged Jobs</div>
+                        <div className="text-2xl font-bold text-yellow-200">
+                          {data.jobs.filter(job => job.review_flag).length}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-yellow-200/60">Security Events</div>
+                        <div className="text-2xl font-bold text-yellow-200">
+                          {data.securityEvents.length}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Profile */}
                 <div>
                   <h3 className="font-semibold mb-3">Profile</h3>
@@ -273,7 +398,7 @@ function DemoContent() {
                 </div>
 
                 {/* Billing */}
-                <div>
+                <div data-tour="billing">
                   <h3 className="font-semibold mb-3">Plan & Billing</h3>
                   <div className="p-4 bg-white/5 border border-white/10 rounded-lg space-y-2">
                     <div className="flex justify-between">
@@ -301,7 +426,7 @@ function DemoContent() {
                 </div>
 
                 {/* Security */}
-                <div>
+                <div data-tour="security">
                   <h3 className="font-semibold mb-3">Security</h3>
                   <div className="space-y-2">
                     <div className="p-3 bg-white/5 border border-white/10 rounded">
@@ -325,10 +450,26 @@ function DemoContent() {
   )
 }
 
-export default function DemoPage() {
+function DemoPageContent() {
+  const searchParams = useSearchParams()
+  const initialRole = (searchParams?.get('role') as DemoRole) || 'owner'
+  const initialScenario = (searchParams?.get('scenario') as DemoScenario) || 'normal'
+
   return (
-    <DemoProvider initialRole="owner">
+    <DemoProvider initialRole={initialRole} initialScenario={initialScenario}>
       <DemoContent />
     </DemoProvider>
+  )
+}
+
+export default function DemoPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-[#0A0A0A] text-white flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#F97316]"></div>
+      </div>
+    }>
+      <DemoPageContent />
+    </Suspense>
   )
 }
