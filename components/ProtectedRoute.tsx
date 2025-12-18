@@ -53,6 +53,7 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
     return () => {
       subscription.unsubscribe()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router])
 
   const loadLegalStatus = async () => {

@@ -43,6 +43,7 @@ export function DemoProvider({
   useEffect(() => {
     if (urlRole !== currentRole) setCurrentRole(urlRole)
     if (urlScenario !== currentScenario) setCurrentScenario(urlScenario)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [urlRole, urlScenario])
 
   // Update URL when role/scenario changes
@@ -80,6 +81,7 @@ export function DemoProvider({
       if (savedRole) setCurrentRole(savedRole)
       if (savedScenario) setCurrentScenario(savedScenario)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const showDemoMessage = (action: string) => {
