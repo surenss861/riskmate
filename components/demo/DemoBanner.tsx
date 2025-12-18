@@ -42,8 +42,22 @@ export function DemoBanner() {
             Copy Link
           </button>
           <button
-            onClick={resetDemo}
+            onClick={() => {
+              if (window.confirm('Reset demo to baseline fixtures? All local changes will be lost.')) {
+                resetDemo()
+                setTimeout(() => {
+                  if (typeof window !== 'undefined') {
+                    const toast = document.createElement('div')
+                    toast.className = 'fixed bottom-4 right-4 z-50 max-w-md rounded-lg bg-green-500 px-4 py-3 text-sm text-white shadow-lg'
+                    toast.textContent = 'Demo restored to baseline (v1.0 fixtures)'
+                    document.body.appendChild(toast)
+                    setTimeout(() => toast.remove(), 3000)
+                  }
+                }, 100)
+              }
+            }}
             className="px-3 py-1 bg-black/20 hover:bg-black/30 rounded text-xs font-medium transition-colors flex items-center gap-1.5"
+            title="Reset demo to baseline fixtures"
           >
             <RotateCcw className="w-3 h-3" />
             Reset

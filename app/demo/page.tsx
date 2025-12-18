@@ -215,7 +215,7 @@ function DemoContent() {
                             {job.review_flag ? 'Unflag' : 'Flag'}
                           </button>
                         )}
-                        {currentRole !== 'executive' && (
+                        {currentRole !== 'executive' ? (
                           <button
                             onClick={() => {
                               // Simulate archiving - remove from list
@@ -226,6 +226,10 @@ function DemoContent() {
                           >
                             Archive
                           </button>
+                        ) : (
+                          <div className="px-3 py-1.5 text-xs text-white/40 italic">
+                            Read-only (Executive)
+                          </div>
                         )}
                       </div>
                     </div>
@@ -459,8 +463,15 @@ function DemoContent() {
 
 function DemoPageContent() {
   const searchParams = useSearchParams()
-  const initialRole = (searchParams?.get('role') as DemoRole) || 'owner'
-  const initialScenario = (searchParams?.get('scenario') as DemoScenario) || 'normal'
+  const rawRole = searchParams?.get('role') || 'owner'
+  const rawScenario = searchParams?.get('scenario') || 'normal'
+  
+  // Validate and fallback to safe defaults
+  const validRoles: DemoRole[] = ['owner', 'admin', 'safety_lead', 'executive', 'member']
+  const validScenarios: DemoScenario[] = ['normal', 'audit_review', 'incident', 'insurance_packet']
+  
+  const initialRole = validRoles.includes(rawRole as DemoRole) ? (rawRole as DemoRole) : 'member'
+  const initialScenario = validScenarios.includes(rawScenario as DemoScenario) ? (rawScenario as DemoScenario) : 'normal'
 
   return (
     <DemoProvider initialRole={initialRole} initialScenario={initialScenario}>

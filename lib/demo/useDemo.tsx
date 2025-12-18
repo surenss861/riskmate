@@ -11,9 +11,11 @@ interface DemoContextType {
   currentScenario: DemoScenario
   setCurrentScenario: (scenario: DemoScenario) => void
   data: ReturnType<typeof getDemoDataForRole>
-  showDemoMessage: (action: string) => void
+  showDemoMessage: (action: string, capability?: string, blocked?: boolean) => void
   resetDemo: () => void
   copyDemoLink: () => void
+  validateRole: (role: string) => DemoRole
+  validateScenario: (scenario: string) => DemoScenario
 }
 
 const DemoContext = createContext<DemoContextType | null>(null)
@@ -84,8 +86,15 @@ export function DemoProvider({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const showDemoMessage = (action: string) => {
-    const message = `Demo mode: ${action} simulated. In production, this would write to audit logs and enforce governance.`
+  const showDemoMessage = (action: string, capability?: string, blocked?: boolean) => {
+    let message = `Demo mode: ${action} simulated.`
+    
+    if (blocked && capability) {
+      message = `Demo mode: ${action} blocked. Requires ${capability} capability. Current role: ${currentRole}. This would be logged as auth.role_violation in production.`
+    } else {
+      message += ` In production, this would write to audit logs and enforce governance.`
+    }
+    
     setDemoMessage(message)
     setTimeout(() => setDemoMessage(null), 5000)
   }
@@ -110,6 +119,16 @@ export function DemoProvider({
     showDemoMessage('Demo link copied to clipboard')
   }
 
+  const validateRole = (role: string): DemoRole => {
+    const validRoles: DemoRole[] = ['owner', 'admin', 'safety_lead', 'executive', 'member']
+    return validRoles.includes(role as DemoRole) ? (role as DemoRole) : 'member'
+  }
+
+  const validateScenario = (scenario: string): DemoScenario => {
+    const validScenarios: DemoScenario[] = ['normal', 'audit_review', 'incident', 'insurance_packet']
+    return validScenarios.includes(scenario as DemoScenario) ? (scenario as DemoScenario) : 'normal'
+  }
+
   const data = getDemoDataForRole(currentRole, currentScenario)
 
   return (
@@ -124,6 +143,8 @@ export function DemoProvider({
         showDemoMessage,
         resetDemo,
         copyDemoLink,
+        validateRole,
+        validateScenario,
       }}
     >
       {children}
@@ -165,6 +186,8 @@ export function useDemo() {
       showDemoMessage: () => {},
       resetDemo: () => {},
       copyDemoLink: () => {},
+      validateRole: (role: string) => role as DemoRole,
+      validateScenario: (scenario: string) => scenario as DemoScenario,
     }
   }
   return context
