@@ -263,7 +263,7 @@ export default function TeamPage() {
 
             {/* Risk Coverage */}
             {team.risk_coverage && (
-              <div className={`${cardStyles.base} ${cardStyles.padding.md}`}>
+            <div className={`${cardStyles.base} ${cardStyles.padding.md}`}>
                 <div className={`flex items-center justify-between ${spacing.normal} mb-4`}>
                   <h2 className="text-xl font-semibold text-white">Risk Coverage</h2>
                 </div>
@@ -300,12 +300,12 @@ export default function TeamPage() {
                       <span className="text-white/60">Seat usage</span>
                       <span className="text-white">
                         {team.seats.used} / {team.seats.limit}
-                      </span>
-                    </div>
-                  </div>
-                )}
+                  </span>
               </div>
-            )}
+                  </div>
+              )}
+                </div>
+              )}
 
             {/* Error Message */}
             {error && (

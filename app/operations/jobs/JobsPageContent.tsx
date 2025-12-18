@@ -337,9 +337,9 @@ export function JobsPageContentView(props: JobsPageContentProps) {
           <div className="flex items-center justify-between">
             <div className="flex-1">
                   <div className="flex items-center gap-3">
-                    <Link href="/operations/jobs" className={`${typography.h1} hover:text-[#F97316] transition-colors`}>
-                      Job Roster
-                    </Link>
+                  <Link href="/operations/jobs" className={`${typography.h1} hover:text-[#F97316] transition-colors`}>
+                    Job Roster
+                  </Link>
                     <span className="text-xs text-white/40 font-normal">Audit-safe view</span>
                   </div>
                   <p className={`${spacing.tight} ${typography.bodyMuted}`}>
@@ -375,11 +375,11 @@ export function JobsPageContentView(props: JobsPageContentProps) {
         >
           <div className="flex flex-wrap gap-3 mb-3">
             <JobRosterSelect
-              value={props.filterStatus}
+            value={props.filterStatus}
               onValueChange={(value) => {
                 props.onFilterStatusChange(value)
-                props.onPageChange(1)
-              }}
+              props.onPageChange(1)
+            }}
               placeholder="All Statuses"
               options={[
                 { label: 'All Statuses', value: '' },
@@ -391,11 +391,11 @@ export function JobsPageContentView(props: JobsPageContentProps) {
             />
 
             <JobRosterSelect
-              value={props.filterRiskLevel}
+            value={props.filterRiskLevel}
               onValueChange={(value) => {
                 props.onFilterRiskLevelChange(value)
-                props.onPageChange(1)
-              }}
+              props.onPageChange(1)
+            }}
               placeholder="All Risk Levels"
               options={[
                 { label: 'All Risk Levels', value: '' },
@@ -407,12 +407,12 @@ export function JobsPageContentView(props: JobsPageContentProps) {
             />
 
             <JobRosterSelect
-              value={props.filterTemplateSource}
+            value={props.filterTemplateSource}
               onValueChange={(value) => {
                 props.onFilterTemplateSourceChange(value)
-                props.onFilterTemplateIdChange('')
-                props.onPageChange(1)
-              }}
+              props.onFilterTemplateIdChange('')
+              props.onPageChange(1)
+            }}
               placeholder="All Sources"
               options={[
                 { label: 'All Sources', value: '' },
@@ -421,15 +421,15 @@ export function JobsPageContentView(props: JobsPageContentProps) {
               ]}
             />
 
-            {props.filterTemplateSource === 'template' && props.templates.length > 0 && (
+          {props.filterTemplateSource === 'template' && props.templates.length > 0 && (
               <JobRosterSelect
-                value={props.filterTemplateId}
+              value={props.filterTemplateId}
                 onValueChange={(value) => {
                   props.onFilterTemplateIdChange(value)
-                  props.onPageChange(1)
-                }}
+                props.onPageChange(1)
+              }}
                 placeholder="All Templates"
-                disabled={props.loadingTemplates}
+              disabled={props.loadingTemplates}
                 options={[
                   { label: 'All Templates', value: '' },
                   ...props.templates.map((template) => ({
@@ -524,16 +524,16 @@ export function JobsPageContentView(props: JobsPageContentProps) {
                 </>
               ) : (
                 <>
-                  <p className={`text-white font-medium ${spacing.tight}`}>No jobs yet</p>
-                  <p className={`text-sm text-white/60 ${spacing.normal} max-w-md mx-auto`}>
-                    Jobs are where you track safety, document hazards, and generate audit-ready reports. Create your first job to get started.
-                  </p>
-                  <button
-                    onClick={() => router.push('/operations/jobs/new')}
-                    className={`${spacing.normal} ${buttonStyles.primary} ${buttonStyles.sizes.lg}`}
-                  >
-                    Create Your First Job
-                  </button>
+              <p className={`text-white font-medium ${spacing.tight}`}>No jobs yet</p>
+              <p className={`text-sm text-white/60 ${spacing.normal} max-w-md mx-auto`}>
+                Jobs are where you track safety, document hazards, and generate audit-ready reports. Create your first job to get started.
+              </p>
+              <button
+                onClick={() => router.push('/operations/jobs/new')}
+                className={`${spacing.normal} ${buttonStyles.primary} ${buttonStyles.sizes.lg}`}
+              >
+                Create Your First Job
+              </button>
                 </>
               )}
             </motion.div>
@@ -552,14 +552,14 @@ export function JobsPageContentView(props: JobsPageContentProps) {
                 width: '200px',
                 render: (value: string, job: any) => (
                   <div>
-                    <button
-                      onClick={() => router.push(`/operations/jobs/${job.id}`)}
-                      onMouseEnter={() => handleJobHover(job.id)}
-                      onMouseLeave={() => handleJobHoverEnd(job.id)}
-                      className="text-white hover:text-[#F97316] transition-colors font-semibold"
-                    >
-                      {value}
-                    </button>
+                  <button
+                    onClick={() => router.push(`/operations/jobs/${job.id}`)}
+                    onMouseEnter={() => handleJobHover(job.id)}
+                    onMouseLeave={() => handleJobHoverEnd(job.id)}
+                    className="text-white hover:text-[#F97316] transition-colors font-semibold"
+                  >
+                    {value}
+                  </button>
                     {!executiveView && (
                       <div className="text-xs text-white/30 mt-0.5">
                         Owner: {job.owner_name || 'Safety Lead'}
@@ -667,7 +667,7 @@ export function JobsPageContentView(props: JobsPageContentProps) {
                           onClick={() => setShowTooltip(!showTooltip)}
                         >
                           <div className="flex items-center gap-1.5 justify-end">
-                            <div className="text-lg font-bold text-white">{value}</div>
+                    <div className="text-lg font-bold text-white">{value}</div>
                             {getRiskTrend(job) && (
                               <span className="text-sm text-white/50" title={
                                 getRiskTrend(job) === '↑' ? 'Increasing risk' :
@@ -677,12 +677,12 @@ export function JobsPageContentView(props: JobsPageContentProps) {
                               </span>
                             )}
                           </div>
-                          {job.risk_level && (
-                            <div className={`text-xs ${props.getRiskColor(job.risk_level)}`}>
-                              {job.risk_level.toUpperCase()}
-                            </div>
-                          )}
-                        </div>
+                    {job.risk_level && (
+                      <div className={`text-xs ${props.getRiskColor(job.risk_level)}`}>
+                        {job.risk_level.toUpperCase()}
+                      </div>
+                    )}
+                  </div>
                         {showTooltip && (
                           <div className="absolute right-0 top-full mt-2 z-20 w-72 p-3 bg-[#1A1A1A] border border-white/10 rounded-lg shadow-lg text-left text-xs text-white/80">
                             <div className="font-semibold text-white mb-2">Risk Score: {job.risk_score || 0}</div>

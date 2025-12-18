@@ -125,9 +125,9 @@ export function ReportView({
       <div className="space-y-6">
         <div>
           <div className="flex items-start justify-between">
-            <div>
-              <h1 className="text-4xl font-bold text-white mb-2">{job.job_type}</h1>
-              <p className="text-white/60 text-lg">{job.location}</p>
+        <div>
+          <h1 className="text-4xl font-bold text-white mb-2">{job.job_type}</h1>
+          <p className="text-white/60 text-lg">{job.location}</p>
             </div>
             {lastSystemUpdate && (
               <div className="text-right">
@@ -188,14 +188,14 @@ export function ReportView({
       {!readOnly && (
         <div className="space-y-3">
           <div className="flex gap-3 items-center">
-            {onExport && (
-              <button
-                onClick={onExport}
-                disabled={exportInProgress}
-                className="rounded-lg bg-[#F97316] px-6 py-3 text-black font-semibold hover:bg-[#FB923C] disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {exportInProgress ? 'Exporting...' : 'Export PDF'}
-              </button>
+          {onExport && (
+            <button
+              onClick={onExport}
+              disabled={exportInProgress}
+              className="rounded-lg bg-[#F97316] px-6 py-3 text-black font-semibold hover:bg-[#FB923C] disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {exportInProgress ? 'Exporting...' : 'Export PDF'}
+            </button>
             )}
           </div>
           {onExport && (

@@ -156,8 +156,8 @@ teamRouter.post("/invite", async (req: express.Request, res: express.Response) =
 
     // Try to filter by account_status, fallback to archived_at if column doesn't exist
     let memberCountQuery = supabase
-      .from("users")
-      .select("id", { count: "exact", head: true })
+        .from("users")
+        .select("id", { count: "exact", head: true })
       .eq("organization_id", organizationId);
 
     try {

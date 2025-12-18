@@ -95,12 +95,12 @@ const JobsPageContent = () => {
       setUser(user)
 
       if (user) {
-        const { data: userRow } = await supabase
-          .from('users')
+      const { data: userRow } = await supabase
+        .from('users')
           .select('role')
-          .eq('id', user.id)
-          .single()
-        
+        .eq('id', user.id)
+        .single()
+
         if (userRow?.role) {
           setUserRole(userRow.role as 'owner' | 'admin' | 'member')
         }
@@ -178,25 +178,25 @@ const JobsPageContent = () => {
     
     // Apply template filters client-side (since API doesn't support them yet)
     let filteredJobs = jobsData
-    
-    if (filterTemplateSource === 'template') {
-      filteredJobs = filteredJobs.filter(job => job.applied_template_id !== null)
-    } else if (filterTemplateSource === 'manual') {
-      filteredJobs = filteredJobs.filter(job => job.applied_template_id === null)
-    }
-    
-    if (filterTemplateId) {
-      filteredJobs = filteredJobs.filter(job => job.applied_template_id === filterTemplateId)
-    }
 
-    // Ensure jobsData is an array and set jobs
+      if (filterTemplateSource === 'template') {
+      filteredJobs = filteredJobs.filter(job => job.applied_template_id !== null)
+      } else if (filterTemplateSource === 'manual') {
+      filteredJobs = filteredJobs.filter(job => job.applied_template_id === null)
+      }
+
+      if (filterTemplateId) {
+      filteredJobs = filteredJobs.filter(job => job.applied_template_id === filterTemplateId)
+      }
+
+      // Ensure jobsData is an array and set jobs
     if (Array.isArray(filteredJobs)) {
       setJobs(filteredJobs)
-    } else {
+      } else {
       console.warn('Jobs query returned non-array data:', filteredJobs)
-      setJobs([])
-    }
-    
+        setJobs([])
+      }
+      
     // Calculate total pages from API pagination or filtered count
     const totalCount = response.pagination?.total || filteredJobs.length
     setTotalPages(Math.ceil(totalCount / 50))
