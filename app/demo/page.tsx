@@ -152,6 +152,98 @@ function DemoContent() {
         {/* Jobs Section */}
         {activeSection === 'jobs' && (
           <div className="space-y-6">
+            {/* Scenario Proof Cards */}
+            {currentScenario === 'incident' && (
+              <div className={cardStyles.base}>
+                <h3 className="font-semibold text-yellow-200 mb-3 flex items-center gap-2">
+                  <AlertTriangle className="w-5 h-5" />
+                  Escalation Trail
+                </h3>
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center gap-2 text-white/80">
+                    <span className="w-2 h-2 rounded-full bg-red-500"></span>
+                    <span>Job flagged for review by Safety Lead</span>
+                    <span className="text-white/40">(2025-01-12 10:00 AM)</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-white/80">
+                    <span className="w-2 h-2 rounded-full bg-yellow-500"></span>
+                    <span>High risk score detected (87)</span>
+                    <span className="text-white/40">(2025-01-10 08:00 AM)</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-white/80">
+                    <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                    <span>Mitigation checklist generated</span>
+                    <span className="text-white/40">(2025-01-10 08:15 AM)</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {currentScenario === 'insurance_packet' && (
+              <div className={cardStyles.base}>
+                <h3 className="font-semibold text-blue-200 mb-3 flex items-center gap-2">
+                  <FileText className="w-5 h-5" />
+                  Packet Contents
+                </h3>
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center justify-between p-2 bg-white/5 rounded">
+                    <span className="text-white/80">Risk Assessment Reports</span>
+                    <span className="text-white/40">2 PDFs</span>
+                  </div>
+                  <div className="flex items-center justify-between p-2 bg-white/5 rounded">
+                    <span className="text-white/80">Audit Trail Log</span>
+                    <span className="text-white/40">CSV Export</span>
+                  </div>
+                  <div className="flex items-center justify-between p-2 bg-white/5 rounded">
+                    <span className="text-white/80">Security Events</span>
+                    <span className="text-white/40">3 events logged</span>
+                  </div>
+                  <div className="flex items-center justify-between p-2 bg-white/5 rounded">
+                    <span className="text-white/80">Capability Violations</span>
+                    <span className="text-white/40">2 violations logged</span>
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-white/10">
+                    <button
+                      onClick={() => showDemoMessage('Download insurance packet')}
+                      className="px-4 py-2 bg-[#F97316] hover:bg-[#FB923C] text-black rounded text-sm font-medium transition-colors"
+                    >
+                      Download Packet (ZIP)
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {currentScenario === 'normal' && (
+              <div className={cardStyles.base}>
+                <h3 className="font-semibold text-white mb-3">Operational Snapshot</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                  <div>
+                    <div className="text-white/60">Total Jobs</div>
+                    <div className="text-2xl font-bold text-white">{localJobs.length}</div>
+                  </div>
+                  <div>
+                    <div className="text-white/60">In Progress</div>
+                    <div className="text-2xl font-bold text-[#F97316]">
+                      {localJobs.filter(j => j.status === 'in_progress').length}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-white/60">High Risk</div>
+                    <div className="text-2xl font-bold text-red-400">
+                      {localJobs.filter(j => j.risk_level === 'high').length}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-white/60">Flagged</div>
+                    <div className="text-2xl font-bold text-yellow-400">
+                      {localJobs.filter(j => j.review_flag).length}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className={cardStyles.base}>
               <h2 className={`${typography.h2} mb-4`}>Job Roster</h2>
               <p className="text-white/60 text-sm mb-6">
