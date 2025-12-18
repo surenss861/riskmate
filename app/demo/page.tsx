@@ -197,11 +197,17 @@ function DemoContent() {
                           <button
                             onClick={() => {
                               // Simulate flagging - update local state
-                              setLocalJobs(localJobs.map(j => 
-                                j.id === job.id 
-                                  ? { ...j, review_flag: !j.review_flag, flagged_at: !j.review_flag ? new Date().toISOString() : null }
-                                  : j
-                              ))
+                              setLocalJobs(localJobs.map(j => {
+                                if (j.id === job.id) {
+                                  const newFlagged = !j.review_flag
+                                  return {
+                                    ...j,
+                                    review_flag: newFlagged,
+                                    flagged_at: newFlagged ? new Date().toISOString() : null,
+                                  } as typeof j
+                                }
+                                return j
+                              }))
                               showDemoMessage('Flag job for review')
                             }}
                             className="px-3 py-1.5 text-sm bg-white/10 hover:bg-white/20 border border-white/20 rounded transition-colors"
