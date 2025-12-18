@@ -1,13 +1,14 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { DemoProvider, useDemo } from '@/lib/demo/useDemo'
 import { DashboardNavbar } from '@/components/dashboard/DashboardNavbar'
 import { DemoBanner } from '@/components/demo/DemoBanner'
 import { RoleSwitcher } from '@/components/demo/RoleSwitcher'
+import { GuidedTour } from '@/components/demo/GuidedTour'
 import { cardStyles, typography, spacing } from '@/lib/styles/design-system'
-import { Building2, Users, FileText, Shield, Settings, X, AlertTriangle } from 'lucide-react'
+import { Users, FileText, Settings, AlertTriangle, Play } from 'lucide-react'
 import type { DemoRole, DemoScenario } from '@/lib/demo/demoData'
 
 interface TourStep {
