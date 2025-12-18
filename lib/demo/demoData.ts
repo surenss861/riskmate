@@ -286,38 +286,75 @@ export const demoData = {
   },
 }
 
-export const getDemoDataForRole = (role: DemoRole) => {
+export const getDemoDataForRole = (role: DemoRole, scenario: DemoScenario = 'normal') => {
   const baseData = { ...demoData }
   
   // Adjust data visibility based on role
-  if (role === 'executive') {
-    // Executives see read-only view
-    return {
-      ...baseData,
-      profile: {
-        ...baseData.profile,
-        role: 'executive' as DemoRole,
-      },
-    }
-  }
-  
-  if (role === 'member') {
-    // Members don't see flagged jobs in their default view
-    return {
-      ...baseData,
-      profile: {
-        ...baseData.profile,
-        role: 'member' as DemoRole,
-      },
-    }
-  }
-  
-  return {
+  let adjustedData = {
     ...baseData,
     profile: {
       ...baseData.profile,
       role,
     },
   }
+
+  // Apply scenario-specific curation
+  if (scenario === 'audit_review') {
+    // Emphasize audit logs and security events
+    adjustedData = {
+      ...adjustedData,
+      auditLogs: [
+        ...baseData.auditLogs,
+        {
+          id: 'demo-audit-005',
+          organization_id: 'demo-org-001',
+          actor_id: 'demo-user-005',
+          event_name: 'auth.role_violation',
+          target_type: 'job',
+          target_id: 'demo-job-004',
+          metadata: {
+            role: 'member',
+            attempted_action: 'flag_job',
+            result: 'denied',
+            reason: 'Role does not have flag_job capability',
+          },
+          created_at: '2025-01-11T15:30:00Z',
+        },
+        {
+          id: 'demo-audit-006',
+          organization_id: 'demo-org-001',
+          actor_id: 'demo-user-004',
+          event_name: 'auth.role_violation',
+          target_type: 'job',
+          target_id: 'demo-job-002',
+          metadata: {
+            role: 'executive',
+            attempted_action: 'update_job',
+            result: 'denied',
+            reason: 'Executive role is read-only',
+          },
+          created_at: '2025-01-09T11:00:00Z',
+        },
+      ],
+    }
+  } else if (scenario === 'incident') {
+    // Emphasize flagged jobs and escalation
+    adjustedData = {
+      ...adjustedData,
+      jobs: baseData.jobs.map(job => 
+        job.id === 'demo-job-001' 
+          ? { ...job, review_flag: true, flagged_at: '2025-01-12T10:00:00Z' }
+          : job
+      ),
+    }
+  } else if (scenario === 'insurance_packet') {
+    // Emphasize completed jobs with full audit trail
+    adjustedData = {
+      ...adjustedData,
+      jobs: baseData.jobs.filter(job => job.status === 'completed'),
+    }
+  }
+  
+  return adjustedData
 }
 
