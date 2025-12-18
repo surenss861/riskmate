@@ -341,11 +341,16 @@ export const getDemoDataForRole = (role: DemoRole, scenario: DemoScenario = 'nor
     // Emphasize flagged jobs and escalation
     adjustedData = {
       ...adjustedData,
-      jobs: baseData.jobs.map(job => 
-        job.id === 'demo-job-001' 
-          ? { ...job, review_flag: true, flagged_at: '2025-01-12T10:00:00Z' }
-          : job
-      ),
+      jobs: baseData.jobs.map(job => {
+        if (job.id === 'demo-job-001') {
+          return {
+            ...job,
+            review_flag: true,
+            flagged_at: '2025-01-12T10:00:00Z',
+          } as typeof job
+        }
+        return job
+      }),
     }
   } else if (scenario === 'insurance_packet') {
     // Emphasize completed jobs with full audit trail
