@@ -266,7 +266,7 @@ export function TemplatesManager({ organizationId, subscriptionTier = 'starter' 
   // Group templates by playbook/niche
   const playbookGroups = useMemo(() => {
     const templates = activeTab === 'hazard' ? hazardTemplates : jobTemplates
-    const groups: Record<string, typeof templates> = {
+    const groups: Record<string, (HazardTemplate | JobTemplate)[]> = {
       'All Playbooks': templates,
       'Residential Trades': [],
       'Commercial Contractors': [],
