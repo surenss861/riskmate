@@ -283,6 +283,21 @@ export const jobsApi = {
     return apiRequest<{ data: any[] }>(`/api/jobs/${jobId}/audit`);
   },
 
+  exportProofPack: async (jobId: string, packType: 'insurance' | 'audit' | 'incident' | 'compliance') => {
+    return apiRequest<{
+      data: {
+        id: string | null
+        pdf_url: string
+        pdf_base64: string
+        hash: string
+        generated_at: string
+      }
+    }>(`/api/jobs/${jobId}/proof-pack`, {
+      method: 'POST',
+      body: JSON.stringify({ pack_type: packType }),
+    });
+  },
+
   archive: async (jobId: string) => {
     return apiRequest<{
       data: {

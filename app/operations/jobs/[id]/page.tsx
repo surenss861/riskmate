@@ -262,6 +262,24 @@ export default function JobDetailPage() {
         setAppliedTemplate(null)
       }
       
+      // Load attachments
+      try {
+        const documentsResponse = await jobsApi.getDocuments(jobId)
+        const docs = documentsResponse.data || []
+        setAttachments(docs.map((doc: any) => ({
+          id: doc.id,
+          name: doc.file_name || doc.name || 'Untitled',
+          type: doc.type === 'photo' ? 'photo' : 
+                doc.file_name?.toLowerCase().includes('permit') ? 'permit' :
+                doc.file_name?.toLowerCase().includes('inspection') ? 'inspection' : 'document',
+          url: doc.file_path,
+          file_path: doc.file_path,
+          created_at: doc.created_at,
+        })))
+      } catch (err) {
+        console.error('Failed to load attachments:', err)
+      }
+      
       // Ensure minimum skeleton display time (300ms)
       const elapsed = Date.now() - startTime
       const remaining = Math.max(0, 300 - elapsed)
@@ -1223,11 +1241,26 @@ export default function JobDetailPage() {
                   onExport={async (packType) => {
                     try {
                       setToast({ message: `Generating ${packType} packet PDF...`, type: 'info' })
-                      // TODO: Implement proof pack PDF export
-                      // const response = await jobsApi.exportProofPack(jobId, packType)
+                      const response = await jobsApi.exportProofPack(jobId, packType)
+                      
+                      // Download PDF
+                      if (response.data.pdf_base64) {
+                        const blob = base64ToBlob(response.data.pdf_base64, 'application/pdf')
+                        if (blob) {
+                          const url = URL.createObjectURL(blob)
+                          const link = document.createElement('a')
+                          link.href = url
+                          link.download = `${job.client_name}-${packType}-packet.pdf`
+                          document.body.appendChild(link)
+                          link.click()
+                          document.body.removeChild(link)
+                          URL.revokeObjectURL(url)
+                        }
+                      }
+                      
                       setToast({ 
-                        message: `${packType === 'insurance' ? 'Insurance' : packType === 'audit' ? 'Audit' : packType === 'incident' ? 'Incident' : 'Compliance'} Packet PDF export coming in v2`, 
-                        type: 'info' 
+                        message: `${packType === 'insurance' ? 'Insurance' : packType === 'audit' ? 'Audit' : packType === 'incident' ? 'Incident' : 'Compliance'} Packet PDF downloaded`, 
+                        type: 'success' 
                       })
                     } catch (err: any) {
                       setToast({ message: err.message || 'Export failed', type: 'error' })
