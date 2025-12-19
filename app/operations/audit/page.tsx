@@ -460,7 +460,7 @@ export default function AuditViewPage() {
                           severity: filters.severity || undefined,
                           outcome: filters.outcome || undefined,
                           time_range: filters.timeRange,
-                          view: filters.savedView || undefined,
+                          view: filters.savedView && filters.savedView !== 'custom' ? filters.savedView : undefined,
                         })
                       } catch (err) {
                         alert('Export failed. Please try again.')
@@ -483,7 +483,7 @@ export default function AuditViewPage() {
                           severity: filters.severity || undefined,
                           outcome: filters.outcome || undefined,
                           time_range: filters.timeRange,
-                          view: filters.savedView || undefined,
+                          view: filters.savedView && filters.savedView !== 'custom' ? filters.savedView : undefined,
                         })
                       } catch (err) {
                         alert('Export failed. Please try again.')
