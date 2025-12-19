@@ -1502,3 +1502,90 @@ jobsRouter.delete("/:id", authenticate as unknown as express.RequestHandler, asy
   }
 });
 
+// POST /api/jobs/:id/proof-pack
+// Generates a proof pack PDF (Insurance, Audit, Incident, or Compliance)
+jobsRouter.post("/:id/proof-pack", authenticate as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
+  const authReq = req as AuthenticatedRequest & RequestWithId;
+  const requestId = authReq.requestId || 'unknown';
+  try {
+    const { organization_id, id: userId } = authReq.user;
+    const { id: jobId } = req.params;
+    const { pack_type } = req.body;
+
+    if (!pack_type || !['insurance', 'audit', 'incident', 'compliance'].includes(pack_type)) {
+      const { response: errorResponse, errorId } = createErrorResponse({
+        message: "Invalid pack type. Must be one of: insurance, audit, incident, compliance",
+        internalMessage: `Invalid pack_type: ${pack_type}`,
+        code: "VALIDATION_ERROR",
+        requestId,
+        statusCode: 400,
+      });
+      res.setHeader('X-Error-ID', errorId);
+      return res.status(400).json(errorResponse);
+    }
+
+    // Build job report data
+    let reportData;
+    try {
+      reportData = await buildJobReport(organization_id, jobId);
+    } catch (err: any) {
+      if (err?.message === "Job not found") {
+        return res.status(404).json({ message: "Job not found" });
+      }
+      throw err;
+    }
+
+    if (!reportData?.job) {
+      return res.status(404).json({ message: "Job not found" });
+    }
+
+    // For now, use the existing PDF generation
+    // TODO: Create pack-specific PDF templates
+    const { generateRiskSnapshotPDF } = await import("../utils/pdf");
+    const pdfBuffer = await generateRiskSnapshotPDF(
+      reportData.job,
+      reportData.risk_score,
+      reportData.mitigations || [],
+      reportData.organization ?? { id: organization_id, name: reportData.job?.client_name ?? "Organization" },
+      [], // Photos - can be enhanced later
+      reportData.audit || []
+    );
+
+    const pdfBase64 = pdfBuffer.toString("base64");
+
+    // Log audit event
+    await recordAuditLog({
+      organizationId: organization_id,
+      actorId: userId,
+      eventName: `proof_pack.${pack_type}_generated`,
+      targetType: "proof_pack",
+      targetId: jobId,
+      metadata: {
+        pack_type,
+        job_id: jobId,
+      },
+    });
+
+    res.json({
+      data: {
+        id: null,
+        pdf_url: "",
+        pdf_base64: pdfBase64,
+        hash: "",
+        generated_at: new Date().toISOString(),
+      },
+    });
+  } catch (err: any) {
+    console.error("Proof pack generation failed:", err);
+    const { response: errorResponse, errorId } = createErrorResponse({
+      message: "Failed to generate proof pack PDF",
+      internalMessage: err?.message || String(err),
+      code: "PROOF_PACK_GENERATION_FAILED",
+      requestId,
+      statusCode: 500,
+    });
+    res.setHeader('X-Error-ID', errorId);
+    res.status(500).json(errorResponse);
+  }
+});
+
