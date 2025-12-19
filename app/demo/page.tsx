@@ -127,22 +127,32 @@ const getTourSteps = (role: DemoRole): TourStep[] => {
 
 function DemoContent() {
   const searchParams = useSearchParams()
-  const { data, currentRole, currentScenario, showDemoMessage } = useDemo()
+  const { data, currentRole, currentScenario, showDemoMessage, setCurrentRole, setCurrentScenario } = useDemo()
   const [activeSection, setActiveSection] = useState<'jobs' | 'team' | 'account'>('jobs')
   const [tourStep, setTourStep] = useState<number | null>(null)
   const [localJobs, setLocalJobs] = useState(data.jobs)
+  const [showConversionCard, setShowConversionCard] = useState(false)
+  
+  const tourSteps = getTourSteps(currentRole)
   
   // Update local jobs when scenario changes
   useEffect(() => {
     setLocalJobs(data.jobs)
   }, [data.jobs])
 
-  // Start tour if ?tour=1 in URL
+  // Start tour if ?tour=1 in URL, with graceful fallback
   useEffect(() => {
     if (searchParams?.get('tour') === '1') {
-      setTourStep(0)
+      // Check if tour targets exist before starting
+      const firstStep = tourSteps[0]
+      if (firstStep && document.querySelector(firstStep.target)) {
+        setTourStep(0)
+      } else {
+        // Skip tour if targets don't exist (graceful degradation)
+        console.warn('Tour targets not found, skipping tour')
+      }
     }
-  }, [searchParams])
+  }, [searchParams, tourSteps])
 
   return (
     <div className="min-h-screen bg-[#0A0A0A] text-white">
