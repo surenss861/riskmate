@@ -105,6 +105,16 @@ export default function JobDetailPage() {
     file_path?: string
     created_at: string
   }>>([])
+  const [signoffs, setSignoffs] = useState<Array<{
+    id: string
+    signer_id: string
+    signer_role: string
+    signer_name: string
+    signoff_type: string
+    status: 'pending' | 'signed' | 'rejected'
+    signed_at?: string
+    comments?: string
+  }>>([])
   const [evidenceItems, setEvidenceItems] = useState<Array<{
     id: string
     type: 'photo' | 'document' | 'mitigation'
