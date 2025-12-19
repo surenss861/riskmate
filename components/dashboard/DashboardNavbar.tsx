@@ -12,7 +12,8 @@ interface DashboardNavbarProps {
 }
 
 const ALL_NAV_ITEMS = [
-  { label: 'Operations', href: '/operations', roles: ['owner', 'admin', 'member'] },
+  { label: 'Operations', href: '/operations', roles: ['owner', 'admin', 'member', 'safety_lead', 'executive'] },
+  { label: 'Audit', href: '/operations/audit', roles: ['owner', 'admin', 'safety_lead', 'executive'] },
   { label: 'Account', href: '/operations/account', roles: ['owner', 'admin'] },
   { label: 'Team', href: '/operations/team', roles: ['owner', 'admin'] },
 ]

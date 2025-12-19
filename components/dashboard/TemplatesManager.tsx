@@ -263,6 +263,48 @@ export function TemplatesManager({ organizationId, subscriptionTier = 'starter' 
     }
   }
 
+  // Group templates by playbook/niche
+  const playbookGroups = useMemo(() => {
+    const templates = activeTab === 'hazard' ? hazardTemplates : jobTemplates
+    const groups: Record<string, typeof templates> = {
+      'All Playbooks': templates,
+      'Residential Trades': [],
+      'Commercial Contractors': [],
+      'Facilities & Building Services': [],
+      'Fire & Life Safety': [],
+      'Infrastructure & Heavy Civil': [],
+      'Uncategorized': [],
+    }
+
+    templates.forEach((template) => {
+      const trade = (template as HazardTemplate).trade?.toLowerCase() || (template as JobTemplate).job_type?.toLowerCase() || ''
+      const name = template.name.toLowerCase()
+      
+      if (trade.includes('residential') || trade.includes('roofing') || trade.includes('electrical') || trade.includes('plumbing') || trade.includes('hvac') || name.includes('residential')) {
+        groups['Residential Trades'].push(template)
+      } else if (trade.includes('commercial') || trade.includes('contractor') || name.includes('commercial')) {
+        groups['Commercial Contractors'].push(template)
+      } else if (trade.includes('facilities') || trade.includes('maintenance') || trade.includes('janitorial') || name.includes('facilities')) {
+        groups['Facilities & Building Services'].push(template)
+      } else if (trade.includes('fire') || trade.includes('sprinkler') || trade.includes('life safety') || name.includes('fire')) {
+        groups['Fire & Life Safety'].push(template)
+      } else if (trade.includes('infrastructure') || trade.includes('civil') || trade.includes('heavy') || name.includes('infrastructure')) {
+        groups['Infrastructure & Heavy Civil'].push(template)
+      } else if (trade || name) {
+        groups['Uncategorized'].push(template)
+      }
+    })
+
+    // Remove empty groups
+    Object.keys(groups).forEach((key) => {
+      if (groups[key].length === 0 && key !== 'All Playbooks') {
+        delete groups[key]
+      }
+    })
+
+    return groups
+  }, [activeTab, hazardTemplates, jobTemplates])
+
   // Filter templates by search query
   const filteredTemplates = useMemo(() => {
     const templates = activeTab === 'hazard' ? hazardTemplates : jobTemplates
@@ -278,7 +320,11 @@ export function TemplatesManager({ organizationId, subscriptionTier = 'starter' 
     })
   }, [activeTab, hazardTemplates, jobTemplates, searchQuery])
 
-  const currentTemplates = filteredTemplates
+  const [selectedPlaybook, setSelectedPlaybook] = useState<string>('All Playbooks')
+
+  const currentTemplates = searchQuery.trim() 
+    ? filteredTemplates 
+    : (playbookGroups[selectedPlaybook] || [])
 
   const handleNewTemplate = async () => {
     const limitCheck = await checkTemplateLimit()
@@ -305,7 +351,7 @@ export function TemplatesManager({ organizationId, subscriptionTier = 'starter' 
       <div className="flex items-start justify-between mb-6">
         <div className="flex-1">
           <div className="flex items-center gap-3 mb-2">
-            <h3 className={typography.h4}>Templates</h3>
+            <h3 className={typography.h4}>Playbooks</h3>
             {subscriptionTier === 'pro' || subscriptionTier === 'business' ? (
               <span className="px-2 py-0.5 text-xs font-medium bg-[#F97316]/20 text-[#F97316] rounded border border-[#F97316]/30 flex items-center gap-1">
                 <Check size={12} />
@@ -318,7 +364,7 @@ export function TemplatesManager({ organizationId, subscriptionTier = 'starter' 
             )}
           </div>
           <p className="text-xs text-white/50 mb-2">
-            Save go-to hazard + job setups so your team can spin up jobs in 30 seconds.
+            Industry-specific templates grouped by vertical. Each playbook contains pre-configured hazards, checklists, and workflows for your niche.
           </p>
           {subscriptionTier === 'starter' && templateLimitInfo.current === 2 && (
             <p className="text-xs text-[#F97316] mt-1">
@@ -359,12 +405,31 @@ export function TemplatesManager({ organizationId, subscriptionTier = 'starter' 
         </button>
       </div>
 
-      {/* Search (if templates exist) */}
-      {!loading && currentTemplates.length > 0 && (
-        <div className="mb-4">
+      {/* Playbook Selector & Search */}
+      {!loading && (hazardTemplates.length > 0 || jobTemplates.length > 0) && (
+        <div className="mb-4 space-y-3">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs text-white/50">Playbook:</span>
+            {Object.keys(playbookGroups).map((playbook) => (
+              <button
+                key={playbook}
+                onClick={() => {
+                  setSelectedPlaybook(playbook)
+                  setSearchQuery('')
+                }}
+                className={`px-3 py-1 text-xs rounded-lg transition-colors ${
+                  selectedPlaybook === playbook
+                    ? 'bg-[#F97316] text-black font-medium'
+                    : 'bg-white/5 text-white/70 hover:bg-white/10'
+                }`}
+              >
+                {playbook} ({playbookGroups[playbook]?.length || 0})
+              </button>
+            ))}
+          </div>
           <input
             type="text"
-            placeholder="Search templates..."
+            placeholder="Search playbooks..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-[#F97316] text-sm"
