@@ -111,10 +111,16 @@ export default function HomePage() {
                 <span className="absolute bottom-0 left-0 w-0 h-[1px] bg-white group-hover:w-full transition-all duration-300" />
               </button>
               <button
-                onClick={() => window.open('https://cal.com/riskmate', '_blank')}
+                onClick={() => router.push('/login')}
                 className="px-4 py-2 border border-white/20 hover:border-white/40 rounded-md font-medium text-sm transition-colors"
               >
-                Book a Call
+                Sign In
+              </button>
+              <button
+                onClick={() => router.push('/login')}
+                className="px-4 py-2 bg-[#F97316] hover:bg-[#FB923C] text-black rounded-md font-medium text-sm transition-colors"
+              >
+                Get Started
               </button>
             </div>
             {/* Mobile Menu Button */}
@@ -196,12 +202,21 @@ export default function HomePage() {
                 </button>
                 <button
                   onClick={() => {
-                    window.open('https://cal.com/riskmate', '_blank')
+                    router.push('/login')
                     setMobileMenuOpen(false)
                   }}
                   className="w-full px-4 py-2 border border-white/20 hover:border-white/40 rounded-md font-medium text-sm transition-colors"
                 >
-                  Book a Call
+                  Sign In
+                </button>
+                <button
+                  onClick={() => {
+                    router.push('/login')
+                    setMobileMenuOpen(false)
+                  }}
+                  className="w-full px-4 py-2 bg-[#F97316] hover:bg-[#FB923C] text-black rounded-md font-medium text-sm transition-colors"
+                >
+                  Get Started
                 </button>
               </div>
             </motion.div>
@@ -298,13 +313,16 @@ export default function HomePage() {
                 />
               </motion.button>
               <motion.button
-                onClick={() => window.open('https://cal.com/riskmate', '_blank')}
+                onClick={() => router.push('/login')}
                 className="px-8 py-4 border border-white/10 rounded-lg hover:border-white/20 transition-colors font-semibold text-lg btn-secondary"
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
               >
-                Book a Call
+                Get Started
               </motion.button>
+              <p className="text-sm text-white/50 mt-2">
+                No credit card · Demo data available
+              </p>
             </motion.div>
 
             {/* Trust Badges */}

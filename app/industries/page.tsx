@@ -144,10 +144,10 @@ export default function IndustriesPage() {
                         Try Demo →
                       </button>
                       <button
-                        onClick={() => window.open('https://cal.com/riskmate', '_blank')}
+                        onClick={() => router.push('/login')}
                         className="px-6 py-3 border border-white/10 hover:border-white/20 rounded-lg font-semibold transition-colors"
                       >
-                        Book Call
+                        Get Started
                       </button>
                     </div>
                   </div>
@@ -174,10 +174,10 @@ export default function IndustriesPage() {
                 Try Interactive Demo →
               </button>
               <button
-                onClick={() => window.open('https://cal.com/riskmate', '_blank')}
+                onClick={() => router.push('/login')}
                 className="px-8 py-4 border border-white/10 hover:border-white/20 rounded-lg font-semibold text-lg transition-colors"
               >
-                Book a Call
+                Get Started
               </button>
             </div>
           </motion.div>

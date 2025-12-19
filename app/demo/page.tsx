@@ -312,20 +312,24 @@ function DemoContent() {
                   That&apos;s how RiskMate protects teams during audits, incidents, and insurance reviews.
                 </p>
               </div>
-              <div className="flex flex-col sm:flex-row gap-3 mb-4">
-                <a
-                  href="mailto:hello@riskmate.app?subject=Early Access Request"
-                  className="px-6 py-3 bg-[#F97316] hover:bg-[#FB923C] text-black rounded-lg text-sm font-medium transition-colors text-center"
-                >
-                  Request Early Access
-                </a>
-                <a
-                  href="/docs/GOVERNANCE_MODEL_EXECUTIVE_SUMMARY.md"
-                  target="_blank"
-                  className="px-6 py-3 bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg text-sm transition-colors text-center"
-                >
-                  Download Governance Overview
-                </a>
+              <div className="mb-4">
+                <p className="text-sm text-white/70 mb-4">
+                  Continue in your own workspace. Get started with demo data or connect your organization.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <a
+                    href="/signup"
+                    className="px-6 py-3 bg-[#F97316] hover:bg-[#FB923C] text-black rounded-lg text-sm font-medium transition-colors text-center"
+                  >
+                    Create Account
+                  </a>
+                  <a
+                    href="/login"
+                    className="px-6 py-3 bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg text-sm transition-colors text-center"
+                  >
+                    Sign In
+                  </a>
+                </div>
               </div>
               <p className="text-xs text-white/40 text-center">
                 Designed for construction, trades, and regulated operations where liability is real.
