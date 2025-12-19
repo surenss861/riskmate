@@ -279,6 +279,14 @@ export default function JobDetailPage() {
       } catch (err) {
         console.error('Failed to load attachments:', err)
       }
+
+      // Load sign-offs
+      try {
+        const signoffsResponse = await jobsApi.getSignoffs(jobId)
+        setSignoffs(signoffsResponse.data || [])
+      } catch (err) {
+        console.error('Failed to load sign-offs:', err)
+      }
       
       // Ensure minimum skeleton display time (300ms)
       const elapsed = Date.now() - startTime
