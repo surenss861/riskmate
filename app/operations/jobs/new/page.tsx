@@ -223,10 +223,53 @@ export default function NewJobPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4 }}
           >
-            <h1 className={`${typography.h1} ${spacing.tight}`}>Create New Job</h1>
-            <p className={`${typography.bodyMuted} ${spacing.section}`}>
-              Enter job details and select risk factors to get an instant risk score
-            </p>
+            <div className="flex items-start justify-between mb-6">
+              <div>
+                <h1 className={`${typography.h1} ${spacing.tight}`}>Create New Job</h1>
+                <p className={`${typography.bodyMuted} ${spacing.section}`}>
+                  Enter job details and select risk factors to get an instant risk score
+                </p>
+              </div>
+              {/* Quick Action: Create Job → Proof Pack */}
+              <div className="text-right">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    // Quick create with default template and redirect to packet view
+                    if (!formData.client_name || !formData.job_type) {
+                      setError('Please fill in at least Client Name and Job Type')
+                      return
+                    }
+                    setLoading(true)
+                    try {
+                      // Use first available template if none selected
+                      const templateToUse = selectedTemplate || (jobTemplates.length > 0 ? jobTemplates[0].id : undefined)
+                      
+                      const response = await jobsApi.create({
+                        ...formData,
+                        risk_factor_codes: selectedRiskFactors,
+                        start_date: formData.start_date || undefined,
+                        applied_template_id: templateToUse,
+                        applied_template_type: templateToUse ? 'job' : undefined,
+                      })
+
+                      // Redirect directly to Job Packet view
+                      router.push(`/operations/jobs/${response.data.id}?view=packet`)
+                    } catch (err: any) {
+                      setError('Failed to create job. Please try the standard form.')
+                      setLoading(false)
+                    }
+                  }}
+                  disabled={loading || !formData.client_name || !formData.job_type}
+                  className={`${buttonStyles.secondary} ${buttonStyles.sizes.md} disabled:opacity-40 disabled:cursor-not-allowed`}
+                >
+                  Create & Generate Proof Pack →
+                </button>
+                <p className="text-xs text-white/50 mt-2">
+                  Quick path to insurance-ready packet
+                </p>
+              </div>
+            </div>
 
             {error && (
               <div className={`${spacing.relaxed} p-4 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400`}>
