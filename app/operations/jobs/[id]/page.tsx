@@ -1251,8 +1251,8 @@ export default function JobDetailPage() {
                   auditTimeline={versionHistoryEntries.map(entry => ({
                     id: entry.id,
                     event_type: entry.actionType || entry.changeType || 'updated',
-                    user_name: entry.user?.name,
-                    created_at: entry.changedAt || entry.timestamp,
+                    user_name: entry.changedBy || undefined,
+                    created_at: entry.changedAt,
                     metadata: entry.metadata,
                   }))}
                   attachments={attachments}
