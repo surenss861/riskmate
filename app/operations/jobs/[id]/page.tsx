@@ -17,6 +17,7 @@ import { JobAssignment } from '@/components/dashboard/JobAssignment'
 import { EvidenceVerification } from '@/components/dashboard/EvidenceVerification'
 import { TemplatesManager, TemplateModal, TemplateModalProps } from '@/components/dashboard/TemplatesManager'
 import { ApplyTemplateInline } from '@/components/dashboard/ApplyTemplateInline'
+import { JobPacketView } from '@/components/job/JobPacketView'
 import { buttonStyles, cardStyles, typography, emptyStateStyles, spacing, dividerStyles } from '@/lib/styles/design-system'
 import { ErrorModal } from '@/components/dashboard/ErrorModal'
 import { optimizePhoto } from '@/lib/utils/photoOptimization'
@@ -1190,6 +1191,33 @@ export default function JobDetailPage() {
                     entries={versionHistoryEntries}
                   />
                 )}
+              </motion.div>
+
+              {/* Job Packet View */}
+              <motion.div
+                id="job-packet"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.8 }}
+                className="mt-8"
+              >
+                <JobPacketView
+                  job={job}
+                  mitigations={job.mitigations || []}
+                  auditTimeline={versionHistoryEntries.map(entry => ({
+                    id: entry.id,
+                    event_type: entry.type,
+                    user_name: entry.user?.name,
+                    created_at: entry.timestamp,
+                    metadata: entry.metadata,
+                  }))}
+                  onExport={(packType) => {
+                    setToast({ 
+                      message: `${packType === 'insurance' ? 'Insurance' : packType === 'audit' ? 'Audit' : packType === 'incident' ? 'Incident' : 'Compliance'} Packet export coming in v2`, 
+                      type: 'info' 
+                    })
+                  }}
+                />
               </motion.div>
         </div>
       </div>
