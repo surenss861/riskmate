@@ -136,18 +136,58 @@ export default function HomePage() {
           {/* Mobile Menu Drawer */}
           {mobileMenuOpen && (
             <motion.div
+              className="md:hidden absolute top-full left-0 right-0 bg-black/95 backdrop-blur-xl border-b border-white/10"
               initial={{ opacity: 0, y: -20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="md:hidden fixed top-[73px] left-0 w-full bg-black/95 backdrop-blur-xl border-b border-white/10 py-4 px-6"
+              transition={{ duration: 0.3 }}
             >
-              <div className="flex flex-col gap-3">
+              <div className="px-6 py-4 space-y-3">
+                <button
+                  onClick={() => {
+                    router.push('/industries')
+                    setMobileMenuOpen(false)
+                  }}
+                  className="block w-full text-left text-white/70 hover:text-white transition-colors py-2"
+                >
+                  Industries
+                </button>
+                <button
+                  onClick={() => {
+                    const element = document.getElementById('how-it-works')
+                    element?.scrollIntoView({ behavior: 'smooth' })
+                    setMobileMenuOpen(false)
+                  }}
+                  className="block w-full text-left text-white/70 hover:text-white transition-colors py-2"
+                >
+                  How it Works
+                </button>
+                <button
+                  onClick={() => {
+                    const element = document.getElementById('proof')
+                    element?.scrollIntoView({ behavior: 'smooth' })
+                    setMobileMenuOpen(false)
+                  }}
+                  className="block w-full text-left text-white/70 hover:text-white transition-colors py-2"
+                >
+                  Proof
+                </button>
+                <button
+                  onClick={() => {
+                    const element = document.getElementById('pricing')
+                    element?.scrollIntoView({ behavior: 'smooth' })
+                    setMobileMenuOpen(false)
+                  }}
+                  className="block w-full text-left text-white/70 hover:text-white transition-colors py-2"
+                >
+                  Pricing
+                </button>
                 <button
                   onClick={() => {
                     router.push('/demo')
                     setMobileMenuOpen(false)
                   }}
-                  className="text-white/70 hover:text-white transition-colors text-sm flex items-center gap-1.5"
+                  className="block w-full text-left text-white/70 hover:text-white transition-colors py-2 flex items-center gap-1.5"
                 >
                   Demo
                   <span className="px-1.5 py-0.5 text-xs bg-[#F97316]/20 text-[#F97316] border border-[#F97316]/30 rounded">
@@ -156,47 +196,14 @@ export default function HomePage() {
                 </button>
                 <button
                   onClick={() => {
-                    router.push('/signup')
+                    window.open('https://cal.com/riskmate', '_blank')
                     setMobileMenuOpen(false)
                   }}
-                  className="px-4 py-2 bg-[#F97316] hover:bg-[#FB923C] text-white rounded-md font-medium text-sm transition-colors"
+                  className="w-full px-4 py-2 border border-white/20 hover:border-white/40 rounded-md font-medium text-sm transition-colors"
                 >
-                  Start Free →
+                  Book a Call
                 </button>
               </div>
-            </motion.div>
-          )}
-          {mobileMenuOpen && (
-            <motion.div
-              className="md:hidden absolute top-full left-0 right-0 bg-black/95 backdrop-blur-xl border-b border-white/10"
-              initial={{ opacity: 0, y: -20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.3 }}
-            >
-            <div className="px-6 py-4 space-y-4">
-              <button
-                onClick={() => {
-                  router.push('/demo')
-                  setMobileMenuOpen(false)
-                }}
-                className="block w-full text-left text-white/70 hover:text-white transition-colors py-2 flex items-center gap-1.5"
-              >
-                Demo
-                <span className="px-1.5 py-0.5 text-xs bg-[#F97316]/20 text-[#F97316] border border-[#F97316]/30 rounded">
-                  Interactive
-                </span>
-              </button>
-              <button
-                onClick={() => {
-                  router.push('/signup')
-                  setMobileMenuOpen(false)
-                }}
-                className="w-full px-4 py-2 bg-[#F97316] hover:bg-[#FB923C] text-white rounded-md font-medium text-sm transition-colors btn-primary"
-              >
-                Start Free →
-              </button>
-            </div>
             </motion.div>
           )}
         </nav>
