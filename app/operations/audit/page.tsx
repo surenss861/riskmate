@@ -176,7 +176,8 @@ export default function AuditViewPage() {
 
           return {
             ...event,
-            event_type: (event.event_name || event.event_type || 'unknown').toString(),
+            event_type: (event.event_name || 'unknown').toString(),
+            job_id: event.target_type === 'job' ? (event.target_id || event.job_id) : event.job_id,
             job_name: jobName,
             site_name: siteName,
             user_name: userName,
