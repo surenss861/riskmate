@@ -19,43 +19,111 @@ interface TourStep {
   position: 'top' | 'bottom' | 'left' | 'right'
 }
 
-const tourSteps: TourStep[] = [
-  {
-    id: 'role-switcher',
-    title: 'Role-Based Capabilities',
-    description: 'Watch capabilities change instantly. Try switching to "Member" and notice which actions disappear.',
-    target: '[data-tour="role-switcher"]',
-    position: 'bottom',
-  },
-  {
-    id: 'flagged-job',
-    title: 'Flagged for Review',
-    description: 'Safety Leads and Executives see all flagged jobs automatically. This is a governance signal, not a workflow.',
-    target: '[data-tour="flagged-job"]',
-    position: 'right',
-  },
-  {
-    id: 'audit-logs',
-    title: 'Audit Trail',
-    description: 'Every action is logged, including capability violations. See auth.role_violation events proving enforcement.',
-    target: '[data-tour="audit-logs"]',
-    position: 'top',
-  },
-  {
-    id: 'billing',
-    title: 'Billing Integration',
-    description: 'Managed by Stripe. Source of truth is external, but all operational data is in RiskMate.',
-    target: '[data-tour="billing"]',
-    position: 'top',
-  },
-  {
-    id: 'security',
-    title: 'Security Events',
-    description: 'Password changes, logins, and session management are all tracked for compliance.',
-    target: '[data-tour="security"]',
-    position: 'top',
-  },
-]
+const getTourSteps = (role: DemoRole): TourStep[] => {
+  const baseSteps: TourStep[] = [
+    {
+      id: 'role-switcher',
+      title: 'Why unauthorized actions are impossible',
+      description: 'Watch capabilities change instantly. Try switching to "Member" and notice which actions disappear. This is server-enforced, not UI hiding.',
+      target: '[data-tour="role-switcher"]',
+      position: 'bottom',
+    },
+    {
+      id: 'flagged-job',
+      title: 'Governance signals, not workflow noise',
+      description: 'Safety Leads and Executives see all flagged jobs automatically. This creates institutional memory without blocking work.',
+      target: '[data-tour="flagged-job"]',
+      position: 'right',
+    },
+  ]
+
+  // Role-specific steps
+  if (role === 'executive') {
+    return [
+      ...baseSteps,
+      {
+        id: 'audit-logs',
+        title: 'This is what protects you during inspections',
+        description: 'Every action is logged, including capability violations. See auth.role_violation events proving enforcement is active, not theoretical.',
+        target: '[data-tour="audit-logs"]',
+        position: 'top',
+      },
+      {
+        id: 'flagged-job',
+        title: 'Risk visibility without interference',
+        description: 'You see all flagged jobs automatically. This is read-only oversight — you observe risk, you don\'t edit history.',
+        target: '[data-tour="flagged-job"]',
+        position: 'right',
+      },
+    ]
+  }
+
+  if (role === 'owner') {
+    return [
+      ...baseSteps,
+      {
+        id: 'billing',
+        title: 'Billing is external by design',
+        description: 'Operational data stays tamper-proof. Stripe manages billing; RiskMate governs operations. This separation protects you.',
+        target: '[data-tour="billing"]',
+        position: 'top',
+      },
+      {
+        id: 'security',
+        title: 'Access changes are auditable',
+        description: 'Password changes, logins, and session management are all tracked. This is what insurers and auditors want to see.',
+        target: '[data-tour="security"]',
+        position: 'top',
+      },
+    ]
+  }
+
+  if (role === 'safety_lead') {
+    return [
+      ...baseSteps,
+      {
+        id: 'flagged-job',
+        title: 'You own operational risk',
+        description: 'You see all flagged jobs automatically. This is your escalation surface — risk signals come to you, not scattered across tools.',
+        target: '[data-tour="flagged-job"]',
+        position: 'right',
+      },
+      {
+        id: 'audit-logs',
+        title: 'Every escalation is provable',
+        description: 'When you flag a job, it\'s logged. When someone tries to flag without permission, that\'s logged too. This is audit-ready.',
+        target: '[data-tour="audit-logs"]',
+        position: 'top',
+      },
+    ]
+  }
+
+  // Default steps for member/admin
+  return [
+    ...baseSteps,
+    {
+      id: 'audit-logs',
+      title: 'This is what protects you during inspections',
+      description: 'Every action is logged, including capability violations. See auth.role_violation events proving enforcement is active, not theoretical.',
+      target: '[data-tour="audit-logs"]',
+      position: 'top',
+    },
+    {
+      id: 'billing',
+      title: 'Billing is external by design',
+      description: 'Operational data stays tamper-proof. Stripe manages billing; RiskMate governs operations. This separation protects you.',
+      target: '[data-tour="billing"]',
+      position: 'top',
+    },
+    {
+      id: 'security',
+      title: 'Access changes are auditable',
+      description: 'Password changes, logins, and session management are all tracked. This is what insurers and auditors want to see.',
+      target: '[data-tour="security"]',
+      position: 'top',
+    },
+  ]
+}
 
 function DemoContent() {
   const searchParams = useSearchParams()
@@ -82,35 +150,207 @@ function DemoContent() {
       <DashboardNavbar />
       
       <div className="max-w-7xl mx-auto px-6 py-8">
-        {/* Header with Role Switcher */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className={`${typography.h1} mb-2`}>RiskMate Demo</h1>
-            <p className="text-white/60 text-sm">
-              Interactive product walkthrough — no authentication required
+        {/* Header with Enhanced Copy */}
+        <div className="mb-8">
+          <div className="mb-6">
+            <h1 className={`${typography.h1} mb-3`}>RiskMate Interactive Demo</h1>
+            <p className="text-white text-lg mb-2">
+              See how real risk governance actually works — live, role by role
+            </p>
+            <p className="text-white/60 text-sm mb-1">
+              Explore live risk scoring, role-based enforcement, and audit trails — no login, no backend, no data saved.
+            </p>
+            <p className="text-white/40 text-xs italic">
+              This demo mirrors production behavior, permissions, and audit logic. Only persistence is disabled.
             </p>
           </div>
-          <div className="flex items-center gap-4">
+
+          {/* Choose Your Perspective Entry Card */}
+          {!searchParams?.get('role') && !searchParams?.get('dismissed') && (
+            <div className="mb-6 p-4 bg-white/5 border border-white/10 rounded-lg">
+              <div className="flex items-start justify-between mb-3">
+                <div>
+                  <h3 className="font-semibold text-white mb-1">Who are you evaluating RiskMate as?</h3>
+                  <p className="text-sm text-white/60">Choose a perspective to see relevant features</p>
+                </div>
+                <button
+                  onClick={() => {
+                    const params = new URLSearchParams(searchParams?.toString() || '')
+                    params.set('dismissed', 'true')
+                    window.history.replaceState({}, '', `?${params.toString()}`)
+                  }}
+                  className="text-white/40 hover:text-white transition-colors"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                <button
+                  onClick={() => {
+                    setCurrentRole('owner')
+                    setCurrentScenario('normal')
+                    setTourStep(0)
+                    const params = new URLSearchParams(searchParams?.toString() || '')
+                    params.set('role', 'owner')
+                    params.set('scenario', 'normal')
+                    params.delete('dismissed')
+                    window.history.replaceState({}, '', `?${params.toString()}`)
+                  }}
+                  className="px-4 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded text-sm transition-colors text-left"
+                >
+                  <div className="text-lg mb-1">🧑‍💼</div>
+                  <div className="font-medium text-white">Owner / Founder</div>
+                  <div className="text-xs text-white/60 mt-1">Full system access</div>
+                </button>
+                <button
+                  onClick={() => {
+                    setCurrentRole('safety_lead')
+                    setCurrentScenario('incident')
+                    setTourStep(0)
+                    const params = new URLSearchParams(searchParams?.toString() || '')
+                    params.set('role', 'safety_lead')
+                    params.set('scenario', 'incident')
+                    params.delete('dismissed')
+                    window.history.replaceState({}, '', `?${params.toString()}`)
+                  }}
+                  className="px-4 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded text-sm transition-colors text-left"
+                >
+                  <div className="text-lg mb-1">🛡️</div>
+                  <div className="font-medium text-white">Safety Lead</div>
+                  <div className="text-xs text-white/60 mt-1">Risk oversight</div>
+                </button>
+                <button
+                  onClick={() => {
+                    setCurrentRole('executive')
+                    setCurrentScenario('audit_review')
+                    setTourStep(0)
+                    const params = new URLSearchParams(searchParams?.toString() || '')
+                    params.set('role', 'executive')
+                    params.set('scenario', 'audit_review')
+                    params.delete('dismissed')
+                    window.history.replaceState({}, '', `?${params.toString()}`)
+                  }}
+                  className="px-4 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded text-sm transition-colors text-left"
+                >
+                  <div className="text-lg mb-1">🏢</div>
+                  <div className="font-medium text-white">Executive / Risk</div>
+                  <div className="text-xs text-white/60 mt-1">Visibility & trends</div>
+                </button>
+                <button
+                  onClick={() => {
+                    setCurrentRole('executive')
+                    setCurrentScenario('insurance_packet')
+                    setTourStep(0)
+                    const params = new URLSearchParams(searchParams?.toString() || '')
+                    params.set('role', 'executive')
+                    params.set('scenario', 'insurance_packet')
+                    params.delete('dismissed')
+                    window.history.replaceState({}, '', `?${params.toString()}`)
+                  }}
+                  className="px-4 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded text-sm transition-colors text-left"
+                >
+                  <div className="text-lg mb-1">🧾</div>
+                  <div className="font-medium text-white">Insurance / Auditor</div>
+                  <div className="text-xs text-white/60 mt-1">Audit-ready view</div>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Demo Command Bar */}
+          <div className="flex items-center gap-3 flex-wrap">
             <button
               onClick={() => setTourStep(0)}
               className="px-4 py-2 bg-[#F97316] hover:bg-[#FB923C] text-black rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
             >
               <Play className="w-4 h-4" />
-              Start Tour
+              Start Guided Tour
             </button>
             <div data-tour="role-switcher">
               <RoleSwitcher />
             </div>
+            <button
+              onClick={() => {
+                const { copyDemoLink } = useDemo()
+                copyDemoLink()
+              }}
+              className="px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg text-sm transition-colors"
+            >
+              Share Scenario
+            </button>
           </div>
         </div>
 
         <GuidedTour
           step={tourStep}
           steps={tourSteps}
-          onClose={() => setTourStep(null)}
-          onNext={() => setTourStep(tourStep !== null ? tourStep + 1 : 0)}
+          onClose={() => {
+            setTourStep(null)
+            // Show conversion card after tour completion
+            if (tourStep === tourSteps.length - 1) {
+              setShowConversionCard(true)
+            }
+          }}
+          onNext={() => {
+            const nextStep = tourStep !== null ? tourStep + 1 : 0
+            setTourStep(nextStep)
+            // Show conversion card after last step
+            if (nextStep >= tourSteps.length) {
+              setTourStep(null)
+              setShowConversionCard(true)
+            }
+          }}
           onPrevious={() => setTourStep(tourStep !== null ? Math.max(0, tourStep - 1) : 0)}
         />
+
+        {/* Post-Tour Conversion Card */}
+        {showConversionCard && (
+          <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/70 backdrop-blur">
+            <div className="relative w-full max-w-2xl rounded-3xl border border-white/10 bg-[#0B0C14] p-8 shadow-[0_30px_80px_rgba(0,0,0,0.6)]">
+              <button
+                onClick={() => setShowConversionCard(false)}
+                className="absolute top-4 right-4 text-white/60 hover:text-white transition-colors"
+              >
+                ✕
+              </button>
+              <h2 className="text-2xl font-semibold text-white mb-4">
+                You've just seen RiskMate enforce risk — not just track it
+              </h2>
+              <div className="space-y-4 text-sm text-white/80 mb-6">
+                <p>
+                  What you experienced isn't a walkthrough — it's the actual governance model in action.
+                </p>
+                <ul className="space-y-2 list-disc list-inside">
+                  <li>Roles weren't cosmetic — permissions were enforced</li>
+                  <li>Flagged jobs triggered visibility, not workflow noise</li>
+                  <li>Every action created an audit trail, including violations</li>
+                  <li>Billing, access, and security were intentionally separated</li>
+                </ul>
+                <p className="text-white/90 font-medium">
+                  That's how RiskMate protects teams during audits, incidents, and insurance reviews.
+                </p>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-3 mb-4">
+                <a
+                  href="mailto:hello@riskmate.app?subject=Early Access Request"
+                  className="px-6 py-3 bg-[#F97316] hover:bg-[#FB923C] text-black rounded-lg text-sm font-medium transition-colors text-center"
+                >
+                  Request Early Access
+                </a>
+                <a
+                  href="/docs/GOVERNANCE_MODEL_EXECUTIVE_SUMMARY.md"
+                  target="_blank"
+                  className="px-6 py-3 bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg text-sm transition-colors text-center"
+                >
+                  Download Governance Overview
+                </a>
+              </div>
+              <p className="text-xs text-white/40 text-center">
+                Designed for construction, trades, and regulated operations where liability is real.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Section Navigation */}
         <div className="flex gap-4 mb-8 border-b border-white/10">
@@ -245,7 +485,12 @@ function DemoContent() {
             )}
 
             <div className={cardStyles.base}>
-              <h2 className={`${typography.h2} mb-4`}>Job Roster</h2>
+              <div className="mb-4">
+                <h2 className={`${typography.h2} mb-2`}>Job Roster</h2>
+                <p className="text-white/70 text-sm italic">
+                  Every job is continuously risk-scored and logged for legal defensibility.
+                </p>
+              </div>
               <p className="text-white/60 text-sm mb-6">
                 View and manage risk assessments. Flagged jobs are visible to Safety Leads and Executives.
               </p>
@@ -506,7 +751,12 @@ function DemoContent() {
 
                 {/* Billing */}
                 <div data-tour="billing">
-                  <h3 className="font-semibold mb-3">Plan & Billing</h3>
+                  <div className="mb-3">
+                    <h3 className="font-semibold mb-1">Plan & Billing</h3>
+                    <p className="text-white/60 text-xs italic">
+                      Billing is external by design. Operational data stays tamper-proof.
+                    </p>
+                  </div>
                   <div className="p-4 bg-white/5 border border-white/10 rounded-lg space-y-2">
                     <div className="flex justify-between">
                       <span className="text-white/60">Plan</span>
