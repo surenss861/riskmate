@@ -228,7 +228,7 @@ export function JobPacketView({
       </div>
 
       {/* Job Packet Content (Printable) */}
-      <div className={`${cardStyles.default} p-8 print:border-0 print:shadow-none`}>
+      <div className={`${cardStyles.base} p-8 print:border-0 print:shadow-none`}>
         {/* Job Summary */}
         <section className="mb-8 pb-8 border-b border-white/5">
           <h3 className={`${typography.h3} mb-4`}>Job Summary</h3>
