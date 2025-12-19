@@ -1,12 +1,7 @@
 -- Multi-site support for facilities operations
 -- Adds site_id to jobs table for facilities that manage multiple locations
 
--- Add site_id column to jobs table
-ALTER TABLE jobs
-ADD COLUMN IF NOT EXISTS site_id UUID REFERENCES sites(id) ON DELETE SET NULL,
-ADD COLUMN IF NOT EXISTS site_name TEXT;
-
--- Create sites table for multi-site organizations
+-- Create sites table for multi-site organizations FIRST
 CREATE TABLE IF NOT EXISTS sites (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
@@ -29,6 +24,13 @@ CREATE TABLE IF NOT EXISTS sites (
 -- Create index for efficient site lookups
 CREATE INDEX IF NOT EXISTS idx_sites_organization ON sites(organization_id);
 CREATE INDEX IF NOT EXISTS idx_sites_archived ON sites(archived, archived_at);
+
+-- NOW add site_id column to jobs table (after sites table exists)
+ALTER TABLE jobs
+ADD COLUMN IF NOT EXISTS site_id UUID REFERENCES sites(id) ON DELETE SET NULL,
+ADD COLUMN IF NOT EXISTS site_name TEXT;
+
+-- Create index for jobs site lookup
 CREATE INDEX IF NOT EXISTS idx_jobs_site ON jobs(site_id);
 
 -- Enable RLS on sites table
