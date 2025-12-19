@@ -149,45 +149,20 @@ export default function AuditViewPage() {
       // Fallback: get users from the organization
       let usersList: Array<{ id: string; name: string; email: string }> = []
       
+      // Skip organization_members query entirely - it's causing 500 errors
+      // Query users directly by organization_id (this is the reliable path)
       try {
-        // Try to query organization_members first
-        const { data: members, error: membersError } = await supabase
-          .from('organization_members')
-          .select('user_id')
+        const { data: users, error: usersError } = await supabase
+          .from('users')
+          .select('id, full_name, email')
           .eq('organization_id', orgData.id)
         
-        if (!membersError && members && members.length > 0) {
-          // Query users table for user details
-          const userIds = members.map((m: any) => m.user_id).filter(Boolean)
-          
-          if (userIds.length > 0) {
-            const { data: users, error: usersError } = await supabase
-              .from('users')
-              .select('id, full_name, email')
-              .in('id', userIds)
-            
-            if (!usersError && users) {
-              usersList = users.map((u: any) => ({
-                id: u.id,
-                name: u.full_name || 'Unknown',
-                email: u.email || '',
-              }))
-            }
-          }
-        } else {
-          // Fallback: query users directly by organization_id
-          const { data: users, error: usersError } = await supabase
-            .from('users')
-            .select('id, full_name, email')
-            .eq('organization_id', orgData.id)
-          
-          if (!usersError && users) {
-            usersList = users.map((u: any) => ({
-              id: u.id,
-              name: u.full_name || 'Unknown',
-              email: u.email || '',
-            }))
-          }
+        if (!usersError && users) {
+          usersList = users.map((u: any) => ({
+            id: u.id,
+            name: u.full_name || 'Unknown',
+            email: u.email || '',
+          }))
         }
       } catch (error) {
         console.error('Error fetching users for audit log:', error)
@@ -351,7 +326,7 @@ export default function AuditViewPage() {
                     <div key={eventType} className="border border-white/5 rounded-lg p-4">
                       <div className="flex items-center gap-2 mb-3">
                         <Icon className={`w-5 h-5 ${getEventColor(eventType)}`} />
-                        <h3 className="font-semibold capitalize">{eventType.replace(/_/g, ' ')}</h3>
+                        <h3 className="font-semibold capitalize">{eventType?.replace(/_/g, ' ') || eventType || 'Unknown'}</h3>
                         <span className="text-sm text-white/60">({events.length})</span>
                       </div>
                       <div className="space-y-2">
@@ -408,7 +383,7 @@ export default function AuditViewPage() {
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
                           <p className="font-semibold capitalize">
-                            {event.event_type.replace(/_/g, ' ')}
+                            {event.event_type?.replace(/_/g, ' ') || event.event_type || 'Unknown'}
                           </p>
                           {event.user_name && (
                             <span className="text-sm text-white/60 flex items-center gap-1">
