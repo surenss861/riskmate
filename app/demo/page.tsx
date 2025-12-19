@@ -171,7 +171,17 @@ function DemoContent() {
             <p className="text-white/60 text-sm mb-1">
               Explore live risk scoring, role-based enforcement, and audit trails — no login, no backend, no data saved.
             </p>
-            <p className="text-white/40 text-xs italic">
+            {searchParams?.get('operation') && operationPresets[searchParams.get('operation') as OperationType] && (
+              <div className="mt-3 p-3 bg-[#F97316]/10 border border-[#F97316]/30 rounded-lg">
+                <p className="text-sm text-[#F97316] font-medium">
+                  Viewing as: {operationPresets[searchParams.get('operation') as OperationType].label}
+                </p>
+                <p className="text-xs text-white/60 mt-1">
+                  {operationPresets[searchParams.get('operation') as OperationType].message}
+                </p>
+              </div>
+            )}
+            <p className="text-white/40 text-xs italic mt-2">
               This demo mirrors production behavior, permissions, and audit logic. Only persistence is disabled.
             </p>
           </div>
