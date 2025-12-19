@@ -1284,14 +1284,12 @@ export default function JobDetailPage() {
                           link.click()
                           document.body.removeChild(link)
                           URL.revokeObjectURL(url)
-                          setToast({ message: `${packType} packet PDF downloaded successfully`, type: 'success' })
+                          setToast({ 
+                            message: `${packType === 'insurance' ? 'Insurance' : packType === 'audit' ? 'Audit' : packType === 'incident' ? 'Incident' : 'Compliance'} Packet PDF downloaded successfully`, 
+                            type: 'success' 
+                          })
                         }
                       }
-                      
-                      setToast({ 
-                        message: `${packType === 'insurance' ? 'Insurance' : packType === 'audit' ? 'Audit' : packType === 'incident' ? 'Incident' : 'Compliance'} Packet PDF downloaded`, 
-                        type: 'success' 
-                      })
                     } catch (err: any) {
                       setToast({ message: err.message || 'Export failed', type: 'error' })
                     }
