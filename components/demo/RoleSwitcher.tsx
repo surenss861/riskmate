@@ -1,7 +1,7 @@
 'use client'
 
 import { useDemo } from '@/lib/demo/useDemo'
-import type { DemoRole, DemoScenario } from '@/lib/demo/demoData'
+import type { DemoRole } from '@/lib/demo/demoData'
 
 const roleLabels: Record<DemoRole, string> = {
   owner: 'Owner',
@@ -19,61 +19,33 @@ const roleDescriptions: Record<DemoRole, string> = {
   member: 'Can create/update jobs, no governance authority',
 }
 
-const scenarioLabels: Record<DemoScenario, string> = {
-  normal: 'Normal Operations',
-  audit_review: 'Audit Review',
-  incident: 'Incident Response',
-  insurance_packet: 'Insurance Packet',
-}
-
-const scenarioDescriptions: Record<DemoScenario, string> = {
-  normal: 'Standard jobs and team management',
-  audit_review: 'Audit logs and security events highlighted',
-  incident: 'Flagged job with escalation trail',
-  insurance_packet: 'Completed jobs with full audit trail',
-}
-
 export function RoleSwitcher() {
-  const { isDemo, currentRole, setCurrentRole, currentScenario, setCurrentScenario } = useDemo()
+  const { isDemo, currentRole, setCurrentRole } = useDemo()
 
   if (!isDemo) return null
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex items-center gap-3 px-4 py-2 bg-white/5 border border-white/10 rounded-lg">
-        <span className="text-sm text-white/70">Viewing as:</span>
-        <select
-          value={currentRole}
-          onChange={(e) => setCurrentRole(e.target.value as DemoRole)}
-          className="px-3 py-1.5 bg-white/10 border border-white/20 rounded text-white text-sm font-medium focus:outline-none focus:border-[#F97316] cursor-pointer"
-        >
-          {Object.entries(roleLabels).map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </select>
-        <div className="text-xs text-white/50 max-w-xs">
-          {roleDescriptions[currentRole]}
-        </div>
+    <div className="relative">
+      <label className="block text-xs text-white/60 mb-1.5">Viewing as:</label>
+      <select
+        value={currentRole}
+        onChange={(e) => setCurrentRole(e.target.value as DemoRole)}
+        className="px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-[#F97316] hover:bg-white/10 transition-colors appearance-none cursor-pointer pr-8 min-w-[180px]"
+      >
+        {Object.entries(roleLabels).map(([value, label]) => (
+          <option key={value} value={value} className="bg-[#121212]">
+            {label}
+          </option>
+        ))}
+      </select>
+      <div className="absolute right-2 top-8 pointer-events-none">
+        <svg className="w-4 h-4 text-white/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
       </div>
-      <div className="flex items-center gap-3 px-4 py-2 bg-white/5 border border-white/10 rounded-lg">
-        <span className="text-sm text-white/70">Scenario:</span>
-        <select
-          value={currentScenario}
-          onChange={(e) => setCurrentScenario(e.target.value as DemoScenario)}
-          className="px-3 py-1.5 bg-white/10 border border-white/20 rounded text-white text-sm font-medium focus:outline-none focus:border-[#F97316] cursor-pointer"
-        >
-          {Object.entries(scenarioLabels).map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </select>
-        <div className="text-xs text-white/50 max-w-xs">
-          {scenarioDescriptions[currentScenario]}
-        </div>
-      </div>
+      {roleDescriptions[currentRole] && (
+        <p className="text-xs text-white/40 mt-1">{roleDescriptions[currentRole]}</p>
+      )}
     </div>
   )
 }
