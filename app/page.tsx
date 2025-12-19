@@ -293,34 +293,36 @@ export default function HomePage() {
               Role-based enforcement. Immutable audit trails. Insurance-ready proof packs. RiskMate doesn&apos;t just track risk—it proves governance.
             </motion.p>
             <motion.div 
-              className="flex flex-col sm:flex-row gap-4 justify-center mb-8"
+              className="flex flex-col items-center gap-4 mb-8"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.5 }}
             >
-              <motion.button
-                onClick={() => router.push('/demo')}
-                className="px-8 py-4 bg-[#F97316] text-black rounded-lg hover:bg-[#FB923C] transition-all font-semibold text-lg btn-primary relative overflow-hidden group"
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-              >
-                <span className="relative z-10">Try Interactive Demo →</span>
-                <motion.span
-                  className="absolute inset-0 bg-white/20"
-                  initial={{ x: '-100%' }}
-                  whileHover={{ x: '100%' }}
-                  transition={{ duration: 0.6 }}
-                />
-              </motion.button>
-              <motion.button
-                onClick={() => router.push('/login')}
-                className="px-8 py-4 border border-white/10 rounded-lg hover:border-white/20 transition-colors font-semibold text-lg btn-secondary"
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-              >
-                Get Started
-              </motion.button>
-              <p className="text-sm text-white/50 mt-2">
+              <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                <motion.button
+                  onClick={() => router.push('/login')}
+                  className="px-8 py-4 bg-[#F97316] text-black rounded-lg hover:bg-[#FB923C] transition-all font-semibold text-lg btn-primary relative overflow-hidden group"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  <span className="relative z-10">Get Started</span>
+                  <motion.span
+                    className="absolute inset-0 bg-white/20"
+                    initial={{ x: '-100%' }}
+                    whileHover={{ x: '100%' }}
+                    transition={{ duration: 0.6 }}
+                  />
+                </motion.button>
+                <motion.button
+                  onClick={() => router.push('/demo')}
+                  className="px-8 py-4 border border-white/10 rounded-lg hover:border-white/20 transition-colors font-semibold text-lg btn-secondary"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  Try Interactive Demo →
+                </motion.button>
+              </div>
+              <p className="text-sm text-white/50">
                 No credit card · Demo data available
               </p>
             </motion.div>
