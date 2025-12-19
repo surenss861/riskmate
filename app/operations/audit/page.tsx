@@ -147,7 +147,7 @@ export default function AuditViewPage() {
 
       const { data: members } = await supabase
         .from('organization_members')
-        .select('user_id, users(full_name, email)')
+        .select('user_id, users!inner(full_name, email)')
         .eq('organization_id', orgData.id)
 
       const usersList = (members || [])

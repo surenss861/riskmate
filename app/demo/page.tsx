@@ -468,19 +468,19 @@ function DemoContent() {
                   <div>
                     <div className="text-white/60">In Progress</div>
                     <div className="text-2xl font-bold text-[#F97316]">
-                      {localJobs.filter(j => j.status === 'in_progress').length}
+                      {localJobs.filter(j => j?.status === 'in_progress').length}
                     </div>
                   </div>
                   <div>
                     <div className="text-white/60">High Risk</div>
                     <div className="text-2xl font-bold text-red-400">
-                      {localJobs.filter(j => j.risk_level === 'high').length}
+                      {localJobs.filter(j => j?.risk_level === 'high').length}
                     </div>
                   </div>
                   <div>
                     <div className="text-white/60">Flagged</div>
                     <div className="text-2xl font-bold text-yellow-400">
-                      {localJobs.filter(j => j.review_flag).length}
+                      {localJobs.filter(j => j?.review_flag).length}
                     </div>
                   </div>
                 </div>

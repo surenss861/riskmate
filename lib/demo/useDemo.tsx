@@ -119,12 +119,14 @@ export function DemoProvider({
     showDemoMessage('Demo link copied to clipboard')
   }
 
-  const validateRole = (role: string): DemoRole => {
+  const validateRole = (role: string | null | undefined): DemoRole => {
+    if (!role) return 'member'
     const validRoles: DemoRole[] = ['owner', 'admin', 'safety_lead', 'executive', 'member']
     return validRoles.includes(role as DemoRole) ? (role as DemoRole) : 'member'
   }
 
-  const validateScenario = (scenario: string): DemoScenario => {
+  const validateScenario = (scenario: string | null | undefined): DemoScenario => {
+    if (!scenario) return 'normal'
     const validScenarios: DemoScenario[] = ['normal', 'audit_review', 'incident', 'insurance_packet']
     return validScenarios.includes(scenario as DemoScenario) ? (scenario as DemoScenario) : 'normal'
   }
