@@ -217,9 +217,11 @@ export default function AuditViewPage() {
   }, [filters])
 
   const violationEvents = events.filter(e => 
-    e.event_type.includes('violation') || 
-    e.event_type.includes('role_violation') ||
-    e.event_type === 'auth.role_violation'
+    e.event_type && (
+      e.event_type.includes('violation') || 
+      e.event_type.includes('role_violation') ||
+      e.event_type === 'auth.role_violation'
+    )
   )
 
   const groupedViolations = violationEvents.reduce((acc, event) => {
@@ -232,6 +234,7 @@ export default function AuditViewPage() {
   }, {} as Record<string, AuditEvent[]>)
 
   const getEventIcon = (eventType: string) => {
+    if (!eventType) return FileText
     if (eventType.includes('violation')) return AlertTriangle
     if (eventType.includes('role')) return Shield
     if (eventType.includes('flag')) return AlertTriangle
@@ -239,6 +242,7 @@ export default function AuditViewPage() {
   }
 
   const getEventColor = (eventType: string) => {
+    if (!eventType) return 'text-white/60'
     if (eventType.includes('violation')) return 'text-red-400'
     if (eventType.includes('role')) return 'text-orange-400'
     if (eventType.includes('flag')) return 'text-yellow-400'
