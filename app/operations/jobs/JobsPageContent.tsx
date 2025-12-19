@@ -603,6 +603,7 @@ export function JobsPageContentView(props: JobsPageContentProps) {
                 accessor: (job: any) => job.risk_score ?? '—',
                 sortable: true,
                 width: '120px',
+                // Add tooltip title for governance clarity
                 render: (value: string | number, job: any) => {
                   const RiskTooltip = () => {
                     const [showTooltip, setShowTooltip] = useState(false)
@@ -620,20 +621,20 @@ export function JobsPageContentView(props: JobsPageContentProps) {
                       }
                     }, [showTooltip])
                     
-                    const getRiskExplanation = () => {
+                      const getRiskExplanation = () => {
                       if (!job.risk_score || job.risk_score === 0) {
-                        return 'No risk factors identified. Job is compliant.'
+                        return 'No risk factors identified. Job is compliant and audit-ready.'
                       }
                       if (job.risk_score >= 90) {
-                        return 'Critical risk due to unresolved high-severity hazards and missing safety protocols.'
+                        return 'Critical risk: Unresolved high-severity hazards and missing safety protocols. Requires immediate Safety Lead review. This risk level triggers automatic visibility escalation.'
                       }
                       if (job.risk_score >= 70) {
-                        return 'Elevated risk due to unresolved hazards and incomplete safety documentation.'
+                        return 'Elevated risk: Unresolved hazards and incomplete safety documentation. Visible to Safety Leads and Executives. Mitigation required before completion.'
                       }
                       if (job.risk_score >= 40) {
-                        return 'Moderate risk due to some unresolved hazards or missing equipment checks.'
+                        return 'Moderate risk: Some unresolved hazards or missing equipment checks. Standard mitigation procedures apply.'
                       }
-                      return 'Low risk with minor items requiring attention.'
+                      return 'Low risk: Minor items requiring attention. Standard compliance protocols sufficient.'
                     }
                     
                     // Risk breakdown by category (simplified - can be enhanced with actual risk factor data)

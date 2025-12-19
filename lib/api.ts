@@ -298,6 +298,17 @@ export const jobsApi = {
     });
   },
 
+  getSignoffs: async (jobId: string) => {
+    return apiRequest<{ data: any[] }>(`/api/jobs/${jobId}/signoffs`);
+  },
+
+  createSignoff: async (jobId: string, signoffType: string, comments: string, role: string) => {
+    return apiRequest<{ data: any }>(`/api/jobs/${jobId}/signoffs`, {
+      method: 'POST',
+      body: JSON.stringify({ signoff_type: signoffType, comments, role }),
+    });
+  },
+
   archive: async (jobId: string) => {
     return apiRequest<{
       data: {

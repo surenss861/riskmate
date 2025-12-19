@@ -207,7 +207,7 @@ export default function AuditViewPage() {
           <div className="mb-8">
             <h1 className={`${typography.h1} mb-2`}>Audit View</h1>
             <p className="text-white/60 text-sm">
-              Complete audit trail of all actions, violations, and access changes. Export-ready for compliance.
+              Complete audit trail of all actions, governance enforcement events, and access changes. Export-ready for compliance, legal discovery, and regulatory review.
             </p>
           </div>
 
@@ -271,7 +271,12 @@ export default function AuditViewPage() {
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
                   <Shield className="w-6 h-6 text-orange-400" />
-                  <h2 className={`${typography.h2}`}>Capability Violations</h2>
+                  <div>
+                    <h2 className={`${typography.h2}`}>Governance Enforcement Events</h2>
+                    <p className="text-xs text-white/50 mt-1">
+                      Capability violations — actions blocked by role-based access control
+                    </p>
+                  </div>
                   <span className="px-3 py-1 bg-orange-500/20 text-orange-400 rounded-lg text-sm">
                     {violationEvents.length}
                   </span>
