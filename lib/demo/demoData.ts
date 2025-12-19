@@ -5,6 +5,59 @@
 
 export type DemoRole = 'owner' | 'admin' | 'safety_lead' | 'executive' | 'member'
 export type DemoScenario = 'normal' | 'audit_review' | 'incident' | 'insurance_packet'
+export type OperationType = 'residential_trades' | 'commercial_contractors' | 'facilities_services' | 'fire_life_safety' | 'infrastructure_heavy_civil'
+
+export interface OperationPreset {
+  type: OperationType
+  label: string
+  description: string
+  role: DemoRole
+  scenario: DemoScenario
+  message: string
+}
+
+export const operationPresets: Record<OperationType, OperationPreset> = {
+  residential_trades: {
+    type: 'residential_trades',
+    label: 'Residential Trades',
+    description: 'Electrical, Plumbing, HVAC, Roofing, Landscaping',
+    role: 'owner',
+    scenario: 'normal',
+    message: 'Stop relying on texts + memory. Prove due diligence.',
+  },
+  commercial_contractors: {
+    type: 'commercial_contractors',
+    label: 'Commercial Contractors',
+    description: 'GC, Multi-trade, Tenant Improvements',
+    role: 'safety_lead',
+    scenario: 'audit_review',
+    message: 'Governance enforcement across teams. Audit-ready by default.',
+  },
+  facilities_services: {
+    type: 'facilities_services',
+    label: 'Facilities & Building Services',
+    description: 'Janitorial, Maintenance, Security Systems',
+    role: 'admin',
+    scenario: 'audit_review',
+    message: 'Proof of work + compliance history, without paperwork.',
+  },
+  fire_life_safety: {
+    type: 'fire_life_safety',
+    label: 'Fire & Life Safety',
+    description: 'Fire Protection, Sprinklers, Inspections',
+    role: 'safety_lead',
+    scenario: 'audit_review',
+    message: 'If it isn&apos;t logged, it didn&apos;t happen. RiskMate makes it defensible.',
+  },
+  infrastructure_heavy_civil: {
+    type: 'infrastructure_heavy_civil',
+    label: 'Infrastructure & Heavy Civil',
+    description: 'Heavy Civil, Utilities, Industrial, Hazmat',
+    role: 'executive',
+    scenario: 'insurance_packet',
+    message: 'Role-based enforcement + audit defensibility across high-liability field ops.',
+  },
+}
 
 export const demoData = {
   organization: {

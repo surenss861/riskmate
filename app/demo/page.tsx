@@ -9,7 +9,8 @@ import { RoleSwitcher } from '@/components/demo/RoleSwitcher'
 import { GuidedTour } from '@/components/demo/GuidedTour'
 import { cardStyles, typography, spacing } from '@/lib/styles/design-system'
 import { Users, FileText, Settings, AlertTriangle, Play } from 'lucide-react'
-import type { DemoRole, DemoScenario } from '@/lib/demo/demoData'
+import type { DemoRole, DemoScenario, OperationType } from '@/lib/demo/demoData'
+import { operationPresets } from '@/lib/demo/demoData'
 
 interface TourStep {
   id: string
@@ -175,13 +176,13 @@ function DemoContent() {
             </p>
           </div>
 
-          {/* Choose Your Perspective Entry Card */}
+          {/* Choose Your Operation Type Entry Card */}
           {!searchParams?.get('role') && !searchParams?.get('dismissed') && (
-            <div className="mb-6 p-4 bg-white/5 border border-white/10 rounded-lg">
-              <div className="flex items-start justify-between mb-3">
+            <div className="mb-6 p-6 bg-white/5 border border-white/10 rounded-lg">
+              <div className="flex items-start justify-between mb-4">
                 <div>
-                  <h3 className="font-semibold text-white mb-1">Who are you evaluating RiskMate as?</h3>
-                  <p className="text-sm text-white/60">Choose a perspective to see relevant features</p>
+                  <h3 className="font-semibold text-white mb-1">What do you run?</h3>
+                  <p className="text-sm text-white/60">Choose your operation type to see RiskMate configured for your needs</p>
                 </div>
                 <button
                   onClick={() => {
@@ -194,75 +195,32 @@ function DemoContent() {
                   ✕
                 </button>
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                <button
-                  onClick={() => {
-                    setCurrentRole('owner')
-                    setCurrentScenario('normal')
-                    setTourStep(0)
-                    const params = new URLSearchParams(searchParams?.toString() || '')
-                    params.set('role', 'owner')
-                    params.set('scenario', 'normal')
-                    params.delete('dismissed')
-                    window.history.replaceState({}, '', `?${params.toString()}`)
-                  }}
-                  className="px-4 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded text-sm transition-colors text-left"
-                >
-                  <div className="text-lg mb-1">🧑‍💼</div>
-                  <div className="font-medium text-white">Owner / Founder</div>
-                  <div className="text-xs text-white/60 mt-1">Full system access</div>
-                </button>
-                <button
-                  onClick={() => {
-                    setCurrentRole('safety_lead')
-                    setCurrentScenario('incident')
-                    setTourStep(0)
-                    const params = new URLSearchParams(searchParams?.toString() || '')
-                    params.set('role', 'safety_lead')
-                    params.set('scenario', 'incident')
-                    params.delete('dismissed')
-                    window.history.replaceState({}, '', `?${params.toString()}`)
-                  }}
-                  className="px-4 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded text-sm transition-colors text-left"
-                >
-                  <div className="text-lg mb-1">🛡️</div>
-                  <div className="font-medium text-white">Safety Lead</div>
-                  <div className="text-xs text-white/60 mt-1">Risk oversight</div>
-                </button>
-                <button
-                  onClick={() => {
-                    setCurrentRole('executive')
-                    setCurrentScenario('audit_review')
-                    setTourStep(0)
-                    const params = new URLSearchParams(searchParams?.toString() || '')
-                    params.set('role', 'executive')
-                    params.set('scenario', 'audit_review')
-                    params.delete('dismissed')
-                    window.history.replaceState({}, '', `?${params.toString()}`)
-                  }}
-                  className="px-4 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded text-sm transition-colors text-left"
-                >
-                  <div className="text-lg mb-1">🏢</div>
-                  <div className="font-medium text-white">Executive / Risk</div>
-                  <div className="text-xs text-white/60 mt-1">Visibility & trends</div>
-                </button>
-                <button
-                  onClick={() => {
-                    setCurrentRole('executive')
-                    setCurrentScenario('insurance_packet')
-                    setTourStep(0)
-                    const params = new URLSearchParams(searchParams?.toString() || '')
-                    params.set('role', 'executive')
-                    params.set('scenario', 'insurance_packet')
-                    params.delete('dismissed')
-                    window.history.replaceState({}, '', `?${params.toString()}`)
-                  }}
-                  className="px-4 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded text-sm transition-colors text-left"
-                >
-                  <div className="text-lg mb-1">🧾</div>
-                  <div className="font-medium text-white">Insurance / Auditor</div>
-                  <div className="text-xs text-white/60 mt-1">Audit-ready view</div>
-                </button>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {Object.values(operationPresets).map((preset) => (
+                  <button
+                    key={preset.type}
+                    onClick={() => {
+                      setCurrentRole(preset.role)
+                      setCurrentScenario(preset.scenario)
+                      setTourStep(0)
+                      const params = new URLSearchParams(searchParams?.toString() || '')
+                      params.set('role', preset.role)
+                      params.set('scenario', preset.scenario)
+                      params.set('operation', preset.type)
+                      params.delete('dismissed')
+                      window.history.replaceState({}, '', `?${params.toString()}`)
+                    }}
+                    className="px-4 py-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-left transition-colors group"
+                  >
+                    <div className="font-medium text-white mb-1 group-hover:text-[#F97316] transition-colors">
+                      {preset.label}
+                    </div>
+                    <div className="text-xs text-white/60 mb-2">{preset.description}</div>
+                    <div className="text-xs text-white/40 italic border-t border-white/10 pt-2 mt-2">
+                      {preset.message}
+                    </div>
+                  </button>
+                ))}
               </div>
             </div>
           )}
