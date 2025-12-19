@@ -57,11 +57,13 @@ export default function AuditViewPage() {
     loadJobs()
     loadUsers()
     loadSites()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
     loadAuditEvents()
-  }, [filters])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters, activeTab])
 
   const loadAuditEvents = async () => {
     try {
@@ -76,7 +78,7 @@ export default function AuditViewPage() {
         severity: filters.severity || undefined,
         outcome: filters.outcome || undefined,
         time_range: filters.timeRange,
-        view: filters.savedView || undefined,
+        view: filters.savedView && filters.savedView !== 'custom' ? filters.savedView : undefined,
         limit: 500,
       })
 
