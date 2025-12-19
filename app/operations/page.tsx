@@ -18,7 +18,7 @@ import { DashboardNavbar } from '@/components/dashboard/DashboardNavbar'
 import { DashboardSkeleton, JobListSkeleton } from '@/components/dashboard/SkeletonLoader'
 import { DashboardOverview } from '@/components/dashboard/DashboardOverview'
 import { Changelog } from '@/components/dashboard/Changelog'
-import { OnboardingWizard } from '@/components/onboarding/OnboardingWizard'
+import { FirstRunSetupWizard } from '@/components/setup/FirstRunSetupWizard'
 import Link from 'next/link'
 import { getRiskBadgeClass, getStatusBadgeClass, buttonStyles, spacing, typography } from '@/lib/styles/design-system'
 
@@ -72,24 +72,23 @@ export default function DashboardPage() {
       let subscriptionData: any = null
       let organizationId: string | null = null
 
-      // Load user role and onboarding status
+      // Load user role and setup status
       let role = 'member'
       if (user) {
         const { data: userRow } = await supabase
           .from('users')
-          .select('role, has_completed_onboarding, onboarding_completed')
+          .select('role, has_completed_onboarding, setup_completed')
           .eq('id', user.id)
           .maybeSingle()
         role = userRow?.role ?? 'member'
         setUserRole(role)
-        // Show onboarding only if user exists and explicitly hasn't completed it
+        // Show setup wizard only if user exists and hasn't completed setup
         if (userRow) {
-          const onboardingCompleted = userRow.has_completed_onboarding ?? userRow.onboarding_completed
+          const setupCompleted = userRow.setup_completed ?? userRow.has_completed_onboarding
           // Only show if explicitly false or null (not completed)
-          setShowOnboarding(onboardingCompleted !== true)
+          setShowOnboarding(setupCompleted !== true)
         } else {
-          // If user row doesn't exist yet, don't show onboarding
-          // (user will be created on signup/signin, and onboarding will be handled then)
+          // If user row doesn't exist yet, don't show setup
           setShowOnboarding(false)
         }
       }
@@ -728,29 +727,17 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Onboarding Wizard */}
-      <OnboardingWizard
+      {/* First-Run Setup Wizard */}
+      <FirstRunSetupWizard
         isOpen={showOnboarding}
         onComplete={async () => {
           setShowOnboarding(false)
-          // Mark onboarding as completed
-          const supabase = createSupabaseBrowserClient()
-          const { data: { user } } = await supabase.auth.getUser()
-          if (user) {
-            const { error } = await supabase
-              .from('users')
-              .update({ has_completed_onboarding: true })
-              .eq('id', user.id)
-            
-            if (error) {
-              console.error('Failed to update onboarding status:', error)
-              // Still hide the onboarding even if update fails
-            }
-          }
+          // Reload data to reflect setup changes
+          loadData()
         }}
         onSkip={async () => {
           setShowOnboarding(false)
-          // Also mark as completed when skipped
+          // Mark setup as skipped (but not completed)
           const supabase = createSupabaseBrowserClient()
           const { data: { user } } = await supabase.auth.getUser()
           if (user) {
