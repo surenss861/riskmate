@@ -145,29 +145,36 @@ export default function AuditViewPage() {
 
       if (!orgData) return
 
-      // Query organization_members and join with users table
+      // Query organization_members to get user_ids
       const { data: members, error: membersError } = await supabase
         .from('organization_members')
-        .select(`
-          user_id,
-          users (
-            full_name,
-            email
-          )
-        `)
+        .select('user_id')
         .eq('organization_id', orgData.id)
       
       if (membersError) {
         console.error('Error fetching organization members:', membersError)
       }
 
-      const usersList = (members || [])
-        .map((m: any) => ({
-          id: m.user_id,
-          name: m.users?.full_name || 'Unknown',
-          email: m.users?.email || '',
-        }))
-        .filter((u: any) => u.id)
+      // Query users table for user details
+      const userIds = (members || []).map((m: any) => m.user_id).filter(Boolean)
+      let usersList: Array<{ id: string; name: string; email: string }> = []
+      
+      if (userIds.length > 0) {
+        const { data: users, error: usersError } = await supabase
+          .from('users')
+          .select('id, full_name, email')
+          .in('id', userIds)
+        
+        if (usersError) {
+          console.error('Error fetching users:', usersError)
+        } else {
+          usersList = (users || []).map((u: any) => ({
+            id: u.id,
+            name: u.full_name || 'Unknown',
+            email: u.email || '',
+          }))
+        }
+      }
 
       setUsers(usersList)
     } catch (err) {
