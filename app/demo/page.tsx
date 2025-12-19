@@ -50,8 +50,8 @@ const getTourSteps = (role: DemoRole): TourStep[] => {
       },
       {
         id: 'flagged-job',
-        title: 'Risk visibility without interference',
-        description: 'You see all flagged jobs automatically. This is read-only oversight — you observe risk, you don\'t edit history.',
+      title: 'Risk visibility without interference',
+      description: 'You see all flagged jobs automatically. This is read-only oversight — you observe risk, you don&apos;t edit history.',
         target: '[data-tour="flagged-job"]',
         position: 'right',
       },
@@ -90,8 +90,8 @@ const getTourSteps = (role: DemoRole): TourStep[] => {
       },
       {
         id: 'audit-logs',
-        title: 'Every escalation is provable',
-        description: 'When you flag a job, it\'s logged. When someone tries to flag without permission, that\'s logged too. This is audit-ready.',
+      title: 'Every escalation is provable',
+      description: 'When you flag a job, it&apos;s logged. When someone tries to flag without permission, that&apos;s logged too. This is audit-ready.',
         target: '[data-tour="audit-logs"]',
         position: 'top',
       },
@@ -281,8 +281,12 @@ function DemoContent() {
             </div>
             <button
               onClick={() => {
-                const { copyDemoLink } = useDemo()
-                copyDemoLink()
+                const params = new URLSearchParams(searchParams?.toString() || '')
+                params.set('role', currentRole)
+                params.set('scenario', currentScenario)
+                const url = `${window.location.origin}/demo?${params.toString()}`
+                navigator.clipboard.writeText(url)
+                showDemoMessage('Demo link copied to clipboard')
               }}
               className="px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg text-sm transition-colors"
             >
@@ -328,7 +332,7 @@ function DemoContent() {
               </h2>
               <div className="space-y-4 text-sm text-white/80 mb-6">
                 <p>
-                  What you experienced isn't a walkthrough — it's the actual governance model in action.
+                  What you experienced isn&apos;t a walkthrough — it&apos;s the actual governance model in action.
                 </p>
                 <ul className="space-y-2 list-disc list-inside">
                   <li>Roles weren't cosmetic — permissions were enforced</li>
@@ -337,7 +341,7 @@ function DemoContent() {
                   <li>Billing, access, and security were intentionally separated</li>
                 </ul>
                 <p className="text-white/90 font-medium">
-                  That's how RiskMate protects teams during audits, incidents, and insurance reviews.
+                  That&apos;s how RiskMate protects teams during audits, incidents, and insurance reviews.
                 </p>
               </div>
               <div className="flex flex-col sm:flex-row gap-3 mb-4">
