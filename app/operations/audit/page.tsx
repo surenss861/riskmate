@@ -117,18 +117,24 @@ export default function AuditViewPage() {
       // Apply saved view filters
       let filteredData = data || []
       if (filters.savedView === 'governance-enforcement') {
-        filteredData = filteredData.filter(e => categorizeEvent(e.event_name || e.event_type) === 'governance')
+        filteredData = filteredData.filter(e => {
+          const eventType = (e.event_name || e.event_type || '').toString()
+          return categorizeEvent(eventType) === 'governance'
+        })
       } else if (filters.savedView === 'incident-review') {
         filteredData = filteredData.filter(e => {
-          const type = e.event_name || e.event_type
-          return type?.includes('flag') || type?.includes('incident')
+          const type = (e.event_name || e.event_type || '').toString()
+          return type.includes('flag') || type.includes('incident')
         })
       } else if (filters.savedView === 'access-review') {
-        filteredData = filteredData.filter(e => categorizeEvent(e.event_name || e.event_type) === 'access')
+        filteredData = filteredData.filter(e => {
+          const eventType = (e.event_name || e.event_type || '').toString()
+          return categorizeEvent(eventType) === 'access'
+        })
       } else if (filters.savedView === 'insurance-ready') {
         filteredData = filteredData.filter(e => {
-          const type = e.event_name || e.event_type
-          return type?.includes('proof_pack') || type?.includes('signoff') || type?.includes('job.completed')
+          const type = (e.event_name || e.event_type || '').toString()
+          return type.includes('proof_pack') || type.includes('signoff') || type.includes('job.completed')
         })
       }
 
@@ -170,7 +176,7 @@ export default function AuditViewPage() {
 
           return {
             ...event,
-            event_type: event.event_name || event.event_type,
+            event_type: (event.event_name || event.event_type || 'unknown').toString(),
             job_name: jobName,
             site_name: siteName,
             user_name: userName,
