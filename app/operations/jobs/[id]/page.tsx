@@ -97,6 +97,14 @@ export default function JobDetailPage() {
     avatarUrl?: string
   }>>([])
   const [loadingWorkers, setLoadingWorkers] = useState(false)
+  const [attachments, setAttachments] = useState<Array<{
+    id: string
+    name: string
+    type: 'photo' | 'document' | 'permit' | 'inspection'
+    url?: string
+    file_path?: string
+    created_at: string
+  }>>([])
   const [evidenceItems, setEvidenceItems] = useState<Array<{
     id: string
     type: 'photo' | 'document' | 'mitigation'
@@ -1211,11 +1219,39 @@ export default function JobDetailPage() {
                     created_at: entry.timestamp,
                     metadata: entry.metadata,
                   }))}
-                  onExport={(packType) => {
-                    setToast({ 
-                      message: `${packType === 'insurance' ? 'Insurance' : packType === 'audit' ? 'Audit' : packType === 'incident' ? 'Incident' : 'Compliance'} Packet export coming in v2`, 
-                      type: 'info' 
-                    })
+                  attachments={attachments}
+                  onExport={async (packType) => {
+                    try {
+                      setToast({ message: `Generating ${packType} packet PDF...`, type: 'info' })
+                      // TODO: Implement proof pack PDF export
+                      // const response = await jobsApi.exportProofPack(jobId, packType)
+                      setToast({ 
+                        message: `${packType === 'insurance' ? 'Insurance' : packType === 'audit' ? 'Audit' : packType === 'incident' ? 'Incident' : 'Compliance'} Packet PDF export coming in v2`, 
+                        type: 'info' 
+                      })
+                    } catch (err: any) {
+                      setToast({ message: err.message || 'Export failed', type: 'error' })
+                    }
+                  }}
+                  onAttachmentUploaded={async () => {
+                    // Reload attachments
+                    try {
+                      const documentsResponse = await jobsApi.getDocuments(jobId)
+                      const docs = documentsResponse.data || []
+                      setAttachments(docs.map((doc: any) => ({
+                        id: doc.id,
+                        name: doc.file_name || doc.name || 'Untitled',
+                        type: doc.type === 'photo' ? 'photo' : 
+                              doc.file_name?.toLowerCase().includes('permit') ? 'permit' :
+                              doc.file_name?.toLowerCase().includes('inspection') ? 'inspection' : 'document',
+                        url: doc.file_path,
+                        file_path: doc.file_path,
+                        created_at: doc.created_at,
+                      })))
+                      setToast({ message: 'File uploaded successfully', type: 'success' })
+                    } catch (err) {
+                      console.error('Failed to reload attachments:', err)
+                    }
                   }}
                 />
               </motion.div>

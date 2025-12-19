@@ -1,9 +1,19 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { motion } from 'framer-motion'
-import { Download, FileText, Shield, CheckCircle, Clock, User, Flag } from 'lucide-react'
+import { Download, FileText, Shield, CheckCircle, Clock, User, Flag, Upload, X, Image as ImageIcon } from 'lucide-react'
 import { cardStyles, buttonStyles, typography } from '@/lib/styles/design-system'
+import { jobsApi } from '@/lib/api'
+
+interface Attachment {
+  id: string
+  name: string
+  type: 'photo' | 'document' | 'permit' | 'inspection'
+  url?: string
+  file_path?: string
+  created_at: string
+}
 
 interface JobPacketViewProps {
   job: {
@@ -30,11 +40,23 @@ interface JobPacketViewProps {
     created_at: string
     metadata?: any
   }>
+  attachments?: Attachment[]
   onExport?: (packType: 'insurance' | 'audit' | 'incident' | 'compliance') => void
+  onAttachmentUploaded?: () => void
 }
 
-export function JobPacketView({ job, mitigations = [], auditTimeline = [], onExport }: JobPacketViewProps) {
+export function JobPacketView({ 
+  job, 
+  mitigations = [], 
+  auditTimeline = [], 
+  attachments = [],
+  onExport,
+  onAttachmentUploaded 
+}: JobPacketViewProps) {
   const [selectedPack, setSelectedPack] = useState<'insurance' | 'audit' | 'incident' | 'compliance' | null>(null)
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const getRiskColor = (level: string | null) => {
     switch (level?.toLowerCase()) {
@@ -279,14 +301,91 @@ export function JobPacketView({ job, mitigations = [], auditTimeline = [], onExp
           </section>
         )}
 
-        {/* Attachments Placeholder */}
+        {/* Attachments */}
         <section className="mb-8 pb-8 border-b border-white/5">
-          <h3 className={`${typography.h3} mb-4`}>Attachments</h3>
-          <div className="p-6 bg-white/5 rounded-lg border border-dashed border-white/10 text-center">
-            <FileText className="w-8 h-8 text-white/40 mx-auto mb-2" />
-            <p className="text-sm text-white/60 mb-2">Upload permit / photo / inspection</p>
-            <p className="text-xs text-white/40 italic">File uploads coming in v2</p>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className={`${typography.h3}`}>Attachments</h3>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              className={`${buttonStyles.secondary} flex items-center gap-2 text-sm`}
+            >
+              <Upload className="w-4 h-4" />
+              {uploading ? 'Uploading...' : 'Upload File'}
+            </button>
           </div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept="image/*,.pdf,.doc,.docx"
+            className="hidden"
+            onChange={async (e) => {
+              const files = Array.from(e.target.files || [])
+              if (files.length === 0) return
+
+              setUploading(true)
+              setUploadError(null)
+
+              try {
+                for (const file of files) {
+                  const fileType = file.type.startsWith('image/') ? 'photo' : 
+                                  file.name.includes('permit') ? 'permit' :
+                                  file.name.includes('inspection') ? 'inspection' : 'document'
+                  
+                  await jobsApi.uploadDocument(job.id, file, {
+                    name: file.name,
+                    type: fileType,
+                    description: `Uploaded for ${selectedPack || 'job'} packet`,
+                  })
+                }
+                onAttachmentUploaded?.()
+                if (fileInputRef.current) {
+                  fileInputRef.current.value = ''
+                }
+              } catch (err: any) {
+                setUploadError(err.message || 'Upload failed')
+              } finally {
+                setUploading(false)
+              }
+            }}
+          />
+          {uploadError && (
+            <div className="mb-4 p-3 bg-red-500/20 border border-red-500/30 rounded-lg text-sm text-red-400">
+              {uploadError}
+            </div>
+          )}
+          {attachments.length === 0 ? (
+            <div className="p-6 bg-white/5 rounded-lg border border-dashed border-white/10 text-center">
+              <FileText className="w-8 h-8 text-white/40 mx-auto mb-2" />
+              <p className="text-sm text-white/60 mb-2">Upload permit / photo / inspection</p>
+              <p className="text-xs text-white/40">Supports images, PDFs, and documents</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {attachments.map((attachment) => (
+                <div
+                  key={attachment.id}
+                  className="p-3 bg-white/5 rounded-lg border border-white/10 hover:border-white/20 transition-colors"
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    {attachment.type === 'photo' ? (
+                      <ImageIcon className="w-4 h-4 text-white/60" />
+                    ) : (
+                      <FileText className="w-4 h-4 text-white/60" />
+                    )}
+                    <span className="text-xs text-white/50 capitalize">{attachment.type}</span>
+                  </div>
+                  <p className="text-sm text-white/80 truncate mb-1" title={attachment.name}>
+                    {attachment.name}
+                  </p>
+                  <p className="text-xs text-white/40">
+                    {new Date(attachment.created_at).toLocaleDateString()}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
         </section>
 
         {/* Sign-offs (Role-based) */}
