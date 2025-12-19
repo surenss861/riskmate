@@ -18,7 +18,6 @@ const FAQ_ANSWERS: Record<string, string> = {
   'pricing': 'RiskMate has three plans: Starter ($29/mo, 3 jobs/month, 1 seat), Pro ($59/mo, unlimited jobs, 5 seats), and Business ($129/mo, unlimited jobs, unlimited seats, plus Permit Pack Generator and advanced features).',
   'trial': 'Yes! You can start with a free trial. The Starter plan includes 3 jobs per month, so you can test RiskMate with real jobs before committing to a paid plan.',
   'mobile': 'Mobile apps for iOS and Android are currently in development (Q1 2025). The web version works great on mobile browsers, and we\'re building native apps with offline mode and GPS metadata.',
-  'support': 'Pro plan includes priority email support, and Business plan includes dedicated onboarding and phone support. Starter plan users can access our help center and community forums.',
 }
 
 const SUGGESTED_QUESTIONS = [
@@ -73,11 +72,8 @@ export function ChatWidget() {
     if (lowerQuestion.includes('mobile') || lowerQuestion.includes('app') || lowerQuestion.includes('phone')) {
       return FAQ_ANSWERS['mobile']
     }
-    if (lowerQuestion.includes('support') || lowerQuestion.includes('help')) {
-      return FAQ_ANSWERS['support']
-    }
 
-    return "I'm not sure about that specific question. For detailed help, please email us at support@riskmate.com or check out our help center. You can also try asking about: generating reports, risk scores, team seats, pricing, or tax deductions."
+    return "I'm not sure about that specific question. You can try asking about: generating reports, risk scores, team seats, pricing, or tax deductions."
   }
 
   const handleSend = (question?: string) => {
@@ -216,9 +212,6 @@ export function ChatWidget() {
                   </svg>
                 </button>
               </div>
-              <p className="text-xs text-white/40 mt-2 text-center">
-                Need more help? Email support@riskmate.com
-              </p>
             </div>
           </motion.div>
         )}

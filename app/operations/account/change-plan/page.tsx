@@ -259,9 +259,6 @@ export default function ChangePlanPage() {
             transition={{ delay: 0.4, duration: 0.45 }}
             className="mt-12 text-center"
           >
-            <p className="text-white/60 mb-4">
-              Need help choosing a plan? <a href="mailto:support@riskmate.com" className="text-[#F97316] hover:underline">Contact support</a>
-            </p>
           </motion.div>
         </div>
 

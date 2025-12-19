@@ -2,7 +2,6 @@ import type { Metadata } from 'next'
 import { Inter, Playfair_Display } from 'next/font/google'
 import './globals.css'
 import { PWARegister } from '@/components/PWARegister'
-import { ChatWidget } from '@/components/ChatWidget'
 import { SmoothScroll } from '@/components/SmoothScroll'
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
@@ -59,7 +58,6 @@ export default function RootLayout({
         <SmoothScroll />
         <PWARegister />
         {children}
-        <ChatWidget />
       </body>
     </html>
   )
