@@ -192,7 +192,7 @@ export function JobPacketView({
                 setSelectedPack(pack.type)
                 onExport?.(pack.type)
               }}
-              className={`${cardStyles.default} p-6 text-left hover:border-[#F97316]/30 transition-colors ${
+              className={`${cardStyles.base} p-6 text-left hover:border-[#F97316]/30 transition-colors ${
                 selectedPack === pack.type ? 'border-[#F97316]' : ''
               }`}
               whileHover={{ y: -2 }}
