@@ -596,3 +596,102 @@ export const accountApi = {
   },
 };
 
+export const auditApi = {
+  getEvents: async (params?: {
+    category?: 'governance' | 'operations' | 'access'
+    site_id?: string
+    job_id?: string
+    actor_id?: string
+    severity?: 'info' | 'material' | 'critical'
+    outcome?: 'allowed' | 'blocked'
+    time_range?: '24h' | '7d' | '30d' | 'all' | 'custom'
+    start_date?: string
+    end_date?: string
+    view?: 'insurance-ready' | 'governance-enforcement' | 'incident-review' | 'access-review'
+    cursor?: string
+    limit?: number
+    debug?: boolean
+  }) => {
+    const queryParams = new URLSearchParams()
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          queryParams.append(key, String(value))
+        }
+      })
+    }
+    return apiRequest<{
+      data: {
+        events: Array<any>
+        stats: {
+          total: number
+          violations: number
+          jobs_touched: number
+          proof_packs: number
+          signoffs: number
+          access_changes: number
+        }
+        pagination: {
+          next_cursor: string | null
+          limit: number
+          has_more: boolean
+        }
+      }
+      _meta?: any
+    }>(`/api/audit/events?${queryParams.toString()}`)
+  },
+  export: async (params: {
+    format: 'pdf' | 'csv' | 'json'
+    category?: 'governance' | 'operations' | 'access'
+    site_id?: string
+    job_id?: string
+    actor_id?: string
+    severity?: 'info' | 'material' | 'critical'
+    outcome?: 'allowed' | 'blocked'
+    time_range?: '24h' | '7d' | '30d' | 'all' | 'custom'
+    start_date?: string
+    end_date?: string
+    view?: 'insurance-ready' | 'governance-enforcement' | 'incident-review' | 'access-review'
+  }) => {
+    if (params.format === 'csv' || params.format === 'json') {
+      const token = await getAuthToken()
+      const backendUrl = API_URL || ''
+      const response = await fetch(`${backendUrl}/api/audit/export`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(params),
+      })
+      if (!response.ok) throw new Error('Export failed')
+      if (params.format === 'csv') {
+        const blob = await response.blob()
+        const url = window.URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `audit-export-${Date.now()}.csv`
+        a.click()
+        window.URL.revokeObjectURL(url)
+        return { success: true }
+      } else {
+        const blob = await response.blob()
+        const url = window.URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `audit-export-${Date.now()}.json`
+        a.click()
+        window.URL.revokeObjectURL(url)
+        return { success: true }
+      }
+    } else {
+      // PDF export
+      return apiRequest<{ message: string; code: string }>('/api/audit/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(params),
+      })
+    }
+  },
+}
+
