@@ -145,30 +145,60 @@ export default function AuditViewPage() {
 
       if (!orgData) return
 
-      // Query organization_members to get user_ids
-      const { data: members, error: membersError } = await supabase
-        .from('organization_members')
-        .select('user_id')
-        .eq('organization_id', orgData.id)
-      
-      if (membersError) {
-        console.error('Error fetching organization members:', membersError)
-      }
-
-      // Query users table for user details
-      const userIds = (members || []).map((m: any) => m.user_id).filter(Boolean)
+      // Query users directly from the users table (organization_members might not be accessible)
+      // Fallback: get users from the organization
       let usersList: Array<{ id: string; name: string; email: string }> = []
       
-      if (userIds.length > 0) {
+      try {
+        // Try to query organization_members first
+        const { data: members, error: membersError } = await supabase
+          .from('organization_members')
+          .select('user_id')
+          .eq('organization_id', orgData.id)
+        
+        if (!membersError && members && members.length > 0) {
+          // Query users table for user details
+          const userIds = members.map((m: any) => m.user_id).filter(Boolean)
+          
+          if (userIds.length > 0) {
+            const { data: users, error: usersError } = await supabase
+              .from('users')
+              .select('id, full_name, email')
+              .in('id', userIds)
+            
+            if (!usersError && users) {
+              usersList = users.map((u: any) => ({
+                id: u.id,
+                name: u.full_name || 'Unknown',
+                email: u.email || '',
+              }))
+            }
+          }
+        } else {
+          // Fallback: query users directly by organization_id
+          const { data: users, error: usersError } = await supabase
+            .from('users')
+            .select('id, full_name, email')
+            .eq('organization_id', orgData.id)
+          
+          if (!usersError && users) {
+            usersList = users.map((u: any) => ({
+              id: u.id,
+              name: u.full_name || 'Unknown',
+              email: u.email || '',
+            }))
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching users for audit log:', error)
+        // Fallback: query users directly by organization_id
         const { data: users, error: usersError } = await supabase
           .from('users')
           .select('id, full_name, email')
-          .in('id', userIds)
+          .eq('organization_id', orgData.id)
         
-        if (usersError) {
-          console.error('Error fetching users:', usersError)
-        } else {
-          usersList = (users || []).map((u: any) => ({
+        if (!usersError && users) {
+          usersList = users.map((u: any) => ({
             id: u.id,
             name: u.full_name || 'Unknown',
             email: u.email || '',

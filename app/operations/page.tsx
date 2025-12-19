@@ -77,20 +77,13 @@ export default function DashboardPage() {
       if (user) {
         const { data: userRow } = await supabase
           .from('users')
-          .select('role, has_completed_onboarding, setup_completed')
+          .select('role')
           .eq('id', user.id)
           .maybeSingle()
         role = userRow?.role ?? 'member'
         setUserRole(role)
-        // Show setup wizard only if user exists and hasn't completed setup
-        if (userRow) {
-          const setupCompleted = userRow.setup_completed ?? userRow.has_completed_onboarding
-          // Only show if explicitly false or null (not completed)
-          setShowOnboarding(setupCompleted !== true)
-        } else {
-          // If user row doesn't exist yet, don't show setup
-          setShowOnboarding(false)
-        }
+        // Don't show onboarding wizard for now (columns don't exist yet)
+        setShowOnboarding(false)
       }
 
       // Load subscription first (needed for permit pack hints)
