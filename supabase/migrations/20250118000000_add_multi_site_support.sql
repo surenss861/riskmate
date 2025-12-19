@@ -37,6 +37,7 @@ CREATE INDEX IF NOT EXISTS idx_jobs_site ON jobs(site_id);
 ALTER TABLE sites ENABLE ROW LEVEL SECURITY;
 
 -- RLS policy: Users can only see sites from their organization
+DROP POLICY IF EXISTS "Users can view sites from their organization" ON sites;
 CREATE POLICY "Users can view sites from their organization"
   ON sites FOR SELECT
   USING (
@@ -47,6 +48,7 @@ CREATE POLICY "Users can view sites from their organization"
   );
 
 -- RLS policy: Only owners/admins can create sites
+DROP POLICY IF EXISTS "Owners and admins can create sites" ON sites;
 CREATE POLICY "Owners and admins can create sites"
   ON sites FOR INSERT
   WITH CHECK (
@@ -58,6 +60,7 @@ CREATE POLICY "Owners and admins can create sites"
   );
 
 -- RLS policy: Only owners/admins can update sites
+DROP POLICY IF EXISTS "Owners and admins can update sites" ON sites;
 CREATE POLICY "Owners and admins can update sites"
   ON sites FOR UPDATE
   USING (

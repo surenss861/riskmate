@@ -212,7 +212,7 @@ export default function AuditViewPage() {
           </div>
 
           {/* Filters */}
-          <div className={`${cardStyles.default} p-6 mb-6`}>
+          <div className={`${cardStyles.base} p-6 mb-6`}>
             <div className="flex items-center gap-4 mb-4">
               <Filter className="w-5 h-5 text-white/60" />
               <h2 className={`${typography.h2}`}>Filters</h2>
@@ -267,7 +267,7 @@ export default function AuditViewPage() {
 
           {/* Capability Violations Grouped View */}
           {violationEvents.length > 0 && (
-            <div className={`${cardStyles.default} p-6 mb-6`}>
+            <div className={`${cardStyles.base} p-6 mb-6`}>
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
                   <Shield className="w-6 h-6 text-orange-400" />
@@ -329,7 +329,7 @@ export default function AuditViewPage() {
           )}
 
           {/* All Audit Events */}
-          <div className={`${cardStyles.default} p-6`}>
+          <div className={`${cardStyles.base} p-6`}>
             <div className="flex items-center justify-between mb-4">
               <h2 className={`${typography.h2}`}>All Audit Events</h2>
               <span className="text-sm text-white/60">{events.length} events</span>
