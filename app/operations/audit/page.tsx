@@ -145,10 +145,21 @@ export default function AuditViewPage() {
 
       if (!orgData) return
 
-      const { data: members } = await supabase
+      // Query organization_members and join with users table
+      const { data: members, error: membersError } = await supabase
         .from('organization_members')
-        .select('user_id, users!inner(full_name, email)')
+        .select(`
+          user_id,
+          users (
+            full_name,
+            email
+          )
+        `)
         .eq('organization_id', orgData.id)
+      
+      if (membersError) {
+        console.error('Error fetching organization members:', membersError)
+      }
 
       const usersList = (members || [])
         .map((m: any) => ({
