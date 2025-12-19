@@ -1250,9 +1250,9 @@ export default function JobDetailPage() {
                   mitigations={job.mitigation_items || []}
                   auditTimeline={versionHistoryEntries.map(entry => ({
                     id: entry.id,
-                    event_type: entry.type,
+                    event_type: entry.actionType || entry.changeType || 'updated',
                     user_name: entry.user?.name,
-                    created_at: entry.timestamp,
+                    created_at: entry.changedAt || entry.timestamp,
                     metadata: entry.metadata,
                   }))}
                   attachments={attachments}
