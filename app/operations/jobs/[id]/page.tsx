@@ -1259,7 +1259,6 @@ export default function JobDetailPage() {
                   signoffs={signoffs}
                   onExport={async (packType) => {
                     try {
-                      setToast({ message: `Generating ${packType} packet PDF...`, type: 'info' })
                       const response = await jobsApi.exportProofPack(jobId, packType)
                       
                       // Download PDF
@@ -1274,6 +1273,7 @@ export default function JobDetailPage() {
                           link.click()
                           document.body.removeChild(link)
                           URL.revokeObjectURL(url)
+                          setToast({ message: `${packType} packet PDF downloaded successfully`, type: 'success' })
                         }
                       }
                       
