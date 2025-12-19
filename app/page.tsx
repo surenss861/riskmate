@@ -283,7 +283,7 @@ export default function HomePage() {
               </motion.span>
             </motion.h1>
             <motion.p 
-              className="text-xl md:text-2xl text-[#A1A1A1] mb-10 max-w-2xl mx-auto leading-relaxed"
+              className="text-xl md:text-2xl text-[#A1A1A1] mb-6 max-w-2xl mx-auto leading-relaxed"
               data-string=""
               data-string-parallax="0.01"
               initial={{ opacity: 0, y: 20 }}
@@ -292,6 +292,22 @@ export default function HomePage() {
             >
               Role-based enforcement. Immutable audit trails. Insurance-ready proof packs. RiskMate doesn&apos;t just track risk—it proves governance.
             </motion.p>
+            <motion.div
+              className="max-w-3xl mx-auto mb-10 p-6 bg-[#121212]/50 border border-white/10 rounded-xl"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.5 }}
+            >
+              <p className="text-lg text-white font-medium mb-2">
+                RiskMate exists to answer one hard question:
+              </p>
+              <p className="text-xl text-[#F97316] font-semibold italic">
+                &ldquo;When something goes wrong, can you prove who knew what, when, and why?&rdquo;
+              </p>
+              <p className="text-sm text-white/60 mt-3">
+                That&apos;s the whole product. Everything else flows from that.
+              </p>
+            </motion.div>
             <motion.div 
               className="flex flex-col items-center gap-4 mb-8"
               initial={{ opacity: 0, y: 20 }}
@@ -406,7 +422,7 @@ export default function HomePage() {
           </motion.div>
         </section>
 
-        {/* What RiskMate Replaces Section */}
+        {/* What RiskMate Is (and Is Not) Section */}
         <section className="max-w-6xl mx-auto px-6 py-20">
           <motion.h2
             className="text-4xl font-bold text-center mb-4 font-display"
@@ -415,14 +431,58 @@ export default function HomePage() {
             viewport={{ once: true }}
             transition={{ duration: 0.6 }}
           >
-            What RiskMate Replaces
+            What RiskMate Is
           </motion.h2>
+          <motion.p
+            className="text-[#A1A1A1] text-center mb-8 max-w-2xl mx-auto"
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6, delay: 0.1 }}
+          >
+            RiskMate is a <strong className="text-white">system of record for operational risk</strong> in high-liability field operations.
+          </motion.p>
+          <motion.div
+            className="grid md:grid-cols-2 gap-6 mb-12"
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6, delay: 0.2 }}
+          >
+            <div className="p-6 bg-red-500/10 border border-red-500/30 rounded-xl">
+              <h3 className="text-lg font-semibold text-red-400 mb-4">Not:</h3>
+              <ul className="space-y-2 text-white/70">
+                <li>✗ A task manager</li>
+                <li>✗ A safety checklist app</li>
+                <li>✗ A &ldquo;construction SaaS&rdquo;</li>
+                <li>✗ A document dumping tool</li>
+              </ul>
+            </div>
+            <div className="p-6 bg-green-500/10 border border-green-500/30 rounded-xl">
+              <h3 className="text-lg font-semibold text-green-400 mb-4">Is:</h3>
+              <ul className="space-y-2 text-white/70">
+                <li>✓ A risk ledger (immutable records)</li>
+                <li>✓ Governance enforcement (server-side)</li>
+                <li>✓ Audit-ready proof packs (4 types)</li>
+                <li>✓ Institutional memory (not workflow)</li>
+              </ul>
+            </div>
+          </motion.div>
+          <motion.h3
+            className="text-2xl font-bold text-center mb-4 font-display"
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6, delay: 0.3 }}
+          >
+            What RiskMate Replaces
+          </motion.h3>
           <motion.p
             className="text-[#A1A1A1] text-center mb-12 max-w-2xl mx-auto"
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            transition={{ duration: 0.6, delay: 0.1 }}
+            transition={{ duration: 0.6, delay: 0.4 }}
           >
             Stop juggling multiple tools and messy workflows. Here&apos;s what disappears when you use RiskMate.
           </motion.p>
@@ -781,6 +841,180 @@ export default function HomePage() {
               </motion.button>
             ))}
           </div>
+        </section>
+
+        {/* Proof Packs Section */}
+        <section 
+          id="proof"
+          className="max-w-6xl mx-auto px-6 py-20"
+        >
+          <motion.h2 
+            className="text-4xl font-bold text-center mb-4 font-display"
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+          >
+            Proof Packs: Why Buyers Say &ldquo;This Is Real&rdquo;
+          </motion.h2>
+          <motion.p
+            className="text-[#A1A1A1] text-center mb-12 max-w-2xl mx-auto"
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6, delay: 0.1 }}
+          >
+            Every job can generate four exportable PDF proof packs. These are legal artifacts, not dashboards.
+          </motion.p>
+          <div className="grid md:grid-cols-2 gap-6">
+            {[
+              {
+                title: 'Insurance Packet',
+                description: 'Completed job, risk score, flags, attachments, audit trail',
+                icon: '🛡️',
+                color: 'blue',
+              },
+              {
+                title: 'Audit Packet',
+                description: 'Role enforcement, violations, corrective actions, timeline',
+                icon: '📋',
+                color: 'yellow',
+              },
+              {
+                title: 'Incident Packet',
+                description: 'Flag escalation trail, accountability markers, decisions made',
+                icon: '⚠️',
+                color: 'red',
+              },
+              {
+                title: 'Client Compliance Packet',
+                description: 'Checklists, sign-offs, documentation, proof of work',
+                icon: '✅',
+                color: 'green',
+              },
+            ].map((pack, index) => (
+              <motion.div
+                key={pack.title}
+                className="p-6 bg-[#121212] rounded-xl border border-white/5"
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.6, delay: index * 0.1 }}
+              >
+                <div className="text-3xl mb-3">{pack.icon}</div>
+                <h3 className="text-xl font-semibold mb-2">{pack.title}</h3>
+                <p className="text-white/70 text-sm">{pack.description}</p>
+              </motion.div>
+            ))}
+          </div>
+        </section>
+
+        {/* Governance Model Section */}
+        <section className="max-w-6xl mx-auto px-6 py-20 bg-[#121212]/50 rounded-3xl border border-white/5">
+          <motion.h2 
+            className="text-4xl font-bold text-center mb-4 font-display"
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+          >
+            Deterministic Role Enforcement
+          </motion.h2>
+          <motion.p
+            className="text-[#A1A1A1] text-center mb-12 max-w-2xl mx-auto"
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6, delay: 0.1 }}
+          >
+            Capabilities are enforced at the API level, not the UI. Violations are logged as <code className="text-[#F97316]">auth.role_violation</code> with role, action, reason, and timestamp.
+          </motion.p>
+          <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-4">
+            {[
+              { role: 'Owner', desc: 'Org authority, billing, deletion' },
+              { role: 'Admin', desc: 'Team management, risk ops' },
+              { role: 'Safety Lead', desc: 'Risk escalation authority' },
+              { role: 'Executive', desc: 'Read-only, visibility only' },
+              { role: 'Member', desc: 'Operational execution only' },
+            ].map((r, index) => (
+              <motion.div
+                key={r.role}
+                className="p-4 bg-black/20 rounded-lg border border-white/10"
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.6, delay: index * 0.1 }}
+              >
+                <h3 className="font-semibold text-[#F97316] mb-1">{r.role}</h3>
+                <p className="text-xs text-white/60">{r.desc}</p>
+              </motion.div>
+            ))}
+          </div>
+        </section>
+
+        {/* Who It's For Section */}
+        <section className="max-w-6xl mx-auto px-6 py-20">
+          <motion.h2 
+            className="text-4xl font-bold text-center mb-4 font-display"
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+          >
+            Who RiskMate Is For
+          </motion.h2>
+          <motion.p
+            className="text-[#A1A1A1] text-center mb-12 max-w-2xl mx-auto"
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6, delay: 0.1 }}
+          >
+            High-liability field operations where mistakes are expensive and defensibility matters.
+          </motion.p>
+          <div className="grid md:grid-cols-2 gap-6 mb-8">
+            <motion.div
+              className="p-6 bg-[#121212] rounded-xl border border-white/5"
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6, delay: 0.2 }}
+            >
+              <h3 className="text-xl font-semibold mb-4">Core Buyer Profiles</h3>
+              <ul className="space-y-2 text-white/70">
+                <li>• Safety Directors</li>
+                <li>• Risk Managers</li>
+                <li>• Compliance Leads</li>
+                <li>• VP Operations</li>
+                <li>• Executives responsible for exposure</li>
+              </ul>
+            </motion.div>
+            <motion.div
+              className="p-6 bg-[#121212] rounded-xl border border-white/5"
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6, delay: 0.3 }}
+            >
+              <h3 className="text-xl font-semibold mb-4">Core Industries</h3>
+              <ul className="space-y-2 text-white/70">
+                <li>• Trades (HVAC, Electrical, Plumbing, Roofing)</li>
+                <li>• Facilities & Building Services</li>
+                <li>• Fire & Life Safety</li>
+                <li>• Infrastructure & Heavy Civil</li>
+                <li>• Regulated field operations</li>
+              </ul>
+            </motion.div>
+          </div>
+          <motion.p
+            className="text-center text-white/60 italic max-w-2xl mx-auto"
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6, delay: 0.4 }}
+          >
+            They don&apos;t want &ldquo;productivity&rdquo;. They want defensibility.
+          </motion.p>
         </section>
 
         {/* How It Works - Minimal Steps */}
