@@ -1238,6 +1238,7 @@ export default function JobDetailPage() {
                     metadata: entry.metadata,
                   }))}
                   attachments={attachments}
+                  signoffs={signoffs}
                   onExport={async (packType) => {
                     try {
                       setToast({ message: `Generating ${packType} packet PDF...`, type: 'info' })

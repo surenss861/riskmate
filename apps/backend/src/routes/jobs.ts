@@ -1589,3 +1589,131 @@ jobsRouter.post("/:id/proof-pack", authenticate as unknown as express.RequestHan
   }
 });
 
+// GET /api/jobs/:id/signoffs
+// Returns all sign-offs for a job
+jobsRouter.get("/:id/signoffs", authenticate as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
+  const authReq = req as AuthenticatedRequest & RequestWithId;
+  const requestId = authReq.requestId || 'unknown';
+  try {
+    const { organization_id } = authReq.user;
+    const { id: jobId } = req.params;
+
+    const { data, error } = await supabase
+      .from("job_signoffs")
+      .select("*")
+      .eq("job_id", jobId)
+      .eq("organization_id", organization_id)
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+
+    res.json({ data: data || [] });
+  } catch (err: any) {
+    console.error("Sign-offs fetch failed:", err);
+    const { response: errorResponse, errorId } = createErrorResponse({
+      message: "Failed to fetch sign-offs",
+      internalMessage: err?.message || String(err),
+      code: "SIGNOFFS_FETCH_FAILED",
+      requestId,
+      statusCode: 500,
+    });
+    res.setHeader('X-Error-ID', errorId);
+    res.status(500).json(errorResponse);
+  }
+});
+
+// POST /api/jobs/:id/signoffs
+// Creates a new sign-off for a job
+jobsRouter.post("/:id/signoffs", authenticate as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
+  const authReq = req as AuthenticatedRequest & RequestWithId;
+  const requestId = authReq.requestId || 'unknown';
+  try {
+    const { organization_id, id: userId } = authReq.user;
+    const { id: jobId } = req.params;
+    const { signoff_type, comments } = req.body;
+
+    if (!signoff_type || !['safety_approval', 'completion', 'compliance', 'owner_approval'].includes(signoff_type)) {
+      const { response: errorResponse, errorId } = createErrorResponse({
+        message: "Invalid sign-off type",
+        internalMessage: `Invalid signoff_type: ${signoff_type}`,
+        code: "VALIDATION_ERROR",
+        requestId,
+        statusCode: 400,
+      });
+      res.setHeader('X-Error-ID', errorId);
+      return res.status(400).json(errorResponse);
+    }
+
+    // Get user info
+    const { data: userData } = await supabase
+      .from("users")
+      .select("full_name, email, role")
+      .eq("id", userId)
+      .single();
+
+    if (!userData) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Get user's role in organization
+    const { data: memberData } = await supabase
+      .from("organization_members")
+      .select("role")
+      .eq("organization_id", organization_id)
+      .eq("user_id", userId)
+      .single();
+
+    const signerRole = memberData?.role || userData.role || 'member';
+
+    const { data, error } = await supabase
+      .from("job_signoffs")
+      .insert({
+        job_id: jobId,
+        organization_id,
+        signer_id: userId,
+        signer_role: signerRole,
+        signer_name: userData.full_name || userData.email || 'Unknown',
+        signer_email: userData.email,
+        signoff_type,
+        status: 'signed',
+        signed_at: new Date().toISOString(),
+        comments,
+        signature_data: {
+          ip_address: req.ip || req.headers['x-forwarded-for'] || 'unknown',
+          user_agent: req.headers['user-agent'] || 'unknown',
+          timestamp: new Date().toISOString(),
+        },
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    await recordAuditLog({
+      organizationId: organization_id,
+      actorId: userId,
+      eventName: "job.signoff_created",
+      targetType: "signoff",
+      targetId: data.id,
+      metadata: {
+        job_id: jobId,
+        signoff_type,
+        signer_role: signerRole,
+      },
+    });
+
+    res.json({ data });
+  } catch (err: any) {
+    console.error("Sign-off creation failed:", err);
+    const { response: errorResponse, errorId } = createErrorResponse({
+      message: "Failed to create sign-off",
+      internalMessage: err?.message || String(err),
+      code: "SIGNOFF_CREATION_FAILED",
+      requestId,
+      statusCode: 500,
+    });
+    res.setHeader('X-Error-ID', errorId);
+    res.status(500).json(errorResponse);
+  }
+});
+

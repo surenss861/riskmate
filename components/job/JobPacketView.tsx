@@ -15,6 +15,17 @@ interface Attachment {
   created_at: string
 }
 
+interface Signoff {
+  id: string
+  signer_id: string
+  signer_role: string
+  signer_name: string
+  signoff_type: string
+  status: 'pending' | 'signed' | 'rejected'
+  signed_at?: string
+  comments?: string
+}
+
 interface JobPacketViewProps {
   job: {
     id: string
@@ -26,6 +37,8 @@ interface JobPacketViewProps {
     risk_level: string | null
     review_flag?: boolean
     flagged_at?: string | null
+    site_id?: string | null
+    site_name?: string | null
   }
   mitigations?: Array<{
     id: string
@@ -41,6 +54,7 @@ interface JobPacketViewProps {
     metadata?: any
   }>
   attachments?: Attachment[]
+  signoffs?: Signoff[]
   onExport?: (packType: 'insurance' | 'audit' | 'incident' | 'compliance') => void
   onAttachmentUploaded?: () => void
 }
@@ -50,6 +64,7 @@ export function JobPacketView({
   mitigations = [], 
   auditTimeline = [], 
   attachments = [],
+  signoffs = [],
   onExport,
   onAttachmentUploaded 
 }: JobPacketViewProps) {
@@ -202,6 +217,9 @@ export function JobPacketView({
             <div>
               <p className="text-sm text-white/50 mb-1">Location</p>
               <p className="font-semibold">{job.location}</p>
+              {job.site_name && (
+                <p className="text-xs text-white/60 mt-1">Site: {job.site_name}</p>
+              )}
             </div>
             <div>
               <p className="text-sm text-white/50 mb-1">Status</p>
