@@ -6,6 +6,7 @@ import { DemoProvider, useDemo } from '@/lib/demo/useDemo'
 import { DashboardNavbar } from '@/components/dashboard/DashboardNavbar'
 import { DemoBanner } from '@/components/demo/DemoBanner'
 import { RoleSwitcher } from '@/components/demo/RoleSwitcher'
+import { ScenarioPicker } from '@/components/demo/ScenarioPicker'
 import { GuidedTour } from '@/components/demo/GuidedTour'
 import { cardStyles, typography, spacing } from '@/lib/styles/design-system'
 import { Users, FileText, Settings, AlertTriangle, Play } from 'lucide-react'
@@ -172,13 +173,26 @@ function DemoContent() {
               Explore live risk scoring, role-based enforcement, and audit trails — no login, no backend, no data saved.
             </p>
             {searchParams?.get('operation') && operationPresets[searchParams.get('operation') as OperationType] && (
-              <div className="mt-3 p-3 bg-[#F97316]/10 border border-[#F97316]/30 rounded-lg">
-                <p className="text-sm text-[#F97316] font-medium">
-                  Viewing as: {operationPresets[searchParams.get('operation') as OperationType].label}
-                </p>
-                <p className="text-xs text-white/60 mt-1">
-                  {operationPresets[searchParams.get('operation') as OperationType].message}
-                </p>
+              <div className="mt-3 p-3 bg-[#F97316]/10 border border-[#F97316]/30 rounded-lg flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-[#F97316] font-medium">
+                    Operation: {operationPresets[searchParams.get('operation') as OperationType].label}
+                  </p>
+                  <p className="text-xs text-white/60 mt-1">
+                    {operationPresets[searchParams.get('operation') as OperationType].message}
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    const params = new URLSearchParams(searchParams?.toString() || '')
+                    params.delete('operation')
+                    window.history.replaceState({}, '', `?${params.toString()}`)
+                  }}
+                  className="text-white/40 hover:text-white transition-colors ml-4"
+                  title="Clear operation type"
+                >
+                  ✕
+                </button>
               </div>
             )}
             <p className="text-white/40 text-xs italic mt-2">
@@ -187,7 +201,7 @@ function DemoContent() {
           </div>
 
           {/* Choose Your Operation Type Entry Card */}
-          {!searchParams?.get('role') && !searchParams?.get('dismissed') && (
+          {!searchParams?.get('operation') && !searchParams?.get('dismissed') && (
             <div className="mb-6 p-6 bg-white/5 border border-white/10 rounded-lg">
               <div className="flex items-start justify-between mb-4">
                 <div>
@@ -236,30 +250,33 @@ function DemoContent() {
           )}
 
           {/* Demo Command Bar */}
-          <div className="flex items-center gap-3 flex-wrap">
-            <button
-              onClick={() => setTourStep(0)}
-              className="px-4 py-2 bg-[#F97316] hover:bg-[#FB923C] text-black rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
-            >
-              <Play className="w-4 h-4" />
-              Start Guided Tour
-            </button>
-            <div data-tour="role-switcher">
-              <RoleSwitcher />
+          <div className="flex items-start gap-4 flex-wrap mb-6 p-4 bg-white/5 border border-white/10 rounded-lg">
+            <div className="flex items-start gap-4 flex-wrap flex-1">
+              <button
+                onClick={() => setTourStep(0)}
+                className="px-4 py-2 bg-[#F97316] hover:bg-[#FB923C] text-black rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+              >
+                <Play className="w-4 h-4" />
+                Start Guided Tour
+              </button>
+              <div data-tour="role-switcher">
+                <RoleSwitcher />
+              </div>
+              <ScenarioPicker />
+              <button
+                onClick={() => {
+                  const params = new URLSearchParams(searchParams?.toString() || '')
+                  params.set('role', currentRole)
+                  params.set('scenario', currentScenario)
+                  const url = `${window.location.origin}/demo?${params.toString()}`
+                  navigator.clipboard.writeText(url)
+                  showDemoMessage('Demo link copied to clipboard')
+                }}
+                className="px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg text-sm transition-colors"
+              >
+                Share Scenario
+              </button>
             </div>
-            <button
-              onClick={() => {
-                const params = new URLSearchParams(searchParams?.toString() || '')
-                params.set('role', currentRole)
-                params.set('scenario', currentScenario)
-                const url = `${window.location.origin}/demo?${params.toString()}`
-                navigator.clipboard.writeText(url)
-                showDemoMessage('Demo link copied to clipboard')
-              }}
-              className="px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg text-sm transition-colors"
-            >
-              Share Scenario
-            </button>
           </div>
         </div>
 
