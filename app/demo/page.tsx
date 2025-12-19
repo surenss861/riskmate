@@ -328,14 +328,14 @@ function DemoContent() {
                 ✕
               </button>
               <h2 className="text-2xl font-semibold text-white mb-4">
-                You've just seen RiskMate enforce risk — not just track it
+                You&apos;ve just seen RiskMate enforce risk — not just track it
               </h2>
               <div className="space-y-4 text-sm text-white/80 mb-6">
                 <p>
                   What you experienced isn&apos;t a walkthrough — it&apos;s the actual governance model in action.
                 </p>
                 <ul className="space-y-2 list-disc list-inside">
-                  <li>Roles weren't cosmetic — permissions were enforced</li>
+                  <li>Roles weren&apos;t cosmetic — permissions were enforced</li>
                   <li>Flagged jobs triggered visibility, not workflow noise</li>
                   <li>Every action created an audit trail, including violations</li>
                   <li>Billing, access, and security were intentionally separated</li>
