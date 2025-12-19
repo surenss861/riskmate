@@ -12,6 +12,7 @@ import { notificationsRouter } from "./routes/notifications";
 import { teamRouter } from "./routes/team";
 import { accountRouter } from "./routes/account";
 import { sitesRouter } from "./routes/sites";
+import { auditRouter } from "./routes/audit";
 import { requestIdMiddleware, RequestWithId } from "./middleware/requestId";
 
 const app = express();
@@ -103,6 +104,7 @@ app.use("/api/notifications", notificationsRouter);
 app.use("/api/team", teamRouter);
 app.use("/api/account", accountRouter);
 app.use("/api/sites", sitesRouter);
+app.use("/api/audit", auditRouter);
 
 // 404 handler
 app.use((req, res) => {

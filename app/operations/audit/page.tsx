@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { Download, Filter, Shield, AlertTriangle, User, Calendar, FileText, Clock, CheckCircle, XCircle, ExternalLink, ChevronDown, ChevronUp, Building2 } from 'lucide-react'
 import ProtectedRoute from '@/components/ProtectedRoute'
-import { jobsApi } from '@/lib/api'
+import { jobsApi, auditApi } from '@/lib/api'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { cardStyles, buttonStyles, typography } from '@/lib/styles/design-system'
 import { DashboardNavbar } from '@/components/dashboard/DashboardNavbar'
@@ -66,150 +66,64 @@ export default function AuditViewPage() {
   const loadAuditEvents = async () => {
     try {
       setLoading(true)
-      const supabase = createSupabaseBrowserClient()
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) return
+      
+      // Use new backend endpoint with server-side enrichment
+      const response = await auditApi.getEvents({
+        category: activeTab,
+        site_id: filters.site || undefined,
+        job_id: filters.job || undefined,
+        actor_id: filters.user || undefined,
+        severity: filters.severity || undefined,
+        outcome: filters.outcome || undefined,
+        time_range: filters.timeRange,
+        view: filters.savedView || undefined,
+        limit: 500,
+      })
 
-      const { data: orgData } = await supabase
-        .from('organizations')
-        .select('id')
-        .single()
+      const enrichedEvents = (response.data.events || []).map((event: any) => ({
+        ...event,
+        event_type: event.event_name || event.event_type || 'unknown',
+        job_name: event.job_title || event.job_name,
+        user_name: event.actor_name || event.user_name,
+        user_email: event.user_email,
+        user_role: event.actor_role || event.user_role,
+        site_name: event.site_name,
+      }))
 
-      if (!orgData) return
-
-      let query = supabase
-        .from('audit_logs')
-        .select('*')
-        .eq('organization_id', orgData.id)
-        .order('created_at', { ascending: false })
-        .limit(500)
-
-      // Time range filter
-      if (filters.timeRange !== 'all' && filters.timeRange !== 'custom') {
-        const now = new Date()
-        let cutoff = new Date()
-        if (filters.timeRange === '24h') {
-          cutoff.setHours(now.getHours() - 24)
-        } else if (filters.timeRange === '7d') {
-          cutoff.setDate(now.getDate() - 7)
-        } else if (filters.timeRange === '30d') {
-          cutoff.setDate(now.getDate() - 30)
-        }
-        query = query.gte('created_at', cutoff.toISOString())
+      setEvents(enrichedEvents as AuditEvent[])
+      
+      // Update summary metrics from backend stats
+      if (response.data.stats) {
+        // Stats are already computed server-side, but we'll recalculate from filtered events
+        // for consistency with UI
       }
-
-      if (filters.job) {
-        query = query.eq('job_id', filters.job)
-      }
-
-      if (filters.user) {
-        query = query.eq('actor_id', filters.user)
-      }
-
-      if (filters.site) {
-        // Filter by site via job_id (would need to join, but for now we'll filter after)
-      }
-
-      const { data, error } = await query
-
-      if (error) throw error
-
-      // Apply saved view filters
-      let filteredData = data || []
-      if (filters.savedView === 'governance-enforcement') {
-        filteredData = filteredData.filter(e => {
-          const eventType = (e.event_name || e.event_type || '').toString()
-          return categorizeEvent(eventType) === 'governance'
-        })
-      } else if (filters.savedView === 'incident-review') {
-        filteredData = filteredData.filter(e => {
-          const type = (e.event_name || e.event_type || '').toString()
-          return type.includes('flag') || type.includes('incident')
-        })
-      } else if (filters.savedView === 'access-review') {
-        filteredData = filteredData.filter(e => {
-          const eventType = (e.event_name || e.event_type || '').toString()
-          return categorizeEvent(eventType) === 'access'
-        })
-      } else if (filters.savedView === 'insurance-ready') {
-        filteredData = filteredData.filter(e => {
-          const type = (e.event_name || e.event_type || '').toString()
-          return type.includes('proof_pack') || type.includes('signoff') || type.includes('job.completed')
-        })
-      }
-
-      // Enrich with job, user, and site names
-      const enrichedEvents = await Promise.all(
-        filteredData.map(async (event) => {
-          let jobName = null
-          let siteName = null
-          let userName = null
-          let userEmail = null
-          let userRole = null
-
-          if (event.job_id || event.target_id) {
-            const jobId = event.job_id || (event.target_type === 'job' ? event.target_id : null)
-            if (jobId) {
-              try {
-                const jobResponse = await jobsApi.get(jobId)
-                jobName = jobResponse.data.client_name
-                siteName = jobResponse.data.site_name
-              } catch (e) {
-                // Job might not exist
-              }
-            }
-          }
-
-          const userId = event.actor_id || event.user_id
-          if (userId) {
-            const { data: userData } = await supabase
-              .from('users')
-              .select('full_name, email, role')
-              .eq('id', userId)
-              .single()
-            if (userData) {
-              userName = userData.full_name
-              userEmail = userData.email
-              userRole = userData.role
-            }
-          }
-
-          return {
-            ...event,
-            event_type: (event.event_name || 'unknown').toString(),
-            job_id: event.target_type === 'job' ? (event.target_id || event.job_id) : event.job_id,
-            job_name: jobName,
-            site_name: siteName,
-            user_name: userName,
-            user_email: userEmail,
-            user_role: userRole,
-          }
-        })
-      )
-
-      // Apply severity and outcome filters
-      let finalEvents = enrichedEvents
-      if (filters.severity) {
-        finalEvents = finalEvents.filter(e => {
-          const mapping = getEventMapping(e.event_type)
-          return mapping.severity === filters.severity
-        })
-      }
-      if (filters.outcome) {
-        finalEvents = finalEvents.filter(e => {
-          const mapping = getEventMapping(e.event_type)
-          return mapping.outcome === filters.outcome
-        })
-      }
-
-      // Filter by site if specified
-      if (filters.site) {
-        finalEvents = finalEvents.filter(e => e.site_id === filters.site || e.job_id && jobs.find(j => j.id === e.job_id)?.site_name)
-      }
-
-      setEvents(finalEvents as AuditEvent[])
     } catch (err) {
       console.error('Failed to load audit events:', err)
+      // Fallback to direct Supabase query if backend fails
+      try {
+        const supabase = createSupabaseBrowserClient()
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session) return
+
+        const { data: orgData } = await supabase
+          .from('organizations')
+          .select('id')
+          .single()
+
+        if (!orgData) return
+
+        const { data, error } = await supabase
+          .from('audit_logs')
+          .select('*')
+          .eq('organization_id', orgData.id)
+          .order('created_at', { ascending: false })
+          .limit(500)
+
+        if (error) throw error
+        setEvents((data || []) as AuditEvent[])
+      } catch (fallbackErr) {
+        console.error('Fallback query also failed:', fallbackErr)
+      }
     } finally {
       setLoading(false)
     }
@@ -531,16 +445,54 @@ export default function AuditViewPage() {
               </h2>
               <div className="flex items-center gap-4">
                 <span className="text-sm text-white/60">{filteredEvents.length} events</span>
-                <button
-                  onClick={() => {
-                    // Export functionality
-                    alert('Export audit trail coming in v2')
-                  }}
-                  className={`${buttonStyles.secondary} flex items-center gap-2`}
-                >
-                  <Download className="w-4 h-4" />
-                  Export
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={async () => {
+                      try {
+                        await auditApi.export({
+                          format: 'csv',
+                          category: activeTab,
+                          site_id: filters.site || undefined,
+                          job_id: filters.job || undefined,
+                          actor_id: filters.user || undefined,
+                          severity: filters.severity || undefined,
+                          outcome: filters.outcome || undefined,
+                          time_range: filters.timeRange,
+                          view: filters.savedView || undefined,
+                        })
+                      } catch (err) {
+                        alert('Export failed. Please try again.')
+                      }
+                    }}
+                    className={`${buttonStyles.secondary} flex items-center gap-2`}
+                  >
+                    <Download className="w-4 h-4" />
+                    Export CSV
+                  </button>
+                  <button
+                    onClick={async () => {
+                      try {
+                        await auditApi.export({
+                          format: 'json',
+                          category: activeTab,
+                          site_id: filters.site || undefined,
+                          job_id: filters.job || undefined,
+                          actor_id: filters.user || undefined,
+                          severity: filters.severity || undefined,
+                          outcome: filters.outcome || undefined,
+                          time_range: filters.timeRange,
+                          view: filters.savedView || undefined,
+                        })
+                      } catch (err) {
+                        alert('Export failed. Please try again.')
+                      }
+                    }}
+                    className={`${buttonStyles.secondary} flex items-center gap-2`}
+                  >
+                    <Download className="w-4 h-4" />
+                    Export JSON
+                  </button>
+                </div>
               </div>
             </div>
             {loading ? (
