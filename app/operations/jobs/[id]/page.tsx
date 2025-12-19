@@ -1247,7 +1247,7 @@ export default function JobDetailPage() {
               >
                 <JobPacketView
                   job={job}
-                  mitigations={job.mitigations || []}
+                  mitigations={job.mitigation_items || []}
                   auditTimeline={versionHistoryEntries.map(entry => ({
                     id: entry.id,
                     event_type: entry.type,
