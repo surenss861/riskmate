@@ -66,7 +66,40 @@ export default function HomePage() {
             >
               <RiskMateLogo size="sm" showText={true} />
             </motion.div>
-            <div className="hidden md:flex items-center gap-4">
+            <div className="hidden md:flex items-center gap-6">
+              <button
+                onClick={() => router.push('/industries')}
+                className="text-white/70 hover:text-white transition-colors text-sm"
+              >
+                Industries
+              </button>
+              <button
+                onClick={() => {
+                  const element = document.getElementById('how-it-works')
+                  element?.scrollIntoView({ behavior: 'smooth' })
+                }}
+                className="text-white/70 hover:text-white transition-colors text-sm"
+              >
+                How it Works
+              </button>
+              <button
+                onClick={() => {
+                  const element = document.getElementById('proof')
+                  element?.scrollIntoView({ behavior: 'smooth' })
+                }}
+                className="text-white/70 hover:text-white transition-colors text-sm"
+              >
+                Proof
+              </button>
+              <button
+                onClick={() => {
+                  const element = document.getElementById('pricing')
+                  element?.scrollIntoView({ behavior: 'smooth' })
+                }}
+                className="text-white/70 hover:text-white transition-colors text-sm"
+              >
+                Pricing
+              </button>
               <button
                 onClick={() => router.push('/demo')}
                 className="text-white/70 hover:text-white transition-colors text-sm relative group flex items-center gap-1.5"
@@ -78,10 +111,10 @@ export default function HomePage() {
                 <span className="absolute bottom-0 left-0 w-0 h-[1px] bg-white group-hover:w-full transition-all duration-300" />
               </button>
               <button
-                onClick={() => router.push('/signup')}
-                className="px-4 py-2 bg-[#F97316] hover:bg-[#FB923C] text-white rounded-md font-medium text-sm transition-colors btn-primary"
+                onClick={() => window.open('https://cal.com/riskmate', '_blank')}
+                className="px-4 py-2 border border-white/20 hover:border-white/40 rounded-md font-medium text-sm transition-colors"
               >
-                Start Free →
+                Book a Call
               </button>
             </div>
             {/* Mobile Menu Button */}
@@ -209,7 +242,7 @@ export default function HomePage() {
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.8, delay: 0.2 }}
               >
-                Turn every job into an
+                Audit-defensible job governance
               </motion.span>
               <br />
               <motion.span 
@@ -218,7 +251,7 @@ export default function HomePage() {
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.8, delay: 0.3 }}
               >
-                audit-ready safety report
+                for high-liability field operations
                 <motion.span
                   className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#F97316]"
                   initial={{ scaleX: 0 }}
@@ -235,7 +268,7 @@ export default function HomePage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.4 }}
             >
-              Replace messy paper forms and random photos with one clean dashboard. Document hazards, controls, photos, and signatures—everything timestamped and ready for clients, insurers, and auditors.
+              Role-based enforcement. Immutable audit trails. Insurance-ready proof packs. RiskMate doesn&apos;t just track risk—it proves governance.
             </motion.p>
             <motion.div 
               className="flex flex-col sm:flex-row gap-4 justify-center mb-8"
@@ -244,12 +277,12 @@ export default function HomePage() {
               transition={{ duration: 0.6, delay: 0.5 }}
             >
               <motion.button
-                onClick={() => router.push('/signup')}
+                onClick={() => router.push('/demo')}
                 className="px-8 py-4 bg-[#F97316] text-black rounded-lg hover:bg-[#FB923C] transition-all font-semibold text-lg btn-primary relative overflow-hidden group"
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
               >
-                <span className="relative z-10">Protect Your Next Job →</span>
+                <span className="relative z-10">Try Interactive Demo →</span>
                 <motion.span
                   className="absolute inset-0 bg-white/20"
                   initial={{ x: '-100%' }}
@@ -258,23 +291,12 @@ export default function HomePage() {
                 />
               </motion.button>
               <motion.button
-                onClick={() => router.push('/demo')}
+                onClick={() => window.open('https://cal.com/riskmate', '_blank')}
                 className="px-8 py-4 border border-white/10 rounded-lg hover:border-white/20 transition-colors font-semibold text-lg btn-secondary"
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
               >
-                See It in Action
-              </motion.button>
-              <motion.button
-                onClick={() => router.push('/sample-report')}
-                className="px-8 py-4 border border-white/10 rounded-lg hover:border-white/20 transition-colors font-semibold text-lg btn-secondary flex items-center gap-2"
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                Sample Report
+                Book a Call
               </motion.button>
             </motion.div>
 
@@ -736,6 +758,7 @@ export default function HomePage() {
 
         {/* How It Works - Minimal Steps */}
         <section 
+          id="how-it-works"
           className="max-w-6xl mx-auto px-6 py-20"
           data-string=""
           data-string-show=""
