@@ -776,13 +776,18 @@ export function JobsPageContentView(props: JobsPageContentProps) {
               },
               {
                 id: 'last_activity',
-                header: executiveView ? 'Last Activity' : 'Created',
+                header: executiveView ? 'Last Activity (UTC)' : 'Created (UTC)',
                 accessor: (job: any) => job.updated_at || job.created_at,
                 sortable: true,
                 render: (value: string, job: any) => (
-                  <span className="text-xs text-white/40">
-                    {executiveView ? props.formatDate(job.updated_at || job.created_at) : props.formatDate(job.created_at)}
-                  </span>
+                  <div>
+                    <div className="text-xs text-white/40">
+                      {executiveView ? props.formatDate(job.updated_at || job.created_at) : props.formatDate(job.created_at)}
+                    </div>
+                    <div className="text-xs text-white/20 mt-0.5">
+                      {executiveView ? 'Last update' : 'Record created'}
+                    </div>
+                  </div>
                 ),
               },
               ...(canArchive || canDelete ? [{
