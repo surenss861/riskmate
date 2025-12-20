@@ -1438,3 +1438,87 @@ auditRouter.post('/resolve', authenticate as unknown as express.RequestHandler, 
     res.status(500).json(errorResponse)
   }
 })
+
+// POST /api/audit/incidents/corrective-action
+// Creates a corrective action (control) linked to an incident/work record
+auditRouter.post('/incidents/corrective-action', authenticate as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
+  const authReq = req as AuthenticatedRequest & RequestWithId
+  const requestId = authReq.requestId || 'unknown'
+  
+  try {
+    const { organization_id, id: userId } = authReq.user
+    const { work_record_id, incident_event_id, title, owner_id, due_date, verification_method, notes } = req.body
+
+    if (!work_record_id || !title || !owner_id || !due_date) {
+      return res.status(400).json({ 
+        message: 'work_record_id, title, owner_id, and due_date are required' 
+      })
+    }
+
+    // Verify work record exists and belongs to organization
+    const { data: job, error: jobError } = await supabase
+      .from('jobs')
+      .select('id, client_name')
+      .eq('id', work_record_id)
+      .eq('organization_id', organization_id)
+      .single()
+
+    if (jobError || !job) {
+      return res.status(404).json({ message: 'Work record not found' })
+    }
+
+    // Create control (mitigation item)
+    const { data: control, error: controlError } = await supabase
+      .from('mitigation_items')
+      .insert({
+        job_id: work_record_id,
+        title,
+        description: notes || `Corrective action for ${job.client_name}`,
+        done: false,
+        is_completed: false,
+      })
+      .select()
+      .single()
+
+    if (controlError || !control) {
+      console.error('Failed to create control:', controlError)
+      return res.status(500).json({ message: 'Failed to create corrective action' })
+    }
+
+    // Write ledger entry
+    await recordAuditLog({
+      organizationId: organization_id,
+      actorId: userId,
+      eventName: 'incident.corrective_action.created',
+      targetType: 'mitigation',
+      targetId: control.id,
+      metadata: {
+        work_record_id,
+        incident_event_id: incident_event_id || null,
+        control_id: control.id,
+        owner_id,
+        due_date,
+        verification_method: verification_method || 'visual_inspection',
+        notes: notes || null,
+        summary: `Corrective action created: ${title}`,
+      },
+    })
+
+    res.json({ 
+      success: true,
+      message: 'Corrective action created successfully',
+      control_id: control.id,
+    })
+  } catch (err: any) {
+    const { response: errorResponse, errorId } = createErrorResponse({
+      message: 'Failed to create corrective action',
+      internalMessage: err?.message || String(err),
+      code: 'CORRECTIVE_ACTION_ERROR',
+      requestId,
+      statusCode: 500,
+    })
+    res.setHeader('X-Error-ID', errorId)
+    logErrorForSupport(500, 'CORRECTIVE_ACTION_ERROR', requestId, authReq.user?.organization_id, errorResponse.message, errorResponse.internal_message, errorResponse.category, errorResponse.severity, '/api/audit/incidents/corrective-action')
+    res.status(500).json(errorResponse)
+  }
+})

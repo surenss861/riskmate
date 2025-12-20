@@ -15,6 +15,7 @@ import { SavedViewCards } from '@/components/audit/SavedViewCards'
 import { EvidenceDrawer } from '@/components/audit/EvidenceDrawer'
 import { AssignModal } from '@/components/audit/AssignModal'
 import { ResolveModal } from '@/components/audit/ResolveModal'
+import { CreateCorrectiveActionModal } from '@/components/audit/CreateCorrectiveActionModal'
 import { terms } from '@/lib/terms'
 
 interface AuditEvent {
@@ -456,27 +457,41 @@ export default function AuditViewPage() {
     }
   }
 
-  const handleAssignClick = (view: string) => {
-    // For now, we'll use a placeholder - in a full implementation,
-    // this would get the selected event/item from the view
+  const handleAssignClick = (event?: AuditEvent) => {
+    if (!event) {
+      // Called from card action - prompt user to select an event
+      alert('Please select an event from the list to assign')
+      return
+    }
+
     setSelectedTarget({
       type: 'event',
-      id: 'placeholder', // This would be the actual selected item ID
-      name: 'Selected Item',
+      id: event.id,
+      name: event.job_name || event.event_type || 'Event',
     })
     setAssignModalOpen(true)
   }
 
-  const handleResolveClick = (view: string) => {
-    // For now, we'll use a placeholder - in a full implementation,
-    // this would get the selected event/item from the view
+  const handleResolveClick = (event?: AuditEvent) => {
+    if (!event) {
+      // Called from card action - prompt user to select an event
+      alert('Please select an event from the list to resolve')
+      return
+    }
+
+    // Determine if evidence is required based on event type
+    const requiresEvidence = event.event_type?.includes('missing_evidence') || 
+                            event.metadata?.requires_evidence === true
+    const hasEvidence = event.metadata?.has_evidence === true || 
+                       event.job_id !== undefined // If linked to job, assume evidence might exist
+
     setSelectedTarget({
-      type: 'event',
-      id: 'placeholder', // This would be the actual selected item ID
-      name: 'Selected Item',
-      severity: 'material',
-      requiresEvidence: false,
-      hasEvidence: false,
+      type: event.job_id ? 'job' : 'event',
+      id: event.job_id || event.id,
+      name: event.job_name || event.event_type || 'Event',
+      severity: event.metadata?.severity || 'info',
+      requiresEvidence,
+      hasEvidence,
     })
     setResolveModalOpen(true)
   }
@@ -494,9 +509,71 @@ export default function AuditViewPage() {
     }
   }
 
-  const handleCreateCorrectiveAction = (view: string) => {
-    // TODO: Implement corrective action creation workflow
-    alert(`Create corrective action for ${view} - Coming soon`)
+  const [createCorrectiveActionModalOpen, setCreateCorrectiveActionModalOpen] = useState(false)
+  const [selectedIncident, setSelectedIncident] = useState<{
+    workRecordId?: string
+    workRecordName?: string
+    incidentEventId?: string
+    severity?: 'critical' | 'material' | 'info'
+  } | null>(null)
+
+  const handleCreateCorrectiveAction = async (action: {
+    title: string
+    owner_id: string
+    due_date: string
+    verification_method: string
+    notes?: string
+  }) => {
+    if (!selectedIncident?.workRecordId) return
+
+    try {
+      const token = await (async () => {
+        const supabase = createSupabaseBrowserClient()
+        const { data: { session } } = await supabase.auth.getSession()
+        return session?.access_token || null
+      })()
+
+      const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || ''
+      const response = await fetch(`${API_URL}/api/audit/incidents/corrective-action`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+        body: JSON.stringify({
+          work_record_id: selectedIncident.workRecordId,
+          incident_event_id: selectedIncident.incidentEventId,
+          ...action,
+        }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}))
+        throw new Error(error.message || 'Failed to create corrective action')
+      }
+
+      const data = await response.json()
+
+      setToast({
+        message: `Corrective action created. Entry added to Compliance Ledger. View at /operations/audit?event_id=${data.control_id}`,
+        type: 'success',
+      })
+      
+      loadAuditEvents()
+    } catch (err: any) {
+      console.error('Failed to create corrective action:', err)
+      setToast({
+        message: err.message || 'Failed to create corrective action. Please try again.',
+        type: 'error',
+      })
+      throw err
+    }
+  }
+
+  const handleCreateCorrectiveActionClick = (view: string) => {
+    // This would get the selected incident/event from the view
+    // For now, prompt user to select an event
+    alert('Please select an incident from the list to create a corrective action')
   }
 
   const handleCloseIncident = (view: string) => {
@@ -577,10 +654,10 @@ export default function AuditViewPage() {
             }}
             onExport={handleExportFromView}
             onGeneratePack={handleGeneratePack}
-            onAssign={handleAssignClick}
-            onResolve={handleResolveClick}
+            onAssign={(view) => handleAssignClick()}
+            onResolve={(view) => handleResolveClick()}
             onExportEnforcement={handleExportEnforcement}
-            onCreateCorrectiveAction={handleCreateCorrectiveAction}
+            onCreateCorrectiveAction={handleCreateCorrectiveActionClick}
             onCloseIncident={handleCloseIncident}
             onRevokeAccess={handleRevokeAccess}
             onFlagSuspicious={handleFlagSuspicious}
@@ -1014,6 +1091,26 @@ export default function AuditViewPage() {
                               )}
                             </div>
                           )}
+
+                          {/* Review Queue Actions */}
+                          {filters.savedView === 'review-queue' && needsAttention && (
+                            <div className="mt-3 pt-3 border-t border-white/10 flex gap-2">
+                              <button
+                                onClick={() => handleAssignClick(event)}
+                                className={`${buttonStyles.secondary} text-xs flex items-center gap-1`}
+                              >
+                                <User className="w-3 h-3" />
+                                Assign
+                              </button>
+                              <button
+                                onClick={() => handleResolveClick(event)}
+                                className={`${buttonStyles.primary} text-xs flex items-center gap-1`}
+                              >
+                                <CheckCircle className="w-3 h-3" />
+                                Resolve
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1079,6 +1176,20 @@ export default function AuditViewPage() {
           severity={selectedTarget?.severity}
           requiresEvidence={selectedTarget?.requiresEvidence}
           hasEvidence={selectedTarget?.hasEvidence}
+        />
+
+        {/* Create Corrective Action Modal */}
+        <CreateCorrectiveActionModal
+          isOpen={createCorrectiveActionModalOpen}
+          onClose={() => {
+            setCreateCorrectiveActionModalOpen(false)
+            setSelectedIncident(null)
+          }}
+          onCreate={handleCreateCorrectiveAction}
+          workRecordId={selectedIncident?.workRecordId}
+          workRecordName={selectedIncident?.workRecordName}
+          incidentEventId={selectedIncident?.incidentEventId}
+          severity={selectedIncident?.severity}
         />
       </div>
     </ProtectedRoute>
