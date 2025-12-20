@@ -236,5 +236,5 @@ export async function invalidateProjections(organizationId: string): Promise<voi
   console.log(`Projections invalidated for organization: ${organizationId}`)
 }
 
-type LedgerCategory = 'governance' | 'operations' | 'access' | 'review_queue' | 'incident_review' | 'attestations' | 'access_review' | 'system'
+import type { LedgerCategory } from '../../../lib/ledger/contracts'
 
