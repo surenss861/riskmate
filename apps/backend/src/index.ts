@@ -13,6 +13,7 @@ import { teamRouter } from "./routes/team";
 import { accountRouter } from "./routes/account";
 import { sitesRouter } from "./routes/sites";
 import { auditRouter } from "./routes/audit";
+import { executiveRouter } from "./routes/executive";
 import { requestIdMiddleware, RequestWithId } from "./middleware/requestId";
 
 const app = express();
