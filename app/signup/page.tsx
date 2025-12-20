@@ -53,8 +53,8 @@ export default function SignupPage() {
         throw new Error(signInError.message)
       }
 
-      // Redirect to Compliance Ledger (default home)
-      router.push('/operations/audit')
+      // Redirect to Operations Dashboard (default home)
+      router.push('/operations')
     } catch (err: any) {
       setError(err.message || 'Failed to create account')
       setLoading(false)
