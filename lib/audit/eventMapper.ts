@@ -152,13 +152,6 @@ const EVENT_MAPPINGS: Record<string, EventMapping> = {
     outcome: 'allowed',
     description: 'Hazard removed from job',
   },
-  'mitigation.completed': {
-    title: 'Mitigation Completed',
-    category: 'operations',
-    severity: 'info',
-    outcome: 'allowed',
-    description: 'Risk mitigation action completed',
-  },
   'photo.uploaded': {
     title: 'Photo Uploaded',
     category: 'operations',
