@@ -22,6 +22,8 @@ RiskMate implements a **capability-constrained risk system** where authority is 
 
 **Executive Immutability:** Executives are enforced as read-only observers at both the API layer and database RLS level. They are technically incapable of mutating governance records (jobs, sign-offs, documents, mitigations, sites, audit logs). Any attempted mutation is hard-blocked by database policies and logged as `auth.role_violation`. This separation ensures oversight cannot be self-validated and maintains legal defensibility.
 
+**Executive Immutability:** Executives are enforced as read-only observers at both the API layer and database RLS level. They are technically incapable of mutating governance records (jobs, sign-offs, documents, mitigations, sites, audit logs). Any attempted mutation is hard-blocked by database policies and logged as `auth.role_violation`. This separation ensures oversight cannot be self-validated and maintains legal defensibility.
+
 ---
 
 ## Role Capability Matrix
