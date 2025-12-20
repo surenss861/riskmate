@@ -295,7 +295,10 @@ export function JobsPageContentView(props: JobsPageContentProps) {
       // Revalidate to get fresh data
       props.onJobDeleted()
       
-      setToast({ message: 'Job deleted successfully', type: 'success' })
+      setToast({ 
+        message: `Work record deleted. Entry added to Compliance Ledger. [View in Ledger](/operations/audit)`, 
+        type: 'success' 
+      })
       setDeleteModal({ isOpen: false, jobId: null, jobName: '' })
     } catch (err: any) {
       // Rollback is handled by SWR's rollbackOnError, but we also restore previous state explicitly

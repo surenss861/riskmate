@@ -162,8 +162,9 @@ export default function NewJobPage() {
         }
       }
 
+      // Show success message with Ledger link
       // Redirect to job detail page
-      router.push(`/operations/jobs/${response.data.id}`)
+      router.push(`/operations/jobs/${response.data.id}?created=true`)
     } catch (err: any) {
       setError('We couldn\'t create that job. Your information is still here — check the form and try again. If this continues, refresh the page.')
       setLoading(false)

@@ -140,7 +140,7 @@ export function JobPacketView({
       description: 'Proof of sign-offs + checklist completion',
       icon: CheckCircle,
       contents: [
-        'Sign-offs (role-based)',
+        'Attestations (role-based)',
         'Checklist completion',
         'Evidence photos',
         'Compliance status',
@@ -293,10 +293,10 @@ export function JobPacketView({
           </div>
         </section>
 
-        {/* Mitigations/Checklist */}
+        {/* Controls & Corrective Actions */}
         {mitigations.length > 0 && (
           <section className="mb-8 pb-8 border-b border-white/5">
-            <h3 className={`${typography.h3} mb-4`}>Mitigations & Checklist</h3>
+            <h3 className={`${typography.h3} mb-4`}>Controls & Corrective Actions</h3>
             <div className="space-y-3">
               {mitigations.map((mitigation) => (
                 <div
@@ -324,10 +324,10 @@ export function JobPacketView({
           </section>
         )}
 
-        {/* Audit Timeline */}
+        {/* Chain of Custody */}
         {auditTimeline.length > 0 && (
           <section className="mb-8 pb-8 border-b border-white/5">
-            <h3 className={`${typography.h3} mb-4`}>Audit Timeline</h3>
+            <h3 className={`${typography.h3} mb-4`}>Chain of Custody</h3>
             <div className="space-y-4">
               {auditTimeline.map((event) => (
                 <div key={event.id} className="flex items-start gap-4">
@@ -357,10 +357,10 @@ export function JobPacketView({
           </section>
         )}
 
-        {/* Attachments */}
+        {/* Evidence */}
         <section className="mb-8 pb-8 border-b border-white/5">
           <div className="flex items-center justify-between mb-4">
-            <h3 className={`${typography.h3}`}>Attachments</h3>
+            <h3 className={`${typography.h3}`}>Evidence</h3>
             <button
               onClick={() => fileInputRef.current?.click()}
               disabled={uploading}
@@ -444,9 +444,9 @@ export function JobPacketView({
           )}
         </section>
 
-        {/* Sign-offs (Role-based) */}
+        {/* Attestations (Role-based) */}
         <section>
-          <h3 className={`${typography.h3} mb-4`}>Sign-offs</h3>
+          <h3 className={`${typography.h3} mb-4`}>Attestations</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="p-4 bg-white/5 rounded-lg">
               <p className="text-sm text-white/50 mb-2">Safety Lead</p>

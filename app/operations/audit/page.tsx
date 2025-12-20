@@ -442,7 +442,7 @@ export default function AuditViewPage() {
               </div>
               {sites.length > 0 && (
                 <div>
-                  <label className="text-sm text-white/60 mb-2 block">{industryLang.site}</label>
+                  <label className="text-sm text-white/60 mb-2 block">Operational Context</label>
                   <select
                     value={filters.site}
                     onChange={(e) => setFilters({ ...filters, site: e.target.value })}

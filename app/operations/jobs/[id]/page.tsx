@@ -492,6 +492,12 @@ export default function JobDetailPage() {
         message: 'Couldn\'t save that. Your data is safe — retrying helps.', 
         type: 'error' 
       })
+    } else {
+      // Success - show Ledger confirmation
+      setToast({ 
+        message: `Control updated. Entry added to Compliance Ledger. [View in Ledger](/operations/audit?job_id=${jobId})`, 
+        type: 'success' 
+      })
     } finally {
       setUpdatingMitigation(null)
     }
@@ -851,9 +857,9 @@ export default function JobDetailPage() {
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
               <div className={`${cardStyles.base} ${cardStyles.padding.lg} h-full`}>
                 <div className={spacing.relaxed}>
-                  <h2 className={`${typography.h2} ${spacing.tight}`}>Mitigation Checklist</h2>
+                  <h2 className={`${typography.h2} ${spacing.tight}`}>Controls & Corrective Actions</h2>
                   <p className="text-sm text-white/60">
-                    These are the safety actions required to reduce the job&apos;s overall risk.
+                    These are the safety controls required to reduce the work record&apos;s overall risk.
                   </p>
                 </div>
                 {totalCount === 0 ? (
@@ -1208,8 +1214,8 @@ export default function JobDetailPage() {
                       setEvidenceItems(evidenceList)
                       setToast({ 
                         message: status === 'approved' 
-                          ? 'Evidence approved successfully.' 
-                          : 'Evidence rejected.', 
+                          ? `Evidence approved. Entry added to Compliance Ledger. [View in Ledger](/operations/audit?job_id=${jobId})` 
+                          : `Evidence rejected. Entry added to Compliance Ledger. [View in Ledger](/operations/audit?job_id=${jobId})`, 
                         type: 'success' 
                       })
                     } catch (err) {
@@ -1291,7 +1297,7 @@ export default function JobDetailPage() {
                           document.body.removeChild(link)
                           URL.revokeObjectURL(url)
                           setToast({ 
-                            message: `${packType === 'insurance' ? 'Insurance' : packType === 'audit' ? 'Audit' : packType === 'incident' ? 'Incident' : 'Compliance'} Packet PDF downloaded successfully`, 
+                            message: `${packType === 'insurance' ? 'Insurance' : packType === 'audit' ? 'Audit' : packType === 'incident' ? 'Incident' : 'Compliance'} Packet exported. Entry added to Compliance Ledger. [View in Ledger](/operations/audit?job_id=${jobId})`, 
                             type: 'success' 
                           })
                         }
@@ -1315,7 +1321,6 @@ export default function JobDetailPage() {
                         file_path: doc.file_path,
                         created_at: doc.created_at,
                       })))
-                      setToast({ message: 'File uploaded successfully', type: 'success' })
                     } catch (err) {
                       console.error('Failed to reload attachments:', err)
                     }

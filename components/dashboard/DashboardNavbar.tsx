@@ -13,6 +13,7 @@ interface DashboardNavbarProps {
 
 const ALL_NAV_ITEMS = [
   { label: 'Compliance Ledger', href: '/operations/audit', roles: ['owner', 'admin', 'member', 'safety_lead', 'executive'] },
+  { label: 'Audit Readiness', href: '/operations/audit/readiness', roles: ['owner', 'admin', 'safety_lead'] },
   { label: 'Work Records', href: '/operations/jobs', roles: ['owner', 'admin', 'member', 'safety_lead'] },
   { label: 'Risk Posture', href: '/operations/executive', roles: ['owner', 'admin', 'executive'] },
   { label: 'Account', href: '/operations/account', roles: ['owner', 'admin'] },
