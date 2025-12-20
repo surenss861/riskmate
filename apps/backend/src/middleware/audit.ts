@@ -1,4 +1,5 @@
 import { supabase } from "../lib/supabaseClient";
+import { invalidateExecutiveCache } from "../routes/executive";
 
 export type AuditTargetType =
   | "job"
@@ -108,6 +109,9 @@ export async function recordAuditLog(entry: AuditLogEntry) {
 
     if (error) {
       console.error("Audit log insert failed:", error);
+    } else {
+      // Invalidate executive cache when audit log is written
+      invalidateExecutiveCache(entry.organizationId);
     }
   } catch (err) {
     console.error("Audit log exception:", err);
