@@ -476,7 +476,7 @@ auditRouter.get('/events', authenticate as unknown as express.RequestHandler, as
           },
         })
         res.setHeader('X-Error-ID', errorId)
-        logErrorForSupport(500, 'RLS_RECURSION_ERROR', requestId, organization_id, errorResponse.message, errorResponse.internalMessage, 'system', 'error', '/api/audit/events', { query_params: req.query, db_error: error })
+        logErrorForSupport(500, 'RLS_RECURSION_ERROR', requestId, organization_id, errorResponse.message, errorResponse.internalMessage, 'system', 'error', '/api/audit/events')
         return res.status(500).json(errorResponse)
       }
       
@@ -498,7 +498,7 @@ auditRouter.get('/events', authenticate as unknown as express.RequestHandler, as
         rawError: process.env.NODE_ENV === 'development' ? error : undefined,
       })
       res.setHeader('X-Error-ID', errorId)
-      logErrorForSupport(500, 'QUERY_ERROR', requestId, organization_id, errorResponse.message, errorResponse.internalMessage, 'system', 'error', '/api/audit/events', { query_params: req.query, db_error: error })
+      logErrorForSupport(500, 'QUERY_ERROR', requestId, organization_id, errorResponse.message, errorResponse.internalMessage, 'system', 'error', '/api/audit/events')
       return res.status(500).json(errorResponse)
     }
 
@@ -623,7 +623,7 @@ auditRouter.get('/events', authenticate as unknown as express.RequestHandler, as
       } : undefined,
     })
     res.setHeader('X-Error-ID', errorId)
-    logErrorForSupport(500, 'AUDIT_QUERY_ERROR', requestId, authReq.user?.organization_id, errorResponse.message, errorResponse.internalMessage, 'system', 'error', '/api/audit/events', { query_params: req.query, error_stack: err?.stack })
+    logErrorForSupport(500, 'AUDIT_QUERY_ERROR', requestId, authReq.user?.organization_id, errorResponse.message, errorResponse.internalMessage, 'system', 'error', '/api/audit/events')
     res.status(500).json(errorResponse)
   }
 })
