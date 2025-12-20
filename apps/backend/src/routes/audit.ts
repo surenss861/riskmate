@@ -1384,7 +1384,7 @@ auditRouter.post('/assign', authenticate as unknown as express.RequestHandler, a
   const requestId = authReq.requestId || 'unknown'
   
   try {
-    const { organization_id, id: userId, role: userRole, email: userEmail } = authReq.user
+    const { organization_id, id: userId, role: userRole = 'member', email: userEmail } = authReq.user
     const { target_type, target_id, owner_id, due_date, severity_override, note } = req.body
     const idempotencyKey = req.headers['idempotency-key'] as string
 
