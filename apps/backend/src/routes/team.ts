@@ -307,7 +307,7 @@ teamRouter.delete("/invite/:id", async (req: express.Request, res: express.Respo
 
     const { data: inviteRow, error: inviteFetchError } = await supabase
       .from("organization_invites")
-      .select("user_id")
+      .select("user_id, email")
       .eq("id", authReq.params.id)
       .eq("organization_id", authReq.user.organization_id)
       .is("accepted_at", null)
