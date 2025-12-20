@@ -2,8 +2,15 @@
 -- The policy was querying organization_members from within an organization_members policy
 -- Solution: Use SECURITY DEFINER helper function that bypasses RLS
 
--- The helper function is already created in 20250122000000_fix_sites_rls_policy.sql
--- This migration fixes the organization_members policy to use it
+-- Ensure the helper function exists (in case it wasn't created in previous migration)
+CREATE OR REPLACE FUNCTION is_current_user_admin()
+RETURNS BOOLEAN AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM users
+    WHERE id = auth.uid()
+    AND role IN ('owner', 'admin')
+  );
+$$ LANGUAGE sql SECURITY DEFINER;
 
 -- Drop the problematic policy
 DROP POLICY IF EXISTS "Admins can manage members in their organization" ON organization_members;
