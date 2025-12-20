@@ -187,11 +187,9 @@ export function applyAuditFilters<T extends { eq: any; gte: any; lte: any; in: a
   // If both are provided, category filter takes precedence
   if (view && !category) {
     if (view === 'review-queue') {
-      // Review Queue: blocked actions, critical/material events, flagged items
-      // Use separate filters instead of complex .or() for better compatibility
-      query = query.or('outcome.eq.blocked,severity.in.(material,critical)') as T
-      // Note: event_name.ilike filters need to be applied separately or combined differently
-      // For now, we'll handle flagged items via the severity filter
+      // Review Queue: blocked actions OR critical/material severity
+      // Simplified to avoid complex .or() syntax issues
+      query = query.or('outcome.eq.blocked,severity.eq.material,severity.eq.critical') as T
     } else if (view === 'insurance-ready') {
       // Insurance-Ready: completed work records with verified controls and attestations
       query = query.eq('category', 'operations').in('event_name', ['job.completed', 'control.verified', 'evidence.uploaded', 'attestation.created']) as T
@@ -199,8 +197,8 @@ export function applyAuditFilters<T extends { eq: any; gte: any; lte: any; in: a
       // Governance Enforcement: violations and blocked actions
       query = query.or('category.eq.governance,outcome.eq.blocked') as T
     } else if (view === 'incident-review') {
-      // Incident Review: incidents, corrective actions, high severity
-      query = query.or('category.eq.incident_review,severity.in.(material,critical)') as T
+      // Incident Review: incidents OR high severity
+      query = query.or('category.eq.incident_review,severity.eq.material,severity.eq.critical') as T
     } else if (view === 'access-review') {
       // Access Review: access changes, role changes, login events
       query = query.eq('category', 'access_review') as T
