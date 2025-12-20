@@ -258,7 +258,7 @@ export default function ExecutiveSnapshotPage() {
             className="mb-8"
           >
             <h2 className="text-sm font-semibold text-white/80 mb-4">
-              Where you're exposed
+              Where you&apos;re exposed
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {/* High Risk Jobs */}
