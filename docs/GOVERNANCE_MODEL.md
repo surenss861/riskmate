@@ -121,6 +121,8 @@ RiskMate implements a **capability-constrained risk system** where authority is 
 
 **Purpose:** Oversight and visibility without operational interference.
 
+**Critical Constraint:** Executives are server-enforced as read-only observers. They are technically incapable of mutating governance records at the database level. Oversight and authority are intentionally separated.
+
 **Capabilities:**
 - View all jobs (read-only)
 - View flagged jobs
@@ -141,6 +143,16 @@ RiskMate implements a **capability-constrained risk system** where authority is 
 - Applied to: `PATCH /api/jobs/:id`, `PATCH /api/jobs/:id/mitigations/:id`, `PATCH /api/jobs/:id/flag`
 
 **Technical Enforcement:**
+- **API Layer:** All write endpoints check role and return `AUTH_ROLE_READ_ONLY` (403) for executives
+- **Database Layer:** RLS policies hard-block all UPDATE, INSERT, DELETE operations for executives on:
+  - `jobs` (update, delete)
+  - `job_signoffs` (insert, update)
+  - `documents` (insert, update, delete)
+  - `mitigation_items` (update)
+  - `sites` (update, delete)
+  - `audit_logs` (insert)
+- **Audit:** Any attempted mutation is logged as `auth.role_violation` with full context
+
 ```typescript
 if (role === 'executive') {
   return res.status(403).json({
