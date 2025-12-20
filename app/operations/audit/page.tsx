@@ -783,10 +783,18 @@ export default function AuditViewPage() {
 
   return (
     <ProtectedRoute>
-      <div className="min-h-screen bg-[#0A0A0A] text-white">
+      <div className="relative min-h-screen overflow-hidden bg-[#0A0A0A] text-white">
+        {/* Ambient Gradient Backdrop - Matching landing page */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 -z-10"
+        >
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(249,115,22,0.05),_transparent_55%)]" />
+        </div>
+
         <DashboardNavbar />
         
-        <div className="max-w-7xl mx-auto px-6 py-8">
+        <div className="relative max-w-7xl mx-auto px-6 pt-24 pb-14">
           {/* Header */}
           <div className="mb-8">
             <div className="flex items-center gap-3 mb-4">
@@ -835,7 +843,7 @@ export default function AuditViewPage() {
 
           {/* Summary Cards */}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
-            <div className={cardStyles.base + ' p-4'}>
+            <div className={`${cardStyles.base} ${cardStyles.padding.sm} rounded-xl`}>
               <div className="text-sm text-white/60 mb-1">Total Events</div>
               <div className="text-2xl font-bold text-white">{summaryMetrics.totalEvents}</div>
             </div>
@@ -862,7 +870,7 @@ export default function AuditViewPage() {
           </div>
 
           {/* Filters */}
-          <div className={`${cardStyles.base} p-6 mb-6`}>
+          <div className={`${cardStyles.base} ${cardStyles.padding.md} rounded-xl mb-6`}>
             <div className="flex items-center gap-4 mb-4">
               <Filter className="w-5 h-5 text-white/60" />
               <h2 className={`${typography.h2}`}>Filters</h2>

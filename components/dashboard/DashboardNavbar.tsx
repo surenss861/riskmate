@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { motion } from 'framer-motion'
 import RiskMateLogo from '@/components/RiskMateLogo'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
@@ -24,6 +25,23 @@ export function DashboardNavbar({ email, onLogout }: DashboardNavbarProps) {
   const pathname = usePathname()
   const [userRole, setUserRole] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [scrolled, setScrolled] = useState(false)
+  const [navOpacity, setNavOpacity] = useState(0.4)
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const scrollY = window.scrollY
+      setScrolled(scrollY > 50)
+      // Dynamic opacity based on scroll (matching landing page)
+      if (scrollY > 50) {
+        setNavOpacity(Math.min(0.6 + (scrollY - 50) / 200, 0.8))
+      } else {
+        setNavOpacity(0.4)
+      }
+    }
+    window.addEventListener('scroll', handleScroll)
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [])
 
   useEffect(() => {
     const loadUserRole = async () => {
@@ -62,12 +80,26 @@ export function DashboardNavbar({ email, onLogout }: DashboardNavbarProps) {
   })
 
   return (
-    <header className="sticky top-0 z-20 border-b border-white/10 bg-black/40 backdrop-blur-2xl">
-      <div className="mx-auto flex max-w-7xl flex-col gap-4 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+    <nav 
+      className={`fixed top-0 left-0 w-full z-50 transition-all duration-300 ${
+        scrolled 
+          ? 'backdrop-blur-xl border-b border-white/10' 
+          : 'backdrop-blur-md border-b border-white/5'
+      }`}
+      style={{ backgroundColor: `rgba(0, 0, 0, ${navOpacity})` }}
+    >
+      <div className="max-w-7xl mx-auto flex flex-col gap-4 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center justify-between gap-6">
-          <RiskMateLogo size="md" showText />
+          <motion.div 
+            className="flex items-center gap-3"
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.4 }}
+          >
+            <RiskMateLogo size="sm" showText />
+          </motion.div>
           {!loading && (
-            <nav className="hidden items-center gap-5 md:flex">
+            <nav className="hidden items-center gap-6 md:flex">
               {navItems.map((item) => {
                 const isActive =
                   pathname === item.href || pathname.startsWith(`${item.href}/`)
@@ -102,7 +134,7 @@ export function DashboardNavbar({ email, onLogout }: DashboardNavbarProps) {
           )}
         </div>
       </div>
-    </header>
+    </nav>
   )
 }
 
