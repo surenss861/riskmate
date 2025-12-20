@@ -105,6 +105,7 @@ app.use("/api/team", teamRouter);
 app.use("/api/account", accountRouter);
 app.use("/api/sites", sitesRouter);
 app.use("/api/audit", auditRouter);
+app.use("/api/executive", executiveRouter);
 
 // 404 handler
 app.use((req, res) => {

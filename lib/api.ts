@@ -596,6 +596,30 @@ export const accountApi = {
   },
 };
 
+export const executiveApi = {
+  getRiskPosture: async () => {
+    return apiRequest<{
+      data: {
+        exposure_level: 'low' | 'moderate' | 'high'
+        unresolved_violations: number
+        open_reviews: number
+        high_risk_jobs: number
+        open_incidents: number
+        pending_signoffs: number
+        signed_signoffs: number
+        proof_packs_generated: number
+        last_material_event_at: string | null
+        confidence_statement: string
+        ledger_integrity: 'verified' | 'pending' | 'error'
+        flagged_jobs: number
+        signed_jobs: number
+        unsigned_jobs: number
+        recent_violations: number
+      }
+    }>('/api/executive/risk-posture')
+  },
+}
+
 export const auditApi = {
   getEvents: async (params?: {
     category?: 'governance' | 'operations' | 'access'
