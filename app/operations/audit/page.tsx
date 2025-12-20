@@ -646,14 +646,119 @@ export default function AuditViewPage() {
     alert('Please select an incident from the list to close')
   }
 
-  const handleRevokeAccess = (view: string) => {
-    // TODO: Implement access revocation workflow
-    alert(`Revoke access for ${view} - Coming soon`)
+  const handleRevokeAccessClick = (view: string) => {
+    alert('Please select a user from the Access Review view to revoke access')
   }
 
-  const handleFlagSuspicious = (view: string) => {
-    // TODO: Implement suspicious access flagging workflow
-    alert(`Flag suspicious access for ${view} - Coming soon`)
+  const handleFlagSuspiciousClick = (view: string) => {
+    alert('Please select a user or login event from the Access Review view to flag')
+  }
+
+  const [revokeAccessModalOpen, setRevokeAccessModalOpen] = useState(false)
+  const [flagSuspiciousModalOpen, setFlagSuspiciousModalOpen] = useState(false)
+  const [selectedUser, setSelectedUser] = useState<{
+    userId?: string
+    userName?: string
+    userRole?: string
+  } | null>(null)
+
+  const handleRevokeAccess = async (revocation: {
+    action_type: 'disable_user' | 'downgrade_role' | 'revoke_sessions'
+    reason: string
+    new_role?: string
+  }) => {
+    if (!selectedUser?.userId) return
+
+    try {
+      const token = await (async () => {
+        const supabase = createSupabaseBrowserClient()
+        const { data: { session } } = await supabase.auth.getSession()
+        return session?.access_token || null
+      })()
+
+      const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || ''
+      const response = await fetch(`${API_URL}/api/audit/access/revoke`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+        body: JSON.stringify({
+          target_user_id: selectedUser.userId,
+          ...revocation,
+        }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}))
+        throw new Error(error.message || 'Failed to revoke access')
+      }
+
+      setToast({
+        message: `Access revoked. Entry added to Compliance Ledger.`,
+        type: 'success',
+      })
+      
+      loadAuditEvents()
+    } catch (err: any) {
+      console.error('Failed to revoke access:', err)
+      setToast({
+        message: err.message || 'Failed to revoke access. Please try again.',
+        type: 'error',
+      })
+      throw err
+    }
+  }
+
+  const handleFlagSuspicious = async (flag: {
+    reason: string
+    notes?: string
+    severity: 'critical' | 'material' | 'info'
+    open_incident: boolean
+  }) => {
+    if (!selectedUser?.userId) return
+
+    try {
+      const token = await (async () => {
+        const supabase = createSupabaseBrowserClient()
+        const { data: { session } } = await supabase.auth.getSession()
+        return session?.access_token || null
+      })()
+
+      const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || ''
+      const response = await fetch(`${API_URL}/api/audit/access/flag-suspicious`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+        body: JSON.stringify({
+          target_user_id: selectedUser.userId,
+          ...flag,
+        }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}))
+        throw new Error(error.message || 'Failed to flag suspicious access')
+      }
+
+      const data = await response.json()
+
+      setToast({
+        message: `Suspicious access flagged. Entry added to Compliance Ledger.${data.incident_opened ? ' Security incident opened.' : ''}`,
+        type: 'success',
+      })
+      
+      loadAuditEvents()
+    } catch (err: any) {
+      console.error('Failed to flag suspicious access:', err)
+      setToast({
+        message: err.message || 'Failed to flag suspicious access. Please try again.',
+        type: 'error',
+      })
+      throw err
+    }
   }
 
   const handleOpenEvidence = (jobId?: string, jobName?: string, siteName?: string) => {
