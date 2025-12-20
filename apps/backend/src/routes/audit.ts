@@ -1141,27 +1141,20 @@ auditRouter.post('/export/pack', authenticate as unknown as express.RequestHandl
     try {
       const { generateLedgerExportPDF } = await import('../utils/pdf/ledgerExport')
       
-      // Fetch events (using direct Supabase query instead of HTTP call)
+      // Fetch events using unified filter logic (same as GET /events)
       let eventsQuery = supabase
         .from('audit_logs')
         .select('*')
-        .eq('organization_id', organization_id)
         .order('created_at', { ascending: false })
         .limit(1000)
 
-      if (job_id) eventsQuery = eventsQuery.eq('job_id', job_id)
-      if (time_range && time_range !== 'all') {
-        const now = new Date()
-        let cutoff = new Date()
-        if (time_range === '24h') {
-          cutoff.setHours(now.getHours() - 24)
-        } else if (time_range === '7d') {
-          cutoff.setDate(now.getDate() - 7)
-        } else if (time_range === '30d') {
-          cutoff.setDate(now.getDate() - 30)
-        }
-        eventsQuery = eventsQuery.gte('created_at', cutoff.toISOString())
-      }
+      // Apply unified filters for consistency
+      eventsQuery = applyAuditFilters(eventsQuery, {
+        organizationId: organization_id,
+        job_id: job_id || undefined,
+        site_id: site_id || undefined,
+        time_range: time_range || '30d',
+      })
 
       const { data: eventsData, error: eventsError } = await eventsQuery
 
@@ -1316,7 +1309,6 @@ auditRouter.post('/export/pack', authenticate as unknown as express.RequestHandl
 
     // Update archive with correct manifest
     archive.append(JSON.stringify(manifest, null, 2), { name: `manifest_${packId}.json` })
-    archive.append(JSON.stringify(manifest, null, 2), { name: `manifest_${packId}.json` })
 
     await archive.finalize()
 
@@ -1333,24 +1325,22 @@ auditRouter.post('/export/pack', authenticate as unknown as express.RequestHandl
     res.send(zipBuffer)
 
     // Store export pack metadata in ledger (immutable receipt)
-    await supabase.from('audit_logs').insert({
-      organization_id,
-      actor_id: userId,
-      event_name: 'export.audit_pack',
-      target_type: 'system',
-      category: 'operations',
-      outcome: 'allowed',
-      severity: 'info',
-      summary: `Audit Pack exported (ID: ${packId})`,
+    await recordAuditLog({
+      organizationId: organization_id,
+      actorId: userId,
+      eventName: 'export.pack.generated',
+      targetType: 'system',
+      targetId: packId,
       metadata: {
         format: 'zip',
         export_type: 'audit_pack',
         pack_id: packId,
-        filters: req.body,
+        filters: { time_range, job_id, site_id },
         file_hashes: {
           pdf: pdfHash,
           controls_csv: controlsHash,
           attestations_csv: attestationsHash,
+          manifest: manifestHash,
         },
         counts: {
           ledger_events: events.length,
@@ -1360,6 +1350,10 @@ auditRouter.post('/export/pack', authenticate as unknown as express.RequestHandl
         generated_at: new Date().toISOString(),
         generated_by: userData?.full_name || 'Unknown',
         generated_by_role: userData?.role || 'Unknown',
+        generated_by_email: userData?.email || null,
+        request_id: requestId,
+        endpoint: '/api/audit/export/pack',
+        summary: `Audit Pack exported (ID: ${packId})`,
       },
     })
   } catch (err: any) {
