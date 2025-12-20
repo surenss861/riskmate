@@ -125,6 +125,11 @@ export default function AuditViewPage() {
           ? undefined // 'governance' is not a valid backend category, omit it
           : activeTab as 'operations' | 'access' | undefined) // Only send valid categories
       
+      // Type guard: only pass valid view values (exclude 'custom')
+      const viewForRequest = hasView 
+        ? (filters.savedView as 'review-queue' | 'insurance-ready' | 'governance-enforcement' | 'incident-review' | 'access-review')
+        : undefined
+      
       const response = await auditApi.getEvents({
         category: categoryForRequest,
         site_id: filters.site || undefined,
@@ -133,7 +138,7 @@ export default function AuditViewPage() {
         severity: filters.severity || undefined,
         outcome: filters.outcome || undefined,
         time_range: filters.timeRange,
-        view: hasView ? filters.savedView : undefined,
+        view: viewForRequest,
         limit: 500,
       })
 
