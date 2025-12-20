@@ -316,10 +316,27 @@ export default function AuditViewPage() {
         <div className="max-w-7xl mx-auto px-6 py-8">
           {/* Header */}
           <div className="mb-8">
-            <h1 className={`${typography.h1} mb-2`}>Compliance Ledger</h1>
-            <p className="text-white/60 text-sm">
-              Complete governance evidence trail of all actions, enforcement events, and access changes. Export-ready for compliance, legal discovery, and regulatory review.
+            <div className="flex items-center gap-3 mb-4">
+              <Shield className="w-6 h-6 text-[#F97316]" />
+              <div>
+                <p className="text-xs uppercase tracking-[0.42em] text-white/50">
+                  Compliance Ledger
+                </p>
+                <h1 className={`${typography.h1} mt-2`}>
+                  Compliance Ledger
+                </h1>
+              </div>
+            </div>
+            <p className="text-white/60 max-w-2xl mb-4">
+              Immutable governance record of all actions, decisions, and evidence. This is your single source of truth for audits, claims, and disputes.
             </p>
+            <div className="flex items-center gap-4 text-xs text-white/50 mb-2">
+              <Shield className="w-4 h-4" />
+              <span>Executive access is read-only by database policy. Oversight and authority are intentionally separated.</span>
+            </div>
+            <div className="flex items-center gap-2 text-xs text-white/40 italic">
+              <span>All work records, controls, evidence, and attestations feed into this Ledger.</span>
+            </div>
           </div>
 
           {/* Saved View Cards */}
