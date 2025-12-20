@@ -659,6 +659,12 @@ export default function JobDetailPage() {
               >
                 View Audit-Ready Report
               </button>
+              <button
+                onClick={() => router.push(`/operations/audit?job_id=${jobId}`)}
+                className={buttonStyles.secondary}
+              >
+                View in Compliance Ledger
+              </button>
             </div>
             </div>
           </div>

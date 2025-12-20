@@ -790,6 +790,25 @@ export function JobsPageContentView(props: JobsPageContentProps) {
                   </div>
                 ),
               },
+              {
+                id: 'ledger',
+                header: '',
+                accessor: () => '',
+                sortable: false,
+                width: '80px',
+                render: (_: any, job: any) => (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      window.location.href = `/operations/audit?job_id=${job.id}`
+                    }}
+                    className="text-xs text-white/40 hover:text-[#F97316] transition-colors underline"
+                    title="View all actions for this job in Compliance Ledger"
+                  >
+                    Ledger
+                  </button>
+                ),
+              },
               ...(canArchive || canDelete ? [{
                 id: 'actions',
                 header: 'Actions',

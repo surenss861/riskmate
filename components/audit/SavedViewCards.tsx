@@ -5,12 +5,20 @@ import { buttonStyles } from '@/lib/styles/design-system'
 
 interface SavedViewCardsProps {
   activeView: string
-  onSelectView: (view: 'insurance-ready' | 'governance-enforcement' | 'incident-review' | 'access-review' | '') => void
+  onSelectView: (view: 'review-queue' | 'insurance-ready' | 'governance-enforcement' | 'incident-review' | 'access-review' | '') => void
   onExport: (format: 'csv' | 'json', view: string) => void
 }
 
 export function SavedViewCards({ activeView, onSelectView, onExport }: SavedViewCardsProps) {
   const views = [
+    {
+      id: 'review-queue',
+      title: 'Review Queue',
+      icon: AlertTriangle,
+      description: 'Jobs flagged for review, missing sign-offs, critical events, and blocked actions — what needs attention now.',
+      color: 'bg-orange-500/20 border-orange-500/30 text-orange-400',
+      hoverColor: 'hover:bg-orange-500/30',
+    },
     {
       id: 'insurance-ready',
       title: 'Insurance-Ready',
@@ -46,7 +54,7 @@ export function SavedViewCards({ activeView, onSelectView, onExport }: SavedView
   ]
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
       {views.map((view) => {
         const Icon = view.icon
         const isActive = activeView === view.id

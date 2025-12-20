@@ -607,7 +607,7 @@ export const auditApi = {
     time_range?: '24h' | '7d' | '30d' | 'all' | 'custom'
     start_date?: string
     end_date?: string
-    view?: 'insurance-ready' | 'governance-enforcement' | 'incident-review' | 'access-review'
+    view?: 'review-queue' | 'insurance-ready' | 'governance-enforcement' | 'incident-review' | 'access-review'
     cursor?: string
     limit?: number
     debug?: boolean
@@ -651,7 +651,7 @@ export const auditApi = {
     time_range?: '24h' | '7d' | '30d' | 'all' | 'custom'
     start_date?: string
     end_date?: string
-    view?: 'insurance-ready' | 'governance-enforcement' | 'incident-review' | 'access-review'
+    view?: 'review-queue' | 'insurance-ready' | 'governance-enforcement' | 'incident-review' | 'access-review'
   }) => {
     if (params.format === 'csv' || params.format === 'json') {
       const token = await getAuthToken()

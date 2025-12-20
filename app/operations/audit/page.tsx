@@ -34,7 +34,7 @@ interface AuditEvent {
 }
 
 type TimeRange = '24h' | '7d' | '30d' | 'custom' | 'all'
-type SavedView = 'insurance-ready' | 'governance-enforcement' | 'incident-review' | 'access-review' | 'custom'
+type SavedView = 'review-queue' | 'insurance-ready' | 'governance-enforcement' | 'incident-review' | 'access-review' | 'custom'
 
 export default function AuditViewPage() {
   const router = useRouter()
@@ -625,6 +625,27 @@ export default function AuditViewPage() {
                                           <span className="font-medium">Owner:</span> {mapping.exposure.owner}
                                         </div>
                                       )}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                              {/* Review context for flagged/review events */}
+                              {event.event_type?.includes('flag') && event.metadata && (
+                                <div className="mt-2 p-3 bg-blue-500/10 border border-blue-500/30 rounded text-sm">
+                                  <div className="font-medium text-blue-200 mb-2">Review Context:</div>
+                                  {event.metadata.flag_reason && (
+                                    <div className="text-xs text-white/90 mb-1">
+                                      <span className="font-medium">Reason:</span> {event.metadata.flag_reason}
+                                    </div>
+                                  )}
+                                  {event.metadata.review_owner_role && (
+                                    <div className="text-xs text-white/90 mb-1">
+                                      <span className="font-medium">Assigned To:</span> {event.metadata.review_owner_role}
+                                    </div>
+                                  )}
+                                  {event.metadata.review_due_at && (
+                                    <div className="text-xs text-white/90">
+                                      <span className="font-medium">Due:</span> {new Date(event.metadata.review_due_at).toLocaleDateString()}
                                     </div>
                                   )}
                                 </div>

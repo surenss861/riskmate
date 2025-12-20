@@ -749,6 +749,12 @@ jobsRouter.patch("/:id", authenticate as unknown as express.RequestHandler, asyn
       });
     }
 
+    // Check if risk score changed
+    const oldRiskScore = existingJob.risk_score
+    const newRiskScore = updatedJob.risk_score
+    const riskScoreChanged = oldRiskScore !== newRiskScore
+
+    // Log job update
     recordAuditLog({
       organizationId: organization_id,
       actorId: userId,
@@ -762,6 +768,25 @@ jobsRouter.patch("/:id", authenticate as unknown as express.RequestHandler, asyn
           : undefined,
       },
     });
+
+    // If risk score changed, log separate event
+    if (riskScoreChanged) {
+      recordAuditLog({
+        organizationId: organization_id,
+        actorId: userId,
+        eventName: "job.risk_score_changed",
+        targetType: "job",
+        targetId: jobId,
+        metadata: {
+          old_risk_score: oldRiskScore,
+          new_risk_score: newRiskScore,
+          old_risk_level: existingJob.risk_level,
+          new_risk_level: updatedJob.risk_level,
+          risk_factor_codes: Array.isArray(risk_factor_codes) ? risk_factor_codes : undefined,
+          trigger: "risk_factor_update",
+        },
+      });
+    }
 
     invalidateJobReportCache(organization_id, jobId);
 
@@ -1300,8 +1325,14 @@ jobsRouter.patch("/:id/flag", authenticate as unknown as express.RequestHandler,
       return res.status(500).json(errorResponse);
     }
 
-    // Log audit event
+    // Log audit event with comprehensive review context
     try {
+      const { data: jobData } = await supabase
+        .from("jobs")
+        .select("client_name, risk_score, risk_level, status")
+        .eq("id", id)
+        .single()
+
       await recordAuditLog({
         organizationId: organization_id,
         actorId: userId,
@@ -1311,6 +1342,13 @@ jobsRouter.patch("/:id/flag", authenticate as unknown as express.RequestHandler,
         metadata: {
           flagged: updateData.review_flag,
           flagged_at: updateData.flagged_at,
+          job_name: jobData?.client_name,
+          risk_score: jobData?.risk_score,
+          risk_level: jobData?.risk_level,
+          job_status: jobData?.status,
+          flag_reason: req.body.flag_reason || "Manual flag",
+          review_owner_role: req.body.review_owner_role || "safety_lead",
+          review_due_at: req.body.review_due_at,
         },
       });
     } catch (auditError) {

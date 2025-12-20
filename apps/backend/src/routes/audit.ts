@@ -85,7 +85,15 @@ auditRouter.get('/events', authenticate as unknown as express.RequestHandler, as
     }
 
     // Apply saved view presets
-    if (view === 'governance-enforcement') {
+    if (view === 'review-queue') {
+      // Review Queue: flagged jobs, critical/material events, missing signoffs, blocked actions
+      query = query.or(
+        'event_name.ilike.%flagged%,event_name.ilike.%flag%,' +
+        'severity.eq.critical,severity.eq.material,' +
+        'event_name.ilike.%signoff%,' +
+        'outcome.eq.blocked'
+      )
+    } else if (view === 'governance-enforcement') {
       query = query.eq('category', 'governance').eq('outcome', 'blocked')
     } else if (view === 'incident-review') {
       query = query.or('event_name.ilike.%flag%,event_name.ilike.%incident%')

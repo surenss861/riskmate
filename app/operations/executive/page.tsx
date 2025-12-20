@@ -273,6 +273,14 @@ export default function ExecutiveSnapshotPage() {
           >
             <p className="text-sm text-white/60">
               This view is read-only. All data is timestamped and audit-logged. For detailed analysis, contact your Safety Lead or Operations Manager.
+              <div className="mt-4">
+                <a
+                  href="/operations/audit?view=review-queue&severity=material"
+                  className="text-sm text-[#F97316] hover:text-[#FB923C] underline"
+                >
+                  View complete evidence in Compliance Ledger →
+                </a>
+              </div>
             </p>
           </motion.div>
         </div>
