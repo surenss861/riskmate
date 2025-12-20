@@ -47,7 +47,7 @@ This moves RiskMate out of "trust-based SaaS" and into infrastructure.
 
 This line works because it's not marketing:
 
-> **"RiskMate records, enforces, and proves who was accountable — and when."**
+> **"RiskMate records, enforces, and proves who was accountable — and when — and executives cannot change the record."**
 
 Every word in that sentence is backed by:
 - UI

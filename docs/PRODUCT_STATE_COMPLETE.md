@@ -69,7 +69,7 @@ These are defensible system properties:
 
 Buyers can understand RiskMate in one sentence:
 
-> **"RiskMate records, enforces, and proves who was accountable — and when."**
+> **"RiskMate records, enforces, and proves who was accountable — and when — and executives cannot change the record."**
 
 That's the bar. We're already clearing it.
 
