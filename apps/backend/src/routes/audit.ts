@@ -1229,17 +1229,35 @@ auditRouter.post('/export/pack', authenticate as unknown as express.RequestHandl
     res.setHeader('Content-Disposition', `attachment; filename="audit-pack-${packId}.zip"`)
     res.send(zipBuffer)
 
-    // Log export event
+    // Store export pack metadata in ledger (immutable receipt)
     await supabase.from('audit_logs').insert({
       organization_id,
       actor_id: userId,
-      event_name: 'audit.export',
+      event_name: 'export.audit_pack',
       target_type: 'system',
       category: 'operations',
       outcome: 'allowed',
       severity: 'info',
-      summary: `Exported Audit Pack (ID: ${packId})`,
-      metadata: { format: 'zip', export_type: 'audit_pack', pack_id: packId, filters: req.body },
+      summary: `Audit Pack exported (ID: ${packId})`,
+      metadata: {
+        format: 'zip',
+        export_type: 'audit_pack',
+        pack_id: packId,
+        filters: req.body,
+        file_hashes: {
+          pdf: pdfHash,
+          controls_csv: controlsHash,
+          attestations_csv: attestationsHash,
+        },
+        counts: {
+          ledger_events: events.length,
+          controls: controlsCount,
+          attestations: attestationsCount,
+        },
+        generated_at: new Date().toISOString(),
+        generated_by: userData?.full_name || 'Unknown',
+        generated_by_role: userData?.role || 'Unknown',
+      },
     })
   } catch (err: any) {
     const { response: errorResponse, errorId } = createErrorResponse({

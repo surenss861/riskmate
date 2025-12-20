@@ -9,6 +9,7 @@ import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { cardStyles, buttonStyles, typography } from '@/lib/styles/design-system'
 import { DashboardNavbar } from '@/components/dashboard/DashboardNavbar'
 import { useRouter } from 'next/navigation'
+import { terms } from '@/lib/terms'
 
 interface ReadinessItem {
   id: string
@@ -74,8 +75,8 @@ export default function AuditReadinessPage() {
             readinessItems.push({
               id: `missing-evidence-${job.id}`,
               type: 'missing_evidence',
-              title: `Missing evidence for high-risk work record`,
-              description: `${job.client_name} (Risk: ${job.risk_score || 'N/A'}) has no evidence attached`,
+              title: `Missing ${terms.evidence.singular.toLowerCase()} for high-risk ${terms.workRecord.singular.toLowerCase()}`,
+              description: `${job.client_name} (Risk: ${job.risk_score || 'N/A'}) has no ${terms.evidence.singular.toLowerCase()} attached`,
               severity: job.risk_score && job.risk_score > 75 ? 'critical' : 'material',
               job_id: job.id,
               job_name: job.client_name,
@@ -106,8 +107,8 @@ export default function AuditReadinessPage() {
             readinessItems.push({
               id: `unsigned-${job.id}`,
               type: 'unsigned_attestation',
-              title: `Missing attestation for high-risk work record`,
-              description: `${job.client_name} requires role-based attestation`,
+              title: `Missing ${terms.attestation.singular.toLowerCase()} for high-risk ${terms.workRecord.singular.toLowerCase()}`,
+              description: `${job.client_name} requires role-based ${terms.attestation.singular.toLowerCase()}`,
               severity: 'material',
               job_id: job.id,
               job_name: job.client_name,
@@ -149,8 +150,8 @@ export default function AuditReadinessPage() {
               readinessItems.push({
                 id: `overdue-control-${job.id}`,
                 type: 'overdue_control',
-                title: `${incomplete.length} overdue control${incomplete.length > 1 ? 's' : ''} for work record`,
-                description: `${job.client_name} has ${incomplete.length} incomplete control${incomplete.length > 1 ? 's' : ''}`,
+                title: `${incomplete.length} overdue ${terms.control.singular.toLowerCase()}${incomplete.length > 1 ? 's' : ''} for ${terms.workRecord.singular.toLowerCase()}`,
+                description: `${job.client_name} has ${incomplete.length} incomplete ${terms.control.singular.toLowerCase()}${incomplete.length > 1 ? 's' : ''}`,
                 severity: job.risk_score && job.risk_score > 75 ? 'critical' : 'material',
                 job_id: job.id,
                 job_name: job.client_name,
@@ -226,11 +227,11 @@ export default function AuditReadinessPage() {
   const getTypeLabel = (type: string) => {
     switch (type) {
       case 'missing_evidence':
-        return 'Missing Evidence'
+        return `Missing ${terms.evidence.singular}`
       case 'unsigned_attestation':
-        return 'Missing Attestation'
+        return `Missing ${terms.attestation.singular}`
       case 'overdue_control':
-        return 'Overdue Control'
+        return `Overdue ${terms.control.singular}`
       case 'violation_attempt':
         return 'Violation Attempt'
       default:
@@ -309,7 +310,7 @@ export default function AuditReadinessPage() {
               <CheckCircle className="w-16 h-16 text-green-400 mx-auto mb-4" />
               <h3 className={`${typography.h2} mb-2`}>All Clear</h3>
               <p className="text-white/60 mb-6">
-                Your governance record is audit-ready. All evidence, attestations, and controls are complete.
+                Your governance record is audit-ready. All {terms.evidence.plural.toLowerCase()}, {terms.attestation.plural.toLowerCase()}, and {terms.control.plural.toLowerCase()} are complete.
               </p>
               <button
                 onClick={() => router.push('/operations/audit')}
@@ -348,7 +349,7 @@ export default function AuditReadinessPage() {
                       <p className="text-sm text-white/70 mb-4">{item.description}</p>
                       {item.job_name && (
                         <p className="text-xs text-white/50 mb-4">
-                          Work Record: {item.job_name}
+                          {terms.workRecord.singular}: {item.job_name}
                         </p>
                       )}
                       <button

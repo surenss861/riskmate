@@ -13,6 +13,7 @@ import { getEventMapping, categorizeEvent, type EventCategory, type EventSeverit
 import { getIndustryLanguage } from '@/lib/audit/industryLanguage'
 import { SavedViewCards } from '@/components/audit/SavedViewCards'
 import { EvidenceDrawer } from '@/components/audit/EvidenceDrawer'
+import { terms } from '@/lib/terms'
 
 interface AuditEvent {
   id: string
@@ -320,10 +321,10 @@ export default function AuditViewPage() {
               <Shield className="w-6 h-6 text-[#F97316]" />
               <div>
                 <p className="text-xs uppercase tracking-[0.42em] text-white/50">
-                  Compliance Ledger
+                  {terms.complianceLedger.singular}
                 </p>
                 <h1 className={`${typography.h1} mt-2`}>
-                  Compliance Ledger
+                  {terms.complianceLedger.singular}
                 </h1>
               </div>
             </div>
@@ -335,7 +336,7 @@ export default function AuditViewPage() {
               <span>Executive access is read-only by database policy. Oversight and authority are intentionally separated.</span>
             </div>
             <div className="flex items-center gap-2 text-xs text-white/40 italic">
-              <span>All work records, controls, evidence, and attestations feed into this Ledger.</span>
+              <span>All {terms.workRecord.plural.toLowerCase()}, {terms.control.plural.toLowerCase()}, {terms.evidence.plural.toLowerCase()}, and {terms.attestation.plural.toLowerCase()} feed into this {terms.complianceLedger.singular}.</span>
             </div>
           </div>
 
