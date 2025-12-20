@@ -415,7 +415,10 @@ export default function JobDetailPage() {
           window.open(response.data.downloadUrl, '_blank')
           
           // Show success toast
-          setToast({ message: 'Permit Pack ready — downloaded to your device.', type: 'success' })
+          setToast({ 
+            message: `Permit Pack exported. Entry added to Compliance Ledger. [View in Ledger](/operations/audit?job_id=${jobId})`, 
+            type: 'success' 
+          })
           
           // Reload permit packs list
           jobsApi.getPermitPacks(jobId).then((packsResponse) => {
@@ -596,7 +599,10 @@ export default function JobDetailPage() {
       await handleApplyTemplate(hazardIds, templateId, 'hazard', false)
       setShowCreateTemplate(false)
       setPrefillTemplateData(null)
-      setToast({ message: 'Template saved and applied to this job!', type: 'success' })
+      setToast({ 
+        message: `Template saved and applied. Entry added to Compliance Ledger. [View in Ledger](/operations/audit?job_id=${jobId})`, 
+        type: 'success' 
+      })
     } catch (err: any) {
       console.error('Failed to save and apply template:', err)
       setToast({ message: err.message || 'Failed to save and apply template', type: 'error' })
@@ -1096,7 +1102,10 @@ export default function JobDetailPage() {
                         jobsAssigned: assignedUserIds.has(member.id) ? 1 : 0,
                       }))
                       setWorkers(workersList)
-                      setToast({ message: 'Worker assigned successfully.', type: 'success' })
+                      setToast({ 
+                        message: `Worker assigned. Entry added to Compliance Ledger. [View in Ledger](/operations/audit?job_id=${jobId})`, 
+                        type: 'success' 
+                      })
                     } catch (err) {
                       setToast({ message: 'Couldn\'t assign that worker. Try again.', type: 'error' })
                       throw err
@@ -1358,7 +1367,10 @@ export default function JobDetailPage() {
           onSave={() => {
             setShowCreateTemplate(false)
             setPrefillTemplateData(null)
-            setToast({ message: 'Template created successfully!', type: 'success' })
+            setToast({ 
+              message: `Template created. Entry added to Compliance Ledger. [View in Ledger](/operations/audit)`, 
+              type: 'success' 
+            })
           }}
           onSaveAndApply={handleSaveAndApplyTemplate}
         />

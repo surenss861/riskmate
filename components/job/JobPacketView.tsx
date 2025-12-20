@@ -447,19 +447,45 @@ export function JobPacketView({
         {/* Attestations (Role-based) */}
         <section>
           <h3 className={`${typography.h3} mb-4`}>Attestations</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="p-4 bg-white/5 rounded-lg">
-              <p className="text-sm text-white/50 mb-2">Safety Lead</p>
-              <p className="text-sm text-white/40 italic">Pending signature</p>
+          {signoffs.length > 0 ? (
+            <div className="space-y-3">
+              {signoffs.map((signoff) => (
+                <div key={signoff.id} className="p-4 bg-white/5 rounded-lg border border-white/10">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-sm font-semibold text-white">{signoff.signer_name}</p>
+                    <span className={`px-2 py-1 rounded text-xs ${
+                      signoff.status === 'signed' ? 'bg-green-500/20 text-green-400' :
+                      signoff.status === 'rejected' ? 'bg-red-500/20 text-red-400' :
+                      'bg-yellow-500/20 text-yellow-400'
+                    }`}>
+                      {signoff.status.toUpperCase()}
+                    </span>
+                  </div>
+                  <p className="text-xs text-white/50 mb-1">Role: {signoff.signer_role}</p>
+                  <p className="text-xs text-white/50 mb-1">Type: {signoff.signoff_type}</p>
+                  {signoff.signed_at && (
+                    <p className="text-xs text-white/40 mt-2">
+                      Signed: {new Date(signoff.signed_at).toLocaleString()}
+                    </p>
+                  )}
+                  {signoff.comments && (
+                    <p className="text-xs text-white/60 mt-2 italic">{signoff.comments}</p>
+                  )}
+                </div>
+              ))}
             </div>
-            <div className="p-4 bg-white/5 rounded-lg">
-              <p className="text-sm text-white/50 mb-2">Owner</p>
-              <p className="text-sm text-white/40 italic">Pending signature</p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="p-4 bg-white/5 rounded-lg">
+                <p className="text-sm text-white/50 mb-2">Safety Lead</p>
+                <p className="text-sm text-white/40 italic">Pending attestation</p>
+              </div>
+              <div className="p-4 bg-white/5 rounded-lg">
+                <p className="text-sm text-white/50 mb-2">Owner</p>
+                <p className="text-sm text-white/40 italic">Pending attestation</p>
+              </div>
             </div>
-          </div>
-          <p className="text-xs text-white/40 mt-4 italic">
-            Role-based sign-offs coming in v2
-          </p>
+          )}
         </section>
       </div>
     </div>
