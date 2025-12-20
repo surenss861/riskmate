@@ -158,6 +158,22 @@ executiveRouter.get('/risk-posture', authenticate as unknown as express.RequestH
       confidenceStatement = `✅ No unresolved governance violations. All jobs within acceptable risk thresholds.`
     }
 
+    // Collect basis event IDs for provenance (material events that influenced posture)
+    const basisEventIds: string[] = []
+    
+    // Get recent material events that influenced this posture
+    const { data: materialEvents } = await supabase
+      .from('audit_logs')
+      .select('id')
+      .eq('organization_id', organization_id)
+      .in('severity', ['material', 'critical'])
+      .order('created_at', { ascending: false })
+      .limit(10)
+
+    if (materialEvents) {
+      basisEventIds.push(...materialEvents.map((e: any) => e.id))
+    }
+
     const riskPosture = {
       exposure_level: exposureLevel,
       unresolved_violations: violationsCount || 0,
@@ -177,10 +193,22 @@ executiveRouter.get('/risk-posture', authenticate as unknown as express.RequestH
       recent_violations: violationsCount || 0,
     }
 
-    // Cache the result
-    executiveCache.set(cacheKey, { data: riskPosture, timestamp: Date.now() })
+    // Cache the result with provenance
+    executiveCache.set(cacheKey, { 
+      data: riskPosture, 
+      timestamp: Date.now(),
+      basis_event_ids: basisEventIds,
+    })
 
-    res.json({ data: riskPosture })
+    res.json({ 
+      data: {
+        ...riskPosture,
+        _provenance: {
+          generated_at: new Date().toISOString(),
+          basis_event_count: basisEventIds.length,
+        }
+      }
+    })
   } catch (err: any) {
     console.error('Risk posture fetch failed:', err)
     const { response: errorResponse, errorId } = createErrorResponse({
