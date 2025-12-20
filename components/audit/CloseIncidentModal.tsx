@@ -115,7 +115,7 @@ export function CloseIncidentModal({
         closure_summary: formData.closure_summary,
         root_cause: formData.root_cause,
         evidence_attached: formData.evidence_attached,
-        waived: formData.waived || undefined,
+        waived: formData.waived ? true : undefined,
         waiver_reason: formData.waiver_reason || undefined,
         no_action_required: formData.no_action_required,
         no_action_justification: formData.no_action_justification || undefined,
