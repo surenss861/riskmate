@@ -1675,73 +1675,156 @@ auditRouter.post('/resolve', authenticate as unknown as express.RequestHandler, 
 
 // POST /api/audit/incidents/corrective-action
 // Creates a corrective action (control) linked to an incident/work record
+// Ledger-first command: Validate → Mutate → Ledger Append (atomic)
 auditRouter.post('/incidents/corrective-action', authenticate as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
   const authReq = req as AuthenticatedRequest & RequestWithId
   const requestId = authReq.requestId || 'unknown'
   
   try {
-    const { organization_id, id: userId } = authReq.user
-    const { work_record_id, incident_event_id, title, owner_id, due_date, verification_method, notes } = req.body
+    const { organization_id, id: userId, role: userRole = 'member', email: userEmail } = authReq.user
+    const { work_record_id, incident_event_id, title, owner_id, due_date, verification_method, notes, severity } = req.body
+    const idempotencyKey = req.headers['idempotency-key'] as string
 
+    // Validation
     if (!work_record_id || !title || !owner_id || !due_date) {
       return res.status(400).json({ 
         message: 'work_record_id, title, owner_id, and due_date are required' 
       })
     }
 
-    // Verify work record exists and belongs to organization
-    const { data: job, error: jobError } = await supabase
-      .from('jobs')
-      .select('id, client_name')
-      .eq('id', work_record_id)
-      .eq('organization_id', organization_id)
-      .single()
-
-    if (jobError || !job) {
-      return res.status(404).json({ message: 'Work record not found' })
-    }
-
-    // Create control (mitigation item)
-    const { data: control, error: controlError } = await supabase
-      .from('mitigation_items')
-      .insert({
-        job_id: work_record_id,
-        title,
-        description: notes || `Corrective action for ${job.client_name}`,
-        done: false,
-        is_completed: false,
+    // Authorization: Quick deny (executives cannot create corrective actions)
+    if (userRole === 'executive') {
+      await recordAuditLog({
+        organizationId: organization_id,
+        actorId: userId,
+        eventName: 'auth.role_violation',
+        targetType: 'job',
+        targetId: work_record_id,
+        metadata: {
+          attempted_action: 'incident.corrective_action.created',
+          policy_statement: 'Executives have read-only access and cannot create corrective actions',
+          endpoint: '/api/audit/incidents/corrective-action',
+        },
       })
-      .select()
-      .single()
-
-    if (controlError || !control) {
-      console.error('Failed to create control:', controlError)
-      return res.status(500).json({ message: 'Failed to create corrective action' })
+      return res.status(403).json({ 
+        code: 'AUTH_ROLE_READ_ONLY',
+        message: 'Executives cannot create corrective actions' 
+      })
     }
 
-    // Write ledger entry
-    await recordAuditLog({
+    // Build command context
+    const ctx: CommandContext = {
+      userId,
       organizationId: organization_id,
-      actorId: userId,
-      eventName: 'incident.corrective_action.created',
-      targetType: 'mitigation',
-      targetId: control.id,
-      metadata: {
-        work_record_id,
-        incident_event_id: incident_event_id || null,
-        control_id: control.id,
-        owner_id,
-        due_date,
-        verification_method: verification_method || 'visual_inspection',
-        notes: notes || null,
-        summary: `Corrective action created: ${title}`,
+      userRole,
+      userEmail: userEmail ?? undefined,
+      requestId,
+      endpoint: '/api/audit/incidents/corrective-action',
+      ip: req.ip || req.socket.remoteAddress || undefined,
+      userAgent: req.headers['user-agent'] || undefined,
+    }
+
+    const options: CommandOptions = {
+      idempotencyKey,
+    }
+
+    // Execute command: Validate → Mutate → Ledger Append (atomic)
+    const result = await runCommand(
+      supabase,
+      ctx,
+      options,
+      async (tx) => {
+        // Domain mutation: Verify work record exists
+        const { data: job, error: jobError } = await tx
+          .from('jobs')
+          .select('id, client_name')
+          .eq('id', work_record_id)
+          .eq('organization_id', organization_id)
+          .single()
+
+        if (jobError || !job) {
+          throw new Error('Work record not found')
+        }
+
+        // Create control (mitigation item)
+        const { data: control, error: controlError } = await tx
+          .from('mitigation_items')
+          .insert({
+            job_id: work_record_id,
+            title,
+            description: notes || `Corrective action for ${job.client_name}`,
+            done: false,
+            is_completed: false,
+            owner_id,
+            due_date,
+            verification_method: verification_method || 'visual_inspection',
+            severity: severity || 'info',
+          })
+          .select()
+          .single()
+
+        if (controlError || !control) {
+          throw new Error('Failed to create corrective action')
+        }
+
+        return {
+          control_id: control.id,
+          work_record_id,
+          incident_event_id: incident_event_id || null,
+          title,
+          owner_id,
+          due_date,
+          verification_method: verification_method || 'visual_inspection',
+          notes: notes || null,
+          severity: severity || 'info',
+        }
       },
-    })
+      {
+        eventName: 'incident.corrective_action.created',
+        targetType: 'mitigation',
+        targetId: null, // Will be set from command result
+        metadata: {
+          work_record_id,
+          incident_event_id: incident_event_id || null,
+          title,
+          owner_id,
+          due_date,
+          verification_method: verification_method || 'visual_inspection',
+          notes: notes || null,
+          severity: severity || 'info',
+          summary: `Corrective action created: ${title}`,
+        },
+      }
+    )
+
+    if (!result.ok) {
+      const { response: errorResponse, errorId } = createErrorResponse({
+        message: result.error?.message || 'Failed to create corrective action',
+        internalMessage: result.error?.internalMessage,
+        code: result.error?.code || 'CORRECTIVE_ACTION_ERROR',
+        requestId,
+        statusCode: 500,
+      })
+      res.setHeader('X-Error-ID', errorId)
+      logErrorForSupport(500, result.error?.code || 'CORRECTIVE_ACTION_ERROR', requestId, organization_id, errorResponse.message, errorResponse.internal_message, errorResponse.category, errorResponse.severity, '/api/audit/incidents/corrective-action')
+      return res.status(500).json(errorResponse)
+    }
+
+    // Update targetId with control_id from result
+    const controlId = result.data?.control_id
+    if (controlId) {
+      // Update the ledger entry with the correct target_id
+      await supabase
+        .from('audit_logs')
+        .update({ target_id: controlId })
+        .eq('id', result.ledger_entry_id)
+    }
 
     res.json({ 
       success: true,
       message: 'Corrective action created successfully',
-      control_id: control.id,
+      control_id: controlId,
+      ledger_entry_id: result.ledger_entry_id,
     })
   } catch (err: any) {
     const { response: errorResponse, errorId } = createErrorResponse({
@@ -1759,12 +1842,13 @@ auditRouter.post('/incidents/corrective-action', authenticate as unknown as expr
 
 // POST /api/audit/incidents/close
 // Closes an incident with strict validation and creates attestation atomically
+// Uses RPC function for true atomicity: domain mutations + ledger entries succeed/fail together
 auditRouter.post('/incidents/close', authenticate as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
   const authReq = req as AuthenticatedRequest & RequestWithId
   const requestId = authReq.requestId || 'unknown'
   
   try {
-    const { organization_id, id: userId } = authReq.user
+    const { organization_id, id: userId, role: userRole = 'member' } = authReq.user
     const { 
       work_record_id, 
       closure_summary, 
@@ -1774,130 +1858,81 @@ auditRouter.post('/incidents/close', authenticate as unknown as express.RequestH
       waiver_reason,
       no_action_required,
       no_action_justification,
-      ledger_entry_ids 
     } = req.body
+    const idempotencyKey = req.headers['idempotency-key'] as string
 
+    // Validation
     if (!work_record_id || !closure_summary || !root_cause) {
       return res.status(400).json({ 
         message: 'work_record_id, closure_summary, and root_cause are required' 
       })
     }
 
-    // Verify work record exists
-    const { data: job, error: jobError } = await supabase
-      .from('jobs')
-      .select('id, client_name, status')
-      .eq('id', work_record_id)
-      .eq('organization_id', organization_id)
-      .single()
-
-    if (jobError || !job) {
-      return res.status(404).json({ message: 'Work record not found' })
-    }
-
-    // Check for corrective actions
-    const { data: correctiveActions, error: actionsError } = await supabase
-      .from('mitigation_items')
-      .select('id')
-      .eq('job_id', work_record_id)
-      .is('deleted_at', null)
-
-    const hasCorrectiveActions = correctiveActions && correctiveActions.length > 0
-
-    // Validation: require corrective actions OR "no action required" justification
-    if (!hasCorrectiveActions && !no_action_required) {
-      return res.status(400).json({ 
-        message: 'Either corrective actions must exist, or you must mark "No corrective action required" with justification' 
+    // Authorization: Quick deny (executives cannot close incidents)
+    if (userRole === 'executive') {
+      await recordAuditLog({
+        organizationId: organization_id,
+        actorId: userId,
+        eventName: 'auth.role_violation',
+        targetType: 'job',
+        targetId: work_record_id,
+        metadata: {
+          attempted_action: 'incident.closed',
+          policy_statement: 'Executives have read-only access and cannot close incidents',
+          endpoint: '/api/audit/incidents/close',
+        },
+      })
+      return res.status(403).json({ 
+        code: 'AUTH_ROLE_READ_ONLY',
+        message: 'Executives cannot close incidents' 
       })
     }
 
-    if (no_action_required && !no_action_justification?.trim()) {
-      return res.status(400).json({ 
-        message: 'Justification is required when marking "No corrective action required"' 
-      })
-    }
-
-    // Validation: evidence required unless waived
-    if (!evidence_attached && !waived) {
-      return res.status(400).json({ 
-        message: 'Evidence is required. Attach evidence or mark as waived with a reason.' 
-      })
-    }
-
-    if (waived && !waiver_reason?.trim()) {
-      return res.status(400).json({ 
-        message: 'Waiver reason is required when marking evidence as waived' 
-      })
-    }
-
-      // Get user info for attestation
-      const { data: userData } = await supabase
-        .from('users')
-        .select('full_name, role, email')
-        .eq('id', userId)
-        .single()
-
-    // Create attestation atomically as part of closure
-    const { data: attestation, error: attestationError } = await supabase
-      .from('job_signoffs')
-      .insert({
-        job_id: work_record_id,
-        signoff_type: 'incident_closure',
-        status: 'signed',
-        signed_by: userId,
-        signed_at: new Date().toISOString(),
-        comments: `Incident closure attestation: ${closure_summary}`,
-      })
-      .select()
-      .single()
-
-    if (attestationError || !attestation) {
-      console.error('Failed to create attestation:', attestationError)
-      return res.status(500).json({ message: 'Failed to create attestation' })
-    }
-
-    // Write incident.closed ledger entry
-    await recordAuditLog({
-      organizationId: organization_id,
-      actorId: userId,
-      eventName: 'incident.closed',
-      targetType: 'job',
-      targetId: work_record_id,
-      metadata: {
-        closure_summary,
-        root_cause,
-        evidence_attached,
-        waived: waived || false,
-        waiver_reason: waived ? (waiver_reason || null) : null,
-        no_action_required: no_action_required || false,
-        no_action_justification: no_action_required ? (no_action_justification || null) : null,
-        corrective_action_count: correctiveActions?.length || 0,
-        attestation_id: attestation.id,
-        ledger_entry_ids: ledger_entry_ids || [],
-        summary: `Incident closed: ${closure_summary}`,
-      },
+    // Use RPC function for atomic operation
+    const { data: rpcResult, error: rpcError } = await supabase.rpc('audit_close_incident', {
+      p_organization_id: organization_id,
+      p_actor_id: userId,
+      p_work_record_id: work_record_id,
+      p_closure_summary: closure_summary,
+      p_root_cause: root_cause,
+      p_evidence_attached: evidence_attached || false,
+      p_waived: waived || false,
+      p_waiver_reason: waived ? waiver_reason : null,
+      p_no_action_required: no_action_required || false,
+      p_no_action_justification: no_action_required ? no_action_justification : null,
+      p_request_id: requestId,
+      p_endpoint: '/api/audit/incidents/close',
+      p_ip: req.ip || req.socket.remoteAddress || null,
+      p_user_agent: req.headers['user-agent'] || null,
+      p_idempotency_key: idempotencyKey || null,
     })
 
-    // Write attestation.created ledger entry
-    await recordAuditLog({
-      organizationId: organization_id,
-      actorId: userId,
-      eventName: 'attestation.created',
-      targetType: 'system',
-      targetId: attestation.id,
-      metadata: {
-        signoff_type: 'incident_closure',
-        work_record_id,
-        signer_name: userData?.full_name || 'Unknown',
-        signer_role: userData?.role || 'Unknown',
-        summary: `Incident closure attestation created`,
-      },
-    })
+    if (rpcError) {
+      const errorMessage = rpcError.message || 'Failed to close incident'
+      const { response: errorResponse, errorId } = createErrorResponse({
+        message: errorMessage,
+        internalMessage: rpcError.details || rpcError.message,
+        code: 'CLOSE_INCIDENT_ERROR',
+        requestId,
+        statusCode: 500,
+      })
+      res.setHeader('X-Error-ID', errorId)
+      logErrorForSupport(500, 'CLOSE_INCIDENT_ERROR', requestId, organization_id, errorResponse.message, errorResponse.internal_message, errorResponse.category, errorResponse.severity, '/api/audit/incidents/close')
+      return res.status(500).json(errorResponse)
+    }
+
+    if (!rpcResult?.ok) {
+      return res.status(400).json({ 
+        message: rpcResult?.error || 'Failed to close incident' 
+      })
+    }
 
     res.json({ 
       success: true,
       message: 'Incident closed successfully',
-      attestation_id: attestation.id,
+      attestation_id: rpcResult.attestation_id,
+      ledger_entry_id: rpcResult.ledger_entry_id,
+      attestation_ledger_entry_id: rpcResult.attestation_ledger_entry_id,
     })
   } catch (err: any) {
     const { response: errorResponse, errorId } = createErrorResponse({
@@ -1915,124 +1950,82 @@ auditRouter.post('/incidents/close', authenticate as unknown as express.RequestH
 
 // POST /api/audit/access/revoke
 // Revokes access for a user (disable, downgrade role, or revoke sessions)
+// Uses RPC function for atomic operation
 auditRouter.post('/access/revoke', authenticate as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
   const authReq = req as AuthenticatedRequest & RequestWithId
   const requestId = authReq.requestId || 'unknown'
   
   try {
-    const { organization_id, id: userId } = authReq.user
+    const { organization_id, id: userId, role: userRole = 'member' } = authReq.user
+    const { target_user_id, action_type, reason, new_role } = req.body
+    const idempotencyKey = req.headers['idempotency-key'] as string
 
-    // Check user role - only admin/owner can revoke
-    const { data: currentUser } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', userId)
-      .single()
-
-    if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'owner')) {
+    // Authorization: Only admin/owner can revoke
+    if (userRole !== 'admin' && userRole !== 'owner') {
+      await recordAuditLog({
+        organizationId: organization_id,
+        actorId: userId,
+        eventName: 'auth.role_violation',
+        targetType: 'user',
+        targetId: target_user_id,
+        metadata: {
+          attempted_action: 'access.revoked',
+          policy_statement: 'Only administrators and owners can revoke access',
+          endpoint: '/api/audit/access/revoke',
+        },
+      })
       return res.status(403).json({ 
-        message: 'Only administrators and owners can revoke access',
         code: 'AUTH_ROLE_FORBIDDEN',
+        message: 'Only administrators and owners can revoke access' 
       })
     }
 
-    const { target_user_id, action_type, reason, new_role } = req.body
-
+    // Validation
     if (!target_user_id || !action_type || !reason) {
       return res.status(400).json({ 
         message: 'target_user_id, action_type, and reason are required' 
       })
     }
 
-    // Cannot revoke own access
-    if (target_user_id === userId) {
-      return res.status(400).json({ 
-        message: 'You cannot revoke your own access' 
-      })
-    }
-
-    // Verify target user exists and belongs to organization
-    const { data: targetUser, error: targetUserError } = await supabase
-      .from('users')
-      .select('id, email, full_name, role')
-      .eq('id', target_user_id)
-      .eq('organization_id', organization_id)
-      .single()
-
-    if (targetUserError || !targetUser) {
-      return res.status(404).json({ message: 'Target user not found' })
-    }
-
-    // Cannot revoke executive access (they're read-only by design)
-    if (targetUser.role === 'executive') {
-      return res.status(403).json({ 
-        message: 'Cannot revoke executive access - executives are read-only by design' 
-      })
-    }
-
-    const priorRole = targetUser.role
-    let newRole = priorRole
-    let disabled = false
-    let sessionsRevoked = false
-
-    // Perform the action
-    if (action_type === 'disable_user') {
-      // Update user to disabled (you may need to add a disabled field to users table)
-      // For now, we'll downgrade to a disabled role or add a flag
-      const { error: updateError } = await supabase
-        .from('users')
-        .update({ role: 'member' }) // Downgrade as proxy for disabled
-        .eq('id', target_user_id)
-      
-      if (updateError) {
-        console.error('Failed to disable user:', updateError)
-        return res.status(500).json({ message: 'Failed to disable user' })
-      }
-      disabled = true
-      newRole = 'member'
-    } else if (action_type === 'downgrade_role') {
-      if (!new_role) {
-        return res.status(400).json({ message: 'new_role is required for downgrade' })
-      }
-      const { error: updateError } = await supabase
-        .from('users')
-        .update({ role: new_role })
-        .eq('id', target_user_id)
-      
-      if (updateError) {
-        console.error('Failed to downgrade role:', updateError)
-        return res.status(500).json({ message: 'Failed to downgrade role' })
-      }
-      newRole = new_role
-    } else if (action_type === 'revoke_sessions') {
-      // Session revocation would require Supabase Auth Admin API
-      // For now, we'll just log it
-      sessionsRevoked = true
-    }
-
-    // Write ledger entry
-    await recordAuditLog({
-      organizationId: organization_id,
-      actorId: userId,
-      eventName: 'access.revoked',
-      targetType: 'system',
-      targetId: target_user_id,
-      metadata: {
-        target_user_id,
-        target_user_email: targetUser.email,
-        prior_role: priorRole,
-        new_role: newRole,
-        disabled,
-        sessions_revoked: sessionsRevoked,
-        action_type,
-        reason,
-        summary: `Access revoked: ${action_type} - ${reason}`,
-      },
+    // Use RPC function for atomic operation
+    const { data: rpcResult, error: rpcError } = await supabase.rpc('audit_revoke_access', {
+      p_organization_id: organization_id,
+      p_actor_id: userId,
+      p_target_user_id: target_user_id,
+      p_action_type: action_type,
+      p_reason: reason,
+      p_new_role: action_type === 'downgrade_role' ? new_role : null,
+      p_request_id: requestId,
+      p_endpoint: '/api/audit/access/revoke',
+      p_ip: req.ip || req.socket.remoteAddress || null,
+      p_user_agent: req.headers['user-agent'] || null,
+      p_idempotency_key: idempotencyKey || null,
     })
+
+    if (rpcError) {
+      const errorMessage = rpcError.message || 'Failed to revoke access'
+      const { response: errorResponse, errorId } = createErrorResponse({
+        message: errorMessage,
+        internalMessage: rpcError.details || rpcError.message,
+        code: 'REVOKE_ACCESS_ERROR',
+        requestId,
+        statusCode: 500,
+      })
+      res.setHeader('X-Error-ID', errorId)
+      logErrorForSupport(500, 'REVOKE_ACCESS_ERROR', requestId, organization_id, errorResponse.message, errorResponse.internal_message, errorResponse.category, errorResponse.severity, '/api/audit/access/revoke')
+      return res.status(500).json(errorResponse)
+    }
+
+    if (!rpcResult?.ok) {
+      return res.status(400).json({ 
+        message: rpcResult?.error || 'Failed to revoke access' 
+      })
+    }
 
     res.json({ 
       success: true,
       message: 'Access revoked successfully',
+      ledger_entry_id: rpcResult.ledger_entry_id,
     })
   } catch (err: any) {
     const { response: errorResponse, errorId } = createErrorResponse({
@@ -2082,49 +2075,51 @@ auditRouter.post('/access/flag-suspicious', authenticate as unknown as express.R
       return res.status(404).json({ message: 'Target user not found' })
     }
 
-    // Write ledger entry
-    await recordAuditLog({
-      organizationId: organization_id,
-      actorId: userId,
-      eventName: 'security.suspicious_access.flagged',
-      targetType: 'system',
-      targetId: target_user_id,
-      metadata: {
-        target_user_id,
-        target_user_email: targetUser.email,
-        login_event_id: login_event_id || null,
-        reason,
-        notes: notes || null,
-        severity: severity || 'material',
-        open_incident: open_incident !== false, // Default true
-        summary: `Suspicious access flagged: ${reason}`,
-      },
+    const idempotencyKey = req.headers['idempotency-key'] as string
+
+    // Use RPC function for atomic operation
+    const { data: rpcResult, error: rpcError } = await supabase.rpc('audit_flag_suspicious', {
+      p_organization_id: organization_id,
+      p_actor_id: userId,
+      p_target_user_id: target_user_id,
+      p_reason: reason,
+      p_notes: notes || null,
+      p_severity: severity || 'material',
+      p_open_incident: open_incident !== false, // Default true
+      p_login_event_id: login_event_id || null,
+      p_request_id: requestId,
+      p_endpoint: '/api/audit/access/flag-suspicious',
+      p_ip: req.ip || req.socket.remoteAddress || null,
+      p_user_agent: req.headers['user-agent'] || null,
+      p_idempotency_key: idempotencyKey || null,
     })
 
-    // If open_incident is true, create an incident marker
-    if (open_incident !== false) {
-      // Create a security incident event that will appear in Incident Review
-      await recordAuditLog({
-        organizationId: organization_id,
-        actorId: userId,
-        eventName: 'security.incident.opened',
-        targetType: 'system',
-        targetId: target_user_id,
-        metadata: {
-          incident_type: 'suspicious_access',
-          target_user_id,
-          reason,
-          notes: notes || null,
-          severity: severity || 'material',
-          summary: `Security incident opened: Suspicious access - ${reason}`,
-        },
+    if (rpcError) {
+      const errorMessage = rpcError.message || 'Failed to flag suspicious access'
+      const { response: errorResponse, errorId } = createErrorResponse({
+        message: errorMessage,
+        internalMessage: rpcError.details || rpcError.message,
+        code: 'FLAG_SUSPICIOUS_ERROR',
+        requestId,
+        statusCode: 500,
+      })
+      res.setHeader('X-Error-ID', errorId)
+      logErrorForSupport(500, 'FLAG_SUSPICIOUS_ERROR', requestId, organization_id, errorResponse.message, errorResponse.internal_message, errorResponse.category, errorResponse.severity, '/api/audit/access/flag-suspicious')
+      return res.status(500).json(errorResponse)
+    }
+
+    if (!rpcResult?.ok) {
+      return res.status(400).json({ 
+        message: rpcResult?.error || 'Failed to flag suspicious access' 
       })
     }
 
     res.json({ 
       success: true,
       message: 'Suspicious access flagged successfully',
-      incident_opened: open_incident !== false,
+      ledger_entry_id: rpcResult.ledger_entry_id,
+      incident_ledger_entry_id: rpcResult.incident_ledger_entry_id,
+      incident_opened: !!rpcResult.incident_ledger_entry_id,
     })
   } catch (err: any) {
     const { response: errorResponse, errorId } = createErrorResponse({

@@ -9,7 +9,9 @@ export type AuditTargetType =
   | "subscription"
   | "legal"
   | "system"
-  | "site";
+  | "site"
+  | "user"
+  | "signoff";
 
 export interface AuditLogEntry {
   organizationId: string;
