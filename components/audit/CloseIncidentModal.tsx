@@ -194,7 +194,7 @@ export function CloseIncidentModal({
             <div className="text-sm text-yellow-300">
               <p className="font-medium mb-1">Closure Requirements:</p>
               <ul className="space-y-1 text-xs">
-                <li>• Corrective actions OR "No action required" justification</li>
+                <li>• Corrective actions OR &quot;No action required&quot; justification</li>
                 <li>• Evidence attached OR waived with reason</li>
                 <li>• Attestation will be created automatically</li>
               </ul>

@@ -199,7 +199,7 @@ export function RevokeAccessModal({
           {/* Confirmation */}
           <div>
             <label className="block text-sm font-medium text-white/90 mb-2">
-              Type "REVOKE" to confirm <span className="text-red-400">*</span>
+              Type &quot;REVOKE&quot; to confirm <span className="text-red-400">*</span>
             </label>
             <input
               type="text"
