@@ -1,13 +1,38 @@
 -- Fix RLS recursion by creating SECURITY DEFINER helper functions
 -- These functions bypass RLS, preventing infinite recursion in policies
 
--- Drop old function signatures if they exist (from previous migrations)
-DROP FUNCTION IF EXISTS public.is_org_member(UUID);
-DROP FUNCTION IF EXISTS public.is_org_member(UUID, UUID);
-DROP FUNCTION IF EXISTS public.org_role(UUID);
-DROP FUNCTION IF EXISTS public.org_role(UUID, UUID);
+-- Step 1: Drop all policies that depend on the old functions FIRST
+-- (This must happen before we can drop the old function signatures)
 
--- Helper function: Check if current user is a member of an organization
+-- organization_members policies
+DROP POLICY IF EXISTS "Users can view members in their organization" ON organization_members;
+DROP POLICY IF EXISTS "Admins can manage members in their organization" ON organization_members;
+DROP POLICY IF EXISTS "organization_members_select" ON organization_members;
+DROP POLICY IF EXISTS "organization_members_insert" ON organization_members;
+DROP POLICY IF EXISTS "organization_members_update" ON organization_members;
+DROP POLICY IF EXISTS "organization_members_delete" ON organization_members;
+
+-- sites policies
+DROP POLICY IF EXISTS "Users can view sites from their organization" ON sites;
+DROP POLICY IF EXISTS "Owners and admins can create sites" ON sites;
+DROP POLICY IF EXISTS "Owners and admins can update sites" ON sites;
+DROP POLICY IF EXISTS "Owners and admins can delete sites" ON sites;
+
+-- templates policies (from migration 20250122000003)
+DROP POLICY IF EXISTS "Users can view templates in their organization" ON templates;
+DROP POLICY IF EXISTS "Admins can manage templates in their organization" ON templates;
+
+-- api_keys policies (from migration 20250122000003)
+DROP POLICY IF EXISTS "Admins can view API keys in their organization" ON api_keys;
+DROP POLICY IF EXISTS "Admins can manage API keys in their organization" ON api_keys;
+
+-- Step 2: Now we can drop old function signatures
+DROP FUNCTION IF EXISTS public.is_org_member(UUID) CASCADE;
+DROP FUNCTION IF EXISTS public.is_org_member(UUID, UUID) CASCADE;
+DROP FUNCTION IF EXISTS public.org_role(UUID) CASCADE;
+DROP FUNCTION IF EXISTS public.org_role(UUID, UUID) CASCADE;
+
+-- Step 3: Create new helper functions with explicit parameters
 CREATE FUNCTION public.is_org_member(p_org UUID, p_user UUID DEFAULT auth.uid())
 RETURNS BOOLEAN
 LANGUAGE sql
@@ -23,7 +48,6 @@ AS $$
   );
 $$;
 
--- Helper function: Get current user's role in an organization
 CREATE FUNCTION public.org_role(p_org UUID, p_user UUID DEFAULT auth.uid())
 RETURNS TEXT
 LANGUAGE sql
@@ -38,28 +62,19 @@ AS $$
   LIMIT 1;
 $$;
 
--- IMPORTANT: Make sure these are owned by a role that bypasses RLS (commonly postgres)
+-- Step 4: Set ownership and permissions
 ALTER FUNCTION public.is_org_member(UUID, UUID) OWNER TO postgres;
 ALTER FUNCTION public.org_role(UUID, UUID) OWNER TO postgres;
 
--- Lock it down: Revoke from public, grant to authenticated users
 REVOKE ALL ON FUNCTION public.is_org_member(UUID, UUID) FROM public;
 REVOKE ALL ON FUNCTION public.org_role(UUID, UUID) FROM public;
 GRANT EXECUTE ON FUNCTION public.is_org_member(UUID, UUID) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.org_role(UUID, UUID) TO authenticated;
 
--- Now fix organization_members policies to use these helpers (no recursion)
+-- Step 5: Now recreate policies using the new functions
 
 -- Enable RLS if not already enabled
 ALTER TABLE public.organization_members ENABLE ROW LEVEL SECURITY;
-
--- Drop existing policies
-DROP POLICY IF EXISTS "Users can view members in their organization" ON organization_members;
-DROP POLICY IF EXISTS "Admins can manage members in their organization" ON organization_members;
-DROP POLICY IF EXISTS "organization_members_select" ON organization_members;
-DROP POLICY IF EXISTS "organization_members_insert" ON organization_members;
-DROP POLICY IF EXISTS "organization_members_update" ON organization_members;
-DROP POLICY IF EXISTS "organization_members_delete" ON organization_members;
 
 -- SELECT policy: Users can see members of organizations they belong to
 CREATE POLICY "organization_members_select"
