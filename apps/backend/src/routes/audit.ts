@@ -459,7 +459,7 @@ auditRouter.get('/events', authenticate as unknown as express.RequestHandler, as
         statusCode: 500,
       })
       res.setHeader('X-Error-ID', errorId)
-      logErrorForSupport(500, 'QUERY_ERROR', requestId, organization_id, errorResponse.message, errorResponse.internalMessage, 'system', 'critical', '/api/audit/events')
+      logErrorForSupport(500, 'QUERY_ERROR', requestId, organization_id, errorResponse.message, errorResponse.internalMessage, 'system', 'error', '/api/audit/events')
       return res.status(500).json(errorResponse)
     }
 

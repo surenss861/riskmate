@@ -281,8 +281,8 @@ export function applyAuditFilters<T extends { eq: any; gte: any; lte: any; in: a
     }
   }
 
-  // Category filter (explicit category overrides view filter logic)
-  if (category) {
+  // Category filter (only apply if view was not used, to avoid conflicts)
+  if (category && !view) {
     query = query.eq('category', category) as T
   }
 
