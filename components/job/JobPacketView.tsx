@@ -2,9 +2,10 @@
 
 import { useState, useRef } from 'react'
 import { motion } from 'framer-motion'
-import { Download, FileText, Shield, CheckCircle, Clock, User, Flag, Upload, X, Image as ImageIcon } from 'lucide-react'
+import { Download, FileText, Shield, CheckCircle, Clock, User, Flag, Upload, X, Image as ImageIcon, ExternalLink } from 'lucide-react'
 import { cardStyles, buttonStyles, typography } from '@/lib/styles/design-system'
 import { jobsApi } from '@/lib/api'
+import { useRouter } from 'next/navigation'
 
 interface Attachment {
   id: string
@@ -68,6 +69,7 @@ export function JobPacketView({
   onExport,
   onAttachmentUploaded 
 }: JobPacketViewProps) {
+  const router = useRouter()
   const [selectedPack, setSelectedPack] = useState<'insurance' | 'audit' | 'incident' | 'compliance' | null>(null)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
