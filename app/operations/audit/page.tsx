@@ -116,15 +116,24 @@ export default function AuditViewPage() {
       setLoading(true)
       
       // Use new backend endpoint with server-side enrichment
+      // Don't send category when view is present (view takes precedence and includes category logic)
+      // Also map 'governance' tab to valid category or omit it
+      const hasView = filters.savedView && filters.savedView !== 'custom'
+      const categoryForRequest = hasView 
+        ? undefined // View takes precedence
+        : (activeTab === 'governance' 
+          ? undefined // 'governance' is not a valid backend category, omit it
+          : activeTab as 'operations' | 'access' | undefined) // Only send valid categories
+      
       const response = await auditApi.getEvents({
-        category: activeTab,
+        category: categoryForRequest,
         site_id: filters.site || undefined,
         job_id: filters.job || undefined,
         actor_id: filters.user || undefined,
         severity: filters.severity || undefined,
         outcome: filters.outcome || undefined,
         time_range: filters.timeRange,
-        view: filters.savedView && filters.savedView !== 'custom' ? filters.savedView : undefined,
+        view: hasView ? filters.savedView : undefined,
         limit: 500,
       })
 
