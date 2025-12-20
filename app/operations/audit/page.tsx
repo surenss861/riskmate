@@ -289,6 +289,100 @@ export default function AuditViewPage() {
     }
   }
 
+  const handleGeneratePack = async (view: string) => {
+    try {
+      const token = await (async () => {
+        const supabase = createSupabaseBrowserClient()
+        const { data: { session } } = await supabase.auth.getSession()
+        return session?.access_token || null
+      })()
+
+      const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || ''
+      const backendUrl = API_URL || ''
+      const endpoint = `${backendUrl}/api/audit/export/pack`
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+        body: JSON.stringify({
+          time_range: filters.timeRange,
+          job_id: filters.job || undefined,
+          site_id: filters.site || undefined,
+          view: view,
+        }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}))
+        throw new Error(error.message || 'Failed to generate pack')
+      }
+
+      // Download the ZIP file
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      const contentDisposition = response.headers.get('Content-Disposition')
+      const filename = contentDisposition 
+        ? contentDisposition.split('filename=')[1]?.replace(/"/g, '') || `audit-pack-${Date.now()}.zip`
+        : `audit-pack-${Date.now()}.zip`
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      window.URL.revokeObjectURL(url)
+    } catch (err: any) {
+      console.error('Failed to generate pack:', err)
+      alert(err.message || 'Failed to generate audit pack. Please try again.')
+    }
+  }
+
+  const handleAssign = (view: string) => {
+    // TODO: Implement assign modal/workflow
+    alert(`Assign functionality for ${view} - Coming soon`)
+  }
+
+  const handleResolve = (view: string) => {
+    // TODO: Implement resolve modal with reason/comment
+    alert(`Resolve functionality for ${view} - Coming soon`)
+  }
+
+  const handleExportEnforcement = async (view: string) => {
+    try {
+      await auditApi.export({
+        format: 'csv',
+        view: view as any,
+        time_range: filters.timeRange,
+        category: 'governance',
+      })
+    } catch (err) {
+      alert('Failed to export enforcement report. Please try again.')
+    }
+  }
+
+  const handleCreateCorrectiveAction = (view: string) => {
+    // TODO: Implement corrective action creation workflow
+    alert(`Create corrective action for ${view} - Coming soon`)
+  }
+
+  const handleCloseIncident = (view: string) => {
+    // TODO: Implement incident closure workflow with attestation
+    alert(`Close incident for ${view} - Coming soon`)
+  }
+
+  const handleRevokeAccess = (view: string) => {
+    // TODO: Implement access revocation workflow
+    alert(`Revoke access for ${view} - Coming soon`)
+  }
+
+  const handleFlagSuspicious = (view: string) => {
+    // TODO: Implement suspicious access flagging workflow
+    alert(`Flag suspicious access for ${view} - Coming soon`)
+  }
+
   const handleOpenEvidence = (jobId?: string, jobName?: string, siteName?: string) => {
     setEvidenceJobId(jobId)
     setEvidenceJobName(jobName)
@@ -351,6 +445,14 @@ export default function AuditViewPage() {
               if (savedView === 'access-review') setActiveTab('access')
             }}
             onExport={handleExportFromView}
+            onGeneratePack={handleGeneratePack}
+            onAssign={handleAssign}
+            onResolve={handleResolve}
+            onExportEnforcement={handleExportEnforcement}
+            onCreateCorrectiveAction={handleCreateCorrectiveAction}
+            onCloseIncident={handleCloseIncident}
+            onRevokeAccess={handleRevokeAccess}
+            onFlagSuspicious={handleFlagSuspicious}
           />
 
           {/* Summary Cards */}

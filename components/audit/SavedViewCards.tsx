@@ -1,56 +1,117 @@
 'use client'
 
-import { Shield, FileCheck, AlertTriangle, UserCheck, Download } from 'lucide-react'
+import { Shield, FileCheck, AlertTriangle, UserCheck, Download, Package, UserPlus, CheckCircle, FileText, Ban, Flag } from 'lucide-react'
 import { buttonStyles } from '@/lib/styles/design-system'
+import { terms } from '@/lib/terms'
 
 interface SavedViewCardsProps {
   activeView: string
   onSelectView: (view: 'review-queue' | 'insurance-ready' | 'governance-enforcement' | 'incident-review' | 'access-review' | '') => void
   onExport: (format: 'csv' | 'json', view: string) => void
+  onGeneratePack?: (view: string) => void
+  onAssign?: (view: string) => void
+  onResolve?: (view: string) => void
+  onExportEnforcement?: (view: string) => void
+  onCreateCorrectiveAction?: (view: string) => void
+  onCloseIncident?: (view: string) => void
+  onRevokeAccess?: (view: string) => void
+  onFlagSuspicious?: (view: string) => void
 }
 
-export function SavedViewCards({ activeView, onSelectView, onExport }: SavedViewCardsProps) {
+export function SavedViewCards({ 
+  activeView, 
+  onSelectView, 
+  onExport,
+  onGeneratePack,
+  onAssign,
+  onResolve,
+  onExportEnforcement,
+  onCreateCorrectiveAction,
+  onCloseIncident,
+  onRevokeAccess,
+  onFlagSuspicious,
+}: SavedViewCardsProps) {
   const views = [
     {
       id: 'review-queue',
       title: 'Review Queue',
       icon: AlertTriangle,
-      description: 'Outstanding governance issues requiring action: flagged jobs, critical events, blocked actions, and unresolved exposure.',
+      description: 'What needs human action right now? Flagged items, critical events, blocked actions, and unresolved exposure.',
       color: 'bg-orange-500/25 border-orange-500/40 text-orange-300',
       hoverColor: 'hover:bg-orange-500/35',
-      priority: true, // Mark as priority view
+      priority: true,
+      primaryAction: {
+        label: 'Assign',
+        icon: UserPlus,
+        handler: onAssign,
+      },
+      secondaryAction: {
+        label: 'Resolve',
+        icon: CheckCircle,
+        handler: onResolve,
+      },
     },
     {
       id: 'insurance-ready',
       title: 'Insurance-Ready',
       icon: FileCheck,
-      description: 'Includes completed jobs, proof packs, sign-offs, and risk summaries — ready for insurer request.',
+      description: 'Give insurer/client a clean, defensible package fast. Completed work records, verified controls, complete evidence, and attestations.',
       color: 'bg-green-500/20 border-green-500/30 text-green-400',
       hoverColor: 'hover:bg-green-500/30',
+      primaryAction: {
+        label: 'Generate Proof Pack',
+        icon: Package,
+        handler: onGeneratePack,
+      },
     },
     {
       id: 'governance-enforcement',
       title: 'Governance Enforcement',
       icon: Shield,
-      description: 'Shows blocked actions + policy violations — proves role enforcement.',
+      description: 'Show blocked actions + policy enforcement evidence. Proves role enforcement and separation of duties.',
       color: 'bg-red-500/20 border-red-500/30 text-red-400',
       hoverColor: 'hover:bg-red-500/30',
+      primaryAction: {
+        label: 'Export Enforcement Report',
+        icon: FileText,
+        handler: onExportEnforcement,
+      },
     },
     {
       id: 'incident-review',
       title: 'Incident Review',
       icon: AlertTriangle,
-      description: 'Flagged jobs, escalations, and mitigation actions — complete incident trail.',
+      description: 'Complete incident trail: detection → response → corrective actions → closure. Flagged work records, escalations, and high-severity events.',
       color: 'bg-yellow-500/20 border-yellow-500/30 text-yellow-400',
       hoverColor: 'hover:bg-yellow-500/30',
+      primaryAction: {
+        label: 'Create Corrective Action',
+        icon: AlertTriangle,
+        handler: onCreateCorrectiveAction,
+      },
+      secondaryAction: {
+        label: 'Close Incident',
+        icon: CheckCircle,
+        handler: onCloseIncident,
+      },
     },
     {
       id: 'access-review',
       title: 'Access Review',
       icon: UserCheck,
-      description: 'Role changes, login events, and access revocations — security governance record.',
+      description: 'Who got access, who lost access, and why. Role changes, login events, access revocations, and permission grants.',
       color: 'bg-blue-500/20 border-blue-500/30 text-blue-400',
       hoverColor: 'hover:bg-blue-500/30',
+      primaryAction: {
+        label: 'Revoke Access',
+        icon: Ban,
+        handler: onRevokeAccess,
+      },
+      secondaryAction: {
+        label: 'Flag Suspicious',
+        icon: Flag,
+        handler: onFlagSuspicious,
+      },
     },
   ]
 
@@ -77,8 +138,38 @@ export function SavedViewCards({ activeView, onSelectView, onExport }: SavedView
               )}
             </div>
             <h3 className="font-semibold mb-2 text-white">{view.title}</h3>
-            <p className="text-sm text-white/70 mb-4">{view.description}</p>
-            <div className="flex gap-2">
+            <p className="text-sm text-white/70 mb-3">{view.description}</p>
+            
+            {/* Primary Action Button */}
+            {view.primaryAction && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  view.primaryAction?.handler?.(view.id)
+                }}
+                className={`${buttonStyles.primary} w-full text-xs py-2 mb-2 flex items-center justify-center gap-2 font-medium`}
+              >
+                {view.primaryAction.icon && <view.primaryAction.icon className="w-3.5 h-3.5" />}
+                {view.primaryAction.label}
+              </button>
+            )}
+
+            {/* Secondary Action Button (if exists) */}
+            {view.secondaryAction && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  view.secondaryAction?.handler?.(view.id)
+                }}
+                className={`${buttonStyles.secondary} w-full text-xs py-1.5 mb-2 flex items-center justify-center gap-1.5`}
+              >
+                {view.secondaryAction.icon && <view.secondaryAction.icon className="w-3 h-3" />}
+                {view.secondaryAction.label}
+              </button>
+            )}
+
+            {/* Export Buttons (always available) */}
+            <div className="flex gap-2 mt-2">
               <button
                 onClick={(e) => {
                   e.stopPropagation()
