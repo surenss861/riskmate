@@ -130,11 +130,13 @@ async function generateControlsCSV(
 
   const ownerMap = new Map((owners || []).map(o => [o.id, o.email]))
 
+  // Ledger entries already fetched above
+
   // Fetch ledger entries with event_type
   const { data: ledgerEntriesWithType } = await supabase
     .from('audit_logs')
     .select('target_id, id as ledger_entry_id, event_name as ledger_event_type')
-    .in('target_id', controlIds)
+    .in('target_id', allControlIds)
     .eq('target_type', 'mitigation')
     .order('created_at', { ascending: false })
 
@@ -147,14 +149,6 @@ async function generateControlsCSV(
       })
     }
   })
-
-  // Fetch ledger entries with event_type (reuse controlIds from earlier)
-  const { data: ledgerEntriesWithType } = await supabase
-    .from('audit_logs')
-    .select('target_id, id as ledger_entry_id, event_name as ledger_event_type')
-    .in('target_id', allControlIds)
-    .eq('target_type', 'mitigation')
-    .order('created_at', { ascending: false })
 
   // Fetch site IDs
   const { data: jobsWithSites } = await supabase
