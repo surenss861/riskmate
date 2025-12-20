@@ -235,7 +235,14 @@ export function JobsPageContentView(props: JobsPageContentProps) {
       // Revalidate to get fresh data
       props.onJobArchived()
       
-      setToast({ message: 'Job archived successfully', type: 'success' })
+      setToast({ 
+        message: 'Work record archived. Entry added to Compliance Ledger.', 
+        type: 'success',
+        action: {
+          label: 'View in Ledger',
+          onClick: () => router.push(`/operations/audit?job_id=${archiveModal.jobId}`)
+        }
+      })
       setArchiveModal({ isOpen: false, jobId: null, jobName: '' })
     } catch (err: any) {
       // Rollback is handled by SWR's rollbackOnError, but we also restore previous state explicitly
@@ -338,7 +345,7 @@ export function JobsPageContentView(props: JobsPageContentProps) {
             <div className="flex-1">
                   <div className="flex items-center gap-3">
                   <Link href="/operations/jobs" className={`${typography.h1} hover:text-[#F97316] transition-colors`}>
-                    Job Roster
+                    Work Records
                   </Link>
                     <span className="text-xs text-white/40 font-normal">Audit-safe view</span>
                   </div>
