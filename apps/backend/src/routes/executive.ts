@@ -98,7 +98,7 @@ executiveRouter.get('/risk-posture', authenticate as unknown as express.RequestH
       .maybeSingle() // Use maybeSingle() instead of single() to handle no results
 
     // Verify ledger integrity (check hash chain)
-    const { data: integrityCheck } = await supabase
+    const { data: integrityCheck, error: integrityError } = await supabase
       .from('audit_logs')
       .select('id, hash, prev_hash')
       .eq('organization_id', organization_id)
@@ -106,11 +106,14 @@ executiveRouter.get('/risk-posture', authenticate as unknown as express.RequestH
       .limit(100) // Sample check
 
     let ledgerIntegrity: 'verified' | 'pending' | 'error' = 'verified'
-    if (integrityCheck && integrityCheck.length > 0) {
+    if (integrityError) {
+      console.warn('Failed to check ledger integrity:', integrityError)
+      ledgerIntegrity = 'pending'
+    } else if (integrityCheck && integrityCheck.length > 0) {
       // Simple integrity check: verify prev_hash links exist
-      const hashes = new Set(integrityCheck.map(e => e.hash))
-      const brokenLinks = integrityCheck.filter(e => 
-        e.prev_hash !== null && !hashes.has(e.prev_hash)
+      const hashes = new Set(integrityCheck.map((e: any) => e.hash).filter(Boolean))
+      const brokenLinks = integrityCheck.filter((e: any) => 
+        e.prev_hash !== null && e.prev_hash !== undefined && !hashes.has(e.prev_hash)
       )
       if (brokenLinks.length > 0) {
         ledgerIntegrity = 'error'
@@ -118,6 +121,7 @@ executiveRouter.get('/risk-posture', authenticate as unknown as express.RequestH
         ledgerIntegrity = 'verified'
       }
     } else {
+      // No audit logs yet
       ledgerIntegrity = 'pending'
     }
 
