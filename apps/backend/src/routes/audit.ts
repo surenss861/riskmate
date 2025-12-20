@@ -1421,7 +1421,7 @@ auditRouter.post('/assign', authenticate as unknown as express.RequestHandler, a
       userId,
       organizationId: organization_id,
       userRole,
-      userEmail,
+      userEmail: userEmail || undefined,
       requestId,
       endpoint: '/api/audit/assign',
       ip: req.ip || req.socket.remoteAddress,
