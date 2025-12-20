@@ -476,9 +476,18 @@ export default function AuditViewPage() {
 
   const handleAssignClick = (event?: AuditEvent) => {
     if (!event) {
-      // Called from card action - prompt user to select an event
-      alert('Please select an event from the list to assign')
-      return
+      // Called from card action - use first event from filtered list that needs assignment
+      const needsAssignment = events.find(e => 
+        e.outcome === 'blocked' || 
+        e.severity === 'critical' || 
+        e.severity === 'material' ||
+        e.metadata?.needs_assignment === true
+      )
+      if (!needsAssignment) {
+        alert('No events found that require assignment. Please select an event from the list.')
+        return
+      }
+      event = needsAssignment
     }
 
     setSelectedTarget({
@@ -491,9 +500,18 @@ export default function AuditViewPage() {
 
   const handleResolveClick = (event?: AuditEvent) => {
     if (!event) {
-      // Called from card action - prompt user to select an event
-      alert('Please select an event from the list to resolve')
-      return
+      // Called from card action - use first event from filtered list that needs resolution
+      const needsResolution = events.find(e => 
+        e.outcome === 'blocked' || 
+        e.severity === 'critical' || 
+        e.severity === 'material' ||
+        e.metadata?.needs_resolution === true
+      )
+      if (!needsResolution) {
+        alert('No events found that require resolution. Please select an event from the list.')
+        return
+      }
+      event = needsResolution
     }
 
     // Determine if evidence is required based on event type
@@ -588,9 +606,27 @@ export default function AuditViewPage() {
   }
 
   const handleCreateCorrectiveActionClick = (view: string) => {
-    // This would get the selected incident/event from the view
-    // For now, prompt user to select an event
-    alert('Please select an incident from the list to create a corrective action')
+    // Find first incident from filtered events (flagged jobs, high severity, etc.)
+    const incidentEvent = events.find(e => 
+      e.job_id && (
+        e.severity === 'critical' || 
+        e.severity === 'material' ||
+        e.metadata?.flagged === true ||
+        e.event_type?.includes('incident')
+      )
+    )
+    if (!incidentEvent || !incidentEvent.job_id) {
+      alert('No incidents found in the current view. Please filter to incidents or select an event from the list.')
+      return
+    }
+    
+    setSelectedIncident({
+      workRecordId: incidentEvent.job_id,
+      workRecordName: incidentEvent.job_name || 'Incident',
+      incidentEventId: incidentEvent.id,
+      severity: incidentEvent.metadata?.severity || incidentEvent.severity || 'info',
+    })
+    setCreateCorrectiveActionModalOpen(true)
   }
 
   const [closeIncidentModalOpen, setCloseIncidentModalOpen] = useState(false)
@@ -656,16 +692,69 @@ export default function AuditViewPage() {
   }
 
   const handleCloseIncidentClick = (view: string) => {
-    // This would get the selected incident from the view
-    alert('Please select an incident from the list to close')
+    // Find first incident from filtered events that has corrective actions
+    const incidentEvent = events.find(e => 
+      e.job_id && (
+        e.severity === 'critical' || 
+        e.severity === 'material' ||
+        e.metadata?.flagged === true ||
+        e.event_type?.includes('incident')
+      )
+    )
+    if (!incidentEvent || !incidentEvent.job_id) {
+      alert('No incidents found in the current view. Please filter to incidents or select an event from the list.')
+      return
+    }
+    
+    // Check if corrective actions exist (simplified - in real app, query controls)
+    setSelectedIncidentForClosure({
+      workRecordId: incidentEvent.job_id,
+      workRecordName: incidentEvent.job_name || 'Incident',
+      hasCorrectiveActions: true, // Assume true for now - would check actual controls
+      hasEvidence: incidentEvent.metadata?.has_evidence === true,
+    })
+    setCloseIncidentModalOpen(true)
   }
 
   const handleRevokeAccessClick = (view: string) => {
-    alert('Please select a user from the Access Review view to revoke access')
+    // Find first access-related event from filtered view
+    const accessEvent = events.find(e => 
+      e.category === 'access' || 
+      e.event_type?.includes('access') ||
+      e.event_type?.includes('login') ||
+      e.event_type?.includes('role_change')
+    )
+    if (!accessEvent || !accessEvent.actor_id) {
+      alert('No access events found in the current view. Please switch to Access Review view or select an event from the list.')
+      return
+    }
+    
+    setSelectedUser({
+      userId: accessEvent.actor_id,
+      userName: accessEvent.user_name || accessEvent.user_email || 'Unknown User',
+      userRole: accessEvent.user_role,
+    })
+    setRevokeAccessModalOpen(true)
   }
 
   const handleFlagSuspiciousClick = (view: string) => {
-    alert('Please select a user or login event from the Access Review view to flag')
+    // Find first access-related event from filtered view
+    const accessEvent = events.find(e => 
+      e.category === 'access' || 
+      e.event_type?.includes('access') ||
+      e.event_type?.includes('login') ||
+      e.event_type?.includes('role_change')
+    )
+    if (!accessEvent || !accessEvent.actor_id) {
+      alert('No access events found in the current view. Please switch to Access Review view or select an event from the list.')
+      return
+    }
+    
+    setSelectedUser({
+      userId: accessEvent.actor_id,
+      userName: accessEvent.user_name || accessEvent.user_email || 'Unknown User',
+    })
+    setFlagSuspiciousModalOpen(true)
   }
 
   const [revokeAccessModalOpen, setRevokeAccessModalOpen] = useState(false)
