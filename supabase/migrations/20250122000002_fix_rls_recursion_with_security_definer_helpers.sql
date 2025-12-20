@@ -50,21 +50,18 @@ DROP POLICY IF EXISTS "Admins can manage members in their organization" ON organ
 CREATE POLICY "Users can view members in their organization"
   ON organization_members FOR SELECT
   TO authenticated
-  USING (
-    organization_id = get_user_organization_id()
-    OR public.is_org_member(organization_id)
-  );
+  USING (public.is_org_member(organization_id));
 
 -- INSERT/UPDATE/DELETE policy: Only admins/owners can manage members
 CREATE POLICY "Admins can manage members in their organization"
   ON organization_members FOR ALL
   TO authenticated
   USING (
-    organization_id = get_user_organization_id()
+    public.is_org_member(organization_id)
     AND public.org_role(organization_id) IN ('owner', 'admin')
   )
   WITH CHECK (
-    organization_id = get_user_organization_id()
+    public.is_org_member(organization_id)
     AND public.org_role(organization_id) IN ('owner', 'admin')
   );
 
