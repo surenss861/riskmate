@@ -7,9 +7,10 @@
 const CACHE_NAME = 'riskmate-v1'
 const urlsToCache = [
   '/',
-  '/dashboard',
-  '/dashboard/jobs',
-  '/offline',
+  '/operations',
+  '/operations/audit',
+  '/operations/jobs',
+  // Removed /offline - route doesn't exist, causes cache.add() failures
 ]
 
 // Install event - cache resources
