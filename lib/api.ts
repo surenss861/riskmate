@@ -687,8 +687,8 @@ export const auditApi = {
     const token = await getAuthToken()
     // Use getApiUrl() to ensure we have the backend URL
     const backendUrl = getApiUrl()
-    const url = backendUrl ? `${backendUrl}${endpoint}` : endpoint
-    const response = await fetch(url, {
+    const apiUrl = backendUrl ? `${backendUrl}${endpoint}` : endpoint
+    const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -701,7 +701,7 @@ export const auditApi = {
       // Check if we got HTML (404/405 page) instead of JSON
       const contentType = response.headers.get('content-type')
       if (contentType?.includes('text/html')) {
-        throw new Error(`Backend API not found. Please check NEXT_PUBLIC_BACKEND_URL is set correctly. Attempted: ${url}`)
+        throw new Error(`Backend API not found. Please check NEXT_PUBLIC_BACKEND_URL is set correctly. Attempted: ${apiUrl}`)
       }
       const error = await response.json().catch(() => ({ message: 'Export failed' }))
       throw new Error(error.message || 'Export failed')
@@ -709,9 +709,9 @@ export const auditApi = {
 
     // Handle file download
     const blob = await response.blob()
-    const url = window.URL.createObjectURL(blob)
+    const downloadUrl = window.URL.createObjectURL(blob)
     const link = document.createElement('a')
-    link.href = url
+    link.href = downloadUrl
     
     const contentDisposition = response.headers.get('Content-Disposition')
     const filename = contentDisposition 
@@ -722,7 +722,7 @@ export const auditApi = {
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
-    window.URL.revokeObjectURL(url)
+    window.URL.revokeObjectURL(downloadUrl)
     
     return { success: true }
   },
