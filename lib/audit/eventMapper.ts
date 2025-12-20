@@ -15,6 +15,11 @@ export interface EventMapping {
   description: string
   policyStatement?: string
   whyItMatters?: string
+  exposure?: {
+    insurance?: string
+    regulatory?: string
+    owner?: string
+  }
 }
 
 const EVENT_MAPPINGS: Record<string, EventMapping> = {
@@ -27,6 +32,11 @@ const EVENT_MAPPINGS: Record<string, EventMapping> = {
     description: 'Action blocked due to insufficient role permissions',
     policyStatement: 'Role-based access control prevents unauthorized actions',
     whyItMatters: 'Prevents unauthorized record tampering and maintains audit integrity',
+    exposure: {
+      insurance: 'Weakens defensibility if approvals can be bypassed',
+      regulatory: 'Non-compliant change control on safety artifacts',
+      owner: 'Breaks separation of duties; increases dispute risk',
+    },
   },
   'job.flagged_for_review': {
     title: 'Job Flagged for Review',

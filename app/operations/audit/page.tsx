@@ -10,6 +10,9 @@ import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { cardStyles, buttonStyles, typography } from '@/lib/styles/design-system'
 import { DashboardNavbar } from '@/components/dashboard/DashboardNavbar'
 import { getEventMapping, categorizeEvent, type EventCategory, type EventSeverity, type EventOutcome } from '@/lib/audit/eventMapper'
+import { getIndustryLanguage } from '@/lib/audit/industryLanguage'
+import { SavedViewCards } from '@/components/audit/SavedViewCards'
+import { EvidenceDrawer } from '@/components/audit/EvidenceDrawer'
 
 interface AuditEvent {
   id: string
@@ -51,14 +54,39 @@ export default function AuditViewPage() {
   const [jobs, setJobs] = useState<Array<{ id: string; client_name: string; site_name?: string }>>([])
   const [users, setUsers] = useState<Array<{ id: string; name: string; email: string; role?: string }>>([])
   const [sites, setSites] = useState<Array<{ id: string; name: string }>>([])
+  const [industryVertical, setIndustryVertical] = useState<string | null>(null)
+  const [evidenceDrawerOpen, setEvidenceDrawerOpen] = useState(false)
+  const [evidenceJobId, setEvidenceJobId] = useState<string | undefined>()
+  const [evidenceJobName, setEvidenceJobName] = useState<string | undefined>()
+  const [evidenceSiteName, setEvidenceSiteName] = useState<string | undefined>()
 
   useEffect(() => {
     loadAuditEvents()
     loadJobs()
     loadUsers()
     loadSites()
+    loadIndustryVertical()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  const loadIndustryVertical = async () => {
+    try {
+      const supabase = createSupabaseBrowserClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) return
+
+      const { data: orgData } = await supabase
+        .from('organizations')
+        .select('trade_type')
+        .single()
+
+      if (orgData?.trade_type) {
+        setIndustryVertical(orgData.trade_type)
+      }
+    } catch (err) {
+      console.warn('Failed to load industry vertical:', err)
+    }
+  }
 
   useEffect(() => {
     loadAuditEvents()
@@ -242,6 +270,40 @@ export default function AuditViewPage() {
     return eventDate.toLocaleDateString()
   }
 
+  const industryLang = getIndustryLanguage(industryVertical)
+
+  const handleExportFromView = async (format: 'csv' | 'json', view: string) => {
+    try {
+      await auditApi.export({
+        format,
+        view: view as any,
+        time_range: filters.timeRange,
+      })
+    } catch (err) {
+      alert('Export failed. Please try again.')
+    }
+  }
+
+  const handleOpenEvidence = (jobId?: string, jobName?: string, siteName?: string) => {
+    setEvidenceJobId(jobId)
+    setEvidenceJobName(jobName)
+    setEvidenceSiteName(siteName)
+    setEvidenceDrawerOpen(true)
+  }
+
+  const handleExportEvidence = async () => {
+    if (!evidenceJobId) return
+    try {
+      await auditApi.export({
+        format: 'json',
+        job_id: evidenceJobId,
+        time_range: 'all',
+      })
+    } catch (err) {
+      alert('Export failed. Please try again.')
+    }
+  }
+
   return (
     <ProtectedRoute>
       <div className="min-h-screen bg-[#0A0A0A] text-white">
@@ -256,6 +318,17 @@ export default function AuditViewPage() {
             </p>
           </div>
 
+          {/* Saved View Cards */}
+          <SavedViewCards
+            activeView={filters.savedView}
+            onSelectView={(view) => {
+              setFilters({ ...filters, savedView: view })
+              if (view === 'governance-enforcement') setActiveTab('governance')
+              if (view === 'access-review') setActiveTab('access')
+            }}
+            onExport={handleExportFromView}
+          />
+
           {/* Summary Cards */}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
             <div className={cardStyles.base + ' p-4'}>
@@ -267,11 +340,11 @@ export default function AuditViewPage() {
               <div className="text-2xl font-bold text-red-400">{summaryMetrics.governanceViolations}</div>
             </div>
             <div className={cardStyles.base + ' p-4'}>
-              <div className="text-sm text-white/60 mb-1">Jobs Touched</div>
+              <div className="text-sm text-white/60 mb-1">{industryLang.job}s Touched</div>
               <div className="text-2xl font-bold text-[#F97316]">{summaryMetrics.highRiskJobsTouched}</div>
             </div>
             <div className={cardStyles.base + ' p-4'}>
-              <div className="text-sm text-white/60 mb-1">Proof Packs</div>
+              <div className="text-sm text-white/60 mb-1">{industryLang.proofPack}s</div>
               <div className="text-2xl font-bold text-green-400">{summaryMetrics.proofPacksGenerated}</div>
             </div>
             <div className={cardStyles.base + ' p-4'}>
@@ -291,25 +364,6 @@ export default function AuditViewPage() {
               <h2 className={`${typography.h2}`}>Filters</h2>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-              <div>
-                <label className="text-sm text-white/60 mb-2 block">Saved View</label>
-                <select
-                  value={filters.savedView}
-                  onChange={(e) => {
-                    const view = e.target.value as SavedView
-                    setFilters({ ...filters, savedView: view })
-                    if (view === 'governance-enforcement') setActiveTab('governance')
-                    if (view === 'access-review') setActiveTab('access')
-                  }}
-                  className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white"
-                >
-                  <option value="">Custom</option>
-                  <option value="insurance-ready">Insurance-ready (Completed jobs + proof packs)</option>
-                  <option value="governance-enforcement">Governance enforcement (Violations only)</option>
-                  <option value="incident-review">Incident review (Flagged + escalations)</option>
-                  <option value="access-review">Access review (Role + login changes)</option>
-                </select>
-              </div>
               <div>
                 <label className="text-sm text-white/60 mb-2 block">Time Range</label>
                 <select
@@ -351,13 +405,13 @@ export default function AuditViewPage() {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="text-sm text-white/60 mb-2 block">Job</label>
+                <label className="text-sm text-white/60 mb-2 block">{industryLang.job}</label>
                 <select
                   value={filters.job}
                   onChange={(e) => setFilters({ ...filters, job: e.target.value })}
                   className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white"
                 >
-                  <option value="">All Jobs</option>
+                  <option value="">All {industryLang.job}s</option>
                   {jobs.map((job) => (
                     <option key={job.id} value={job.id}>
                       {job.client_name}
@@ -382,13 +436,13 @@ export default function AuditViewPage() {
               </div>
               {sites.length > 0 && (
                 <div>
-                  <label className="text-sm text-white/60 mb-2 block">Site</label>
+                  <label className="text-sm text-white/60 mb-2 block">{industryLang.site}</label>
                   <select
                     value={filters.site}
                     onChange={(e) => setFilters({ ...filters, site: e.target.value })}
                     className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white"
                   >
-                    <option value="">All Sites</option>
+                    <option value="">All {industryLang.site}s</option>
                     {sites.map((site) => (
                       <option key={site.id} value={site.id}>
                         {site.name}
@@ -553,6 +607,26 @@ export default function AuditViewPage() {
                                       Why it matters: {mapping.whyItMatters}
                                     </div>
                                   )}
+                                  {mapping.exposure && (
+                                    <div className="mt-3 pt-3 border-t border-yellow-500/20 space-y-1">
+                                      <div className="text-xs font-medium text-yellow-200">Exposure:</div>
+                                      {mapping.exposure.insurance && (
+                                        <div className="text-xs text-white/80">
+                                          <span className="font-medium">Insurance:</span> {mapping.exposure.insurance}
+                                        </div>
+                                      )}
+                                      {mapping.exposure.regulatory && (
+                                        <div className="text-xs text-white/80">
+                                          <span className="font-medium">Regulatory:</span> {mapping.exposure.regulatory}
+                                        </div>
+                                      )}
+                                      {mapping.exposure.owner && (
+                                        <div className="text-xs text-white/80">
+                                          <span className="font-medium">Owner:</span> {mapping.exposure.owner}
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
                                 </div>
                               )}
                               <p className="text-sm text-white/70 mt-2">{mapping.description}</p>
@@ -575,7 +649,7 @@ export default function AuditViewPage() {
                                 <div className="text-white flex items-center gap-2">
                                   <FileText className="w-4 h-4" />
                                   <button
-                                    onClick={() => router.push(`/operations/jobs/${event.job_id}`)}
+                                    onClick={() => handleOpenEvidence(event.job_id, event.job_name, event.site_name)}
                                     className="hover:text-[#F97316] transition-colors flex items-center gap-1"
                                   >
                                     {event.job_name}
@@ -586,7 +660,7 @@ export default function AuditViewPage() {
                             )}
                             {event.site_name && (
                               <div>
-                                <div className="text-white/60 mb-1">Site</div>
+                                <div className="text-white/60 mb-1">{industryLang.site}</div>
                                 <div className="text-white flex items-center gap-2">
                                   <Building2 className="w-4 h-4" />
                                   {event.site_name}
@@ -607,25 +681,23 @@ export default function AuditViewPage() {
                           {event.job_id && (
                             <div className="flex gap-2 mt-3">
                               <button
+                                onClick={() => handleOpenEvidence(event.job_id, event.job_name, event.site_name)}
+                                className="text-xs px-3 py-1 bg-white/10 hover:bg-white/20 rounded transition-colors"
+                              >
+                                View Evidence
+                              </button>
+                              <button
                                 onClick={() => router.push(`/operations/jobs/${event.job_id}`)}
                                 className="text-xs px-3 py-1 bg-white/10 hover:bg-white/20 rounded transition-colors"
                               >
-                                View Job
+                                View {industryLang.job}
                               </button>
                               <button
                                 onClick={() => router.push(`/operations/jobs/${event.job_id}?view=packet`)}
                                 className="text-xs px-3 py-1 bg-white/10 hover:bg-white/20 rounded transition-colors"
                               >
-                                Job Packet
+                                {industryLang.proofPack}
                               </button>
-                              {event.event_type?.includes('proof_pack') && (
-                                <button
-                                  onClick={() => router.push(`/operations/jobs/${event.job_id}?view=packet`)}
-                                  className="text-xs px-3 py-1 bg-[#F97316]/20 hover:bg-[#F97316]/30 rounded transition-colors"
-                                >
-                                  Proof Pack
-                                </button>
-                              )}
                             </div>
                           )}
                           {event.metadata && Object.keys(event.metadata).length > 0 && (
@@ -653,6 +725,17 @@ export default function AuditViewPage() {
             )}
           </div>
         </div>
+
+        {/* Evidence Drawer */}
+        <EvidenceDrawer
+          isOpen={evidenceDrawerOpen}
+          onClose={() => setEvidenceDrawerOpen(false)}
+          jobId={evidenceJobId}
+          jobName={evidenceJobName}
+          siteName={evidenceSiteName}
+          events={events.filter(e => e.job_id === evidenceJobId)}
+          onExportEvidence={handleExportEvidence}
+        />
       </div>
     </ProtectedRoute>
   )
