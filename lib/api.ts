@@ -5,20 +5,15 @@
 import { JobReportData } from '@/types/report'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
-// Use relative paths for Next.js API routes
-// In production (Vercel), always use relative paths regardless of env var
-// Only use backend URL in local development
+// Get backend API URL from environment variable
+// If NEXT_PUBLIC_BACKEND_URL is set, use it; otherwise use relative paths (Next.js API routes)
 const getApiUrl = () => {
-  if (typeof window === 'undefined') return '' // Server-side: always relative
+  if (typeof window === 'undefined') {
+    // Server-side: always use relative paths (Next.js API routes)
+    return ''
+  }
   
-  // Check if we're on Vercel production domain
-  const isProduction = window.location.hostname.includes('vercel.app') || 
-                       window.location.hostname.includes('riskmate.vercel.app')
-  
-  // Force relative paths in production
-  if (isProduction) return ''
-  
-  // In development, use env var or default to empty (relative)
+  // Client-side: use env var if set, otherwise use relative paths
   return process.env.NEXT_PUBLIC_BACKEND_URL || ''
 }
 
