@@ -318,7 +318,7 @@ export default function AuditViewPage() {
           <div className="mb-8">
             <h1 className={`${typography.h1} mb-2`}>Compliance Ledger</h1>
             <p className="text-white/60 text-sm">
-              Complete audit trail of all actions, governance enforcement events, and access changes. Export-ready for compliance, legal discovery, and regulatory review.
+              Complete governance evidence trail of all actions, enforcement events, and access changes. Export-ready for compliance, legal discovery, and regulatory review.
             </p>
           </div>
 
@@ -566,12 +566,23 @@ export default function AuditViewPage() {
                   const isExpanded = expandedEvents.has(event.id)
                   const isViolation = mapping.category === 'governance' && mapping.outcome === 'blocked'
 
+                  // Enhanced visual weight for Review Queue items
+                  const isReviewQueue = filters.savedView === 'review-queue'
+                  const isCritical = mapping.severity === 'critical'
+                  const isMaterial = mapping.severity === 'material'
+                  const isBlocked = mapping.outcome === 'blocked'
+                  const needsAttention = isReviewQueue && (isCritical || isMaterial || isBlocked)
+
                   return (
                     <div
                       key={event.id}
-                      className={`p-4 bg-white/5 rounded-lg border ${
-                        isViolation ? 'border-red-500/30 bg-red-500/5' : 'border-white/10'
-                      } hover:bg-white/10 transition-colors`}
+                      className={`p-4 rounded-lg border transition-colors ${
+                        isViolation || needsAttention
+                          ? 'border-red-500/40 bg-red-500/10 shadow-lg shadow-red-500/10'
+                          : 'border-white/10 bg-white/5'
+                      } hover:bg-white/10 ${
+                        needsAttention ? 'ring-1 ring-red-500/30' : ''
+                      }`}
                     >
                       <div className="flex items-start gap-4">
                         <div className={`mt-1 p-2 rounded ${
@@ -587,10 +598,19 @@ export default function AuditViewPage() {
                           <div className="flex items-start justify-between mb-2">
                             <div className="flex-1">
                               <div className="flex items-center gap-3 mb-1">
-                                <h3 className="font-semibold text-white">{mapping.title}</h3>
-                                <span className={`px-2 py-0.5 rounded text-xs ${
-                                  mapping.severity === 'critical' ? 'bg-red-500/20 text-red-400' :
-                                  mapping.severity === 'material' ? 'bg-yellow-500/20 text-yellow-400' :
+                                <h3 className={`font-semibold ${
+                                  needsAttention ? 'text-red-200' : 'text-white'
+                                }`}>
+                                  {mapping.title}
+                                  {needsAttention && (
+                                    <span className="ml-2 text-xs text-red-400 font-normal">
+                                      • Requires action
+                                    </span>
+                                  )}
+                                </h3>
+                                <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                                  mapping.severity === 'critical' ? 'bg-red-500/30 text-red-300 border border-red-500/50' :
+                                  mapping.severity === 'material' ? 'bg-yellow-500/30 text-yellow-300 border border-yellow-500/50' :
                                   'bg-blue-500/20 text-blue-400'
                                 }`}>
                                   {mapping.severity.toUpperCase()}

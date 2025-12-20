@@ -117,8 +117,8 @@ export function JobPacketView({
       icon: FileText,
       contents: [
         'Capability violations',
-        'Role assignment history',
-        'Access change log',
+        'Role assignment record',
+        'Access governance trail',
         'Corrective actions',
       ],
     },
@@ -162,7 +162,7 @@ export function JobPacketView({
               onClick={() => router.push(`/operations/audit?job_id=${job.id}`)}
               className="text-xs text-[#F97316] hover:text-[#FB923C] underline flex items-center gap-1"
             >
-              View complete action history in Compliance Ledger
+              View complete governance evidence trail in Compliance Ledger
               <ExternalLink className="w-3 h-3" />
             </button>
           </div>

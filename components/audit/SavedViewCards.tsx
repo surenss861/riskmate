@@ -15,9 +15,10 @@ export function SavedViewCards({ activeView, onSelectView, onExport }: SavedView
       id: 'review-queue',
       title: 'Review Queue',
       icon: AlertTriangle,
-      description: 'Jobs flagged for review, missing sign-offs, critical events, and blocked actions — what needs attention now.',
-      color: 'bg-orange-500/20 border-orange-500/30 text-orange-400',
-      hoverColor: 'hover:bg-orange-500/30',
+      description: 'Outstanding governance issues requiring action: flagged jobs, critical events, blocked actions, and unresolved exposure.',
+      color: 'bg-orange-500/25 border-orange-500/40 text-orange-300',
+      hoverColor: 'hover:bg-orange-500/35',
+      priority: true, // Mark as priority view
     },
     {
       id: 'insurance-ready',
@@ -47,7 +48,7 @@ export function SavedViewCards({ activeView, onSelectView, onExport }: SavedView
       id: 'access-review',
       title: 'Access Review',
       icon: UserCheck,
-      description: 'Role changes, login events, and access revocations — security audit trail.',
+      description: 'Role changes, login events, and access revocations — security governance record.',
       color: 'bg-blue-500/20 border-blue-500/30 text-blue-400',
       hoverColor: 'hover:bg-blue-500/30',
     },
@@ -64,6 +65,8 @@ export function SavedViewCards({ activeView, onSelectView, onExport }: SavedView
             key={view.id}
             className={`${view.color} ${view.hoverColor} border rounded-lg p-4 cursor-pointer transition-all ${
               isActive ? 'ring-2 ring-[#F97316] ring-offset-2 ring-offset-[#0A0A0A]' : ''
+            } ${
+              view.id === 'review-queue' ? 'shadow-lg shadow-orange-500/20' : ''
             }`}
             onClick={() => onSelectView(isActive ? '' : view.id as any)}
           >

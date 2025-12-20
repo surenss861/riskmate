@@ -776,7 +776,7 @@ export function JobsPageContentView(props: JobsPageContentProps) {
               },
               {
                 id: 'last_activity',
-                header: executiveView ? 'Last Activity (UTC)' : 'Created (UTC)',
+                header: executiveView ? 'Last Update (UTC)' : 'Record Created (UTC)',
                 accessor: (job: any) => job.updated_at || job.created_at,
                 sortable: true,
                 render: (value: string, job: any) => (
@@ -785,7 +785,7 @@ export function JobsPageContentView(props: JobsPageContentProps) {
                       {executiveView ? props.formatDate(job.updated_at || job.created_at) : props.formatDate(job.created_at)}
                     </div>
                     <div className="text-xs text-white/20 mt-0.5">
-                      {executiveView ? 'Last update' : 'Record created'}
+                      {executiveView ? 'Last governance record' : 'Evidence created'}
                     </div>
                   </div>
                 ),
@@ -845,7 +845,7 @@ export function JobsPageContentView(props: JobsPageContentProps) {
           <div className="mt-4 flex flex-col gap-2 text-xs">
             <div className="flex items-center justify-between">
               <div className="text-white/30">
-                All job records are immutable once audit activity exists.
+                All job records are immutable once governance evidence exists.
               </div>
               <div className="text-white/40 italic">
                 Export-ready for insurer & regulatory review
