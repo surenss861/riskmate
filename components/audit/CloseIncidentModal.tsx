@@ -13,7 +13,7 @@ interface CloseIncidentModalProps {
     closure_summary: string
     root_cause: string
     evidence_attached: boolean
-    waived: boolean
+    waived?: boolean
     waiver_reason?: string
     no_action_required: boolean
     no_action_justification?: string
