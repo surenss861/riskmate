@@ -62,8 +62,17 @@ export default function ExecutiveSnapshotPage() {
       }
 
       // Fetch risk posture from backend
-      const response = await executiveApi.getRiskPosture()
-      setRiskPosture(response.data)
+      try {
+        const response = await executiveApi.getRiskPosture()
+        if (response?.data) {
+          setRiskPosture(response.data)
+        } else {
+          console.error('Invalid response from risk posture API:', response)
+        }
+      } catch (apiError: any) {
+        console.error('Risk posture API error:', apiError)
+        // Set loading to false even on error so user sees something
+      }
       setLoading(false)
     } catch (err: any) {
       console.error('Failed to load risk posture:', err)

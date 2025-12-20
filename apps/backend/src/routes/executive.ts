@@ -55,14 +55,18 @@ executiveRouter.get('/risk-posture', authenticate as unknown as express.RequestH
       j.status === 'incident' || (j.review_flag === true && j.risk_score !== null && j.risk_score > 75)
     ).length
 
-    // Count sign-offs
-    const { data: signoffs } = await supabase
-      .from('job_signoffs')
-      .select('job_id, status')
-      .in('job_id', (jobs || []).map(j => j.id))
+    // Count sign-offs (only if there are jobs)
+    let signedCount = 0
+    let pendingSignoffs = 0
+    if (jobs && jobs.length > 0) {
+      const { data: signoffs } = await supabase
+        .from('job_signoffs')
+        .select('job_id, status')
+        .in('job_id', jobs.map(j => j.id))
 
-    const signedCount = (signoffs || []).filter(s => s.status === 'signed').length
-    const pendingSignoffs = (jobs || []).length - signedCount
+      signedCount = (signoffs || []).filter(s => s.status === 'signed').length
+      pendingSignoffs = jobs.length - signedCount
+    }
 
     // Count violations (last 30 days)
     const thirtyDaysAgo = new Date()
@@ -83,7 +87,7 @@ executiveRouter.get('/risk-posture', authenticate as unknown as express.RequestH
       .like('event_type', 'proof_pack.%')
       .gte('created_at', thirtyDaysAgo.toISOString())
 
-    // Get last material event
+    // Get last material event (may not exist)
     const { data: lastMaterialEvent } = await supabase
       .from('audit_logs')
       .select('created_at')
@@ -91,7 +95,7 @@ executiveRouter.get('/risk-posture', authenticate as unknown as express.RequestH
       .in('severity', ['material', 'critical'])
       .order('created_at', { ascending: false })
       .limit(1)
-      .single()
+      .maybeSingle() // Use maybeSingle() instead of single() to handle no results
 
     // Verify ledger integrity (check hash chain)
     const { data: integrityCheck } = await supabase
