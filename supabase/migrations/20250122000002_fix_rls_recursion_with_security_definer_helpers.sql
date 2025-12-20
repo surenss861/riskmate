@@ -1,8 +1,14 @@
 -- Fix RLS recursion by creating SECURITY DEFINER helper functions
 -- These functions bypass RLS, preventing infinite recursion in policies
 
+-- Drop old function signatures if they exist (from previous migrations)
+DROP FUNCTION IF EXISTS public.is_org_member(UUID);
+DROP FUNCTION IF EXISTS public.is_org_member(UUID, UUID);
+DROP FUNCTION IF EXISTS public.org_role(UUID);
+DROP FUNCTION IF EXISTS public.org_role(UUID, UUID);
+
 -- Helper function: Check if current user is a member of an organization
-CREATE OR REPLACE FUNCTION public.is_org_member(p_org UUID, p_user UUID DEFAULT auth.uid())
+CREATE FUNCTION public.is_org_member(p_org UUID, p_user UUID DEFAULT auth.uid())
 RETURNS BOOLEAN
 LANGUAGE sql
 STABLE
@@ -18,7 +24,7 @@ AS $$
 $$;
 
 -- Helper function: Get current user's role in an organization
-CREATE OR REPLACE FUNCTION public.org_role(p_org UUID, p_user UUID DEFAULT auth.uid())
+CREATE FUNCTION public.org_role(p_org UUID, p_user UUID DEFAULT auth.uid())
 RETURNS TEXT
 LANGUAGE sql
 STABLE
