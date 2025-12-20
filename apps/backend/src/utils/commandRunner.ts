@@ -265,8 +265,8 @@ export function applyAuditFilters<T extends { eq: any; gte: any; lte: any; in: a
     if (view === 'review-queue') {
       // Review Queue: blocked actions OR critical/material severity
       // PostgREST or() doesn't handle multiple conditions on same column well
-      // Using outcome filter only for now - severity filtering can be added client-side if needed
-      query = query.or('outcome.eq.blocked') as T
+      // Use .eq() for single condition, not .or()
+      query = query.eq('outcome', 'blocked') as T
     } else if (view === 'insurance-ready') {
       // Insurance-Ready: completed work records with verified controls and attestations
       query = query.eq('category', 'operations').in('event_name', ['job.completed', 'control.verified', 'evidence.uploaded', 'attestation.created']) as T
