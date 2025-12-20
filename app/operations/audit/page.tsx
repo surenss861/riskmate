@@ -847,23 +847,23 @@ export default function AuditViewPage() {
               <div className="text-sm text-white/60 mb-1">Total Events</div>
               <div className="text-2xl font-bold text-white">{summaryMetrics.totalEvents}</div>
             </div>
-            <div className={cardStyles.base + ' p-4'}>
+            <div className={`${cardStyles.base} ${cardStyles.padding.sm} rounded-xl`}>
               <div className="text-sm text-white/60 mb-1">Violations</div>
               <div className="text-2xl font-bold text-red-400">{summaryMetrics.governanceViolations}</div>
             </div>
-            <div className={cardStyles.base + ' p-4'}>
+            <div className={`${cardStyles.base} ${cardStyles.padding.sm} rounded-xl`}>
               <div className="text-sm text-white/60 mb-1">{industryLang.job}s Touched</div>
               <div className="text-2xl font-bold text-[#F97316]">{summaryMetrics.highRiskJobsTouched}</div>
             </div>
-            <div className={cardStyles.base + ' p-4'}>
+            <div className={`${cardStyles.base} ${cardStyles.padding.sm} rounded-xl`}>
               <div className="text-sm text-white/60 mb-1">{industryLang.proofPack}s</div>
               <div className="text-2xl font-bold text-green-400">{summaryMetrics.proofPacksGenerated}</div>
             </div>
-            <div className={cardStyles.base + ' p-4'}>
+            <div className={`${cardStyles.base} ${cardStyles.padding.sm} rounded-xl`}>
               <div className="text-sm text-white/60 mb-1">Sign-offs</div>
               <div className="text-2xl font-bold text-blue-400">{summaryMetrics.signoffsRecorded}</div>
             </div>
-            <div className={cardStyles.base + ' p-4'}>
+            <div className={`${cardStyles.base} ${cardStyles.padding.sm} rounded-xl`}>
               <div className="text-sm text-white/60 mb-1">Access Changes</div>
               <div className="text-2xl font-bold text-yellow-400">{summaryMetrics.accessChanges}</div>
             </div>
@@ -1004,7 +1004,7 @@ export default function AuditViewPage() {
           </div>
 
           {/* Events List */}
-          <div className={`${cardStyles.base} p-6`}>
+          <div className={`${cardStyles.base} ${cardStyles.padding.md} rounded-xl`}>
             <div className="flex items-center justify-between mb-4">
               <h2 className={`${typography.h2}`}>
                 {activeTab === 'governance' && 'Governance Enforcement Events'}
