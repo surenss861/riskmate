@@ -1421,11 +1421,11 @@ auditRouter.post('/assign', authenticate as unknown as express.RequestHandler, a
       userId,
       organizationId: organization_id,
       userRole,
-      userEmail: userEmail || undefined,
+      userEmail: userEmail ?? undefined,
       requestId,
       endpoint: '/api/audit/assign',
-      ip: req.ip || req.socket.remoteAddress,
-      userAgent: req.headers['user-agent'],
+      ip: req.ip || req.socket.remoteAddress || undefined,
+      userAgent: req.headers['user-agent'] || undefined,
     }
 
     const options: CommandOptions = {
