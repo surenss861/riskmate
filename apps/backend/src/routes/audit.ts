@@ -4,6 +4,7 @@ import { authenticate, AuthenticatedRequest } from '../middleware/auth'
 import { RequestWithId } from '../middleware/requestId'
 import { createErrorResponse, logErrorForSupport } from '../utils/errorResponse'
 import { recordAuditLog } from '../middleware/audit'
+import { runCommand, CommandContext, CommandOptions, buildAuditFilters } from '../utils/commandRunner'
 import archiver from 'archiver'
 import { Readable } from 'stream'
 import crypto from 'crypto'
@@ -1400,71 +1401,139 @@ auditRouter.post('/export/pack', authenticate as unknown as express.RequestHandl
 
 // POST /api/audit/assign
 // Assigns an item (event, job, incident) to an owner with due date
+// Ledger-first command: Validate → Mutate → Ledger Append (atomic)
 auditRouter.post('/assign', authenticate as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
   const authReq = req as AuthenticatedRequest & RequestWithId
   const requestId = authReq.requestId || 'unknown'
   
   try {
-    const { organization_id, id: userId } = authReq.user
+    const { organization_id, id: userId, role: userRole, email: userEmail } = authReq.user
     const { target_type, target_id, owner_id, due_date, severity_override, note } = req.body
+    const idempotencyKey = req.headers['idempotency-key'] as string
 
+    // Validation
     if (!target_type || !target_id || !owner_id || !due_date) {
       return res.status(400).json({ 
         message: 'target_type, target_id, owner_id, and due_date are required' 
       })
     }
 
-    // Verify target exists and belongs to organization
-    let targetExists = false
-    if (target_type === 'job') {
-      const { data } = await supabase
-        .from('jobs')
-        .select('id, client_name')
-        .eq('id', target_id)
-        .eq('organization_id', organization_id)
-        .single()
-      targetExists = !!data
-    } else if (target_type === 'event') {
-      // For audit log events, verify they exist
-      const { data } = await supabase
-        .from('audit_logs')
-        .select('id')
-        .eq('id', target_id)
-        .eq('organization_id', organization_id)
-        .single()
-      targetExists = !!data
+    // Authorization: Quick deny (executives cannot assign)
+    if (userRole === 'executive') {
+      // Still log the violation attempt
+      await recordAuditLog({
+        organizationId: organization_id,
+        actorId: userId,
+        eventName: 'auth.role_violation',
+        targetType: target_type as any,
+        targetId: target_id,
+        metadata: {
+          attempted_action: 'review.assigned',
+          policy_statement: 'Executives have read-only access and cannot assign review items',
+          endpoint: '/api/audit/assign',
+        },
+      })
+      return res.status(403).json({ 
+        code: 'AUTH_ROLE_READ_ONLY',
+        message: 'Executives cannot assign review items' 
+      })
     }
 
-    if (!targetExists) {
-      return res.status(404).json({ message: 'Target not found' })
-    }
-
-    // Create assignment record (you may want to create a separate assignments table)
-    // For now, we'll store assignment info in metadata and write a ledger entry
-    const assignmentMetadata = {
-      owner_id,
-      due_date,
-      severity_override: severity_override || null,
-      note: note || null,
-      assigned_at: new Date().toISOString(),
-    }
-
-    // Write ledger entry
-    await recordAuditLog({
+    // Build command context
+    const ctx: CommandContext = {
+      userId,
       organizationId: organization_id,
-      actorId: userId,
-      eventName: 'review.assigned',
-      targetType: target_type as any,
-      targetId: target_id,
-      metadata: {
-        ...assignmentMetadata,
-        summary: `Assigned to owner (due: ${due_date})`,
+      userRole,
+      userEmail,
+      requestId,
+      endpoint: '/api/audit/assign',
+      ip: req.ip || req.socket.remoteAddress,
+      userAgent: req.headers['user-agent'],
+    }
+
+    const options: CommandOptions = {
+      idempotencyKey,
+    }
+
+    // Execute command: Validate → Mutate → Ledger Append (atomic)
+    const result = await runCommand(
+      supabase,
+      ctx,
+      options,
+      async (tx) => {
+        // Domain mutation: Verify target exists
+        let targetExists = false
+        let targetName: string | null = null
+
+        if (target_type === 'job') {
+          const { data } = await tx
+            .from('jobs')
+            .select('id, client_name')
+            .eq('id', target_id)
+            .eq('organization_id', organization_id)
+            .single()
+          targetExists = !!data
+          targetName = data?.client_name || null
+        } else if (target_type === 'event') {
+          const { data } = await tx
+            .from('audit_logs')
+            .select('id, event_name')
+            .eq('id', target_id)
+            .eq('organization_id', organization_id)
+            .single()
+          targetExists = !!data
+          targetName = data?.event_name || null
+        }
+
+        if (!targetExists) {
+          throw new Error('Target not found')
+        }
+
+        // For now, assignment is stored in ledger metadata
+        // In future, you might create an assignments table here
+        return {
+          target_type,
+          target_id,
+          target_name: targetName,
+          owner_id,
+          due_date,
+          severity_override: severity_override || null,
+          note: note || null,
+          assigned_at: new Date().toISOString(),
+        }
       },
-    })
+      {
+        eventName: 'review.assigned',
+        targetType: target_type as any,
+        targetId: target_id,
+        metadata: {
+          owner_id,
+          due_date,
+          severity_override: severity_override || null,
+          note: note || null,
+          assigned_at: new Date().toISOString(),
+          summary: `Assigned to owner (due: ${due_date})`,
+        },
+      }
+    )
+
+    if (!result.ok) {
+      const { response: errorResponse, errorId } = createErrorResponse({
+        message: result.error?.message || 'Failed to assign item',
+        internalMessage: result.error?.internalMessage,
+        code: result.error?.code || 'ASSIGN_ERROR',
+        requestId,
+        statusCode: 500,
+      })
+      res.setHeader('X-Error-ID', errorId)
+      logErrorForSupport(500, result.error?.code || 'ASSIGN_ERROR', requestId, organization_id, errorResponse.message, errorResponse.internal_message, errorResponse.category, errorResponse.severity, '/api/audit/assign')
+      return res.status(500).json(errorResponse)
+    }
 
     res.json({ 
       success: true,
       message: 'Item assigned successfully',
+      ledger_entry_id: result.ledger_entry_id,
     })
   } catch (err: any) {
     const { response: errorResponse, errorId } = createErrorResponse({
