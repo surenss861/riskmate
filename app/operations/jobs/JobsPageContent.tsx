@@ -236,12 +236,8 @@ export function JobsPageContentView(props: JobsPageContentProps) {
       props.onJobArchived()
       
       setToast({ 
-        message: 'Work record archived. Entry added to Compliance Ledger.', 
-        type: 'success',
-        action: {
-          label: 'View in Ledger',
-          onClick: () => router.push(`/operations/audit?job_id=${archiveModal.jobId}`)
-        }
+        message: `Work record archived. Entry added to Compliance Ledger. [View in Ledger](${`/operations/audit?job_id=${archiveModal.jobId}`})`, 
+        type: 'success'
       })
       setArchiveModal({ isOpen: false, jobId: null, jobName: '' })
     } catch (err: any) {
