@@ -14,13 +14,26 @@ const getApiUrl = () => {
     return ''
   }
   
-  // Client-side: use env var if set
-  if (process.env.NEXT_PUBLIC_BACKEND_URL) {
-    return process.env.NEXT_PUBLIC_BACKEND_URL
+  const envBackendUrl = process.env.NEXT_PUBLIC_BACKEND_URL
+  
+  // Check if we're on a production/Vercel domain
+  const isProduction = window.location.hostname.includes('vercel.app') || 
+                       window.location.hostname.includes('riskmate.com') ||
+                       (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1')
+  
+  // If backend URL is set, validate it for production
+  if (envBackendUrl) {
+    // In production, reject localhost URLs (they won't work from browser)
+    if (isProduction && envBackendUrl.includes('localhost')) {
+      console.error('NEXT_PUBLIC_BACKEND_URL is set to localhost in production. This will not work. Please set it to your actual backend URL.')
+      // Return empty to fall back to relative paths (which will fail but at least won't cause CORS issues)
+      return ''
+    }
+    return envBackendUrl
   }
   
-  // In development, check if we're on localhost and default to backend port
-  if (process.env.NODE_ENV === 'development' && window.location.hostname === 'localhost') {
+  // In local development, default to backend port
+  if (!isProduction && window.location.hostname === 'localhost') {
     // Backend typically runs on port 5173
     return 'http://localhost:5173'
   }
