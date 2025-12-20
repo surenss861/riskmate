@@ -3,7 +3,8 @@ import { supabase } from '../lib/supabaseClient'
 import { authenticate, AuthenticatedRequest } from '../middleware/auth'
 import { RequestWithId } from '../middleware/requestId'
 import { createErrorResponse, logErrorForSupport } from '../utils/errorResponse'
-import { getEventMapping, categorizeEvent, type EventCategory, type EventSeverity, type EventOutcome } from '../../lib/audit/eventMapper'
+// Event mapping utilities are used in frontend only
+// Backend doesn't need these imports
 
 export const auditRouter = express.Router()
 
@@ -237,8 +238,8 @@ auditRouter.post('/export', authenticate as unknown as express.RequestHandler, a
       throw new Error('Failed to fetch events for export')
     }
 
-    const { data } = await eventsResponse.json()
-    const events = data.events || []
+    const eventsData = await eventsResponse.json()
+    const events = eventsData?.data?.events || []
 
     // Get organization and user info for export header
     const { data: orgData } = await supabase
