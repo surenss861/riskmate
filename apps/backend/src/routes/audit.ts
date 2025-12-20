@@ -1140,7 +1140,7 @@ auditRouter.post('/export/pack', authenticate as unknown as express.RequestHandl
 
     const { data: userData } = await supabase
       .from('users')
-      .select('full_name, role')
+      .select('full_name, role, email')
       .eq('id', userId)
       .single()
 
