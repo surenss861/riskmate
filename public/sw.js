@@ -16,7 +16,33 @@ const urlsToCache = [
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(urlsToCache)
+      // Use Promise.allSettled to prevent one failure from breaking the entire cache
+      // Filter out API routes and external URLs that shouldn't be cached
+      const cacheableUrls = urlsToCache.filter(url => {
+        try {
+          const urlObj = new URL(url, self.location.origin)
+          // Exclude API routes
+          if (urlObj.pathname.startsWith('/api/')) return false
+          // Exclude Supabase/external domains
+          if (!urlObj.hostname.includes(self.location.hostname)) return false
+          return true
+        } catch {
+          return false
+        }
+      })
+      
+      const results = await Promise.allSettled(
+        cacheableUrls.map(url => cache.add(url))
+      )
+      
+      // Log failures but don't throw
+      const failures = results
+        .map((result, index) => ({ result, url: cacheableUrls[index] }))
+        .filter(({ result }) => result.status === 'rejected')
+      
+      if (failures.length > 0) {
+        console.warn('[SW] Failed to cache some URLs:', failures.map(f => f.url))
+      }
     })
   )
 })
