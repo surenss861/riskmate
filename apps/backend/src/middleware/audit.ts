@@ -8,7 +8,8 @@ export type AuditTargetType =
   | "report"
   | "subscription"
   | "legal"
-  | "system";
+  | "system"
+  | "site";
 
 export interface AuditLogEntry {
   organizationId: string;
@@ -54,6 +55,17 @@ function getSeverityFromEventName(eventName: string): 'info' | 'material' | 'cri
   if (eventName.includes('violation') || eventName.includes('critical')) return 'critical'
   if (eventName.includes('flag') || eventName.includes('change') || eventName.includes('remove')) return 'material'
   return 'info'
+}
+
+// Helper to determine if an event is material (should invalidate executive cache)
+function isMaterialEvent(eventName: string, severity: 'info' | 'material' | 'critical'): boolean {
+  // Material events: violations, flags, sign-offs, risk score threshold crossings
+  if (severity === 'critical' || severity === 'material') return true
+  if (eventName.includes('violation')) return true
+  if (eventName.includes('flag')) return true
+  if (eventName.includes('signoff')) return true
+  if (eventName.includes('risk_score_changed')) return true
+  return false
 }
 
 export async function recordAuditLog(entry: AuditLogEntry) {

@@ -238,7 +238,7 @@ auditRouter.post('/export', authenticate as unknown as express.RequestHandler, a
       throw new Error('Failed to fetch events for export')
     }
 
-    const eventsData: any = await eventsResponse.json()
+    const eventsData = (await eventsResponse.json()) as { data?: { events?: any[] } }
     const events = eventsData?.data?.events || []
 
     // Get organization and user info for export header
