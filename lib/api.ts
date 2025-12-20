@@ -644,25 +644,24 @@ export const auditApi = {
         }
       })
     }
-    return apiRequest<{
-      data: {
-        events: Array<any>
-        stats: {
-          total: number
-          violations: number
-          jobs_touched: number
-          proof_packs: number
-          signoffs: number
-          access_changes: number
-        }
-        pagination: {
-          next_cursor: string | null
-          limit: number
-          has_more: boolean
-        }
-      }
-      _meta?: any
-    }>(`/api/audit/events?${queryParams.toString()}`)
+    const token = await getAuthToken()
+    const backendUrl = API_URL || ''
+    const url = `${backendUrl}/api/audit/events?${queryParams.toString()}`
+    
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token && { Authorization: `Bearer ${token}` }),
+      },
+    })
+    
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ message: 'Failed to fetch events' }))
+      throw new Error(error.message || 'Failed to fetch events')
+    }
+    
+    return response.json()
   },
   export: async (params: {
     format: 'pdf' | 'csv' | 'json'
