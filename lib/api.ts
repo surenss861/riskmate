@@ -645,8 +645,9 @@ export const auditApi = {
       })
     }
     const token = await getAuthToken()
-    const backendUrl = API_URL || ''
-    const url = `${backendUrl}/api/audit/events?${queryParams.toString()}`
+    // Use API_URL from getApiUrl() to ensure we have the backend URL
+    const backendUrl = getApiUrl()
+    const url = backendUrl ? `${backendUrl}/api/audit/events?${queryParams.toString()}` : `/api/audit/events?${queryParams.toString()}`
     
     const response = await fetch(url, {
       method: 'GET',
@@ -657,6 +658,11 @@ export const auditApi = {
     })
     
     if (!response.ok) {
+      // Check if we got HTML (404 page) instead of JSON
+      const contentType = response.headers.get('content-type')
+      if (contentType?.includes('text/html')) {
+        throw new Error(`Backend API not found. Please check NEXT_PUBLIC_BACKEND_URL is set correctly. Attempted: ${url}`)
+      }
       const error = await response.json().catch(() => ({ message: 'Failed to fetch events' }))
       throw new Error(error.message || 'Failed to fetch events')
     }
@@ -684,8 +690,10 @@ export const auditApi = {
       : '/api/audit/export'
     
     const token = await getAuthToken()
-    const backendUrl = API_URL || ''
-    const response = await fetch(`${backendUrl}${endpoint}`, {
+    // Use getApiUrl() to ensure we have the backend URL
+    const backendUrl = getApiUrl()
+    const url = backendUrl ? `${backendUrl}${endpoint}` : endpoint
+    const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -695,7 +703,12 @@ export const auditApi = {
     })
 
     if (!response.ok) {
-      const error = await response.json()
+      // Check if we got HTML (404/405 page) instead of JSON
+      const contentType = response.headers.get('content-type')
+      if (contentType?.includes('text/html')) {
+        throw new Error(`Backend API not found. Please check NEXT_PUBLIC_BACKEND_URL is set correctly. Attempted: ${url}`)
+      }
+      const error = await response.json().catch(() => ({ message: 'Export failed' }))
       throw new Error(error.message || 'Export failed')
     }
 
