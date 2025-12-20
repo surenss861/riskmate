@@ -16,6 +16,9 @@ import { EvidenceDrawer } from '@/components/audit/EvidenceDrawer'
 import { AssignModal } from '@/components/audit/AssignModal'
 import { ResolveModal } from '@/components/audit/ResolveModal'
 import { CreateCorrectiveActionModal } from '@/components/audit/CreateCorrectiveActionModal'
+import { CloseIncidentModal } from '@/components/audit/CloseIncidentModal'
+import { RevokeAccessModal } from '@/components/audit/RevokeAccessModal'
+import { FlagSuspiciousModal } from '@/components/audit/FlagSuspiciousModal'
 import { terms } from '@/lib/terms'
 
 interface AuditEvent {
@@ -576,9 +579,71 @@ export default function AuditViewPage() {
     alert('Please select an incident from the list to create a corrective action')
   }
 
-  const handleCloseIncident = (view: string) => {
-    // TODO: Implement incident closure workflow with attestation
-    alert(`Close incident for ${view} - Coming soon`)
+  const [closeIncidentModalOpen, setCloseIncidentModalOpen] = useState(false)
+  const [selectedIncidentForClosure, setSelectedIncidentForClosure] = useState<{
+    workRecordId?: string
+    workRecordName?: string
+    hasCorrectiveActions?: boolean
+    hasEvidence?: boolean
+  } | null>(null)
+
+  const handleCloseIncident = async (closure: {
+    closure_summary: string
+    root_cause: string
+    evidence_attached: boolean
+    waived?: boolean
+    waiver_reason?: string
+    no_action_required: boolean
+    no_action_justification?: string
+  }) => {
+    if (!selectedIncidentForClosure?.workRecordId) return
+
+    try {
+      const token = await (async () => {
+        const supabase = createSupabaseBrowserClient()
+        const { data: { session } } = await supabase.auth.getSession()
+        return session?.access_token || null
+      })()
+
+      const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || ''
+      const response = await fetch(`${API_URL}/api/audit/incidents/close`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+        body: JSON.stringify({
+          work_record_id: selectedIncidentForClosure.workRecordId,
+          ...closure,
+        }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}))
+        throw new Error(error.message || 'Failed to close incident')
+      }
+
+      const data = await response.json()
+
+      setToast({
+        message: `Incident closed — entry added to Compliance Ledger showing closure + attestation. View at /operations/audit?event_id=${data.attestation_id}`,
+        type: 'success',
+      })
+      
+      loadAuditEvents()
+    } catch (err: any) {
+      console.error('Failed to close incident:', err)
+      setToast({
+        message: err.message || 'Failed to close incident. Please try again.',
+        type: 'error',
+      })
+      throw err
+    }
+  }
+
+  const handleCloseIncidentClick = (view: string) => {
+    // This would get the selected incident from the view
+    alert('Please select an incident from the list to close')
   }
 
   const handleRevokeAccess = (view: string) => {
@@ -658,9 +723,9 @@ export default function AuditViewPage() {
             onResolve={(view) => handleResolveClick()}
             onExportEnforcement={handleExportEnforcement}
             onCreateCorrectiveAction={handleCreateCorrectiveActionClick}
-            onCloseIncident={handleCloseIncident}
-            onRevokeAccess={handleRevokeAccess}
-            onFlagSuspicious={handleFlagSuspicious}
+            onCloseIncident={handleCloseIncidentClick}
+            onRevokeAccess={handleRevokeAccessClick}
+            onFlagSuspicious={handleFlagSuspiciousClick}
           />
 
           {/* Summary Cards */}
@@ -1190,6 +1255,45 @@ export default function AuditViewPage() {
           workRecordName={selectedIncident?.workRecordName}
           incidentEventId={selectedIncident?.incidentEventId}
           severity={selectedIncident?.severity}
+        />
+
+        {/* Close Incident Modal */}
+        <CloseIncidentModal
+          isOpen={closeIncidentModalOpen}
+          onClose={() => {
+            setCloseIncidentModalOpen(false)
+            setSelectedIncidentForClosure(null)
+          }}
+          onCloseIncident={handleCloseIncident}
+          workRecordId={selectedIncidentForClosure?.workRecordId}
+          workRecordName={selectedIncidentForClosure?.workRecordName}
+          hasCorrectiveActions={selectedIncidentForClosure?.hasCorrectiveActions}
+          hasEvidence={selectedIncidentForClosure?.hasEvidence}
+        />
+
+        {/* Revoke Access Modal */}
+        <RevokeAccessModal
+          isOpen={revokeAccessModalOpen}
+          onClose={() => {
+            setRevokeAccessModalOpen(false)
+            setSelectedUser(null)
+          }}
+          onRevoke={handleRevokeAccess}
+          targetUserId={selectedUser?.userId}
+          targetUserName={selectedUser?.userName}
+          targetUserRole={selectedUser?.userRole}
+        />
+
+        {/* Flag Suspicious Modal */}
+        <FlagSuspiciousModal
+          isOpen={flagSuspiciousModalOpen}
+          onClose={() => {
+            setFlagSuspiciousModalOpen(false)
+            setSelectedUser(null)
+          }}
+          onFlag={handleFlagSuspicious}
+          targetUserId={selectedUser?.userId}
+          targetUserName={selectedUser?.userName}
         />
       </div>
     </ProtectedRoute>

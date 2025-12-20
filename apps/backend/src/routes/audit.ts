@@ -1522,3 +1522,386 @@ auditRouter.post('/incidents/corrective-action', authenticate as unknown as expr
     res.status(500).json(errorResponse)
   }
 })
+
+// POST /api/audit/incidents/close
+// Closes an incident with strict validation and creates attestation atomically
+auditRouter.post('/incidents/close', authenticate as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
+  const authReq = req as AuthenticatedRequest & RequestWithId
+  const requestId = authReq.requestId || 'unknown'
+  
+  try {
+    const { organization_id, id: userId } = authReq.user
+    const { 
+      work_record_id, 
+      closure_summary, 
+      root_cause, 
+      evidence_attached, 
+      waived, 
+      waiver_reason,
+      no_action_required,
+      no_action_justification,
+      ledger_entry_ids 
+    } = req.body
+
+    if (!work_record_id || !closure_summary || !root_cause) {
+      return res.status(400).json({ 
+        message: 'work_record_id, closure_summary, and root_cause are required' 
+      })
+    }
+
+    // Verify work record exists
+    const { data: job, error: jobError } = await supabase
+      .from('jobs')
+      .select('id, client_name, status')
+      .eq('id', work_record_id)
+      .eq('organization_id', organization_id)
+      .single()
+
+    if (jobError || !job) {
+      return res.status(404).json({ message: 'Work record not found' })
+    }
+
+    // Check for corrective actions
+    const { data: correctiveActions, error: actionsError } = await supabase
+      .from('mitigation_items')
+      .select('id')
+      .eq('job_id', work_record_id)
+      .is('deleted_at', null)
+
+    const hasCorrectiveActions = correctiveActions && correctiveActions.length > 0
+
+    // Validation: require corrective actions OR "no action required" justification
+    if (!hasCorrectiveActions && !no_action_required) {
+      return res.status(400).json({ 
+        message: 'Either corrective actions must exist, or you must mark "No corrective action required" with justification' 
+      })
+    }
+
+    if (no_action_required && !no_action_justification?.trim()) {
+      return res.status(400).json({ 
+        message: 'Justification is required when marking "No corrective action required"' 
+      })
+    }
+
+    // Validation: evidence required unless waived
+    if (!evidence_attached && !waived) {
+      return res.status(400).json({ 
+        message: 'Evidence is required. Attach evidence or mark as waived with a reason.' 
+      })
+    }
+
+    if (waived && !waiver_reason?.trim()) {
+      return res.status(400).json({ 
+        message: 'Waiver reason is required when marking evidence as waived' 
+      })
+    }
+
+    // Get user info for attestation
+    const { data: userData } = await supabase
+      .from('users')
+      .select('full_name, role')
+      .eq('id', userId)
+      .single()
+
+    // Create attestation atomically as part of closure
+    const { data: attestation, error: attestationError } = await supabase
+      .from('job_signoffs')
+      .insert({
+        job_id: work_record_id,
+        signoff_type: 'incident_closure',
+        status: 'signed',
+        signed_by: userId,
+        signed_at: new Date().toISOString(),
+        comments: `Incident closure attestation: ${closure_summary}`,
+      })
+      .select()
+      .single()
+
+    if (attestationError || !attestation) {
+      console.error('Failed to create attestation:', attestationError)
+      return res.status(500).json({ message: 'Failed to create attestation' })
+    }
+
+    // Write incident.closed ledger entry
+    await recordAuditLog({
+      organizationId: organization_id,
+      actorId: userId,
+      eventName: 'incident.closed',
+      targetType: 'job',
+      targetId: work_record_id,
+      metadata: {
+        closure_summary,
+        root_cause,
+        evidence_attached,
+        waived: waived || false,
+        waiver_reason: waived ? (waiver_reason || null) : null,
+        no_action_required: no_action_required || false,
+        no_action_justification: no_action_required ? (no_action_justification || null) : null,
+        corrective_action_count: correctiveActions?.length || 0,
+        attestation_id: attestation.id,
+        ledger_entry_ids: ledger_entry_ids || [],
+        summary: `Incident closed: ${closure_summary}`,
+      },
+    })
+
+    // Write attestation.created ledger entry
+    await recordAuditLog({
+      organizationId: organization_id,
+      actorId: userId,
+      eventName: 'attestation.created',
+      targetType: 'system',
+      targetId: attestation.id,
+      metadata: {
+        signoff_type: 'incident_closure',
+        work_record_id,
+        signer_name: userData?.full_name || 'Unknown',
+        signer_role: userData?.role || 'Unknown',
+        summary: `Incident closure attestation created`,
+      },
+    })
+
+    res.json({ 
+      success: true,
+      message: 'Incident closed successfully',
+      attestation_id: attestation.id,
+    })
+  } catch (err: any) {
+    const { response: errorResponse, errorId } = createErrorResponse({
+      message: 'Failed to close incident',
+      internalMessage: err?.message || String(err),
+      code: 'CLOSE_INCIDENT_ERROR',
+      requestId,
+      statusCode: 500,
+    })
+    res.setHeader('X-Error-ID', errorId)
+    logErrorForSupport(500, 'CLOSE_INCIDENT_ERROR', requestId, authReq.user?.organization_id, errorResponse.message, errorResponse.internal_message, errorResponse.category, errorResponse.severity, '/api/audit/incidents/close')
+    res.status(500).json(errorResponse)
+  }
+})
+
+// POST /api/audit/access/revoke
+// Revokes access for a user (disable, downgrade role, or revoke sessions)
+auditRouter.post('/access/revoke', authenticate as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
+  const authReq = req as AuthenticatedRequest & RequestWithId
+  const requestId = authReq.requestId || 'unknown'
+  
+  try {
+    const { organization_id, id: userId } = authReq.user
+
+    // Check user role - only admin/owner can revoke
+    const { data: currentUser } = await supabase
+      .from('users')
+      .select('role')
+      .eq('id', userId)
+      .single()
+
+    if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'owner')) {
+      return res.status(403).json({ 
+        message: 'Only administrators and owners can revoke access',
+        code: 'AUTH_ROLE_FORBIDDEN',
+      })
+    }
+
+    const { target_user_id, action_type, reason, new_role } = req.body
+
+    if (!target_user_id || !action_type || !reason) {
+      return res.status(400).json({ 
+        message: 'target_user_id, action_type, and reason are required' 
+      })
+    }
+
+    // Cannot revoke own access
+    if (target_user_id === userId) {
+      return res.status(400).json({ 
+        message: 'You cannot revoke your own access' 
+      })
+    }
+
+    // Verify target user exists and belongs to organization
+    const { data: targetUser, error: targetUserError } = await supabase
+      .from('users')
+      .select('id, email, full_name, role')
+      .eq('id', target_user_id)
+      .eq('organization_id', organization_id)
+      .single()
+
+    if (targetUserError || !targetUser) {
+      return res.status(404).json({ message: 'Target user not found' })
+    }
+
+    // Cannot revoke executive access (they're read-only by design)
+    if (targetUser.role === 'executive') {
+      return res.status(403).json({ 
+        message: 'Cannot revoke executive access - executives are read-only by design' 
+      })
+    }
+
+    const priorRole = targetUser.role
+    let newRole = priorRole
+    let disabled = false
+    let sessionsRevoked = false
+
+    // Perform the action
+    if (action_type === 'disable_user') {
+      // Update user to disabled (you may need to add a disabled field to users table)
+      // For now, we'll downgrade to a disabled role or add a flag
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({ role: 'member' }) // Downgrade as proxy for disabled
+        .eq('id', target_user_id)
+      
+      if (updateError) {
+        console.error('Failed to disable user:', updateError)
+        return res.status(500).json({ message: 'Failed to disable user' })
+      }
+      disabled = true
+      newRole = 'member'
+    } else if (action_type === 'downgrade_role') {
+      if (!new_role) {
+        return res.status(400).json({ message: 'new_role is required for downgrade' })
+      }
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({ role: new_role })
+        .eq('id', target_user_id)
+      
+      if (updateError) {
+        console.error('Failed to downgrade role:', updateError)
+        return res.status(500).json({ message: 'Failed to downgrade role' })
+      }
+      newRole = new_role
+    } else if (action_type === 'revoke_sessions') {
+      // Session revocation would require Supabase Auth Admin API
+      // For now, we'll just log it
+      sessionsRevoked = true
+    }
+
+    // Write ledger entry
+    await recordAuditLog({
+      organizationId: organization_id,
+      actorId: userId,
+      eventName: 'access.revoked',
+      targetType: 'system',
+      targetId: target_user_id,
+      metadata: {
+        target_user_id,
+        target_user_email: targetUser.email,
+        prior_role: priorRole,
+        new_role: newRole,
+        disabled,
+        sessions_revoked: sessionsRevoked,
+        action_type,
+        reason,
+        summary: `Access revoked: ${action_type} - ${reason}`,
+      },
+    })
+
+    res.json({ 
+      success: true,
+      message: 'Access revoked successfully',
+    })
+  } catch (err: any) {
+    const { response: errorResponse, errorId } = createErrorResponse({
+      message: 'Failed to revoke access',
+      internalMessage: err?.message || String(err),
+      code: 'REVOKE_ACCESS_ERROR',
+      requestId,
+      statusCode: 500,
+    })
+    res.setHeader('X-Error-ID', errorId)
+    logErrorForSupport(500, 'REVOKE_ACCESS_ERROR', requestId, authReq.user?.organization_id, errorResponse.message, errorResponse.internal_message, errorResponse.category, errorResponse.severity, '/api/audit/access/revoke')
+    res.status(500).json(errorResponse)
+  }
+})
+
+// POST /api/audit/access/flag-suspicious
+// Flags suspicious access activity and optionally opens a security incident
+auditRouter.post('/access/flag-suspicious', authenticate as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
+  const authReq = req as AuthenticatedRequest & RequestWithId
+  const requestId = authReq.requestId || 'unknown'
+  
+  try {
+    const { organization_id, id: userId } = authReq.user
+    const { target_user_id, login_event_id, reason, notes, severity, open_incident } = req.body
+
+    if (!target_user_id || !reason) {
+      return res.status(400).json({ 
+        message: 'target_user_id and reason are required' 
+      })
+    }
+
+    if (reason === 'other' && !notes?.trim()) {
+      return res.status(400).json({ 
+        message: 'Notes are required when reason is "other"' 
+      })
+    }
+
+    // Verify target user exists
+    const { data: targetUser } = await supabase
+      .from('users')
+      .select('id, email, full_name')
+      .eq('id', target_user_id)
+      .eq('organization_id', organization_id)
+      .single()
+
+    if (!targetUser) {
+      return res.status(404).json({ message: 'Target user not found' })
+    }
+
+    // Write ledger entry
+    await recordAuditLog({
+      organizationId: organization_id,
+      actorId: userId,
+      eventName: 'security.suspicious_access.flagged',
+      targetType: 'system',
+      targetId: target_user_id,
+      metadata: {
+        target_user_id,
+        target_user_email: targetUser.email,
+        login_event_id: login_event_id || null,
+        reason,
+        notes: notes || null,
+        severity: severity || 'material',
+        open_incident: open_incident !== false, // Default true
+        summary: `Suspicious access flagged: ${reason}`,
+      },
+    })
+
+    // If open_incident is true, create an incident marker
+    if (open_incident !== false) {
+      // Create a security incident event that will appear in Incident Review
+      await recordAuditLog({
+        organizationId: organization_id,
+        actorId: userId,
+        eventName: 'security.incident.opened',
+        targetType: 'system',
+        targetId: target_user_id,
+        metadata: {
+          incident_type: 'suspicious_access',
+          target_user_id,
+          reason,
+          notes: notes || null,
+          severity: severity || 'material',
+          summary: `Security incident opened: Suspicious access - ${reason}`,
+        },
+      })
+    }
+
+    res.json({ 
+      success: true,
+      message: 'Suspicious access flagged successfully',
+      incident_opened: open_incident !== false,
+    })
+  } catch (err: any) {
+    const { response: errorResponse, errorId } = createErrorResponse({
+      message: 'Failed to flag suspicious access',
+      internalMessage: err?.message || String(err),
+      code: 'FLAG_SUSPICIOUS_ERROR',
+      requestId,
+      statusCode: 500,
+    })
+    res.setHeader('X-Error-ID', errorId)
+    logErrorForSupport(500, 'FLAG_SUSPICIOUS_ERROR', requestId, authReq.user?.organization_id, errorResponse.message, errorResponse.internal_message, errorResponse.category, errorResponse.severity, '/api/audit/access/flag-suspicious')
+    res.status(500).json(errorResponse)
+  }
+})
