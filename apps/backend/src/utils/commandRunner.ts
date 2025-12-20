@@ -18,11 +18,11 @@ export interface CommandContext {
   userId: string
   organizationId: string
   userRole: string
-  userEmail?: string
+  userEmail?: string | null
   requestId: string
   endpoint: string
-  ip?: string
-  userAgent?: string
+  ip?: string | null
+  userAgent?: string | null
 }
 
 export interface CommandOptions {
