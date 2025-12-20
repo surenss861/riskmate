@@ -478,6 +478,12 @@ export default function JobDetailPage() {
         body: JSON.stringify({ done: !currentDone }),
       })
       if (!response.ok) throw new Error('Failed to update')
+      
+      // Success - show Ledger confirmation
+      setToast({ 
+        message: `Control updated. Entry added to Compliance Ledger. [View in Ledger](/operations/audit?job_id=${jobId})`, 
+        type: 'success' 
+      })
     } catch (err) {
       console.error('Failed to update mitigation:', err)
       // Rollback on error
@@ -491,12 +497,6 @@ export default function JobDetailPage() {
       setToast({ 
         message: 'Couldn\'t save that. Your data is safe — retrying helps.', 
         type: 'error' 
-      })
-    } else {
-      // Success - show Ledger confirmation
-      setToast({ 
-        message: `Control updated. Entry added to Compliance Ledger. [View in Ledger](/operations/audit?job_id=${jobId})`, 
-        type: 'success' 
       })
     } finally {
       setUpdatingMitigation(null)
@@ -1123,7 +1123,10 @@ export default function JobDetailPage() {
                         jobsAssigned: assignedUserIds.has(member.id) ? 1 : 0,
                       }))
                       setWorkers(workersList)
-                      setToast({ message: 'Worker unassigned successfully.', type: 'success' })
+                      setToast({ 
+                        message: `Worker unassigned. Entry added to Compliance Ledger. [View in Ledger](/operations/audit?job_id=${jobId})`, 
+                        type: 'success' 
+                      })
                     } catch (err) {
                       setToast({ message: 'Couldn\'t unassign that worker. Try again.', type: 'error' })
                       throw err
