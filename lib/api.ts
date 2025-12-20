@@ -7,14 +7,26 @@ import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
 // Get backend API URL from environment variable
 // If NEXT_PUBLIC_BACKEND_URL is set, use it; otherwise use relative paths (Next.js API routes)
+// In local development, default to backend port if not set
 const getApiUrl = () => {
   if (typeof window === 'undefined') {
     // Server-side: always use relative paths (Next.js API routes)
     return ''
   }
   
-  // Client-side: use env var if set, otherwise use relative paths
-  return process.env.NEXT_PUBLIC_BACKEND_URL || ''
+  // Client-side: use env var if set
+  if (process.env.NEXT_PUBLIC_BACKEND_URL) {
+    return process.env.NEXT_PUBLIC_BACKEND_URL
+  }
+  
+  // In development, check if we're on localhost and default to backend port
+  if (process.env.NODE_ENV === 'development' && window.location.hostname === 'localhost') {
+    // Backend typically runs on port 5173
+    return 'http://localhost:5173'
+  }
+  
+  // Production/other: use relative paths (Next.js API routes)
+  return ''
 }
 
 const API_URL = getApiUrl()
