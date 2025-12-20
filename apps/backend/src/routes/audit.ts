@@ -449,13 +449,15 @@ auditRouter.get('/events', authenticate as unknown as express.RequestHandler, as
     const { data, error, count } = await query
 
     if (error) {
-      console.error('Audit events query error:', {
+      // Log full error details for debugging
+      console.error('[audit/events] Supabase query error:', {
         code: error.code,
         message: error.message,
         details: error.details,
         hint: error.hint,
         query_params: req.query,
         organization_id: organization_id,
+        request_id: requestId,
       })
       
       // If it's an RLS recursion error, provide a more helpful message
@@ -478,17 +480,22 @@ auditRouter.get('/events', authenticate as unknown as express.RequestHandler, as
         return res.status(500).json(errorResponse)
       }
       
+      // Return the actual Supabase error so we can debug
       const { response: errorResponse, errorId } = createErrorResponse({
         message: 'Failed to fetch audit events',
         internalMessage: error.message || String(error),
         code: 'QUERY_ERROR',
         requestId,
         statusCode: 500,
-        databaseError: error.code ? {
+        source: 'supabase',
+        databaseError: {
           code: error.code,
           message: error.message,
           hint: error.hint,
-        } : undefined,
+          details: error.details,
+        },
+        // Include the full error for debugging
+        rawError: process.env.NODE_ENV === 'development' ? error : undefined,
       })
       res.setHeader('X-Error-ID', errorId)
       logErrorForSupport(500, 'QUERY_ERROR', requestId, organization_id, errorResponse.message, errorResponse.internalMessage, 'system', 'error', '/api/audit/events', { query_params: req.query, db_error: error })
