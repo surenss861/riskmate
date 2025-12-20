@@ -255,8 +255,13 @@ export function applyAuditFilters<T extends { eq: any; gte: any; lte: any; in: a
 
   // Apply saved view filters (map views to query conditions)
   // Only apply view filters if no explicit category is set (to avoid conflicts)
-  // If both are provided, category filter takes precedence
-  if (view && !category) {
+  // If both are provided, prefer view over category (view is more specific)
+  // Frontend should ideally not send both, but we handle it gracefully
+  if (view) {
+    // If both view and category are provided, log a warning but use the view
+    if (category) {
+      console.warn(`Both view (${view}) and category (${category}) provided, using view filter`)
+    }
     if (view === 'review-queue') {
       // Review Queue: blocked actions OR critical/material severity
       // Simplified to avoid complex .or() syntax issues

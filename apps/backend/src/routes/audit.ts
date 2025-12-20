@@ -450,7 +450,17 @@ auditRouter.get('/events', authenticate as unknown as express.RequestHandler, as
 
     if (error) {
       console.error('Audit events query error:', error)
-      throw error
+      console.error('Query params:', { category, view, time_range, organization_id })
+      const { response: errorResponse, errorId } = createErrorResponse({
+        message: 'Failed to fetch audit events',
+        internalMessage: error.message || String(error),
+        code: 'QUERY_ERROR',
+        requestId,
+        statusCode: 500,
+      })
+      res.setHeader('X-Error-ID', errorId)
+      logErrorForSupport(500, 'QUERY_ERROR', requestId, organization_id, errorResponse.message, errorResponse.internalMessage, 'system', 'critical', '/api/audit/events')
+      return res.status(500).json(errorResponse)
     }
 
     // Enrich events server-side
