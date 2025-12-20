@@ -13,6 +13,8 @@ import { getEventMapping, categorizeEvent, type EventCategory, type EventSeverit
 import { getIndustryLanguage } from '@/lib/audit/industryLanguage'
 import { SavedViewCards } from '@/components/audit/SavedViewCards'
 import { EvidenceDrawer } from '@/components/audit/EvidenceDrawer'
+import { AssignModal } from '@/components/audit/AssignModal'
+import { ResolveModal } from '@/components/audit/ResolveModal'
 import { terms } from '@/lib/terms'
 
 interface AuditEvent {
@@ -60,6 +62,17 @@ export default function AuditViewPage() {
   const [evidenceJobId, setEvidenceJobId] = useState<string | undefined>()
   const [evidenceJobName, setEvidenceJobName] = useState<string | undefined>()
   const [evidenceSiteName, setEvidenceSiteName] = useState<string | undefined>()
+  const [assignModalOpen, setAssignModalOpen] = useState(false)
+  const [resolveModalOpen, setResolveModalOpen] = useState(false)
+  const [selectedTarget, setSelectedTarget] = useState<{
+    type: 'event' | 'job'
+    id: string
+    name?: string
+    severity?: 'critical' | 'material' | 'info'
+    requiresEvidence?: boolean
+    hasEvidence?: boolean
+  } | null>(null)
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
 
   useEffect(() => {
     loadAuditEvents()
@@ -340,14 +353,132 @@ export default function AuditViewPage() {
     }
   }
 
-  const handleAssign = (view: string) => {
-    // TODO: Implement assign modal/workflow
-    alert(`Assign functionality for ${view} - Coming soon`)
+  const handleAssign = async (assignment: {
+    owner_id: string
+    due_date: string
+    severity_override?: string
+    note?: string
+  }) => {
+    if (!selectedTarget) return
+
+    try {
+      const token = await (async () => {
+        const supabase = createSupabaseBrowserClient()
+        const { data: { session } } = await supabase.auth.getSession()
+        return session?.access_token || null
+      })()
+
+      const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || ''
+      const response = await fetch(`${API_URL}/api/audit/assign`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+        body: JSON.stringify({
+          target_type: selectedTarget.type,
+          target_id: selectedTarget.id,
+          ...assignment,
+        }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}))
+        throw new Error(error.message || 'Failed to assign')
+      }
+
+      setToast({
+        message: `Entry added to Compliance Ledger. View at /operations/audit?event_id=${selectedTarget.id}`,
+        type: 'success',
+      })
+      
+      // Reload events to show the new assignment
+      loadAuditEvents()
+    } catch (err: any) {
+      console.error('Failed to assign:', err)
+      setToast({
+        message: err.message || 'Failed to assign. Please try again.',
+        type: 'error',
+      })
+      throw err
+    }
   }
 
-  const handleResolve = (view: string) => {
-    // TODO: Implement resolve modal with reason/comment
-    alert(`Resolve functionality for ${view} - Coming soon`)
+  const handleResolve = async (resolution: {
+    reason: string
+    comment: string
+    requires_followup: boolean
+    waived?: boolean
+    waiver_reason?: string
+  }) => {
+    if (!selectedTarget) return
+
+    try {
+      const token = await (async () => {
+        const supabase = createSupabaseBrowserClient()
+        const { data: { session } } = await supabase.auth.getSession()
+        return session?.access_token || null
+      })()
+
+      const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || ''
+      const response = await fetch(`${API_URL}/api/audit/resolve`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+        body: JSON.stringify({
+          target_type: selectedTarget.type,
+          target_id: selectedTarget.id,
+          ...resolution,
+        }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}))
+        throw new Error(error.message || 'Failed to resolve')
+      }
+
+      setToast({
+        message: `Entry added to Compliance Ledger. View at /operations/audit?event_id=${selectedTarget.id}`,
+        type: 'success',
+      })
+      
+      // Reload events to show the resolution
+      loadAuditEvents()
+    } catch (err: any) {
+      console.error('Failed to resolve:', err)
+      setToast({
+        message: err.message || 'Failed to resolve. Please try again.',
+        type: 'error',
+      })
+      throw err
+    }
+  }
+
+  const handleAssignClick = (view: string) => {
+    // For now, we'll use a placeholder - in a full implementation,
+    // this would get the selected event/item from the view
+    setSelectedTarget({
+      type: 'event',
+      id: 'placeholder', // This would be the actual selected item ID
+      name: 'Selected Item',
+    })
+    setAssignModalOpen(true)
+  }
+
+  const handleResolveClick = (view: string) => {
+    // For now, we'll use a placeholder - in a full implementation,
+    // this would get the selected event/item from the view
+    setSelectedTarget({
+      type: 'event',
+      id: 'placeholder', // This would be the actual selected item ID
+      name: 'Selected Item',
+      severity: 'material',
+      requiresEvidence: false,
+      hasEvidence: false,
+    })
+    setResolveModalOpen(true)
   }
 
   const handleExportEnforcement = async (view: string) => {
@@ -446,8 +577,8 @@ export default function AuditViewPage() {
             }}
             onExport={handleExportFromView}
             onGeneratePack={handleGeneratePack}
-            onAssign={handleAssign}
-            onResolve={handleResolve}
+            onAssign={handleAssignClick}
+            onResolve={handleResolveClick}
             onExportEnforcement={handleExportEnforcement}
             onCreateCorrectiveAction={handleCreateCorrectiveAction}
             onCloseIncident={handleCloseIncident}
@@ -902,6 +1033,52 @@ export default function AuditViewPage() {
           siteName={evidenceSiteName}
           events={events.filter(e => e.job_id === evidenceJobId)}
           onExportEvidence={handleExportEvidence}
+        />
+
+        {/* Toast Notification */}
+        {toast && (
+          <div className={`fixed top-4 right-4 z-50 p-4 rounded-lg border ${
+            toast.type === 'success' 
+              ? 'bg-green-500/20 border-green-500/40 text-green-400' 
+              : 'bg-red-500/20 border-red-500/40 text-red-400'
+          } max-w-md`}>
+            <p className="text-sm">{toast.message}</p>
+            <button
+              onClick={() => setToast(null)}
+              className="absolute top-2 right-2 text-white/60 hover:text-white"
+            >
+              ×
+            </button>
+          </div>
+        )}
+
+        {/* Assign Modal */}
+        <AssignModal
+          isOpen={assignModalOpen}
+          onClose={() => {
+            setAssignModalOpen(false)
+            setSelectedTarget(null)
+          }}
+          onAssign={handleAssign}
+          targetType={selectedTarget?.type}
+          targetId={selectedTarget?.id}
+          targetName={selectedTarget?.name}
+        />
+
+        {/* Resolve Modal */}
+        <ResolveModal
+          isOpen={resolveModalOpen}
+          onClose={() => {
+            setResolveModalOpen(false)
+            setSelectedTarget(null)
+          }}
+          onResolve={handleResolve}
+          targetType={selectedTarget?.type}
+          targetId={selectedTarget?.id}
+          targetName={selectedTarget?.name}
+          severity={selectedTarget?.severity}
+          requiresEvidence={selectedTarget?.requiresEvidence}
+          hasEvidence={selectedTarget?.hasEvidence}
         />
       </div>
     </ProtectedRoute>

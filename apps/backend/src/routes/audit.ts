@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabaseClient'
 import { authenticate, AuthenticatedRequest } from '../middleware/auth'
 import { RequestWithId } from '../middleware/requestId'
 import { createErrorResponse, logErrorForSupport } from '../utils/errorResponse'
+import { recordAuditLog } from '../middleware/audit'
 import archiver from 'archiver'
 import { Readable } from 'stream'
 import crypto from 'crypto'
@@ -1269,6 +1270,171 @@ auditRouter.post('/export/pack', authenticate as unknown as express.RequestHandl
     })
     res.setHeader('X-Error-ID', errorId)
     logErrorForSupport(500, 'AUDIT_EXPORT_ERROR', requestId, authReq.user?.organization_id, errorResponse.message, errorResponse.internal_message, errorResponse.category, errorResponse.severity, '/api/audit/export/pack')
+    res.status(500).json(errorResponse)
+  }
+})
+
+// POST /api/audit/assign
+// Assigns an item (event, job, incident) to an owner with due date
+auditRouter.post('/assign', authenticate as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
+  const authReq = req as AuthenticatedRequest & RequestWithId
+  const requestId = authReq.requestId || 'unknown'
+  
+  try {
+    const { organization_id, id: userId } = authReq.user
+    const { target_type, target_id, owner_id, due_date, severity_override, note } = req.body
+
+    if (!target_type || !target_id || !owner_id || !due_date) {
+      return res.status(400).json({ 
+        message: 'target_type, target_id, owner_id, and due_date are required' 
+      })
+    }
+
+    // Verify target exists and belongs to organization
+    let targetExists = false
+    if (target_type === 'job') {
+      const { data } = await supabase
+        .from('jobs')
+        .select('id, client_name')
+        .eq('id', target_id)
+        .eq('organization_id', organization_id)
+        .single()
+      targetExists = !!data
+    } else if (target_type === 'event') {
+      // For audit log events, verify they exist
+      const { data } = await supabase
+        .from('audit_logs')
+        .select('id')
+        .eq('id', target_id)
+        .eq('organization_id', organization_id)
+        .single()
+      targetExists = !!data
+    }
+
+    if (!targetExists) {
+      return res.status(404).json({ message: 'Target not found' })
+    }
+
+    // Create assignment record (you may want to create a separate assignments table)
+    // For now, we'll store assignment info in metadata and write a ledger entry
+    const assignmentMetadata = {
+      owner_id,
+      due_date,
+      severity_override: severity_override || null,
+      note: note || null,
+      assigned_at: new Date().toISOString(),
+    }
+
+    // Write ledger entry
+    await recordAuditLog({
+      organizationId: organization_id,
+      actorId: userId,
+      eventName: 'review.assigned',
+      targetType: target_type as any,
+      targetId: target_id,
+      metadata: {
+        ...assignmentMetadata,
+        summary: `Assigned to owner (due: ${due_date})`,
+      },
+    })
+
+    res.json({ 
+      success: true,
+      message: 'Item assigned successfully',
+    })
+  } catch (err: any) {
+    const { response: errorResponse, errorId } = createErrorResponse({
+      message: 'Failed to assign item',
+      internalMessage: err?.message || String(err),
+      code: 'ASSIGN_ERROR',
+      requestId,
+      statusCode: 500,
+    })
+    res.setHeader('X-Error-ID', errorId)
+    logErrorForSupport(500, 'ASSIGN_ERROR', requestId, authReq.user?.organization_id, errorResponse.message, errorResponse.internal_message, errorResponse.category, errorResponse.severity, '/api/audit/assign')
+    res.status(500).json(errorResponse)
+  }
+})
+
+// POST /api/audit/resolve
+// Resolves an item with reason, comment, and optional waiver
+auditRouter.post('/resolve', authenticate as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
+  const authReq = req as AuthenticatedRequest & RequestWithId
+  const requestId = authReq.requestId || 'unknown'
+  
+  try {
+    const { organization_id, id: userId } = authReq.user
+    const { target_type, target_id, reason, comment, requires_followup, waived, waiver_reason } = req.body
+
+    if (!target_type || !target_id || !reason) {
+      return res.status(400).json({ 
+        message: 'target_type, target_id, and reason are required' 
+      })
+    }
+
+    // Verify target exists
+    let targetExists = false
+    if (target_type === 'job') {
+      const { data } = await supabase
+        .from('jobs')
+        .select('id, client_name')
+        .eq('id', target_id)
+        .eq('organization_id', organization_id)
+        .single()
+      targetExists = !!data
+    } else if (target_type === 'event') {
+      const { data } = await supabase
+        .from('audit_logs')
+        .select('id')
+        .eq('id', target_id)
+        .eq('organization_id', organization_id)
+        .single()
+      targetExists = !!data
+    }
+
+    if (!targetExists) {
+      return res.status(404).json({ message: 'Target not found' })
+    }
+
+    // Write ledger entry - use review.waived if waived, otherwise review.resolved
+    const eventName = waived ? 'review.waived' : 'review.resolved'
+    const resolutionMetadata = {
+      reason,
+      comment: comment || null,
+      requires_followup: requires_followup || false,
+      waived: waived || false,
+      waiver_reason: waived ? (waiver_reason || null) : null,
+      resolved_at: new Date().toISOString(),
+    }
+
+    await recordAuditLog({
+      organizationId: organization_id,
+      actorId: userId,
+      eventName,
+      targetType: target_type as any,
+      targetId: target_id,
+      metadata: {
+        ...resolutionMetadata,
+        summary: waived 
+          ? `Waived: ${reason}${waiver_reason ? ` - ${waiver_reason}` : ''}`
+          : `Resolved: ${reason}${comment ? ` - ${comment}` : ''}`,
+      },
+    })
+
+    res.json({ 
+      success: true,
+      message: waived ? 'Item waived successfully' : 'Item resolved successfully',
+    })
+  } catch (err: any) {
+    const { response: errorResponse, errorId } = createErrorResponse({
+      message: 'Failed to resolve item',
+      internalMessage: err?.message || String(err),
+      code: 'RESOLVE_ERROR',
+      requestId,
+      statusCode: 500,
+    })
+    res.setHeader('X-Error-ID', errorId)
+    logErrorForSupport(500, 'RESOLVE_ERROR', requestId, authReq.user?.organization_id, errorResponse.message, errorResponse.internal_message, errorResponse.category, errorResponse.severity, '/api/audit/resolve')
     res.status(500).json(errorResponse)
   }
 })
