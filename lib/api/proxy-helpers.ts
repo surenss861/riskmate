@@ -6,10 +6,25 @@ const BACKEND_URL = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_U
 export async function getSessionToken(): Promise<string | null> {
   try {
     const supabase = await createSupabaseServerClient()
-    const { data: { session } } = await supabase.auth.getSession()
-    return session?.access_token || null
-  } catch (error) {
-    console.error('Failed to get session token:', error)
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+    
+    if (sessionError) {
+      console.error('[Proxy] Session error:', sessionError)
+      return null
+    }
+    
+    if (!session) {
+      console.error('[Proxy] No session found')
+      return null
+    }
+    
+    return session.access_token || null
+  } catch (error: any) {
+    console.error('[Proxy] Failed to get session token:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name,
+    })
     return null
   }
 }
@@ -26,6 +41,7 @@ export async function proxyToBackend(
   try {
     const sessionToken = await getSessionToken()
     if (!sessionToken) {
+      console.error(`[Proxy] No session token for ${endpoint}`)
       return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
     }
 
@@ -36,6 +52,8 @@ export async function proxyToBackend(
     if (method === 'GET' && request.nextUrl.searchParams.toString()) {
       backendUrl += `?${request.nextUrl.searchParams.toString()}`
     }
+
+    console.log(`[Proxy] ${method} ${backendUrl}`)
 
     const fetchOptions: RequestInit = {
       method,
@@ -54,7 +72,7 @@ export async function proxyToBackend(
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({ message: 'Backend request failed' }))
-      console.error(`Backend error for ${endpoint}:`, error, 'Status:', response.status)
+      console.error(`[Proxy] Backend error for ${endpoint}:`, error, 'Status:', response.status)
       return NextResponse.json(error, { status: response.status })
     }
 
@@ -75,9 +93,19 @@ export async function proxyToBackend(
     const data = await response.json()
     return NextResponse.json(data)
   } catch (error: any) {
-    console.error(`Proxy error for ${endpoint}:`, error)
+    console.error(`[Proxy] Error for ${endpoint}:`, {
+      message: error.message,
+      stack: error.stack,
+      name: error.name,
+      cause: error.cause,
+      backendUrl: BACKEND_URL,
+    })
     return NextResponse.json(
-      { message: 'Failed to proxy request', error: error.message },
+      { 
+        message: 'Failed to proxy request', 
+        error: error.message,
+        details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      },
       { status: 500 }
     )
   }
