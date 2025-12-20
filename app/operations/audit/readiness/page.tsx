@@ -31,6 +31,8 @@ export default function AuditReadinessPage() {
     material: 0,
     resolved: 0,
   })
+  const [oldestOverdueDate, setOldestOverdueDate] = useState<Date | null>(null)
+  const [exportingPack, setExportingPack] = useState(false)
 
   useEffect(() => {
     loadReadinessData()
@@ -118,21 +120,32 @@ export default function AuditReadinessPage() {
       // 3. Overdue controls (mitigations not completed)
       const { data: jobsWithMitigations } = await supabase
         .from('jobs')
-        .select('id, client_name, risk_score')
+        .select('id, client_name, risk_score, created_at')
         .eq('organization_id', orgData.id)
         .is('deleted_at', null)
         .gt('risk_score', 50)
 
+      let oldestOverdue: Date | null = null
       if (jobsWithMitigations) {
         for (const job of jobsWithMitigations) {
           const { data: mitigations } = await supabase
             .from('mitigation_items')
-            .select('id, done, is_completed')
+            .select('id, done, is_completed, created_at')
             .eq('job_id', job.id)
 
           if (mitigations) {
             const incomplete = mitigations.filter(m => !m.done && !m.is_completed)
             if (incomplete.length > 0) {
+              // Track oldest overdue date
+              incomplete.forEach(m => {
+                if (m.created_at) {
+                  const createdDate = new Date(m.created_at)
+                  if (!oldestOverdue || createdDate < oldestOverdue) {
+                    oldestOverdue = createdDate
+                  }
+                }
+              })
+
               readinessItems.push({
                 id: `overdue-control-${job.id}`,
                 type: 'overdue_control',
@@ -147,6 +160,7 @@ export default function AuditReadinessPage() {
           }
         }
       }
+      setOldestOverdueDate(oldestOverdue)
 
       // 4. Role violation attempts
       const { data: violations } = await supabase
@@ -257,18 +271,31 @@ export default function AuditReadinessPage() {
           </div>
 
           {/* Summary Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
             <div className={cardStyles.base + ' p-4'}>
               <div className="text-sm text-white/60 mb-1">Total Items</div>
               <div className="text-2xl font-bold text-white">{stats.total}</div>
             </div>
             <div className={cardStyles.base + ' p-4 border-red-500/30 bg-red-500/10'}>
-              <div className="text-sm text-white/60 mb-1">Critical</div>
+              <div className="text-sm text-white/60 mb-1">Critical Blockers</div>
               <div className="text-2xl font-bold text-red-400">{stats.critical}</div>
             </div>
             <div className={cardStyles.base + ' p-4 border-yellow-500/30 bg-yellow-500/10'}>
               <div className="text-sm text-white/60 mb-1">Material</div>
               <div className="text-2xl font-bold text-yellow-400">{stats.material}</div>
+            </div>
+            <div className={cardStyles.base + ' p-4 border-blue-500/30 bg-blue-500/10'}>
+              <div className="text-sm text-white/60 mb-1">Oldest Overdue</div>
+              <div className="text-lg font-bold text-blue-400">
+                {oldestOverdueDate 
+                  ? `${Math.floor((Date.now() - oldestOverdueDate.getTime()) / (1000 * 60 * 60 * 24))}d`
+                  : '—'}
+              </div>
+              {oldestOverdueDate && (
+                <div className="text-xs text-white/50 mt-1">
+                  {oldestOverdueDate.toLocaleDateString()}
+                </div>
+              )}
             </div>
             <div className={cardStyles.base + ' p-4 border-green-500/30 bg-green-500/10'}>
               <div className="text-sm text-white/60 mb-1">Resolved</div>
@@ -338,16 +365,60 @@ export default function AuditReadinessPage() {
           )}
 
           {/* Footer CTA */}
-          <div className={`${cardStyles.base} p-6 mt-8 text-center border-2 border-[#F97316]/30`}>
-            <p className="text-sm text-white/70 mb-4">
-              Once all items are resolved, your governance record will be audit-ready for export.
-            </p>
-            <button
-              onClick={() => router.push('/operations/audit')}
-              className={buttonStyles.primary}
-            >
-              View Full Compliance Ledger
-            </button>
+          <div className={`${cardStyles.base} p-6 mt-8 border-2 border-[#F97316]/30`}>
+            <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+              <div className="text-center md:text-left">
+                <p className="text-sm text-white/70 mb-2">
+                  {stats.total === 0 
+                    ? 'Your governance record is audit-ready for export.'
+                    : `Resolve ${stats.critical > 0 ? `${stats.critical} critical blocker${stats.critical > 1 ? 's' : ''} ` : ''}to make your record audit-ready.`}
+                </p>
+                {stats.critical > 0 && (
+                  <p className="text-xs text-yellow-400">
+                    {oldestOverdueDate && `Oldest overdue item: ${Math.floor((Date.now() - oldestOverdueDate.getTime()) / (1000 * 60 * 60 * 24))} days`}
+                  </p>
+                )}
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => router.push('/operations/audit')}
+                  className={buttonStyles.secondary}
+                >
+                  View Compliance Ledger
+                </button>
+                <button
+                  onClick={async () => {
+                    setExportingPack(true)
+                    try {
+                      const response = await fetch('/api/audit/export/pack', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ time_range: '30d' }),
+                      })
+                      if (!response.ok) throw new Error('Export failed')
+                      const blob = await response.blob()
+                      const url = window.URL.createObjectURL(blob)
+                      const a = document.createElement('a')
+                      a.href = url
+                      a.download = `audit-pack-${new Date().toISOString().split('T')[0]}.zip`
+                      document.body.appendChild(a)
+                      a.click()
+                      window.URL.revokeObjectURL(url)
+                      document.body.removeChild(a)
+                    } catch (err) {
+                      console.error('Failed to export audit pack:', err)
+                      alert('Failed to export audit pack. Please try again.')
+                    } finally {
+                      setExportingPack(false)
+                    }
+                  }}
+                  disabled={exportingPack}
+                  className={buttonStyles.primary + ' ' + (exportingPack ? 'opacity-50 cursor-not-allowed' : '')}
+                >
+                  {exportingPack ? 'Generating...' : 'Export Audit Pack'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>

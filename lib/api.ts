@@ -719,45 +719,5 @@ export const auditApi = {
     
     return { success: true }
   },
-    if (params.format === 'csv' || params.format === 'json') {
-      const token = await getAuthToken()
-      const backendUrl = API_URL || ''
-      const response = await fetch(`${backendUrl}/api/audit/export`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify(params),
-      })
-      if (!response.ok) throw new Error('Export failed')
-      if (params.format === 'csv') {
-        const blob = await response.blob()
-        const url = window.URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = `audit-export-${Date.now()}.csv`
-        a.click()
-        window.URL.revokeObjectURL(url)
-        return { success: true }
-      } else {
-        const blob = await response.blob()
-        const url = window.URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = `audit-export-${Date.now()}.json`
-        a.click()
-        window.URL.revokeObjectURL(url)
-        return { success: true }
-      }
-    } else {
-      // PDF export
-      return apiRequest<{ message: string; code: string }>('/api/audit/export', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(params),
-      })
-    }
-  },
 }
 

@@ -110,14 +110,21 @@ export async function generateLedgerExportPDF(options: LedgerExportOptions): Pro
       y += 15
     })
 
-    // Appendices
+    // Appendices - Evidence Reference
     doc.addPage()
     doc.fontSize(12).font('Helvetica-Bold').text('Appendices', { underline: true })
     doc.moveDown(0.5)
     doc.fontSize(10).font('Helvetica')
-    doc.text('Evidence Links:', { continued: false })
-    events.filter(e => e.job_id).slice(0, 20).forEach((event) => {
-      doc.text(`  • ${event.job_title || 'Job'} (ID: ${event.job_id})`, { indent: 20 })
+    doc.text('Evidence Reference:', { continued: false })
+    doc.moveDown(0.3)
+    doc.fontSize(9).font('Helvetica-Oblique')
+    doc.text('Note: Evidence files are auth-gated. Use the Work Record IDs below to retrieve evidence via the Compliance Ledger interface.', { indent: 20 })
+    doc.moveDown(0.5)
+    doc.fontSize(10).font('Helvetica')
+    const uniqueJobs = new Set(events.filter(e => e.job_id).map(e => e.job_id))
+    Array.from(uniqueJobs).slice(0, 50).forEach((jobId) => {
+      const event = events.find(e => e.job_id === jobId)
+      doc.text(`  • Work Record ID: ${jobId}${event?.job_title ? ` (${event.job_title})` : ''}`, { indent: 20 })
     })
 
     doc.end()

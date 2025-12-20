@@ -484,7 +484,7 @@ export default function JobDetailPage() {
       
       // Success - show Ledger confirmation
       setToast({ 
-        message: `Control updated. Entry added to Compliance Ledger. [View in Ledger](/operations/audit?job_id=${jobId})`, 
+        message: `Control updated. Entry added to Compliance Ledger. View in Ledger: /operations/audit?job_id=${jobId}`, 
         type: 'success' 
       })
     } catch (err) {
