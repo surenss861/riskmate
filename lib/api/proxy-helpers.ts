@@ -3,7 +3,18 @@ import { createSupabaseServerClient } from '@/lib/supabase/server'
 
 const BACKEND_URL = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5173'
 
-export async function getSessionToken(): Promise<string | null> {
+export async function getSessionToken(request?: NextRequest): Promise<string | null> {
+  // First, try to get token from Authorization header (sent by frontend)
+  if (request) {
+    const authHeader = request.headers.get('authorization')
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.substring(7)
+      console.log('[Proxy] Using token from Authorization header')
+      return token
+    }
+  }
+
+  // Fallback: try to get session from cookies (Supabase SSR)
   try {
     const supabase = await createSupabaseServerClient()
     const { data: { session }, error: sessionError } = await supabase.auth.getSession()
@@ -14,10 +25,11 @@ export async function getSessionToken(): Promise<string | null> {
     }
     
     if (!session) {
-      console.error('[Proxy] No session found')
+      console.error('[Proxy] No session found in cookies')
       return null
     }
     
+    console.log('[Proxy] Using token from Supabase session cookies')
     return session.access_token || null
   } catch (error: any) {
     console.error('[Proxy] Failed to get session token:', {
@@ -39,7 +51,7 @@ export async function proxyToBackend(
   } = {}
 ): Promise<NextResponse> {
   try {
-    const sessionToken = await getSessionToken()
+    const sessionToken = await getSessionToken(request)
     if (!sessionToken) {
       console.error(`[Proxy] No session token for ${endpoint}`)
       return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
