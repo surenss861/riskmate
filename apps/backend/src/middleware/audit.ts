@@ -38,9 +38,30 @@ const truncateMetadata = (metadata: Record<string, unknown> | undefined) => {
 };
 
 // Helper to determine category from event name
-function getCategoryFromEventName(eventName: string): 'governance' | 'operations' | 'access' {
-  if (eventName.includes('auth.') || eventName.includes('violation')) return 'governance'
-  if (eventName.includes('team.') || eventName.includes('security.') || eventName.includes('account.')) return 'access'
+// Maps to all categories: governance, operations, access, review_queue, incident_review, attestations, access_review, system
+function getCategoryFromEventName(eventName: string): 'governance' | 'operations' | 'access' | 'review_queue' | 'incident_review' | 'attestations' | 'access_review' | 'system' {
+  // Review queue events
+  if (eventName.includes('review.')) return 'review_queue'
+  
+  // Incident review events
+  if (eventName.includes('incident.') || eventName.includes('corrective_action')) return 'incident_review'
+  
+  // Attestation events
+  if (eventName.includes('attestation.')) return 'attestations'
+  
+  // Access review events
+  if (eventName.includes('access.') || eventName.includes('security.') || eventName.includes('role_change') || eventName.includes('login')) return 'access_review'
+  
+  // Governance enforcement events
+  if (eventName.includes('auth.') || eventName.includes('violation') || eventName.includes('policy.')) return 'governance'
+  
+  // System/export events
+  if (eventName.includes('export.') || eventName.includes('system.')) return 'system'
+  
+  // Team/account management (legacy)
+  if (eventName.includes('team.') || eventName.includes('account.')) return 'access_review'
+  
+  // Default to operations
   return 'operations'
 }
 
@@ -86,12 +107,18 @@ export async function recordAuditLog(entry: AuditLogEntry) {
     const resourceType = entry.targetType
     const resourceId = entry.targetId
 
-    // Extract job_id if target is a job
-    const jobId = entry.targetType === 'job' ? entry.targetId : null
+    // Extract normalized fields from metadata or target type
+    const workRecordId = (entry.metadata?.work_record_id as string) || (entry.targetType === 'job' ? entry.targetId : null)
+    const siteId = entry.metadata?.site_id as string || null
 
     // Build summary
     const summary = entry.metadata?.summary as string || 
       `${entry.eventName.replace(/\./g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())}${entry.targetId ? ` for ${entry.targetType}` : ''}`
+
+    // Get actor info for normalized fields
+    const { data: actorData } = entry.actorId
+      ? await supabase.from('users').select('email, role').eq('id', entry.actorId).single()
+      : { data: null }
 
     const insertData: any = {
       organization_id: entry.organizationId,
@@ -100,14 +127,28 @@ export async function recordAuditLog(entry: AuditLogEntry) {
       target_type: entry.targetType,
       target_id: entry.targetId ?? null,
       metadata: payload ?? {},
-      // New standardized fields
+      // Standardized fields for easier querying
       category: getCategoryFromEventName(entry.eventName),
       action: action,
       outcome: getOutcomeFromEventName(entry.eventName),
       severity: getSeverityFromEventName(entry.eventName),
       resource_type: resourceType,
       resource_id: resourceId,
-      job_id: jobId,
+      job_id: workRecordId, // Use work_record_id from metadata if available
+      work_record_id: workRecordId, // Normalized field name
+      site_id: siteId,
+      actor_user_id: entry.actorId ?? null,
+      actor_email: actorData?.email || null,
+      actor_role: actorData?.role || null,
+      request_id: entry.metadata?.request_id as string || null,
+      endpoint: entry.metadata?.endpoint as string || null,
+      ip: entry.metadata?.ip as string || null,
+      user_agent: entry.metadata?.user_agent as string || null,
+      subject: {
+        type: entry.targetType,
+        id: entry.targetId,
+        related_event_id: entry.metadata?.related_event_id as string || null,
+      },
       summary: summary,
     }
 
