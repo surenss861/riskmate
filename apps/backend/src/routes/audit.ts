@@ -1528,72 +1528,136 @@ auditRouter.post('/assign', authenticate as unknown as express.RequestHandler, a
 
 // POST /api/audit/resolve
 // Resolves an item with reason, comment, and optional waiver
+// Ledger-first command: Validate → Mutate → Ledger Append (atomic)
 auditRouter.post('/resolve', authenticate as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
   const authReq = req as AuthenticatedRequest & RequestWithId
   const requestId = authReq.requestId || 'unknown'
   
   try {
-    const { organization_id, id: userId } = authReq.user
+    const { organization_id, id: userId, role: userRole = 'member', email: userEmail } = authReq.user
     const { target_type, target_id, reason, comment, requires_followup, waived, waiver_reason } = req.body
+    const idempotencyKey = req.headers['idempotency-key'] as string
 
+    // Validation
     if (!target_type || !target_id || !reason) {
       return res.status(400).json({ 
         message: 'target_type, target_id, and reason are required' 
       })
     }
 
-    // Verify target exists
-    let targetExists = false
-    if (target_type === 'job') {
-      const { data } = await supabase
-        .from('jobs')
-        .select('id, client_name')
-        .eq('id', target_id)
-        .eq('organization_id', organization_id)
-        .single()
-      targetExists = !!data
-    } else if (target_type === 'event') {
-      const { data } = await supabase
-        .from('audit_logs')
-        .select('id')
-        .eq('id', target_id)
-        .eq('organization_id', organization_id)
-        .single()
-      targetExists = !!data
+    // Authorization: Quick deny (executives cannot resolve)
+    if (userRole === 'executive') {
+      await recordAuditLog({
+        organizationId: organization_id,
+        actorId: userId,
+        eventName: 'auth.role_violation',
+        targetType: target_type as any,
+        targetId: target_id,
+        metadata: {
+          attempted_action: 'review.resolved',
+          policy_statement: 'Executives have read-only access and cannot resolve review items',
+          endpoint: '/api/audit/resolve',
+        },
+      })
+      return res.status(403).json({ 
+        code: 'AUTH_ROLE_READ_ONLY',
+        message: 'Executives cannot resolve review items' 
+      })
     }
 
-    if (!targetExists) {
-      return res.status(404).json({ message: 'Target not found' })
-    }
-
-    // Write ledger entry - use review.waived if waived, otherwise review.resolved
-    const eventName = waived ? 'review.waived' : 'review.resolved'
-    const resolutionMetadata = {
-      reason,
-      comment: comment || null,
-      requires_followup: requires_followup || false,
-      waived: waived || false,
-      waiver_reason: waived ? (waiver_reason || null) : null,
-      resolved_at: new Date().toISOString(),
-    }
-
-    await recordAuditLog({
+    // Build command context
+    const ctx: CommandContext = {
+      userId,
       organizationId: organization_id,
-      actorId: userId,
-      eventName,
-      targetType: target_type as any,
-      targetId: target_id,
-      metadata: {
-        ...resolutionMetadata,
-        summary: waived 
-          ? `Waived: ${reason}${waiver_reason ? ` - ${waiver_reason}` : ''}`
-          : `Resolved: ${reason}${comment ? ` - ${comment}` : ''}`,
+      userRole,
+      userEmail: userEmail ?? undefined,
+      requestId,
+      endpoint: '/api/audit/resolve',
+      ip: req.ip || req.socket.remoteAddress || undefined,
+      userAgent: req.headers['user-agent'] || undefined,
+    }
+
+    const options: CommandOptions = {
+      idempotencyKey,
+    }
+
+    // Execute command: Validate → Mutate → Ledger Append (atomic)
+    const eventName = waived ? 'review.waived' : 'review.resolved'
+    const result = await runCommand(
+      supabase,
+      ctx,
+      options,
+      async (tx) => {
+        // Domain mutation: Verify target exists
+        let targetExists = false
+        if (target_type === 'job') {
+          const { data } = await tx
+            .from('jobs')
+            .select('id, client_name')
+            .eq('id', target_id)
+            .eq('organization_id', organization_id)
+            .single()
+          targetExists = !!data
+        } else if (target_type === 'event') {
+          const { data } = await tx
+            .from('audit_logs')
+            .select('id')
+            .eq('id', target_id)
+            .eq('organization_id', organization_id)
+            .single()
+          targetExists = !!data
+        }
+
+        if (!targetExists) {
+          throw new Error('Target not found')
+        }
+
+        return {
+          target_type,
+          target_id,
+          reason,
+          comment: comment || null,
+          requires_followup: requires_followup || false,
+          waived: waived || false,
+          waiver_reason: waived ? (waiver_reason || null) : null,
+          resolved_at: new Date().toISOString(),
+        }
       },
-    })
+      {
+        eventName,
+        targetType: target_type as any,
+        targetId: target_id,
+        metadata: {
+          reason,
+          comment: comment || null,
+          requires_followup: requires_followup || false,
+          waived: waived || false,
+          waiver_reason: waived ? (waiver_reason || null) : null,
+          resolved_at: new Date().toISOString(),
+          summary: waived 
+            ? `Waived: ${reason}${waiver_reason ? ` - ${waiver_reason}` : ''}`
+            : `Resolved: ${reason}${comment ? ` - ${comment}` : ''}`,
+        },
+      }
+    )
+
+    if (!result.ok) {
+      const { response: errorResponse, errorId } = createErrorResponse({
+        message: result.error?.message || 'Failed to resolve item',
+        internalMessage: result.error?.internalMessage,
+        code: result.error?.code || 'RESOLVE_ERROR',
+        requestId,
+        statusCode: 500,
+      })
+      res.setHeader('X-Error-ID', errorId)
+      logErrorForSupport(500, result.error?.code || 'RESOLVE_ERROR', requestId, organization_id, errorResponse.message, errorResponse.internal_message, errorResponse.category, errorResponse.severity, '/api/audit/resolve')
+      return res.status(500).json(errorResponse)
+    }
 
     res.json({ 
       success: true,
       message: waived ? 'Item waived successfully' : 'Item resolved successfully',
+      ledger_entry_id: result.ledger_entry_id,
     })
   } catch (err: any) {
     const { response: errorResponse, errorId } = createErrorResponse({
