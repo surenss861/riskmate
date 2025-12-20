@@ -249,8 +249,12 @@ export default function AuditViewPage() {
     accessChanges: events.filter(e => categorizeEvent(e.event_type) === 'access').length,
   }
 
-  // Filter events by active tab
+  // Filter events by active tab (unless Review Queue is active)
   const filteredEvents = events.filter(e => {
+    if (filters.savedView === 'review-queue') {
+      // Review Queue shows all relevant events regardless of tab
+      return true
+    }
     const category = categorizeEvent(e.event_type)
     return category === activeTab
   })

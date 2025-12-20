@@ -157,6 +157,15 @@ export function JobPacketView({
           <p className="text-white/60 text-sm">
             Exportable proof bundles for insurance, audits, incidents, and compliance
           </p>
+          <div className="mt-2">
+            <button
+              onClick={() => router.push(`/operations/audit?job_id=${job.id}`)}
+              className="text-xs text-[#F97316] hover:text-[#FB923C] underline flex items-center gap-1"
+            >
+              View complete action history in Compliance Ledger
+              <ExternalLink className="w-3 h-3" />
+            </button>
+          </div>
         </div>
         <button
           onClick={() => window.print()}
