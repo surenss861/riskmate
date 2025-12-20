@@ -326,9 +326,11 @@ export default function AuditViewPage() {
           <SavedViewCards
             activeView={filters.savedView}
             onSelectView={(view) => {
-              setFilters({ ...filters, savedView: view })
-              if (view === 'governance-enforcement') setActiveTab('governance')
-              if (view === 'access-review') setActiveTab('access')
+              // Map empty string to 'custom' for type safety
+              const savedView: SavedView = view === '' ? 'custom' : view
+              setFilters({ ...filters, savedView })
+              if (savedView === 'governance-enforcement') setActiveTab('governance')
+              if (savedView === 'access-review') setActiveTab('access')
             }}
             onExport={handleExportFromView}
           />
