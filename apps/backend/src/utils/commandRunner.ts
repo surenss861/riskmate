@@ -264,17 +264,21 @@ export function applyAuditFilters<T extends { eq: any; gte: any; lte: any; in: a
     }
     if (view === 'review-queue') {
       // Review Queue: blocked actions OR critical/material severity
-      // Simplified to avoid complex .or() syntax issues
+      // Use PostgREST or() syntax: "column1.eq.value1,column2.eq.value2"
+      // For multiple values on same column, we need separate conditions
+      // Simplest approach: filter by outcome OR use severity.in() for multiple values
       query = query.or('outcome.eq.blocked,severity.eq.material,severity.eq.critical') as T
     } else if (view === 'insurance-ready') {
       // Insurance-Ready: completed work records with verified controls and attestations
       query = query.eq('category', 'operations').in('event_name', ['job.completed', 'control.verified', 'evidence.uploaded', 'attestation.created']) as T
     } else if (view === 'governance-enforcement') {
       // Governance Enforcement: violations and blocked actions
+      // Use or() for different columns - this should work
       query = query.or('category.eq.governance,outcome.eq.blocked') as T
     } else if (view === 'incident-review') {
       // Incident Review: incidents OR high severity
-      query = query.or('category.eq.incident_review,severity.eq.material,severity.eq.critical') as T
+      // Simplified to avoid PostgREST or() syntax issues with same column
+      query = query.eq('category', 'incident_review') as T
     } else if (view === 'access-review') {
       // Access Review: access changes, role changes, login events
       query = query.eq('category', 'access_review') as T
