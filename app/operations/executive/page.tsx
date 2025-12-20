@@ -246,6 +246,9 @@ export default function ExecutiveSnapshotPage() {
                   <span>•</span>
                   <span>{new Date().toLocaleDateString()} {new Date().toLocaleTimeString()}</span>
                 </div>
+                <div className="text-xs text-white/40 mt-2 italic">
+                  Executive access is read-only by database policy.
+                </div>
               </div>
             </div>
           </motion.div>
