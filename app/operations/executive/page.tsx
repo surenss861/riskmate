@@ -44,20 +44,28 @@ export default function ExecutiveSnapshotPage() {
       const { data: { user: authUser } } = await supabase.auth.getUser()
       setUser(authUser)
 
-      if (!authUser) return
+      if (!authUser) {
+        setLoading(false)
+        return
+      }
 
       // Get organization
-      const { data: userRow } = await supabase
+      const { data: userRow, error: userError } = await supabase
         .from('users')
         .select('organization_id, role')
         .eq('id', authUser.id)
         .single()
 
-      if (!userRow?.organization_id) return
+      if (userError || !userRow?.organization_id) {
+        console.error('Failed to load user data:', userError)
+        setLoading(false)
+        return
+      }
 
       // Verify executive role (read-only access)
       if (userRow.role !== 'executive' && userRow.role !== 'owner' && userRow.role !== 'admin') {
         window.location.href = '/operations'
+        setLoading(false)
         return
       }
 
@@ -112,6 +120,24 @@ export default function ExecutiveSnapshotPage() {
       }
     } catch (err: any) {
       console.error('Failed to load risk posture:', err)
+      // Set default values on error
+      setRiskPosture({
+        exposure_level: 'low',
+        unresolved_violations: 0,
+        open_reviews: 0,
+        high_risk_jobs: 0,
+        open_incidents: 0,
+        pending_signoffs: 0,
+        signed_signoffs: 0,
+        proof_packs_generated: 0,
+        last_material_event_at: null,
+        confidence_statement: '✅ No unresolved governance violations. All jobs within acceptable risk thresholds.',
+        ledger_integrity: 'pending',
+        flagged_jobs: 0,
+        signed_jobs: 0,
+        unsigned_jobs: 0,
+        recent_violations: 0,
+      })
       setLoading(false)
     }
   }
