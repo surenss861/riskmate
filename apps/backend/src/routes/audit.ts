@@ -596,15 +596,34 @@ auditRouter.get('/events', authenticate as unknown as express.RequestHandler, as
       } : undefined,
     })
   } catch (err: any) {
+    // Log the full error for debugging
+    console.error('[audit/events] Unexpected error:', {
+      message: err?.message,
+      stack: err?.stack,
+      code: err?.code,
+      name: err?.name,
+      query_params: req.query,
+      organization_id: authReq.user?.organization_id,
+      request_id: requestId,
+    })
+    
     const { response: errorResponse, errorId } = createErrorResponse({
       message: 'Failed to fetch audit events',
       internalMessage: err?.message || String(err),
       code: 'AUDIT_QUERY_ERROR',
       requestId,
       statusCode: 500,
+      source: 'server',
+      // Include error details for debugging (only in development)
+      rawError: process.env.NODE_ENV === 'development' ? {
+        message: err?.message,
+        code: err?.code,
+        name: err?.name,
+        stack: err?.stack,
+      } : undefined,
     })
     res.setHeader('X-Error-ID', errorId)
-    logErrorForSupport(500, 'AUDIT_QUERY_ERROR', requestId, authReq.user?.organization_id, errorResponse.message, errorResponse.internal_message, errorResponse.category, errorResponse.severity, '/api/audit/events')
+    logErrorForSupport(500, 'AUDIT_QUERY_ERROR', requestId, authReq.user?.organization_id, errorResponse.message, errorResponse.internalMessage, 'system', 'error', '/api/audit/events', { query_params: req.query, error_stack: err?.stack })
     res.status(500).json(errorResponse)
   }
 })
