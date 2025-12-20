@@ -404,18 +404,19 @@ auditRouter.get('/events', authenticate as unknown as express.RequestHandler, as
       .order('created_at', { ascending: false })
 
     // Apply unified audit filters (same logic as exports/readiness)
+    // Note: Only pass defined filters (avoid undefined values)
     query = applyAuditFilters(query, {
       organizationId: organization_id,
-      category: category as any,
-      site_id: site_id as string,
-      job_id: job_id as string,
-      actor_id: actor_id as string,
-      severity: severity as any,
-      outcome: outcome as any,
-      time_range: time_range as any,
-      start_date: start_date as string,
-      end_date: end_date as string,
-      view: view as any,
+      ...(category && { category: category as any }),
+      ...(site_id && { site_id: site_id as string }),
+      ...(job_id && { job_id: job_id as string }),
+      ...(actor_id && { actor_id: actor_id as string }),
+      ...(severity && { severity: severity as any }),
+      ...(outcome && { outcome: outcome as any }),
+      ...(time_range && { time_range: time_range as any }),
+      ...(start_date && { start_date: start_date as string }),
+      ...(end_date && { end_date: end_date as string }),
+      ...(view && { view: view as any }),
     })
 
     // Cursor pagination
@@ -427,7 +428,10 @@ auditRouter.get('/events', authenticate as unknown as express.RequestHandler, as
 
     const { data, error, count } = await query
 
-    if (error) throw error
+    if (error) {
+      console.error('Audit events query error:', error)
+      throw error
+    }
 
     // Enrich events server-side
     const enrichedEvents = await Promise.all(
