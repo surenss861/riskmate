@@ -214,7 +214,7 @@ export default function ExecutiveSnapshotPage() {
             </p>
           </motion.div>
 
-          {/* Risk Posture Summary Banner */}
+          {/* Risk Posture Summary Banner - Signed Statement */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -238,22 +238,27 @@ export default function ExecutiveSnapshotPage() {
                 )}
               </div>
               <div className="flex-1">
-                <p className="text-base font-semibold text-white">
+                <p className="text-base font-semibold text-white mb-2">
                   {riskPosture.confidence_statement}
                 </p>
+                <div className="flex items-center gap-4 text-xs text-white/50 pt-2 border-t border-white/10">
+                  <span>Generated from immutable governance records</span>
+                  <span>•</span>
+                  <span>{new Date().toLocaleDateString()} {new Date().toLocaleTimeString()}</span>
+                </div>
               </div>
             </div>
           </motion.div>
 
-          {/* Row 1: Exposure */}
+          {/* Where you're exposed */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.15 }}
             className="mb-8"
           >
-            <h2 className="text-sm font-semibold text-white/70 uppercase tracking-wide mb-4">
-              Exposure
+            <h2 className="text-sm font-semibold text-white/80 mb-4">
+              Where you're exposed
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {/* High Risk Jobs */}
@@ -277,7 +282,11 @@ export default function ExecutiveSnapshotPage() {
                 <div className={`text-3xl font-bold mb-1 ${riskPosture.high_risk_jobs > 0 ? 'text-red-200' : 'text-white'}`}>
                   {riskPosture.high_risk_jobs}
                 </div>
-                <div className="text-sm text-white/60">Jobs scoring above 75</div>
+                <div className="text-sm text-white/60">
+                  {riskPosture.high_risk_jobs === 0 
+                    ? 'No high-risk jobs recorded in governance record'
+                    : 'Jobs scoring above 75'}
+                </div>
                 {hoveredCard === 'high-risk' && (
                   <div className="mt-3 pt-3 border-t border-white/10 text-xs text-white/70">
                     Jobs above threshold require documented mitigation to remain defensible.
@@ -306,7 +315,11 @@ export default function ExecutiveSnapshotPage() {
                 <div className={`text-3xl font-bold mb-1 ${riskPosture.open_incidents > 0 ? 'text-orange-200' : 'text-white'}`}>
                   {riskPosture.open_incidents}
                 </div>
-                <div className="text-sm text-white/60">Active incidents requiring attention</div>
+                <div className="text-sm text-white/60">
+                  {riskPosture.open_incidents === 0
+                    ? 'No open incidents recorded in governance record'
+                    : 'Active incidents requiring attention'}
+                </div>
                 {hoveredCard === 'incidents' && (
                   <div className="mt-3 pt-3 border-t border-white/10 text-xs text-white/70">
                     Open incidents indicate unresolved exposure requiring immediate governance review.
@@ -335,7 +348,11 @@ export default function ExecutiveSnapshotPage() {
                 <div className={`text-3xl font-bold mb-1 ${riskPosture.recent_violations > 0 ? 'text-red-200' : 'text-white'}`}>
                   {riskPosture.recent_violations}
                 </div>
-                <div className="text-sm text-white/60">Role violations (last 30 days)</div>
+                <div className="text-sm text-white/60">
+                  {riskPosture.recent_violations === 0
+                    ? 'No governance violations recorded (last 30 days)'
+                    : 'Role violations (last 30 days)'}
+                </div>
                 {hoveredCard === 'violations' && (
                   <div className="mt-3 pt-3 border-t border-white/10 text-xs text-white/70">
                     Blocked actions indicate attempted unauthorized access. Each violation is logged and defensible.
@@ -345,15 +362,15 @@ export default function ExecutiveSnapshotPage() {
             </div>
           </motion.div>
 
-          {/* Row 2: Control Health */}
+          {/* Whether controls are working */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
             className="mb-8"
           >
-            <h2 className="text-sm font-semibold text-white/70 uppercase tracking-wide mb-4">
-              Control Health
+            <h2 className="text-sm font-semibold text-white/80 mb-4">
+              Whether controls are working
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {/* Jobs Flagged for Review */}
@@ -373,7 +390,11 @@ export default function ExecutiveSnapshotPage() {
                   </div>
                 </div>
                 <div className="text-3xl font-bold text-white mb-1">{riskPosture.flagged_jobs}</div>
-                <div className="text-sm text-white/60">Jobs flagged for review</div>
+                <div className="text-sm text-white/60">
+                  {riskPosture.flagged_jobs === 0
+                    ? 'No jobs flagged for review in governance record'
+                    : 'Jobs flagged for review'}
+                </div>
                 {hoveredCard === 'flagged' && (
                   <div className="mt-3 pt-3 border-t border-white/10 text-xs text-white/70">
                     Flagged jobs require safety lead oversight. Review ensures accountability and defensibility.
@@ -402,7 +423,11 @@ export default function ExecutiveSnapshotPage() {
                 <div className={`text-3xl font-bold mb-1 ${riskPosture.pending_signoffs > 3 ? 'text-yellow-200' : 'text-white'}`}>
                   {riskPosture.pending_signoffs}
                 </div>
-                <div className="text-sm text-white/60">Jobs awaiting sign-offs</div>
+                <div className="text-sm text-white/60">
+                  {riskPosture.pending_signoffs === 0
+                    ? 'No pending sign-offs recorded in governance record'
+                    : 'Jobs awaiting sign-offs'}
+                </div>
                 {hoveredCard === 'pending-signoffs' && (
                   <div className="mt-3 pt-3 border-t border-white/10 text-xs text-white/70">
                     Unsigned approvals weaken insurance and dispute defensibility.
@@ -427,7 +452,11 @@ export default function ExecutiveSnapshotPage() {
                   </div>
                 </div>
                 <div className="text-3xl font-bold text-white mb-1">{riskPosture.signed_jobs}</div>
-                <div className="text-sm text-white/60">Jobs with completed sign-offs</div>
+                <div className="text-sm text-white/60">
+                  {riskPosture.signed_jobs === 0
+                    ? 'No completed sign-offs recorded in governance record'
+                    : 'Jobs with completed sign-offs'}
+                </div>
                 {hoveredCard === 'signed' && (
                   <div className="mt-3 pt-3 border-t border-white/10 text-xs text-white/70">
                     Completed sign-offs provide defensible proof of approval and accountability.
@@ -437,15 +466,15 @@ export default function ExecutiveSnapshotPage() {
             </div>
           </motion.div>
 
-          {/* Row 3: Assurance */}
+          {/* Whether proof exists */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.25 }}
             className="mb-8"
           >
-            <h2 className="text-sm font-semibold text-white/70 uppercase tracking-wide mb-4">
-              Assurance
+            <h2 className="text-sm font-semibold text-white/80 mb-4">
+              Whether proof exists
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {/* Proof Packs Generated */}
@@ -465,7 +494,11 @@ export default function ExecutiveSnapshotPage() {
                   </div>
                 </div>
                 <div className="text-3xl font-bold text-white mb-1">{riskPosture.proof_packs_generated}</div>
-                <div className="text-sm text-white/60">Generated (last 30 days)</div>
+                <div className="text-sm text-white/60">
+                  {riskPosture.proof_packs_generated === 0
+                    ? 'No proof packs generated (last 30 days)'
+                    : 'Generated (last 30 days)'}
+                </div>
                 {hoveredCard === 'proof-packs' && (
                   <div className="mt-3 pt-3 border-t border-white/10 text-xs text-white/70">
                     Exportable proof bundles ready for insurer, regulator, or legal review.
@@ -513,26 +546,29 @@ export default function ExecutiveSnapshotPage() {
             </div>
           </motion.div>
 
-          {/* Single CTA */}
+          {/* Single CTA - Irreversible */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.3 }}
             className="mt-12"
           >
-            <div className={`${cardStyles.base} p-8 text-center`}>
+            <div className={`${cardStyles.base} p-8 text-center border-2 border-[#F97316]/30`}>
               <h3 className="text-xl font-semibold text-white mb-2">
                 Open Full Governance Record
               </h3>
-              <p className="text-sm text-white/60 mb-6">
+              <p className="text-sm text-white/70 mb-6 font-medium">
+                This is the authoritative record used for audits, claims, and disputes.
+              </p>
+              <p className="text-xs text-white/50 mb-6">
                 Immutable, export-ready, insurer-safe
               </p>
               <a
                 href="/operations/audit?view=review-queue"
-                className={`${buttonStyles.primary} inline-flex items-center gap-2`}
+                className={`${buttonStyles.primary} inline-flex items-center gap-2 text-base px-8 py-3`}
               >
                 View Compliance Ledger
-                <ExternalLink className="w-4 h-4" />
+                <ExternalLink className="w-5 h-5" />
               </a>
             </div>
           </motion.div>

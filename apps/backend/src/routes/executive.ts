@@ -6,9 +6,9 @@ import { createErrorResponse, logErrorForSupport } from '../utils/errorResponse'
 
 export const executiveRouter = express.Router()
 
-// Simple in-memory cache for executive metrics (30 seconds TTL)
-const executiveCache = new Map<string, { data: any; timestamp: number }>()
-const CACHE_TTL_MS = 30 * 1000 // 30 seconds
+// Cache for executive metrics - invalidated only on material events
+// Cache structure: { data: RiskPosture, timestamp: number, basis_event_ids: string[] }
+const executiveCache = new Map<string, { data: any; timestamp: number; basis_event_ids: string[] }>()
 
 // GET /api/executive/risk-posture
 // Returns computed risk posture for executive view
@@ -32,11 +32,20 @@ executiveRouter.get('/risk-posture', authenticate as unknown as express.RequestH
       return res.status(403).json(errorResponse)
     }
 
-    // Check cache
+    // Check cache (no TTL - invalidated only on material events)
     const cacheKey = `executive:${organization_id}`
     const cached = executiveCache.get(cacheKey)
-    if (cached && (Date.now() - cached.timestamp) < CACHE_TTL_MS) {
-      return res.json({ data: cached.data })
+    if (cached) {
+      // Return cached data with provenance
+      return res.json({ 
+        data: {
+          ...cached.data,
+          _provenance: {
+            generated_at: new Date(cached.timestamp).toISOString(),
+            basis_event_count: cached.basis_event_ids.length,
+          }
+        }
+      })
     }
 
     // Fetch jobs

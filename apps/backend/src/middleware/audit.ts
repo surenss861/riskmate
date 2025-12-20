@@ -105,13 +105,16 @@ export async function recordAuditLog(entry: AuditLogEntry) {
         'Role-based access control prevents unauthorized actions'
     }
 
-    const { error } = await supabase.from("audit_logs").insert(insertData);
+    const { error, data: insertedData } = await supabase.from("audit_logs").insert(insertData).select('id').single();
 
     if (error) {
       console.error("Audit log insert failed:", error);
     } else {
-      // Invalidate executive cache when audit log is written
-      invalidateExecutiveCache(entry.organizationId);
+      // Invalidate executive cache only on material events
+      const severity = getSeverityFromEventName(entry.eventName)
+      if (isMaterialEvent(entry.eventName, severity)) {
+        invalidateExecutiveCache(entry.organizationId);
+      }
     }
   } catch (err) {
     console.error("Audit log exception:", err);
