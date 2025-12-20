@@ -34,6 +34,7 @@ const envAllowedOrigins = (process.env.ALLOWED_ORIGINS || process.env.FRONTEND_U
 const allowedOrigins = Array.from(new Set([...defaultAllowedOrigins, ...envAllowedOrigins]));
 
 const isAllowedOrigin = (origin?: string) => {
+  // Allow requests with no origin (server-to-server, like Next.js API routes)
   if (!origin) {
     return true;
   }
@@ -45,6 +46,10 @@ const isAllowedOrigin = (origin?: string) => {
   try {
     const { hostname } = new URL(origin);
     if (hostname === "localhost" || hostname === "127.0.0.1") {
+      return true;
+    }
+    // Allow Vercel domains
+    if (hostname.includes("vercel.app") || hostname.includes("vercel.com")) {
       return true;
     }
   } catch (error) {
@@ -60,14 +65,18 @@ const corsOptions: cors.CorsOptionsDelegate = (req, callback) => {
 
   if (isAllowedOrigin(origin)) {
     const options: cors.CorsOptions = {
-      origin: origin ?? true,
+      origin: origin ?? true, // Allow all origins if no origin (server-to-server)
       credentials: true,
       optionsSuccessStatus: 200,
+      // Allow common headers used by Next.js API routes
+      allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
     };
     callback(null, options);
-    } else {
-      callback(new Error("Not allowed by CORS"));
-    }
+  } else {
+    // Log the rejected origin for debugging
+    console.warn(`CORS rejected origin: ${origin}`);
+    callback(new Error("Not allowed by CORS"));
+  }
 };
 
 app.use((req, res, next) => {
