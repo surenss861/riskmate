@@ -4,7 +4,7 @@ import { authenticate, AuthenticatedRequest } from '../middleware/auth'
 import { RequestWithId } from '../middleware/requestId'
 import { createErrorResponse, logErrorForSupport } from '../utils/errorResponse'
 import { recordAuditLog } from '../middleware/audit'
-import { runCommand, CommandContext, CommandOptions, applyAuditFilters } from '../utils/commandRunner'
+import { runCommand, CommandContext, CommandOptions, applyAuditFilters, FilterValidationError } from '../utils/commandRunner'
 import archiver from 'archiver'
 import { Readable } from 'stream'
 import crypto from 'crypto'
@@ -405,19 +405,39 @@ auditRouter.get('/events', authenticate as unknown as express.RequestHandler, as
 
     // Apply unified audit filters (same logic as exports/readiness)
     // Note: Only pass defined filters (avoid undefined values)
-    query = applyAuditFilters(query, {
-      organizationId: organization_id,
-      ...(category && { category: category as any }),
-      ...(site_id && { site_id: site_id as string }),
-      ...(job_id && { job_id: job_id as string }),
-      ...(actor_id && { actor_id: actor_id as string }),
-      ...(severity && { severity: severity as any }),
-      ...(outcome && { outcome: outcome as any }),
-      ...(time_range && { time_range: time_range as any }),
-      ...(start_date && { start_date: start_date as string }),
-      ...(end_date && { end_date: end_date as string }),
-      ...(view && { view: view as any }),
-    })
+    try {
+      query = applyAuditFilters(query, {
+        organizationId: organization_id,
+        ...(category && { category: category as any }),
+        ...(site_id && { site_id: site_id as string }),
+        ...(job_id && { job_id: job_id as string }),
+        ...(actor_id && { actor_id: actor_id as string }),
+        ...(severity && { severity: severity as any }),
+        ...(outcome && { outcome: outcome as any }),
+        ...(time_range && { time_range: time_range as any }),
+        ...(start_date && { start_date: start_date as string }),
+        ...(end_date && { end_date: end_date as string }),
+        ...(view && { view: view as any }),
+      })
+    } catch (filterError: any) {
+      // Handle filter validation errors (400 Bad Request)
+      if (filterError instanceof FilterValidationError) {
+        const { response: errorResponse, errorId } = createErrorResponse({
+          message: filterError.message,
+          internalMessage: `Invalid filter parameter: ${filterError.field}`,
+          code: 'INVALID_FILTER',
+          requestId,
+          statusCode: 400,
+          field: filterError.field,
+          allowedValues: filterError.allowedValues,
+        })
+        res.setHeader('X-Error-ID', errorId)
+        logErrorForSupport(400, 'INVALID_FILTER', requestId, organization_id, errorResponse.message, errorResponse.internalMessage, 'system', 'info', '/api/audit/events')
+        return res.status(400).json(errorResponse)
+      }
+      // Re-throw unexpected errors
+      throw filterError
+    }
 
     // Cursor pagination
     const limitNum = parseInt(String(limit), 10) || 50
@@ -1153,12 +1173,30 @@ auditRouter.post('/export/pack', authenticate as unknown as express.RequestHandl
         .limit(1000)
 
       // Apply unified filters for consistency
-      eventsQuery = applyAuditFilters(eventsQuery, {
-        organizationId: organization_id,
-        job_id: job_id || undefined,
-        site_id: site_id || undefined,
-        time_range: time_range || '30d',
-      })
+      try {
+        eventsQuery = applyAuditFilters(eventsQuery, {
+          organizationId: organization_id,
+          job_id: job_id || undefined,
+          site_id: site_id || undefined,
+          time_range: time_range || '30d',
+        })
+      } catch (filterError: any) {
+        if (filterError instanceof FilterValidationError) {
+          const { response: errorResponse, errorId } = createErrorResponse({
+            message: filterError.message,
+            internalMessage: `Invalid filter parameter: ${filterError.field}`,
+            code: 'INVALID_FILTER',
+            requestId,
+            statusCode: 400,
+            field: filterError.field,
+            allowedValues: filterError.allowedValues,
+          })
+          res.setHeader('X-Error-ID', errorId)
+          logErrorForSupport(400, 'INVALID_FILTER', requestId, organization_id, errorResponse.message, errorResponse.internalMessage, 'system', 'info', '/api/audit/export/pack')
+          return res.status(400).json(errorResponse)
+        }
+        throw filterError
+      }
 
       const { data: eventsData, error: eventsError } = await eventsQuery
 

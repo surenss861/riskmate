@@ -154,30 +154,101 @@ export async function runCommand<T = any>(
  * Used by views, exports, and readiness endpoints for consistency
  * Returns a function that applies filters to a Supabase query builder
  */
+// Valid audit log categories (must match database schema and getCategoryFromEventName)
+export const VALID_AUDIT_CATEGORIES = [
+  'governance',
+  'operations',
+  'access',
+  'review_queue',
+  'incident_review',
+  'attestations',
+  'access_review',
+  'system'
+] as const
+
+export type AuditCategory = typeof VALID_AUDIT_CATEGORIES[number]
+
+export const VALID_TIME_RANGES = ['24h', '7d', '30d', 'all', 'custom'] as const
+export type TimeRange = typeof VALID_TIME_RANGES[number]
+
+export const VALID_SAVED_VIEWS = ['review-queue', 'insurance-ready', 'governance-enforcement', 'incident-review', 'access-review'] as const
+export type SavedView = typeof VALID_SAVED_VIEWS[number]
+
 export interface AuditFilters {
-  category?: 'governance' | 'operations' | 'access' | 'review_queue' | 'incident_review' | 'attestations' | 'access_review' | 'system'
+  category?: AuditCategory
   site_id?: string
   job_id?: string
   actor_id?: string
   severity?: 'info' | 'material' | 'critical'
   outcome?: 'allowed' | 'blocked' | 'success' | 'failed'
-  time_range?: '24h' | '7d' | '30d' | 'all' | 'custom'
+  time_range?: TimeRange
   start_date?: string
   end_date?: string
-  view?: 'review-queue' | 'insurance-ready' | 'governance-enforcement' | 'incident-review' | 'access-review'
+  view?: SavedView
   event_type?: string
   organizationId: string
 }
 
 /**
+ * Validation error for invalid filter parameters
+ */
+export class FilterValidationError extends Error {
+  constructor(
+    message: string,
+    public field: string,
+    public allowedValues?: readonly string[]
+  ) {
+    super(message)
+    this.name = 'FilterValidationError'
+  }
+}
+
+/**
  * Apply audit filters to a Supabase query builder
  * This ensures views, exports, and readiness endpoints use the same filter logic
+ * 
+ * @throws {FilterValidationError} If invalid filter values are provided (returns 400)
  */
 export function applyAuditFilters<T extends { eq: any; gte: any; lte: any; in: any; or: any; like: any }>(
   query: T,
   filters: AuditFilters
 ): T {
   const { organizationId, category, site_id, job_id, actor_id, severity, outcome, time_range, start_date, end_date, view, event_type } = filters
+
+  // Validate category
+  if (category && !VALID_AUDIT_CATEGORIES.includes(category as AuditCategory)) {
+    throw new FilterValidationError(
+      `Invalid category: ${category}`,
+      'category',
+      VALID_AUDIT_CATEGORIES
+    )
+  }
+
+  // Validate time_range
+  if (time_range && !VALID_TIME_RANGES.includes(time_range as TimeRange)) {
+    throw new FilterValidationError(
+      `Invalid time_range: ${time_range}`,
+      'time_range',
+      VALID_TIME_RANGES
+    )
+  }
+
+  // Validate view
+  if (view && !VALID_SAVED_VIEWS.includes(view as SavedView)) {
+    throw new FilterValidationError(
+      `Invalid view: ${view}`,
+      'view',
+      VALID_SAVED_VIEWS
+    )
+  }
+
+  // Validate custom time range requires dates
+  if (time_range === 'custom' && (!start_date || !end_date)) {
+    throw new FilterValidationError(
+      'Custom time_range requires both start_date and end_date',
+      'time_range'
+    )
+  }
 
   // Always filter by organization
   query = query.eq('organization_id', organizationId) as T
