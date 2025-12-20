@@ -49,7 +49,7 @@ export default function AuditViewPage() {
     timeRange: '30d' as TimeRange,
     severity: '' as EventSeverity | '',
     outcome: '' as EventOutcome | '',
-    savedView: '' as SavedView | '',
+    savedView: 'review-queue' as SavedView, // Default to Review Queue
   })
   const [jobs, setJobs] = useState<Array<{ id: string; client_name: string; site_name?: string }>>([])
   const [users, setUsers] = useState<Array<{ id: string; name: string; email: string; role?: string }>>([])
