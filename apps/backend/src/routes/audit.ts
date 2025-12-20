@@ -449,17 +449,49 @@ auditRouter.get('/events', authenticate as unknown as express.RequestHandler, as
     const { data, error, count } = await query
 
     if (error) {
-      console.error('Audit events query error:', error)
-      console.error('Query params:', { category, view, time_range, organization_id })
+      console.error('Audit events query error:', {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        query_params: req.query,
+        organization_id: organization_id,
+      })
+      
+      // If it's an RLS recursion error, provide a more helpful message
+      if (error.code === '42P17' || error.message?.includes('infinite recursion')) {
+        const { response: errorResponse, errorId } = createErrorResponse({
+          message: 'Database policy recursion detected. This indicates a configuration issue with row-level security policies.',
+          internalMessage: `RLS recursion error: ${error.message} (code: ${error.code})`,
+          code: 'RLS_RECURSION_ERROR',
+          requestId,
+          statusCode: 500,
+          databaseError: {
+            code: error.code,
+            message: error.message,
+            hint: error.hint,
+            details: error.details,
+          },
+        })
+        res.setHeader('X-Error-ID', errorId)
+        logErrorForSupport(500, 'RLS_RECURSION_ERROR', requestId, organization_id, errorResponse.message, errorResponse.internalMessage, 'system', 'error', '/api/audit/events', { query_params: req.query, db_error: error })
+        return res.status(500).json(errorResponse)
+      }
+      
       const { response: errorResponse, errorId } = createErrorResponse({
         message: 'Failed to fetch audit events',
         internalMessage: error.message || String(error),
         code: 'QUERY_ERROR',
         requestId,
         statusCode: 500,
+        databaseError: error.code ? {
+          code: error.code,
+          message: error.message,
+          hint: error.hint,
+        } : undefined,
       })
       res.setHeader('X-Error-ID', errorId)
-      logErrorForSupport(500, 'QUERY_ERROR', requestId, organization_id, errorResponse.message, errorResponse.internalMessage, 'system', 'error', '/api/audit/events')
+      logErrorForSupport(500, 'QUERY_ERROR', requestId, organization_id, errorResponse.message, errorResponse.internalMessage, 'system', 'error', '/api/audit/events', { query_params: req.query, db_error: error })
       return res.status(500).json(errorResponse)
     }
 
