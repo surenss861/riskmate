@@ -4,7 +4,7 @@ import { authenticate, AuthenticatedRequest } from '../middleware/auth'
 import { RequestWithId } from '../middleware/requestId'
 import { createErrorResponse, logErrorForSupport } from '../utils/errorResponse'
 import { recordAuditLog } from '../middleware/audit'
-import { runCommand, CommandContext, CommandOptions, buildAuditFilters } from '../utils/commandRunner'
+import { runCommand, CommandContext, CommandOptions, applyAuditFilters } from '../utils/commandRunner'
 import archiver from 'archiver'
 import { Readable } from 'stream'
 import crypto from 'crypto'
@@ -375,6 +375,7 @@ async function generateAttestationsCSV(
 
 // GET /api/audit/events
 // Returns filtered, enriched audit events with stats
+// Uses unified filter logic (same as exports/readiness) for consistency
 auditRouter.get('/events', authenticate as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
   const authReq = req as AuthenticatedRequest & RequestWithId
   const requestId = authReq.requestId || 'unknown'
@@ -396,50 +397,26 @@ auditRouter.get('/events', authenticate as unknown as express.RequestHandler, as
       limit = 50,
     } = req.query
 
-    // Build base query
+    // Build base query with unified filters
     let query = supabase
       .from('audit_logs')
       .select('*', { count: 'exact' })
-      .eq('organization_id', organization_id)
       .order('created_at', { ascending: false })
 
-    // Time range filter
-    if (time_range !== 'all' && time_range !== 'custom') {
-      const now = new Date()
-      let cutoff = new Date()
-      if (time_range === '24h') {
-        cutoff.setHours(now.getHours() - 24)
-      } else if (time_range === '7d') {
-        cutoff.setDate(now.getDate() - 7)
-      } else if (time_range === '30d') {
-        cutoff.setDate(now.getDate() - 30)
-      }
-      query = query.gte('created_at', cutoff.toISOString())
-    } else if (time_range === 'custom' && start_date && end_date) {
-      query = query.gte('created_at', start_date as string).lte('created_at', end_date as string)
-    }
-
-    // Apply saved view filters
-    if (view === 'review-queue') {
-      // Review Queue: flagged jobs, critical/material events, missing signoffs, blocked actions
-      query = query.or('job_flagged.eq.true,severity.in.(critical,material),outcome.eq.blocked')
-    } else if (view === 'insurance-ready') {
-      query = query.eq('category', 'operations').in('severity', ['material', 'critical'])
-    } else if (view === 'governance-enforcement') {
-      query = query.eq('category', 'governance')
-    } else if (view === 'incident-review') {
-      query = query.or('event_name.like.%incident%,event_name.like.%violation%')
-    } else if (view === 'access-review') {
-      query = query.eq('category', 'access')
-    }
-
-    // Apply filters
-    if (category) query = query.eq('category', category)
-    if (site_id) query = query.eq('site_id', site_id)
-    if (job_id) query = query.eq('job_id', job_id)
-    if (actor_id) query = query.eq('actor_id', actor_id)
-    if (severity) query = query.eq('severity', severity)
-    if (outcome) query = query.eq('outcome', outcome)
+    // Apply unified audit filters (same logic as exports/readiness)
+    query = applyAuditFilters(query, {
+      organizationId: organization_id,
+      category: category as any,
+      site_id: site_id as string,
+      job_id: job_id as string,
+      actor_id: actor_id as string,
+      severity: severity as any,
+      outcome: outcome as any,
+      time_range: time_range as any,
+      start_date: start_date as string,
+      end_date: end_date as string,
+      view: view as any,
+    })
 
     // Cursor pagination
     const limitNum = parseInt(String(limit), 10) || 50
