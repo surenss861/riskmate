@@ -38,6 +38,9 @@ interface AuditEvent {
   actor_id?: string
   target_type?: string
   target_id?: string
+  category?: string
+  severity?: 'critical' | 'material' | 'info'
+  outcome?: 'blocked' | 'allowed' | 'success' | 'failure'
 }
 
 type TimeRange = '24h' | '7d' | '30d' | 'custom' | 'all'
@@ -147,9 +150,12 @@ export default function AuditViewPage() {
         event_type: event.event_name || event.event_type || 'unknown',
         job_name: event.job_title || event.job_name,
         user_name: event.actor_name || event.user_name,
-        user_email: event.user_email,
+        user_email: event.user_email || event.actor_email,
         user_role: event.actor_role || event.user_role,
         site_name: event.site_name,
+        category: event.category,
+        severity: event.severity,
+        outcome: event.outcome,
       }))
 
       setEvents(enrichedEvents as AuditEvent[])
