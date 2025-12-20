@@ -1,10 +1,23 @@
 -- Fix sites RLS policy to use SECURITY DEFINER helper functions to avoid recursion
 -- Direct queries to users table in policies can cause infinite recursion with organization_members
 
--- Create SECURITY DEFINER helper function to get user role (bypasses RLS, prevents recursion)
+-- Create SECURITY DEFINER helper functions to prevent RLS recursion
+-- These functions bypass RLS, preventing infinite recursion in policies
+
+-- Get current user's role (bypasses RLS)
 CREATE OR REPLACE FUNCTION get_current_user_role()
 RETURNS TEXT AS $$
   SELECT role FROM users WHERE id = auth.uid() LIMIT 1;
+$$ LANGUAGE sql SECURITY DEFINER;
+
+-- Check if current user is admin in their organization (bypasses RLS)
+CREATE OR REPLACE FUNCTION is_current_user_admin()
+RETURNS BOOLEAN AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM users
+    WHERE id = auth.uid()
+    AND role IN ('owner', 'admin')
+  );
 $$ LANGUAGE sql SECURITY DEFINER;
 
 -- Drop existing policies
