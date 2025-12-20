@@ -60,21 +60,7 @@ async function generateControlsCSV(
     })),
   }))
 
-  // Get ledger entries
-  const controlIds = controlsByJob.flatMap(j => j.controls.map(c => c.id))
-  const { data: ledgerEntries } = await supabase
-    .from('audit_logs')
-    .select('target_id, id as ledger_entry_id, created_at as ledger_entry_at')
-    .in('target_id', controlIds)
-    .eq('target_type', 'mitigation')
-    .order('created_at', { ascending: false })
-  
-  const ledgerMap = new Map<string, { ledger_entry_id: string; ledger_entry_at: string }>()
-  ledgerEntries?.forEach((entry: any) => {
-    if (!ledgerMap.has(entry.target_id)) {
-      ledgerMap.set(entry.target_id, { ledger_entry_id: entry.ledger_entry_id, ledger_entry_at: entry.ledger_entry_at })
-    }
-  })
+  // Note: Ledger entries are now fetched later with event_type
 
   // Get org and user data
   const { data: orgData } = await supabase
@@ -105,33 +91,110 @@ async function generateControlsCSV(
     '--- Controls Data ---',
   ]
 
-  const headers = ['Control ID', 'Ledger Entry ID', 'Work Record ID', 'Work Record', 'Risk Score', 'Status at Export', 'Control Title', 'Control Status', 'Created (ISO)', 'Site']
-  const rows: any[] = []
-  controlsByJob.forEach(job => {
-    if (job.controls.length === 0) {
-      rows.push(['', '', job.job_id, job.job_name, job.risk_score || 'N/A', job.status, 'No controls', 'N/A', '', job.site_name || ''])
-    } else {
-      job.controls.forEach(control => {
-        const ledgerInfo = ledgerMap.get(control.id)
-        rows.push([
-          control.id,
-          ledgerInfo?.ledger_entry_id || '',
-          job.job_id,
-          job.job_name,
-          job.risk_score || 'N/A',
-          job.status,
-          control.title,
-          control.status,
-          new Date(control.created_at).toISOString(),
-          job.site_name || '',
-        ])
+  // Exact header order per schema specification
+  const HEADERS = [
+    'control_id',
+    'ledger_entry_id',
+    'ledger_event_type',
+    'work_record_id',
+    'site_id',
+    'org_id',
+    'status_at_export',
+    'severity',
+    'title',
+    'owner_user_id',
+    'owner_email',
+    'due_date',
+    'verification_method',
+    'created_at',
+    'updated_at',
+  ]
+
+  // Fetch additional data needed for schema
+  const allControlIds = controlsByJob.flatMap(j => j.controls.map(c => c.id))
+  const { data: controlsWithDetails } = await supabase
+    .from('mitigation_items')
+    .select('id, owner_id, due_date, verification_method, created_at, updated_at')
+    .in('id', allControlIds)
+
+  const controlDetailsMap = new Map(
+    (controlsWithDetails || []).map(c => [c.id, c])
+  )
+
+  // Fetch owner emails
+  const ownerIds = [...new Set((controlsWithDetails || []).map(c => c.owner_id).filter(Boolean))]
+  const { data: owners } = await supabase
+    .from('users')
+    .select('id, email')
+    .in('id', ownerIds)
+
+  const ownerMap = new Map((owners || []).map(o => [o.id, o.email]))
+
+  // Fetch ledger entries with event_type
+  const { data: ledgerEntriesWithType } = await supabase
+    .from('audit_logs')
+    .select('target_id, id as ledger_entry_id, event_name as ledger_event_type')
+    .in('target_id', controlIds)
+    .eq('target_type', 'mitigation')
+    .order('created_at', { ascending: false })
+
+  const ledgerTypeMap = new Map<string, { ledger_entry_id: string; ledger_event_type: string }>()
+  ledgerEntriesWithType?.forEach((entry: any) => {
+    if (!ledgerTypeMap.has(entry.target_id)) {
+      ledgerTypeMap.set(entry.target_id, {
+        ledger_entry_id: entry.ledger_entry_id,
+        ledger_event_type: entry.ledger_event_type,
       })
     }
   })
 
+  // Fetch ledger entries with event_type (reuse controlIds from earlier)
+  const { data: ledgerEntriesWithType } = await supabase
+    .from('audit_logs')
+    .select('target_id, id as ledger_entry_id, event_name as ledger_event_type')
+    .in('target_id', allControlIds)
+    .eq('target_type', 'mitigation')
+    .order('created_at', { ascending: false })
+
+  // Fetch site IDs
+  const { data: jobsWithSites } = await supabase
+    .from('jobs')
+    .select('id, site_id')
+    .in('id', jobs.map(j => j.id))
+
+  const siteMap = new Map((jobsWithSites || []).map(j => [j.id, j.site_id || '']))
+
+  const rows: any[] = []
+  controlsByJob.forEach(job => {
+    job.controls.forEach(control => {
+      const ledgerInfo = ledgerTypeMap.get(control.id)
+      const details = controlDetailsMap.get(control.id)
+      const ownerEmail = details?.owner_id ? ownerMap.get(details.owner_id) : ''
+      const siteId = siteMap.get(job.job_id) || ''
+
+      rows.push([
+        control.id, // control_id
+        ledgerInfo?.ledger_entry_id || '', // ledger_entry_id
+        ledgerInfo?.ledger_event_type || '', // ledger_event_type
+        job.job_id, // work_record_id
+        siteId, // site_id
+        organizationId, // org_id
+        control.status, // status_at_export
+        job.risk_level || 'info', // severity
+        control.title || '', // title
+        details?.owner_id || '', // owner_user_id
+        ownerEmail || '', // owner_email
+        details?.due_date ? new Date(details.due_date).toISOString().split('T')[0] : '', // due_date (YYYY-MM-DD)
+        details?.verification_method || '', // verification_method
+        details?.created_at ? new Date(details.created_at).toISOString() : '', // created_at (ISO)
+        details?.updated_at ? new Date(details.updated_at).toISOString() : '', // updated_at (ISO)
+      ])
+    })
+  })
+
   const csv = [
     ...headerBlock,
-    headers.join(','),
+    HEADERS.join(','),
     ...rows.map((r: any[]) => r.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')),
   ].join('\n')
 
@@ -234,28 +297,81 @@ async function generateAttestationsCSV(
     '--- Attestation Data ---',
   ]
 
-  const headers = ['Attestation ID', 'Ledger Entry ID', 'Work Record ID', 'Work Record', 'Attestation Type', 'Signer ID', 'Signer', 'Role', 'Status at Export', 'Signed At (ISO)', 'IP Address', 'Comments']
+  // Exact header order per schema specification
+  const HEADERS = [
+    'attestation_id',
+    'ledger_entry_id',
+    'ledger_event_type',
+    'work_record_id',
+    'site_id',
+    'org_id',
+    'status_at_export',
+    'signer_user_id',
+    'signer_email',
+    'signer_role',
+    'signed_at',
+    'statement',
+  ]
+
+  // Fetch site IDs and enrich signoffs with required fields
+  const { data: jobsWithSites } = await supabase
+    .from('jobs')
+    .select('id, site_id')
+    .in('id', jobIds)
+
+  const siteMap = new Map((jobsWithSites || []).map(j => [j.id, j.site_id || '']))
+
+  // Fetch signer emails
+  const signerIds = [...new Set(enrichedSignoffs.map(s => s.signed_by).filter(Boolean))]
+  const { data: signers } = await supabase
+    .from('users')
+    .select('id, email')
+    .in('id', signerIds)
+
+  const signerEmailMap = new Map((signers || []).map(s => [s.id, s.email]))
+
+  // Fetch ledger entries with event_type
+  const { data: attestationLedgerEntriesWithType } = await supabase
+    .from('audit_logs')
+    .select('target_id, id as ledger_entry_id, event_name as ledger_event_type')
+    .in('target_id', signoffIds)
+    .eq('target_type', 'system') // Updated from 'signoff' to match our recordAuditLog
+    .order('created_at', { ascending: false })
+
+  const attestationLedgerTypeMap = new Map<string, { ledger_entry_id: string; ledger_event_type: string }>()
+  attestationLedgerEntriesWithType?.forEach((entry: any) => {
+    if (!attestationLedgerTypeMap.has(entry.target_id)) {
+      attestationLedgerTypeMap.set(entry.target_id, {
+        ledger_entry_id: entry.ledger_entry_id,
+        ledger_event_type: entry.ledger_event_type,
+      })
+    }
+  })
+
   const rows = enrichedSignoffs.map((s: any) => {
-    const ledgerInfo = attestationLedgerMap.get(s.id)
+    const ledgerInfo = attestationLedgerTypeMap.get(s.id)
+    const signerEmail = s.signed_by ? signerEmailMap.get(s.signed_by) : ''
+    const siteId = siteMap.get(s.job_id) || ''
+
     return [
-      s.id,
-      ledgerInfo?.ledger_entry_id || '',
-      s.job_id,
-      jobMap.get(s.job_id) || 'Unknown',
-      s.signoff_type,
-      s.signed_by || '',
-      s.signer_name || 'Unknown',
-      s.signer_role || 'Unknown',
-      s.status,
-      s.signed_at ? new Date(s.signed_at).toISOString() : '',
-      s.ip_address || '',
-      s.comments || '',
+      s.id, // attestation_id
+      ledgerInfo?.ledger_entry_id || '', // ledger_entry_id
+      ledgerInfo?.ledger_event_type || '', // ledger_event_type
+      s.job_id, // work_record_id
+      siteId, // site_id
+      organizationId, // org_id
+      s.status, // status_at_export
+      s.signed_by || '', // signer_user_id
+      signerEmail || '', // signer_email
+      s.signer_role || 'Unknown', // signer_role
+      s.signed_at ? new Date(s.signed_at).toISOString() : '', // signed_at (ISO)
+      s.comments || '', // statement
     ]
   })
 
   const csv = [
     ...headerBlock,
-    headers.join(','),
+    HEADERS.join(','),
     ...rows.map((r: any[]) => r.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')),
   ].join('\n')
 
@@ -1174,46 +1290,60 @@ auditRouter.post('/export/pack', authenticate as unknown as express.RequestHandl
     // Calculate PDF hash
     const pdfHash = pdfBuffer ? crypto.createHash('sha256').update(pdfBuffer).digest('hex') : null
 
-    // Generate manifest with counts and hashes
+    // Generate manifest with counts and hashes (exact schema per specification)
     const manifest = {
       pack_id: packId,
       generated_at: new Date().toISOString(),
-      generated_by: userData?.full_name || 'Unknown',
-      generated_by_role: userData?.role || 'Unknown',
-      generated_by_user_id: userId,
-      organization: orgData?.name || 'Unknown',
-      organization_id: organization_id,
-      time_range: time_range || '30d',
-      filters: {
-        job_id: job_id || null,
-        site_id: site_id || null,
+      generated_by: {
+        user_id: userId,
+        email: userData?.email || 'Unknown',
+        role: userData?.role || 'Unknown',
       },
-      contents: [
+      filters: {
+        time_range: time_range || '30d',
+        site_id: site_id || null,
+        severity: 'all',
+        outcome: 'all',
+        user: 'all',
+      },
+      counts: {
+        ledger_events: events.length,
+        controls: controlsCount,
+        attestations: attestationsCount,
+      },
+      files: [
         {
-          filename: `ledger_export_${packId}.pdf`,
-          type: 'ledger_pdf',
-          record_count: events.length,
-          hash_sha256: pdfHash,
+          name: `ledger_export_${packId}.pdf`,
+          sha256: pdfHash || '',
+          bytes: pdfBuffer?.length || 0,
         },
         {
-          filename: `controls_${packId}.csv`,
-          type: 'controls_csv',
-          record_count: controlsCount,
-          hash_sha256: controlsHash,
+          name: `controls_${packId}.csv`,
+          sha256: controlsHash || '',
+          bytes: controlsBuffer?.length || 0,
         },
         {
-          filename: `attestations_${packId}.csv`,
-          type: 'attestations_csv',
-          record_count: attestationsCount,
-          hash_sha256: attestationsHash,
+          name: `attestations_${packId}.csv`,
+          sha256: attestationsHash || '',
+          bytes: attestationsBuffer?.length || 0,
+        },
+        {
+          name: `manifest_${packId}.json`,
+          sha256: '', // Will be calculated after manifest is created
+          bytes: 0, // Will be calculated
         },
       ],
-      summary: {
-        total_ledger_events: events.length,
-        total_controls: controlsCount,
-        total_attestations: attestationsCount,
-      },
     }
+
+    // Calculate manifest hash and size
+    const manifestJson = JSON.stringify(manifest, null, 2)
+    const manifestBuffer = Buffer.from(manifestJson, 'utf-8')
+    const manifestHash = crypto.createHash('sha256').update(manifestBuffer).digest('hex')
+    manifest.files[3].sha256 = manifestHash
+    manifest.files[3].bytes = manifestBuffer.length
+
+    // Update archive with correct manifest
+    archive.append(JSON.stringify(manifest, null, 2), { name: `manifest_${packId}.json` })
     archive.append(JSON.stringify(manifest, null, 2), { name: `manifest_${packId}.json` })
 
     await archive.finalize()
@@ -1596,12 +1726,12 @@ auditRouter.post('/incidents/close', authenticate as unknown as express.RequestH
       })
     }
 
-    // Get user info for attestation
-    const { data: userData } = await supabase
-      .from('users')
-      .select('full_name, role')
-      .eq('id', userId)
-      .single()
+      // Get user info for attestation
+      const { data: userData } = await supabase
+        .from('users')
+        .select('full_name, role, email')
+        .eq('id', userId)
+        .single()
 
     // Create attestation atomically as part of closure
     const { data: attestation, error: attestationError } = await supabase
