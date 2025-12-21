@@ -361,14 +361,32 @@ export default function AuditViewPage() {
     accessChanges: events.filter(e => categorizeEvent(e.event_type) === 'access').length,
   }
 
-  // Filter events by active tab (unless Review Queue is active)
+  // Filter events by active tab (unless a Saved View is active)
+  // Map events to the three main Compliance Ledger tabs:
+  // - governance: Blocked actions, policy enforcement, violations
+  // - operations: Human actions (assign/resolve/waive, corrective actions, incident closures, exports)
+  // - access: Identity + permissions (access changes, logins, security events)
   const filteredEvents = events.filter(e => {
-    if (filters.savedView === 'review-queue') {
-      // Review Queue shows all relevant events regardless of tab
+    if (filters.savedView && filters.savedView !== 'custom') {
+      // Saved Views show all relevant events regardless of tab
       return true
     }
-    const category = categorizeEvent(e.event_type)
-    return category === activeTab
+    
+    // Use the actual category from the event (from database) if available, otherwise fall back to client-side categorization
+    const eventCategory = e.category || categorizeEvent(e.event_type)
+    
+    // Map sub-categories to main tabs
+    if (activeTab === 'governance') {
+      return eventCategory === 'governance'
+    } else if (activeTab === 'operations') {
+      // Operations includes: operations, review_queue, incident_review, attestations, system
+      return ['operations', 'review_queue', 'incident_review', 'attestations', 'system'].includes(eventCategory)
+    } else if (activeTab === 'access') {
+      // Access includes: access, access_review
+      return ['access', 'access_review'].includes(eventCategory)
+    }
+    
+    return false
   })
 
   const formatRelativeTime = (date: string) => {
@@ -1623,7 +1641,29 @@ export default function AuditViewPage() {
             {loading ? (
               <div className="text-center py-12 text-white/60">Loading audit events...</div>
             ) : filteredEvents.length === 0 ? (
-              <div className="text-center py-12 text-white/60">No events found for this category</div>
+              <div className="text-center py-12 px-4">
+                <div className="max-w-md mx-auto">
+                  <p className="text-white/60 mb-4">
+                    {activeTab === 'governance' && `No Governance Enforcement events in the last ${filters.timeRange === '24h' ? '24 hours' : filters.timeRange === '7d' ? '7 days' : filters.timeRange === '30d' ? '30 days' : 'time period'}.`}
+                    {activeTab === 'operations' && `No Operational Actions in the last ${filters.timeRange === '24h' ? '24 hours' : filters.timeRange === '7d' ? '7 days' : filters.timeRange === '30d' ? '30 days' : 'time period'}.`}
+                    {activeTab === 'access' && `No Access & Security events in the last ${filters.timeRange === '24h' ? '24 hours' : filters.timeRange === '7d' ? '7 days' : filters.timeRange === '30d' ? '30 days' : 'time period'}.`}
+                  </p>
+                  <div className="flex flex-wrap gap-2 justify-center">
+                    <button
+                      onClick={() => setFilters({ ...filters, timeRange: 'all' })}
+                      className={`${buttonStyles.secondary} ${buttonStyles.sizes.sm} text-xs`}
+                    >
+                      Show all time
+                    </button>
+                    <button
+                      onClick={() => setFilters({ ...filters, outcome: '', severity: '' })}
+                      className={`${buttonStyles.secondary} ${buttonStyles.sizes.sm} text-xs`}
+                    >
+                      Clear filters
+                    </button>
+                  </div>
+                </div>
+              </div>
             ) : (
               <div className="space-y-3">
                 {filteredEvents.map((event) => {

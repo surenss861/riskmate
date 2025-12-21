@@ -73,13 +73,46 @@ export async function recordAuditLog(
   }
 }
 
+/**
+ * Categorize events into the three main Compliance Ledger tabs:
+ * - governance: Blocked actions, policy enforcement, violations (system blocked something + why)
+ * - operations: Human actions (assign/resolve/waive, corrective actions, incident closures, exports)
+ * - access: Identity + permissions (access changes, logins, security events)
+ */
 function getCategoryFromEventName(eventName: string): 'governance' | 'operations' | 'access' | 'review_queue' | 'incident_review' | 'attestations' | 'access_review' | 'system' {
-  if (eventName.includes('auth.') || eventName.includes('violation')) return 'governance'
-  if (eventName.includes('review.')) return 'review_queue'
+  // Governance Enforcement: blocked actions, policy enforcement, violations
+  if (
+    eventName.includes('auth.role_violation') ||
+    eventName.includes('policy.denied') ||
+    eventName.includes('rls.denied') ||
+    eventName.includes('enforcement.blocked') ||
+    eventName.includes('governance.enforcement')
+  ) {
+    return 'governance'
+  }
+  
+  // Access & Security: identity + permissions changes
+  if (
+    eventName.includes('access.') ||
+    eventName.includes('role.changed') ||
+    eventName.includes('permission.') ||
+    eventName.includes('login.') ||
+    eventName.includes('session.terminated') ||
+    eventName.includes('team.') ||
+    eventName.includes('security.')
+  ) {
+    return 'access'
+  }
+  
+  // Operational Actions: human work (default category)
+  // Includes: review_queue.*, incident.*, export.*, proof_pack.*, attestation.*
+  // Note: review_queue and incident_review are sub-categories but still count as "operations" for tab filtering
+  if (eventName.includes('review_queue.') || eventName.includes('review.')) return 'review_queue'
   if (eventName.includes('incident.')) return 'incident_review'
-  if (eventName.includes('access.') || eventName.includes('team.') || eventName.includes('security.')) return 'access'
   if (eventName.includes('attestation.')) return 'attestations'
   if (eventName.includes('export.') || eventName.includes('system.')) return 'system'
+  
+  // Default to operations (human actions)
   return 'operations'
 }
 
