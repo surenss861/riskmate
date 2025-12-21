@@ -124,7 +124,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Process each item (support bulk assignment)
+    // Track results explicitly for partial-failure transparency
     const ledgerEntryIds: string[] = []
+    const succeededIds: string[] = []
+    const failedIds: string[] = []
+    const failures: Array<{ id: string; code: string; message: string }> = []
 
     for (const itemId of item_ids) {
       // Determine target type by checking if it's a job or event
@@ -155,6 +159,12 @@ export async function POST(request: NextRequest) {
 
         if (!eventData) {
           console.warn(`[review-queue/assign] Item ${itemId} not found, skipping`, { requestId })
+          failedIds.push(itemId)
+          failures.push({
+            id: itemId,
+            code: 'NOT_FOUND',
+            message: 'Item not found',
+          })
           continue
         }
 
@@ -166,6 +176,12 @@ export async function POST(request: NextRequest) {
       // Hard rule: Can't assign resolved items
       if (isAlreadyResolved) {
         console.warn(`[review-queue/assign] Item ${itemId} is already resolved, skipping`, { requestId })
+        failedIds.push(itemId)
+        failures.push({
+          id: itemId,
+          code: 'ALREADY_RESOLVED',
+          message: 'Item is already resolved and cannot be assigned',
+        })
         continue
       }
 

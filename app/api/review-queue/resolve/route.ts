@@ -136,7 +136,11 @@ export async function POST(request: NextRequest) {
       .eq('id', user_id)
       .single()
 
+    // Track results explicitly for partial-failure transparency
     const ledgerEntryIds: string[] = []
+    const succeededIds: string[] = []
+    const failedIds: string[] = []
+    const failures: Array<{ id: string; code: string; message: string }> = []
 
     // Process each item
     for (const itemId of item_ids) {
@@ -167,6 +171,12 @@ export async function POST(request: NextRequest) {
 
         if (!eventData) {
           console.warn(`[review-queue/resolve] Item ${itemId} not found, skipping`, { requestId })
+          failedIds.push(itemId)
+          failures.push({
+            id: itemId,
+            code: 'NOT_FOUND',
+            message: 'Item not found',
+          })
           continue
         }
 
@@ -178,6 +188,12 @@ export async function POST(request: NextRequest) {
       // Hard rule: Can't resolve already resolved items
       if (isAlreadyResolved) {
         console.warn(`[review-queue/resolve] Item ${itemId} is already resolved, skipping`, { requestId })
+        failedIds.push(itemId)
+        failures.push({
+          id: itemId,
+          code: 'ALREADY_RESOLVED',
+          message: 'Item is already resolved and cannot be resolved again',
+        })
         continue
       }
 
@@ -252,14 +268,30 @@ export async function POST(request: NextRequest) {
 
       if (ledgerResult.data?.id) {
         ledgerEntryIds.push(ledgerResult.data.id)
+        succeededIds.push(itemId)
+      } else {
+        failedIds.push(itemId)
+        failures.push({
+          id: itemId,
+          code: 'LEDGER_WRITE_FAILED',
+          message: 'Failed to write ledger entry',
+        })
       }
     }
 
     const successResponse = createSuccessResponse({
       ledger_entry_ids: ledgerEntryIds,
-      resolved_count: ledgerEntryIds.length,
+      resolved_count: succeededIds.length,
+      succeeded_ids: succeededIds,
+      ...(failedIds.length > 0 && {
+        failed_ids: failedIds,
+        failures,
+        partial_success: true,
+      }),
     }, {
-      message: `Successfully resolved ${ledgerEntryIds.length} item(s)`,
+      message: failedIds.length > 0
+        ? `Resolved ${succeededIds.length} item(s), ${failedIds.length} failed`
+        : `Successfully resolved ${succeededIds.length} item(s)`,
       requestId,
     })
     return NextResponse.json(successResponse, {

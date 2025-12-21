@@ -110,11 +110,18 @@ export async function GET(request: NextRequest) {
         ...rows.map((r: any[]) => r.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')),
       ].join('\n')
 
+      // CSV exports: meta goes in headers, not body (body is pure CSV text)
+      const exportedAt = new Date().toISOString()
       return new NextResponse(csv, {
         headers: {
           'Content-Type': 'text/csv; charset=utf-8',
           'Content-Disposition': `attachment; filename="incidents-export-${new Date().toISOString().split('T')[0]}.csv"`,
           'X-Request-ID': requestId,
+          'X-Exported-At': exportedAt,
+          'X-Export-Format': 'csv',
+          'X-Export-View': 'incident-review',
+          'X-Export-Count': eventList.length.toString(),
+          ...(time_range && { 'X-Export-Filter-TimeRange': time_range }),
         },
       })
     }
