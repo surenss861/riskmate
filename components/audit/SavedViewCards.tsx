@@ -143,32 +143,53 @@ export function SavedViewCards({
             <p className="text-sm text-white/70 mb-3">{view.description}</p>
             
             {/* Primary Action Button */}
-            {view.primaryAction && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  view.primaryAction?.handler?.(view.id)
-                }}
-                className={`${buttonStyles.primary} w-full text-xs py-2 mb-2 flex items-center justify-center gap-2 font-medium`}
-              >
-                {view.primaryAction.icon && <view.primaryAction.icon className="w-3.5 h-3.5" />}
-                {view.primaryAction.label}
-              </button>
-            )}
+            {view.primaryAction && (() => {
+              // Action buttons (Assign, Resolve, Create Corrective Action, etc.) require selection
+              // Export buttons (Generate Proof Pack, Export Enforcement Report) don't require selection
+              const requiresSelection = ['Assign', 'Resolve', 'Create Corrective Action', 'Close Incident', 'Revoke Access', 'Flag Suspicious'].includes(view.primaryAction.label)
+              const isDisabled = requiresSelection && selectedCount === 0
+              
+              return (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    if (!isDisabled) {
+                      view.primaryAction?.handler?.(view.id)
+                    }
+                  }}
+                  disabled={isDisabled}
+                  title={isDisabled ? 'Select at least 1 item from the list below' : undefined}
+                  className={`${buttonStyles.primary} w-full text-xs py-2 mb-2 flex items-center justify-center gap-2 font-medium disabled:opacity-50 disabled:cursor-not-allowed`}
+                >
+                  {view.primaryAction.icon && <view.primaryAction.icon className="w-3.5 h-3.5" />}
+                  {view.primaryAction.label}
+                </button>
+              )
+            })()}
 
             {/* Secondary Action Button (if exists) */}
-            {view.secondaryAction && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  view.secondaryAction?.handler?.(view.id)
-                }}
-                className={`${buttonStyles.secondary} w-full text-xs py-1.5 mb-2 flex items-center justify-center gap-1.5`}
-              >
-                {view.secondaryAction.icon && <view.secondaryAction.icon className="w-3 h-3" />}
-                {view.secondaryAction.label}
-              </button>
-            )}
+            {view.secondaryAction && (() => {
+              // Action buttons require selection
+              const requiresSelection = ['Assign', 'Resolve', 'Create Corrective Action', 'Close Incident', 'Revoke Access', 'Flag Suspicious'].includes(view.secondaryAction.label)
+              const isDisabled = requiresSelection && selectedCount === 0
+              
+              return (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    if (!isDisabled) {
+                      view.secondaryAction?.handler?.(view.id)
+                    }
+                  }}
+                  disabled={isDisabled}
+                  title={isDisabled ? 'Select at least 1 item from the list below' : undefined}
+                  className={`${buttonStyles.secondary} w-full text-xs py-1.5 mb-2 flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed`}
+                >
+                  {view.secondaryAction.icon && <view.secondaryAction.icon className="w-3 h-3" />}
+                  {view.secondaryAction.label}
+                </button>
+              )
+            })()}
 
             {/* Export Buttons (always available) */}
             <div className="flex gap-2 mt-2">
