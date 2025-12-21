@@ -43,12 +43,32 @@ export function EventSelectionTable({
 }: EventSelectionTableProps) {
   // Use external selection if provided, otherwise use internal hook
   const internalSelection = useSelectedRows()
-  const selectedIds = externalSelectedIds || internalSelection.selectedIds
-  const toggleSelection = internalSelection.toggleSelection
+  const selectedIds = externalSelectedIds !== undefined ? externalSelectedIds : internalSelection.selectedIds
   const isSelected = (id: string) => selectedIds.includes(id)
-  const clearSelection = internalSelection.clearSelection
   const selectedCount = selectedIds.length
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
+
+  // Use external toggleSelection if provided, otherwise use internal
+  const handleToggleSelection = (id: string) => {
+    if (externalSelectedIds !== undefined && onSelect) {
+      // External selection - use callback
+      onSelect(id)
+    } else {
+      // Internal selection - use hook
+      internalSelection.toggleSelection(id)
+      onSelect?.(id)
+    }
+  }
+
+  const handleClearSelection = () => {
+    if (externalSelectedIds !== undefined) {
+      // External selection - clear all by toggling each selected one
+      selectedIds.forEach(id => onSelect?.(id))
+    } else {
+      // Internal selection
+      internalSelection.clearSelection()
+    }
+  }
 
   const toggleExpanded = (eventId: string) => {
     const newExpanded = new Set(expandedRows)
@@ -62,8 +82,7 @@ export function EventSelectionTable({
 
   const handleCheckboxClick = (e: React.MouseEvent, eventId: string) => {
     e.stopPropagation()
-    toggleSelection(eventId)
-    onSelect?.(eventId)
+    handleToggleSelection(eventId)
   }
 
   const isReadOnly = userRole === 'executive'
@@ -92,7 +111,7 @@ export function EventSelectionTable({
             <span className="text-sm text-white/60">
               {selectedCount} selected
               <button
-                onClick={clearSelection}
+                onClick={handleClearSelection}
                 className="ml-2 text-xs text-[#F97316] hover:text-[#FFC857]"
               >
                 Clear
@@ -116,9 +135,9 @@ export function EventSelectionTable({
                   checked={selectedIds.length === events.length && events.length > 0}
                   onChange={(e) => {
                     if (e.target.checked) {
-                      events.forEach(event => toggleSelection(event.id))
+                      events.forEach(event => handleToggleSelection(event.id))
                     } else {
-                      clearSelection()
+                      handleClearSelection()
                     }
                   }}
                   className="w-4 h-4 rounded border-white/20 bg-white/5 text-[#F97316] focus:ring-[#F97316]"
@@ -147,8 +166,7 @@ export function EventSelectionTable({
                   }`}
                   onClick={() => {
                     if (!isReadOnly) {
-                      toggleSelection(event.id)
-                      onSelect?.(event.id)
+                      handleToggleSelection(event.id)
                     }
                     onRowClick?.(event)
                   }}
