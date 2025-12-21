@@ -125,18 +125,56 @@ export async function POST(request: NextRequest) {
     const { data: events, error } = await query
 
     if (error) {
-      console.error('[audit/export] Query error:', error)
-      return NextResponse.json(
+      console.error('[audit/export] Query error:', {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        requestId,
+        organization_id,
+      })
+
+      if (error.code === '42P17' || error.message?.includes('infinite recursion')) {
+        const errorResponse = createErrorResponse(
+          'Database policy recursion detected. This indicates a configuration issue with row-level security policies.',
+          'RLS_RECURSION_ERROR',
+          {
+            requestId,
+            statusCode: 500,
+            details: {
+              databaseError: {
+                code: error.code,
+                message: error.message,
+                hint: error.hint,
+              },
+            },
+          }
+        )
+        return NextResponse.json(errorResponse, { 
+          status: 500,
+          headers: { 'X-Request-ID': requestId }
+        })
+      }
+
+      const errorResponse = createErrorResponse(
+        'Failed to fetch audit events for export',
+        'QUERY_ERROR',
         {
-          message: 'Failed to fetch audit events for export',
-          code: 'QUERY_ERROR',
-          databaseError: {
-            code: error.code,
-            message: error.message,
+          requestId,
+          statusCode: 500,
+          details: {
+            databaseError: {
+              code: error.code,
+              message: error.message,
+              hint: error.hint,
+            },
           },
-        },
-        { status: 500 }
+        }
       )
+      return NextResponse.json(errorResponse, { 
+        status: 500,
+        headers: { 'X-Request-ID': requestId }
+      })
     }
 
     // Enrich events (same as events endpoint)
@@ -217,16 +255,27 @@ export async function POST(request: NextRequest) {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `attachment; filename="${filename}"`,
         'Content-Length': pdfBuffer.length.toString(),
+        'X-Request-ID': requestId,
       },
     })
   } catch (error: any) {
-    console.error('[audit/export] Error:', error)
-    return NextResponse.json(
+    console.error('[audit/export] Unhandled error:', {
+      message: error.message,
+      stack: error.stack,
+      requestId,
+    })
+    const errorResponse = createErrorResponse(
+      error.message || 'Failed to export audit ledger',
+      'EXPORT_ERROR',
       {
-        message: error.message || 'Failed to export audit ledger',
-        code: 'EXPORT_ERROR',
-      },
-      { status: 500 }
+        requestId,
+        statusCode: 500,
+        details: process.env.NODE_ENV === 'development' ? { stack: error.stack } : undefined,
+      }
     )
+    return NextResponse.json(errorResponse, { 
+      status: 500,
+      headers: { 'X-Request-ID': requestId }
+    })
   }
 }
