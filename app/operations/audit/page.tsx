@@ -94,6 +94,8 @@ export default function AuditViewPage() {
     failures?: Array<{ id: string; code: string; message: string }>
     requestId?: string
   } | null>(null)
+  const [mutationLoading, setMutationLoading] = useState(false)
+  const [highlightedFailedIds, setHighlightedFailedIds] = useState<Set<string>>(new Set())
   const selectionHook = useSelectedRows()
   const { selectedIds, selectedCount } = selectionHook
 
@@ -192,7 +194,11 @@ export default function AuditViewPage() {
         outcome: event.outcome,
       }))
 
-      setEvents(enrichedEvents as AuditEvent[])
+      const finalEvents = enrichedEvents as AuditEvent[]
+      setEvents(finalEvents)
+      
+      // Prune selection after loading new data
+      pruneSelection(finalEvents)
       
       // Update summary metrics from backend stats
       if (response.data.stats) {
@@ -234,7 +240,10 @@ export default function AuditViewPage() {
           .limit(500)
 
         if (error) throw error
-        setEvents((data || []) as AuditEvent[])
+        const fallbackEvents = (data || []) as AuditEvent[]
+        setEvents(fallbackEvents)
+        // Prune selection after fallback load
+        pruneSelection(fallbackEvents)
       } catch (fallbackErr) {
         console.error('Fallback query also failed:', fallbackErr)
       }
@@ -538,6 +547,11 @@ export default function AuditViewPage() {
     priority?: 'low' | 'medium' | 'high'
     note?: string
   }) => {
+    // Prevent duplicate requests
+    if (mutationLoading) {
+      return
+    }
+
     // Use selected IDs if available, otherwise use selectedTarget (single selection)
     const itemIds = selectedIds.length > 0 ? selectedIds : (selectedTarget ? [selectedTarget.id] : [])
 
@@ -550,6 +564,7 @@ export default function AuditViewPage() {
     }
 
     try {
+      setMutationLoading(true)
       const response = await fetch('/api/review-queue/assign', {
         method: 'POST',
         headers: {
@@ -608,9 +623,23 @@ export default function AuditViewPage() {
       }
       
       // Reload events to show the new assignment
-      loadAuditEvents()
+      await loadAuditEvents()
     } catch (err: any) {
       console.error('Failed to assign:', err)
+      
+      // Handle 401 (unauthorized/expired session)
+      if (err.message?.includes('Unauthorized') || err.message?.includes('401')) {
+        setToast({
+          message: 'Your session has expired. Please log in again.',
+          type: 'error',
+        })
+        // Optionally redirect to login
+        setTimeout(() => {
+          router.push('/auth/login')
+        }, 2000)
+        return
+      }
+      
       // Try to extract request ID from error response
       const requestId = err.requestId || (err.response?.headers?.get?.('X-Request-ID'))
       setToast({
@@ -619,6 +648,8 @@ export default function AuditViewPage() {
         requestId: process.env.NODE_ENV === 'development' ? requestId : undefined,
       })
       throw err
+    } finally {
+      setMutationLoading(false)
     }
   }
 
@@ -628,7 +659,13 @@ export default function AuditViewPage() {
     requires_followup: boolean
     waived?: boolean
     waiver_reason?: string
+    expires_at?: string
   }) => {
+    // Prevent duplicate requests
+    if (mutationLoading) {
+      return
+    }
+
     // Use selected IDs if available, otherwise use selectedTarget (single selection)
     const itemIds = selectedIds.length > 0 ? selectedIds : (selectedTarget ? [selectedTarget.id] : [])
 
@@ -641,6 +678,7 @@ export default function AuditViewPage() {
     }
 
     try {
+      setMutationLoading(true)
       const response = await fetch('/api/review-queue/resolve', {
         method: 'POST',
         headers: {
@@ -652,6 +690,7 @@ export default function AuditViewPage() {
           notes: resolution.comment,
           waived: resolution.waived,
           waiver_reason: resolution.waiver_reason,
+          expires_at: resolution.expires_at,
         }),
       })
 
@@ -1292,6 +1331,8 @@ export default function AuditViewPage() {
               <EventSelectionTable
                 events={filteredEvents}
                 view={filters.savedView}
+                selectedIds={selectedIds}
+                highlightedFailedIds={Array.from(highlightedFailedIds)}
                 onSelect={(eventId) => {
                   selectionHook.toggleSelection(eventId)
                 }}

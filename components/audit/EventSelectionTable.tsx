@@ -26,6 +26,7 @@ interface EventSelectionTableProps {
   events: AuditEvent[]
   view: string
   selectedIds?: string[] // Optional: use external selection state if provided
+  highlightedFailedIds?: string[] // IDs to highlight (for showing failed items)
   onSelect?: (eventId: string) => void
   onRowClick?: (event: AuditEvent) => void
   showActions?: boolean
@@ -36,6 +37,7 @@ export function EventSelectionTable({
   events, 
   view,
   selectedIds: externalSelectedIds,
+  highlightedFailedIds = [],
   onSelect, 
   onRowClick,
   showActions = false,
@@ -96,7 +98,7 @@ export function EventSelectionTable({
   }
 
   return (
-    <div className="rounded-xl border border-white/10 bg-[#121212]/80 backdrop-blur-sm overflow-hidden">
+    <div className="rounded-xl border border-white/10 bg-[#121212]/80 backdrop-blur-sm overflow-hidden" data-event-table>
       {/* Table Header */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
         <div className="flex items-center gap-4">
@@ -158,11 +160,15 @@ export function EventSelectionTable({
               const selected = isSelected(event.id)
               const expanded = expandedRows.has(event.id)
               
+              const isHighlighted = highlightedFailedIds.includes(event.id) || highlightedFailedIds.includes(event.job_id || '')
+              
               return (
                 <tr
                   key={event.id}
                   className={`hover:bg-white/5 transition-colors cursor-pointer ${
                     selected ? 'bg-[#F97316]/10' : ''
+                  } ${
+                    isHighlighted ? 'bg-red-500/20 border-l-4 border-red-500 animate-pulse' : ''
                   }`}
                   onClick={() => {
                     if (!isReadOnly) {
