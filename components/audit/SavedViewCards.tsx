@@ -6,6 +6,7 @@ import { terms } from '@/lib/terms'
 
 interface SavedViewCardsProps {
   activeView: string
+  selectedCount?: number // Number of selected items (action buttons require selection)
   onSelectView: (view: 'review-queue' | 'insurance-ready' | 'governance-enforcement' | 'incident-review' | 'access-review' | '') => void
   onExport: (format: 'csv' | 'json', view: string) => void
   onGeneratePack?: (view: string) => void
@@ -20,6 +21,7 @@ interface SavedViewCardsProps {
 
 export function SavedViewCards({ 
   activeView, 
+  selectedCount = 0,
   onSelectView, 
   onExport,
   onGeneratePack,

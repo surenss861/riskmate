@@ -1229,6 +1229,7 @@ export default function AuditViewPage() {
           {/* Saved View Cards */}
           <SavedViewCards
             activeView={filters.savedView}
+            selectedCount={selectedCount}
             onSelectView={(view) => {
               // Map empty string to 'custom' for type safety
               const savedView: SavedView = view === '' ? 'custom' : view
