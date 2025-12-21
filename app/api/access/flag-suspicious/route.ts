@@ -139,6 +139,16 @@ export async function POST(request: NextRequest) {
 
     // Power move: Auto-create review queue item for follow-up
     // This creates a bridge between access review and review queue
+    let workRecordId: string | null = null
+    if (event_id) {
+      const { data: sourceEvent } = await supabase
+        .from('audit_logs')
+        .select('work_record_id')
+        .eq('id', event_id)
+        .single()
+      workRecordId = sourceEvent?.work_record_id || null
+    }
+    
     const reviewQueueEntry = await recordAuditLog(supabase, {
       organizationId: organization_id,
       actorId: user_id,
@@ -155,7 +165,7 @@ export async function POST(request: NextRequest) {
         assigned_to: assigned_to || null,
         created_at: new Date().toISOString(),
         summary: `Review queue item created from suspicious access flag: ${reason.trim()}`,
-        work_record_id: event_id ? (await supabase.from('audit_logs').select('work_record_id').eq('id', event_id).single()).data?.work_record_id : null,
+        work_record_id: workRecordId,
       },
     })
 
