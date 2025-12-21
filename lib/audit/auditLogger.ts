@@ -107,10 +107,12 @@ function getCategoryFromEventName(eventName: string): 'governance' | 'operations
   // Operational Actions: human work (default category)
   // Includes: review_queue.*, incident.*, export.*, proof_pack.*, attestation.*
   // Note: review_queue and incident_review are sub-categories but still count as "operations" for tab filtering
-  if (eventName.includes('review_queue.') || eventName.includes('review.')) return 'review_queue'
+  if (eventName.includes('review_queue.') || (eventName.includes('review.') && !eventName.includes('access_review'))) return 'review_queue'
   if (eventName.includes('incident.')) return 'incident_review'
+  if (eventName.includes('proof_pack.')) return 'system' // Proof packs are operational actions (exports)
+  if (eventName.includes('export.')) return 'system' // Exports are operational actions
   if (eventName.includes('attestation.')) return 'attestations'
-  if (eventName.includes('export.') || eventName.includes('system.')) return 'system'
+  if (eventName.includes('system.')) return 'system'
   
   // Default to operations (human actions)
   return 'operations'
