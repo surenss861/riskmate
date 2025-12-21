@@ -48,7 +48,7 @@ interface AuditEvent {
 }
 
 type TimeRange = '24h' | '7d' | '30d' | 'custom' | 'all'
-type SavedView = 'review-queue' | 'insurance-ready' | 'governance-enforcement' | 'incident-review' | 'access-review' | 'custom'
+export type SavedView = 'review-queue' | 'insurance-ready' | 'governance-enforcement' | 'incident-review' | 'access-review' | 'custom'
 
 export default function AuditViewPage() {
   const router = useRouter()
