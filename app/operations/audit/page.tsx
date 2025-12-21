@@ -188,8 +188,20 @@ export default function AuditViewPage() {
         // Stats are already computed server-side, but we'll recalculate from filtered events
         // for consistency with UI
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to load audit events:', err)
+      
+      // Log request ID if available for easier debugging
+      if (err.requestId) {
+        console.error(`Request ID: ${err.requestId} - Search this in Vercel logs to find the exact error`)
+      }
+
+      // Show user-friendly error toast
+      setToast({
+        message: err.message || 'Failed to load audit events. Please try again.',
+        type: 'error',
+      })
+
       // Fallback to direct Supabase query if backend fails
       try {
         const supabase = createSupabaseBrowserClient()
