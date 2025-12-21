@@ -169,12 +169,20 @@ export async function GET(request: NextRequest) {
       const uint8Array = new Uint8Array(pdfBuffer)
       const blob = new Blob([uint8Array], { type: 'application/pdf' })
 
+      // PDF exports: meta goes in headers
+      const exportedAt = new Date().toISOString()
       return new NextResponse(blob, {
         headers: {
           'Content-Type': 'application/pdf',
           'Content-Disposition': `attachment; filename="${filename}"`,
           'Content-Length': pdfBuffer.length.toString(),
           'X-Request-ID': requestId,
+          'X-Exported-At': exportedAt,
+          'X-Export-Format': 'pdf',
+          'X-Export-View': 'governance-enforcement',
+          'X-Export-Count': auditEntries.length.toString(),
+          ...(time_range && { 'X-Export-Filter-TimeRange': time_range }),
+          ...(categories.length > 0 && { 'X-Export-Filter-Categories': categories.join(',') }),
         },
       })
     }
