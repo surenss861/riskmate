@@ -126,17 +126,52 @@ export async function proxyToBackend(
     const data = await response.json()
     return NextResponse.json(data)
   } catch (error: any) {
+    const isConnectionError = 
+      error.message?.includes('ECONNREFUSED') ||
+      error.message?.includes('fetch failed') ||
+      error.code === 'ECONNREFUSED' ||
+      error.cause?.code === 'ECONNREFUSED'
+    
     console.error(`[Proxy] Error for ${endpoint}:`, {
       message: error.message,
+      code: error.code,
       stack: error.stack,
       name: error.name,
       cause: error.cause,
-      backendUrl: BACKEND_URL,
+      backendUrl,
+      BACKEND_URL,
+      isConnectionError,
     })
+    
+    // Return more helpful error for connection issues
+    if (isConnectionError) {
+      return NextResponse.json(
+        { 
+          message: 'Backend server is not accessible',
+          error: error.message,
+          code: 'BACKEND_CONNECTION_ERROR',
+          _proxy: {
+            backend_url: backendUrl,
+            configured_backend_url: BACKEND_URL,
+            hint: BACKEND_URL === 'http://localhost:5173' 
+              ? 'BACKEND_URL environment variable is not set. The backend server must be deployed separately and BACKEND_URL must point to it.'
+              : 'Check that the backend server is running and accessible at the configured URL.',
+          },
+          details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        },
+        { status: 503 } // Service Unavailable
+      )
+    }
+    
     return NextResponse.json(
       { 
         message: 'Failed to proxy request', 
         error: error.message,
+        code: error.code || 'PROXY_ERROR',
+        _proxy: {
+          backend_url: backendUrl,
+          configured_backend_url: BACKEND_URL,
+        },
         details: process.env.NODE_ENV === 'development' ? error.stack : undefined
       },
       { status: 500 }
