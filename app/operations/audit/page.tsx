@@ -1096,7 +1096,7 @@ export default function AuditViewPage() {
           />
 
           {/* Event Selection Table - Show when a saved view is active */}
-          {filters.savedView !== 'custom' && filters.savedView !== '' && (
+          {filters.savedView !== 'custom' && (
             <div className="mb-6">
               <EventSelectionTable
                 events={filteredEvents}
