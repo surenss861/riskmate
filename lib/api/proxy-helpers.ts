@@ -50,6 +50,9 @@ export async function proxyToBackend(
     isFileDownload?: boolean
   } = {}
 ): Promise<NextResponse> {
+  // Declare backendUrl outside try block so it's accessible in catch
+  let backendUrl = `${BACKEND_URL}${endpoint}`
+  
   try {
     const sessionToken = await getSessionToken(request)
     if (!sessionToken) {
@@ -60,7 +63,7 @@ export async function proxyToBackend(
     const { method = 'GET', body, isFileDownload = false } = options
 
     // Build URL with query params for GET requests
-    let backendUrl = `${BACKEND_URL}${endpoint}`
+    backendUrl = `${BACKEND_URL}${endpoint}`
     if (method === 'GET' && request.nextUrl.searchParams.toString()) {
       backendUrl += `?${request.nextUrl.searchParams.toString()}`
     }
