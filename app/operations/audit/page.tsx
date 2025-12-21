@@ -516,9 +516,9 @@ export default function AuditViewPage() {
   }
 
   const handleResolve = async (resolution: {
-    resolution_reason: string
+    reason: string
     comment: string
-    requires_followup?: boolean
+    requires_followup: boolean
     waived?: boolean
     waiver_reason?: string
   }) => {
@@ -541,7 +541,7 @@ export default function AuditViewPage() {
         },
         body: JSON.stringify({
           item_ids: itemIds,
-          resolution: resolution.resolution_reason,
+          resolution: resolution.reason,
           notes: resolution.comment,
           waived: resolution.waived,
           waiver_reason: resolution.waiver_reason,
