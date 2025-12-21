@@ -768,6 +768,34 @@ export default function AuditViewPage() {
     }
   }
 
+  // Handler for bulk result modal close
+  const handleBulkResultClose = () => {
+    setBulkResultModal(null)
+  }
+
+  // Handler to show failed items in table
+  const handleShowFailedItems = (failedIds: string[]) => {
+    // Clear current selection and select failed items
+    selectionHook.clearSelection()
+    failedIds.forEach(id => {
+      if (events.some(e => e.id === id || e.job_id === id)) {
+        selectionHook.toggleSelection(id)
+      }
+    })
+    
+    // Highlight failed items for 8 seconds
+    setHighlightedFailedIds(new Set(failedIds))
+    setTimeout(() => {
+      setHighlightedFailedIds(new Set())
+    }, 8000)
+    
+    // Scroll to table if it exists
+    const tableElement = document.querySelector('[data-event-table]')
+    if (tableElement) {
+      tableElement.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }
+
   const handleAssignClick = (event?: AuditEvent) => {
     if (!event) {
       // Called from card action - use first event from filtered list that needs assignment
