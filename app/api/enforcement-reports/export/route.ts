@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { getOrganizationContext } from '@/lib/utils/organizationGuard'
+import { getRequestId } from '@/lib/utils/requestId'
+import { createSuccessResponse, createErrorResponse } from '@/lib/utils/apiResponse'
 import { generateLedgerExportPDF } from '@/lib/utils/pdf/ledgerExport'
 import { randomUUID } from 'crypto'
 
@@ -82,11 +84,30 @@ export async function GET(request: NextRequest) {
     const { data: events, error } = await query
 
     if (error) {
-      console.error('[enforcement-reports/export] Query error:', error)
-      return NextResponse.json(
-        { ok: false, message: 'Failed to fetch enforcement events', code: 'QUERY_ERROR' },
-        { status: 500 }
+      console.error('[enforcement-reports/export] Query error:', {
+        code: error.code,
+        message: error.message,
+        requestId,
+        organization_id,
+      })
+      const errorResponse = createErrorResponse(
+        'Failed to fetch enforcement events',
+        'QUERY_ERROR',
+        {
+          requestId,
+          statusCode: 500,
+          details: {
+            databaseError: {
+              code: error.code,
+              message: error.message,
+            },
+          },
+        }
       )
+      return NextResponse.json(errorResponse, { 
+        status: 500,
+        headers: { 'X-Request-ID': requestId }
+      })
     }
 
     // Handle empty results gracefully
@@ -153,6 +174,7 @@ export async function GET(request: NextRequest) {
           'Content-Type': 'application/pdf',
           'Content-Disposition': `attachment; filename="${filename}"`,
           'Content-Length': pdfBuffer.length.toString(),
+          'X-Request-ID': requestId,
         },
       })
     }
@@ -208,15 +230,24 @@ export async function GET(request: NextRequest) {
       }
     })
   } catch (error: any) {
-    console.error('[enforcement-reports/export] Error:', error)
-    return NextResponse.json(
+    console.error('[enforcement-reports/export] Error:', {
+      message: error.message,
+      stack: error.stack,
+      requestId,
+    })
+    const errorResponse = createErrorResponse(
+      error.message || 'Failed to export enforcement report',
+      error.code || 'EXPORT_ERROR',
       {
-        ok: false,
-        message: error.message || 'Failed to export enforcement report',
-        code: 'EXPORT_ERROR',
-      },
-      { status: 500 }
+        requestId,
+        statusCode: 500,
+        details: process.env.NODE_ENV === 'development' ? { stack: error.stack } : undefined,
+      }
     )
+    return NextResponse.json(errorResponse, { 
+      status: 500,
+      headers: { 'X-Request-ID': requestId }
+    })
   }
 }
 
