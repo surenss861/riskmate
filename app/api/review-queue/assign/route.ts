@@ -254,15 +254,30 @@ export async function POST(request: NextRequest) {
 
       if (ledgerResult.data?.id) {
         ledgerEntryIds.push(ledgerResult.data.id)
+        succeededIds.push(itemId)
+      } else {
+        failedIds.push(itemId)
+        failures.push({
+          id: itemId,
+          code: 'LEDGER_WRITE_FAILED',
+          message: 'Failed to write ledger entry',
+        })
       }
     }
 
-    // Update event name to match specification: review_queue.assigned
     const successResponse = createSuccessResponse({
       ledger_entry_ids: ledgerEntryIds,
-      assigned_count: ledgerEntryIds.length,
+      assigned_count: succeededIds.length,
+      succeeded_ids: succeededIds,
+      ...(failedIds.length > 0 && {
+        failed_ids: failedIds,
+        failures,
+        partial_success: true,
+      }),
     }, {
-      message: `Successfully assigned ${ledgerEntryIds.length} item(s)`,
+      message: failedIds.length > 0
+        ? `Assigned ${succeededIds.length} item(s), ${failedIds.length} failed`
+        : `Successfully assigned ${succeededIds.length} item(s)`,
       requestId,
     })
     return NextResponse.json(successResponse, {
