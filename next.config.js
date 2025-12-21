@@ -58,12 +58,19 @@ const nextConfig = {
   },
   webpack: (config, { isServer }) => {
     if (isServer) {
-      // Include PDFKit font files in serverless bundle
+      // Ensure PDFKit and its font data are bundled for serverless
       config.externals = config.externals || [];
-      // Don't externalize pdfkit - we need it bundled
+      // Don't externalize pdfkit - we need it bundled with font data
       config.externals = config.externals.filter(
         (external) => typeof external !== 'string' || !external.includes('pdfkit')
       );
+      
+      // Add resolve fallback for font files (they're bundled in pdfkit)
+      config.resolve = config.resolve || {};
+      config.resolve.fallback = {
+        ...(config.resolve.fallback || {}),
+        fs: false, // PDFKit doesn't need fs in browser/serverless
+      };
     }
     return config;
   },
