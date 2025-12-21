@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { getOrganizationContext } from '@/lib/utils/organizationGuard'
+import { getRequestId } from '@/lib/utils/requestId'
+import { createSuccessResponse, createErrorResponse } from '@/lib/utils/apiResponse'
 
 export const runtime = 'nodejs'
 
@@ -9,21 +11,27 @@ export const runtime = 'nodejs'
  * Exports incident timeline + actions + evidence links
  */
 export async function GET(request: NextRequest) {
+  const requestId = getRequestId(request)
+
   try {
     let organization_id: string
     try {
       const context = await getOrganizationContext()
       organization_id = context.organization_id
     } catch (authError: any) {
-      console.error('[incidents/export] Auth error:', authError)
-      return NextResponse.json(
-        {
-          ok: false,
-          message: 'Unauthorized: Please log in to export data',
-          code: 'UNAUTHORIZED',
-        },
-        { status: 401 }
+      console.error('[incidents/export] Auth error:', {
+        message: authError.message,
+        requestId,
+      })
+      const errorResponse = createErrorResponse(
+        'Unauthorized: Please log in to export data',
+        'UNAUTHORIZED',
+        { requestId, statusCode: 401 }
       )
+      return NextResponse.json(errorResponse, { 
+        status: 401,
+        headers: { 'X-Request-ID': requestId }
+      })
     }
     
     const { searchParams } = request.nextUrl
@@ -57,21 +65,42 @@ export async function GET(request: NextRequest) {
     const { data: events, error } = await query
 
     if (error) {
-      console.error('[incidents/export] Query error:', error)
-      return NextResponse.json(
-        { ok: false, message: 'Failed to fetch incident events', code: 'QUERY_ERROR' },
-        { status: 500 }
+      console.error('[incidents/export] Query error:', {
+        code: error.code,
+        message: error.message,
+        requestId,
+        organization_id,
+      })
+      const errorResponse = createErrorResponse(
+        'Failed to fetch incident events',
+        'QUERY_ERROR',
+        {
+          requestId,
+          statusCode: 500,
+          details: {
+            databaseError: {
+              code: error.code,
+              message: error.message,
+            },
+          },
+        }
       )
+      return NextResponse.json(errorResponse, { 
+        status: 500,
+        headers: { 'X-Request-ID': requestId }
+      })
     }
+
+    const eventList = events || []
 
     if (format === 'csv') {
       const headers = ['ID', 'Event Name', 'Work Record ID', 'Created At', 'Actor', 'Severity', 'Summary']
-      const rows = (events || []).map((e: any) => [
+      const rows = eventList.map((e: any) => [
         e.id,
         e.event_name || '',
         e.work_record_id || e.job_id || '',
         e.created_at || '',
-        e.actor_email || '',
+        e.actor_email || e.actor_name || '',
         e.severity || '',
         e.summary || '',
       ])
@@ -83,28 +112,54 @@ export async function GET(request: NextRequest) {
 
       return new NextResponse(csv, {
         headers: {
-          'Content-Type': 'text/csv',
+          'Content-Type': 'text/csv; charset=utf-8',
           'Content-Disposition': `attachment; filename="incidents-export-${new Date().toISOString().split('T')[0]}.csv"`,
+          'X-Request-ID': requestId,
         },
       })
     }
 
-    return NextResponse.json({
-      ok: true,
-      data: events || [],
-      count: events?.length || 0,
-      exported_at: new Date().toISOString(),
+    // JSON format
+    const successResponse = createSuccessResponse(
+      eventList,
+      {
+        count: eventList.length,
+        meta: {
+          exportedAt: new Date().toISOString(),
+          format: 'json' as const,
+          view: 'incident-review',
+          filters: {
+            time_range,
+          },
+          requestId,
+        },
+      }
+    )
+    return NextResponse.json(successResponse, {
+      headers: { 
+        'X-Request-ID': requestId,
+        'Content-Type': 'application/json; charset=utf-8',
+      }
     })
   } catch (error: any) {
-    console.error('[incidents/export] Error:', error)
-    return NextResponse.json(
+    console.error('[incidents/export] Error:', {
+      message: error.message,
+      stack: error.stack,
+      requestId,
+    })
+    const errorResponse = createErrorResponse(
+      error.message || 'Failed to export incidents',
+      error.code || 'EXPORT_ERROR',
       {
-        ok: false,
-        message: error.message || 'Failed to export incidents',
-        code: 'EXPORT_ERROR',
-      },
-      { status: 500 }
+        requestId,
+        statusCode: 500,
+        details: process.env.NODE_ENV === 'development' ? { stack: error.stack } : undefined,
+      }
     )
+    return NextResponse.json(errorResponse, { 
+      status: 500,
+      headers: { 'X-Request-ID': requestId }
+    })
   }
 }
 

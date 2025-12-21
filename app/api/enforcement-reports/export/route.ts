@@ -171,18 +171,35 @@ export async function GET(request: NextRequest) {
 
       return new NextResponse(csv, {
         headers: {
-          'Content-Type': 'text/csv',
+          'Content-Type': 'text/csv; charset=utf-8',
           'Content-Disposition': `attachment; filename="enforcement-report-${new Date().toISOString().split('T')[0]}.csv"`,
+          'X-Request-ID': requestId,
         },
       })
     }
 
     // JSON format
-    return NextResponse.json({
-      ok: true,
-      data: enrichedEvents,
-      count: enrichedEvents.length,
-      exported_at: new Date().toISOString(),
+    const successResponse = createSuccessResponse(
+      enrichedEvents,
+      {
+        count: enrichedEvents.length,
+        meta: {
+          exportedAt: new Date().toISOString(),
+          format: 'json' as const,
+          view: 'governance-enforcement',
+          filters: {
+            time_range,
+            categories: categories.join(','),
+          },
+          requestId,
+        },
+      }
+    )
+    return NextResponse.json(successResponse, {
+      headers: { 
+        'X-Request-ID': requestId,
+        'Content-Type': 'application/json; charset=utf-8',
+      }
     })
   } catch (error: any) {
     console.error('[enforcement-reports/export] Error:', error)

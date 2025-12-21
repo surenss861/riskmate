@@ -126,8 +126,9 @@ export async function GET(request: NextRequest) {
 
       return new NextResponse(csv, {
         headers: {
-          'Content-Type': 'text/csv',
+          'Content-Type': 'text/csv; charset=utf-8',
           'Content-Disposition': `attachment; filename="review-queue-export-${new Date().toISOString().split('T')[0]}.csv"`,
+          'X-Request-ID': requestId,
         },
       })
     }
@@ -137,18 +138,25 @@ export async function GET(request: NextRequest) {
       eventList,
       {
         count: eventList.length,
-        exported_at: new Date().toISOString(),
-        filters: {
-          time_range,
-          category,
-          severity,
-          outcome,
+        meta: {
+          exportedAt: new Date().toISOString(),
+          format: 'json' as const,
+          view: 'review-queue',
+          filters: {
+            time_range,
+            category,
+            severity,
+            outcome,
+          },
+          requestId,
         },
-        requestId,
       }
     )
     return NextResponse.json(successResponse, {
-      headers: { 'X-Request-ID': requestId }
+      headers: { 
+        'X-Request-ID': requestId,
+        'Content-Type': 'application/json; charset=utf-8',
+      }
     })
   } catch (error: any) {
     console.error('[review-queue/export] Error:', {

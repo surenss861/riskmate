@@ -9,21 +9,27 @@ export const runtime = 'nodejs'
  * Exports insurance-ready dataset (completed work records + controls + evidence metadata)
  */
 export async function GET(request: NextRequest) {
+  const requestId = getRequestId(request)
+
   try {
     let organization_id: string
     try {
       const context = await getOrganizationContext()
       organization_id = context.organization_id
     } catch (authError: any) {
-      console.error('[proof-packs/export] Auth error:', authError)
-      return NextResponse.json(
-        {
-          ok: false,
-          message: 'Unauthorized: Please log in to export data',
-          code: 'UNAUTHORIZED',
-        },
-        { status: 401 }
+      console.error('[proof-packs/export] Auth error:', {
+        message: authError.message,
+        requestId,
+      })
+      const errorResponse = createErrorResponse(
+        'Unauthorized: Please log in to export data',
+        'UNAUTHORIZED',
+        { requestId, statusCode: 401 }
       )
+      return NextResponse.json(errorResponse, { 
+        status: 401,
+        headers: { 'X-Request-ID': requestId }
+      })
     }
     
     const { searchParams } = request.nextUrl
@@ -58,11 +64,30 @@ export async function GET(request: NextRequest) {
     const { data: jobs, error: jobsError } = await jobsQuery.limit(500)
 
     if (jobsError) {
-      console.error('[proof-packs/export] Jobs query error:', jobsError)
-      return NextResponse.json(
-        { ok: false, message: 'Failed to fetch work records', code: 'QUERY_ERROR' },
-        { status: 500 }
+      console.error('[proof-packs/export] Jobs query error:', {
+        code: jobsError.code,
+        message: jobsError.message,
+        requestId,
+        organization_id,
+      })
+      const errorResponse = createErrorResponse(
+        'Failed to fetch work records',
+        'QUERY_ERROR',
+        {
+          requestId,
+          statusCode: 500,
+          details: {
+            databaseError: {
+              code: jobsError.code,
+              message: jobsError.message,
+            },
+          },
+        }
       )
+      return NextResponse.json(errorResponse, { 
+        status: 500,
+        headers: { 'X-Request-ID': requestId }
+      })
     }
 
     // For each job, get controls and attestations
@@ -130,29 +155,54 @@ export async function GET(request: NextRequest) {
 
       return new NextResponse(csv, {
         headers: {
-          'Content-Type': 'text/csv',
+          'Content-Type': 'text/csv; charset=utf-8',
           'Content-Disposition': `attachment; filename="proof-pack-export-${new Date().toISOString().split('T')[0]}.csv"`,
+          'X-Request-ID': requestId,
         },
       })
     }
 
     // JSON format
-    return NextResponse.json({
-      ok: true,
-      data: enrichedData,
-      count: enrichedData.length,
-      exported_at: new Date().toISOString(),
+    const successResponse = createSuccessResponse(
+      enrichedData,
+      {
+        count: enrichedData.length,
+        meta: {
+          exportedAt: new Date().toISOString(),
+          format: 'json' as const,
+          view: 'insurance-ready',
+          filters: {
+            time_range,
+          },
+          requestId,
+        },
+      }
+    )
+    return NextResponse.json(successResponse, {
+      headers: { 
+        'X-Request-ID': requestId,
+        'Content-Type': 'application/json; charset=utf-8',
+      }
     })
   } catch (error: any) {
-    console.error('[proof-packs/export] Error:', error)
-    return NextResponse.json(
+    console.error('[proof-packs/export] Error:', {
+      message: error.message,
+      stack: error.stack,
+      requestId,
+    })
+    const errorResponse = createErrorResponse(
+      error.message || 'Failed to export proof pack',
+      error.code || 'EXPORT_ERROR',
       {
-        ok: false,
-        message: error.message || 'Failed to export proof pack',
-        code: 'EXPORT_ERROR',
-      },
-      { status: 500 }
+        requestId,
+        statusCode: 500,
+        details: process.env.NODE_ENV === 'development' ? { stack: error.stack } : undefined,
+      }
     )
+    return NextResponse.json(errorResponse, { 
+      status: 500,
+      headers: { 'X-Request-ID': requestId }
+    })
   }
 }
 

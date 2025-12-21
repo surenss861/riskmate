@@ -76,8 +76,24 @@ export interface ExportResponse {
   ok: true
   data: any[]
   count: number
-  exported_at: string
-  filters?: any
+  meta: {
+    exportedAt: string
+    format: 'csv' | 'json' | 'pdf'
+    view?: string
+    filters?: {
+      time_range?: string
+      category?: string
+      site_id?: string
+      job_id?: string
+      actor_id?: string
+      severity?: string
+      outcome?: string
+      start_date?: string
+      end_date?: string
+      [key: string]: any
+    }
+    requestId?: string
+  }
   [key: string]: any
 }
 
