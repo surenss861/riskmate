@@ -339,11 +339,21 @@ export default function AuditViewPage() {
 
   const handleExportFromView = async (format: 'csv' | 'json', view: string) => {
     try {
+      setToast({
+        message: 'Exporting...',
+        type: 'success',
+      })
+
       let endpoint = ''
       const params = new URLSearchParams({
         format,
         time_range: filters.timeRange || '30d',
       })
+
+      // Add view filter if applicable
+      if (view && view !== 'custom') {
+        params.append('view', view)
+      }
 
       // Route to appropriate export endpoint based on view
       if (view === 'review-queue') {
@@ -353,7 +363,12 @@ export default function AuditViewPage() {
       } else if (view === 'incident-review') {
         endpoint = `/api/incidents/export?${params.toString()}`
       } else if (view === 'governance-enforcement') {
-        endpoint = `/api/enforcement-reports/export?${params.toString()}`
+        // For enforcement, use CSV format by default, or keep PDF for the export button
+        const exportParams = new URLSearchParams({
+          format: format === 'json' ? 'json' : 'csv',
+          time_range: filters.timeRange || '30d',
+        })
+        endpoint = `/api/enforcement-reports/export?${exportParams.toString()}`
       } else if (view === 'insurance-ready') {
         endpoint = `/api/proof-packs/export?${params.toString()}`
       } else {
@@ -368,11 +383,31 @@ export default function AuditViewPage() {
       })
 
       if (!response.ok) {
-        const error = await response.json().catch(() => ({}))
-        throw new Error(error.message || 'Export failed')
+        const errorText = await response.text()
+        let error
+        try {
+          error = JSON.parse(errorText)
+        } catch {
+          error = { message: errorText || 'Export failed' }
+        }
+        throw new Error(error.message || error.error || 'Export failed')
       }
 
-      if (format === 'csv') {
+      // Handle different content types
+      const contentType = response.headers.get('content-type') || ''
+
+      if (contentType.includes('application/json')) {
+        const data = await response.json()
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+        const url = window.URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `${view}-export-${new Date().toISOString().split('T')[0]}.json`
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        window.URL.revokeObjectURL(url)
+      } else if (contentType.includes('text/csv')) {
         const blob = await response.blob()
         const url = window.URL.createObjectURL(blob)
         const a = document.createElement('a')
@@ -382,7 +417,22 @@ export default function AuditViewPage() {
         a.click()
         document.body.removeChild(a)
         window.URL.revokeObjectURL(url)
+      } else if (contentType.includes('application/pdf')) {
+        const blob = await response.blob()
+        const url = window.URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        const contentDisposition = response.headers.get('Content-Disposition')
+        const filename = contentDisposition
+          ? contentDisposition.split('filename=')[1]?.replace(/"/g, '') || `${view}-export-${new Date().toISOString().split('T')[0]}.pdf`
+          : `${view}-export-${new Date().toISOString().split('T')[0]}.pdf`
+        a.href = url
+        a.download = filename
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        window.URL.revokeObjectURL(url)
       } else {
+        // Fallback: try to parse as JSON
         const data = await response.json()
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
         const url = window.URL.createObjectURL(blob)
@@ -731,17 +781,28 @@ export default function AuditViewPage() {
   }
 
   const handleCreateCorrectiveActionClick = (view: string) => {
-    // Find first incident from filtered events (flagged jobs, high severity, etc.)
-    const incidentEvent = events.find(e => 
-      e.job_id && (
-        e.severity === 'critical' || 
-        e.severity === 'material' ||
-        e.metadata?.flagged === true ||
-        e.event_type?.includes('incident')
+    // Check for selection first, then fall back to finding from events
+    let incidentEvent: AuditEvent | undefined
+    
+    if (selectionHook.selectedIds.length > 0) {
+      incidentEvent = events.find(e => selectionHook.selectedIds.includes(e.id) && e.job_id)
+    } else {
+      // Find first incident from filtered events
+      incidentEvent = events.find(e => 
+        e.job_id && (
+          e.severity === 'critical' || 
+          e.severity === 'material' ||
+          e.metadata?.flagged === true ||
+          e.event_type?.includes('incident')
+        )
       )
-    )
+    }
+    
     if (!incidentEvent || !incidentEvent.job_id) {
-      alert('No incidents found in the current view. Please filter to incidents or select an event from the list.')
+      setToast({
+        message: 'Please select an incident from the list to create a corrective action',
+        type: 'error',
+      })
       return
     }
     
@@ -817,17 +878,28 @@ export default function AuditViewPage() {
   }
 
   const handleCloseIncidentClick = (view: string) => {
-    // Find first incident from filtered events that has corrective actions
-    const incidentEvent = events.find(e => 
-      e.job_id && (
-        e.severity === 'critical' || 
-        e.severity === 'material' ||
-        e.metadata?.flagged === true ||
-        e.event_type?.includes('incident')
+    // Check for selection first, then fall back to finding from events
+    let incidentEvent: AuditEvent | undefined
+    
+    if (selectionHook.selectedIds.length > 0) {
+      incidentEvent = events.find(e => selectionHook.selectedIds.includes(e.id) && e.job_id)
+    } else {
+      // Find first incident from filtered events
+      incidentEvent = events.find(e => 
+        e.job_id && (
+          e.severity === 'critical' || 
+          e.severity === 'material' ||
+          e.metadata?.flagged === true ||
+          e.event_type?.includes('incident')
+        )
       )
-    )
+    }
+    
     if (!incidentEvent || !incidentEvent.job_id) {
-      alert('No incidents found in the current view. Please filter to incidents or select an event from the list.')
+      setToast({
+        message: 'Please select an incident from the list to close',
+        type: 'error',
+      })
       return
     }
     
@@ -842,15 +914,24 @@ export default function AuditViewPage() {
   }
 
   const handleRevokeAccessClick = (view: string) => {
-    // Find first access-related event from filtered view
-    const accessEvent = events.find(e => 
-      e.category === 'access' || 
-      e.event_type?.includes('access') ||
-      e.event_type?.includes('login') ||
-      e.event_type?.includes('role_change')
-    )
+    // Check for selection first, then fall back to finding from events
+    let accessEvent: AuditEvent | undefined
+    
+    if (selectionHook.selectedIds.length > 0) {
+      accessEvent = events.find(e => selectionHook.selectedIds.includes(e.id) && e.actor_id)
+    } else {
+      // Find first access-related event from filtered view
+      accessEvent = events.find(e => 
+        (e.category === 'access' || e.category === 'access_review') &&
+        e.actor_id
+      )
+    }
+    
     if (!accessEvent || !accessEvent.actor_id) {
-      alert('No access events found in the current view. Please switch to Access Review view or select an event from the list.')
+      setToast({
+        message: 'Please select a user from the Access Review view to revoke access',
+        type: 'error',
+      })
       return
     }
     
@@ -863,15 +944,24 @@ export default function AuditViewPage() {
   }
 
   const handleFlagSuspiciousClick = (view: string) => {
-    // Find first access-related event from filtered view
-    const accessEvent = events.find(e => 
-      e.category === 'access' || 
-      e.event_type?.includes('access') ||
-      e.event_type?.includes('login') ||
-      e.event_type?.includes('role_change')
-    )
-    if (!accessEvent || !accessEvent.actor_id) {
-      alert('No access events found in the current view. Please switch to Access Review view or select an event from the list.')
+    // Check for selection first, then fall back to finding from events
+    let accessEvent: AuditEvent | undefined
+    
+    if (selectionHook.selectedIds.length > 0) {
+      accessEvent = events.find(e => selectionHook.selectedIds.includes(e.id))
+    } else {
+      // Find first access-related event from filtered view
+      accessEvent = events.find(e => 
+        (e.category === 'access' || e.category === 'access_review') &&
+        (e.actor_id || e.id)
+      )
+    }
+    
+    if (!accessEvent) {
+      setToast({
+        message: 'Please select a user or login event from the Access Review view to flag',
+        type: 'error',
+      })
       return
     }
     
@@ -1061,9 +1151,10 @@ export default function AuditViewPage() {
             onExport={handleExportFromView}
             onGeneratePack={handleGeneratePack}
             onAssign={(view) => {
+              // Check for selection first
               if (selectionHook.selectedIds.length === 0) {
                 setToast({
-                  message: 'Please select at least one item from the list below',
+                  message: 'Please select at least one item from the list below to assign',
                   type: 'error',
                 })
                 return
@@ -1072,12 +1163,18 @@ export default function AuditViewPage() {
               const firstEvent = events.find(e => selectionHook.selectedIds.includes(e.id))
               if (firstEvent) {
                 handleAssignClick(firstEvent)
+              } else {
+                setToast({
+                  message: 'Selected item not found in current view',
+                  type: 'error',
+                })
               }
             }}
             onResolve={(view) => {
+              // Check for selection first
               if (selectionHook.selectedIds.length === 0) {
                 setToast({
-                  message: 'Please select at least one item from the list below',
+                  message: 'Please select at least one item from the list below to resolve',
                   type: 'error',
                 })
                 return
@@ -1086,6 +1183,11 @@ export default function AuditViewPage() {
               const firstEvent = events.find(e => selectionHook.selectedIds.includes(e.id))
               if (firstEvent) {
                 handleResolveClick(firstEvent)
+              } else {
+                setToast({
+                  message: 'Selected item not found in current view',
+                  type: 'error',
+                })
               }
             }}
             onExportEnforcement={handleExportEnforcement}

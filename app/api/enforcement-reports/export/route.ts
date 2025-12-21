@@ -67,30 +67,36 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Enrich events
-    const enrichedEvents = await Promise.all(
-      (events || []).map(async (event: any) => {
-        const enriched: any = { ...event }
+    // Handle empty results gracefully
+    const eventList = events || []
 
-        if (event.actor_id) {
-          const { data: actorData } = await supabase
-            .from('users')
-            .select('full_name, role')
-            .eq('id', event.actor_id)
-            .single()
-          if (actorData) {
-            enriched.actor_name = actorData.full_name || 'Unknown'
-            enriched.actor_role = actorData.role || 'member'
-          }
-        }
+    // Enrich events (only if we have events)
+    const enrichedEvents = eventList.length > 0
+      ? await Promise.all(
+          eventList.map(async (event: any) => {
+            const enriched: any = { ...event }
 
-        return enriched
-      })
-    )
+            if (event.actor_id) {
+              const { data: actorData } = await supabase
+                .from('users')
+                .select('full_name, role')
+                .eq('id', event.actor_id)
+                .single()
+              if (actorData) {
+                enriched.actor_name = actorData.full_name || 'Unknown'
+                enriched.actor_role = actorData.role || 'member'
+              }
+            }
+
+            return enriched
+          })
+        )
+      : []
 
     // Format response
     if (format === 'pdf') {
       const exportId = randomUUID()
+      // Handle empty events - still generate a valid PDF
       const auditEntries = enrichedEvents.map((e: any) => ({
         id: e.id,
         event_name: e.event_name || e.event_type,

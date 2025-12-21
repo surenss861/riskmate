@@ -59,17 +59,20 @@ export async function GET(request: NextRequest) {
       )
     }
 
+    // Handle empty results gracefully
+    const eventList = events || []
+
     // Format response
     if (format === 'csv') {
-      // Generate CSV
+      // Generate CSV - always include headers even for empty results
       const headers = ['ID', 'Event Name', 'Category', 'Severity', 'Created At', 'Actor', 'Target Type', 'Target ID', 'Summary']
-      const rows = (events || []).map((e: any) => [
+      const rows = eventList.map((e: any) => [
         e.id,
         e.event_name || '',
         e.category || '',
         e.severity || '',
         e.created_at || '',
-        e.actor_email || '',
+        e.actor_email || e.actor_name || '',
         e.target_type || '',
         e.target_id || '',
         e.summary || '',
@@ -91,19 +94,31 @@ export async function GET(request: NextRequest) {
     // JSON format
     return NextResponse.json({
       ok: true,
-      data: events || [],
-      count: events?.length || 0,
+      data: eventList,
+      count: eventList.length,
       exported_at: new Date().toISOString(),
+      filters: {
+        time_range,
+        category,
+        severity,
+        outcome,
+      },
     })
   } catch (error: any) {
-    console.error('[review-queue/export] Error:', error)
+    console.error('[review-queue/export] Error:', {
+      message: error.message,
+      stack: error.stack,
+      organization_id: error.organization_id,
+    })
+    
+    // Return consistent error format
     return NextResponse.json(
       {
         ok: false,
         message: error.message || 'Failed to export review queue',
-        code: 'EXPORT_ERROR',
+        code: error.code || 'EXPORT_ERROR',
       },
-      { status: 500 }
+      { status: error.statusCode || 500 }
     )
   }
 }
