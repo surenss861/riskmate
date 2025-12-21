@@ -83,9 +83,30 @@ export async function proxyToBackend(
     const response = await fetch(backendUrl, fetchOptions)
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ message: 'Backend request failed' }))
-      console.error(`[Proxy] Backend error for ${endpoint}:`, error, 'Status:', response.status)
-      return NextResponse.json(error, { status: response.status })
+      // Try to get error text first (might not be JSON)
+      const errorText = await response.text()
+      let error: any
+      try {
+        error = JSON.parse(errorText)
+      } catch {
+        error = { message: errorText || 'Backend request failed', raw: errorText }
+      }
+      
+      console.error(`[Proxy] Backend error for ${endpoint}:`, {
+        status: response.status,
+        error,
+        backendUrl,
+        headers: Object.fromEntries(response.headers.entries()),
+      })
+      
+      // Include the actual backend error in response for debugging
+      return NextResponse.json({
+        ...error,
+        _proxy: {
+          backend_url: backendUrl,
+          status: response.status,
+        },
+      }, { status: response.status })
     }
 
     if (isFileDownload) {
