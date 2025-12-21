@@ -183,9 +183,10 @@ export async function POST(request: NextRequest) {
       events: auditEntries,
     })
 
-    // Return PDF as response (convert Buffer to ArrayBuffer for NextResponse)
+    // Return PDF as response (convert Buffer to Blob for NextResponse)
     const filename = `compliance-ledger-export-${exportId.slice(0, 8)}.pdf`
-    return new NextResponse(pdfBuffer.buffer.slice(pdfBuffer.byteOffset, pdfBuffer.byteOffset + pdfBuffer.byteLength), {
+    const blob = new Blob([pdfBuffer], { type: 'application/pdf' })
+    return new NextResponse(blob, {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',
