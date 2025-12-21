@@ -143,13 +143,13 @@ export default function AuditViewPage() {
       
       // Use new backend endpoint with server-side enrichment
       // Don't send category when view is present (view takes precedence and includes category logic)
-      // Also map 'governance' tab to valid category or omit it
+      // Map activeTab to valid backend categories: 'governance', 'operations', 'access'
       const hasView = filters.savedView && filters.savedView !== 'custom'
       const categoryForRequest = hasView 
         ? undefined // View takes precedence
         : (activeTab === 'governance' 
-          ? undefined // 'governance' is not a valid backend category, omit it
-          : activeTab as 'operations' | 'access' | undefined) // Only send valid categories
+          ? 'governance' // 'governance' IS a valid backend category
+          : activeTab as 'operations' | 'access' | undefined) // Send valid categories
       
       // Type guard: only pass valid view values (exclude 'custom')
       const viewForRequest = hasView 
