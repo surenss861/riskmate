@@ -53,12 +53,38 @@ async function apiRequest<T>(
   const isJson = contentType?.includes('application/json');
   const data = isJson ? await response.json() : await response.text();
 
+  // Extract request ID from response headers for correlation
+  const requestId = response.headers.get('x-request-id') || response.headers.get('X-Request-ID')
+
   if (!response.ok) {
-    const message = isJson ? (data?.detail || data?.message) : data || response.statusText;
+    const message = isJson ? (data?.detail || data?.message || data?.error) : data || response.statusText;
     const error: Error & ApiError = new Error(message || 'API request failed') as Error & ApiError;
     if (isJson && data?.code) {
       error.code = data.code;
     }
+    // Store request ID for debugging
+    if (requestId || (isJson && data?.requestId)) {
+      (error as any).requestId = requestId || data?.requestId;
+    }
+    
+    // Log failed request for debugging (only in browser)
+    if (typeof window !== 'undefined') {
+      import('./utils/clientRequestLogger').then(({ logFailedRequest }) => {
+        logFailedRequest(
+          endpoint,
+          options.method || 'GET',
+          response.status,
+          {
+            code: isJson ? data?.code : undefined,
+            message: message,
+            requestId: requestId || (isJson ? data?.requestId : undefined),
+          }
+        )
+      }).catch(() => {
+        // Silently fail if logger can't be imported (shouldn't happen but be safe)
+      })
+    }
+    
     // Include full error details in development
     if (isJson && data?.error && process.env.NODE_ENV === 'development') {
       console.error('API Error Details:', data.error);
