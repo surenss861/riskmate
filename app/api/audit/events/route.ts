@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { getOrganizationContext } from '@/lib/utils/organizationGuard'
+import { getRequestId } from '@/lib/utils/requestId'
+import { createSuccessResponse, createErrorResponse } from '@/lib/utils/apiResponse'
 
 export const runtime = 'nodejs'
 
@@ -10,8 +12,30 @@ export const runtime = 'nodejs'
  * Queries Supabase directly (no backend proxy needed)
  */
 export async function GET(request: NextRequest) {
+  const requestId = getRequestId(request)
+
   try {
-    const { organization_id, user_id } = await getOrganizationContext()
+    let organization_id: string
+    let user_id: string
+    try {
+      const context = await getOrganizationContext()
+      organization_id = context.organization_id
+      user_id = context.user_id
+    } catch (authError: any) {
+      console.error('[audit/events] Auth error:', {
+        message: authError.message,
+        requestId,
+      })
+      const errorResponse = createErrorResponse(
+        'Unauthorized: Please log in to view audit events',
+        'UNAUTHORIZED',
+        { requestId, statusCode: 401 }
+      )
+      return NextResponse.json(errorResponse, { 
+        status: 401,
+        headers: { 'X-Request-ID': requestId }
+      })
+    }
     
     const { searchParams } = request.nextUrl
     const category = searchParams.get('category')
@@ -105,35 +129,51 @@ export async function GET(request: NextRequest) {
         message: error.message,
         details: error.details,
         hint: error.hint,
+        requestId,
+        organization_id,
       })
 
       if (error.code === '42P17' || error.message?.includes('infinite recursion')) {
-        return NextResponse.json(
+        const errorResponse = createErrorResponse(
+          'Database policy recursion detected. This indicates a configuration issue with row-level security policies.',
+          'RLS_RECURSION_ERROR',
           {
-            message: 'Database policy recursion detected. This indicates a configuration issue with row-level security policies.',
-            code: 'RLS_RECURSION_ERROR',
+            requestId,
+            statusCode: 500,
+            details: {
+              databaseError: {
+                code: error.code,
+                message: error.message,
+                hint: error.hint,
+              },
+            },
+          }
+        )
+        return NextResponse.json(errorResponse, { 
+          status: 500,
+          headers: { 'X-Request-ID': requestId }
+        })
+      }
+
+      const errorResponse = createErrorResponse(
+        'Failed to fetch audit events',
+        'QUERY_ERROR',
+        {
+          requestId,
+          statusCode: 500,
+          details: {
             databaseError: {
               code: error.code,
               message: error.message,
               hint: error.hint,
             },
           },
-          { status: 500 }
-        )
-      }
-
-      return NextResponse.json(
-        {
-          message: 'Failed to fetch audit events',
-          code: 'QUERY_ERROR',
-          databaseError: {
-            code: error.code,
-            message: error.message,
-            hint: error.hint,
-          },
-        },
-        { status: 500 }
+        }
       )
+      return NextResponse.json(errorResponse, { 
+        status: 500,
+        headers: { 'X-Request-ID': requestId }
+      })
     }
 
     // Enrich events server-side
@@ -200,25 +240,39 @@ export async function GET(request: NextRequest) {
       ? enrichedEvents[enrichedEvents.length - 1].created_at 
       : null
 
-    return NextResponse.json({
-      data: {
-        events: enrichedEvents,
-        stats,
-        pagination: {
-          next_cursor: nextCursor,
-          limit,
-          has_more: enrichedEvents.length === limit,
-        },
+    const successResponse = createSuccessResponse({
+      events: enrichedEvents,
+      stats,
+      pagination: {
+        next_cursor: nextCursor,
+        limit,
+        has_more: enrichedEvents.length === limit,
       },
+    }, { requestId })
+
+    return NextResponse.json(successResponse, {
+      headers: { 'X-Request-ID': requestId }
     })
   } catch (error: any) {
-    console.error('[audit/events] Error:', error)
-    return NextResponse.json(
+    console.error('[audit/events] Unhandled error:', {
+      message: error.message,
+      stack: error.stack,
+      requestId,
+    })
+    
+    const errorResponse = createErrorResponse(
+      error.message || 'Failed to fetch audit events',
+      'AUDIT_QUERY_ERROR',
       {
-        message: error.message || 'Failed to fetch audit events',
-        code: 'AUDIT_QUERY_ERROR',
-      },
-      { status: 500 }
+        requestId,
+        statusCode: 500,
+        details: process.env.NODE_ENV === 'development' ? { stack: error.stack } : undefined,
+      }
     )
+    
+    return NextResponse.json(errorResponse, { 
+      status: 500,
+      headers: { 'X-Request-ID': requestId }
+    })
   }
 }

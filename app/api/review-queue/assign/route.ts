@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { getOrganizationContext } from '@/lib/utils/organizationGuard'
 import { recordAuditLog } from '@/lib/audit/auditLogger'
+import { getRequestId } from '@/lib/utils/requestId'
+import { createSuccessResponse, createErrorResponse, MutationResponse } from '@/lib/utils/apiResponse'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 export const runtime = 'nodejs'
@@ -12,8 +14,32 @@ export const runtime = 'nodejs'
  * Supports bulk assignment via item_ids array
  */
 export async function POST(request: NextRequest) {
+  const requestId = getRequestId(request)
+
   try {
-    const { organization_id, user_id, user_role } = await getOrganizationContext()
+    let organization_id: string
+    let user_id: string
+    let user_role: string
+    try {
+      const context = await getOrganizationContext()
+      organization_id = context.organization_id
+      user_id = context.user_id
+      user_role = context.user_role
+    } catch (authError: any) {
+      console.error('[review-queue/assign] Auth error:', {
+        message: authError.message,
+        requestId,
+      })
+      const errorResponse = createErrorResponse(
+        'Unauthorized: Please log in',
+        'UNAUTHORIZED',
+        { requestId, statusCode: 401 }
+      )
+      return NextResponse.json(errorResponse, { 
+        status: 401,
+        headers: { 'X-Request-ID': requestId }
+      })
+    }
     
     // Authorization: Executives cannot assign
     if (user_role === 'executive') {
@@ -30,14 +56,15 @@ export async function POST(request: NextRequest) {
         },
       })
       
-      return NextResponse.json(
-        { 
-          ok: false,
-          code: 'AUTH_ROLE_READ_ONLY',
-          message: 'Executives cannot assign review items' 
-        },
-        { status: 403 }
+      const errorResponse = createErrorResponse(
+        'Executives cannot assign review items',
+        'AUTH_ROLE_READ_ONLY',
+        { requestId, statusCode: 403 }
       )
+      return NextResponse.json(errorResponse, { 
+        status: 403,
+        headers: { 'X-Request-ID': requestId }
+      })
     }
 
     const body = await request.json()
@@ -51,17 +78,27 @@ export async function POST(request: NextRequest) {
 
     // Validation
     if (!item_ids || !Array.isArray(item_ids) || item_ids.length === 0) {
-      return NextResponse.json(
-        { ok: false, message: 'item_ids array is required' },
-        { status: 400 }
+      const errorResponse = createErrorResponse(
+        'item_ids array is required',
+        'VALIDATION_ERROR',
+        { requestId, statusCode: 400 }
       )
+      return NextResponse.json(errorResponse, { 
+        status: 400,
+        headers: { 'X-Request-ID': requestId }
+      })
     }
 
     if (!assignee_id || !due_at) {
-      return NextResponse.json(
-        { ok: false, message: 'assignee_id and due_at are required' },
-        { status: 400 }
+      const errorResponse = createErrorResponse(
+        'assignee_id and due_at are required',
+        'VALIDATION_ERROR',
+        { requestId, statusCode: 400 }
       )
+      return NextResponse.json(errorResponse, { 
+        status: 400,
+        headers: { 'X-Request-ID': requestId }
+      })
     }
 
     const supabase = await createSupabaseServerClient()
@@ -75,10 +112,15 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (!assigneeData) {
-      return NextResponse.json(
-        { ok: false, message: 'Assignee not found' },
-        { status: 404 }
+      const errorResponse = createErrorResponse(
+        'Assignee not found',
+        'NOT_FOUND',
+        { requestId, statusCode: 404 }
       )
+      return NextResponse.json(errorResponse, { 
+        status: 404,
+        headers: { 'X-Request-ID': requestId }
+      })
     }
 
     // Process each item (support bulk assignment)
@@ -188,22 +230,35 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({
-      ok: true,
-      message: `Successfully assigned ${ledgerEntryIds.length} item(s)`,
+    const successResponse = createSuccessResponse({
       ledger_entry_ids: ledgerEntryIds,
       assigned_count: ledgerEntryIds.length,
+    }, {
+      message: `Successfully assigned ${ledgerEntryIds.length} item(s)`,
+      requestId,
+    })
+    return NextResponse.json(successResponse, {
+      headers: { 'X-Request-ID': requestId }
     })
   } catch (error: any) {
-    console.error('[review-queue/assign] Error:', error)
-    return NextResponse.json(
+    console.error('[review-queue/assign] Error:', {
+      message: error.message,
+      stack: error.stack,
+      requestId,
+    })
+    const errorResponse = createErrorResponse(
+      error.message || 'Failed to assign review items',
+      error.code || 'ASSIGN_ERROR',
       {
-        ok: false,
-        message: error.message || 'Failed to assign review items',
-        code: 'ASSIGN_ERROR',
-      },
-      { status: 500 }
+        requestId,
+        statusCode: 500,
+        details: process.env.NODE_ENV === 'development' ? { stack: error.stack } : undefined,
+      }
     )
+    return NextResponse.json(errorResponse, { 
+      status: 500,
+      headers: { 'X-Request-ID': requestId }
+    })
   }
 }
 

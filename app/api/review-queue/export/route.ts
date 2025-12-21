@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { getOrganizationContext } from '@/lib/utils/organizationGuard'
+import { getRequestId } from '@/lib/utils/requestId'
+import { createSuccessResponse, createErrorResponse, ExportResponse } from '@/lib/utils/apiResponse'
 
 export const runtime = 'nodejs'
 
@@ -10,21 +12,27 @@ export const runtime = 'nodejs'
  * Filter-based (no selection required)
  */
 export async function GET(request: NextRequest) {
+  const requestId = getRequestId(request)
+
   try {
     let organization_id: string
     try {
       const context = await getOrganizationContext()
       organization_id = context.organization_id
     } catch (authError: any) {
-      console.error('[review-queue/export] Auth error:', authError)
-      return NextResponse.json(
-        {
-          ok: false,
-          message: 'Unauthorized: Please log in to export data',
-          code: 'UNAUTHORIZED',
-        },
-        { status: 401 }
+      console.error('[review-queue/export] Auth error:', {
+        message: authError.message,
+        requestId,
+      })
+      const errorResponse = createErrorResponse(
+        'Unauthorized: Please log in to export data',
+        'UNAUTHORIZED',
+        { requestId, statusCode: 401 }
       )
+      return NextResponse.json(errorResponse, { 
+        status: 401,
+        headers: { 'X-Request-ID': requestId }
+      })
     }
     
     const { searchParams } = request.nextUrl
@@ -66,11 +74,30 @@ export async function GET(request: NextRequest) {
     const { data: events, error } = await query
 
     if (error) {
-      console.error('[review-queue/export] Query error:', error)
-      return NextResponse.json(
-        { ok: false, message: 'Failed to fetch review queue items', code: 'QUERY_ERROR' },
-        { status: 500 }
+      console.error('[review-queue/export] Query error:', {
+        code: error.code,
+        message: error.message,
+        requestId,
+        organization_id,
+      })
+      const errorResponse = createErrorResponse(
+        'Failed to fetch review queue items',
+        'QUERY_ERROR',
+        {
+          requestId,
+          statusCode: 500,
+          details: {
+            databaseError: {
+              code: error.code,
+              message: error.message,
+            },
+          },
+        }
       )
+      return NextResponse.json(errorResponse, { 
+        status: 500,
+        headers: { 'X-Request-ID': requestId }
+      })
     }
 
     // Handle empty results gracefully
@@ -106,34 +133,43 @@ export async function GET(request: NextRequest) {
     }
 
     // JSON format
-    return NextResponse.json({
-      ok: true,
-      data: eventList,
-      count: eventList.length,
-      exported_at: new Date().toISOString(),
-      filters: {
-        time_range,
-        category,
-        severity,
-        outcome,
-      },
+    const successResponse = createSuccessResponse(
+      eventList,
+      {
+        count: eventList.length,
+        exported_at: new Date().toISOString(),
+        filters: {
+          time_range,
+          category,
+          severity,
+          outcome,
+        },
+        requestId,
+      }
+    )
+    return NextResponse.json(successResponse, {
+      headers: { 'X-Request-ID': requestId }
     })
   } catch (error: any) {
     console.error('[review-queue/export] Error:', {
       message: error.message,
       stack: error.stack,
-      organization_id: error.organization_id,
+      requestId,
     })
     
-    // Return consistent error format
-    return NextResponse.json(
+    const errorResponse = createErrorResponse(
+      error.message || 'Failed to export review queue',
+      error.code || 'EXPORT_ERROR',
       {
-        ok: false,
-        message: error.message || 'Failed to export review queue',
-        code: error.code || 'EXPORT_ERROR',
-      },
-      { status: error.statusCode || 500 }
+        requestId,
+        statusCode: error.statusCode || 500,
+        details: process.env.NODE_ENV === 'development' ? { stack: error.stack } : undefined,
+      }
     )
+    return NextResponse.json(errorResponse, { 
+      status: error.statusCode || 500,
+      headers: { 'X-Request-ID': requestId }
+    })
   }
 }
 
