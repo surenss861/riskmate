@@ -10,7 +10,21 @@ export const runtime = 'nodejs'
  */
 export async function GET(request: NextRequest) {
   try {
-    const { organization_id } = await getOrganizationContext()
+    let organization_id: string
+    try {
+      const context = await getOrganizationContext()
+      organization_id = context.organization_id
+    } catch (authError: any) {
+      console.error('[incidents/export] Auth error:', authError)
+      return NextResponse.json(
+        {
+          ok: false,
+          message: 'Unauthorized: Please log in to export data',
+          code: 'UNAUTHORIZED',
+        },
+        { status: 401 }
+      )
+    }
     
     const { searchParams } = request.nextUrl
     const format = searchParams.get('format') || 'json'
