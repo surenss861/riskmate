@@ -12,6 +12,8 @@ export const runtime = 'nodejs'
  * Supports CSV, JSON, and PDF formats
  */
 export async function GET(request: NextRequest) {
+  const requestId = getRequestId(request)
+
   try {
     let organization_id: string
     let user_id: string
@@ -20,15 +22,19 @@ export async function GET(request: NextRequest) {
       organization_id = context.organization_id
       user_id = context.user_id
     } catch (authError: any) {
-      console.error('[enforcement-reports/export] Auth error:', authError)
-      return NextResponse.json(
-        {
-          ok: false,
-          message: 'Unauthorized: Please log in to export data',
-          code: 'UNAUTHORIZED',
-        },
-        { status: 401 }
+      console.error('[enforcement-reports/export] Auth error:', {
+        message: authError.message,
+        requestId,
+      })
+      const errorResponse = createErrorResponse(
+        'Unauthorized: Please log in to export data',
+        'UNAUTHORIZED',
+        { requestId, statusCode: 401 }
       )
+      return NextResponse.json(errorResponse, { 
+        status: 401,
+        headers: { 'X-Request-ID': requestId }
+      })
     }
     
     const { searchParams } = request.nextUrl
