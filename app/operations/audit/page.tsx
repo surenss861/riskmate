@@ -150,6 +150,25 @@ export default function AuditViewPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters, activeTab])
 
+  // Prune selection: remove IDs that no longer exist in the dataset
+  // This prevents "ghost selection" when data changes
+  const pruneSelection = (currentEvents: AuditEvent[]) => {
+    if (selectedIds.length === 0) return
+    
+    const eventIds = new Set(currentEvents.map(e => e.id))
+    const jobIds = new Set(currentEvents.filter(e => e.job_id).map(e => e.job_id!))
+    
+    const validSelectedIds = selectedIds.filter(id => 
+      eventIds.has(id) || jobIds.has(id)
+    )
+    
+    if (validSelectedIds.length !== selectedIds.length) {
+      // Some selected IDs are no longer in the dataset - prune them
+      selectionHook.clearSelection()
+      validSelectedIds.forEach(id => selectionHook.toggleSelection(id))
+    }
+  }
+
   const loadAuditEvents = async () => {
     try {
       setLoading(true)
