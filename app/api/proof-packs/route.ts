@@ -163,7 +163,7 @@ export async function POST(request: NextRequest) {
           generatedByRole: userData?.role || 'Unknown',
           exportId: packId,
           timeRange: time_range || 'All',
-          filters: { site_ids },
+          filters: site_ids && site_ids.length > 0 ? { site_id: site_ids[0] } : undefined,
           events: enrichedEvents,
         })
 
