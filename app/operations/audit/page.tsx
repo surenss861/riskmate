@@ -19,6 +19,8 @@ import { CreateCorrectiveActionModal } from '@/components/audit/CreateCorrective
 import { CloseIncidentModal } from '@/components/audit/CloseIncidentModal'
 import { RevokeAccessModal } from '@/components/audit/RevokeAccessModal'
 import { FlagSuspiciousModal } from '@/components/audit/FlagSuspiciousModal'
+import { EventSelectionTable } from '@/components/audit/EventSelectionTable'
+import { useSelectedRows } from '@/lib/hooks/useSelectedRows'
 import { terms } from '@/lib/terms'
 
 interface AuditEvent {
@@ -80,6 +82,9 @@ export default function AuditViewPage() {
     hasEvidence?: boolean
   } | null>(null)
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+  const [userRole, setUserRole] = useState<string | null>(null)
+  const selectionHook = useSelectedRows()
+  const { selectedIds } = selectionHook
 
   useEffect(() => {
     loadAuditEvents()
@@ -87,8 +92,26 @@ export default function AuditViewPage() {
     loadUsers()
     loadSites()
     loadIndustryVertical()
+    loadUserRole()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  const loadUserRole = async () => {
+    try {
+      const supabase = createSupabaseBrowserClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        const { data: userData } = await supabase
+          .from('users')
+          .select('role')
+          .eq('id', user.id)
+          .single()
+        setUserRole(userData?.role || 'member')
+      }
+    } catch (err) {
+      console.error('Failed to load user role:', err)
+    }
+  }
 
   const loadIndustryVertical = async () => {
     try {
@@ -316,13 +339,72 @@ export default function AuditViewPage() {
 
   const handleExportFromView = async (format: 'csv' | 'json', view: string) => {
     try {
-      await auditApi.export({
+      let endpoint = ''
+      const params = new URLSearchParams({
         format,
-        view: view as any,
-        time_range: filters.timeRange,
+        time_range: filters.timeRange || '30d',
       })
-    } catch (err) {
-      alert('Export failed. Please try again.')
+
+      // Route to appropriate export endpoint based on view
+      if (view === 'review-queue') {
+        endpoint = `/api/review-queue/export?${params.toString()}`
+      } else if (view === 'access-review') {
+        endpoint = `/api/access/export?${params.toString()}`
+      } else if (view === 'incident-review') {
+        endpoint = `/api/incidents/export?${params.toString()}`
+      } else if (view === 'governance-enforcement') {
+        endpoint = `/api/enforcement-reports/export?${params.toString()}`
+      } else if (view === 'insurance-ready') {
+        endpoint = `/api/proof-packs/export?${params.toString()}`
+      } else {
+        endpoint = `/api/audit/export?${params.toString()}`
+      }
+
+      const response = await fetch(endpoint, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}))
+        throw new Error(error.message || 'Export failed')
+      }
+
+      if (format === 'csv') {
+        const blob = await response.blob()
+        const url = window.URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `${view}-export-${new Date().toISOString().split('T')[0]}.csv`
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        window.URL.revokeObjectURL(url)
+      } else {
+        const data = await response.json()
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+        const url = window.URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `${view}-export-${new Date().toISOString().split('T')[0]}.json`
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        window.URL.revokeObjectURL(url)
+      }
+
+      setToast({
+        message: `Export completed successfully`,
+        type: 'success',
+      })
+    } catch (err: any) {
+      console.error('Export failed:', err)
+      setToast({
+        message: err.message || 'Export failed. Please try again.',
+        type: 'error',
+      })
     }
   }
 
@@ -380,29 +462,32 @@ export default function AuditViewPage() {
   const handleAssign = async (assignment: {
     owner_id: string
     due_date: string
-    severity_override?: string
+    priority?: 'low' | 'medium' | 'high'
     note?: string
   }) => {
-    if (!selectedTarget) return
+    // Use selected IDs if available, otherwise use selectedTarget (single selection)
+    const itemIds = selectedIds.length > 0 ? selectedIds : (selectedTarget ? [selectedTarget.id] : [])
+
+    if (itemIds.length === 0) {
+      setToast({
+        message: 'Please select at least one item to assign',
+        type: 'error',
+      })
+      return
+    }
 
     try {
-      const token = await (async () => {
-        const supabase = createSupabaseBrowserClient()
-        const { data: { session } } = await supabase.auth.getSession()
-        return session?.access_token || null
-      })()
-
-      const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || ''
-      const response = await fetch(`${API_URL}/api/audit/assign`, {
+      const response = await fetch('/api/review-queue/assign', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(token && { Authorization: `Bearer ${token}` }),
         },
         body: JSON.stringify({
-          target_type: selectedTarget.type,
-          target_id: selectedTarget.id,
-          ...assignment,
+          item_ids: itemIds,
+          assignee_id: assignment.owner_id,
+          priority: assignment.priority || 'medium',
+          due_at: assignment.due_date,
+          note: assignment.note,
         }),
       })
 
@@ -411,8 +496,10 @@ export default function AuditViewPage() {
         throw new Error(error.message || 'Failed to assign')
       }
 
+      const data = await response.json()
+
       setToast({
-        message: `Entry added to Compliance Ledger. View at /operations/audit?event_id=${selectedTarget.id}`,
+        message: `Successfully assigned ${data.assigned_count || itemIds.length} item(s). Entry added to Compliance Ledger.`,
         type: 'success',
       })
       
@@ -429,32 +516,35 @@ export default function AuditViewPage() {
   }
 
   const handleResolve = async (resolution: {
-    reason: string
+    resolution_reason: string
     comment: string
-    requires_followup: boolean
+    requires_followup?: boolean
     waived?: boolean
     waiver_reason?: string
   }) => {
-    if (!selectedTarget) return
+    // Use selected IDs if available, otherwise use selectedTarget (single selection)
+    const itemIds = selectedIds.length > 0 ? selectedIds : (selectedTarget ? [selectedTarget.id] : [])
+
+    if (itemIds.length === 0) {
+      setToast({
+        message: 'Please select at least one item to resolve',
+        type: 'error',
+      })
+      return
+    }
 
     try {
-      const token = await (async () => {
-        const supabase = createSupabaseBrowserClient()
-        const { data: { session } } = await supabase.auth.getSession()
-        return session?.access_token || null
-      })()
-
-      const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || ''
-      const response = await fetch(`${API_URL}/api/audit/resolve`, {
+      const response = await fetch('/api/review-queue/resolve', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(token && { Authorization: `Bearer ${token}` }),
         },
         body: JSON.stringify({
-          target_type: selectedTarget.type,
-          target_id: selectedTarget.id,
-          ...resolution,
+          item_ids: itemIds,
+          resolution: resolution.resolution_reason,
+          notes: resolution.comment,
+          waived: resolution.waived,
+          waiver_reason: resolution.waiver_reason,
         }),
       })
 
@@ -463,8 +553,10 @@ export default function AuditViewPage() {
         throw new Error(error.message || 'Failed to resolve')
       }
 
+      const data = await response.json()
+
       setToast({
-        message: `Entry added to Compliance Ledger. View at /operations/audit?event_id=${selectedTarget.id}`,
+        message: `Successfully resolved ${data.resolved_count || itemIds.length} item(s). Entry added to Compliance Ledger.`,
         type: 'success',
       })
       
@@ -539,14 +631,41 @@ export default function AuditViewPage() {
 
   const handleExportEnforcement = async (view: string) => {
     try {
-      await auditApi.export({
-        format: 'csv',
-        view: view as any,
-        time_range: filters.timeRange,
-        category: 'governance',
+      const params = new URLSearchParams({
+        format: 'pdf',
+        time_range: filters.timeRange || '30d',
+        categories: 'governance',
       })
-    } catch (err) {
-      alert('Failed to export enforcement report. Please try again.')
+
+      const response = await fetch(`/api/enforcement-reports/export?${params.toString()}`, {
+        method: 'GET',
+      })
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}))
+        throw new Error(error.message || 'Export failed')
+      }
+
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `enforcement-report-${new Date().toISOString().split('T')[0]}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      window.URL.revokeObjectURL(url)
+
+      setToast({
+        message: 'Enforcement report exported successfully',
+        type: 'success',
+      })
+    } catch (err: any) {
+      console.error('Failed to export enforcement report:', err)
+      setToast({
+        message: err.message || 'Failed to export enforcement report. Please try again.',
+        type: 'error',
+      })
     }
   }
 
@@ -941,14 +1060,64 @@ export default function AuditViewPage() {
             }}
             onExport={handleExportFromView}
             onGeneratePack={handleGeneratePack}
-            onAssign={(view) => handleAssignClick()}
-            onResolve={(view) => handleResolveClick()}
+            onAssign={(view) => {
+              if (selectionHook.selectedIds.length === 0) {
+                setToast({
+                  message: 'Please select at least one item from the list below',
+                  type: 'error',
+                })
+                return
+              }
+              // Open assign modal with first selected item
+              const firstEvent = events.find(e => selectionHook.selectedIds.includes(e.id))
+              if (firstEvent) {
+                handleAssignClick(firstEvent)
+              }
+            }}
+            onResolve={(view) => {
+              if (selectionHook.selectedIds.length === 0) {
+                setToast({
+                  message: 'Please select at least one item from the list below',
+                  type: 'error',
+                })
+                return
+              }
+              // Open resolve modal with first selected item
+              const firstEvent = events.find(e => selectionHook.selectedIds.includes(e.id))
+              if (firstEvent) {
+                handleResolveClick(firstEvent)
+              }
+            }}
             onExportEnforcement={handleExportEnforcement}
             onCreateCorrectiveAction={handleCreateCorrectiveActionClick}
             onCloseIncident={handleCloseIncidentClick}
             onRevokeAccess={handleRevokeAccessClick}
             onFlagSuspicious={handleFlagSuspiciousClick}
           />
+
+          {/* Event Selection Table - Show when a saved view is active */}
+          {filters.savedView !== 'custom' && filters.savedView !== '' && (
+            <div className="mb-6">
+              <EventSelectionTable
+                events={filteredEvents}
+                view={filters.savedView}
+                onSelect={(eventId) => {
+                  selectionHook.toggleSelection(eventId)
+                }}
+                onRowClick={(event) => {
+                  // Set selected target for modals
+                  setSelectedTarget({
+                    type: event.job_id ? 'job' : 'event',
+                    id: event.job_id || event.id,
+                    name: event.job_title || event.event_name || 'Event',
+                    severity: event.severity,
+                  })
+                }}
+                showActions={true}
+                userRole={userRole || undefined}
+              />
+            </div>
+          )}
 
           {/* Summary Cards */}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
