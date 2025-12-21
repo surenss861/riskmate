@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { getOrganizationContext } from '@/lib/utils/organizationGuard'
+import { getRequestId } from '@/lib/utils/requestId'
+import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { generateLedgerExportPDF } from '@/lib/utils/pdf/ledgerExport'
 import { randomUUID } from 'crypto'
 
@@ -12,8 +14,30 @@ export const runtime = 'nodejs'
  * Queries Supabase directly and generates PDF using pdfkit
  */
 export async function POST(request: NextRequest) {
+  const requestId = getRequestId(request)
+
   try {
-    const { organization_id, user_id } = await getOrganizationContext()
+    let organization_id: string
+    let user_id: string
+    try {
+      const context = await getOrganizationContext()
+      organization_id = context.organization_id
+      user_id = context.user_id
+    } catch (authError: any) {
+      console.error('[audit/export] Auth error:', {
+        message: authError.message,
+        requestId,
+      })
+      const errorResponse = createErrorResponse(
+        'Unauthorized: Please log in to export data',
+        'UNAUTHORIZED',
+        { requestId, statusCode: 401 }
+      )
+      return NextResponse.json(errorResponse, { 
+        status: 401,
+        headers: { 'X-Request-ID': requestId }
+      })
+    }
     const body = await request.json()
     
     const {
