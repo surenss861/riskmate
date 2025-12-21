@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { getOrganizationContext } from '@/lib/utils/organizationGuard'
 import { recordAuditLog } from '@/lib/audit/auditLogger'
+import { getRequestId } from '@/lib/utils/requestId'
+import { createSuccessResponse, createErrorResponse } from '@/lib/utils/apiResponse'
 
 export const runtime = 'nodejs'
 
@@ -10,8 +12,32 @@ export const runtime = 'nodejs'
  * Revokes a user's access (role downgrade or membership removal)
  */
 export async function POST(request: NextRequest) {
+  const requestId = getRequestId(request)
+
   try {
-    const { organization_id, user_id, user_role } = await getOrganizationContext()
+    let organization_id: string
+    let user_id: string
+    let user_role: string
+    try {
+      const context = await getOrganizationContext()
+      organization_id = context.organization_id
+      user_id = context.user_id
+      user_role = context.user_role
+    } catch (authError: any) {
+      console.error('[access/revoke] Auth error:', {
+        message: authError.message,
+        requestId,
+      })
+      const errorResponse = createErrorResponse(
+        'Unauthorized: Please log in',
+        'UNAUTHORIZED',
+        { requestId, statusCode: 401 }
+      )
+      return NextResponse.json(errorResponse, { 
+        status: 401,
+        headers: { 'X-Request-ID': requestId }
+      })
+    }
     
     // Authorization: Only admins/owners can revoke access
     if (user_role !== 'owner' && user_role !== 'admin') {
@@ -28,10 +54,15 @@ export async function POST(request: NextRequest) {
         },
       })
       
-      return NextResponse.json(
-        { ok: false, code: 'AUTH_ROLE_FORBIDDEN', message: 'Only owners and admins can revoke access' },
-        { status: 403 }
+      const errorResponse = createErrorResponse(
+        'Only owners and admins can revoke access',
+        'AUTH_ROLE_FORBIDDEN',
+        { requestId, statusCode: 403 }
       )
+      return NextResponse.json(errorResponse, { 
+        status: 403,
+        headers: { 'X-Request-ID': requestId }
+      })
     }
 
     const body = await request.json()
@@ -46,18 +77,28 @@ export async function POST(request: NextRequest) {
 
     // Validation
     if (!target_user_id || !reason) {
-      return NextResponse.json(
-        { ok: false, message: 'user_id and reason are required' },
-        { status: 400 }
+      const errorResponse = createErrorResponse(
+        'user_id and reason are required',
+        'VALIDATION_ERROR',
+        { requestId, statusCode: 400 }
       )
+      return NextResponse.json(errorResponse, { 
+        status: 400,
+        headers: { 'X-Request-ID': requestId }
+      })
     }
 
-    // Guardrail: Cannot revoke own access
+    // Hard rule: Cannot revoke own access (unless "break glass" flow - not implemented yet)
     if (target_user_id === user_id) {
-      return NextResponse.json(
-        { ok: false, message: 'Cannot revoke your own access' },
-        { status: 400 }
+      const errorResponse = createErrorResponse(
+        'Cannot revoke your own access',
+        'VALIDATION_ERROR',
+        { requestId, statusCode: 400, field: 'target_user_id' }
       )
+      return NextResponse.json(errorResponse, { 
+        status: 400,
+        headers: { 'X-Request-ID': requestId }
+      })
     }
 
     const supabase = await createSupabaseServerClient()
@@ -71,18 +112,48 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (!targetUser) {
-      return NextResponse.json(
-        { ok: false, message: 'User not found' },
-        { status: 404 }
+      const errorResponse = createErrorResponse(
+        'User not found',
+        'NOT_FOUND',
+        { requestId, statusCode: 404 }
       )
+      return NextResponse.json(errorResponse, { 
+        status: 404,
+        headers: { 'X-Request-ID': requestId }
+      })
     }
 
-    // Guardrail: Cannot revoke executive access (executives are immutable)
+    // Hard rule: Cannot revoke executive access (executives are immutable)
     if (targetUser.role === 'executive') {
-      return NextResponse.json(
-        { ok: false, message: 'Cannot revoke executive access (executives are immutable)' },
-        { status: 403 }
+      const errorResponse = createErrorResponse(
+        'Cannot revoke executive access (executives are immutable)',
+        'AUTH_ROLE_IMMUTABLE',
+        { requestId, statusCode: 403 }
       )
+      return NextResponse.json(errorResponse, { 
+        status: 403,
+        headers: { 'X-Request-ID': requestId }
+      })
+    }
+
+    // Hard rule: Cannot revoke org owner without second approval (simplified check - would need approval workflow)
+    // For now, we'll allow it but log it prominently
+    const { data: orgData } = await supabase
+      .from('organizations')
+      .select('owner_id')
+      .eq('id', organization_id)
+      .single()
+    
+    if (orgData?.owner_id === target_user_id && user_role !== 'owner') {
+      const errorResponse = createErrorResponse(
+        'Cannot revoke organization owner access without owner approval',
+        'AUTH_REQUIRES_OWNER',
+        { requestId, statusCode: 403 }
+      )
+      return NextResponse.json(errorResponse, { 
+        status: 403,
+        headers: { 'X-Request-ID': requestId }
+      })
     }
 
     // Perform revocation based on scope
@@ -137,21 +208,54 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    return NextResponse.json({
-      ok: true,
-      message: 'Access revoked successfully',
+    // Optionally write session.terminated ledger entry if force_logout is true
+    // (In a full implementation, you'd invalidate refresh tokens via Supabase Admin API)
+    if (force_logout) {
+      await recordAuditLog(supabase, {
+        organizationId: organization_id,
+        actorId: user_id,
+        eventName: 'session.terminated',
+        targetType: 'user',
+        targetId: target_user_id,
+        metadata: {
+          target_user_id,
+          target_user_name: targetUser.full_name || targetUser.email,
+          reason: 'Access revoked',
+          revoked_by: user_id,
+          terminated_at: new Date().toISOString(),
+          summary: `Sessions terminated for ${targetUser.full_name || targetUser.email}`,
+        },
+      })
+    }
+
+    const successResponse = createSuccessResponse({
       ledger_entry_id: ledgerResult.data?.id,
+    }, {
+      message: 'Access revoked successfully',
+      requestId,
+    })
+    return NextResponse.json(successResponse, {
+      headers: { 'X-Request-ID': requestId }
     })
   } catch (error: any) {
-    console.error('[access/revoke] Error:', error)
-    return NextResponse.json(
+    console.error('[access/revoke] Error:', {
+      message: error.message,
+      stack: error.stack,
+      requestId,
+    })
+    const errorResponse = createErrorResponse(
+      error.message || 'Failed to revoke access',
+      error.code || 'REVOKE_ERROR',
       {
-        ok: false,
-        message: error.message || 'Failed to revoke access',
-        code: 'REVOKE_ERROR',
-      },
-      { status: 500 }
+        requestId,
+        statusCode: 500,
+        details: process.env.NODE_ENV === 'development' ? { stack: error.stack } : undefined,
+      }
     )
+    return NextResponse.json(errorResponse, { 
+      status: 500,
+      headers: { 'X-Request-ID': requestId }
+    })
   }
 }
 

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { getOrganizationContext } from '@/lib/utils/organizationGuard'
 import { recordAuditLog } from '@/lib/audit/auditLogger'
+import { getRequestId } from '@/lib/utils/requestId'
+import { createSuccessResponse, createErrorResponse } from '@/lib/utils/apiResponse'
 
 export const runtime = 'nodejs'
 
@@ -10,8 +12,32 @@ export const runtime = 'nodejs'
  * Closes an incident with closure summary and verification
  */
 export async function POST(request: NextRequest) {
+  const requestId = getRequestId(request)
+
   try {
-    const { organization_id, user_id, user_role } = await getOrganizationContext()
+    let organization_id: string
+    let user_id: string
+    let user_role: string
+    try {
+      const context = await getOrganizationContext()
+      organization_id = context.organization_id
+      user_id = context.user_id
+      user_role = context.user_role
+    } catch (authError: any) {
+      console.error('[incidents/close] Auth error:', {
+        message: authError.message,
+        requestId,
+      })
+      const errorResponse = createErrorResponse(
+        'Unauthorized: Please log in',
+        'UNAUTHORIZED',
+        { requestId, statusCode: 401 }
+      )
+      return NextResponse.json(errorResponse, { 
+        status: 401,
+        headers: { 'X-Request-ID': requestId }
+      })
+    }
     
     // Authorization: Executives cannot close incidents
     if (user_role === 'executive') {
@@ -28,10 +54,15 @@ export async function POST(request: NextRequest) {
         },
       })
       
-      return NextResponse.json(
-        { ok: false, code: 'AUTH_ROLE_READ_ONLY', message: 'Executives cannot close incidents' },
-        { status: 403 }
+      const errorResponse = createErrorResponse(
+        'Executives cannot close incidents',
+        'AUTH_ROLE_READ_ONLY',
+        { requestId, statusCode: 403 }
       )
+      return NextResponse.json(errorResponse, { 
+        status: 403,
+        headers: { 'X-Request-ID': requestId }
+      })
     }
 
     const body = await request.json()
@@ -49,25 +80,40 @@ export async function POST(request: NextRequest) {
 
     // Validation
     if (!work_record_id || !closure_summary) {
-      return NextResponse.json(
-        { ok: false, message: 'work_record_id and closure_summary are required' },
-        { status: 400 }
+      const errorResponse = createErrorResponse(
+        'work_record_id and closure_summary are required',
+        'VALIDATION_ERROR',
+        { requestId, statusCode: 400 }
       )
+      return NextResponse.json(errorResponse, { 
+        status: 400,
+        headers: { 'X-Request-ID': requestId }
+      })
     }
 
     // Guardrails
     if (no_action_required && !no_action_justification) {
-      return NextResponse.json(
-        { ok: false, message: 'no_action_justification is required when no_action_required is true' },
-        { status: 400 }
+      const errorResponse = createErrorResponse(
+        'no_action_justification is required when no_action_required is true',
+        'VALIDATION_ERROR',
+        { requestId, statusCode: 400, field: 'no_action_justification' }
       )
+      return NextResponse.json(errorResponse, { 
+        status: 400,
+        headers: { 'X-Request-ID': requestId }
+      })
     }
 
     if (waived && !waiver_reason) {
-      return NextResponse.json(
-        { ok: false, message: 'waiver_reason is required when waived is true' },
-        { status: 400 }
+      const errorResponse = createErrorResponse(
+        'waiver_reason is required when waived is true',
+        'VALIDATION_ERROR',
+        { requestId, statusCode: 400, field: 'waiver_reason' }
       )
+      return NextResponse.json(errorResponse, { 
+        status: 400,
+        headers: { 'X-Request-ID': requestId }
+      })
     }
 
     const supabase = await createSupabaseServerClient()
@@ -81,10 +127,41 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (!jobData) {
-      return NextResponse.json(
-        { ok: false, message: 'Work record not found' },
-        { status: 404 }
+      const errorResponse = createErrorResponse(
+        'Work record not found',
+        'NOT_FOUND',
+        { requestId, statusCode: 404 }
       )
+      return NextResponse.json(errorResponse, { 
+        status: 404,
+        headers: { 'X-Request-ID': requestId }
+      })
+    }
+
+    // Hard rule: Can't close if there are open corrective actions unless user provides override
+    if (!no_action_required) {
+      const { data: openActions, count: openActionsCount } = await supabase
+        .from('mitigation_items')
+        .select('id', { count: 'exact', head: true })
+        .eq('job_id', work_record_id)
+        .eq('is_completed', false)
+        .eq('done', false)
+
+      if (openActionsCount && openActionsCount > 0 && !no_action_justification) {
+        const errorResponse = createErrorResponse(
+          `Cannot close incident: ${openActionsCount} open corrective action(s) remain. Provide justification or mark as no_action_required.`,
+          'VALIDATION_ERROR',
+          { 
+            requestId, 
+            statusCode: 400,
+            details: { open_actions_count: openActionsCount },
+          }
+        )
+        return NextResponse.json(errorResponse, { 
+          status: 400,
+          headers: { 'X-Request-ID': requestId }
+        })
+      }
     }
 
     // Get actor info
@@ -161,25 +238,36 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    return NextResponse.json({
-      ok: true,
-      message: 'Incident closed successfully',
-      data: {
-        work_record_id,
-        attestation_id: attestationId,
-      },
+    const successResponse = createSuccessResponse({
+      work_record_id,
+      attestation_id: attestationId,
       ledger_entry_id: ledgerResult.data?.id,
+    }, {
+      message: 'Incident closed successfully',
+      requestId,
+    })
+    return NextResponse.json(successResponse, {
+      headers: { 'X-Request-ID': requestId }
     })
   } catch (error: any) {
-    console.error('[incidents/close] Error:', error)
-    return NextResponse.json(
+    console.error('[incidents/close] Error:', {
+      message: error.message,
+      stack: error.stack,
+      requestId,
+    })
+    const errorResponse = createErrorResponse(
+      error.message || 'Failed to close incident',
+      error.code || 'CLOSE_INCIDENT_ERROR',
       {
-        ok: false,
-        message: error.message || 'Failed to close incident',
-        code: 'CLOSE_INCIDENT_ERROR',
-      },
-      { status: 500 }
+        requestId,
+        statusCode: 500,
+        details: process.env.NODE_ENV === 'development' ? { stack: error.stack } : undefined,
+      }
     )
+    return NextResponse.json(errorResponse, { 
+      status: 500,
+      headers: { 'X-Request-ID': requestId }
+    })
   }
 }
 

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { getOrganizationContext } from '@/lib/utils/organizationGuard'
 import { recordAuditLog } from '@/lib/audit/auditLogger'
+import { getRequestId } from '@/lib/utils/requestId'
+import { createSuccessResponse, createErrorResponse } from '@/lib/utils/apiResponse'
 
 export const runtime = 'nodejs'
 
@@ -10,8 +12,32 @@ export const runtime = 'nodejs'
  * Creates a corrective action (mitigation item) linked to an incident/work record
  */
 export async function POST(request: NextRequest) {
+  const requestId = getRequestId(request)
+
   try {
-    const { organization_id, user_id, user_role } = await getOrganizationContext()
+    let organization_id: string
+    let user_id: string
+    let user_role: string
+    try {
+      const context = await getOrganizationContext()
+      organization_id = context.organization_id
+      user_id = context.user_id
+      user_role = context.user_role
+    } catch (authError: any) {
+      console.error('[incidents/corrective-action] Auth error:', {
+        message: authError.message,
+        requestId,
+      })
+      const errorResponse = createErrorResponse(
+        'Unauthorized: Please log in',
+        'UNAUTHORIZED',
+        { requestId, statusCode: 401 }
+      )
+      return NextResponse.json(errorResponse, { 
+        status: 401,
+        headers: { 'X-Request-ID': requestId }
+      })
+    }
     
     // Authorization: Executives cannot create corrective actions
     if (user_role === 'executive') {
@@ -28,10 +54,15 @@ export async function POST(request: NextRequest) {
         },
       })
       
-      return NextResponse.json(
-        { ok: false, code: 'AUTH_ROLE_READ_ONLY', message: 'Executives cannot create corrective actions' },
-        { status: 403 }
+      const errorResponse = createErrorResponse(
+        'Executives cannot create corrective actions',
+        'AUTH_ROLE_READ_ONLY',
+        { requestId, statusCode: 403 }
       )
+      return NextResponse.json(errorResponse, { 
+        status: 403,
+        headers: { 'X-Request-ID': requestId }
+      })
     }
 
     const body = await request.json()
@@ -48,11 +79,19 @@ export async function POST(request: NextRequest) {
 
     // Validation
     if (!work_record_id || !title || !owner_id || !due_date) {
-      return NextResponse.json(
-        { ok: false, message: 'work_record_id, title, owner_id, and due_date are required' },
-        { status: 400 }
+      const errorResponse = createErrorResponse(
+        'work_record_id, title, owner_id, and due_date are required',
+        'VALIDATION_ERROR',
+        { requestId, statusCode: 400 }
       )
+      return NextResponse.json(errorResponse, { 
+        status: 400,
+        headers: { 'X-Request-ID': requestId }
+      })
     }
+
+    // Hard rule: If high severity, require owner + due date (already validated above, but document it)
+    // Note: severity validation would go here if severity field is provided
 
     const supabase = await createSupabaseServerClient()
 
@@ -65,10 +104,15 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (!jobData) {
-      return NextResponse.json(
-        { ok: false, message: 'Work record not found' },
-        { status: 404 }
+      const errorResponse = createErrorResponse(
+        'Work record not found',
+        'NOT_FOUND',
+        { requestId, statusCode: 404 }
       )
+      return NextResponse.json(errorResponse, { 
+        status: 404,
+        headers: { 'X-Request-ID': requestId }
+      })
     }
 
     // Get owner info
@@ -80,10 +124,15 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (!ownerData) {
-      return NextResponse.json(
-        { ok: false, message: 'Owner not found' },
-        { status: 404 }
+      const errorResponse = createErrorResponse(
+        'Owner not found',
+        'NOT_FOUND',
+        { requestId, statusCode: 404 }
       )
+      return NextResponse.json(errorResponse, { 
+        status: 404,
+        headers: { 'X-Request-ID': requestId }
+      })
     }
 
     // Create mitigation item (control/corrective action)
@@ -110,11 +159,29 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (mitigationError) {
-      console.error('[incidents/corrective-action] Error creating mitigation:', mitigationError)
-      return NextResponse.json(
-        { ok: false, message: 'Failed to create corrective action', code: 'CREATE_ERROR' },
-        { status: 500 }
+      console.error('[incidents/corrective-action] Error creating mitigation:', {
+        code: mitigationError.code,
+        message: mitigationError.message,
+        requestId,
+      })
+      const errorResponse = createErrorResponse(
+        'Failed to create corrective action',
+        'CREATE_ERROR',
+        {
+          requestId,
+          statusCode: 500,
+          details: {
+            databaseError: {
+              code: mitigationError.code,
+              message: mitigationError.message,
+            },
+          },
+        }
       )
+      return NextResponse.json(errorResponse, { 
+        status: 500,
+        headers: { 'X-Request-ID': requestId }
+      })
     }
 
     // Write ledger entry
@@ -139,27 +206,38 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    return NextResponse.json({
-      ok: true,
-      message: 'Corrective action created successfully',
-      data: {
-        id: mitigationItem.id,
-        title: mitigationItem.title,
-        owner_id: mitigationItem.owner_id,
-        due_date: mitigationItem.due_date,
-      },
+    const successResponse = createSuccessResponse({
+      id: mitigationItem.id,
+      title: mitigationItem.title,
+      owner_id: mitigationItem.owner_id,
+      due_date: mitigationItem.due_date,
       ledger_entry_id: ledgerResult.data?.id,
+    }, {
+      message: 'Corrective action created successfully',
+      requestId,
+    })
+    return NextResponse.json(successResponse, {
+      headers: { 'X-Request-ID': requestId }
     })
   } catch (error: any) {
-    console.error('[incidents/corrective-action] Error:', error)
-    return NextResponse.json(
+    console.error('[incidents/corrective-action] Error:', {
+      message: error.message,
+      stack: error.stack,
+      requestId,
+    })
+    const errorResponse = createErrorResponse(
+      error.message || 'Failed to create corrective action',
+      error.code || 'CORRECTIVE_ACTION_ERROR',
       {
-        ok: false,
-        message: error.message || 'Failed to create corrective action',
-        code: 'CORRECTIVE_ACTION_ERROR',
-      },
-      { status: 500 }
+        requestId,
+        statusCode: 500,
+        details: process.env.NODE_ENV === 'development' ? { stack: error.stack } : undefined,
+      }
     )
+    return NextResponse.json(errorResponse, { 
+      status: 500,
+      headers: { 'X-Request-ID': requestId }
+    })
   }
 }
 

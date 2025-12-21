@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { getOrganizationContext } from '@/lib/utils/organizationGuard'
 import { recordAuditLog } from '@/lib/audit/auditLogger'
+import { getRequestId } from '@/lib/utils/requestId'
+import { createSuccessResponse, createErrorResponse } from '@/lib/utils/apiResponse'
 
 export const runtime = 'nodejs'
 
@@ -11,8 +13,30 @@ export const runtime = 'nodejs'
  * Creates a review queue item for follow-up
  */
 export async function POST(request: NextRequest) {
+  const requestId = getRequestId(request)
+
   try {
-    const { organization_id, user_id } = await getOrganizationContext()
+    let organization_id: string
+    let user_id: string
+    try {
+      const context = await getOrganizationContext()
+      organization_id = context.organization_id
+      user_id = context.user_id
+    } catch (authError: any) {
+      console.error('[access/flag-suspicious] Auth error:', {
+        message: authError.message,
+        requestId,
+      })
+      const errorResponse = createErrorResponse(
+        'Unauthorized: Please log in',
+        'UNAUTHORIZED',
+        { requestId, statusCode: 401 }
+      )
+      return NextResponse.json(errorResponse, { 
+        status: 401,
+        headers: { 'X-Request-ID': requestId }
+      })
+    }
     
     const body = await request.json()
     const { 
@@ -26,17 +50,27 @@ export async function POST(request: NextRequest) {
 
     // Validation
     if (!event_id && !target_user_id) {
-      return NextResponse.json(
-        { ok: false, message: 'Either event_id or user_id is required' },
-        { status: 400 }
+      const errorResponse = createErrorResponse(
+        'Either event_id or user_id is required',
+        'VALIDATION_ERROR',
+        { requestId, statusCode: 400 }
       )
+      return NextResponse.json(errorResponse, { 
+        status: 400,
+        headers: { 'X-Request-ID': requestId }
+      })
     }
 
-    if (!reason) {
-      return NextResponse.json(
-        { ok: false, message: 'reason is required' },
-        { status: 400 }
+    if (!reason || reason.trim().length < 3) {
+      const errorResponse = createErrorResponse(
+        'reason is required (minimum 3 characters)',
+        'VALIDATION_ERROR',
+        { requestId, statusCode: 400, field: 'reason' }
       )
+      return NextResponse.json(errorResponse, { 
+        status: 400,
+        headers: { 'X-Request-ID': requestId }
+      })
     }
 
     const supabase = await createSupabaseServerClient()
@@ -75,7 +109,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Optionally create/update a review queue entry by updating the event metadata
+    // Update event metadata to mark as flagged
     if (event_id) {
       const { data: currentEvent } = await supabase
         .from('audit_logs')
@@ -92,8 +126,8 @@ export async function POST(request: NextRequest) {
               flagged_by: user_id,
               flagged_at: new Date().toISOString(),
               severity,
-              reason,
-              notes: notes || null,
+              reason: reason.trim(),
+              notes: notes ? notes.trim() : null,
               assigned_to: assigned_to || null,
               status: 'under_review',
             },
@@ -102,6 +136,28 @@ export async function POST(request: NextRequest) {
         })
         .eq('id', event_id)
     }
+
+    // Power move: Auto-create review queue item for follow-up
+    // This creates a bridge between access review and review queue
+    const reviewQueueEntry = await recordAuditLog(supabase, {
+      organizationId: organization_id,
+      actorId: user_id,
+      eventName: 'review_queue.created_from_access',
+      targetType: targetType,
+      targetId: targetId,
+      metadata: {
+        source_event_id: event_id || null,
+        source_type: 'access_flag',
+        target_user_id: resolvedTargetUserId || null,
+        severity,
+        reason: reason.trim(),
+        notes: notes ? notes.trim() : null,
+        assigned_to: assigned_to || null,
+        created_at: new Date().toISOString(),
+        summary: `Review queue item created from suspicious access flag: ${reason.trim()}`,
+        work_record_id: event_id ? (await supabase.from('audit_logs').select('work_record_id').eq('id', event_id).single()).data?.work_record_id : null,
+      },
+    })
 
     // Write ledger entry
     const ledgerResult = await recordAuditLog(supabase, {
@@ -114,31 +170,46 @@ export async function POST(request: NextRequest) {
         event_id: event_id || null,
         target_user_id: resolvedTargetUserId || null,
         severity,
-        reason,
-        notes: notes || null,
+        reason: reason.trim(),
+        notes: notes ? notes.trim() : null,
         assigned_to: assigned_to || null,
         flagged_at: new Date().toISOString(),
         target_name: targetName,
-        summary: `Suspicious access flagged: ${reason}`,
+        review_queue_entry_id: reviewQueueEntry.data?.id || null,
+        summary: `Suspicious access flagged: ${reason.trim()}`,
       },
     })
 
-    return NextResponse.json({
-      ok: true,
-      message: 'Suspicious access flagged successfully',
+    const successResponse = createSuccessResponse({
       ledger_entry_id: ledgerResult.data?.id,
+      review_queue_entry_id: reviewQueueEntry.data?.id || null,
       incident_opened: severity === 'critical', // Indicate if this should open an incident
+    }, {
+      message: 'Suspicious access flagged successfully',
+      requestId,
+    })
+    return NextResponse.json(successResponse, {
+      headers: { 'X-Request-ID': requestId }
     })
   } catch (error: any) {
-    console.error('[access/flag-suspicious] Error:', error)
-    return NextResponse.json(
+    console.error('[access/flag-suspicious] Error:', {
+      message: error.message,
+      stack: error.stack,
+      requestId,
+    })
+    const errorResponse = createErrorResponse(
+      error.message || 'Failed to flag suspicious access',
+      error.code || 'FLAG_ERROR',
       {
-        ok: false,
-        message: error.message || 'Failed to flag suspicious access',
-        code: 'FLAG_ERROR',
-      },
-      { status: 500 }
+        requestId,
+        statusCode: 500,
+        details: process.env.NODE_ENV === 'development' ? { stack: error.stack } : undefined,
+      }
     )
+    return NextResponse.json(errorResponse, { 
+      status: 500,
+      headers: { 'X-Request-ID': requestId }
+    })
   }
 }
 

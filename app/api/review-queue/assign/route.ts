@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
         eventName: 'auth.role_violation',
         targetType: 'system',
         metadata: {
-          attempted_action: 'review.assigned',
+          attempted_action: 'review_queue.assigned',
           policy_statement: 'Executives have read-only access and cannot assign review items',
           endpoint: '/api/review-queue/assign',
         },
@@ -130,32 +130,43 @@ export async function POST(request: NextRequest) {
       // Determine target type by checking if it's a job or event
       const { data: jobData } = await supabase
         .from('jobs')
-        .select('id, client_name')
+        .select('id, client_name, metadata')
         .eq('id', itemId)
         .eq('organization_id', organization_id)
         .single()
 
       let targetType: 'job' | 'event' = 'event'
       let targetName: string | null = null
+      let isAlreadyResolved = false
 
       if (jobData) {
         targetType = 'job'
         targetName = jobData.client_name
+        // Check if already resolved - can't assign resolved items
+        isAlreadyResolved = jobData.metadata?.resolution?.status === 'resolved'
       } else {
         // Check if it's an audit log event
         const { data: eventData } = await supabase
           .from('audit_logs')
-          .select('id, event_name, job_id')
+          .select('id, event_name, job_id, metadata')
           .eq('id', itemId)
           .eq('organization_id', organization_id)
           .single()
 
         if (!eventData) {
-          console.warn(`Item ${itemId} not found, skipping`)
+          console.warn(`[review-queue/assign] Item ${itemId} not found, skipping`, { requestId })
           continue
         }
 
         targetName = eventData.event_name || 'Event'
+        // Check if already resolved - can't assign resolved items
+        isAlreadyResolved = eventData.metadata?.resolution?.status === 'resolved'
+      }
+
+      // Hard rule: Can't assign resolved items
+      if (isAlreadyResolved) {
+        console.warn(`[review-queue/assign] Item ${itemId} is already resolved, skipping`, { requestId })
+        continue
       }
 
       // Update the target record's metadata with assignment info
@@ -197,7 +208,7 @@ export async function POST(request: NextRequest) {
                 due_at,
                 priority,
                 note: note || null,
-                status: 'assigned',
+                status: 'assigned', // Status: open -> assigned
               },
             },
           })
@@ -208,7 +219,7 @@ export async function POST(request: NextRequest) {
       const ledgerResult = await recordAuditLog(supabase, {
         organizationId: organization_id,
         actorId: user_id,
-        eventName: 'review.assigned',
+        eventName: 'review_queue.assigned',
         targetType,
         targetId: itemId,
         metadata: {
@@ -230,6 +241,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Update event name to match specification: review_queue.assigned
     const successResponse = createSuccessResponse({
       ledger_entry_ids: ledgerEntryIds,
       assigned_count: ledgerEntryIds.length,
