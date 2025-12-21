@@ -20,6 +20,8 @@ import { CloseIncidentModal } from '@/components/audit/CloseIncidentModal'
 import { RevokeAccessModal } from '@/components/audit/RevokeAccessModal'
 import { FlagSuspiciousModal } from '@/components/audit/FlagSuspiciousModal'
 import { EventSelectionTable } from '@/components/audit/EventSelectionTable'
+import { SelectedActionBar } from '@/components/audit/SelectedActionBar'
+import { BulkActionResultModal } from '@/components/audit/BulkActionResultModal'
 import { useSelectedRows } from '@/lib/hooks/useSelectedRows'
 import { terms } from '@/lib/terms'
 
@@ -81,10 +83,19 @@ export default function AuditViewPage() {
     requiresEvidence?: boolean
     hasEvidence?: boolean
   } | null>(null)
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error'; requestId?: string } | null>(null)
   const [userRole, setUserRole] = useState<string | null>(null)
+  const [bulkResultModal, setBulkResultModal] = useState<{
+    isOpen: boolean
+    title: string
+    succeededCount: number
+    failedCount: number
+    succeededIds?: string[]
+    failures?: Array<{ id: string; code: string; message: string }>
+    requestId?: string
+  } | null>(null)
   const selectionHook = useSelectedRows()
-  const { selectedIds } = selectionHook
+  const { selectedIds, selectedCount } = selectionHook
 
   useEffect(() => {
     loadAuditEvents()
@@ -559,19 +570,53 @@ export default function AuditViewPage() {
       }
 
       const data = await response.json()
+      const requestId = response.headers.get('X-Request-ID') || data.requestId
 
-      setToast({
-        message: `Successfully assigned ${data.assigned_count || itemIds.length} item(s). Entry added to Compliance Ledger.`,
-        type: 'success',
-      })
+      // Handle partial failures
+      if (data.data?.partial_success || (data.data?.failed_ids && data.data.failed_ids.length > 0)) {
+        const failedIds = data.data?.failed_ids || []
+        const succeededIds = data.data?.succeeded_ids || []
+        
+        // Clear succeeded items from selection, keep failed items
+        const newSelection = selectedIds.filter(id => failedIds.includes(id))
+        selectionHook.clearSelection()
+        newSelection.forEach(id => selectionHook.toggleSelection(id))
+
+        setBulkResultModal({
+          isOpen: true,
+          title: 'Assignment Results',
+          succeededCount: succeededIds.length,
+          failedCount: failedIds.length,
+          succeededIds,
+          failures: data.data?.failures || [],
+          requestId,
+        })
+
+        setToast({
+          message: `Assigned ${succeededIds.length} item(s), ${failedIds.length} failed`,
+          type: 'success',
+          requestId: process.env.NODE_ENV === 'development' ? requestId : undefined,
+        })
+      } else {
+        // Full success - clear selection
+        selectionHook.clearSelection()
+        setToast({
+          message: `Successfully assigned ${data.data?.assigned_count || itemIds.length} item(s). Entry added to Compliance Ledger.`,
+          type: 'success',
+          requestId: process.env.NODE_ENV === 'development' ? requestId : undefined,
+        })
+      }
       
       // Reload events to show the new assignment
       loadAuditEvents()
     } catch (err: any) {
       console.error('Failed to assign:', err)
+      // Try to extract request ID from error response
+      const requestId = err.requestId || (err.response?.headers?.get?.('X-Request-ID'))
       setToast({
         message: err.message || 'Failed to assign. Please try again.',
         type: 'error',
+        requestId: process.env.NODE_ENV === 'development' ? requestId : undefined,
       })
       throw err
     }
@@ -616,11 +661,42 @@ export default function AuditViewPage() {
       }
 
       const data = await response.json()
+      const requestId = response.headers.get('X-Request-ID') || data.requestId
 
-      setToast({
-        message: `Successfully resolved ${data.resolved_count || itemIds.length} item(s). Entry added to Compliance Ledger.`,
-        type: 'success',
-      })
+      // Handle partial failures
+      if (data.data?.partial_success || (data.data?.failed_ids && data.data.failed_ids.length > 0)) {
+        const failedIds = data.data?.failed_ids || []
+        const succeededIds = data.data?.succeeded_ids || []
+        
+        // Clear succeeded items from selection, keep failed items
+        const newSelection = selectedIds.filter(id => failedIds.includes(id))
+        selectionHook.clearSelection()
+        newSelection.forEach(id => selectionHook.toggleSelection(id))
+
+        setBulkResultModal({
+          isOpen: true,
+          title: 'Resolution Results',
+          succeededCount: succeededIds.length,
+          failedCount: failedIds.length,
+          succeededIds,
+          failures: data.data?.failures || [],
+          requestId,
+        })
+
+        setToast({
+          message: `Resolved ${succeededIds.length} item(s), ${failedIds.length} failed`,
+          type: 'success',
+          requestId: process.env.NODE_ENV === 'development' ? requestId : undefined,
+        })
+      } else {
+        // Full success - clear selection
+        selectionHook.clearSelection()
+        setToast({
+          message: `Successfully resolved ${data.data?.resolved_count || itemIds.length} item(s). Entry added to Compliance Ledger.`,
+          type: 'success',
+          requestId: process.env.NODE_ENV === 'development' ? requestId : undefined,
+        })
+      }
       
       // Reload events to show the resolution
       loadAuditEvents()
@@ -1710,6 +1786,23 @@ export default function AuditViewPage() {
               : 'bg-red-500/20 border-red-500/40 text-red-400'
           } max-w-md`}>
             <p className="text-sm">{toast.message}</p>
+            {toast.requestId && process.env.NODE_ENV === 'development' && (
+              <div className="mt-2 pt-2 border-t border-white/10">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-white/60">Request ID:</span>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(toast.requestId!)
+                    }}
+                    className="text-xs text-white/60 hover:text-white flex items-center gap-1"
+                    title="Copy Request ID"
+                  >
+                    <code className="text-xs font-mono">{toast.requestId.slice(0, 16)}...</code>
+                    <span className="text-xs">📋</span>
+                  </button>
+                </div>
+              </div>
+            )}
             <button
               onClick={() => setToast(null)}
               className="absolute top-2 right-2 text-white/60 hover:text-white"
@@ -1717,6 +1810,21 @@ export default function AuditViewPage() {
               ×
             </button>
           </div>
+        )}
+
+        {/* Bulk Result Modal */}
+        {bulkResultModal && (
+          <BulkActionResultModal
+            isOpen={bulkResultModal.isOpen}
+            onClose={handleBulkResultClose}
+            title={bulkResultModal.title}
+            succeededCount={bulkResultModal.succeededCount}
+            failedCount={bulkResultModal.failedCount}
+            succeededIds={bulkResultModal.succeededIds}
+            failures={bulkResultModal.failures}
+            requestId={bulkResultModal.requestId}
+            onShowInTable={handleShowFailedItems}
+          />
         )}
 
         {/* Assign Modal */}

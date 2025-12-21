@@ -25,6 +25,7 @@ interface AuditEvent {
 interface EventSelectionTableProps {
   events: AuditEvent[]
   view: string
+  selectedIds?: string[] // Optional: use external selection state if provided
   onSelect?: (eventId: string) => void
   onRowClick?: (event: AuditEvent) => void
   showActions?: boolean
@@ -33,13 +34,20 @@ interface EventSelectionTableProps {
 
 export function EventSelectionTable({ 
   events, 
-  view, 
+  view,
+  selectedIds: externalSelectedIds,
   onSelect, 
   onRowClick,
   showActions = false,
   userRole
 }: EventSelectionTableProps) {
-  const { selectedIds, toggleSelection, isSelected, clearSelection, selectedCount } = useSelectedRows()
+  // Use external selection if provided, otherwise use internal hook
+  const internalSelection = useSelectedRows()
+  const selectedIds = externalSelectedIds || internalSelection.selectedIds
+  const toggleSelection = internalSelection.toggleSelection
+  const isSelected = (id: string) => selectedIds.includes(id)
+  const clearSelection = internalSelection.clearSelection
+  const selectedCount = selectedIds.length
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
 
   const toggleExpanded = (eventId: string) => {
