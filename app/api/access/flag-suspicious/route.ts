@@ -41,7 +41,8 @@ export async function POST(request: NextRequest) {
 
     const supabase = await createSupabaseServerClient()
 
-    let targetId = event_id || target_user_id
+    let resolvedTargetUserId = target_user_id
+    let targetId = event_id || resolvedTargetUserId
     let targetType: 'event' | 'user' = event_id ? 'event' : 'user'
     let targetName = 'Unknown'
 
@@ -56,11 +57,12 @@ export async function POST(request: NextRequest) {
 
       if (eventData) {
         targetName = eventData.event_name || 'Event'
-        if (eventData.actor_id && !target_user_id) {
-          target_user_id = eventData.actor_id
+        if (eventData.actor_id && !resolvedTargetUserId) {
+          resolvedTargetUserId = eventData.actor_id
+          targetId = resolvedTargetUserId
         }
       }
-    } else if (target_user_id) {
+    } else if (resolvedTargetUserId) {
       const { data: userData } = await supabase
         .from('users')
         .select('id, full_name, email')
@@ -110,7 +112,7 @@ export async function POST(request: NextRequest) {
       targetId,
       metadata: {
         event_id: event_id || null,
-        target_user_id: target_user_id || null,
+        target_user_id: resolvedTargetUserId || null,
         severity,
         reason,
         notes: notes || null,
