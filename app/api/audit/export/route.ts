@@ -1,22 +1,206 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { getOrganizationContext } from '@/lib/utils/organizationGuard'
+import { generateLedgerExportPDF } from '@/lib/utils/pdf/ledgerExport'
+import { randomUUID } from 'crypto'
 
 export const runtime = 'nodejs'
 
 /**
  * POST /api/audit/export
  * Export audit ledger as PDF
- * TODO: Implement direct Supabase query + PDF generation (currently requires backend server)
+ * Queries Supabase directly and generates PDF using pdfkit
  */
 export async function POST(request: NextRequest) {
-  // For now, return a helpful error indicating backend is required for exports
-  // The events endpoint now works directly, but PDF/CSV generation needs backend services
-  return NextResponse.json(
-    {
-      message: 'Export functionality requires the backend server. Please ensure BACKEND_URL is configured, or implement PDF generation directly in this route.',
-      code: 'EXPORT_REQUIRES_BACKEND',
-      hint: 'PDF generation with pdfkit and CSV generation require server-side processing. Either deploy the backend server separately or implement the export logic directly in this Next.js API route.',
-    },
-    { status: 503 }
-  )
-}
+  try {
+    const { organization_id, user_id } = await getOrganizationContext()
+    const body = await request.json()
+    
+    const {
+      category,
+      site_id,
+      job_id,
+      actor_id,
+      severity,
+      outcome,
+      time_range = '30d',
+      start_date,
+      end_date,
+      view,
+    } = body
 
+    const supabase = await createSupabaseServerClient()
+
+    // Get user and org info for PDF header
+    const { data: userData } = await supabase
+      .from('users')
+      .select('full_name, email, role')
+      .eq('id', user_id)
+      .single()
+
+    const { data: orgData } = await supabase
+      .from('organizations')
+      .select('name')
+      .eq('id', organization_id)
+      .single()
+
+    // Build query (same logic as events endpoint)
+    let query = supabase
+      .from('audit_logs')
+      .select('*')
+      .eq('organization_id', organization_id)
+      .order('created_at', { ascending: false })
+
+    // Apply saved view filters
+    if (view) {
+      if (view === 'review-queue') {
+        query = query.eq('outcome', 'blocked')
+      } else if (view === 'insurance-ready') {
+        query = query
+          .eq('category', 'operations')
+          .in('event_name', ['job.completed', 'control.verified', 'evidence.uploaded', 'attestation.created'])
+      } else if (view === 'governance-enforcement') {
+        query = query.or('category.eq.governance,outcome.eq.blocked')
+      } else if (view === 'incident-review') {
+        query = query.eq('category', 'incident_review')
+      } else if (view === 'access-review') {
+        query = query.eq('category', 'access_review')
+      }
+    } else if (category) {
+      query = query.eq('category', category)
+    }
+
+    // Apply other filters
+    if (site_id) query = query.eq('site_id', site_id)
+    if (job_id) query = query.eq('work_record_id', job_id)
+    if (actor_id) query = query.eq('actor_id', actor_id)
+    if (severity) query = query.eq('severity', severity)
+    if (outcome) query = query.eq('outcome', outcome)
+
+    // Time range filter
+    if (time_range && time_range !== 'all') {
+      if (time_range === 'custom' && start_date && end_date) {
+        query = query.gte('created_at', start_date).lte('created_at', end_date)
+      } else {
+        const now = new Date()
+        let cutoff = new Date()
+        if (time_range === '24h') {
+          cutoff.setHours(now.getHours() - 24)
+        } else if (time_range === '7d') {
+          cutoff.setDate(now.getDate() - 7)
+        } else if (time_range === '30d') {
+          cutoff.setDate(now.getDate() - 30)
+        }
+        query = query.gte('created_at', cutoff.toISOString())
+      }
+    }
+
+    // Limit to reasonable number for PDF
+    query = query.limit(500)
+
+    const { data: events, error } = await query
+
+    if (error) {
+      console.error('[audit/export] Query error:', error)
+      return NextResponse.json(
+        {
+          message: 'Failed to fetch audit events for export',
+          code: 'QUERY_ERROR',
+          databaseError: {
+            code: error.code,
+            message: error.message,
+          },
+        },
+        { status: 500 }
+      )
+    }
+
+    // Enrich events (same as events endpoint)
+    const enrichedEvents = await Promise.all(
+      (events || []).map(async (event: any) => {
+        const enriched: any = { ...event }
+
+        // Enrich actor info
+        if (event.actor_id) {
+          const { data: actorData } = await supabase
+            .from('users')
+            .select('full_name, role')
+            .eq('id', event.actor_id)
+            .single()
+          if (actorData) {
+            enriched.actor_name = actorData.full_name || 'Unknown'
+            enriched.actor_role = actorData.role || 'member'
+          }
+        }
+
+        // Enrich job info
+        if (event.work_record_id || event.job_id) {
+          const jobId = event.work_record_id || event.job_id
+          const { data: jobData } = await supabase
+            .from('jobs')
+            .select('client_name, risk_score, review_flag')
+            .eq('id', jobId)
+            .single()
+          if (jobData) {
+            enriched.job_title = jobData.client_name
+            enriched.job_risk_score = jobData.risk_score
+            enriched.job_flagged = jobData.review_flag
+          }
+        }
+
+        return enriched
+      })
+    )
+
+    // Generate export ID
+    const exportId = randomUUID()
+
+    // Prepare events for PDF
+    const auditEntries = enrichedEvents.map((e: any) => ({
+      id: e.id,
+      event_name: e.event_name || e.event_type,
+      created_at: e.created_at,
+      category: e.category || 'operations',
+      outcome: e.outcome || 'allowed',
+      severity: e.severity || 'info',
+      actor_name: e.actor_name || 'System',
+      actor_role: e.actor_role || '',
+      work_record_id: e.work_record_id,
+      job_id: e.job_id || e.work_record_id,
+      job_title: e.job_title,
+      target_type: e.target_type,
+      summary: e.summary,
+    }))
+
+    // Generate PDF
+    const pdfBuffer = await generateLedgerExportPDF({
+      organizationName: orgData?.name || 'Unknown',
+      generatedBy: userData?.full_name || userData?.email || 'Unknown',
+      generatedByRole: userData?.role || 'Unknown',
+      exportId,
+      timeRange: time_range || 'All',
+      filters: { category, site_id, job_id, severity, outcome },
+      events: auditEntries,
+    })
+
+    // Return PDF as response
+    const filename = `compliance-ledger-export-${exportId.slice(0, 8)}.pdf`
+    return new NextResponse(pdfBuffer, {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `attachment; filename="${filename}"`,
+        'Content-Length': pdfBuffer.length.toString(),
+      },
+    })
+  } catch (error: any) {
+    console.error('[audit/export] Error:', error)
+    return NextResponse.json(
+      {
+        message: error.message || 'Failed to export audit ledger',
+        code: 'EXPORT_ERROR',
+      },
+      { status: 500 }
+    )
+  }
+}
