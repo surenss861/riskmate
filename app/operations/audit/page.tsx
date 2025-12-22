@@ -28,6 +28,7 @@ import { terms } from '@/lib/terms'
 interface AuditEvent {
   id: string
   event_type: string
+  event_name?: string
   user_id?: string
   user_name?: string
   user_email?: string
@@ -40,9 +41,13 @@ interface AuditEvent {
   metadata?: any
   organization_id: string
   actor_id?: string
+  actor_name?: string
+  actor_email?: string
+  actor_role?: string
   target_type?: string
   target_id?: string
   category?: string
+  category_tab?: 'governance' | 'operations' | 'access' // Computed by backend for backward compatibility
   severity?: 'critical' | 'material' | 'info'
   outcome?: 'blocked' | 'allowed' | 'success' | 'failure'
 }
@@ -1653,7 +1658,7 @@ export default function AuditViewPage() {
                         No Governance Enforcement events in the last {filters.timeRange === '24h' ? '24 hours' : filters.timeRange === '7d' ? '7 days' : filters.timeRange === '30d' ? '30 days' : 'time period'}.
                       </p>
                       <p className="text-white/40 text-sm mb-4">
-                        This tab shows blocked actions, policy enforcement, and violations. Try "All time" or trigger a policy block (e.g., executive attempting a mutation) to verify.
+                        This tab shows blocked actions, policy enforcement, and violations. Try &quot;All time&quot; or trigger a policy block (e.g., executive attempting a mutation) to verify.
                       </p>
                     </>
                   )}
@@ -2035,10 +2040,11 @@ export default function AuditViewPage() {
                                   <span>{formatRelativeTime(event.created_at)}</span>
                                 </div>
                                 <div className="text-xs text-white/50 mt-1">
-                                {new Date(event.created_at).toLocaleString()}
+                                  {new Date(event.created_at).toLocaleString()}
+                                </div>
                               </div>
                             </div>
-                          </div>
+                          )}
                           {event.job_id && (
                             <div className="flex gap-2 mt-3">
                               <button
