@@ -1,7 +1,6 @@
 'use client';
 
 import { useMemo } from 'react';
-import { motion } from 'framer-motion';
 
 type TrendPoint = {
   date: string;
@@ -170,23 +169,17 @@ export function TrendChart({
               </linearGradient>
             </defs>
 
-            <motion.path
+            <path
               d={areaPath}
               fill="url(#trendGradient)"
-              initial={{ pathLength: 0 }}
-              animate={{ pathLength: 1 }}
-              transition={{ duration: 0.8, ease: 'easeOut' }}
             />
 
-            <motion.path
+            <path
               d={linePath}
               fill="none"
               stroke="url(#trendLine)"
               strokeWidth={3}
               strokeLinecap="round"
-              initial={{ pathLength: 0 }}
-              animate={{ pathLength: 1 }}
-              transition={{ duration: 0.8, ease: 'easeOut' }}
             />
 
             {/* Y Axis ticks */}
