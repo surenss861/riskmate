@@ -192,19 +192,32 @@ function DashboardPageInner() {
     }
   }, [filterStatus, filterRiskLevel, timeRange, debouncedSearchQuery, sortBy, currentPage, pageSize])
   
-  // Update URL params when filters change
+  // Update URL params when filters change (preserve time_range)
   useEffect(() => {
     const params = new URLSearchParams(searchParams.toString())
+    
+    // Preserve time_range
+    if (timeRange && timeRange !== '30d') {
+      params.set('time_range', timeRange)
+    } else {
+      params.delete('time_range')
+    }
+    
+    // Update search
     if (debouncedSearchQuery) {
       params.set('q', debouncedSearchQuery)
     } else {
       params.delete('q')
     }
+    
+    // Update sort (only if not default)
     if (sortBy && sortBy !== 'blockers_desc') {
       params.set('sort', sortBy)
     } else {
       params.delete('sort')
     }
+    
+    // Update pagination
     if (currentPage > 1) {
       params.set('page', currentPage.toString())
     } else {
@@ -215,10 +228,23 @@ function DashboardPageInner() {
     } else {
       params.delete('page_size')
     }
+    
+    // Preserve status and risk_level filters
+    if (filterStatus) {
+      params.set('status', filterStatus)
+    } else {
+      params.delete('status')
+    }
+    if (filterRiskLevel) {
+      params.set('risk_level', filterRiskLevel)
+    } else {
+      params.delete('risk_level')
+    }
+    
     // Update URL without triggering navigation
     const newUrl = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ''}`
     window.history.replaceState({}, '', newUrl)
-  }, [debouncedSearchQuery, sortBy, currentPage, pageSize, searchParams])
+  }, [debouncedSearchQuery, sortBy, currentPage, pageSize, timeRange, filterStatus, filterRiskLevel, searchParams])
 
   useEffect(() => {
     loadData()
@@ -850,19 +876,41 @@ function DashboardPageInner() {
               </div>
             </div>
 
-            {jobs.length === 0 ? (
+            {jobs.length === 0 && !loading ? (
               <div className="px-12 py-16 text-center">
-                <p className="mb-2 text-white font-medium">No active jobs</p>
-                <p className="mb-6 text-sm text-white/60">
-                  Create a job to begin compliance tracking and audit logging.
-                </p>
-                <button
-                  onClick={() => router.push('/operations/jobs/new')}
-                  onMouseEnter={() => router.prefetch('/operations/jobs/new')}
-                  className={`${buttonStyles.primary} ${buttonStyles.sizes.lg}`}
-                >
-                  Create Job
-                </button>
+                {debouncedSearchQuery || filterStatus || filterRiskLevel ? (
+                  <>
+                    <p className="mb-2 text-white font-medium">No jobs match your filters</p>
+                    <p className="mb-6 text-sm text-white/60">
+                      Try adjusting your search, filters, or time range.
+                    </p>
+                    <button
+                      onClick={() => {
+                        setSearchQuery('')
+                        setFilterStatus('')
+                        setFilterRiskLevel('')
+                        setCurrentPage(1)
+                      }}
+                      className="px-6 py-3 border border-white/10 rounded-lg hover:border-white/20 transition-colors font-medium text-sm"
+                    >
+                      Clear Filters
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <p className="mb-2 text-white font-medium">No active jobs</p>
+                    <p className="mb-6 text-sm text-white/60">
+                      Create a job to begin compliance tracking and audit logging.
+                    </p>
+                    <button
+                      onClick={() => router.push('/operations/jobs/new')}
+                      onMouseEnter={() => router.prefetch('/operations/jobs/new')}
+                      className={`${buttonStyles.primary} ${buttonStyles.sizes.lg}`}
+                    >
+                      Create Job
+                    </button>
+                  </>
+                )}
               </div>
             ) : loading ? (
               <JobListSkeleton />
