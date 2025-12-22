@@ -573,7 +573,7 @@ function DashboardPageInner() {
         <DashboardNavbar email={user?.email} onLogout={handleLogout} />
 
         {/* Dashboard Content */}
-        <div className="relative mx-auto max-w-7xl px-6 pt-24 pb-14">
+        <div className="relative mx-auto max-w-6xl px-6 pt-32 pb-20">
           <motion.div
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
@@ -720,7 +720,7 @@ function DashboardPageInner() {
               initial={{ opacity: 0, y: 18 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.12, duration: 0.45 }}
-              className="mb-10"
+              className="mb-16"
             >
               <div className="mb-4">
                 <p className="text-sm text-white/60">
@@ -745,7 +745,7 @@ function DashboardPageInner() {
               initial={{ opacity: 0, y: 18 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.14, duration: 0.45 }}
-              className="mb-10"
+              className="mb-16"
             >
               <Changelog />
             </motion.div>
@@ -785,7 +785,7 @@ function DashboardPageInner() {
             transition={{ delay: 0.18, duration: 0.45 }}
             className="rounded-3xl border border-white/5 bg-gradient-to-b from-[#121212] to-transparent backdrop-blur-sm"
           >
-            <div className="border-b border-white/10 px-6 py-5">
+            <div className="border-b border-white/5 px-6 py-6">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex-1">
                   <Link href="/operations/jobs">
