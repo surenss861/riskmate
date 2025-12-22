@@ -358,7 +358,16 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
     
     // Fetch readiness and blockers data for jobs (if needed for sorting or response)
     const jobIds = (jobs || []).map((job: any) => job.id);
-    let readinessData: Record<string, { readiness_score: number; blockers_count: number; missing_evidence: boolean; pending_attestations: number }> = {};
+    let readinessData: Record<string, { 
+      readiness_score: number | null; 
+      readiness_basis: string;
+      readiness_empty_reason: string | null;
+      mitigations_total: number;
+      mitigations_complete: number;
+      blockers_count: number; 
+      missing_evidence: boolean; 
+      pending_attestations: number;
+    }> = {};
     
     if (jobIds.length > 0 && (useReadinessOrdering || useBlockersOrdering || !useCursor)) {
       // Calculate readiness metrics for each job
@@ -396,11 +405,25 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
       jobIds.forEach((jobId: string) => {
         const mitigation = mitigationsByJob[jobId] || { total: 0, completed: 0 };
         const hasEvidence = documentsByJob[jobId] || false;
-        const readiness_score = mitigation.total > 0 
-          ? Math.round((mitigation.completed / mitigation.total) * 100)
-          : (hasEvidence ? 50 : 0); // Default score if no mitigations
         
-        const blockers_count = mitigation.total - mitigation.completed;
+        // Explicit readiness calculation with audit-defensible fields
+        const mitigations_total = mitigation.total;
+        const mitigations_complete = mitigation.completed;
+        
+        // readiness_score: null if no mitigations (undefined/not calculated), otherwise 0-100
+        let readiness_score: number | null = null;
+        let readiness_basis: string = 'not_calculated';
+        let readiness_empty_reason: string | null = null;
+        
+        if (mitigations_total === 0) {
+          readiness_empty_reason = 'no_mitigations';
+          readiness_basis = 'mitigation_completion_rate_v1';
+        } else {
+          readiness_score = Math.round((mitigations_complete / mitigations_total) * 100);
+          readiness_basis = 'mitigation_completion_rate_v1';
+        }
+        
+        const blockers_count = mitigations_total - mitigations_complete;
         const missing_evidence = !hasEvidence;
         
         // Pending attestations: would need to query attestations table
@@ -409,6 +432,10 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
         
         readinessData[jobId] = {
           readiness_score,
+          readiness_basis,
+          readiness_empty_reason,
+          mitigations_total,
+          mitigations_complete,
           blockers_count,
           missing_evidence,
           pending_attestations,
@@ -455,10 +482,11 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
     }
     
     // Apply readiness_asc/readiness_desc ordering (in-memory sort)
+    // null scores go last (treated as -1 for sorting)
     if (useReadinessOrdering && jobs) {
       jobs = [...jobs].sort((a, b) => {
-        const aScore = readinessData[a.id]?.readiness_score || 0;
-        const bScore = readinessData[b.id]?.readiness_score || 0;
+        const aScore = readinessData[a.id]?.readiness_score ?? -1;
+        const bScore = readinessData[b.id]?.readiness_score ?? -1;
         if (aScore !== bScore) {
           return sortDirection === 'asc' ? aScore - bScore : bScore - aScore;
         }
@@ -483,6 +511,10 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
           applied_template_id: job.applied_template_id ?? null,
           applied_template_type: job.applied_template_type ?? null,
           readiness_score: readiness.readiness_score,
+          readiness_basis: readiness.readiness_basis,
+          readiness_empty_reason: readiness.readiness_empty_reason,
+          mitigations_total: readiness.mitigations_total,
+          mitigations_complete: readiness.mitigations_complete,
           blockers_count: readiness.blockers_count,
           missing_evidence: readiness.missing_evidence,
           pending_attestations: readiness.pending_attestations,

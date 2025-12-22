@@ -61,6 +61,20 @@ function DashboardPageInner() {
   const timeRangeParam = searchParams.get('time_range') as TimeRange | null
   const [timeRange, setTimeRange] = useState<TimeRange>(timeRangeParam || '30d')
   const analyticsRange = timeRange === 'all' ? 365 : parseInt(timeRange.replace('d', ''))
+  
+  // Job Roster filters from URL params
+  const [searchQuery, setSearchQuery] = useState<string>(searchParams.get('q') || '')
+  const debouncedSearchQuery = useDebounce(searchQuery, 300)
+  const [sortBy, setSortBy] = useState<string>(searchParams.get('sort') || 'blockers_desc')
+  const [currentPage, setCurrentPage] = useState<number>(parseInt(searchParams.get('page') || '1', 10))
+  const [pageSize, setPageSize] = useState<number>(parseInt(searchParams.get('page_size') || '50', 10))
+  const [jobsPagination, setJobsPagination] = useState<{
+    page?: number
+    page_size?: number
+    total: number
+    total_pages?: number
+    totalPages?: number
+  } | null>(null)
 
   const isMember = userRole === 'member'
   const roleLoaded = userRole !== null
@@ -128,39 +142,29 @@ function DashboardPageInner() {
           status: filterStatus || undefined,
           risk_level: filterRiskLevel || undefined,
           time_range: timeRange, // Use global time range
-          limit: 50, // Show more jobs in Job Roster
+          q: debouncedSearchQuery || undefined, // Search query
+          sort: sortBy || undefined, // Sort mode
+          page: currentPage,
+          page_size: pageSize,
         })
         
         if (jobsResponse?.data && Array.isArray(jobsResponse.data)) {
-          // Fetch additional data for next action hints (mitigation items, permit packs)
-          const jobsWithHints = await Promise.all(
-            jobsResponse.data.map(async (job: Job) => {
-              try {
-                // Get incomplete mitigation count
-                const { count: incompleteCount } = await supabase
-                  .from('mitigation_items')
-                  .select('*', { count: 'exact', head: true })
-                  .eq('job_id', job.id)
-                  .eq('done', false)
-                
-                // Check if permit pack is available (Business plan only)
-                const permitPacksAvailable = subscriptionData?.tier === 'business'
-                
-                return {
-                  ...job,
-                  incompleteMitigations: incompleteCount || 0,
-                  permitPacksAvailable,
-                }
-              } catch (err) {
-                // If fetch fails, return job without hints
-                return { ...job, incompleteMitigations: 0, permitPacksAvailable: false }
-              }
-            })
-          )
+          // Store pagination info
+          if (jobsResponse.pagination) {
+            setJobsPagination(jobsResponse.pagination)
+          }
+          
+          // Jobs now come with readiness metrics from backend, no need for extra fetches
+          // Just merge with permit pack hint if needed
+          const jobsWithHints = jobsResponse.data.map((job: Job) => ({
+            ...job,
+            permitPacksAvailable: subscriptionData?.tier === 'business',
+          }))
           setJobs(jobsWithHints)
         } else {
           console.warn('Jobs API returned invalid data format:', jobsResponse)
           setJobs([])
+          setJobsPagination(null)
         }
       } catch (jobsError: any) {
         console.error('Failed to load jobs for Job Roster:', jobsError)
@@ -185,7 +189,35 @@ function DashboardPageInner() {
       }
       setLoading(false)
     }
-  }, [filterStatus, filterRiskLevel, timeRange])
+  }, [filterStatus, filterRiskLevel, timeRange, debouncedSearchQuery, sortBy, currentPage, pageSize])
+  
+  // Update URL params when filters change
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams.toString())
+    if (debouncedSearchQuery) {
+      params.set('q', debouncedSearchQuery)
+    } else {
+      params.delete('q')
+    }
+    if (sortBy && sortBy !== 'blockers_desc') {
+      params.set('sort', sortBy)
+    } else {
+      params.delete('sort')
+    }
+    if (currentPage > 1) {
+      params.set('page', currentPage.toString())
+    } else {
+      params.delete('page')
+    }
+    if (pageSize !== 50) {
+      params.set('page_size', pageSize.toString())
+    } else {
+      params.delete('page_size')
+    }
+    // Update URL without triggering navigation
+    const newUrl = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ''}`
+    window.history.replaceState({}, '', newUrl)
+  }, [debouncedSearchQuery, sortBy, currentPage, pageSize, searchParams])
 
   useEffect(() => {
     loadData()
@@ -718,19 +750,65 @@ function DashboardPageInner() {
             transition={{ delay: 0.18, duration: 0.45 }}
             className="rounded-lg border border-white/10 bg-[#121212]/80 backdrop-blur-sm"
           >
-            <div className="flex items-center justify-between border-b border-white/10 px-6 py-5">
-              <div className="flex-1">
-                <Link href="/operations/jobs">
-                  <h2 className={`${typography.h2} hover:text-[#F97316] transition-colors cursor-pointer`}>Job Roster</h2>
-                </Link>
+            <div className="border-b border-white/10 px-6 py-5">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex-1">
+                  <Link href="/operations/jobs">
+                    <h2 className={`${typography.h2} hover:text-[#F97316] transition-colors cursor-pointer`}>Job Roster</h2>
+                  </Link>
+                </div>
+                <div className="flex items-center gap-4">
+                  {/* Search Input */}
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="Search jobs..."
+                      className="rounded-lg border border-white/10 bg-[#121212]/80 px-4 py-2 pl-10 text-sm text-white/90 placeholder-white/40 transition focus:outline-none focus:ring-1 focus:ring-white/20 focus:border-white/20 w-64"
+                    />
+                    <svg
+                      className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-white/40"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                  </div>
+                  
+                  {/* Sort Dropdown */}
+                  <select
+                    value={sortBy}
+                    onChange={(e) => {
+                      setSortBy(e.target.value)
+                      setCurrentPage(1) // Reset to first page when sorting changes
+                    }}
+                    className="rounded-lg border border-white/10 bg-[#121212]/80 px-4 py-2 text-sm text-white/90 transition focus:outline-none focus:ring-1 focus:ring-white/20"
+                  >
+                    <option value="blockers_desc">Most Blockers</option>
+                    <option value="blockers_asc">Fewest Blockers</option>
+                    <option value="readiness_asc">Readiness (Low to High)</option>
+                    <option value="readiness_desc">Readiness (High to Low)</option>
+                    <option value="risk_desc">Highest Risk</option>
+                    <option value="risk_asc">Lowest Risk</option>
+                    <option value="newest">Newest First</option>
+                    <option value="oldest">Oldest First</option>
+                  </select>
+                </div>
               </div>
-              <div className="flex flex-col items-end gap-2">
-                <span className="text-xs text-white/40 uppercase tracking-wide">FILTERS</span>
-                <div className="flex gap-4">
+              
+              {/* Filters Row */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <span className="text-xs text-white/40 uppercase tracking-wide">FILTERS</span>
                   <select
                     value={filterStatus}
-                    onChange={(e) => setFilterStatus(e.target.value)}
-                    className="rounded-lg border border-white/3 bg-[#121212]/80 px-4 py-2 text-sm text-white/80 transition focus:outline-none focus:ring-1 focus:ring-white/15"
+                    onChange={(e) => {
+                      setFilterStatus(e.target.value)
+                      setCurrentPage(1)
+                    }}
+                    className="rounded-lg border border-white/10 bg-[#121212]/80 px-3 py-1.5 text-sm text-white/80 transition focus:outline-none focus:ring-1 focus:ring-white/20"
                   >
                     <option value="">Status (All)</option>
                     <option value="draft">Draft</option>
@@ -741,8 +819,11 @@ function DashboardPageInner() {
                   </select>
                   <select
                     value={filterRiskLevel}
-                    onChange={(e) => setFilterRiskLevel(e.target.value)}
-                    className="rounded-lg border border-white/3 bg-[#121212]/80 px-4 py-2 text-sm text-white/80 transition focus:outline-none focus:ring-1 focus:ring-white/15"
+                    onChange={(e) => {
+                      setFilterRiskLevel(e.target.value)
+                      setCurrentPage(1)
+                    }}
+                    className="rounded-lg border border-white/10 bg-[#121212]/80 px-3 py-1.5 text-sm text-white/80 transition focus:outline-none focus:ring-1 focus:ring-white/20"
                   >
                     <option value="">Risk (All)</option>
                     <option value="low">Low</option>
@@ -751,6 +832,20 @@ function DashboardPageInner() {
                     <option value="critical">Critical</option>
                   </select>
                 </div>
+                
+                {/* Results count */}
+                {jobsPagination && (
+                  <div className="text-sm text-white/60">
+                    {jobsPagination.total > 0 ? (
+                      <>
+                        Showing {((currentPage - 1) * pageSize) + 1}-
+                        {Math.min(currentPage * pageSize, jobsPagination.total)} of {jobsPagination.total}
+                      </>
+                    ) : (
+                      'No jobs found'
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 
