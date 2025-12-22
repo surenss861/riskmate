@@ -119,6 +119,7 @@ export default function DashboardPage() {
         const jobsResponse = await jobsApi.list({
           status: filterStatus || undefined,
           risk_level: filterRiskLevel || undefined,
+          time_range: timeRange, // Use global time range
           limit: 50, // Show more jobs in Job Roster
         })
         
@@ -792,8 +793,22 @@ export default function DashboardPage() {
                         <div className="text-xs text-white/55 mb-0.5">
                           Created {new Date(job.created_at).toLocaleDateString()}
                         </div>
-                        {/* Next Required Action Hint */}
-                        {(job as any).incompleteMitigations > 0 && (
+                        {/* Readiness metrics and blockers */}
+                        {((job as any).blockers_count !== undefined && (job as any).blockers_count > 0) && (
+                          <div className="text-xs text-orange-400/80">
+                            {(job as any).blockers_count} blocker{((job as any).blockers_count !== 1) ? 's' : ''}
+                            {((job as any).readiness_score !== undefined) && (
+                              <span className="text-white/50 ml-2">• Readiness: {(job as any).readiness_score}%</span>
+                            )}
+                          </div>
+                        )}
+                        {(job as any).missing_evidence && (
+                          <div className="text-xs text-yellow-400/80">
+                            Missing evidence
+                          </div>
+                        )}
+                        {/* Next Required Action Hint (fallback) */}
+                        {(job as any).incompleteMitigations > 0 && !((job as any).blockers_count !== undefined) && (
                           <div className="text-xs text-white/50">
                             {(job as any).incompleteMitigations} action{((job as any).incompleteMitigations !== 1) ? 's' : ''} required
                           </div>
