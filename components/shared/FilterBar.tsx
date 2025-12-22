@@ -54,6 +54,11 @@ type SearchInputProps = {
   className?: string
 }
 
+/**
+ * SearchInput - Standardized search input
+ * Uses Input component with search icon
+ * Icon: w-4 h-4 text-white/40 (consistent across all inputs)
+ */
 export function SearchInput({ value, onChange, placeholder = 'Search...', className }: SearchInputProps) {
   return (
     <div className={clsx('relative', className)}>
@@ -62,7 +67,7 @@ export function SearchInput({ value, onChange, placeholder = 'Search...', classN
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="rounded-lg border border-white/10 bg-white/5 backdrop-blur-sm px-4 py-2 pl-10 text-sm text-white/90 placeholder-white/40 transition focus:outline-none focus:ring-1 focus:ring-white/20 focus:border-white/20 w-64"
+        className="h-11 px-4 py-2.5 pl-10 bg-white/5 border border-white/10 backdrop-blur-sm rounded-lg text-sm text-white/90 placeholder:text-white/40 transition-all duration-200 focus:outline-none focus:ring-1 focus:ring-white/20 focus:border-white/20 w-64"
       />
       <svg
         className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-white/40"
