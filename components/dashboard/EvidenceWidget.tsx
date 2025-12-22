@@ -81,7 +81,6 @@ export function EvidenceWidget({
 
           <div className="mt-8 pt-8 border-t border-white/10 flex flex-wrap gap-8 text-sm">
             <div>
-            <div>
               <span className="block text-xs text-white/50 mb-1">
                 Evidence Files
               </span>
