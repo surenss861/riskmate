@@ -146,11 +146,28 @@ export const jobsApi = {
     }
     
     return apiRequest<{ 
-      data: any[]; 
+      data: Array<{
+        id: string;
+        client_name: string;
+        job_type: string;
+        location: string;
+        status: string;
+        risk_score: number | null;
+        risk_level: string | null;
+        created_at: string;
+        updated_at: string;
+        readiness_score?: number;
+        blockers_count?: number;
+        missing_evidence?: boolean;
+        pending_attestations?: number;
+        [key: string]: any;
+      }>; 
       pagination: {
         page?: number;
+        page_size?: number;
         limit: number;
         total: number;
+        total_pages?: number;
         totalPages?: number;
         cursor?: string;
         hasMore?: boolean;
