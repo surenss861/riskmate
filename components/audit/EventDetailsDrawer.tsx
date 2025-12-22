@@ -1,9 +1,10 @@
 'use client'
 
-import { X, ExternalLink, User, FileText, Building2, Clock, Copy, Check } from 'lucide-react'
-import { useState } from 'react'
+import { X, ExternalLink, User, FileText, Building2, Clock, Copy, Check, Link2, Loader2 } from 'lucide-react'
+import { useState, useEffect } from 'react'
 import { buttonStyles } from '@/lib/styles/design-system'
 import { useRouter } from 'next/navigation'
+import { auditApi } from '@/lib/api'
 
 interface AuditEvent {
   id: string
@@ -129,17 +130,21 @@ export function EventDetailsDrawer({ isOpen, onClose, event }: EventDetailsDrawe
                       <div className="text-white/60 text-sm font-mono">{event.actor_email}</div>
                     )}
                   </div>
-                  <button
-                    onClick={() => handleCopy(event.actor_id!, 'actor_id')}
-                    className="text-white/40 hover:text-white/60 transition-colors"
-                    title="Copy Actor ID"
-                  >
-                    {copied === 'actor_id' ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                  </button>
+                  {event.actor_id && (
+                    <button
+                      onClick={() => handleCopy(event.actor_id!, 'actor_id')}
+                      className="text-white/40 hover:text-white/60 transition-colors"
+                      title="Copy Actor ID"
+                    >
+                      {copied === 'actor_id' ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                    </button>
+                  )}
                 </div>
-                <div className="text-xs text-white/50 font-mono">
-                  ID: {event.actor_id}
-                </div>
+                {event.actor_id && (
+                  <div className="text-xs text-white/50 font-mono">
+                    ID: {event.actor_id}
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -152,11 +157,11 @@ export function EventDetailsDrawer({ isOpen, onClose, event }: EventDetailsDrawe
                 Target
               </h3>
               <div className="bg-white/5 rounded-lg p-4 space-y-2">
-                {event.job_name && (
+                {event?.job_name && event?.job_id && (
                   <div className="flex items-center justify-between">
                     <div>
                       <div className="text-white font-medium">{event.job_name}</div>
-                      {event.site_name && (
+                      {event?.site_name && (
                         <div className="text-white/60 text-sm flex items-center gap-1">
                           <Building2 className="w-3 h-3" />
                           {event.site_name}
@@ -171,7 +176,7 @@ export function EventDetailsDrawer({ isOpen, onClose, event }: EventDetailsDrawe
                     </button>
                   </div>
                 )}
-                {event.target_type && event.target_id && (
+                {event?.target_type && event?.target_id && (
                   <div className="text-xs text-white/50 font-mono">
                     Type: {event.target_type} | ID: {event.target_id}
                   </div>
@@ -181,16 +186,18 @@ export function EventDetailsDrawer({ isOpen, onClose, event }: EventDetailsDrawe
           )}
 
           {/* Timestamp */}
-          <div>
-            <h3 className="text-sm font-medium text-white/60 mb-2 flex items-center gap-2">
-              <Clock className="w-4 h-4" />
-              Timestamp
-            </h3>
-            <div className="bg-white/5 rounded-lg p-4">
-              <div className="text-white">{formatDate(event.created_at)}</div>
-              <div className="text-xs text-white/50 font-mono mt-1">{event.created_at}</div>
+          {event?.created_at && (
+            <div>
+              <h3 className="text-sm font-medium text-white/60 mb-2 flex items-center gap-2">
+                <Clock className="w-4 h-4" />
+                Timestamp
+              </h3>
+              <div className="bg-white/5 rounded-lg p-4">
+                <div className="text-white">{formatDate(event.created_at)}</div>
+                <div className="text-xs text-white/50 font-mono mt-1">{event.created_at}</div>
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Metadata */}
           {event.metadata && Object.keys(event.metadata).length > 0 && (
@@ -223,10 +230,10 @@ export function EventDetailsDrawer({ isOpen, onClose, event }: EventDetailsDrawe
             <h3 className="text-sm font-medium text-white/60 mb-2">Full Event Data</h3>
             <div className="bg-black/20 rounded-lg p-4 overflow-x-auto">
               <pre className="text-xs text-white/80 font-mono whitespace-pre-wrap">
-                {JSON.stringify(event, null, 2)}
+                {JSON.stringify(event || {}, null, 2)}
               </pre>
               <button
-                onClick={() => handleCopy(JSON.stringify(event, null, 2), 'full_event')}
+                onClick={() => handleCopy(JSON.stringify(event || {}, null, 2), 'full_event')}
                 className="mt-2 text-xs text-[#F97316] hover:text-[#FFC857] flex items-center gap-1"
               >
                 {copied === 'full_event' ? (
