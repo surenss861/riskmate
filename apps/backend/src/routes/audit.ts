@@ -5,6 +5,7 @@ import { RequestWithId } from '../middleware/requestId'
 import { createErrorResponse, logErrorForSupport } from '../utils/errorResponse'
 import { recordAuditLog } from '../middleware/audit'
 import { runCommand, CommandContext, CommandOptions, applyAuditFilters, FilterValidationError } from '../utils/commandRunner'
+import { mapCategoryToTab, CategoryTab, eventBelongsToTab } from '../utils/categoryMapper'
 import archiver from 'archiver'
 import { Readable } from 'stream'
 import crypto from 'crypto'
@@ -507,6 +508,9 @@ auditRouter.get('/events', authenticate as unknown as express.RequestHandler, as
       (data || []).map(async (event: any) => {
         const enriched: any = { ...event }
 
+        // Add computed category_tab for frontend filtering (handles old categories)
+        enriched.category_tab = mapCategoryToTab(event.category, event.event_name)
+
         // Enrich actor info
         if (event.actor_id) {
           const { data: actorData } = await supabase
@@ -556,24 +560,32 @@ auditRouter.get('/events', authenticate as unknown as express.RequestHandler, as
       })
     )
 
-    // Calculate stats from filtered dataset
+    // Filter by category_tab if category was requested (for tab filtering)
+    // This ensures old events with different category values still show up in the right tab
+    let finalEvents = enrichedEvents
+    if (category && ['governance', 'operations', 'access'].includes(category as string)) {
+      const requestedTab = category as CategoryTab
+      finalEvents = enrichedEvents.filter(e => eventBelongsToTab(e.category, e.event_name, requestedTab))
+    }
+
+    // Calculate stats from filtered dataset (use finalEvents after tab filtering)
     const stats = {
-      total: count || 0,
-      violations: enrichedEvents.filter(e => e.category === 'governance' && e.outcome === 'blocked').length,
-      jobs_touched: new Set(enrichedEvents.filter(e => e.job_id).map(e => e.job_id)).size,
-      proof_packs: enrichedEvents.filter(e => e.event_name?.includes('proof_pack')).length,
-      signoffs: enrichedEvents.filter(e => e.event_name?.includes('signoff')).length,
-      access_changes: enrichedEvents.filter(e => e.category === 'access').length,
+      total: finalEvents.length,
+      violations: finalEvents.filter(e => eventBelongsToTab(e.category, e.event_name, 'governance') && e.outcome === 'blocked').length,
+      jobs_touched: new Set(finalEvents.filter(e => e.job_id).map(e => e.job_id)).size,
+      proof_packs: finalEvents.filter(e => e.event_name?.includes('proof_pack')).length,
+      signoffs: finalEvents.filter(e => e.event_name?.includes('signoff')).length,
+      access_changes: finalEvents.filter(e => eventBelongsToTab(e.category, e.event_name, 'access')).length,
     }
 
     // Get next cursor
-    const nextCursor = enrichedEvents.length > 0 
-      ? enrichedEvents[enrichedEvents.length - 1].created_at 
+    const nextCursor = finalEvents.length > 0 
+      ? finalEvents[finalEvents.length - 1].created_at 
       : null
 
     res.json({
       data: {
-        events: enrichedEvents,
+        events: finalEvents,
         stats,
         pagination: {
           next_cursor: nextCursor,

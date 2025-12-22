@@ -372,21 +372,23 @@ export default function AuditViewPage() {
       return true
     }
     
-    // Use the actual category from the event (from database) if available, otherwise fall back to client-side categorization
-    const eventCategory = e.category || categorizeEvent(e.event_type)
+    // Use category_tab from backend if available (computed with backward compatibility),
+    // otherwise compute from category/event_type client-side
+    const categoryTab = e.category_tab || (() => {
+      const eventCategory = e.category || categorizeEvent(e.event_type || '')
+      
+      // Map sub-categories to main tabs
+      if (eventCategory === 'governance' || eventCategory === 'governance_enforcement') {
+        return 'governance'
+      } else if (['access', 'access_review', 'access_security'].includes(eventCategory)) {
+        return 'access'
+      } else {
+        // Operations includes: operations, review_queue, incident_review, attestations, system
+        return 'operations'
+      }
+    })()
     
-    // Map sub-categories to main tabs
-    if (activeTab === 'governance') {
-      return eventCategory === 'governance'
-    } else if (activeTab === 'operations') {
-      // Operations includes: operations, review_queue, incident_review, attestations, system
-      return ['operations', 'review_queue', 'incident_review', 'attestations', 'system'].includes(eventCategory)
-    } else if (activeTab === 'access') {
-      // Access includes: access, access_review
-      return ['access', 'access_review'].includes(eventCategory)
-    }
-    
-    return false
+    return categoryTab === activeTab
   })
 
   const formatRelativeTime = (date: string) => {
