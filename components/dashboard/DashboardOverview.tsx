@@ -41,6 +41,7 @@ interface DashboardOverviewProps {
     date: string
     rate: number
   }>
+  timeRange?: string // Add time_range prop for deep links
 }
 
 export function DashboardOverview({
@@ -50,8 +51,10 @@ export function DashboardOverview({
   incompleteMitigations,
   workforceActivity,
   complianceTrend,
+  timeRange = '30d',
 }: DashboardOverviewProps) {
   const router = useRouter()
+  const timeRangeParam = timeRange ? `time_range=${timeRange}` : ''
 
   return (
     <div className="space-y-6">
@@ -128,20 +131,38 @@ export function DashboardOverview({
           </div>
           <div className="space-y-2">
             {jobsAtRisk.length === 0 ? (
-              <p className="text-sm text-white/50">No high-risk jobs</p>
-            ) : (
-              jobsAtRisk.slice(0, 3).map((job) => (
+              <>
+                <p className="text-sm text-white/50 mb-3">All clear — no high-risk jobs</p>
                 <Link
-                  key={job.id}
-                  href={`/operations/jobs/${job.id}`}
-                  className="block p-2 rounded-lg hover:bg-white/5 transition-colors"
+                  href={`/operations/jobs?${timeRangeParam}`}
+                  className="text-xs text-[#F97316] hover:text-[#FB923C] transition-colors inline-block"
                 >
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-white/80 truncate">{job.client_name}</span>
-                    <span className="text-xs font-semibold text-red-400">{job.risk_score}</span>
-                  </div>
+                  View all jobs →
                 </Link>
-              ))
+              </>
+            ) : (
+              <>
+                {jobsAtRisk.slice(0, 3).map((job) => (
+                  <Link
+                    key={job.id}
+                    href={`/operations/jobs/${job.id}`}
+                    className="block p-2 rounded-lg hover:bg-white/5 transition-colors"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-white/80 truncate">{job.client_name}</span>
+                      <span className="text-xs font-semibold text-red-400">{job.risk_score}</span>
+                    </div>
+                  </Link>
+                ))}
+                {jobsAtRisk.length > 3 && (
+                  <Link
+                    href={`/operations/jobs?risk_level=high&${timeRangeParam}`}
+                    className="text-xs text-[#F97316] hover:text-[#FB923C] transition-colors inline-block mt-2"
+                  >
+                    View all {jobsAtRisk.length} high-risk jobs →
+                  </Link>
+                )}
+              </>
             )}
           </div>
         </motion.div>
@@ -164,20 +185,36 @@ export function DashboardOverview({
           </div>
           <div className="space-y-2">
             {recentEvidence.length === 0 ? (
-              <p className="text-sm text-white/50">No evidence uploaded recently</p>
-            ) : (
-              recentEvidence.slice(0, 3).map((evidence) => (
+              <>
+                <p className="text-sm text-white/50 mb-3">No evidence uploaded recently</p>
                 <Link
-                  key={evidence.id}
-                  href={`/operations/jobs/${evidence.job_id}`}
-                  className="block p-2 rounded-lg hover:bg-white/5 transition-colors"
+                  href={`/operations/jobs?missing_evidence=true&${timeRangeParam}`}
+                  className="text-xs text-[#F97316] hover:text-[#FB923C] transition-colors inline-block"
                 >
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-white/80 truncate">{evidence.job_name}</span>
-                    <span className="text-xs text-white/50 capitalize">{evidence.type}</span>
-                  </div>
+                  Upload evidence →
                 </Link>
-              ))
+              </>
+            ) : (
+              <>
+                {recentEvidence.slice(0, 3).map((evidence) => (
+                  <Link
+                    key={evidence.id}
+                    href={`/operations/jobs/${evidence.job_id}`}
+                    className="block p-2 rounded-lg hover:bg-white/5 transition-colors"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-white/80 truncate">{evidence.job_name}</span>
+                      <span className="text-xs text-white/50 capitalize">{evidence.type}</span>
+                    </div>
+                  </Link>
+                ))}
+                <Link
+                  href={`/operations/jobs?missing_evidence=true&${timeRangeParam}`}
+                  className="text-xs text-[#F97316] hover:text-[#FB923C] transition-colors inline-block mt-2"
+                >
+                  Upload more evidence →
+                </Link>
+              </>
             )}
           </div>
         </motion.div>
@@ -200,20 +237,38 @@ export function DashboardOverview({
           </div>
           <div className="space-y-2">
             {incompleteMitigations.length === 0 ? (
-              <p className="text-sm text-white/50">All mitigations complete</p>
-            ) : (
-              incompleteMitigations.slice(0, 3).map((mitigation) => (
+              <>
+                <p className="text-sm text-white/50 mb-3">All mitigations complete</p>
                 <Link
-                  key={mitigation.id}
-                  href={`/operations/jobs/${mitigation.job_id}`}
-                  className="block p-2 rounded-lg hover:bg-white/5 transition-colors"
+                  href={`/operations/jobs?${timeRangeParam}`}
+                  className="text-xs text-[#F97316] hover:text-[#FB923C] transition-colors inline-block"
                 >
-                  <div className="flex flex-col gap-1">
-                    <span className="text-sm text-white/80 truncate">{mitigation.job_name}</span>
-                    <span className="text-xs text-white/50 truncate">{mitigation.title}</span>
-                  </div>
+                  View all jobs →
                 </Link>
-              ))
+              </>
+            ) : (
+              <>
+                {incompleteMitigations.slice(0, 3).map((mitigation) => (
+                  <Link
+                    key={mitigation.id}
+                    href={`/operations/jobs/${mitigation.job_id}`}
+                    className="block p-2 rounded-lg hover:bg-white/5 transition-colors"
+                  >
+                    <div className="flex flex-col gap-1">
+                      <span className="text-sm text-white/80 truncate">{mitigation.job_name}</span>
+                      <span className="text-xs text-white/50 truncate">{mitigation.title}</span>
+                    </div>
+                  </Link>
+                ))}
+                {incompleteMitigations.length > 3 && (
+                  <Link
+                    href={`/operations/audit/readiness?status=open&${timeRangeParam}`}
+                    className="text-xs text-[#F97316] hover:text-[#FB923C] transition-colors inline-block mt-2"
+                  >
+                    View all {incompleteMitigations.length} incomplete →
+                  </Link>
+                )}
+              </>
             )}
           </div>
         </motion.div>
@@ -272,23 +327,39 @@ export function DashboardOverview({
           </div>
           <div className="space-y-2">
             {workforceActivity.length === 0 ? (
-              <p className="text-sm text-white/50">No activity data</p>
+              <>
+                <p className="text-sm text-white/50 mb-3">No activity data</p>
+                <Link
+                  href={`/operations/team?${timeRangeParam}`}
+                  className="text-xs text-[#F97316] hover:text-[#FB923C] transition-colors inline-block"
+                >
+                  Invite team →
+                </Link>
+              </>
             ) : (
-              workforceActivity.slice(0, 3).map((worker) => (
-                <div key={worker.user_id} className="p-2 rounded-lg hover:bg-white/5 transition-colors">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span className="text-sm text-white/80">{worker.name}</span>
-                      <p className="text-xs text-white/50">
-                        {worker.jobs_assigned} job{worker.jobs_assigned !== 1 ? 's' : ''} assigned
-                      </p>
+              <>
+                {workforceActivity.slice(0, 3).map((worker) => (
+                  <div key={worker.user_id} className="p-2 rounded-lg hover:bg-white/5 transition-colors">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-sm text-white/80">{worker.name}</span>
+                        <p className="text-xs text-white/50">
+                          {worker.jobs_assigned} job{worker.jobs_assigned !== 1 ? 's' : ''} assigned
+                        </p>
+                      </div>
+                      <span className="text-xs text-white/50">
+                        {new Date(worker.last_login).toLocaleDateString()}
+                      </span>
                     </div>
-                    <span className="text-xs text-white/50">
-                      {new Date(worker.last_login).toLocaleDateString()}
-                    </span>
                   </div>
-                </div>
-              ))
+                ))}
+                <Link
+                  href={`/operations/audit?tab=operations&${timeRangeParam}`}
+                  className="text-xs text-[#F97316] hover:text-[#FB923C] transition-colors inline-block mt-2"
+                >
+                  View workforce activity →
+                </Link>
+              </>
             )}
           </div>
         </motion.div>
