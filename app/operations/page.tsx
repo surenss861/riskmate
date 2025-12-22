@@ -667,34 +667,35 @@ function DashboardPageInner() {
               </div>
             </GlassCard>
           ) : (
-            <motion.div
-              initial={{ opacity: 0, y: 18 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1, duration: 0.45 }}
-              className={`${spacing.relaxed} ${spacing.gap.relaxed}`}
-            >
-            <KpiGrid items={kpiItems} />
-            <div className={`grid ${spacing.gap.relaxed} xl:grid-cols-[2fr_1fr]`}>
-              <TrendChart
-                data={analyticsData.trend}
-                rangeDays={analyticsRange}
-                onRangeChange={handleRangeChange}
-                isLoading={analyticsLoading}
-                emptyReason={analyticsData.trend_empty_reason}
-                onCreateJob={() => router.push('/operations/jobs/new')}
-                onViewMitigations={() => router.push('/operations/audit/readiness?status=open')}
-              />
-              <EvidenceWidget
-                totalJobs={totalJobsForRange}
-                jobsWithEvidence={jobsWithEvidence}
-                evidenceCount={analyticsData.evidence_count}
-                avgTimeToFirstEvidenceHours={analyticsData.avg_time_to_first_evidence_hours}
-                isLoading={analyticsLoading}
-                jobs_total={analyticsData.jobs_total}
-                jobs_with_photo_evidence={analyticsData.jobs_with_photo_evidence}
-                jobs_missing_required_evidence={analyticsData.jobs_missing_required_evidence}
-                required_evidence_policy={analyticsData.required_evidence_policy}
-                avg_time_to_first_photo_minutes={analyticsData.avg_time_to_first_photo_minutes}
+            <div className="mb-16 space-y-16">
+              <div>
+                <h2 className="text-2xl font-bold font-display mb-6">Performance Metrics</h2>
+                <KpiGrid items={kpiItems} />
+              </div>
+              <div className="grid gap-6 xl:grid-cols-[2fr_1fr]">
+                <GlassCard className="p-8">
+                  <TrendChart
+                    data={analyticsData.trend}
+                    rangeDays={analyticsRange}
+                    onRangeChange={handleRangeChange}
+                    isLoading={analyticsLoading}
+                    emptyReason={analyticsData.trend_empty_reason}
+                    onCreateJob={() => router.push('/operations/jobs/new')}
+                    onViewMitigations={() => router.push('/operations/audit/readiness?status=open')}
+                  />
+                </GlassCard>
+                <GlassCard className="p-8">
+                  <EvidenceWidget
+                    totalJobs={totalJobsForRange}
+                    jobsWithEvidence={jobsWithEvidence}
+                    evidenceCount={analyticsData.evidence_count}
+                    avgTimeToFirstEvidenceHours={analyticsData.avg_time_to_first_evidence_hours}
+                    isLoading={analyticsLoading}
+                    jobs_total={analyticsData.jobs_total}
+                    jobs_with_photo_evidence={analyticsData.jobs_with_photo_evidence}
+                    jobs_missing_required_evidence={analyticsData.jobs_missing_required_evidence}
+                    required_evidence_policy={analyticsData.required_evidence_policy}
+                    avg_time_to_first_photo_minutes={analyticsData.avg_time_to_first_photo_minutes}
                     timeRange={timeRange}
                   />
                 </GlassCard>
