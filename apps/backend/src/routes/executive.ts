@@ -5,6 +5,8 @@ import { RequestWithId } from '../middleware/requestId'
 import { createErrorResponse, logErrorForSupport } from '../utils/errorResponse'
 import { generateExecutiveBriefPDF } from '../utils/pdf/executiveBrief'
 import { recordAuditLog } from '../middleware/audit'
+import { sendEmail, hashAlertPayload } from '../utils/email'
+import crypto from 'crypto'
 
 export const executiveRouter = express.Router()
 
@@ -697,6 +699,331 @@ executiveRouter.post('/brief/pdf', authenticate as unknown as express.RequestHan
     })
     res.setHeader('X-Error-ID', errorId)
     logErrorForSupport(500, 'PDF_GENERATION_FAILED', requestId, authReq.user?.organization_id, errorResponse.message, errorResponse.internal_message, errorResponse.category, errorResponse.severity, '/api/executive/brief/pdf')
+    res.status(500).json(errorResponse)
+  }
+})
+
+// POST /api/executive/alerts/check
+// Checks for alert conditions and sends notifications
+// Can be called by cron jobs with service-to-service auth (Authorization: Bearer <CRON_SECRET>)
+// or by authenticated users with owner/admin/executive role
+executiveRouter.post('/alerts/check', async (req: express.Request, res: express.Response) => {
+  const authReq = req as AuthenticatedRequest & RequestWithId
+  const requestId = authReq.requestId || 'unknown'
+  
+  try {
+    // Support service-to-service auth for cron jobs
+    const cronSecret = req.headers.authorization?.replace('Bearer ', '')
+    const expectedCronSecret = process.env.EXEC_ALERT_CRON_SECRET
+    
+    let organizationIds: string[] = []
+    
+    if (cronSecret && expectedCronSecret && cronSecret === expectedCronSecret) {
+      // Cron job: check all organizations
+      const { data: orgs, error: orgError } = await supabase
+        .from('organizations')
+        .select('id')
+      
+      if (orgError) {
+        throw new Error(`Failed to fetch organizations: ${orgError.message}`)
+      }
+      
+      organizationIds = (orgs || []).map(o => o.id)
+    } else if (authReq.user) {
+      // Authenticated user: check their organization only
+      const { organization_id, role } = authReq.user
+      
+      if (role !== 'owner' && role !== 'admin' && role !== 'executive') {
+        return res.status(403).json({
+          code: 'AUTH_ROLE_FORBIDDEN',
+          message: 'Executive access required',
+        })
+      }
+      
+      organizationIds = [organization_id]
+    } else {
+      return res.status(401).json({
+        code: 'AUTH_REQUIRED',
+        message: 'Authentication required',
+      })
+    }
+
+    const timeRange = (req.body.time_range as string) || '7d'
+    const alertsSent: Array<{ organizationId: string; alertKey: string; sent: boolean; reason?: string }> = []
+
+    // Process each organization
+    for (const organizationId of organizationIds) {
+      // Get organization email recipients (owners + executives)
+      const { data: recipients, error: recipientError } = await supabase
+        .from('users')
+        .select('email, role')
+        .eq('organization_id', organizationId)
+        .in('role', ['owner', 'executive'])
+        .not('email', 'is', null)
+      
+      if (recipientError || !recipients || recipients.length === 0) {
+        alertsSent.push({
+          organizationId,
+          alertKey: 'SKIP_NO_RECIPIENTS',
+          sent: false,
+          reason: 'No email recipients found',
+        })
+        continue
+      }
+
+      const recipientEmails = recipients.map(r => r.email).filter(Boolean) as string[]
+
+      // Get executive metrics (reuse cache or compute)
+      const cacheKey = `executive:${organizationId}:${timeRange}`
+      let metrics = executiveCache.get(cacheKey)?.data
+
+      if (!metrics) {
+        // Compute metrics by calling the risk-posture endpoint logic
+        // For now, we'll trigger a compute - in production you'd want to extract this into a shared function
+        // But for MVP, we'll just skip if not cached (cron should run after risk-posture is computed)
+        alertsSent.push({
+          organizationId,
+          alertKey: 'SKIP_NO_METRICS',
+          sent: false,
+          reason: 'Metrics not available (cache miss)',
+        })
+        continue
+      }
+
+      // Define alert triggers
+      interface AlertTrigger {
+        key: string
+        shouldAlert: (m: typeof metrics) => boolean
+        subject: (m: typeof metrics) => string
+        body: (m: typeof metrics, orgName: string) => string
+        actionUrl: (m: typeof metrics, timeRange: string) => string
+      }
+
+      const triggers: AlertTrigger[] = [
+        {
+          key: 'INTEGRITY_ERROR',
+          shouldAlert: (m) => m.ledger_integrity === 'error',
+          subject: () => 'RiskMate — Ledger Integrity Error',
+          body: (m, orgName) => {
+            const errorDetails = m.ledger_integrity_error_details
+            return `
+              <h2>Ledger Integrity Error Detected</h2>
+              <p>The compliance ledger for ${orgName} has failed verification. This indicates a potential data integrity issue.</p>
+              ${errorDetails?.failingEventId ? `<p>Failing event ID: ${errorDetails.failingEventId}</p>` : ''}
+              <p><strong>Action Required:</strong> Review the compliance ledger and investigate the failing event.</p>
+            `
+          },
+          actionUrl: (m, timeRange) => {
+            const failingEventId = m.ledger_integrity_error_details?.failingEventId
+            return `/operations/audit?tab=governance&time_range=${timeRange}${failingEventId ? `&event_id=${failingEventId}` : ''}`
+          },
+        },
+        {
+          key: 'VIOLATIONS_PRESENT',
+          shouldAlert: (m) => (m.recent_violations || 0) > 0,
+          subject: (m) => `RiskMate — ${m.recent_violations} Security Violation${m.recent_violations > 1 ? 's' : ''} Detected`,
+          body: (m, orgName) => `
+            <h2>Security Violations Detected</h2>
+            <p>${m.recent_violations} unauthorized access attempt${m.recent_violations > 1 ? 's' : ''} ${m.recent_violations > 1 ? 'have' : 'has'} been blocked for ${orgName}.</p>
+            <p><strong>Action Required:</strong> Review blocked actions to understand access patterns and potential security concerns.</p>
+          `,
+          actionUrl: (m, timeRange) => `/operations/audit?tab=governance&outcome=blocked&time_range=${timeRange}`,
+        },
+        {
+          key: 'HIGH_RISK_SPIKE',
+          shouldAlert: (m) => {
+            const delta = m.deltas?.high_risk_jobs || 0
+            return delta >= 3 && timeRange !== 'all' // Only alert on deltas for time-bounded ranges
+          },
+          subject: (m) => `RiskMate — High-Risk Jobs Increased by ${m.deltas?.high_risk_jobs || 0}`,
+          body: (m, orgName) => {
+            const delta = m.deltas?.high_risk_jobs || 0
+            const current = m.high_risk_jobs || 0
+            return `
+              <h2>High-Risk Job Spike Detected</h2>
+              <p>The number of high-risk jobs for ${orgName} has increased by ${delta} (now ${current} total).</p>
+              ${m.drivers?.highRiskJobs?.[0] ? `<p>Top driver: ${m.drivers.highRiskJobs[0].label} (${m.drivers.highRiskJobs[0].count})</p>` : ''}
+              <p><strong>Action Required:</strong> Review high-risk jobs and ensure appropriate controls are in place.</p>
+            `
+          },
+          actionUrl: (m, timeRange) => `/operations/jobs?risk_level=high&time_range=${timeRange}`,
+        },
+        {
+          key: 'ATTESTATIONS_OVERDUE',
+          shouldAlert: (m) => (m.pending_signoffs || 0) > 0,
+          subject: (m) => `RiskMate — ${m.pending_signoffs} Pending Attestation${m.pending_signoffs > 1 ? 's' : ''}`,
+          body: (m, orgName) => `
+            <h2>Pending Attestations</h2>
+            <p>${m.pending_signoffs} attestation${m.pending_signoffs > 1 ? 's are' : ' is'} pending for ${orgName}.</p>
+            ${m.drivers?.pending?.[0] ? `<p>Top driver: ${m.drivers.pending[0].label} (${m.drivers.pending[0].count})</p>` : ''}
+            <p><strong>Action Required:</strong> Request attestations to maintain audit readiness.</p>
+          `,
+          actionUrl: (m, timeRange) => `/operations/audit/readiness?category=attestations&status=open&time_range=${timeRange}`,
+        },
+      ]
+
+      // Check each trigger
+      for (const trigger of triggers) {
+        if (!trigger.shouldAlert(metrics)) {
+          continue
+        }
+
+        // Build alert payload
+        const alertPayload = {
+          organizationId,
+          alertKey: trigger.key,
+          timeRange,
+          metrics: {
+            high_risk_jobs: metrics.high_risk_jobs,
+            open_incidents: metrics.open_incidents,
+            violations: metrics.recent_violations,
+            pending_attestations: metrics.pending_signoffs,
+            integrity_status: metrics.ledger_integrity,
+          },
+        }
+
+        const payloadHash = hashAlertPayload(alertPayload)
+
+        // Check alert state (prevent spam)
+        const { data: alertState } = await supabase
+          .from('executive_alert_state')
+          .select('last_sent_at, last_payload_hash, cooldown_minutes')
+          .eq('organization_id', organizationId)
+          .eq('alert_key', trigger.key)
+          .single()
+
+        const cooldownMinutes = alertState?.cooldown_minutes || 360 // 6 hours default
+        const shouldSend = !alertState || 
+          alertState.last_payload_hash !== payloadHash || // Payload changed
+          !alertState.last_sent_at || 
+          (new Date().getTime() - new Date(alertState.last_sent_at).getTime()) > (cooldownMinutes * 60 * 1000) // Cooldown elapsed
+
+        if (!shouldSend) {
+          alertsSent.push({
+            organizationId,
+            alertKey: trigger.key,
+            sent: false,
+            reason: 'Cooldown active or duplicate payload',
+          })
+          continue
+        }
+
+        // Get organization name for email
+        const { data: org } = await supabase
+          .from('organizations')
+          .select('name')
+          .eq('id', organizationId)
+          .single()
+
+        const orgName = org?.name || 'Organization'
+        const frontendUrl = process.env.FRONTEND_URL || process.env.NEXT_PUBLIC_FRONTEND_URL || 'https://riskmate.vercel.app'
+        const actionUrl = `${frontendUrl}${trigger.actionUrl(metrics, timeRange)}`
+
+        // Build email HTML
+        const emailHtml = `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="utf-8">
+            <style>
+              body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; line-height: 1.6; color: #333; }
+              .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+              .header { background: #1a1a1a; color: white; padding: 20px; border-radius: 8px 8px 0 0; }
+              .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 8px 8px; }
+              .button { display: inline-block; background: #1a1a1a; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; margin-top: 20px; }
+              .footer { text-align: center; margin-top: 30px; color: #666; font-size: 12px; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <div class="header">
+                <h1>${trigger.subject(metrics)}</h1>
+              </div>
+              <div class="content">
+                ${trigger.body(metrics, orgName)}
+                <a href="${actionUrl}" class="button">Take Action</a>
+                <div class="footer">
+                  <p>This alert is based on data from the last ${timeRange}.</p>
+                  <p><a href="${frontendUrl}/operations/executive?time_range=${timeRange}">View Executive Console</a></p>
+                </div>
+              </div>
+            </div>
+          </body>
+          </html>
+        `
+
+        // Send email
+        try {
+          await sendEmail({
+            to: recipientEmails,
+            subject: trigger.subject(metrics),
+            html: emailHtml,
+          })
+
+          // Update alert state
+          await supabase
+            .from('executive_alert_state')
+            .upsert({
+              organization_id: organizationId,
+              alert_key: trigger.key,
+              last_sent_at: new Date().toISOString(),
+              last_payload_hash: payloadHash,
+              updated_at: new Date().toISOString(),
+            })
+
+          // Log alert
+          await recordAuditLog({
+            organizationId,
+            actorId: authReq.user?.id || 'system', // Use system if cron
+            eventName: 'executive.alert_sent',
+            targetType: 'system',
+            targetId: null,
+            metadata: {
+              alert_key: trigger.key,
+              time_range: timeRange,
+              payload_hash: payloadHash,
+              recipient_count: recipientEmails.length,
+              metrics: alertPayload.metrics,
+            },
+          })
+
+          alertsSent.push({
+            organizationId,
+            alertKey: trigger.key,
+            sent: true,
+          })
+        } catch (emailError: any) {
+          console.error(`Failed to send alert ${trigger.key} for org ${organizationId}:`, emailError)
+          alertsSent.push({
+            organizationId,
+            alertKey: trigger.key,
+            sent: false,
+            reason: `Email send failed: ${emailError.message}`,
+          })
+        }
+      }
+    }
+
+    res.json({
+      data: {
+        processed_organizations: organizationIds.length,
+        alerts_checked: alertsSent.length,
+        alerts_sent: alertsSent.filter(a => a.sent).length,
+        alerts_skipped: alertsSent.filter(a => !a.sent).length,
+        results: alertsSent,
+      },
+    })
+  } catch (err: any) {
+    console.error('Alert check failed:', err)
+    const { response: errorResponse, errorId } = createErrorResponse({
+      message: 'Failed to check alerts',
+      internalMessage: `Alert check failed: ${err?.message || String(err)}`,
+      code: 'ALERT_CHECK_FAILED',
+      requestId,
+      statusCode: 500,
+    })
+    res.setHeader('X-Error-ID', errorId)
+    logErrorForSupport(500, 'ALERT_CHECK_FAILED', requestId, undefined, errorResponse.message, errorResponse.internal_message, errorResponse.category, errorResponse.severity, '/api/executive/alerts/check')
     res.status(500).json(errorResponse)
   }
 })
