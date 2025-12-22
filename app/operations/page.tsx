@@ -4,7 +4,7 @@
 
 
 import { useEffect, useMemo, useState, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import { motion } from 'framer-motion'
@@ -22,6 +22,8 @@ import { FirstRunSetupWizard } from '@/components/setup/FirstRunSetupWizard'
 import Link from 'next/link'
 import { getRiskBadgeClass, getStatusBadgeClass, buttonStyles, spacing, typography } from '@/lib/styles/design-system'
 
+type TimeRange = '7d' | '30d' | '90d' | 'all'
+
 interface Job {
   id: string
   client_name: string
@@ -35,6 +37,7 @@ interface Job {
 
 export default function DashboardPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [user, setUser] = useState<any>(null)
   const [userRole, setUserRole] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -44,8 +47,12 @@ export default function DashboardPage() {
   const [filterStatus, setFilterStatus] = useState<string>('')
   const [filterRiskLevel, setFilterRiskLevel] = useState<string>('')
   const [showUpgradeBanner, setShowUpgradeBanner] = useState(false)
-  const [analyticsRange, setAnalyticsRange] = useState<number>(30)
   const [showOnboarding, setShowOnboarding] = useState(false)
+  
+  // Time range from query params, default to 30d
+  const timeRangeParam = searchParams.get('time_range') as TimeRange | null
+  const [timeRange, setTimeRange] = useState<TimeRange>(timeRangeParam || '30d')
+  const analyticsRange = timeRange === 'all' ? 365 : parseInt(timeRange.replace('d', ''))
 
   const isMember = userRole === 'member'
   const roleLoaded = userRole !== null
@@ -292,10 +299,27 @@ export default function DashboardPage() {
     ]
   )
 
-  const handleRangeChange = (nextRange: number) => {
-    if (nextRange === analyticsRange) return
-    setAnalyticsRange(nextRange)
+  // Sync time range with URL query params
+  useEffect(() => {
+    const param = searchParams.get('time_range') as TimeRange | null
+    if (param && ['7d', '30d', '90d', 'all'].includes(param)) {
+      setTimeRange(param)
+    }
+  }, [searchParams])
+
+  const handleTimeRangeChange = (newRange: TimeRange) => {
+    setTimeRange(newRange)
+    const params = new URLSearchParams(searchParams.toString())
+    params.set('time_range', newRange)
+    router.push(`/operations?${params.toString()}`, { scroll: false })
     refetchAnalytics()
+  }
+
+  const handleRangeChange = (nextRange: number) => {
+    // Convert number to TimeRange
+    const rangeMap: Record<number, TimeRange> = { 7: '7d', 30: '30d', 90: '90d', 365: 'all' }
+    const newTimeRange = rangeMap[nextRange] || '30d'
+    handleTimeRangeChange(newTimeRange)
   }
 
   // Compute DashboardOverview data
@@ -347,23 +371,94 @@ export default function DashboardPage() {
     }))
   }, [analyticsData.trend])
 
-  // Calculate KPI metrics for hero card
+  // Calculate KPI metrics for hero card (scoped to time range)
   const kpiMetrics = useMemo(() => {
-    const activeJobs = jobs.filter(j => j.status === 'active' || j.status === 'in_progress').length
-    const openRisks = jobs.filter(j => j.risk_score !== null && j.risk_score > 75).length
-    const avgRiskScore = jobs.length > 0 && jobs.some(j => j.risk_score !== null)
-      ? Math.round(jobs.filter(j => j.risk_score !== null).reduce((sum, j) => sum + (j.risk_score || 0), 0) / jobs.filter(j => j.risk_score !== null).length)
+    // Calculate date cutoff based on time range
+    const now = new Date()
+    let dateCutoff: Date | null = null
+    if (timeRange === '7d') {
+      dateCutoff = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+    } else if (timeRange === '30d') {
+      dateCutoff = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+    } else if (timeRange === '90d') {
+      dateCutoff = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
+    }
+    // 'all' means no cutoff
+    
+    // Filter jobs by time range
+    const jobsInRange = dateCutoff 
+      ? jobs.filter(j => new Date(j.created_at) >= dateCutoff!)
+      : jobs
+    
+    const activeJobs = jobsInRange.filter(j => j.status === 'active' || j.status === 'in_progress').length
+    const openRisks = jobsInRange.filter(j => j.risk_score !== null && j.risk_score > 75).length
+    const avgRiskScore = jobsInRange.length > 0 && jobsInRange.some(j => j.risk_score !== null)
+      ? Math.round(jobsInRange.filter(j => j.risk_score !== null).reduce((sum, j) => sum + (j.risk_score || 0), 0) / jobsInRange.filter(j => j.risk_score !== null).length)
       : null
-    // Audit events count would need to fetch from audit_logs - for now use placeholder
-    const auditEvents30d = null // Would need to fetch from audit_logs table
     
     return {
       activeJobs,
       openRisks,
       avgRiskScore,
-      auditEvents30d,
+      auditEvents30d: null as number | null, // Will be loaded separately
     }
-  }, [jobs])
+  }, [jobs, timeRange])
+  
+  // Load audit events count
+  const [auditEventsCount, setAuditEventsCount] = useState<number | null>(null)
+  useEffect(() => {
+    const loadAuditEventsCount = async () => {
+      try {
+        const supabase = createSupabaseBrowserClient()
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return
+        
+        const { data: userRow } = await supabase
+          .from('users')
+          .select('organization_id')
+          .eq('id', user.id)
+          .single()
+        
+        if (!userRow?.organization_id) return
+        
+        // Calculate date cutoff
+        const now = new Date()
+        let dateCutoff: Date | null = null
+        if (timeRange === '7d') {
+          dateCutoff = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+        } else if (timeRange === '30d') {
+          dateCutoff = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+        } else if (timeRange === '90d') {
+          dateCutoff = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
+        }
+        
+        let query = supabase
+          .from('audit_logs')
+          .select('id', { count: 'exact', head: true })
+          .eq('organization_id', userRow.organization_id)
+        
+        if (dateCutoff) {
+          query = query.gte('created_at', dateCutoff.toISOString())
+        }
+        
+        const { count, error } = await query
+        
+        if (error) throw error
+        setAuditEventsCount(count ?? 0)
+      } catch (err) {
+        console.error('Failed to load audit events count:', err)
+        setAuditEventsCount(null)
+      }
+    }
+    
+    loadAuditEventsCount()
+  }, [timeRange])
+  
+  // Update kpiMetrics with audit events count
+  const kpiMetricsWithAudit = useMemo(() => ({
+    ...kpiMetrics,
+    auditEvents30d: auditEventsCount,
+  }), [kpiMetrics, auditEventsCount])
 
   if (loading) {
     return (
