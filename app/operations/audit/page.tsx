@@ -2253,6 +2253,16 @@ export default function AuditViewPage() {
           targetUserId={selectedUser?.userId}
           targetUserName={selectedUser?.userName}
         />
+
+        {/* Event Details Drawer */}
+        <EventDetailsDrawer
+          isOpen={eventDetailsDrawerOpen}
+          onClose={() => {
+            setEventDetailsDrawerOpen(false)
+            setSelectedEventForDetails(null)
+          }}
+          event={selectedEventForDetails}
+        />
       </div>
     </ProtectedRoute>
   )
