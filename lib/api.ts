@@ -514,6 +514,16 @@ export const analyticsApi = {
       jobs_without_evidence: number;
       avg_time_to_first_evidence_hours: number;
       trend: Array<{ date: string; completion_rate: number }>;
+      // Explicit evidence denominators
+      jobs_total?: number;
+      jobs_scored?: number;
+      jobs_with_any_evidence?: number;
+      jobs_with_photo_evidence?: number;
+      jobs_missing_required_evidence?: number;
+      required_evidence_policy?: string;
+      avg_time_to_first_photo_minutes?: number | null;
+      // Empty state reasons
+      trend_empty_reason?: 'no_jobs' | 'no_events' | null;
     }>(endpoint);
   },
 };

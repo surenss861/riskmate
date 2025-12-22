@@ -148,6 +148,22 @@ analyticsRouter.get(
       const jobsWithEvidence = Object.keys(jobEvidenceMap).length;
       const jobsWithoutEvidence = Math.max(jobIds.length - jobsWithEvidence, 0);
 
+      // Calculate explicit evidence metrics
+      const jobsTotal = jobIds.length;
+      
+      // Jobs with photo evidence (assuming documents with type='photo' or checking file extensions)
+      // For now, count all documents as photo evidence (can be refined later)
+      const jobsWithPhotoEvidence = jobsWithEvidence;
+      
+      // Jobs missing required evidence - use readiness rules or default: high-risk jobs without evidence
+      const highRiskJobIds = (jobs || [])
+        .filter((job) => job.risk_score !== null && job.risk_score > 75)
+        .map((job) => job.id);
+      const highRiskJobsWithoutEvidence = highRiskJobIds.filter(
+        (jobId) => !jobEvidenceMap[jobId]
+      ).length;
+      const jobsMissingRequiredEvidence = highRiskJobsWithoutEvidence;
+
       const avgTimeToFirstEvidenceHours =
         jobsWithEvidence === 0
           ? 0
@@ -159,6 +175,8 @@ analyticsRouter.get(
               const diffHours = (evidenceCreated - jobCreated) / (1000 * 60 * 60);
               return acc + Math.max(diffHours, 0);
             }, 0) / jobsWithEvidence;
+      
+      const avgTimeToFirstPhotoMinutes = avgTimeToFirstEvidenceHours * 60;
 
       // Trend (daily)
       const trend: { date: string; completion_rate: number }[] = [];
@@ -189,6 +207,13 @@ analyticsRouter.get(
         dateCursor.setDate(dateCursor.getDate() + 1);
       }
 
+      // Determine empty reasons
+      const trendEmptyReason = jobsTotal === 0 
+        ? 'no_jobs' 
+        : totalMitigations === 0 
+        ? 'no_events' 
+        : null;
+
       res.json({
         org_id: orgId,
         range_days: rangeDays,
@@ -200,6 +225,16 @@ analyticsRouter.get(
         jobs_without_evidence: jobsWithoutEvidence,
         avg_time_to_first_evidence_hours: Number(avgTimeToFirstEvidenceHours.toFixed(2)),
         trend,
+        // Explicit evidence denominators
+        jobs_total: jobsTotal,
+        jobs_scored: (jobs || []).filter((job) => job.risk_score !== null).length,
+        jobs_with_any_evidence: jobsWithEvidence,
+        jobs_with_photo_evidence: jobsWithPhotoEvidence,
+        jobs_missing_required_evidence: jobsMissingRequiredEvidence,
+        required_evidence_policy: 'Photo required for high-risk jobs',
+        avg_time_to_first_photo_minutes: avgTimeToFirstPhotoMinutes ? Number(avgTimeToFirstPhotoMinutes.toFixed(0)) : null,
+        // Empty state reasons
+        trend_empty_reason: trendEmptyReason,
       });
     } catch (error: any) {
       console.error("Analytics metrics error:", error);

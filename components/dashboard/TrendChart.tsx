@@ -13,6 +13,9 @@ type TrendChartProps = {
   rangeDays: number;
   onRangeChange?: (next: number) => void;
   isLoading?: boolean;
+  emptyReason?: 'no_jobs' | 'no_events' | null;
+  onCreateJob?: () => void;
+  onViewMitigations?: () => void;
 };
 
 const RANGES = [30, 90];
@@ -41,6 +44,9 @@ export function TrendChart({
   rangeDays,
   onRangeChange,
   isLoading = false,
+  emptyReason,
+  onCreateJob,
+  onViewMitigations,
 }: TrendChartProps) {
   const paddedData = useMemo(() => {
     return data.length > 0 ? data : [{ date: new Date().toISOString().slice(0, 10), completion_rate: 0 }];
@@ -112,9 +118,43 @@ export function TrendChart({
 
       {isLoading ? (
         <div className="mt-10 h-[220px] w-full animate-pulse rounded-2xl bg-white/5" />
-      ) : paddedData.length === 0 ? (
-        <div className="mt-10 flex h-[220px] w-full items-center justify-center rounded-2xl border border-dashed border-white/10 bg-black/20">
-          <p className="text-sm text-[#9FA6BE]">Insufficient data to display trend.</p>
+      ) : (paddedData.length === 0 || emptyReason) ? (
+        <div className="mt-10 flex h-[220px] w-full flex-col items-center justify-center rounded-2xl border border-dashed border-white/10 bg-black/20 p-8">
+          {emptyReason === 'no_jobs' ? (
+            <>
+              <svg className="w-12 h-12 text-white/30 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              </svg>
+              <p className="text-base font-medium text-white mb-1">No jobs in this range</p>
+              <p className="text-sm text-white/60 mb-4">Create a job to start tracking trends</p>
+              {onCreateJob && (
+                <button
+                  onClick={onCreateJob}
+                  className="px-4 py-2 bg-[#F97316] text-white rounded-lg text-sm font-medium hover:bg-[#F97316]/90 transition-colors"
+                >
+                  Create Job
+                </button>
+              )}
+            </>
+          ) : emptyReason === 'no_events' ? (
+            <>
+              <svg className="w-12 h-12 text-white/30 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              </svg>
+              <p className="text-base font-medium text-white mb-1">No completions yet</p>
+              <p className="text-sm text-white/60 mb-4">View open mitigations to track progress</p>
+              {onViewMitigations && (
+                <button
+                  onClick={onViewMitigations}
+                  className="px-4 py-2 bg-[#F97316] text-white rounded-lg text-sm font-medium hover:bg-[#F97316]/90 transition-colors"
+                >
+                  View Open Mitigations
+                </button>
+              )}
+            </>
+          ) : (
+            <p className="text-sm text-[#9FA6BE]">Insufficient data to display trend.</p>
+          )}
         </div>
       ) : (
         <div className="relative mt-8 overflow-hidden">

@@ -1,6 +1,8 @@
 'use client';
 
 import { motion } from 'framer-motion';
+import Link from 'next/link';
+import { buttonStyles } from '@/lib/styles/design-system';
 
 type EvidenceWidgetProps = {
   totalJobs: number;
@@ -8,6 +10,13 @@ type EvidenceWidgetProps = {
   evidenceCount: number;
   avgTimeToFirstEvidenceHours: number;
   isLoading?: boolean;
+  // Explicit backend fields
+  jobs_total?: number;
+  jobs_with_photo_evidence?: number;
+  jobs_missing_required_evidence?: number;
+  required_evidence_policy?: string;
+  avg_time_to_first_photo_minutes?: number | null;
+  timeRange?: string;
 };
 
 const formatHoursToHuman = (hours: number) => {
@@ -26,9 +35,21 @@ export function EvidenceWidget({
   evidenceCount,
   avgTimeToFirstEvidenceHours,
   isLoading = false,
+  jobs_total,
+  jobs_with_photo_evidence,
+  jobs_missing_required_evidence,
+  required_evidence_policy,
+  avg_time_to_first_photo_minutes,
+  timeRange = '30d',
 }: EvidenceWidgetProps) {
-  const percent =
-    totalJobs === 0 ? 0 : Math.round((jobsWithEvidence / totalJobs) * 100);
+  // Use explicit backend fields if available, fall back to computed values
+  const jobsTotal = jobs_total ?? totalJobs;
+  const jobsWithPhotoEvidence = jobs_with_photo_evidence ?? jobsWithEvidence;
+  const jobsMissingEvidence = jobs_missing_required_evidence ?? Math.max(jobsTotal - jobsWithPhotoEvidence, 0);
+  
+  const percent = jobsTotal === 0 
+    ? 0 
+    : Math.round((jobsWithPhotoEvidence / jobsTotal) * 100);
 
   return (
     <motion.div
@@ -45,13 +66,28 @@ export function EvidenceWidget({
           <p className="text-xs uppercase tracking-[0.34em] text-white/45">
             Evidence Health
           </p>
-          <h3 className="mt-4 text-3xl font-semibold text-white md:text-4xl">
-            {isLoading ? '—' : `${percent}%`} of jobs have photo evidence
-          </h3>
-          <p className="mt-4 max-w-sm text-sm leading-relaxed text-white/65">
-            Keep crews capturing site photos before work begins. Evidence-rich jobs
-            make your reports inspection-ready.
-          </p>
+          {jobsTotal === 0 ? (
+            <>
+              <h3 className="mt-4 text-3xl font-semibold text-white md:text-4xl">
+                N/A
+              </h3>
+              <p className="mt-4 max-w-sm text-sm leading-relaxed text-white/65">
+                No jobs in selected range.
+              </p>
+            </>
+          ) : (
+            <>
+              <h3 className="mt-4 text-3xl font-semibold text-white md:text-4xl">
+                {isLoading ? '—' : `${percent}%`} of jobs have photo evidence
+              </h3>
+              <p className="mt-2 text-xs text-white/40">
+                ({jobsWithPhotoEvidence}/{jobsTotal})
+              </p>
+              <p className="mt-4 max-w-sm text-sm leading-relaxed text-white/65">
+                {required_evidence_policy || 'Keep crews capturing site photos before work begins. Evidence-rich jobs make your reports inspection-ready.'}
+              </p>
+            </>
+          )}
 
           <div className="mt-6 flex flex-wrap gap-8 text-sm text-white/65">
             <div>
@@ -67,16 +103,23 @@ export function EvidenceWidget({
                 Avg time to first photo
               </span>
               <span className="mt-1 text-xl font-semibold text-white">
-                {isLoading ? '—' : formatHoursToHuman(avgTimeToFirstEvidenceHours)}
+                {isLoading ? '—' : avg_time_to_first_photo_minutes 
+                  ? formatHoursToHuman(avg_time_to_first_photo_minutes / 60)
+                  : avgTimeToFirstEvidenceHours > 0
+                  ? formatHoursToHuman(avgTimeToFirstEvidenceHours)
+                  : 'N/A'}
               </span>
             </div>
             <div>
               <span className="block text-[0.7rem] uppercase tracking-[0.22em] text-white/40">
                 Jobs missing evidence
               </span>
-              <span className="mt-1 text-xl font-semibold text-white">
-                {isLoading ? '—' : Math.max(totalJobs - jobsWithEvidence, 0)}
-              </span>
+              <Link 
+                href={`/operations/jobs?missing_evidence=true&time_range=${timeRange}`}
+                className="block mt-1 text-xl font-semibold text-white hover:text-[#F97316] transition-colors"
+              >
+                {isLoading ? '—' : jobsMissingEvidence}
+              </Link>
             </div>
           </div>
         </div>

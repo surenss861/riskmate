@@ -290,7 +290,7 @@ export default function DashboardPage() {
             ? 'Evidence trail building'
             : 'Add site photos',
         isLoading: analyticsLoading,
-        href: `/operations/jobs?time_range=${timeRange}`, // Could link to evidence view if exists
+        href: `/operations/jobs?missing_evidence=true&time_range=${timeRange}`,
       },
     ],
     [
@@ -616,6 +616,12 @@ export default function DashboardPage() {
                 evidenceCount={analyticsData.evidence_count}
                 avgTimeToFirstEvidenceHours={analyticsData.avg_time_to_first_evidence_hours}
                 isLoading={analyticsLoading}
+                jobs_total={analyticsData.jobs_total}
+                jobs_with_photo_evidence={analyticsData.jobs_with_photo_evidence}
+                jobs_missing_required_evidence={analyticsData.jobs_missing_required_evidence}
+                required_evidence_policy={analyticsData.required_evidence_policy}
+                avg_time_to_first_photo_minutes={analyticsData.avg_time_to_first_photo_minutes}
+                timeRange={timeRange}
               />
             </div>
             </motion.div>
