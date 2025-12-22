@@ -11,6 +11,7 @@ import { motion } from 'framer-motion'
 import { jobsApi, subscriptionsApi, riskApi } from '@/lib/api'
 import UpgradeBanner from '@/components/UpgradeBanner'
 import { useAnalytics } from '@/hooks/useAnalytics'
+import { useDebounce } from '@/hooks/useDebounce'
 import { KpiGrid } from '@/components/dashboard/KpiGrid'
 import { TrendChart } from '@/components/dashboard/TrendChart'
 import EvidenceWidget from '@/components/dashboard/EvidenceWidget'
@@ -910,8 +911,11 @@ function DashboardPageInner() {
                         {((job as any).blockers_count !== undefined && (job as any).blockers_count > 0) && (
                           <div className="text-xs text-orange-400/80">
                             {(job as any).blockers_count} blocker{((job as any).blockers_count !== 1) ? 's' : ''}
-                            {((job as any).readiness_score !== undefined) && (
+                            {((job as any).readiness_score !== null && (job as any).readiness_score !== undefined) && (
                               <span className="text-white/50 ml-2">• Readiness: {(job as any).readiness_score}%</span>
+                            )}
+                            {((job as any).readiness_empty_reason === 'no_mitigations') && (
+                              <span className="text-white/50 ml-2">• No mitigations</span>
                             )}
                           </div>
                         )}
@@ -951,6 +955,49 @@ function DashboardPageInner() {
                     </div>
                   </motion.div>
                 ))}
+              </div>
+            )}
+            
+            {/* Pagination Controls */}
+            {jobsPagination && jobsPagination.total_pages && jobsPagination.total_pages > 1 && (
+              <div className="flex items-center justify-between border-t border-white/10 px-6 py-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-white/60">Page size:</span>
+                  <select
+                    value={pageSize}
+                    onChange={(e) => {
+                      setPageSize(parseInt(e.target.value, 10))
+                      setCurrentPage(1)
+                    }}
+                    className="rounded-lg border border-white/10 bg-[#121212]/80 px-3 py-1.5 text-sm text-white/90 transition focus:outline-none focus:ring-1 focus:ring-white/20"
+                  >
+                    <option value="25">25</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                  </select>
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="px-4 py-2 rounded-lg border border-white/10 bg-[#121212]/80 text-sm text-white/90 transition disabled:opacity-50 disabled:cursor-not-allowed hover:border-white/20 hover:bg-white/5 disabled:hover:border-white/10 disabled:hover:bg-[#121212]/80"
+                  >
+                    Previous
+                  </button>
+                  
+                  <span className="text-sm text-white/60 px-4">
+                    Page {currentPage} of {jobsPagination.total_pages}
+                  </span>
+                  
+                  <button
+                    onClick={() => setCurrentPage(p => Math.min(jobsPagination.total_pages || 1, p + 1))}
+                    disabled={currentPage >= (jobsPagination.total_pages || 1)}
+                    className="px-4 py-2 rounded-lg border border-white/10 bg-[#121212]/80 text-sm text-white/90 transition disabled:opacity-50 disabled:cursor-not-allowed hover:border-white/20 hover:bg-white/5 disabled:hover:border-white/10 disabled:hover:bg-[#121212]/80"
+                  >
+                    Next
+                  </button>
+                </div>
               </div>
             )}
           </motion.div>
