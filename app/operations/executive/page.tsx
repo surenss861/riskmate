@@ -692,9 +692,13 @@ export default function ExecutiveSnapshotPage() {
                     ? 'text-red-400'
                     : 'text-yellow-400'
                 }`}>
-                  {getIntegrityText(riskPosture.ledger_integrity)}
+                  {getIntegrityText(riskPosture.ledger_integrity, riskPosture.ledger_integrity_last_verified_at)}
                 </div>
-                <div className="text-sm text-white/60">Hash chain verification</div>
+                <div className="text-sm text-white/60">
+                  {riskPosture.ledger_integrity === 'verified' && riskPosture.ledger_integrity_last_verified_at
+                    ? `Verified ${new Date(riskPosture.ledger_integrity_last_verified_at).toLocaleDateString()}`
+                    : 'Hash chain verification'}
+                </div>
               </div>
             </div>
           </motion.div>
