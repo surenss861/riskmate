@@ -123,7 +123,7 @@ export default function ExecutiveSnapshotPage() {
             proof_packs_generated: 0,
             last_material_event_at: null,
             confidence_statement: '✅ No unresolved governance violations. All jobs within acceptable risk thresholds.',
-            ledger_integrity: 'pending',
+            ledger_integrity: 'not_verified',
             flagged_jobs: 0,
             signed_jobs: 0,
             unsigned_jobs: 0,
