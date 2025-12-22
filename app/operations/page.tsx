@@ -247,6 +247,7 @@ export default function DashboardPage() {
         ) as 'up' | 'down' | 'flat',
         trendLabel: analyticsError ? 'Using cached data' : 'Live field data',
         isLoading: analyticsLoading,
+        href: `/operations/audit/readiness?status=open&time_range=${timeRange}`,
       },
       {
         id: 'close-time',
@@ -261,6 +262,7 @@ export default function DashboardPage() {
             ? 'Under 24h target'
             : 'Investigate slow mitigations',
         isLoading: analyticsLoading,
+        href: `/operations/audit?tab=operations&event_name=mitigation.resolved&time_range=${timeRange}`,
       },
       {
         id: 'high-risk',
@@ -274,6 +276,7 @@ export default function DashboardPage() {
             ? 'All jobs in safe zone'
             : 'Needs immediate mitigation',
         isLoading: analyticsLoading,
+        href: `/operations/jobs?risk_level=high&time_range=${timeRange}`,
       },
       {
         id: 'evidence-files',
@@ -287,6 +290,7 @@ export default function DashboardPage() {
             ? 'Evidence trail building'
             : 'Add site photos',
         isLoading: analyticsLoading,
+        href: `/operations/jobs?time_range=${timeRange}`, // Could link to evidence view if exists
       },
     ],
     [
@@ -296,6 +300,7 @@ export default function DashboardPage() {
       analyticsData.evidence_count,
       analyticsError,
       analyticsLoading,
+      timeRange,
     ]
   )
 

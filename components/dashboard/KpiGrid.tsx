@@ -13,6 +13,8 @@ export type KpiGridItem = {
   isLoading?: boolean;
   trend?: 'up' | 'down' | 'flat';
   trendLabel?: string;
+  href?: string;
+  onClick?: () => void;
 };
 
 type KpiGridProps = {

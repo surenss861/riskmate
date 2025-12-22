@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { motion, useSpring } from 'framer-motion';
 import clsx from 'clsx';
+import Link from 'next/link';
 
 type KpiTileProps = {
   title: string;
@@ -14,6 +15,8 @@ type KpiTileProps = {
   isLoading?: boolean;
   trend?: 'up' | 'down' | 'flat';
   trendLabel?: string;
+  href?: string;
+  onClick?: () => void;
 };
 
 const formatNumber = (value: number) => {
@@ -43,6 +46,8 @@ export function KpiTile({
   isLoading = false,
   trend = 'flat',
   trendLabel,
+  href,
+  onClick,
 }: KpiTileProps) {
   const [displayValue, setDisplayValue] = useState('0');
   const spring = useSpring(0, {
@@ -68,13 +73,17 @@ export function KpiTile({
     return trendLabel;
   }, [trendLabel]);
 
-  return (
+  const tileContent = (
     <motion.div
       initial={{ opacity: 0, y: 24 }}
       animate={{ opacity: 1, y: 0 }}
       whileHover={{ scale: 1.02, y: -6 }}
       transition={{ duration: 0.35 }}
-      className="group relative overflow-hidden rounded-3xl border border-white/10 bg-[#111111]/80 p-6 shadow-[0_24px_80px_rgba(8,8,24,0.55)] backdrop-blur-2xl transition-transform duration-300"
+      className={clsx(
+        "group relative overflow-hidden rounded-3xl border border-white/10 bg-[#111111]/80 p-6 shadow-[0_24px_80px_rgba(8,8,24,0.55)] backdrop-blur-2xl transition-transform duration-300",
+        (href || onClick) && "cursor-pointer"
+      )}
+      onClick={onClick}
     >
       <span className="pointer-events-none absolute -top-20 left-10 h-40 w-40 rounded-full bg-[#F97316]/15 blur-[120px]" />
       <span className="pointer-events-none absolute -bottom-24 right-6 h-44 w-44 rounded-full bg-[#38BDF8]/12 blur-[140px]" />
@@ -119,6 +128,12 @@ export function KpiTile({
       )}
     </motion.div>
   );
+
+  if (href) {
+    return <Link href={href}>{tileContent}</Link>
+  }
+
+  return tileContent
 }
 
 export default KpiTile;
