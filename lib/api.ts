@@ -164,7 +164,11 @@ export const jobsApi = {
         risk_level: string | null;
         created_at: string;
         updated_at: string;
-        readiness_score?: number;
+        readiness_score?: number | null;
+        readiness_basis?: string;
+        readiness_empty_reason?: string | null;
+        mitigations_total?: number;
+        mitigations_complete?: number;
         blockers_count?: number;
         missing_evidence?: boolean;
         pending_attestations?: number;
