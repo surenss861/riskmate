@@ -632,6 +632,12 @@ export const executiveApi = {
         ledger_integrity: 'verified' | 'error' | 'not_verified'
         ledger_integrity_last_verified_at: string | null
         ledger_integrity_verified_through_event_id: string | null
+        ledger_integrity_error_details?: {
+          failingEventId?: string
+          expectedHash?: string
+          gotHash?: string
+          eventIndex?: number
+        }
         flagged_jobs: number
         signed_jobs: number
         unsigned_jobs: number
@@ -654,6 +660,12 @@ export const executiveApi = {
           signed_signoffs: number
           proof_packs: number
         }
+        recommended_actions: Array<{
+          priority: number
+          action: string
+          href: string
+          reason: string
+        }>
       }
     }>(`/api/executive/risk-posture${queryParams}`)
   },

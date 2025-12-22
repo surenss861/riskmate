@@ -215,6 +215,7 @@ executiveRouter.get('/risk-posture', authenticate as unknown as express.RequestH
     let ledgerIntegrity: 'verified' | 'error' | 'not_verified' = 'not_verified'
     let lastVerifiedAt: string | null = null
     let verifiedThroughEventId: string | null = null
+    let integrityErrorDetails: { failingEventId?: string; expectedHash?: string; gotHash?: string; eventIndex?: number } | null = null
 
     if (!integrityError && allLogs && allLogs.length > 0) {
       // Verify hash chain: each log's prev_hash should match the previous log's hash
@@ -234,12 +235,24 @@ executiveRouter.get('/risk-posture', authenticate as unknown as express.RequestH
           }
           // Missing hashes indicate incomplete verification
           isVerified = false
+          integrityErrorDetails = {
+            failingEventId: current.id,
+            eventIndex: i,
+            expectedHash: previous.hash || '(missing)',
+            gotHash: current.prev_hash || '(missing)',
+          }
           break
         }
 
         // Check if prev_hash matches previous log's hash
         if (current.prev_hash !== previous.hash) {
           isVerified = false
+          integrityErrorDetails = {
+            failingEventId: current.id,
+            eventIndex: i,
+            expectedHash: previous.hash,
+            gotHash: current.prev_hash,
+          }
           break
         }
 
@@ -250,11 +263,11 @@ executiveRouter.get('/risk-posture', authenticate as unknown as express.RequestH
         ledgerIntegrity = 'verified'
         lastVerifiedAt = new Date().toISOString() // Verification just completed
         verifiedThroughEventId = allLogs[lastGoodIndex].id
-      } else if (lastGoodIndex >= 0) {
-        // Found a mismatch
+      } else if (integrityErrorDetails) {
+        // Found a mismatch - return details
         ledgerIntegrity = 'error'
         lastVerifiedAt = new Date().toISOString()
-        verifiedThroughEventId = lastGoodIndex > 0 ? allLogs[lastGoodIndex - 1].id : null
+        verifiedThroughEventId = integrityErrorDetails.failingEventId || null
       } else {
         // No logs to verify or incomplete chain
         ledgerIntegrity = 'not_verified'
@@ -262,6 +275,7 @@ executiveRouter.get('/risk-posture', authenticate as unknown as express.RequestH
     } else if (integrityError) {
       ledgerIntegrity = 'error'
       lastVerifiedAt = new Date().toISOString()
+      integrityErrorDetails = { eventIndex: 0 }
     }
 
     // Compute exposure level
@@ -465,6 +479,7 @@ executiveRouter.get('/risk-posture', authenticate as unknown as express.RequestH
       ledger_integrity: ledgerIntegrity,
       ledger_integrity_last_verified_at: lastVerifiedAt,
       ledger_integrity_verified_through_event_id: verifiedThroughEventId,
+      ledger_integrity_error_details: integrityErrorDetails || undefined,
       // Raw counts for cards
       flagged_jobs: flaggedJobs,
       signed_jobs: signedCount,
