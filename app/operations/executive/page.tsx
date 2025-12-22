@@ -707,10 +707,23 @@ export default function ExecutiveSnapshotPage() {
                   {getIntegrityText(riskPosture.ledger_integrity, riskPosture.ledger_integrity_last_verified_at)}
                 </div>
                 <div className="text-sm text-white/60">
-                  {riskPosture.ledger_integrity === 'verified' && riskPosture.ledger_integrity_last_verified_at
-                    ? `Verified ${new Date(riskPosture.ledger_integrity_last_verified_at).toLocaleDateString()}`
+                  {riskPosture.ledger_integrity === 'verified' && riskPosture.ledger_integrity_verified_through_event_id
+                    ? `Verified through event ${riskPosture.ledger_integrity_verified_through_event_id.slice(0, 8)}...`
+                    : riskPosture.ledger_integrity === 'error' && riskPosture.ledger_integrity_error_details?.failingEventId
+                    ? `Mismatch at event ${riskPosture.ledger_integrity_error_details.failingEventId.slice(0, 8)}...`
                     : 'Hash chain verification'}
                 </div>
+                {riskPosture.ledger_integrity === 'error' && riskPosture.ledger_integrity_error_details?.failingEventId && (
+                  <a
+                    href={`/operations/audit?event_id=${riskPosture.ledger_integrity_error_details.failingEventId}`}
+                    className="mt-2 text-xs text-red-400 hover:text-red-300 underline inline-block"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                    }}
+                  >
+                    View failing event →
+                  </a>
+                )}
               </div>
             </div>
           </motion.div>
