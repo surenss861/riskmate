@@ -80,19 +80,17 @@ export function KpiTile({
       whileHover={{ scale: 1.01 }}
       transition={{ duration: 0.35 }}
       className={clsx(
-        "group relative overflow-hidden rounded-3xl border border-white/5",
-        "bg-gradient-to-b from-[#121212] to-transparent backdrop-blur-sm",
-        "shadow-[0_8px_32px_rgba(0,0,0,0.3)] p-6 transition-transform duration-300",
+        "group relative overflow-hidden rounded-3xl border border-white/10",
+        "bg-white/[0.03] backdrop-blur-xl",
+        "shadow-[0_4px_24px_rgba(0,0,0,0.15)] p-6 transition-transform duration-300",
         (href || onClick) && "cursor-pointer"
       )}
       onClick={onClick}
     >
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-white/60 font-medium">{title}</p>
-      </div>
-
-      <div className="mt-5 flex items-baseline gap-2">
-        <span className="text-4xl font-semibold tracking-tight text-white">
+      <div className="text-xs uppercase tracking-wider text-white/50 mb-2">{title}</div>
+      
+      <div className="mt-2 flex items-baseline gap-2">
+        <span className="text-3xl font-bold font-display text-white">
           {prefix}
           {isLoading ? '—' : displayValue}
           {suffix}
@@ -100,7 +98,7 @@ export function KpiTile({
       </div>
 
       {description && (
-        <p className="mt-3 text-sm leading-relaxed text-white/65">{description}</p>
+        <p className="mt-3 text-sm text-white/60 leading-relaxed">{description}</p>
       )}
 
       {trendText && (

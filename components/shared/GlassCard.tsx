@@ -30,8 +30,8 @@ export function GlassCard({
       transition={transition || { duration: 0.45 }}
       className={clsx(
         'relative overflow-hidden rounded-3xl border border-white/10',
-        'bg-gradient-to-b from-[#121212] to-transparent backdrop-blur-xl',
-        'shadow-[0_8px_32px_rgba(0,0,0,0.3)]',
+        'bg-white/[0.03] backdrop-blur-xl',
+        'shadow-[0_4px_24px_rgba(0,0,0,0.15)]',
         href || onClick ? 'cursor-pointer transition-transform hover:scale-[1.01]' : '',
         className
       )}

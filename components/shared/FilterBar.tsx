@@ -34,7 +34,7 @@ export function SegmentedControl({ value, onChange, options }: SegmentedControlP
           key={option.value}
           onClick={() => onChange(option.value)}
           className={clsx(
-            'px-4 py-2 text-sm font-medium rounded-md transition-all',
+            'px-4 py-2.5 text-sm font-medium rounded-md transition-all',
             value === option.value
               ? 'bg-[#F97316] text-black shadow-sm'
               : 'text-white/70 hover:text-white hover:bg-white/5'
