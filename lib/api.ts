@@ -126,21 +126,29 @@ export const jobsApi = {
   list: async (params?: { 
     page?: number; 
     limit?: number; 
+    page_size?: number;
     status?: string; 
     risk_level?: string;
     include_archived?: boolean;
     sort?: string;
     cursor?: string;
+    q?: string;
+    time_range?: string;
+    missing_evidence?: boolean;
     debug?: boolean;
   }) => {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.set('page', params.page.toString());
     if (params?.limit) queryParams.set('limit', params.limit.toString());
+    if (params?.page_size) queryParams.set('page_size', params.page_size.toString());
     if (params?.status) queryParams.set('status', params.status);
     if (params?.risk_level) queryParams.set('risk_level', params.risk_level);
     if (params?.include_archived) queryParams.set('include_archived', 'true');
     if (params?.sort) queryParams.set('sort', params.sort);
     if (params?.cursor) queryParams.set('cursor', params.cursor);
+    if (params?.q) queryParams.set('q', params.q);
+    if (params?.time_range) queryParams.set('time_range', params.time_range);
+    if (params?.missing_evidence === true) queryParams.set('missing_evidence', 'true');
     if (params?.debug && process.env.NODE_ENV === 'development') {
       queryParams.set('debug', '1');
     }

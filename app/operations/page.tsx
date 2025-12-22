@@ -3,7 +3,7 @@
 // for enterprise language consistency (Operations Control Center)
 
 
-import { useEffect, useMemo, useState, useCallback } from 'react'
+import { useEffect, useMemo, useState, useCallback, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import ProtectedRoute from '@/components/ProtectedRoute'
@@ -36,6 +36,14 @@ interface Job {
 }
 
 export default function DashboardPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-white/60">Loading...</div>}>
+      <DashboardPageInner />
+    </Suspense>
+  )
+}
+
+function DashboardPageInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [user, setUser] = useState<any>(null)
@@ -177,7 +185,7 @@ export default function DashboardPage() {
       }
       setLoading(false)
     }
-  }, [filterStatus, filterRiskLevel])
+  }, [filterStatus, filterRiskLevel, timeRange])
 
   useEffect(() => {
     loadData()
@@ -217,6 +225,15 @@ export default function DashboardPage() {
     avg_time_to_first_evidence_hours: 0,
     trend_data: [],
     trend: [],
+    // New fields (optional, used in Sprint 2)
+    jobs_total: 0,
+    jobs_scored: 0,
+    jobs_with_any_evidence: 0,
+    jobs_with_photo_evidence: 0,
+    jobs_missing_required_evidence: 0,
+    required_evidence_policy: '',
+    avg_time_to_first_photo_minutes: null as number | null,
+    trend_empty_reason: null as 'no_jobs' | 'no_events' | null,
   }
 
   const analyticsData = analytics || defaultAnalytics
