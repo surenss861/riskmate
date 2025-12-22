@@ -22,6 +22,7 @@ import { Changelog } from '@/components/dashboard/Changelog'
 import { FirstRunSetupWizard } from '@/components/setup/FirstRunSetupWizard'
 import Link from 'next/link'
 import { getRiskBadgeClass, getStatusBadgeClass, buttonStyles, spacing, typography } from '@/lib/styles/design-system'
+import { AppBackground, AppShell, PageHeader, Button as SharedButton } from '@/components/shared'
 
 type TimeRange = '7d' | '30d' | '90d' | 'all'
 
@@ -561,19 +562,10 @@ function DashboardPageInner() {
 
   return (
     <ProtectedRoute>
-      <div className="relative min-h-screen overflow-hidden bg-[#0A0A0A] text-white">
-        {/* Ambient Gradient Backdrop - Subtle like landing page */}
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 -z-10"
-        >
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(249,115,22,0.05),_transparent_55%)]" />
-        </div>
-
+      <AppBackground>
         <DashboardNavbar email={user?.email} onLogout={handleLogout} />
 
-        {/* Dashboard Content */}
-        <div className="relative mx-auto max-w-6xl px-6 pt-32 pb-20">
+        <AppShell>
           <motion.div
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
@@ -629,12 +621,13 @@ function DashboardPageInner() {
               </div>
             </div>
             <div className="relative flex flex-col items-end gap-3">
-            <button
+            <SharedButton
+              variant="primary"
+              size="lg"
               onClick={() => router.push('/operations/jobs/new')}
-              className={`${buttonStyles.primary} ${buttonStyles.sizes.lg}`}
             >
               + New Job
-            </button>
+            </SharedButton>
               <Link
                 href="/operations/jobs"
                 className="inline-flex items-center gap-2 px-6 py-3 border border-white/10 rounded-lg hover:border-white/20 transition-colors font-medium text-sm"
@@ -1081,6 +1074,7 @@ function DashboardPageInner() {
           }
         }}
       />
+      </AppBackground>
     </ProtectedRoute>
   )
 }
