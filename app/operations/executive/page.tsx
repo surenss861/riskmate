@@ -171,7 +171,9 @@ export default function ExecutiveSnapshotPage() {
         proof_packs_generated: 0,
         last_material_event_at: null,
         confidence_statement: '✅ No unresolved governance violations. All jobs within acceptable risk thresholds.',
-        ledger_integrity: 'pending',
+        ledger_integrity: 'not_verified',
+        ledger_integrity_last_verified_at: null,
+        ledger_integrity_verified_through_event_id: null,
         flagged_jobs: 0,
         signed_jobs: 0,
         unsigned_jobs: 0,
@@ -249,14 +251,14 @@ export default function ExecutiveSnapshotPage() {
           >
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
-                <Lock className="w-6 h-6 text-[#F97316]" />
-                <div>
-                  <p className="text-xs uppercase tracking-[0.42em] text-white/50">
-                    Executive View
-                  </p>
-                  <h1 className={`${typography.h1} mt-2`}>
-                    Organizational Risk Posture
-                  </h1>
+              <Lock className="w-6 h-6 text-[#F97316]" />
+              <div>
+                <p className="text-xs uppercase tracking-[0.42em] text-white/50">
+                  Executive View
+                </p>
+                <h1 className={`${typography.h1} mt-2`}>
+                  Organizational Risk Posture
+                </h1>
                 </div>
               </div>
               <div className="flex items-center gap-3">
@@ -348,7 +350,7 @@ export default function ExecutiveSnapshotPage() {
                 </div>
                 <div className="flex items-baseline gap-2 mb-1">
                   <span className={`text-3xl font-bold ${riskPosture.high_risk_jobs > 0 ? 'text-red-200' : 'text-white'}`}>
-                    {riskPosture.high_risk_jobs}
+                  {riskPosture.high_risk_jobs}
                   </span>
                   {riskPosture.deltas && riskPosture.deltas.high_risk_jobs !== 0 && (
                     <span className={`text-sm font-medium ${riskPosture.deltas.high_risk_jobs > 0 ? 'text-red-400' : 'text-green-400'}`}>
@@ -393,7 +395,7 @@ export default function ExecutiveSnapshotPage() {
                 </div>
                 <div className="flex items-baseline gap-2">
                   <span className={`text-3xl font-bold ${riskPosture.open_incidents > 0 ? 'text-orange-200' : 'text-white'}`}>
-                    {riskPosture.open_incidents}
+                  {riskPosture.open_incidents}
                   </span>
                   {riskPosture.deltas && riskPosture.deltas.open_incidents !== 0 && (
                     <span className={`text-sm font-medium ${riskPosture.deltas.open_incidents > 0 ? 'text-orange-400' : 'text-green-400'}`}>
@@ -438,7 +440,7 @@ export default function ExecutiveSnapshotPage() {
                 </div>
                 <div className="flex items-baseline gap-2">
                   <span className={`text-3xl font-bold ${riskPosture.recent_violations > 0 ? 'text-red-200' : 'text-white'}`}>
-                    {riskPosture.recent_violations}
+                  {riskPosture.recent_violations}
                   </span>
                   {riskPosture.deltas && riskPosture.deltas.violations !== 0 && (
                     <span className={`text-sm font-medium ${riskPosture.deltas.violations > 0 ? 'text-red-400' : 'text-green-400'}`}>
@@ -537,7 +539,7 @@ export default function ExecutiveSnapshotPage() {
                 </div>
                 <div className="flex items-baseline gap-2">
                   <span className={`text-3xl font-bold ${riskPosture.pending_signoffs > 3 ? 'text-yellow-200' : 'text-white'}`}>
-                    {riskPosture.pending_signoffs}
+                  {riskPosture.pending_signoffs}
                   </span>
                   {riskPosture.deltas && riskPosture.deltas.pending_signoffs !== 0 && (
                     <span className={`text-sm font-medium ${riskPosture.deltas.pending_signoffs > 0 ? 'text-yellow-400' : 'text-green-400'}`}>
@@ -750,13 +752,13 @@ export default function ExecutiveSnapshotPage() {
                 Immutable, export-ready, insurer-safe
               </p>
               <div className="flex items-center justify-center gap-4">
-                <a
+              <a
                   href="/operations/audit?tab=governance&time_range=90d&severity=material"
-                  className={`${buttonStyles.primary} inline-flex items-center gap-2 text-base px-8 py-3`}
-                >
-                  View Compliance Ledger
-                  <ExternalLink className="w-5 h-5" />
-                </a>
+                className={`${buttonStyles.primary} inline-flex items-center gap-2 text-base px-8 py-3`}
+              >
+                View Compliance Ledger
+                <ExternalLink className="w-5 h-5" />
+              </a>
                 <button
                   onClick={() => {
                     const brief = {
