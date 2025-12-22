@@ -695,10 +695,10 @@ function DashboardPageInner() {
                 jobs_missing_required_evidence={analyticsData.jobs_missing_required_evidence}
                 required_evidence_policy={analyticsData.required_evidence_policy}
                 avg_time_to_first_photo_minutes={analyticsData.avg_time_to_first_photo_minutes}
-                timeRange={timeRange}
-              />
-              </GlassCard>
-            </div>
+                    timeRange={timeRange}
+                  />
+                </GlassCard>
+              </div>
             </div>
           ))}
 
