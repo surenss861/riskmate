@@ -962,7 +962,7 @@ function DashboardPageInner() {
                         </div>
                       )}
                     </div>
-                  </motion.div>
+                  </div>
                 ))}
               </div>
             )}
