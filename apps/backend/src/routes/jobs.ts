@@ -356,6 +356,74 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
 
     if (error) throw error;
     
+    // Fetch readiness and blockers data for jobs (if needed for sorting or response)
+    const jobIds = (jobs || []).map((job: any) => job.id);
+    let readinessData: Record<string, { readiness_score: number; blockers_count: number; missing_evidence: boolean; pending_attestations: number }> = {};
+    
+    if (jobIds.length > 0 && (useReadinessOrdering || useBlockersOrdering || !useCursor)) {
+      // Calculate readiness metrics for each job
+      // For now, we'll use mitigation items as a proxy for readiness/blockers
+      // In a full implementation, this would query readiness_items table
+      const { data: mitigationItems } = await supabase
+        .from('mitigation_items')
+        .select('job_id, done, is_completed')
+        .in('job_id', jobIds);
+      
+      const { data: documents } = await supabase
+        .from('documents')
+        .select('job_id')
+        .in('job_id', jobIds);
+      
+      // Group by job_id
+      const mitigationsByJob: Record<string, { total: number; completed: number }> = {};
+      const documentsByJob: Record<string, boolean> = {};
+      
+      mitigationItems?.forEach((item: any) => {
+        if (!mitigationsByJob[item.job_id]) {
+          mitigationsByJob[item.job_id] = { total: 0, completed: 0 };
+        }
+        mitigationsByJob[item.job_id].total++;
+        if (item.done || item.is_completed) {
+          mitigationsByJob[item.job_id].completed++;
+        }
+      });
+      
+      documents?.forEach((doc: any) => {
+        documentsByJob[doc.job_id] = true;
+      });
+      
+      // Calculate readiness_score (0-100) and blockers_count per job
+      jobIds.forEach((jobId: string) => {
+        const mitigation = mitigationsByJob[jobId] || { total: 0, completed: 0 };
+        const hasEvidence = documentsByJob[jobId] || false;
+        const readiness_score = mitigation.total > 0 
+          ? Math.round((mitigation.completed / mitigation.total) * 100)
+          : (hasEvidence ? 50 : 0); // Default score if no mitigations
+        
+        const blockers_count = mitigation.total - mitigation.completed;
+        const missing_evidence = !hasEvidence;
+        
+        // Pending attestations: would need to query attestations table
+        // For now, use 0 as placeholder
+        const pending_attestations = 0;
+        
+        readinessData[jobId] = {
+          readiness_score,
+          blockers_count,
+          missing_evidence,
+          pending_attestations,
+        };
+      });
+    }
+    
+    // Apply missing_evidence filter if specified
+    if (missing_evidence === 'true' && jobs) {
+      jobs = jobs.filter((job: any) => {
+        const data = readinessData[job.id];
+        return data?.missing_evidence === true;
+      });
+    }
+    
     // Apply deterministic status ordering if requested (in-memory sort)
     if (useStatusOrdering && jobs) {
       jobs = [...jobs].sort((a, b) => {
@@ -368,6 +436,36 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
         const aTime = new Date(a.created_at).getTime();
         const bTime = new Date(b.created_at).getTime();
         return sortDirection === 'asc' ? aTime - bTime : bTime - aTime;
+      });
+    }
+    
+    // Apply blockers_desc/blockers_asc ordering (in-memory sort)
+    if (useBlockersOrdering && jobs) {
+      jobs = [...jobs].sort((a, b) => {
+        const aBlockers = readinessData[a.id]?.blockers_count || 0;
+        const bBlockers = readinessData[b.id]?.blockers_count || 0;
+        if (aBlockers !== bBlockers) {
+          return sortDirection === 'asc' ? aBlockers - bBlockers : bBlockers - aBlockers;
+        }
+        // Tiebreaker: created_at
+        const aTime = new Date(a.created_at).getTime();
+        const bTime = new Date(b.created_at).getTime();
+        return bTime - aTime; // Newest first for tiebreaker
+      });
+    }
+    
+    // Apply readiness_asc/readiness_desc ordering (in-memory sort)
+    if (useReadinessOrdering && jobs) {
+      jobs = [...jobs].sort((a, b) => {
+        const aScore = readinessData[a.id]?.readiness_score || 0;
+        const bScore = readinessData[b.id]?.readiness_score || 0;
+        if (aScore !== bScore) {
+          return sortDirection === 'asc' ? aScore - bScore : bScore - aScore;
+        }
+        // Tiebreaker: created_at
+        const aTime = new Date(a.created_at).getTime();
+        const bTime = new Date(b.created_at).getTime();
+        return bTime - aTime; // Newest first for tiebreaker
       });
     }
     
@@ -443,6 +541,13 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
 
     let { count, error: countError } = await countQuery;
     
+    // Adjust total count if missing_evidence filter was applied
+    let adjustedTotal = count || 0;
+    if (missing_evidence === 'true') {
+      // Re-count after missing_evidence filter (in-memory filter)
+      adjustedTotal = jobs?.length || 0;
+    }
+    
     // If error is due to missing columns, retry without archive/delete filters
     if (countError && (countError.message?.includes('archived_at') || countError.message?.includes('deleted_at') || (countError as any).code === 'PGRST116')) {
       let fallbackCountQuery = supabase
@@ -460,6 +565,12 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
       const fallbackCountResult = await fallbackCountQuery;
       count = fallbackCountResult.count;
       countError = fallbackCountResult.error;
+      
+      // Re-adjust total if missing_evidence filter was applied
+      adjustedTotal = count || 0;
+      if (missing_evidence === 'true') {
+        adjustedTotal = jobs?.length || 0;
+      }
     }
 
     if (countError) throw countError;
@@ -468,9 +579,11 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
       data: jobs || [],
       pagination: {
         page: cursor ? undefined : pageNum,
-        limit: limitNum,
-        total: count || 0,
-        totalPages: cursor ? undefined : Math.ceil((count || 0) / limitNum),
+        page_size: limitNum,
+        limit: limitNum, // Keep for backward compatibility
+        total: adjustedTotal,
+        total_pages: cursor ? undefined : Math.ceil(adjustedTotal / limitNum),
+        totalPages: cursor ? undefined : Math.ceil(adjustedTotal / limitNum), // Keep for backward compatibility
         cursor: nextCursor || undefined,
         hasMore: nextCursor !== null,
       },
