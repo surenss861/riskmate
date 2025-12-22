@@ -259,8 +259,12 @@ executiveRouter.get('/risk-posture', authenticate as unknown as express.RequestH
 })
 
 // Invalidate cache on audit log write (called from audit middleware)
+// Invalidates all time_range variants for the organization
 export function invalidateExecutiveCache(organizationId: string) {
-  const cacheKey = `executive:${organizationId}`
-  executiveCache.delete(cacheKey)
+  const timeRanges = ['7d', '30d', '90d', 'all']
+  timeRanges.forEach(timeRange => {
+    const cacheKey = `executive:${organizationId}:${timeRange}`
+    executiveCache.delete(cacheKey)
+  })
 }
 
