@@ -705,12 +705,7 @@ function DashboardPageInner() {
 
           {/* Enhanced Dashboard Overview - Only for owners/admins */}
           {!isMember && (
-            <motion.div
-              initial={{ opacity: 0, y: 18 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.12, duration: 0.45 }}
-              className="mb-16"
-            >
+            <div className="mb-16">
               <div className="mb-4">
                 <p className="text-sm text-white/60">
                   Your centralized job hub — track progress, hazards, documents, and generate audit-ready reports.
@@ -730,14 +725,9 @@ function DashboardPageInner() {
 
           {/* Changelog - Only for owners/admins */}
           {!isMember && (
-            <motion.div
-              initial={{ opacity: 0, y: 18 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.14, duration: 0.45 }}
-              className="mb-16"
-            >
+            <div className="mb-16">
               <Changelog />
-            </motion.div>
+            </div>
           )}
 
           {/* Top Hazards - Only for owners/admins */}
