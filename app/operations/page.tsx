@@ -609,6 +609,9 @@ export default function DashboardPage() {
                 rangeDays={analyticsRange}
                 onRangeChange={handleRangeChange}
                 isLoading={analyticsLoading}
+                emptyReason={analyticsData.trend_empty_reason}
+                onCreateJob={() => router.push('/operations/jobs/new')}
+                onViewMitigations={() => router.push('/operations/audit/readiness?status=open')}
               />
               <EvidenceWidget
                 totalJobs={totalJobsForRange}
