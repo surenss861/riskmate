@@ -3,15 +3,14 @@
 import React, { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { motion } from 'framer-motion'
 import { DashboardNavbar } from '@/components/dashboard/DashboardNavbar'
 import { DataGrid } from '@/components/dashboard/DataGrid'
 import { ConfirmationModal } from '@/components/dashboard/ConfirmationModal'
 import { Toast } from '@/components/dashboard/Toast'
 import { JobRosterSelect } from '@/components/dashboard/JobRosterSelect'
 import { jobsApi } from '@/lib/api'
-import { typography, buttonStyles, spacing } from '@/lib/styles/design-system'
 import { hasPermission } from '@/lib/utils/permissions'
+import { AppBackground, AppShell, PageHeader, PageSection, GlassCard, Button } from '@/components/shared'
 
 interface JobsPageContentProps {
   user: any
@@ -324,7 +323,7 @@ export function JobsPageContentView(props: JobsPageContentProps) {
   }
   
   return (
-        <div className="min-h-screen bg-[#0A0A0A] text-white">
+    <AppBackground>
       <DashboardNavbar 
         email={props.user?.email} 
         onLogout={async () => {
@@ -333,53 +332,17 @@ export function JobsPageContentView(props: JobsPageContentProps) {
           router.push('/')
         }} 
       />
-      <div className="mx-auto max-w-7xl px-6 pt-24 pb-14">
-        <motion.div
-          initial={{ opacity: 0, y: 24 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.45 }}
-          className={spacing.section}
-        >
-          <div className="flex items-center justify-between">
-            <div className="flex-1">
-                  <div className="flex items-center gap-3">
-                  <Link href="/operations/jobs" className={`${typography.h1} hover:text-[#F97316] transition-colors`}>
-                    Work Records
-                  </Link>
-                    <span className="text-xs text-white/40 font-normal">Audit-safe view</span>
-                  </div>
-                  <p className={`${spacing.tight} ${typography.bodyMuted}`}>
-                    Your centralized job hub — track progress, hazards, documents, and generate audit-ready reports.
-                  </p>
-            </div>
-            <div className="flex items-center gap-3">
-              <label className="flex items-center gap-2 text-sm text-white/60 cursor-pointer hover:text-white/80 transition-colors">
-                <input
-                  type="checkbox"
-                  checked={executiveView}
-                  onChange={(e) => setExecutiveView(e.target.checked)}
-                  className="w-4 h-4 rounded border-white/20 bg-white/5 text-[#F97316] focus:ring-[#F97316]/50"
-                />
-                <span>Executive View</span>
-              </label>
-              <button
-                onClick={() => router.push('/operations/jobs/new')}
-                className={`${buttonStyles.primary} ${buttonStyles.sizes.lg}`}
-              >
-                + Create Job
-              </button>
-            </div>
-          </div>
-        </motion.div>
+      <AppShell>
+        <PageHeader
+          title="Work Records"
+          subtitle="Your centralized job hub — track progress, hazards, documents, and generate audit-ready reports."
+          showDivider
+        />
 
         {/* Filters */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.45, delay: 0.1 }}
-          className={`${spacing.relaxed}`}
-        >
-          <div className="flex flex-wrap gap-3 mb-3">
+        <PageSection>
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex flex-wrap gap-3">
             <JobRosterSelect
             value={props.filterStatus}
               onValueChange={(value) => {
@@ -445,6 +408,25 @@ export function JobsPageContentView(props: JobsPageContentProps) {
                 ]}
               />
             )}
+            </div>
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-2 text-sm text-white/60 cursor-pointer hover:text-white/80 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={executiveView}
+                  onChange={(e) => setExecutiveView(e.target.checked)}
+                  className="w-4 h-4 rounded border-white/20 bg-white/5 text-[#F97316] focus:ring-[#F97316]/50"
+                />
+                <span>Executive View</span>
+              </label>
+              <Button
+                variant="primary"
+                size="lg"
+                onClick={() => router.push('/operations/jobs/new')}
+              >
+                + Create Job
+              </Button>
+            </div>
           </div>
           {/* Filter Summary */}
           {(props.filterStatus || props.filterRiskLevel || props.filterTemplateSource || props.filterTemplateId) && (
@@ -473,16 +455,11 @@ export function JobsPageContentView(props: JobsPageContentProps) {
               </button>
             </div>
           )}
-        </motion.div>
+        </PageSection>
 
         {/* Keyboard Hint (one-time) */}
         {showKeyboardHint && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            className="mb-4 px-4 py-2 bg-[#F97316]/10 border border-[#F97316]/20 rounded-lg text-sm text-white/70"
-          >
+          <div className="mb-6 px-4 py-2 bg-[#F97316]/10 border border-[#F97316]/20 rounded-lg text-sm text-white/70">
             <div className="flex items-center justify-between">
               <span>💡 Tip: Press <kbd className="px-1.5 py-0.5 bg-white/10 rounded text-xs">/</kbd> to search, <kbd className="px-1.5 py-0.5 bg-white/10 rounded text-xs">Enter</kbd> to open row</span>
               <button
@@ -495,54 +472,52 @@ export function JobsPageContentView(props: JobsPageContentProps) {
                 ×
               </button>
             </div>
-          </motion.div>
+          </div>
         )}
 
         {/* Jobs List */}
+        <PageSection>
         {props.loading ? (
           <div className="flex items-center justify-center py-20">
             <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#F97316] border-t-transparent" />
           </div>
         ) : props.jobs.length === 0 ? (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="rounded-2xl border border-white/10 bg-black/35 p-12 text-center"
-            >
-              {props.filterStatus || props.filterRiskLevel || props.filterTemplateSource || props.filterTemplateId ? (
-                <>
-                  <p className={`text-white font-medium ${spacing.tight}`}>No jobs match these filters</p>
-                  <p className={`text-sm text-white/60 ${spacing.normal} max-w-md mx-auto`}>
-                    Try adjusting your filters or clear them to see all jobs.
-                  </p>
-                  <button
-                    onClick={() => {
-                      props.onFilterStatusChange('')
-                      props.onFilterRiskLevelChange('')
-                      props.onFilterTemplateSourceChange('')
-                      props.onFilterTemplateIdChange('')
-                      props.onPageChange(1)
-                    }}
-                    className={`${spacing.normal} px-4 py-2 text-sm text-white/70 hover:text-white border border-white/10 rounded-lg hover:bg-white/5 transition-colors`}
-                  >
-                    Clear Filters
-                  </button>
-                </>
-              ) : (
-                <>
-              <p className={`text-white font-medium ${spacing.tight}`}>No jobs yet</p>
-              <p className={`text-sm text-white/60 ${spacing.normal} max-w-md mx-auto`}>
-                Jobs are where you track safety, document hazards, and generate audit-ready reports. Create your first job to get started.
-              </p>
-              <button
-                onClick={() => router.push('/operations/jobs/new')}
-                className={`${spacing.normal} ${buttonStyles.primary} ${buttonStyles.sizes.lg}`}
-              >
-                Create Your First Job
-              </button>
-                </>
-              )}
-            </motion.div>
+          <GlassCard className="p-12 text-center">
+            {props.filterStatus || props.filterRiskLevel || props.filterTemplateSource || props.filterTemplateId ? (
+              <>
+                <p className="text-white font-medium mb-2">No jobs match these filters</p>
+                <p className="text-sm text-white/60 mb-6 max-w-md mx-auto">
+                  Try adjusting your filters or clear them to see all jobs.
+                </p>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    props.onFilterStatusChange('')
+                    props.onFilterRiskLevelChange('')
+                    props.onFilterTemplateSourceChange('')
+                    props.onFilterTemplateIdChange('')
+                    props.onPageChange(1)
+                  }}
+                >
+                  Clear Filters
+                </Button>
+              </>
+            ) : (
+              <>
+                <p className="text-white font-medium mb-2">No jobs yet</p>
+                <p className="text-sm text-white/60 mb-6 max-w-md mx-auto">
+                  Jobs are where you track safety, document hazards, and generate audit-ready reports. Create your first job to get started.
+                </p>
+                <Button
+                  variant="primary"
+                  size="lg"
+                  onClick={() => router.push('/operations/jobs/new')}
+                >
+                  Create Your First Job
+                </Button>
+              </>
+            )}
+          </GlassCard>
         ) : (
           <DataGrid
             data={props.jobs}
@@ -845,10 +820,12 @@ export function JobsPageContentView(props: JobsPageContentProps) {
             }}
           />
         )}
+        </PageSection>
 
         {/* Audit Narrative Footer */}
         {props.jobs.length > 0 && (
-          <div className="mt-4 flex flex-col gap-2 text-xs">
+          <PageSection>
+            <div className="flex flex-col gap-2 text-xs">
             <div className="flex items-center justify-between">
               <div className="text-white/30">
                 All job records are immutable once governance evidence exists.
@@ -860,32 +837,35 @@ export function JobsPageContentView(props: JobsPageContentProps) {
             <div className="text-white/25 text-center">
               RiskMate maintains a continuous, immutable risk ledger for every job.
             </div>
-          </div>
+            </div>
+          </PageSection>
         )}
 
         {/* Pagination */}
         {props.totalPages > 1 && (
-          <div className={`${spacing.section} flex items-center justify-center ${spacing.gap.tight}`}>
-            <button
-              onClick={() => props.onPageChange(Math.max(1, props.page - 1))}
-              disabled={props.page === 1}
-              className="rounded-lg border border-white/15 bg-white/5 px-4 py-2 text-sm text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-white/10"
-            >
-              Previous
-            </button>
-            <span className="px-4 text-sm text-white/60">
-              Page {props.page} of {props.totalPages}
-            </span>
-            <button
-              onClick={() => props.onPageChange(Math.min(props.totalPages, props.page + 1))}
-              disabled={props.page === props.totalPages}
-              className="rounded-lg border border-white/15 bg-white/5 px-4 py-2 text-sm text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-white/10"
-            >
-              Next
-            </button>
-          </div>
+          <PageSection>
+            <div className="flex items-center justify-center gap-4">
+              <Button
+                variant="secondary"
+                onClick={() => props.onPageChange(Math.max(1, props.page - 1))}
+                disabled={props.page === 1}
+              >
+                Previous
+              </Button>
+              <span className="px-4 text-sm text-white/60">
+                Page {props.page} of {props.totalPages}
+              </span>
+              <Button
+                variant="secondary"
+                onClick={() => props.onPageChange(Math.min(props.totalPages, props.page + 1))}
+                disabled={props.page === props.totalPages}
+              >
+                Next
+              </Button>
+            </div>
+          </PageSection>
         )}
-      </div>
+      </AppShell>
       
       {/* Archive Confirmation Modal */}
       <ConfirmationModal
@@ -922,7 +902,7 @@ export function JobsPageContentView(props: JobsPageContentProps) {
           onClose={() => setToast(null)}
         />
       )}
-    </div>
+    </AppBackground>
   )
 }
 
