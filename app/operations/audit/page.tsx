@@ -22,6 +22,7 @@ import { FlagSuspiciousModal } from '@/components/audit/FlagSuspiciousModal'
 import { EventSelectionTable } from '@/components/audit/EventSelectionTable'
 import { SelectedActionBar } from '@/components/audit/SelectedActionBar'
 import { BulkActionResultModal } from '@/components/audit/BulkActionResultModal'
+import { EventDetailsDrawer } from '@/components/audit/EventDetailsDrawer'
 import { useSelectedRows } from '@/lib/hooks/useSelectedRows'
 import { terms } from '@/lib/terms'
 

@@ -11,15 +11,23 @@ export const runtime = 'nodejs'
  * POST /api/dev/generate-sample-events
  * Dev-only endpoint to generate sample events for testing UI
  * Generates 1 event per tab (governance, operations, access)
+ * 
+ * SECURITY: Hard-gated to development only. Returns 404 in production (not 403) to avoid attack-surface signaling.
  */
 export async function POST(request: NextRequest) {
   const requestId = getRequestId(request)
 
-  // Only allow in development
-  if (process.env.NODE_ENV !== 'development') {
+  // Hard-gate: Only allow in development environments
+  const isDevelopment = 
+    process.env.NODE_ENV === 'development' ||
+    process.env.NEXT_PUBLIC_APP_ENV === 'development' ||
+    (process.env.VERCEL_ENV && process.env.VERCEL_ENV !== 'production')
+
+  if (!isDevelopment) {
+    // Return 404 (not 403) to avoid signaling this endpoint exists
     return NextResponse.json(
-      createErrorResponse('This endpoint is only available in development', 'DEV_ONLY', { requestId, statusCode: 403 }),
-      { status: 403, headers: { 'X-Request-ID': requestId } }
+      createErrorResponse('Not found', 'NOT_FOUND', { requestId, statusCode: 404 }),
+      { status: 404, headers: { 'X-Request-ID': requestId } }
     )
   }
 
