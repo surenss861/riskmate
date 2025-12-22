@@ -757,7 +757,7 @@ function DashboardPageInner() {
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.18, duration: 0.45 }}
-            className="rounded-3xl border border-white/5 bg-gradient-to-b from-[#121212] to-transparent backdrop-blur-sm"
+            className="mb-16"
           >
             <div className="border-b border-white/5 px-6 py-6">
               <div className="flex items-center justify-between mb-4">
@@ -793,7 +793,7 @@ function DashboardPageInner() {
                       setSortBy(e.target.value)
                       setCurrentPage(1) // Reset to first page when sorting changes
                     }}
-                    className="rounded-lg border border-white/10 bg-[#121212]/80 px-4 py-2 text-sm text-white/90 transition focus:outline-none focus:ring-1 focus:ring-white/20"
+                    className="rounded-lg border border-white/10 bg-white/5 backdrop-blur-sm px-4 py-2 text-sm text-white/90 transition focus:outline-none focus:ring-1 focus:ring-white/20"
                   >
                     <option value="blockers_desc">Most Blockers</option>
                     <option value="blockers_asc">Fewest Blockers</option>
@@ -817,7 +817,7 @@ function DashboardPageInner() {
                       setFilterStatus(e.target.value)
                       setCurrentPage(1)
                     }}
-                    className="rounded-lg border border-white/10 bg-[#121212]/80 px-3 py-1.5 text-sm text-white/80 transition focus:outline-none focus:ring-1 focus:ring-white/20"
+                    className="rounded-lg border border-white/10 bg-white/5 backdrop-blur-sm px-3 py-1.5 text-sm text-white/80 transition focus:outline-none focus:ring-1 focus:ring-white/20"
                   >
                     <option value="">Status (All)</option>
                     <option value="draft">Draft</option>
@@ -832,7 +832,7 @@ function DashboardPageInner() {
                       setFilterRiskLevel(e.target.value)
                       setCurrentPage(1)
                     }}
-                    className="rounded-lg border border-white/10 bg-[#121212]/80 px-3 py-1.5 text-sm text-white/80 transition focus:outline-none focus:ring-1 focus:ring-white/20"
+                    className="rounded-lg border border-white/10 bg-white/5 backdrop-blur-sm px-3 py-1.5 text-sm text-white/80 transition focus:outline-none focus:ring-1 focus:ring-white/20"
                   >
                     <option value="">Risk (All)</option>
                     <option value="low">Low</option>
@@ -884,13 +884,14 @@ function DashboardPageInner() {
                     <p className="mb-6 text-sm text-white/60">
                       Create a job to begin compliance tracking and audit logging.
                     </p>
-                    <button
+                    <SharedButton
+                      variant="primary"
+                      size="lg"
                       onClick={() => router.push('/operations/jobs/new')}
                       onMouseEnter={() => router.prefetch('/operations/jobs/new')}
-                      className={`${buttonStyles.primary} ${buttonStyles.sizes.lg}`}
                     >
                       Create Job
-                    </button>
+                    </SharedButton>
                   </>
                 )}
               </div>
@@ -992,7 +993,7 @@ function DashboardPageInner() {
                       setPageSize(parseInt(e.target.value, 10))
                       setCurrentPage(1)
                     }}
-                    className="rounded-lg border border-white/10 bg-[#121212]/80 px-3 py-1.5 text-sm text-white/90 transition focus:outline-none focus:ring-1 focus:ring-white/20"
+                    className="rounded-lg border border-white/10 bg-white/5 backdrop-blur-sm px-3 py-1.5 text-sm text-white/90 transition focus:outline-none focus:ring-1 focus:ring-white/20"
                   >
                     <option value="25">25</option>
                     <option value="50">50</option>
@@ -1004,7 +1005,7 @@ function DashboardPageInner() {
                   <button
                     onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                     disabled={currentPage === 1}
-                    className="px-4 py-2 rounded-lg border border-white/10 bg-[#121212]/80 text-sm text-white/90 transition disabled:opacity-50 disabled:cursor-not-allowed hover:border-white/20 hover:bg-white/5 disabled:hover:border-white/10 disabled:hover:bg-[#121212]/80"
+                    className="px-4 py-2 rounded-lg border border-white/10 bg-white/5 backdrop-blur-sm text-sm text-white/90 transition disabled:opacity-50 disabled:cursor-not-allowed hover:border-white/20 hover:bg-white/10 disabled:hover:border-white/10 disabled:hover:bg-white/5"
                   >
                     Previous
                   </button>
@@ -1016,7 +1017,7 @@ function DashboardPageInner() {
                   <button
                     onClick={() => setCurrentPage(p => Math.min(jobsPagination.total_pages || 1, p + 1))}
                     disabled={currentPage >= (jobsPagination.total_pages || 1)}
-                    className="px-4 py-2 rounded-lg border border-white/10 bg-[#121212]/80 text-sm text-white/90 transition disabled:opacity-50 disabled:cursor-not-allowed hover:border-white/20 hover:bg-white/5 disabled:hover:border-white/10 disabled:hover:bg-[#121212]/80"
+                    className="px-4 py-2 rounded-lg border border-white/10 bg-white/5 backdrop-blur-sm text-sm text-white/90 transition disabled:opacity-50 disabled:cursor-not-allowed hover:border-white/20 hover:bg-white/10 disabled:hover:border-white/10 disabled:hover:bg-white/5"
                   >
                     Next
                   </button>
