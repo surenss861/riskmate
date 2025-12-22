@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter, useParams } from 'next/navigation'
-import { motion } from 'framer-motion'
 import { jobsApi, teamApi } from '@/lib/api'
 import { useRiskFactors, usePlan } from '@/lib/cache'
 import { Toast } from '@/components/dashboard/Toast'
@@ -18,11 +17,12 @@ import { EvidenceVerification } from '@/components/dashboard/EvidenceVerificatio
 import { TemplatesManager, TemplateModal, TemplateModalProps } from '@/components/dashboard/TemplatesManager'
 import { ApplyTemplateInline } from '@/components/dashboard/ApplyTemplateInline'
 import { JobPacketView } from '@/components/job/JobPacketView'
-import { buttonStyles, cardStyles, typography, emptyStateStyles, spacing, dividerStyles } from '@/lib/styles/design-system'
+import { typography, emptyStateStyles, spacing, dividerStyles } from '@/lib/styles/design-system'
 import { ErrorModal } from '@/components/dashboard/ErrorModal'
 import { optimizePhoto } from '@/lib/utils/photoOptimization'
 import { getGPSLocation } from '@/lib/utils/gpsMetadata'
 import { hasPermission } from '@/lib/utils/permissions'
+import { AppBackground, AppShell, PageSection, GlassCard, Button, Badge } from '@/components/shared'
 
 // Helper function to convert base64 to Blob
 const base64ToBlob = (base64: string, contentType = 'application/pdf') => {
@@ -533,13 +533,14 @@ export default function JobDetailPage() {
       <ProtectedRoute>
         <div className="min-h-screen bg-[#0A0A0A] text-white flex items-center justify-center">
           <div className="text-center">
-            <p className="text-[#A1A1A1] mb-4">Job not found</p>
-            <button
+            <p className="text-white/60 mb-4">Job not found</p>
+            <Button
+              variant="primary"
+              size="lg"
               onClick={() => router.push('/operations')}
-              className={`${buttonStyles.primary} ${buttonStyles.sizes.lg}`}
             >
               Back to Dashboard
-            </button>
+            </Button>
           </div>
         </div>
       </ProtectedRoute>
@@ -633,57 +634,57 @@ export default function JobDetailPage() {
 
   return (
     <ProtectedRoute>
-      <div className="min-h-screen bg-[#0A0A0A] text-white">
-        <header className="sticky top-0 z-40 border-b border-white/5 bg-[#0A0A0A]/95 backdrop-blur-sm px-6 py-4">
-          <div className="max-w-7xl mx-auto flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <RiskMateLogo size="sm" showText={true} />
-            </div>
-            <div className="flex items-center gap-3">
-            <button
-              onClick={() => router.push('/operations')}
-              className="text-sm text-[#A1A1A1] hover:text-white transition-colors"
-            >
-              ← Back to Dashboard
-            </button>
-            <div className="flex items-center gap-3">
-              {subscriptionTier === 'business' && (
+      <AppBackground>
+        <div className="sticky top-0 z-40 border-b border-white/5 bg-black/40 backdrop-blur-sm">
+          <div className="max-w-7xl mx-auto px-6 py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <RiskMateLogo size="sm" showText={true} />
+              </div>
+              <div className="flex items-center gap-3">
                 <button
-                  onClick={handleGeneratePermitPack}
-                  disabled={generatingPermitPack}
-                  className={`${buttonStyles.primary} flex items-center gap-2`}
+                  onClick={() => router.push('/operations')}
+                  className="text-sm text-white/60 hover:text-white transition-colors"
                 >
-                  {generatingPermitPack ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-black" />
-                      Generating...
-                    </>
-                  ) : (
-                    <>
-                      📦 Generate Permit Pack
-                    </>
-                  )}
+                  ← Back to Dashboard
                 </button>
-              )}
-              <button
-                onClick={() => router.push(`/operations/jobs/${jobId}/report`)}
-                className={buttonStyles.secondary}
-              >
-                View Audit-Ready Report
-              </button>
-              <button
-                onClick={() => router.push(`/operations/audit?job_id=${jobId}`)}
-                className={buttonStyles.secondary}
-              >
-                View in Compliance Ledger
-              </button>
-            </div>
+                <div className="flex items-center gap-3">
+                  {subscriptionTier === 'business' && (
+                    <Button
+                      variant="primary"
+                      onClick={handleGeneratePermitPack}
+                      disabled={generatingPermitPack}
+                    >
+                      {generatingPermitPack ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-black" />
+                          Generating...
+                        </>
+                      ) : (
+                        <>📦 Generate Permit Pack</>
+                      )}
+                    </Button>
+                  )}
+                  <Button
+                    variant="secondary"
+                    onClick={() => router.push(`/operations/jobs/${jobId}/report`)}
+                  >
+                    View Audit-Ready Report
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={() => router.push(`/operations/audit?job_id=${jobId}`)}
+                  >
+                    View in Compliance Ledger
+                  </Button>
+                </div>
+              </div>
             </div>
           </div>
-        </header>
+        </div>
 
-        <div className="max-w-7xl mx-auto px-6 py-12">
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className={spacing.section}>
+        <AppShell>
+          <PageSection>
             <EditableText
               value={job.client_name}
               onSave={async (newValue) => {
@@ -734,11 +735,10 @@ export default function JobDetailPage() {
             <p className="text-xs text-white/50 mt-2">
               Status helps your team understand what stage this job is in.
             </p>
-          </motion.div>
+          </PageSection>
 
-          <div className={`grid lg:grid-cols-3 ${spacing.gap.relaxed}`}>
-            <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }}>
-              <div className={`${cardStyles.base} p-10 border ${getScoreBg(job.risk_score)} flex flex-col h-full`}>
+          <div className="grid lg:grid-cols-3 gap-6 mb-16">
+            <GlassCard className="p-10 flex flex-col h-full">
                 {/* Growable Content Section */}
                 <div className="flex-1">
                   <div className="text-center mb-10">
@@ -830,38 +830,36 @@ export default function JobDetailPage() {
                 {organizationId && (
                   <div className="mt-6 pt-4 border-t border-white/10">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <button
+                      <Button
+                        variant="primary"
                         onClick={() => setShowApplyTemplate(true)}
-                        className={buttonStyles.primary}
                       >
                         Apply Template
-                      </button>
-                      <button
+                      </Button>
+                      <Button
+                        variant="secondary"
                         onClick={() => {
                           setPrefillTemplateData(null)
                           setShowCreateTemplate(true)
                         }}
-                        className={buttonStyles.secondary}
                       >
                         + Create Template
-                      </button>
+                      </Button>
                       {!job.applied_template_id && job.risk_score_detail && job.risk_score_detail.factors.length > 0 && (
-                        <button
+                        <Button
+                          variant="ghost"
                           onClick={handleSaveAsTemplate}
-                          className={buttonStyles.tertiary}
                           title="Save this job setup as a reusable template"
                         >
                           💾 Save as Template
-                        </button>
+                        </Button>
                       )}
                     </div>
                   </div>
                 )}
-              </div>
-            </motion.div>
+            </GlassCard>
 
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-              <div className={`${cardStyles.base} ${cardStyles.padding.lg} h-full`}>
+            <GlassCard className="p-8 h-full">
                 <div className={spacing.relaxed}>
                   <h2 className={`${typography.h2} ${spacing.tight}`}>Controls & Corrective Actions</h2>
                   <p className="text-sm text-white/60">
@@ -912,11 +910,9 @@ export default function JobDetailPage() {
                     Mark mitigations complete only after verifying the action was performed on-site.
                   </p>
                 )}
-              </div>
-            </motion.div>
+            </GlassCard>
 
-            <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }}>
-              <div className={`${cardStyles.base} ${cardStyles.padding.lg} h-full flex flex-col bg-[#121212]/60 border-white/5`}>
+            <GlassCard className="p-8 h-full flex flex-col">
                 <h2 className={`${typography.h2} mb-6 text-white/80`}>Job Details</h2>
 
                 <div className="space-y-4 mb-8 flex-1">
@@ -939,22 +935,24 @@ export default function JobDetailPage() {
                 </div>
 
                 <div className="pt-6 border-t border-white/10 space-y-3">
-                  <button
+                  <Button
+                    variant="secondary"
+                    className="w-full"
                     onClick={() => router.push(`/operations/jobs/${jobId}/report`)}
-                    className={`${buttonStyles.secondary} w-full`}
                   >
                     View Live Report →
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    className="w-full"
                     onClick={() => router.push(`/operations/jobs/${jobId}/edit`)}
-                    className={`${buttonStyles.secondary} w-full opacity-70 hover:opacity-100`}
                   >
                     Edit Job Details
-                  </button>
+                  </Button>
                 </div>
-              </div>
-            </motion.div>
+            </GlassCard>
           </div>
+          </PageSection>
 
           {/* Apply Template Inline - Full Width Section */}
           {showApplyTemplate && organizationId && (
@@ -969,13 +967,8 @@ export default function JobDetailPage() {
 
           {/* Permit Packs Section (Business Plan Only) */}
           {subscriptionTier === 'business' && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4 }}
-              className="mt-12"
-            >
-              <div className={`${cardStyles.base} ${cardStyles.padding.lg}`}>
+            <PageSection>
+              <GlassCard className="p-8">
                 <div className="flex items-center justify-between mb-6">
                   <div>
                     <h2 className={`${typography.h2} mb-2`}>Permit Packs</h2>
@@ -983,10 +976,10 @@ export default function JobDetailPage() {
                       Bundle all job documentation into a single ZIP file for inspectors, permit offices, or insurers. Everything is timestamped and audit-ready.
                     </p>
                   </div>
-                  <button
+                  <Button
+                    variant="primary"
                     onClick={handleGeneratePermitPack}
                     disabled={generatingPermitPack}
-                    className={`${buttonStyles.primary} flex items-center gap-2`}
                   >
                     {generatingPermitPack ? (
                       <>
@@ -994,11 +987,9 @@ export default function JobDetailPage() {
                         Generating...
                       </>
                     ) : (
-                      <>
-                        📦 Generate New Pack
-                      </>
+                      <>📦 Generate New Pack</>
                     )}
-                  </button>
+                  </Button>
                 </div>
 
                 {loadingPermitPacks ? (
@@ -1012,21 +1003,20 @@ export default function JobDetailPage() {
                     <p className="text-xs text-white/60 max-w-md mx-auto mb-4">
                       Permit packs bundle all job documentation into a single ZIP file for inspectors, insurers, or permit offices. Everything is timestamped and audit-ready.
                     </p>
-                    <button
+                    <Button
+                      variant="primary"
+                      size="md"
                       onClick={handleGeneratePermitPack}
                       disabled={generatingPermitPack}
-                      className={`${buttonStyles.primary} ${buttonStyles.sizes.md}`}
                     >
                       {generatingPermitPack ? 'Generating...' : 'Generate Your First Permit Pack'}
-                    </button>
+                    </Button>
                   </div>
                 ) : (
                   <div className="space-y-3">
                     {permitPacks.map((pack) => (
-                      <div
-                        key={pack.id}
-                        className={`flex items-center justify-between p-4 rounded-lg border border-white/10 ${cardStyles.flat} hover:bg-[#121212]/60 transition-colors`}
-                      >
+                      <GlassCard key={pack.id} className="p-4">
+                        <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 rounded-lg bg-[#F97316]/20 flex items-center justify-center">
                             <span className="text-xl">📦</span>
@@ -1042,32 +1032,29 @@ export default function JobDetailPage() {
                           </div>
                         </div>
                         {pack.downloadUrl ? (
-                          <button
+                          <Button
+                            variant="secondary"
+                            size="sm"
                             onClick={() => window.open(pack.downloadUrl!, '_blank')}
-                            className="px-4 py-2 rounded-lg border border-white/20 text-white text-sm hover:bg-white/10 transition-colors"
                           >
                             Download
-                          </button>
+                          </Button>
                         ) : (
-                          <span className="text-xs text-[#A1A1A1]">Unavailable</span>
+                          <span className="text-xs text-white/60">Unavailable</span>
                         )}
-                      </div>
+                        </div>
+                      </GlassCard>
                     ))}
                   </div>
                 )}
-              </div>
-            </motion.div>
-              )}
+              </GlassCard>
+            </PageSection>
+          )}
 
-              {/* Job Assignment */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.5 }}
-                className="mt-12"
-              >
-                {loadingWorkers ? (
-                  <div className={`${cardStyles.base} ${cardStyles.padding.lg}`}>
+          {/* Job Assignment */}
+          <PageSection>
+            {loadingWorkers ? (
+              <GlassCard className="p-8">
                     <div className="mb-6">
                       <SkeletonLoader variant="text" lines={2} className="mb-2" />
                     </div>
@@ -1151,18 +1138,13 @@ export default function JobDetailPage() {
                   }}
                     userRole={userRole}
                   />
-                )}
-              </motion.div>
+            )}
+          </PageSection>
 
-              {/* Evidence Verification */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.6 }}
-                className="mt-12"
-              >
-                {loadingEvidence ? (
-                  <div className={`${cardStyles.base} ${cardStyles.padding.lg}`}>
+          {/* Evidence Verification */}
+          <PageSection>
+            {loadingEvidence ? (
+              <GlassCard className="p-8">
                     <div className="mb-6">
                       <SkeletonLoader variant="text" lines={2} className="mb-2" />
                     </div>
@@ -1237,24 +1219,21 @@ export default function JobDetailPage() {
                   }}
                     userRole={userRole}
                   />
-                )}
-              </motion.div>
+            )}
+          </PageSection>
 
-              {/* Version History - Lazy Load */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.7 }}
-                className="mt-8"
-                onMouseEnter={() => {
-                  if (!showVersionHistory && !loadingVersionHistory) {
-                    setShowVersionHistory(true)
-                    loadVersionHistory()
-                  }
-                }}
-              >
-                {loadingVersionHistory ? (
-                  <div className={`${cardStyles.base} ${cardStyles.padding.lg}`}>
+          {/* Version History - Lazy Load */}
+          <PageSection>
+            <div
+              onMouseEnter={() => {
+                if (!showVersionHistory && !loadingVersionHistory) {
+                  setShowVersionHistory(true)
+                  loadVersionHistory()
+                }
+              }}
+            >
+              {loadingVersionHistory ? (
+                <GlassCard className="p-8">
                     <div className="mb-6">
                       <SkeletonLoader variant="text" lines={2} className="mb-2" />
                     </div>
@@ -1269,17 +1248,13 @@ export default function JobDetailPage() {
                     jobId={jobId}
                     entries={versionHistoryEntries}
                   />
-                )}
-              </motion.div>
+              )}
+            </div>
+          </PageSection>
 
-              {/* Job Packet View */}
-              <motion.div
-                id="job-packet"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.8 }}
-                className="mt-8"
-              >
+          {/* Job Packet View */}
+          <PageSection>
+            <div id="job-packet">
                 <JobPacketView
                   job={job}
                   mitigations={job.mitigation_items || []}
@@ -1338,9 +1313,10 @@ export default function JobDetailPage() {
                     }
                   }}
                 />
-              </motion.div>
-        </div>
-      </div>
+            </div>
+          </PageSection>
+        </AppShell>
+      </AppBackground>
       <GenerationProgressModal
         isOpen={showProgressModal}
         onClose={() => setShowProgressModal(false)}
