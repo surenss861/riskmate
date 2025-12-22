@@ -763,7 +763,7 @@ function DashboardPageInner() {
               <div className="flex items-center justify-between mb-4">
                 <div className="flex-1">
                   <Link href="/operations/jobs">
-                    <h2 className={`${typography.h2} hover:text-[#F97316] transition-colors cursor-pointer`}>Job Roster</h2>
+                    <h2 className="text-2xl font-bold font-display hover:text-[#F97316] transition-colors cursor-pointer">Job Roster</h2>
                   </Link>
                 </div>
                 <div className="flex items-center gap-4">
