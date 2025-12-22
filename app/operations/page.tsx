@@ -578,7 +578,7 @@ function DashboardPageInner() {
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.45 }}
-            className={`relative ${spacing.section} flex flex-wrap items-start justify-between ${spacing.gap.relaxed} rounded-lg border border-white/10 bg-[#121212]/80 backdrop-blur-sm px-8 py-10`}
+            className={`relative ${spacing.section} flex flex-wrap items-start justify-between ${spacing.gap.relaxed} rounded-3xl border border-white/5 bg-gradient-to-b from-[#121212] to-transparent backdrop-blur-sm px-8 py-10`}
           >
             <div className="relative max-w-xl flex-1">
               <p className="text-xs uppercase tracking-[0.42em] text-white/50">
@@ -659,7 +659,7 @@ function DashboardPageInner() {
               initial={{ opacity: 0, y: 18 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1, duration: 0.45 }}
-              className={`${spacing.section} rounded-lg border border-white/10 bg-[#121212]/80 backdrop-blur-sm px-8 py-10 text-center`}
+              className={`${spacing.section} rounded-3xl border border-white/5 bg-gradient-to-b from-[#121212] to-transparent backdrop-blur-sm px-8 py-10 text-center`}
             >
               <p className="text-xs uppercase tracking-[0.36em] text-white/45">Analytics</p>
               <h2 className="mt-3 text-3xl font-semibold text-white">Upgrade to unlock live analytics</h2>
@@ -759,7 +759,7 @@ function DashboardPageInner() {
               initial={{ opacity: 0, y: 18 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.12, duration: 0.45 }}
-              className={`relative ${spacing.relaxed} rounded-lg border border-white/10 bg-[#121212]/80 backdrop-blur-sm p-6`}
+              className={`relative ${spacing.relaxed} rounded-3xl border border-white/5 bg-gradient-to-b from-[#121212] to-transparent backdrop-blur-sm p-6`}
             >
               <h2 className="text-xl font-semibold text-white">Top Hazards (Last 30 Days)</h2>
               <p className="mt-1 text-sm text-white/60">
@@ -784,7 +784,7 @@ function DashboardPageInner() {
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.18, duration: 0.45 }}
-            className="rounded-lg border border-white/10 bg-[#121212]/80 backdrop-blur-sm"
+            className="rounded-3xl border border-white/5 bg-gradient-to-b from-[#121212] to-transparent backdrop-blur-sm"
           >
             <div className="border-b border-white/10 px-6 py-5">
               <div className="flex items-center justify-between mb-4">
