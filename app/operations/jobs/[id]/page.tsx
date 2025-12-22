@@ -1143,16 +1143,16 @@ export default function JobDetailPage() {
           <PageSection>
             {loadingEvidence ? (
               <GlassCard className="p-8">
-                    <div className="mb-6">
-                      <SkeletonLoader variant="text" lines={2} className="mb-2" />
-                    </div>
-                    <div className="space-y-3">
-                      {[1, 2, 3].map((i) => (
-                        <SkeletonLoader key={i} variant="card" height="100px" />
-                      ))}
-                    </div>
-                  </div>
-                ) : (
+                <div className="mb-6">
+                  <SkeletonLoader variant="text" lines={2} className="mb-2" />
+                </div>
+                <div className="space-y-3">
+                  {[1, 2, 3].map((i) => (
+                    <SkeletonLoader key={i} variant="card" height="100px" />
+                  ))}
+                </div>
+              </GlassCard>
+            ) : (
                   <EvidenceVerification
                     jobId={jobId}
                     items={evidenceItems}
@@ -1232,16 +1232,16 @@ export default function JobDetailPage() {
             >
               {loadingVersionHistory ? (
                 <GlassCard className="p-8">
-                    <div className="mb-6">
-                      <SkeletonLoader variant="text" lines={2} className="mb-2" />
-                    </div>
-                    <div className="space-y-3">
-                      {[1, 2, 3, 4].map((i) => (
-                        <SkeletonLoader key={i} variant="card" height="60px" />
-                      ))}
-                    </div>
+                  <div className="mb-6">
+                    <SkeletonLoader variant="text" lines={2} className="mb-2" />
                   </div>
-                ) : (
+                  <div className="space-y-3">
+                    {[1, 2, 3, 4].map((i) => (
+                      <SkeletonLoader key={i} variant="card" height="60px" />
+                    ))}
+                  </div>
+                </GlassCard>
+              ) : (
                   <VersionHistory
                     jobId={jobId}
                     entries={versionHistoryEntries}
