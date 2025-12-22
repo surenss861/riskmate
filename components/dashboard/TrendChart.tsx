@@ -98,7 +98,7 @@ export function TrendChart({
 
       {isLoading ? (
         <div className="mt-10 h-[220px] w-full animate-pulse rounded-2xl bg-white/5" />
-      ) : ((paddedData.length === 0 || emptyReason) ? (
+      ) : (paddedData.length === 0 || emptyReason) ? (
         <div className="mt-10 flex h-[220px] w-full flex-col items-center justify-center rounded-2xl border border-dashed border-white/10 bg-black/20 p-8">
           {emptyReason === 'no_jobs' ? (
             <>
