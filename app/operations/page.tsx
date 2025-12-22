@@ -22,7 +22,7 @@ import { Changelog } from '@/components/dashboard/Changelog'
 import { FirstRunSetupWizard } from '@/components/setup/FirstRunSetupWizard'
 import Link from 'next/link'
 import { getRiskBadgeClass, getStatusBadgeClass, buttonStyles, spacing, typography } from '@/lib/styles/design-system'
-import { AppBackground, AppShell, Button as SharedButton, GlassCard } from '@/components/shared'
+import { AppBackground, AppShell, PageHeader, Button as SharedButton, GlassCard } from '@/components/shared'
 import clsx from 'clsx'
 
 type TimeRange = '7d' | '30d' | '90d' | 'all'
