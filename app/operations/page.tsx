@@ -21,7 +21,7 @@ import { DashboardOverview } from '@/components/dashboard/DashboardOverview'
 import { Changelog } from '@/components/dashboard/Changelog'
 import { FirstRunSetupWizard } from '@/components/setup/FirstRunSetupWizard'
 import Link from 'next/link'
-import { getRiskBadgeClass, getStatusBadgeClass, buttonStyles, spacing, typography } from '@/lib/styles/design-system'
+import { getRiskBadgeClass, getStatusBadgeClass } from '@/lib/styles/design-system'
 import { AppBackground, AppShell, PageHeader, Button as SharedButton, GlassCard } from '@/components/shared'
 import clsx from 'clsx'
 
@@ -753,12 +753,7 @@ function DashboardPageInner() {
           )}
 
           {/* Job List */}
-          <motion.div
-            initial={{ opacity: 0, y: 24 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.18, duration: 0.45 }}
-            className="mb-16"
-          >
+          <GlassCard className="mb-16">
             <div className="border-b border-white/5 px-6 py-6">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex-1">
@@ -900,13 +895,9 @@ function DashboardPageInner() {
             ) : (
               <div className="divide-y divide-white/5/50">
                 {jobs.map((job, index) => (
-                  <motion.div
+                  <div
                     key={job.id}
-                    initial={{ opacity: 0, y: 18 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.05 * index }}
-                    whileHover={{ backgroundColor: 'rgba(255,255,255,0.06)' }}
-                    className="group relative px-6 py-3.5 transition duration-200"
+                    className="group relative px-6 py-3.5 transition duration-200 hover:bg-white/5"
                   >
                     {/* Visual separator - subtle left border */}
                     <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-white/5" />
