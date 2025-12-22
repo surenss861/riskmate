@@ -1074,7 +1074,7 @@ function DashboardPageInner() {
           }
         }}
       />
-      </AppBackground>
+        </AppBackground>
     </ProtectedRoute>
   )
 }
