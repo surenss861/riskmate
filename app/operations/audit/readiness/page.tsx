@@ -11,6 +11,7 @@ import { terms } from '@/lib/terms'
 import { UploadEvidenceModal } from '@/components/audit/UploadEvidenceModal'
 import { RequestAttestationModal } from '@/components/audit/RequestAttestationModal'
 import { FixQueueSidebar } from '@/components/audit/FixQueueSidebar'
+import type { FixQueueItem } from '@/components/audit/FixQueueSidebar'
 
 type ReadinessCategory = 'evidence' | 'controls' | 'attestations' | 'incidents' | 'access'
 type ReadinessSeverity = 'critical' | 'material' | 'info'
@@ -123,7 +124,7 @@ export default function AuditReadinessPage() {
   }, [])
 
   // Fix Queue state
-  const [fixQueue, setFixQueue] = useState<ReadinessItem[]>([])
+  const [fixQueue, setFixQueue] = useState<FixQueueItem[]>([])
   const [fixQueueOpen, setFixQueueOpen] = useState(false)
 
   // Data state
@@ -218,7 +219,20 @@ export default function AuditReadinessPage() {
   const handleAddToQueue = (item: ReadinessItem) => {
     // Add to queue if not already there
     if (!fixQueue.find(q => q.id === item.id)) {
-      setFixQueue([...fixQueue, item])
+      // Convert ReadinessItem to FixQueueItem
+      const queueItem: FixQueueItem = {
+        id: item.id,
+        rule_code: item.rule_code,
+        rule_name: item.rule_name,
+        category: item.category,
+        severity: item.severity,
+        work_record_id: item.work_record_id,
+        work_record_name: item.work_record_name,
+        affected_id: item.affected_id,
+        affected_name: item.affected_name,
+        fix_action_type: item.fix_action_type,
+      }
+      setFixQueue([...fixQueue, queueItem])
       setFixQueueOpen(true)
     }
   }
@@ -229,6 +243,32 @@ export default function AuditReadinessPage() {
 
   const handleClearQueue = () => {
     setFixQueue([])
+  }
+
+  const handleFixFromQueue = (queueItem: FixQueueItem) => {
+    // Find the full item from the data to get all required fields
+    const fullItem = data?.items.find(i => i.id === queueItem.id)
+    if (fullItem) {
+      handleFix(fullItem)
+    } else {
+      // If item not found in current data, reconstruct from queue item
+      const reconstructedItem: ReadinessItem = {
+        id: queueItem.id,
+        rule_code: queueItem.rule_code,
+        rule_name: queueItem.rule_name,
+        category: queueItem.category,
+        severity: queueItem.severity,
+        affected_type: 'work_record',
+        affected_id: queueItem.work_record_id || queueItem.affected_id || queueItem.id,
+        affected_name: queueItem.work_record_name || queueItem.affected_name,
+        work_record_id: queueItem.work_record_id,
+        work_record_name: queueItem.work_record_name,
+        status: 'open',
+        why_it_matters: '',
+        fix_action_type: queueItem.fix_action_type,
+      }
+      handleFix(reconstructedItem)
+    }
   }
 
   const handleModalComplete = () => {
@@ -656,7 +696,7 @@ export default function AuditReadinessPage() {
           items={fixQueue}
           onRemove={handleRemoveFromQueue}
           onClear={handleClearQueue}
-          onFix={handleFix}
+          onFix={handleFixFromQueue}
         />
 
         {/* Fix Queue Toggle Button */}

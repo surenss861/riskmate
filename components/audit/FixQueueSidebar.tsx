@@ -4,7 +4,7 @@ import { X, AlertTriangle, XCircle, Clock, CheckSquare } from 'lucide-react'
 import { buttonStyles } from '@/lib/styles/design-system'
 import { motion, AnimatePresence } from 'framer-motion'
 
-interface FixQueueItem {
+export type FixQueueItem = {
   id: string
   rule_code: string
   rule_name: string
@@ -12,6 +12,8 @@ interface FixQueueItem {
   severity: 'critical' | 'material' | 'info'
   work_record_id?: string
   work_record_name?: string
+  affected_id?: string
+  affected_name?: string
   fix_action_type: 'upload_evidence' | 'request_attestation' | 'complete_controls' | 'resolve_incident' | 'review_item'
 }
 
