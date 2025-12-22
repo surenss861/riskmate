@@ -190,7 +190,7 @@ export default function ExecutiveSnapshotPage() {
       <div className="relative min-h-screen overflow-hidden bg-[#0A0A0A] text-white">
         <DashboardNavbar email={user?.email} onLogout={handleLogout} />
 
-        <div className="relative mx-auto max-w-7xl px-6 py-14">
+        <div className="relative mx-auto max-w-7xl px-6 pt-24 pb-14">
           {/* Header */}
           <motion.div
             initial={{ opacity: 0, y: 24 }}

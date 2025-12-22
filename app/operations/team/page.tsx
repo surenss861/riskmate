@@ -253,7 +253,7 @@ export default function TeamPage() {
       <div className="min-h-screen bg-[#0A0A0A] text-white">
         <DashboardNavbar email={userEmail} onLogout={handleLogout} />
 
-        <main className="mx-auto max-w-7xl px-6 py-14">
+        <main className="mx-auto max-w-7xl px-6 pt-24 pb-14">
           <div className={spacing.gap.relaxed}>
             {/* Header */}
             <div>

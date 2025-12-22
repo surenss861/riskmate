@@ -333,7 +333,7 @@ export function JobsPageContentView(props: JobsPageContentProps) {
           router.push('/')
         }} 
       />
-      <div className="mx-auto max-w-7xl px-6 py-14">
+      <div className="mx-auto max-w-7xl px-6 pt-24 pb-14">
         <motion.div
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
