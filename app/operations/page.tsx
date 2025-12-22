@@ -567,76 +567,74 @@ function DashboardPageInner() {
         <DashboardNavbar email={user?.email} onLogout={handleLogout} />
 
         <AppShell>
-          <motion.div
-            initial={{ opacity: 0, y: 24 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.45 }}
-            className={`relative ${spacing.section} flex flex-wrap items-start justify-between ${spacing.gap.relaxed} rounded-3xl border border-white/5 bg-gradient-to-b from-[#121212] to-transparent backdrop-blur-sm px-8 py-10`}
-          >
-            <div className="relative max-w-xl flex-1">
-              <h1 className="text-4xl md:text-5xl font-bold font-display mb-3">
-                Operations Control Center
-              </h1>
-              {/* Thin orange hairline divider - signature landing page element */}
-              <div className="h-[1px] w-24 bg-gradient-to-r from-[#F97316] via-[#FFC857] to-transparent mb-6" />
-              <p className="text-lg text-white/70">
-                Live operational view of risk and compliance.
-              </p>
-              <div className="mt-8 flex flex-wrap gap-3 text-sm">
-                <span className="px-4 py-2 bg-white/5 rounded-lg border border-white/5 text-white/70">
-                  Audit-ready reports
-                </span>
-                <span className="px-4 py-2 bg-white/5 rounded-lg border border-white/5 text-white/70">
-                  Timestamped evidence
-                </span>
-                <span className="px-4 py-2 bg-white/5 rounded-lg border border-white/5 text-white/70">
-                  Compliance trail
-                </span>
+          {/* Mini-Hero Header - Editorial style matching landing page */}
+          <div className="mb-16">
+            <div className="flex flex-col md:flex-row md:items-end md:justify-between md:gap-8 mb-12">
+              <div className="flex-1">
+                <PageHeader
+                  title="Operations"
+                  subtitle="Audit-defensible live health across jobs, mitigations, evidence."
+                  showDivider={true}
+                  className="mb-0"
+                />
+              </div>
+              <div className="flex items-center gap-4 mt-6 md:mt-0">
+                {/* Time Range Segmented Control */}
+                <div className="inline-flex bg-white/5 border border-white/10 rounded-lg p-1 backdrop-blur-sm">
+                  {(['30d', '90d', 'all'] as const).map((range) => (
+                    <button
+                      key={range}
+                      onClick={() => setTimeRange(range)}
+                      className={clsx(
+                        'px-4 py-2.5 text-sm font-medium rounded-md transition-all',
+                        timeRange === range
+                          ? 'bg-[#F97316] text-black shadow-sm'
+                          : 'text-white/70 hover:text-white hover:bg-white/5'
+                      )}
+                    >
+                      {range === 'all' ? 'All' : range.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
+                <SharedButton
+                  variant="primary"
+                  onClick={() => router.push('/operations/jobs/new')}
+                >
+                  + New Job
+                </SharedButton>
               </div>
             </div>
-            
-            {/* Vertical divider - Bloomberg terminal style */}
-            <div className="hidden lg:block border-l border-white/5 h-full min-h-[200px] mx-8" />
-            
-            {/* KPI Strip - Quantitative signals */}
-            <div className="flex-1 min-w-[280px]">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                <div>
-                  <div className="text-xl font-semibold text-white mb-0.5">{kpiMetrics.activeJobs}</div>
-                  <div className="text-xs text-white/50 uppercase tracking-wide">Active Jobs</div>
+
+            {/* KPI Row - Editorial, flat, no dots */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <GlassCard className="p-6">
+                <div className="text-xs uppercase tracking-wider text-white/50 mb-2">Active Jobs</div>
+                <div className="text-3xl font-bold font-display text-white mb-2">{kpiMetrics.activeJobs}</div>
+                <div className="text-sm text-white/60">Currently tracked</div>
+              </GlassCard>
+              <GlassCard className="p-6">
+                <div className="text-xs uppercase tracking-wider text-white/50 mb-2">Open Risks</div>
+                <div className="text-3xl font-bold font-display text-white mb-2">{kpiMetrics.openRisks}</div>
+                <div className="text-sm text-white/60">
+                  {kpiMetrics.openRisks === 0 ? 'All quiet' : 'Requiring attention'}
                 </div>
-                <div>
-                  <div className="text-xl font-semibold text-white mb-0.5">{kpiMetrics.openRisks}</div>
-                  <div className="text-xs text-white/50 uppercase tracking-wide">Open Risks</div>
+              </GlassCard>
+              <GlassCard className="p-6">
+                <div className="text-xs uppercase tracking-wider text-white/50 mb-2">Avg Risk Score</div>
+                <div className="text-3xl font-bold font-display text-white mb-2">
+                  {kpiMetrics.avgRiskScore !== null ? kpiMetrics.avgRiskScore : '—'}
                 </div>
-                <div>
-                  <div className="text-xl font-semibold text-white mb-0.5">
-                    {kpiMetrics.avgRiskScore !== null ? kpiMetrics.avgRiskScore : '—'}
-                  </div>
-                  <div className="text-xs text-white/50 uppercase tracking-wide">Avg Risk Score</div>
+                <div className="text-sm text-white/60">Across all jobs</div>
+              </GlassCard>
+              <GlassCard className="p-6">
+                <div className="text-xs uppercase tracking-wider text-white/50 mb-2">Audit Events</div>
+                <div className="text-3xl font-bold font-display text-white mb-2">
+                  {kpiMetricsWithAudit.auditEvents30d !== null ? kpiMetricsWithAudit.auditEvents30d : '—'}
                 </div>
-                <div>
-                  <div className="text-xl font-semibold text-white mb-0.5">—</div>
-                  <div className="text-xs text-white/50 uppercase tracking-wide">Audit Events (Last 30 Days)</div>
-                </div>
-              </div>
+                <div className="text-sm text-white/60">Last 30 days</div>
+              </GlassCard>
             </div>
-            <div className="relative flex flex-col items-end gap-3">
-            <SharedButton
-              variant="primary"
-              size="lg"
-              onClick={() => router.push('/operations/jobs/new')}
-            >
-              + New Job
-            </SharedButton>
-              <Link
-                href="/operations/jobs"
-                className="inline-flex items-center gap-2 px-6 py-3 border border-white/10 rounded-lg hover:border-white/20 transition-colors font-medium text-sm"
-              >
-                View job roster →
-              </Link>
           </div>
-          </motion.div>
 
           {!isMember && showUpgradeBanner && (
             <UpgradeBanner
@@ -647,12 +645,7 @@ function DashboardPageInner() {
 
           {/* KPI Tiles - Only for owners/admins */}
           {!isMember && (analyticsLocked ? (
-            <motion.div
-              initial={{ opacity: 0, y: 18 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1, duration: 0.45 }}
-              className={`${spacing.section} rounded-3xl border border-white/5 bg-gradient-to-b from-[#121212] to-transparent backdrop-blur-sm px-8 py-10 text-center`}
-            >
+            <GlassCard className="p-10 text-center mb-16">
               <p className="text-xs uppercase tracking-[0.36em] text-white/45">Analytics</p>
               <h2 className="mt-3 text-3xl font-semibold text-white">Upgrade to unlock live analytics</h2>
               <p className="mt-4 text-sm text-white/65 max-w-2xl mx-auto">
@@ -704,8 +697,9 @@ function DashboardPageInner() {
                 avg_time_to_first_photo_minutes={analyticsData.avg_time_to_first_photo_minutes}
                 timeRange={timeRange}
               />
+              </GlassCard>
             </div>
-            </motion.div>
+            </div>
           ))}
 
           {/* Enhanced Dashboard Overview - Only for owners/admins */}
