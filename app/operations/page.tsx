@@ -732,12 +732,7 @@ function DashboardPageInner() {
 
           {/* Top Hazards - Only for owners/admins */}
           {!isMember && hazards.length > 0 && (
-            <motion.div
-              initial={{ opacity: 0, y: 18 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.12, duration: 0.45 }}
-              className={`relative ${spacing.relaxed} rounded-3xl border border-white/5 bg-gradient-to-b from-[#121212] to-transparent backdrop-blur-sm p-6`}
-            >
+            <GlassCard className="p-6 mb-16">
               <h2 className="text-2xl font-bold font-display mb-2">Top Hazards</h2>
               <div className="h-[1px] w-24 bg-gradient-to-r from-[#F97316] via-[#FFC857] to-transparent mb-4" />
               <p className="text-base text-white/70 mt-4">
