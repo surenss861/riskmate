@@ -118,7 +118,7 @@ export function DashboardOverview({
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="rounded-xl border border-red-500/30 bg-red-500/5 backdrop-blur-sm p-6"
+          className="rounded-3xl border border-white/10 bg-white/[0.03] backdrop-blur-xl p-6"
         >
           <div className="flex items-center justify-between mb-4">
             <div>
@@ -172,7 +172,7 @@ export function DashboardOverview({
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="rounded-xl border border-white/10 bg-[#121212]/80 backdrop-blur-sm p-6"
+          className="rounded-3xl border border-white/10 bg-white/[0.03] backdrop-blur-xl p-6"
         >
           <div className="flex items-center justify-between mb-4">
             <div>
@@ -224,7 +224,7 @@ export function DashboardOverview({
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
-          className="rounded-xl border border-yellow-500/30 bg-yellow-500/5 backdrop-blur-sm p-6"
+          className="rounded-3xl border border-white/10 bg-white/[0.03] backdrop-blur-xl p-6"
         >
           <div className="flex items-center justify-between mb-4">
             <div>
