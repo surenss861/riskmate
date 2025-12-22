@@ -1,7 +1,6 @@
 'use client'
 
 import { ReactNode } from 'react'
-import { motion } from 'framer-motion'
 import clsx from 'clsx'
 
 type GlassCardProps = {
@@ -9,36 +8,34 @@ type GlassCardProps = {
   className?: string
   href?: string
   onClick?: () => void
-  initial?: any
-  animate?: any
-  transition?: any
 }
 
+/**
+ * GlassCard - Canonical surface component
+ * Uses centralized design tokens for consistency across the app
+ * Canon surface: bg-white/[0.03], border-white/10
+ * 
+ * For secondary surfaces (inputs, selects), use bg-white/5
+ */
 export function GlassCard({
   children,
   className,
   href,
   onClick,
-  initial,
-  animate,
-  transition,
 }: GlassCardProps) {
   const cardContent = (
-    <motion.div
-      initial={initial || { opacity: 0, y: 24 }}
-      animate={animate || { opacity: 1, y: 0 }}
-      transition={transition || { duration: 0.45 }}
+    <div
       className={clsx(
         'relative overflow-hidden rounded-3xl border border-white/10',
         'bg-white/[0.03] backdrop-blur-xl',
-        'shadow-[0_4px_24px_rgba(0,0,0,0.15)]',
-        href || onClick ? 'cursor-pointer transition-transform hover:scale-[1.01]' : '',
+        'shadow-[0_8px_32px_rgba(0,0,0,0.3)]',
+        href || onClick ? 'cursor-pointer transition-all hover:opacity-90' : '',
         className
       )}
       onClick={onClick}
     >
       {children}
-    </motion.div>
+    </div>
   )
 
   if (href) {

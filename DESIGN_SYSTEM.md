@@ -2,11 +2,14 @@
 
 ## Canonical Tokens (Single Source of Truth)
 
-### Surfaces
-- **Primary surface:** `bg-white/[0.03]` (GlassCard component)
-- **Secondary surface:** `bg-white/5` (for inputs, selects, segmented controls)
-- **Border:** `border-white/10` (all cards, inputs, dividers)
-- **Hover surface:** `hover:bg-white/5` or `hover:bg-white/10`
+### Surfaces (CANONICAL - Single Source of Truth)
+- **Primary surface (cards/panels):** `bg-white/[0.03]` + `border-white/10` (GlassCard component)
+  - Use for: Cards, panels, containers, main content areas
+- **Secondary surface (inputs/controls):** `bg-white/5` + `border-white/10` + `backdrop-blur-sm`
+  - Use for: Inputs, selects, segmented controls, search bars
+- **Subtle border/divider:** `border-white/5` or `divide-white/5`
+  - Use for: Row separators, subtle dividers
+- **Hover states:** `hover:bg-white/5` or `hover:bg-white/10`
 
 ### Typography
 - **Page titles:** `text-4xl md:text-5xl font-bold font-display` (serif)
@@ -38,9 +41,11 @@
 
 ### Design Rules (Non-Negotiable)
 
-1. **No raw colors in page files**
-   - ❌ `className="bg-white/5 border-white/10"`
-   - ✅ Use `<GlassCard>`, `<Button>`, `<Badge>` components
+1. **No raw colors in page files (except for inputs/selects)**
+   - ❌ `className="bg-white/[0.03] border-white/10"` (use GlassCard instead)
+   - ✅ `<GlassCard>` for cards/panels
+   - ✅ `bg-white/5` allowed only for inputs, selects, segmented controls (secondary surfaces)
+   - ✅ Use `<Button>`, `<Badge>` components
 
 2. **Typography hierarchy**
    - Serif (`font-display`) ONLY for page/section titles
