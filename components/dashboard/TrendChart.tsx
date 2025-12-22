@@ -95,22 +95,6 @@ export function TrendChart({
           How fast crews are closing mitigations over the last {rangeDays} days.
         </p>
       </div>
-        <div className="flex items-center gap-2">
-          {RANGES.map((range) => (
-            <button
-              key={range}
-              onClick={() => onRangeChange?.(range)}
-              className={`rounded-full border px-4 py-2 text-sm transition backdrop-blur-sm ${
-                rangeDays === range
-                  ? 'border-transparent bg-gradient-to-r from-[#F97316] via-[#FF8A3D] to-[#FFD166] text-black shadow-[0_12px_32px_rgba(249,115,22,0.35)]'
-                  : 'border-white/10 bg-white/5 text-white/70 hover:border-white/20 hover:bg-white/10'
-              }`}
-            >
-              {range}d
-            </button>
-          ))}
-        </div>
-      </div>
 
       {isLoading ? (
         <div className="mt-10 h-[220px] w-full animate-pulse rounded-2xl bg-white/5" />

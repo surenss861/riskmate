@@ -138,7 +138,7 @@ export function EvidenceWidget({
               strokeWidth="8"
               fill="none"
             />
-            <motion.circle
+            <circle
               cx="60"
               cy="60"
               r="52"
@@ -148,11 +148,6 @@ export function EvidenceWidget({
               strokeDasharray={Math.PI * 2 * 52}
               strokeDashoffset={((100 - percent) / 100) * Math.PI * 2 * 52}
               strokeLinecap="round"
-              initial={{ strokeDashoffset: Math.PI * 2 * 52 }}
-              animate={{
-                strokeDashoffset: ((100 - percent) / 100) * Math.PI * 2 * 52,
-              }}
-              transition={{ duration: 0.6, ease: 'easeInOut' }}
             />
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
@@ -167,7 +162,7 @@ export function EvidenceWidget({
           <div className="absolute inset-0 rounded-full border border-white/10" />
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 }
 
