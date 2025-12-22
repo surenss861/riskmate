@@ -252,7 +252,8 @@ function DashboardPageInner() {
     const riskParam = searchParams.get('risk_level')
     if (statusParam && !filterStatus) setFilterStatus(statusParam)
     if (riskParam && !filterRiskLevel) setFilterRiskLevel(riskParam)
-  }, []) // Only on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // Only on mount - intentionally empty deps to run once
 
   useEffect(() => {
     loadData()
