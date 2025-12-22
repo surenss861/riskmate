@@ -89,16 +89,13 @@ export function TrendChart({
   const latestPoint = points[points.length - 1];
 
   return (
-    <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-[#111111]/80 p-6 shadow-[0_28px_90px_rgba(8,8,24,0.55)] backdrop-blur-2xl">
-      <span className="pointer-events-none absolute -right-32 top-[-120px] h-60 w-60 rounded-full bg-[#F97316]/18 blur-[140px]" />
-      <span className="pointer-events-none absolute -left-36 bottom-[-100px] h-64 w-64 rounded-full bg-[#38BDF8]/14 blur-[150px]" />
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h3 className="text-xl font-semibold text-white">Mitigation Completion Trend</h3>
-          <p className="text-sm text-white/65">
-            How fast crews are closing mitigations over the last {rangeDays} days.
-          </p>
-        </div>
+    <div className="relative">
+      <div className="mb-6">
+        <h3 className="text-xl font-bold font-display text-white mb-2">Mitigation Completion Trend</h3>
+        <p className="text-sm text-white/60">
+          How fast crews are closing mitigations over the last {rangeDays} days.
+        </p>
+      </div>
         <div className="flex items-center gap-2">
           {RANGES.map((range) => (
             <button

@@ -1,8 +1,6 @@
 'use client';
 
-import { motion } from 'framer-motion';
 import Link from 'next/link';
-import { buttonStyles } from '@/lib/styles/design-system';
 
 type EvidenceWidgetProps = {
   totalJobs: number;
@@ -68,22 +66,22 @@ export function EvidenceWidget({
           </p>
           {jobsTotal === 0 ? (
             <>
-              <h3 className="mt-4 text-3xl font-semibold text-white md:text-4xl">
+              <div className="text-3xl font-bold font-display text-white mb-3">
                 N/A
-              </h3>
-              <p className="mt-4 max-w-sm text-sm leading-relaxed text-white/65">
+              </div>
+              <p className="text-sm text-white/60">
                 No jobs in selected range.
               </p>
             </>
           ) : (
             <>
-              <h3 className="mt-4 text-3xl font-semibold text-white md:text-4xl">
-                {isLoading ? '—' : `${percent}%`} of jobs have photo evidence
-              </h3>
-              <p className="mt-2 text-xs text-white/40">
-                ({jobsWithPhotoEvidence}/{jobsTotal})
+              <div className="text-3xl font-bold font-display text-white mb-2">
+                {isLoading ? '—' : `${percent}%`}
+              </div>
+              <p className="text-sm text-white/60 mb-4">
+                {jobsWithPhotoEvidence} of {jobsTotal} jobs have photo evidence
               </p>
-              <p className="mt-4 max-w-sm text-sm leading-relaxed text-white/65">
+              <p className="text-sm text-white/60">
                 {required_evidence_policy || 'Keep crews capturing site photos before work begins. Evidence-rich jobs make your reports inspection-ready.'}
               </p>
             </>
