@@ -1,205 +1,195 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { motion } from 'framer-motion'
-import { AlertTriangle, CheckCircle, Clock, FileText, Shield, User, XCircle } from 'lucide-react'
+import { AlertTriangle, CheckCircle, Clock, FileText, Shield, User, XCircle, Upload, UserCheck, CheckSquare, ArrowRight } from 'lucide-react'
 import ProtectedRoute from '@/components/ProtectedRoute'
-import { jobsApi, auditApi } from '@/lib/api'
-import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { cardStyles, buttonStyles, typography } from '@/lib/styles/design-system'
 import { DashboardNavbar } from '@/components/dashboard/DashboardNavbar'
 import { useRouter } from 'next/navigation'
 import { terms } from '@/lib/terms'
+import { UploadEvidenceModal } from '@/components/audit/UploadEvidenceModal'
+import { RequestAttestationModal } from '@/components/audit/RequestAttestationModal'
+
+type ReadinessCategory = 'evidence' | 'controls' | 'attestations' | 'incidents' | 'access'
+type ReadinessSeverity = 'critical' | 'material' | 'info'
+type FixActionType = 'upload_evidence' | 'request_attestation' | 'complete_controls' | 'resolve_incident' | 'review_item'
 
 interface ReadinessItem {
   id: string
-  type: 'missing_evidence' | 'unsigned_attestation' | 'overdue_control' | 'violation_attempt'
-  title: string
-  description: string
-  severity: 'critical' | 'material' | 'info'
-  job_id?: string
-  job_name?: string
-  action_url: string
+  rule_code: string
+  rule_name: string
+  category: ReadinessCategory
+  severity: ReadinessSeverity
+  affected_type: 'work_record' | 'control' | 'attestation' | 'incident' | 'review_item'
+  affected_id: string
+  affected_name?: string
+  work_record_id?: string
+  work_record_name?: string
+  site_id?: string
+  site_name?: string
+  owner_id?: string
+  owner_name?: string
+  due_date?: string
+  status: 'open' | 'in_progress' | 'waived' | 'resolved'
+  why_it_matters: string
+  fix_action_type: FixActionType
+  metadata?: any
+  created_at?: string
+  updated_at?: string
+}
+
+interface ReadinessSummary {
+  total_items: number
+  critical_blockers: number
+  material: number
+  info: number
+  resolved: number
+  audit_ready_score: number
+  estimated_time_to_clear_hours?: number
+  oldest_overdue_date?: string
+  category_breakdown: {
+    evidence: number
+    controls: number
+    attestations: number
+    incidents: number
+    access: number
+  }
+}
+
+interface ReadinessResponse {
+  ok: true
+  data: {
+    summary: ReadinessSummary
+    items: ReadinessItem[]
+  }
+  requestId?: string
+}
+
+interface ApiError {
+  ok: false
+  code: string
+  message: string
+  requestId?: string
+}
+
+function buildQuery(params: Record<string, any>): string {
+  const sp = new URLSearchParams()
+  Object.entries(params).forEach(([k, v]) => {
+    if (v === undefined || v === null || v === '' || v === 'all') return
+    sp.set(k, String(v))
+  })
+  return sp.toString()
+}
+
+function fixActionLabel(type: FixActionType): string {
+  switch (type) {
+    case 'upload_evidence':
+      return 'Upload Evidence'
+    case 'request_attestation':
+      return 'Request Attestation'
+    case 'complete_controls':
+      return 'Complete Controls'
+    case 'resolve_incident':
+      return 'Resolve Incident'
+    case 'review_item':
+      return 'Review Item'
+    default:
+      return 'Resolve'
+  }
 }
 
 export default function AuditReadinessPage() {
   const router = useRouter()
+
+  // Filters & Tabs
+  const [category, setCategory] = useState<ReadinessCategory>('evidence')
+  const [timeRange, setTimeRange] = useState('30d')
+  const [severity, setSeverity] = useState<ReadinessSeverity | 'all'>('all')
+  const [status, setStatus] = useState<'open' | 'in_progress' | 'waived' | 'resolved' | 'all'>('open')
+  const [sort, setSort] = useState<'severity' | 'oldest' | 'score'>('severity')
+
+  // Data state
   const [loading, setLoading] = useState(true)
-  const [items, setItems] = useState<ReadinessItem[]>([])
-  const [stats, setStats] = useState({
-    total: 0,
-    critical: 0,
-    material: 0,
-    resolved: 0,
-  })
-  const [oldestOverdueDate, setOldestOverdueDate] = useState<Date | null>(null)
+  const [error, setError] = useState<ApiError | null>(null)
+  const [data, setData] = useState<ReadinessResponse['data'] | null>(null)
+
+  // Modal state
+  const [activeItem, setActiveItem] = useState<ReadinessItem | null>(null)
+  const [showUploadEvidence, setShowUploadEvidence] = useState(false)
+  const [showRequestAttestation, setShowRequestAttestation] = useState(false)
   const [exportingPack, setExportingPack] = useState(false)
 
-  useEffect(() => {
-    loadReadinessData()
-  }, [])
+  const query = useMemo(() => {
+    return buildQuery({
+      category,
+      time_range: timeRange,
+      severity: severity === 'all' ? undefined : severity,
+      status: status === 'all' ? undefined : status,
+    })
+  }, [category, timeRange, severity, status])
 
   const loadReadinessData = async () => {
+    setLoading(true)
+    setError(null)
+
     try {
-      setLoading(true)
-      const supabase = createSupabaseBrowserClient()
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) return
+      const res = await fetch(`/api/audit/readiness?${query}`, { method: 'GET' })
+      const json = (await res.json()) as ReadinessResponse | ApiError
 
-      const { data: orgData } = await supabase
-        .from('organizations')
-        .select('id')
-        .single()
-
-      if (!orgData) return
-
-      const readinessItems: ReadinessItem[] = []
-
-      // 1. Missing evidence (jobs without documents)
-      const { data: jobsWithoutDocs } = await supabase
-        .from('jobs')
-        .select('id, client_name, risk_score, risk_level')
-        .eq('organization_id', orgData.id)
-        .is('deleted_at', null)
-        .gt('risk_score', 50) // Only high-risk jobs need evidence
-
-      if (jobsWithoutDocs) {
-        for (const job of jobsWithoutDocs) {
-          const { data: docs } = await supabase
-            .from('documents')
-            .select('id')
-            .eq('job_id', job.id)
-            .limit(1)
-
-          if (!docs || docs.length === 0) {
-            readinessItems.push({
-              id: `missing-evidence-${job.id}`,
-              type: 'missing_evidence',
-              title: `Missing ${terms.evidence.singular.toLowerCase()} for high-risk ${terms.workRecord.singular.toLowerCase()}`,
-              description: `${job.client_name} (Risk: ${job.risk_score || 'N/A'}) has no ${terms.evidence.singular.toLowerCase()} attached`,
-              severity: job.risk_score && job.risk_score > 75 ? 'critical' : 'material',
-              job_id: job.id,
-              job_name: job.client_name,
-              action_url: `/operations/jobs/${job.id}?view=packet`,
-            })
-          }
-        }
+      if (!res.ok || ('ok' in json && json.ok === false)) {
+        setError(json as ApiError)
+        setData(null)
+        return
       }
 
-      // 2. Unsigned attestations (jobs without sign-offs)
-      const { data: highRiskJobs } = await supabase
-        .from('jobs')
-        .select('id, client_name, risk_score')
-        .eq('organization_id', orgData.id)
-        .is('deleted_at', null)
-        .gt('risk_score', 75)
-
-      if (highRiskJobs) {
-        for (const job of highRiskJobs) {
-          const { data: signoffs } = await supabase
-            .from('job_signoffs')
-            .select('id')
-            .eq('job_id', job.id)
-            .eq('status', 'signed')
-            .limit(1)
-
-          if (!signoffs || signoffs.length === 0) {
-            readinessItems.push({
-              id: `unsigned-${job.id}`,
-              type: 'unsigned_attestation',
-              title: `Missing ${terms.attestation.singular.toLowerCase()} for high-risk ${terms.workRecord.singular.toLowerCase()}`,
-              description: `${job.client_name} requires role-based ${terms.attestation.singular.toLowerCase()}`,
-              severity: 'material',
-              job_id: job.id,
-              job_name: job.client_name,
-              action_url: `/operations/jobs/${job.id}?view=packet`,
-            })
-          }
-        }
-      }
-
-      // 3. Overdue controls (mitigations not completed)
-      const { data: jobsWithMitigations } = await supabase
-        .from('jobs')
-        .select('id, client_name, risk_score, created_at')
-        .eq('organization_id', orgData.id)
-        .is('deleted_at', null)
-        .gt('risk_score', 50)
-
-      let oldestOverdue: Date | null = null
-      if (jobsWithMitigations) {
-        for (const job of jobsWithMitigations) {
-          const { data: mitigations } = await supabase
-            .from('mitigation_items')
-            .select('id, done, is_completed, created_at')
-            .eq('job_id', job.id)
-
-          if (mitigations) {
-            const incomplete = mitigations.filter(m => !m.done && !m.is_completed)
-            if (incomplete.length > 0) {
-              // Track oldest overdue date
-              incomplete.forEach(m => {
-                if (m.created_at) {
-                  const createdDate = new Date(m.created_at)
-                  if (!oldestOverdue || createdDate < oldestOverdue) {
-                    oldestOverdue = createdDate
-                  }
-                }
-              })
-
-              readinessItems.push({
-                id: `overdue-control-${job.id}`,
-                type: 'overdue_control',
-                title: `${incomplete.length} overdue ${terms.control.singular.toLowerCase()}${incomplete.length > 1 ? 's' : ''} for ${terms.workRecord.singular.toLowerCase()}`,
-                description: `${job.client_name} has ${incomplete.length} incomplete ${terms.control.singular.toLowerCase()}${incomplete.length > 1 ? 's' : ''}`,
-                severity: job.risk_score && job.risk_score > 75 ? 'critical' : 'material',
-                job_id: job.id,
-                job_name: job.client_name,
-                action_url: `/operations/jobs/${job.id}`,
-              })
-            }
-          }
-        }
-      }
-      setOldestOverdueDate(oldestOverdue)
-
-      // 4. Role violation attempts
-      const { data: violations } = await supabase
-        .from('audit_logs')
-        .select('id, job_id, job_title, created_at, summary')
-        .eq('organization_id', orgData.id)
-        .eq('event_name', 'auth.role_violation')
-        .gte('created_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString())
-        .order('created_at', { ascending: false })
-        .limit(10)
-
-      if (violations) {
-        violations.forEach((violation) => {
-          readinessItems.push({
-            id: `violation-${violation.id}`,
-            type: 'violation_attempt',
-            title: 'Role violation attempt logged',
-            description: violation.summary || 'Unauthorized action attempt',
-            severity: 'critical',
-            job_id: violation.job_id || undefined,
-            job_name: violation.job_title || undefined,
-            action_url: violation.job_id ? `/operations/audit?job_id=${violation.job_id}` : '/operations/audit?view=governance-enforcement',
-          })
-        })
-      }
-
-      setItems(readinessItems)
-      setStats({
-        total: readinessItems.length,
-        critical: readinessItems.filter(i => i.severity === 'critical').length,
-        material: readinessItems.filter(i => i.severity === 'material').length,
-        resolved: 0, // Would track resolved items
-      })
-    } catch (err) {
-      console.error('Failed to load audit readiness data:', err)
+      setData((json as ReadinessResponse).data)
+    } catch (e: any) {
+      setError({ ok: false, code: 'NETWORK_ERROR', message: e?.message || 'Failed to load readiness' })
+      setData(null)
     } finally {
       setLoading(false)
     }
+  }
+
+  useEffect(() => {
+    loadReadinessData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query])
+
+  const handleFix = (item: ReadinessItem) => {
+    setActiveItem(item)
+
+    switch (item.fix_action_type) {
+      case 'upload_evidence':
+        setShowUploadEvidence(true)
+        break
+      case 'request_attestation':
+        setShowRequestAttestation(true)
+        break
+      case 'complete_controls':
+        if (item.work_record_id) {
+          router.push(`/operations/jobs/${item.work_record_id}?focus=controls`)
+        }
+        break
+      case 'resolve_incident':
+        if (item.work_record_id) {
+          router.push(`/operations/jobs/${item.work_record_id}?view=incident`)
+        }
+        break
+      case 'review_item':
+        router.push(`/operations/audit?eventId=${item.affected_id}`)
+        break
+      default:
+        console.warn('Unhandled fix action:', item.fix_action_type)
+    }
+  }
+
+  const handleModalComplete = () => {
+    setShowUploadEvidence(false)
+    setShowRequestAttestation(false)
+    setActiveItem(null)
+    loadReadinessData()
   }
 
   const getSeverityIcon = (severity: string) => {
@@ -224,22 +214,38 @@ export default function AuditReadinessPage() {
     }
   }
 
-  const getTypeLabel = (type: string) => {
-    switch (type) {
-      case 'missing_evidence':
-        return `Missing ${terms.evidence.singular}`
-      case 'unsigned_attestation':
-        return `Missing ${terms.attestation.singular}`
-      case 'overdue_control':
-        return `Overdue ${terms.control.singular}`
-      case 'violation_attempt':
-        return 'Violation Attempt'
-      default:
-        return 'Issue'
-    }
-  }
+  const summary = data?.summary
+  const items = data?.items || []
 
-  if (loading) {
+  // Sort items
+  const sortedItems = useMemo(() => {
+    if (!items.length) return []
+    const sorted = [...items]
+    switch (sort) {
+      case 'severity':
+        return sorted.sort((a, b) => {
+          const severityOrder = { critical: 0, material: 1, info: 2 }
+          return severityOrder[a.severity] - severityOrder[b.severity]
+        })
+      case 'oldest':
+        return sorted.sort((a, b) => {
+          const aDate = a.created_at || a.due_date || ''
+          const bDate = b.created_at || b.due_date || ''
+          return aDate.localeCompare(bDate)
+        })
+      case 'score':
+        // Sort by risk score if available in metadata, otherwise by severity
+        return sorted.sort((a, b) => {
+          const aScore = a.metadata?.risk_score || 0
+          const bScore = b.metadata?.risk_score || 0
+          return bScore - aScore
+        })
+      default:
+        return sorted
+    }
+  }, [items, sort])
+
+  if (loading && !data) {
     return (
       <ProtectedRoute>
         <div className="min-h-screen bg-[#0A0A0A] text-white flex items-center justify-center">
@@ -263,54 +269,197 @@ export default function AuditReadinessPage() {
             <div className="flex items-center gap-3 mb-4">
               <Shield className="w-6 h-6 text-[#F97316]" />
               <div>
-                <h1 className={`${typography.h1}`}>Audit Readiness</h1>
+                <h1 className={typography.h1}>Audit Readiness</h1>
                 <p className="text-white/60 text-sm mt-2">
-                  What&apos;s missing for audit? Complete these items to make your governance record audit-ready.
+                  What&apos;s missing for audit? Fix these items to make your governance record audit-ready.
                 </p>
               </div>
             </div>
           </div>
 
-          {/* Summary Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+          {/* Enhanced Summary Cards */}
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-8">
+            <div className={`${cardStyles.base} p-4 border-2 ${summary && summary.audit_ready_score >= 80 ? 'border-green-500/30 bg-green-500/10' : summary && summary.audit_ready_score >= 60 ? 'border-yellow-500/30 bg-yellow-500/10' : 'border-red-500/30 bg-red-500/10'}`}>
+              <div className="text-sm text-white/60 mb-1">Audit-Ready Score</div>
+              <div className="text-2xl font-bold text-white">
+                {summary ? summary.audit_ready_score : '—'}<span className="text-lg text-white/40">/100</span>
+              </div>
+            </div>
             <div className={cardStyles.base + ' p-4'}>
               <div className="text-sm text-white/60 mb-1">Total Items</div>
-              <div className="text-2xl font-bold text-white">{stats.total}</div>
+              <div className="text-2xl font-bold text-white">{summary ? summary.total_items : '—'}</div>
             </div>
             <div className={cardStyles.base + ' p-4 border-red-500/30 bg-red-500/10'}>
               <div className="text-sm text-white/60 mb-1">Critical Blockers</div>
-              <div className="text-2xl font-bold text-red-400">{stats.critical}</div>
+              <div className="text-2xl font-bold text-red-400">{summary ? summary.critical_blockers : '—'}</div>
             </div>
             <div className={cardStyles.base + ' p-4 border-yellow-500/30 bg-yellow-500/10'}>
               <div className="text-sm text-white/60 mb-1">Material</div>
-              <div className="text-2xl font-bold text-yellow-400">{stats.material}</div>
+              <div className="text-2xl font-bold text-yellow-400">{summary ? summary.material : '—'}</div>
+            </div>
+            <div className={cardStyles.base + ' p-4 border-blue-500/30 bg-blue-500/10'}>
+              <div className="text-sm text-white/60 mb-1">Time to Clear</div>
+              <div className="text-lg font-bold text-blue-400">
+                {summary?.estimated_time_to_clear_hours 
+                  ? `${Math.ceil(summary.estimated_time_to_clear_hours)}h`
+                  : '—'}
+              </div>
             </div>
             <div className={cardStyles.base + ' p-4 border-blue-500/30 bg-blue-500/10'}>
               <div className="text-sm text-white/60 mb-1">Oldest Overdue</div>
               <div className="text-lg font-bold text-blue-400">
-                {oldestOverdueDate 
-                  ? `${Math.floor((Date.now() - oldestOverdueDate.getTime()) / (1000 * 60 * 60 * 24))}d`
+                {summary?.oldest_overdue_date 
+                  ? `${Math.floor((Date.now() - new Date(summary.oldest_overdue_date).getTime()) / (1000 * 60 * 60 * 24))}d`
                   : '—'}
               </div>
-              {oldestOverdueDate && (
+              {summary?.oldest_overdue_date && (
                 <div className="text-xs text-white/50 mt-1">
-                  {oldestOverdueDate.toLocaleDateString()}
+                  {new Date(summary.oldest_overdue_date).toLocaleDateString()}
                 </div>
               )}
             </div>
-            <div className={cardStyles.base + ' p-4 border-green-500/30 bg-green-500/10'}>
-              <div className="text-sm text-white/60 mb-1">Resolved</div>
-              <div className="text-2xl font-bold text-green-400">{stats.resolved}</div>
+          </div>
+
+          {/* Category Tabs + Filters */}
+          <div className={cardStyles.base + ' p-4 mb-8'}>
+            <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => setCategory('evidence')}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    category === 'evidence'
+                      ? 'bg-[#F97316] text-black'
+                      : 'bg-white/5 text-white/60 hover:bg-white/10'
+                  }`}
+                >
+                  Evidence ({summary?.category_breakdown.evidence || 0})
+                </button>
+                <button
+                  onClick={() => setCategory('controls')}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    category === 'controls'
+                      ? 'bg-[#F97316] text-black'
+                      : 'bg-white/5 text-white/60 hover:bg-white/10'
+                  }`}
+                >
+                  Controls ({summary?.category_breakdown.controls || 0})
+                </button>
+                <button
+                  onClick={() => setCategory('attestations')}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    category === 'attestations'
+                      ? 'bg-[#F97316] text-black'
+                      : 'bg-white/5 text-white/60 hover:bg-white/10'
+                  }`}
+                >
+                  Attestations ({summary?.category_breakdown.attestations || 0})
+                </button>
+                <button
+                  onClick={() => setCategory('incidents')}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    category === 'incidents'
+                      ? 'bg-[#F97316] text-black'
+                      : 'bg-white/5 text-white/60 hover:bg-white/10'
+                  }`}
+                >
+                  Incidents ({summary?.category_breakdown.incidents || 0})
+                </button>
+                <button
+                  onClick={() => setCategory('access')}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    category === 'access'
+                      ? 'bg-[#F97316] text-black'
+                      : 'bg-white/5 text-white/60 hover:bg-white/10'
+                  }`}
+                >
+                  Access ({summary?.category_breakdown.access || 0})
+                </button>
+              </div>
+              <button
+                onClick={loadReadinessData}
+                className={buttonStyles.secondary + ' text-sm'}
+              >
+                Refresh
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div>
+                <label className="block text-sm text-white/60 mb-2">Time Range</label>
+                <select
+                  value={timeRange}
+                  onChange={(e) => setTimeRange(e.target.value)}
+                  className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-[#F97316]"
+                >
+                  <option value="7d">Last 7 days</option>
+                  <option value="30d">Last 30 days</option>
+                  <option value="90d">Last 90 days</option>
+                  <option value="all">All time</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm text-white/60 mb-2">Severity</label>
+                <select
+                  value={severity}
+                  onChange={(e) => setSeverity(e.target.value as ReadinessSeverity | 'all')}
+                  className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-[#F97316]"
+                >
+                  <option value="all">All</option>
+                  <option value="critical">Critical</option>
+                  <option value="material">Material</option>
+                  <option value="info">Info</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm text-white/60 mb-2">Status</label>
+                <select
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value as typeof status)}
+                  className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-[#F97316]"
+                >
+                  <option value="open">Open</option>
+                  <option value="in_progress">In Progress</option>
+                  <option value="waived">Waived</option>
+                  <option value="resolved">Resolved</option>
+                  <option value="all">All</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm text-white/60 mb-2">Sort By</label>
+                <select
+                  value={sort}
+                  onChange={(e) => setSort(e.target.value as typeof sort)}
+                  className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-[#F97316]"
+                >
+                  <option value="severity">Severity</option>
+                  <option value="oldest">Oldest First</option>
+                  <option value="score">Risk Score</option>
+                </select>
+              </div>
             </div>
           </div>
 
-          {/* Readiness Checklist */}
-          {items.length === 0 ? (
+          {/* Error State */}
+          {error && (
+            <div className={`${cardStyles.base} p-6 border-red-500/30 bg-red-500/10 mb-8`}>
+              <div className="flex items-center gap-3 mb-2">
+                <XCircle className="w-5 h-5 text-red-400" />
+                <div className="font-semibold text-red-400">Failed to load readiness</div>
+              </div>
+              <p className="text-sm text-white/70">{error.message}</p>
+              {error.requestId && process.env.NODE_ENV === 'development' && (
+                <p className="text-xs text-white/50 mt-2">Request ID: {error.requestId}</p>
+              )}
+            </div>
+          )}
+
+          {/* Readiness Items List */}
+          {sortedItems.length === 0 && !loading && !error && (
             <div className={cardStyles.base + ' p-12 text-center'}>
               <CheckCircle className="w-16 h-16 text-green-400 mx-auto mb-4" />
-              <h3 className={`${typography.h2} mb-2`}>All Clear</h3>
+              <h3 className={typography.h2 + ' mb-2'}>All Clear</h3>
               <p className="text-white/60 mb-6">
-                Your governance record is audit-ready. All {terms.evidence.plural.toLowerCase()}, {terms.attestation.plural.toLowerCase()}, and {terms.control.plural.toLowerCase()} are complete.
+                No {category} readiness issues found for {timeRange === 'all' ? 'all time' : `the last ${timeRange}`}.
               </p>
               <button
                 onClick={() => router.push('/operations/audit')}
@@ -319,9 +468,11 @@ export default function AuditReadinessPage() {
                 View Compliance Ledger
               </button>
             </div>
-          ) : (
-            <div className="space-y-4">
-              {items.map((item) => (
+          )}
+
+          {sortedItems.length > 0 && (
+            <div className="space-y-4 mb-8">
+              {sortedItems.map((item) => (
                 <motion.div
                   key={item.id}
                   initial={{ opacity: 0, y: 20 }}
@@ -339,26 +490,28 @@ export default function AuditReadinessPage() {
                           item.severity === 'material' ? 'bg-yellow-500/30 text-yellow-300' :
                           'bg-blue-500/30 text-blue-300'
                         }`}>
-                          {getTypeLabel(item.type)}
+                          {item.rule_code}
                         </span>
                         <span className="text-xs text-white/50 uppercase tracking-wide">
                           {item.severity}
                         </span>
                       </div>
-                      <h3 className="font-semibold text-white mb-1">{item.title}</h3>
-                      <p className="text-sm text-white/70 mb-4">{item.description}</p>
-                      {item.job_name && (
-                        <p className="text-xs text-white/50 mb-4">
-                          {terms.workRecord.singular}: {item.job_name}
+                      <h3 className="font-semibold text-white mb-1">{item.rule_name}</h3>
+                      <p className="text-sm text-white/70 mb-2">{item.why_it_matters}</p>
+                      {item.work_record_name && (
+                        <p className="text-xs text-white/50 mb-2">
+                          {terms.workRecord.singular}: {item.work_record_name}
+                          {item.owner_name && ` • Owner: ${item.owner_name}`}
+                          {item.due_date && ` • Due: ${new Date(item.due_date).toLocaleDateString()}`}
                         </p>
                       )}
-                      <button
-                        onClick={() => router.push(item.action_url)}
-                        className={buttonStyles.secondary + ' text-sm'}
-                      >
-                        Resolve →
-                      </button>
                     </div>
+                    <button
+                      onClick={() => handleFix(item)}
+                      className={buttonStyles.primary + ' whitespace-nowrap'}
+                    >
+                      {fixActionLabel(item.fix_action_type)} <ArrowRight className="w-4 h-4 inline ml-1" />
+                    </button>
                   </div>
                 </motion.div>
               ))}
@@ -366,17 +519,17 @@ export default function AuditReadinessPage() {
           )}
 
           {/* Footer CTA */}
-          <div className={`${cardStyles.base} p-6 mt-8 border-2 border-[#F97316]/30`}>
+          <div className={`${cardStyles.base} p-6 border-2 border-[#F97316]/30`}>
             <div className="flex flex-col md:flex-row items-center justify-between gap-4">
               <div className="text-center md:text-left">
                 <p className="text-sm text-white/70 mb-2">
-                  {stats.total === 0 
+                  {summary && summary.total_items === 0
                     ? 'Your governance record is audit-ready for export.'
-                    : `Resolve ${stats.critical > 0 ? `${stats.critical} critical blocker${stats.critical > 1 ? 's' : ''} ` : ''}to make your record audit-ready.`}
+                    : `Resolve ${summary && summary.critical_blockers > 0 ? `${summary.critical_blockers} critical blocker${summary.critical_blockers > 1 ? 's' : ''} ` : ''}to make your record audit-ready.`}
                 </p>
-                {stats.critical > 0 && (
-                  <p className="text-xs text-yellow-400">
-                    {oldestOverdueDate && `Oldest overdue item: ${Math.floor((Date.now() - oldestOverdueDate.getTime()) / (1000 * 60 * 60 * 24))} days`}
+                {summary?.estimated_time_to_clear_hours && summary.estimated_time_to_clear_hours > 0 && (
+                  <p className="text-xs text-white/50">
+                    Estimated time to clear: {Math.ceil(summary.estimated_time_to_clear_hours)} hours
                   </p>
                 )}
               </div>
@@ -394,7 +547,7 @@ export default function AuditReadinessPage() {
                       const response = await fetch('/api/audit/export/pack', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ time_range: '30d' }),
+                        body: JSON.stringify({ time_range: timeRange }),
                       })
                       if (!response.ok) throw new Error('Export failed')
                       const blob = await response.blob()
@@ -423,7 +576,33 @@ export default function AuditReadinessPage() {
           </div>
         </div>
       </div>
+
+      {/* Modals */}
+      {activeItem && showUploadEvidence && (
+        <UploadEvidenceModal
+          isOpen={showUploadEvidence}
+          onClose={() => {
+            setShowUploadEvidence(false)
+            setActiveItem(null)
+          }}
+          onComplete={handleModalComplete}
+          workRecordId={activeItem.work_record_id || activeItem.affected_id}
+          workRecordName={activeItem.work_record_name || activeItem.affected_name}
+        />
+      )}
+
+      {activeItem && showRequestAttestation && (
+        <RequestAttestationModal
+          isOpen={showRequestAttestation}
+          onClose={() => {
+            setShowRequestAttestation(false)
+            setActiveItem(null)
+          }}
+          onComplete={handleModalComplete}
+          workRecordId={activeItem.work_record_id || activeItem.affected_id}
+          workRecordName={activeItem.work_record_name || activeItem.affected_name}
+        />
+      )}
     </ProtectedRoute>
   )
 }
-
