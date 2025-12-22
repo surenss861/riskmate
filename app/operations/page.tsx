@@ -665,7 +665,7 @@ function DashboardPageInner() {
                   View all plans →
                 </button>
               </div>
-            </motion.div>
+            </GlassCard>
           ) : (
             <motion.div
               initial={{ opacity: 0, y: 18 }}
@@ -724,7 +724,7 @@ function DashboardPageInner() {
                 complianceTrend={complianceTrend}
                 timeRange={timeRange}
               />
-            </motion.div>
+            </div>
           )}
 
           {/* Changelog - Only for owners/admins */}
@@ -763,7 +763,7 @@ function DashboardPageInner() {
                   </div>
                 ))}
               </div>
-            </motion.div>
+            </GlassCard>
           )}
 
           {/* Job List */}
