@@ -1050,10 +1050,9 @@ function DashboardPageInner() {
               </div>
             )}
           </motion.div>
-        </div>
-      </div>
+        </AppShell>
 
-      {/* First-Run Setup Wizard */}
+        {/* First-Run Setup Wizard */}
       <FirstRunSetupWizard
         isOpen={showOnboarding}
         onComplete={async () => {
