@@ -866,17 +866,17 @@ function DashboardPageInner() {
                     <p className="mb-6 text-sm text-white/60">
                       Try adjusting your search, filters, or time range.
                     </p>
-                    <button
+                    <SharedButton
+                      variant="secondary"
                       onClick={() => {
                         setSearchQuery('')
                         setFilterStatus('')
                         setFilterRiskLevel('')
                         setCurrentPage(1)
                       }}
-                      className="px-6 py-3 border border-white/10 rounded-lg hover:border-white/20 transition-colors font-medium text-sm"
                     >
                       Clear Filters
-                    </button>
+                    </SharedButton>
                   </>
                 ) : (
                   <>
@@ -908,14 +908,8 @@ function DashboardPageInner() {
                     whileHover={{ backgroundColor: 'rgba(255,255,255,0.06)' }}
                     className="group relative px-6 py-3.5 transition duration-200"
                   >
-                    {/* Visual scan spine - left indicator bar */}
-                    <div className={`absolute left-0 top-0 bottom-0 w-0.5 ${
-                      (job.risk_level || '').toLowerCase() === 'low' ? 'bg-green-400/8' :
-                      (job.risk_level || '').toLowerCase() === 'medium' ? 'bg-yellow-400/8' :
-                      (job.risk_level || '').toLowerCase() === 'high' ? 'bg-orange-400/8' :
-                      (job.risk_level || '').toLowerCase() === 'critical' ? 'bg-red-400/8' :
-                      'bg-white/5'
-                    }`} />
+                    {/* Visual separator - subtle left border */}
+                    <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-white/5" />
                     <div className="flex items-center justify-between">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-3 mb-1.5">
@@ -1002,29 +996,31 @@ function DashboardPageInner() {
                 </div>
                 
                 <div className="flex items-center gap-2">
-                  <button
+                  <SharedButton
+                    variant="secondary"
+                    size="sm"
                     onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                     disabled={currentPage === 1}
-                    className="px-4 py-2 rounded-lg border border-white/10 bg-white/5 backdrop-blur-sm text-sm text-white/90 transition disabled:opacity-50 disabled:cursor-not-allowed hover:border-white/20 hover:bg-white/10 disabled:hover:border-white/10 disabled:hover:bg-white/5"
                   >
                     Previous
-                  </button>
+                  </SharedButton>
                   
                   <span className="text-sm text-white/60 px-4">
                     Page {currentPage} of {jobsPagination.total_pages}
                   </span>
                   
-                  <button
+                  <SharedButton
+                    variant="secondary"
+                    size="sm"
                     onClick={() => setCurrentPage(p => Math.min(jobsPagination.total_pages || 1, p + 1))}
                     disabled={currentPage >= (jobsPagination.total_pages || 1)}
-                    className="px-4 py-2 rounded-lg border border-white/10 bg-white/5 backdrop-blur-sm text-sm text-white/90 transition disabled:opacity-50 disabled:cursor-not-allowed hover:border-white/20 hover:bg-white/10 disabled:hover:border-white/10 disabled:hover:bg-white/5"
                   >
                     Next
-                  </button>
+                  </SharedButton>
                 </div>
               </div>
             )}
-          </motion.div>
+          </GlassCard>
         </AppShell>
 
         {/* First-Run Setup Wizard */}
