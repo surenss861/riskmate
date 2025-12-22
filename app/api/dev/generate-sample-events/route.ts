@@ -54,7 +54,33 @@ export async function POST(request: NextRequest) {
       .eq('id', user_id)
       .single()
 
+    if (!userData) {
+      return NextResponse.json(
+        createErrorResponse('User not found', 'NOT_FOUND', { requestId, statusCode: 404 }),
+        { status: 404, headers: { 'X-Request-ID': requestId } }
+      )
+    }
+
+    // Get a sample job/work record for operations events (if available)
+    const { data: sampleJob } = await supabase
+      .from('jobs')
+      .select('id, client_name')
+      .eq('organization_id', organization_id)
+      .is('deleted_at', null)
+      .limit(1)
+      .single()
+
+    // Get another user for access events (if available) - don't use self for revocation
+    const { data: sampleTargetUser } = await supabase
+      .from('users')
+      .select('id, full_name, email, role')
+      .eq('organization_id', organization_id)
+      .neq('id', user_id)
+      .limit(1)
+      .single()
+
     const ledgerEntryIds: string[] = []
+    const now = new Date()
 
     // 1. Governance Enforcement event: role violation
     const governanceResult = await recordAuditLog(supabase, {
@@ -62,50 +88,65 @@ export async function POST(request: NextRequest) {
       actorId: user_id,
       eventName: 'auth.role_violation',
       targetType: 'system',
+      targetId: null,
       metadata: {
         attempted_action: 'job.update',
         policy_statement: 'Executives have read-only access and cannot update work records',
         endpoint: '/api/jobs/update',
         reason: 'Executive attempted to update a work record',
+        blocked_reason: 'Role-based access control: Executives have read-only access',
         summary: 'Executive attempted to update a work record (blocked by governance policy)',
+        request_id: requestId,
       },
     })
     if (governanceResult.data?.id) ledgerEntryIds.push(governanceResult.data.id)
 
-    // 2. Operational Actions event: review queue assigned
+    // 2. Operational Actions event: review queue assigned (with realistic job if available)
     const operationsResult = await recordAuditLog(supabase, {
       organizationId: organization_id,
       actorId: user_id,
       eventName: 'review_queue.assigned',
-      targetType: 'job',
+      targetType: sampleJob ? 'job' : 'event',
+      targetId: sampleJob?.id || null,
       metadata: {
+        work_record_id: sampleJob?.id || null,
         assignee_id: user_id,
-        assignee_name: userData?.full_name || userData?.email || 'Unknown',
-        due_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days from now
+        assignee_name: userData.full_name || userData.email,
+        assignee_role: userData.role,
+        due_at: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days from now
         priority: 'high',
         status_change: {
           before: 'open',
           after: 'assigned',
         },
-        notes: 'Sample review assignment for testing',
-        summary: `Assigned to ${userData?.full_name || userData?.email || 'Unknown'} (due: ${new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString()})`,
+        notes: 'Sample review assignment for testing Compliance Ledger UI',
+        assigned_at: now.toISOString(),
+        summary: `Assigned to ${userData.full_name || userData.email} (due: ${new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString()})`,
+        request_id: requestId,
       },
     })
     if (operationsResult.data?.id) ledgerEntryIds.push(operationsResult.data.id)
 
-    // 3. Access & Security event: access revoked
+    // 3. Access & Security event: access revoked (use sample target user if available, otherwise self)
+    const targetUserId = sampleTargetUser?.id || user_id
+    const targetUserName = sampleTargetUser?.full_name || sampleTargetUser?.email || userData.full_name || userData.email
     const accessResult = await recordAuditLog(supabase, {
       organizationId: organization_id,
       actorId: user_id,
       eventName: 'access.revoked',
       targetType: 'user',
+      targetId: targetUserId,
       metadata: {
-        target_user_id: user_id, // Revoking own access (sample)
-        target_user_name: userData?.full_name || userData?.email || 'Unknown',
+        target_user_id: targetUserId,
+        target_user_name: targetUserName,
+        target_user_role: sampleTargetUser?.role || userData.role,
         scope: 'org',
-        reason: 'Sample access revocation for testing',
+        reason: 'Sample access revocation for testing Compliance Ledger UI',
         force_logout: false,
-        summary: `Access revoked for ${userData?.full_name || userData?.email || 'Unknown'}: Sample access revocation for testing (scope: org)`,
+        revoked_at: now.toISOString(),
+        revoked_by: user_id,
+        summary: `Access revoked for ${targetUserName}: Sample access revocation for testing (scope: org)`,
+        request_id: requestId,
       },
     })
     if (accessResult.data?.id) ledgerEntryIds.push(accessResult.data.id)
