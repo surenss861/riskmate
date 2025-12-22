@@ -803,7 +803,7 @@ export default function JobDetailPage() {
                         {job.risk_score_detail.factors.map((factor, i) => (
                           <div
                             key={i}
-                            className={`flex items-center gap-3 p-3 rounded-lg border border-white/10 ${cardStyles.flat}`}
+                            className="flex items-center gap-3 p-3 rounded-lg border border-white/10 bg-white/[0.03]"
                           >
                             <div className="w-2 h-2 rounded-full bg-[#F97316]" />
                             <div className="flex-1">
