@@ -571,6 +571,136 @@ executiveRouter.get('/risk-posture', authenticate as unknown as express.RequestH
   }
 })
 
+// POST /api/executive/brief/pdf
+// Generates PDF Board Brief from executive summary
+executiveRouter.post('/brief/pdf', authenticate as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
+  const authReq = req as AuthenticatedRequest & RequestWithId
+  const requestId = authReq.requestId || 'unknown'
+  
+  try {
+    const { organization_id, id: userId, role, email: userEmail } = authReq.user
+
+    // Verify executive role
+    if (role !== 'executive' && role !== 'owner' && role !== 'admin') {
+      const { response: errorResponse, errorId } = createErrorResponse({
+        message: 'Executive access required',
+        internalMessage: `PDF brief generation attempted by role=${role}`,
+        code: 'AUTH_ROLE_FORBIDDEN',
+        requestId,
+        statusCode: 403,
+      })
+      res.setHeader('X-Error-ID', errorId)
+      return res.status(403).json(errorResponse)
+    }
+
+    // Get organization name
+    const { data: org, error: orgError } = await supabase
+      .from('organizations')
+      .select('name')
+      .eq('id', organization_id)
+      .single()
+
+    if (orgError || !org) {
+      const { response: errorResponse, errorId } = createErrorResponse({
+        message: 'Organization not found',
+        internalMessage: `Organization lookup failed: ${orgError?.message}`,
+        code: 'ORG_NOT_FOUND',
+        requestId,
+        statusCode: 404,
+      })
+      res.setHeader('X-Error-ID', errorId)
+      return res.status(404).json(errorResponse)
+    }
+
+    // Get current executive summary data (we'll use the same endpoint logic)
+    const timeRange = (req.body.time_range as string) || '30d'
+    const cacheKey = `executive:${organization_id}:${timeRange}`
+    const cached = executiveCache.get(cacheKey)
+
+    if (!cached) {
+      // If not cached, return error - user should load the page first
+      return res.status(400).json({
+        code: 'NO_DATA_AVAILABLE',
+        message: 'Executive summary data not available. Please load the executive page first.',
+      })
+    }
+
+    // Build brief data structure
+    const briefData = {
+      generated_at: new Date().toISOString(),
+      time_range: timeRange,
+      summary: {
+        exposure_level: cached.data.exposure_level,
+        confidence_statement: cached.data.confidence_statement,
+        counts: {
+          high_risk_jobs: cached.data.high_risk_jobs,
+          open_incidents: cached.data.open_incidents,
+          violations: cached.data.recent_violations,
+          flagged: cached.data.flagged_jobs,
+          pending_attestations: cached.data.pending_signoffs,
+          signed_attestations: cached.data.signed_jobs,
+          proof_packs: cached.data.proof_packs_generated,
+        },
+        deltas: cached.data.deltas,
+        top_drivers: cached.data.drivers ? {
+          highRiskJobs: cached.data.drivers.highRiskJobs.slice(0, 1),
+          openIncidents: cached.data.drivers.openIncidents.slice(0, 1),
+          violations: cached.data.drivers.violations.slice(0, 1),
+          flagged: cached.data.drivers.flagged.slice(0, 1),
+          pending: cached.data.drivers.pending.slice(0, 1),
+        } : undefined,
+        integrity: {
+          status: cached.data.ledger_integrity,
+          last_verified_at: cached.data.ledger_integrity_last_verified_at,
+        },
+        recommended_actions: cached.data.recommended_actions,
+      },
+    }
+
+    // Generate PDF
+    const { buffer, hash } = await generateExecutiveBriefPDF(
+      briefData,
+      org.name || 'Organization',
+      userEmail || `User ${userId.slice(0, 8)}`
+    )
+
+    // Record audit log
+    await recordAuditLog({
+      organizationId: organization_id,
+      actorId: userId,
+      eventName: 'executive.brief_exported',
+      targetType: 'system',
+      targetId: null,
+      metadata: {
+        format: 'pdf',
+        time_range: timeRange,
+        hash,
+        summary: {
+          exposure_level: cached.data.exposure_level,
+          counts: briefData.summary.counts,
+        },
+      },
+    })
+
+    res.setHeader('Content-Type', 'application/pdf')
+    res.setHeader('Content-Disposition', `attachment; filename="executive-brief-${timeRange}-${new Date().toISOString().split('T')[0]}.pdf"`)
+    res.setHeader('X-PDF-Hash', hash)
+    res.send(buffer)
+  } catch (err: any) {
+    console.error('PDF brief generation failed:', err)
+    const { response: errorResponse, errorId } = createErrorResponse({
+      message: 'Failed to generate PDF brief',
+      internalMessage: `PDF generation failed: ${err?.message || String(err)}`,
+      code: 'PDF_GENERATION_FAILED',
+      requestId,
+      statusCode: 500,
+    })
+    res.setHeader('X-Error-ID', errorId)
+    logErrorForSupport(500, 'PDF_GENERATION_FAILED', requestId, authReq.user?.organization_id, errorResponse.message, errorResponse.internal_message, errorResponse.category, errorResponse.severity, '/api/executive/brief/pdf')
+    res.status(500).json(errorResponse)
+  }
+})
+
 // Invalidate cache on audit log write (called from audit middleware)
 // Invalidates all time_range variants for the organization
 export function invalidateExecutiveCache(organizationId: string) {
