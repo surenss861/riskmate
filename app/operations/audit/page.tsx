@@ -1839,48 +1839,202 @@ export default function AuditViewPage() {
                               <p className="text-sm text-white/70 mt-2">{mapping.description}</p>
                             </div>
                           </div>
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-3 text-sm">
-                            <div>
-                              <div className="text-white/60 mb-1">Actor</div>
-                              <div className="text-white flex items-center gap-2">
-                                <User className="w-4 h-4" />
-                                {event.user_name || 'System'}
-                                {event.user_role && (
-                                  <span className="text-xs text-white/50">({event.user_role})</span>
-                                )}
+                          
+                          {/* Tab-specific row fields */}
+                          {activeTab === 'governance' && (
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-3 text-sm">
+                              <div>
+                                <div className="text-white/60 mb-1">Event</div>
+                                <div className="text-white font-mono text-xs">{event.event_name || event.event_type || 'Unknown'}</div>
+                              </div>
+                              {event.metadata?.policy_statement && (
+                                <div>
+                                  <div className="text-white/60 mb-1">Policy</div>
+                                  <div className="text-white text-xs">{event.metadata.policy_statement}</div>
+                                </div>
+                              )}
+                              {event.metadata?.reason && (
+                                <div>
+                                  <div className="text-white/60 mb-1">Blocked Reason</div>
+                                  <div className="text-red-300 text-xs">{event.metadata.reason}</div>
+                                </div>
+                              )}
+                              <div>
+                                <div className="text-white/60 mb-1">Actor</div>
+                                <div className="text-white flex items-center gap-2">
+                                  <User className="w-4 h-4" />
+                                  {event.actor_name || event.actor_email || event.user_name || 'System'}
+                                  {(event.actor_role || event.user_role) && (
+                                    <span className="text-xs text-white/50">({event.actor_role || event.user_role})</span>
+                                  )}
+                                </div>
+                              </div>
+                              {event.target_type && event.target_id && (
+                                <div>
+                                  <div className="text-white/60 mb-1">Target</div>
+                                  <div className="text-white text-xs">
+                                    {event.target_type}: {event.target_id.slice(0, 8)}...
+                                  </div>
+                                </div>
+                              )}
+                              <div>
+                                <div className="text-white/60 mb-1">Time</div>
+                                <div className="text-white flex items-center gap-2">
+                                  <Clock className="w-4 h-4" />
+                                  {formatRelativeTime(event.created_at)}
+                                </div>
                               </div>
                             </div>
-                            {event.job_name && (
+                          )}
+                          
+                          {activeTab === 'operations' && (
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-3 text-sm">
                               <div>
-                                <div className="text-white/60 mb-1">Target</div>
+                                <div className="text-white/60 mb-1">Action</div>
+                                <div className="text-white font-medium">{mapping.title}</div>
+                              </div>
+                              <div>
+                                <div className="text-white/60 mb-1">Actor</div>
                                 <div className="text-white flex items-center gap-2">
-                                  <FileText className="w-4 h-4" />
-                                  <button
-                                    onClick={() => handleOpenEvidence(event.job_id, event.job_name, event.site_name)}
-                                    className="hover:text-[#F97316] transition-colors flex items-center gap-1"
-                                  >
-                                    {event.job_name}
-                                    <ExternalLink className="w-3 h-3" />
-                                  </button>
+                                  <User className="w-4 h-4" />
+                                  {event.actor_name || event.actor_email || event.user_name || 'System'}
+                                  {(event.actor_role || event.user_role) && (
+                                    <span className="text-xs text-white/50">({event.actor_role || event.user_role})</span>
+                                  )}
                                 </div>
                               </div>
-                            )}
-                            {event.site_name && (
+                              {event.job_name && (
+                                <div>
+                                  <div className="text-white/60 mb-1">Target</div>
+                                  <div className="text-white flex items-center gap-2">
+                                    <FileText className="w-4 h-4" />
+                                    <button
+                                      onClick={() => handleOpenEvidence(event.job_id, event.job_name, event.site_name)}
+                                      className="hover:text-[#F97316] transition-colors flex items-center gap-1"
+                                    >
+                                      {event.job_name}
+                                      <ExternalLink className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                              {event.metadata?.status_change && (
+                                <div>
+                                  <div className="text-white/60 mb-1">Status Change</div>
+                                  <div className="text-white text-xs">
+                                    {event.metadata.status_change.before} → {event.metadata.status_change.after}
+                                  </div>
+                                </div>
+                              )}
+                              {event.metadata?.notes && (
+                                <div className="col-span-2">
+                                  <div className="text-white/60 mb-1">Notes</div>
+                                  <div className="text-white/80 text-xs">{event.metadata.notes}</div>
+                                </div>
+                              )}
                               <div>
-                                <div className="text-white/60 mb-1">{industryLang.site}</div>
+                                <div className="text-white/60 mb-1">Time</div>
                                 <div className="text-white flex items-center gap-2">
-                                  <Building2 className="w-4 h-4" />
-                                  {event.site_name}
+                                  <Clock className="w-4 h-4" />
+                                  {formatRelativeTime(event.created_at)}
                                 </div>
                               </div>
-                            )}
-                            <div>
-                              <div className="text-white/60 mb-1">Time</div>
-                              <div className="text-white flex items-center gap-2">
-                                <Clock className="w-4 h-4" />
-                                <span>{formatRelativeTime(event.created_at)}</span>
+                            </div>
+                          )}
+                          
+                          {activeTab === 'access' && (
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-3 text-sm">
+                              <div>
+                                <div className="text-white/60 mb-1">Change Type</div>
+                                <div className="text-white font-medium">
+                                  {event.event_name?.replace('access.', '').replace('session.', '').replace(/_/g, ' ') || 'Access Change'}
+                                </div>
                               </div>
-                              <div className="text-xs text-white/50 mt-1">
+                              {event.metadata?.target_user_name && (
+                                <div>
+                                  <div className="text-white/60 mb-1">Subject User</div>
+                                  <div className="text-white flex items-center gap-2">
+                                    <User className="w-4 h-4" />
+                                    {event.metadata.target_user_name}
+                                  </div>
+                                </div>
+                              )}
+                              <div>
+                                <div className="text-white/60 mb-1">Actor</div>
+                                <div className="text-white flex items-center gap-2">
+                                  <User className="w-4 h-4" />
+                                  {event.actor_name || event.actor_email || event.user_name || 'System'}
+                                  {(event.actor_role || event.user_role) && (
+                                    <span className="text-xs text-white/50">({event.actor_role || event.user_role})</span>
+                                  )}
+                                </div>
+                              </div>
+                              {event.metadata?.reason && (
+                                <div>
+                                  <div className="text-white/60 mb-1">Reason</div>
+                                  <div className="text-white/80 text-xs">{event.metadata.reason}</div>
+                                </div>
+                              )}
+                              {event.metadata?.force_logout && (
+                                <div>
+                                  <div className="text-white/60 mb-1">Force Logout</div>
+                                  <div className="text-red-300 text-xs">Yes</div>
+                                </div>
+                              )}
+                              <div>
+                                <div className="text-white/60 mb-1">Time</div>
+                                <div className="text-white flex items-center gap-2">
+                                  <Clock className="w-4 h-4" />
+                                  {formatRelativeTime(event.created_at)}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                          
+                          {/* Fallback for custom views or if activeTab doesn't match */}
+                          {activeTab !== 'governance' && activeTab !== 'operations' && activeTab !== 'access' && (
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-3 text-sm">
+                              <div>
+                                <div className="text-white/60 mb-1">Actor</div>
+                                <div className="text-white flex items-center gap-2">
+                                  <User className="w-4 h-4" />
+                                  {event.actor_name || event.actor_email || event.user_name || 'System'}
+                                  {(event.actor_role || event.user_role) && (
+                                    <span className="text-xs text-white/50">({event.actor_role || event.user_role})</span>
+                                  )}
+                                </div>
+                              </div>
+                              {event.job_name && (
+                                <div>
+                                  <div className="text-white/60 mb-1">Target</div>
+                                  <div className="text-white flex items-center gap-2">
+                                    <FileText className="w-4 h-4" />
+                                    <button
+                                      onClick={() => handleOpenEvidence(event.job_id, event.job_name, event.site_name)}
+                                      className="hover:text-[#F97316] transition-colors flex items-center gap-1"
+                                    >
+                                      {event.job_name}
+                                      <ExternalLink className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                              {event.site_name && (
+                                <div>
+                                  <div className="text-white/60 mb-1">{industryLang.site}</div>
+                                  <div className="text-white flex items-center gap-2">
+                                    <Building2 className="w-4 h-4" />
+                                    {event.site_name}
+                                  </div>
+                                </div>
+                              )}
+                              <div>
+                                <div className="text-white/60 mb-1">Time</div>
+                                <div className="text-white flex items-center gap-2">
+                                  <Clock className="w-4 h-4" />
+                                  <span>{formatRelativeTime(event.created_at)}</span>
+                                </div>
+                                <div className="text-xs text-white/50 mt-1">
                                 {new Date(event.created_at).toLocaleString()}
                               </div>
                             </div>
