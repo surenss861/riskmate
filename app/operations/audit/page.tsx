@@ -2068,22 +2068,18 @@ export default function AuditViewPage() {
                               </button>
                             </div>
                           )}
-                          {event.metadata && Object.keys(event.metadata).length > 0 && (
-                            <div className="mt-3">
-                              <button
-                                onClick={() => toggleEventExpansion(event.id)}
-                                className="text-xs text-white/60 hover:text-white flex items-center gap-1"
-                              >
-                                {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                                {isExpanded ? 'Hide' : 'Show'} Details
-                              </button>
-                              {isExpanded && (
-                                <div className="mt-2 p-3 bg-black/20 rounded text-xs text-white/70 font-mono">
-                                  <pre>{JSON.stringify(event.metadata, null, 2)}</pre>
-                                </div>
-                              )}
-                            </div>
-                          )}
+                          <div className="mt-3">
+                            <button
+                              onClick={() => {
+                                setSelectedEventForDetails(event)
+                                setEventDetailsDrawerOpen(true)
+                              }}
+                              className="text-xs text-[#F97316] hover:text-[#FFC857] flex items-center gap-1 transition-colors"
+                            >
+                              <FileText className="w-3 h-3" />
+                              View Full Details
+                            </button>
+                          </div>
 
                           {/* Review Queue Actions */}
                           {filters.savedView === 'review-queue' && needsAttention && (
