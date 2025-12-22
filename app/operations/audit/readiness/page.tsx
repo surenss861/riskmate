@@ -462,7 +462,7 @@ export default function AuditReadinessPage() {
       <div className="min-h-screen bg-[#0A0A0A] text-white">
         <DashboardNavbar />
         
-        <div className="max-w-7xl mx-auto px-6 py-8">
+        <div className="max-w-7xl mx-auto px-6 pt-24 pb-8">
           {/* Header */}
           <div className="mb-8">
             <div className="flex items-center gap-3 mb-4">
