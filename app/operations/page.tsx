@@ -759,8 +759,9 @@ function DashboardPageInner() {
               transition={{ delay: 0.12, duration: 0.45 }}
               className={`relative ${spacing.relaxed} rounded-3xl border border-white/5 bg-gradient-to-b from-[#121212] to-transparent backdrop-blur-sm p-6`}
             >
-              <h2 className="text-xl font-semibold text-white">Top Hazards (Last 30 Days)</h2>
-              <p className="mt-1 text-sm text-white/60">
+              <h2 className="text-2xl font-bold font-display mb-2">Top Hazards</h2>
+              <div className="h-[1px] w-24 bg-gradient-to-r from-[#F97316] via-[#FFC857] to-transparent mb-4" />
+              <p className="text-base text-white/70 mt-4">
                 The most frequent risk signatures across your active jobs.
               </p>
               <div className="mt-5 flex flex-wrap gap-3">
