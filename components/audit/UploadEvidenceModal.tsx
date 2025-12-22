@@ -118,10 +118,10 @@ export function UploadEvidenceModal({
 
       // Legacy path: Direct document creation (if not using readiness/resolve)
       // This path is kept for backward compatibility but ideally all flows should go through readiness/resolve
-      const { data: docData, error: docError } = await supabase
+        const { data: docData, error: docError } = await supabase
         .from('documents')
-        .insert({
-          job_id: workRecordId,
+          .insert({
+            job_id: workRecordId,
           organization_id: userData.organization_id,
           name: file?.name || `Evidence: ${evidenceType}`,
           type: evidenceType,
@@ -129,14 +129,14 @@ export function UploadEvidenceModal({
           file_size: file_size,
           mime_type: mime_type,
           description: notes.trim() || null,
-          uploaded_by: session.user.id,
-        })
-        .select('id')
-        .single()
+            uploaded_by: session.user.id,
+          })
+          .select('id')
+          .single()
 
-      if (docError) {
+        if (docError) {
         throw new Error(`Failed to create evidence: ${docError.message}`)
-      }
+        }
 
       onComplete()
       onClose()

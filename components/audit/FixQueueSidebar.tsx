@@ -205,15 +205,15 @@ export function FixQueueSidebar({
                   Bulk Resolve ({items.length})
                 </button>
               ) : (
-                <button
-                  onClick={() => {
+              <button
+                onClick={() => {
                     // Fix all items individually (fallback)
-                    items.forEach(item => onFix(item))
-                  }}
-                  className={`${buttonStyles.primary} w-full`}
-                >
-                  Fix All ({items.length})
-                </button>
+                  items.forEach(item => onFix(item))
+                }}
+                className={`${buttonStyles.primary} w-full`}
+              >
+                Fix All ({items.length})
+              </button>
               )}
             </div>
           )}

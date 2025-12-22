@@ -759,48 +759,84 @@ export default function ExecutiveSnapshotPage() {
                 View Compliance Ledger
                 <ExternalLink className="w-5 h-5" />
               </a>
-                <button
-                  onClick={() => {
-                    const brief = {
-                      generated_at: new Date().toISOString(),
-                      time_range: timeRange,
-                      summary: {
-                        exposure_level: riskPosture.exposure_level,
-                        confidence_statement: riskPosture.confidence_statement,
-                        counts: {
-                          high_risk_jobs: riskPosture.high_risk_jobs,
-                          open_incidents: riskPosture.open_incidents,
-                          violations: riskPosture.recent_violations,
-                          flagged: riskPosture.flagged_jobs,
-                          pending_attestations: riskPosture.pending_signoffs,
-                          signed_attestations: riskPosture.signed_jobs,
-                          proof_packs: riskPosture.proof_packs_generated,
+                <div className="flex flex-col items-center gap-2">
+                  <button
+                    onClick={async () => {
+                      try {
+                        const response = await fetch('/api/executive/brief/pdf', {
+                          method: 'POST',
+                          headers: {
+                            'Content-Type': 'application/json',
+                          },
+                          body: JSON.stringify({ time_range: timeRange }),
+                        })
+                        
+                        if (!response.ok) {
+                          throw new Error('Failed to generate PDF')
+                        }
+
+                        const blob = await response.blob()
+                        const url = URL.createObjectURL(blob)
+                        const a = document.createElement('a')
+                        a.href = url
+                        const hash = response.headers.get('X-PDF-Hash') || ''
+                        a.download = `executive-brief-${timeRange}-${new Date().toISOString().split('T')[0]}.pdf`
+                        document.body.appendChild(a)
+                        a.click()
+                        document.body.removeChild(a)
+                        URL.revokeObjectURL(url)
+                      } catch (err) {
+                        console.error('PDF export failed:', err)
+                        alert('Failed to generate PDF. Please try again.')
+                      }
+                    }}
+                    className={`${buttonStyles.primary} inline-flex items-center gap-2 text-base px-8 py-3`}
+                  >
+                    Export PDF Brief
+                    <FileCheck className="w-5 h-5" />
+                  </button>
+                  <button
+                    onClick={() => {
+                      const brief = {
+                        generated_at: new Date().toISOString(),
+                        time_range: timeRange,
+                        summary: {
+                          exposure_level: riskPosture.exposure_level,
+                          confidence_statement: riskPosture.confidence_statement,
+                          counts: {
+                            high_risk_jobs: riskPosture.high_risk_jobs,
+                            open_incidents: riskPosture.open_incidents,
+                            violations: riskPosture.recent_violations,
+                            flagged: riskPosture.flagged_jobs,
+                            pending_attestations: riskPosture.pending_signoffs,
+                            signed_attestations: riskPosture.signed_jobs,
+                            proof_packs: riskPosture.proof_packs_generated,
+                          },
+                          deltas: riskPosture.deltas,
+                          top_drivers: riskPosture.drivers,
+                          integrity: {
+                            status: riskPosture.ledger_integrity,
+                            last_verified_at: riskPosture.ledger_integrity_last_verified_at,
+                            verified_through_event_id: riskPosture.ledger_integrity_verified_through_event_id,
+                          },
+                          recommended_actions: riskPosture.recommended_actions,
                         },
-                        deltas: riskPosture.deltas,
-                        top_drivers: riskPosture.drivers,
-                        integrity: {
-                          status: riskPosture.ledger_integrity,
-                          last_verified_at: riskPosture.ledger_integrity_last_verified_at,
-                          verified_through_event_id: riskPosture.ledger_integrity_verified_through_event_id,
-                        },
-                        recommended_actions: riskPosture.recommended_actions,
-                      },
-                    }
-                    const blob = new Blob([JSON.stringify(brief, null, 2)], { type: 'application/json' })
-                    const url = URL.createObjectURL(blob)
-                    const a = document.createElement('a')
-                    a.href = url
-                    a.download = `executive-brief-${timeRange}-${new Date().toISOString().split('T')[0]}.json`
-                    document.body.appendChild(a)
-                    a.click()
-                    document.body.removeChild(a)
-                    URL.revokeObjectURL(url)
-                  }}
-                  className={`${buttonStyles.secondary} inline-flex items-center gap-2 text-base px-8 py-3`}
-                >
-                  Export Executive Brief
-                  <FileCheck className="w-5 h-5" />
-                </button>
+                      }
+                      const blob = new Blob([JSON.stringify(brief, null, 2)], { type: 'application/json' })
+                      const url = URL.createObjectURL(blob)
+                      const a = document.createElement('a')
+                      a.href = url
+                      a.download = `executive-brief-${timeRange}-${new Date().toISOString().split('T')[0]}.json`
+                      document.body.appendChild(a)
+                      a.click()
+                      document.body.removeChild(a)
+                      URL.revokeObjectURL(url)
+                    }}
+                    className={`${buttonStyles.secondary} inline-flex items-center gap-2 text-sm px-6 py-2`}
+                  >
+                    Export JSON
+                  </button>
+                </div>
               </div>
             </div>
           </motion.div>

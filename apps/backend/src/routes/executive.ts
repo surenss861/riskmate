@@ -3,6 +3,8 @@ import { supabase } from '../lib/supabaseClient'
 import { authenticate, AuthenticatedRequest } from '../middleware/auth'
 import { RequestWithId } from '../middleware/requestId'
 import { createErrorResponse, logErrorForSupport } from '../utils/errorResponse'
+import { generateExecutiveBriefPDF } from '../utils/pdf/executiveBrief'
+import { recordAuditLog } from '../middleware/audit'
 
 export const executiveRouter = express.Router()
 
@@ -575,7 +577,7 @@ export function invalidateExecutiveCache(organizationId: string) {
   const timeRanges = ['7d', '30d', '90d', 'all']
   timeRanges.forEach(timeRange => {
     const cacheKey = `executive:${organizationId}:${timeRange}`
-    executiveCache.delete(cacheKey)
+  executiveCache.delete(cacheKey)
   })
 }
 
