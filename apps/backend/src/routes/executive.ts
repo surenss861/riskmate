@@ -753,12 +753,13 @@ executiveRouter.post('/alerts/check', async (req: express.Request, res: express.
 
     // Process each organization
     for (const organizationId of organizationIds) {
-      // Get organization email recipients (owners + executives)
+      // Get organization email recipients (owners only - executives don't exist as separate role in schema)
+      // If you add executive role later, include it here
       const { data: recipients, error: recipientError } = await supabase
         .from('users')
         .select('email, role')
         .eq('organization_id', organizationId)
-        .in('role', ['owner', 'executive'])
+        .in('role', ['owner', 'admin']) // Include admins as they typically have exec-level visibility
         .not('email', 'is', null)
       
       if (recipientError || !recipients || recipients.length === 0) {
