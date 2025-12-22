@@ -10,8 +10,9 @@ Add these to your Vercel project settings (Production, Preview, Development):
 # Cron authentication secret (generate a long random string)
 EXEC_ALERT_CRON_SECRET=your-long-random-secret-here-min-32-chars
 
-# Backend URL (use relative path for Vercel, or absolute if backend is separate)
-BACKEND_URL=https://your-backend-url.com  # Or leave empty to use Next.js API routes
+# Backend URL (optional - only needed if backend is a separate service)
+# If not set, cron route will use relative paths (assumes backend is proxied via Next.js)
+# BACKEND_URL=https://your-backend-url.com
 ```
 
 ### Email Provider (choose one)
