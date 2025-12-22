@@ -4,6 +4,7 @@
 
 import { JobReportData } from '@/types/report'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
+import { fetchWithIdempotency, generateBulkIdempotencyKey } from './api/fetchWithIdempotency'
 
 // Get backend API URL from environment variable
 // Always use relative paths - Next.js API routes will proxy to backend
@@ -638,6 +639,81 @@ export const executiveApi = {
 }
 
 export const auditApi = {
+  /**
+   * Resolve a single readiness item
+   */
+  resolveReadiness: async (params: {
+    readiness_item_id: string;
+    rule_code: string;
+    action_type: 'create_evidence' | 'request_attestation' | 'create_control' | 'mark_resolved';
+    payload?: any;
+    idempotencyKey?: string;
+  }) => {
+    return fetchWithIdempotency<{
+      success: boolean;
+      message: string;
+      ledger_entry_id: string;
+      action_type: string;
+      result: any;
+    }>('/api/audit/readiness/resolve', {
+      method: 'POST',
+      body: JSON.stringify({
+        readiness_item_id: params.readiness_item_id,
+        rule_code: params.rule_code,
+        action_type: params.action_type,
+        payload: params.payload,
+      }),
+      idempotencyKey: params.idempotencyKey,
+    });
+  },
+
+  /**
+   * Bulk resolve multiple readiness items
+   */
+  bulkResolveReadiness: async (params: {
+    items: Array<{
+      readiness_item_id: string;
+      rule_code: string;
+      action_type: 'create_evidence' | 'request_attestation' | 'create_control' | 'mark_resolved';
+      payload?: any;
+      idempotency_key?: string;
+    }>;
+    baseIdempotencyKey?: string; // Optional base key (will generate if not provided)
+  }) => {
+    // Generate base key if not provided
+    const baseKey = params.baseIdempotencyKey ?? crypto.randomUUID();
+    
+    // Add per-item idempotency keys
+    const itemsWithKeys = params.items.map(item => ({
+      ...item,
+      idempotency_key: item.idempotency_key || generateBulkIdempotencyKey(baseKey, item.readiness_item_id),
+    }));
+
+    return fetchWithIdempotency<{
+      success: boolean;
+      total: number;
+      successful: number;
+      failed: number;
+      results: Array<{
+        readiness_item_id: string;
+        rule_code: string;
+        success: boolean;
+        result?: any;
+        error?: string;
+      }>;
+      failed_items: Array<{
+        readiness_item_id: string;
+        rule_code: string;
+        action_type: string;
+        error: string;
+      }>;
+    }>('/api/audit/readiness/bulk-resolve', {
+      method: 'POST',
+      body: JSON.stringify({ items: itemsWithKeys }),
+      idempotencyKey: baseKey, // Use base key for the bulk request itself
+    });
+  },
+
   getEvents: async (params?: {
     category?: 'governance' | 'operations' | 'access'
     site_id?: string

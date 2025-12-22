@@ -6,6 +6,7 @@ import { createErrorResponse, logErrorForSupport } from '../utils/errorResponse'
 import { recordAuditLog } from '../middleware/audit'
 import { runCommand, CommandContext, CommandOptions, applyAuditFilters, FilterValidationError } from '../utils/commandRunner'
 import { mapCategoryToTab, CategoryTab, eventBelongsToTab } from '../utils/categoryMapper'
+import { checkIdempotency, storeIdempotencyKey, getIdempotencyKey } from '../utils/idempotency'
 import archiver from 'archiver'
 import { Readable } from 'stream'
 import crypto from 'crypto'
@@ -2250,6 +2251,602 @@ auditRouter.post('/access/flag-suspicious', authenticate as unknown as express.R
     })
     res.setHeader('X-Error-ID', errorId)
     logErrorForSupport(500, 'FLAG_SUSPICIOUS_ERROR', requestId, authReq.user?.organization_id, errorResponse.message, errorResponse.internal_message, errorResponse.category, errorResponse.severity, '/api/audit/access/flag-suspicious')
+    res.status(500).json(errorResponse)
+  }
+})
+
+// POST /api/audit/readiness/resolve
+// Unified endpoint for resolving readiness gaps (evidence/attestation/controls/etc.)
+// Always emits readiness.resolved ledger event for audit trail
+auditRouter.post('/readiness/resolve', authenticate as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
+  const authReq = req as AuthenticatedRequest & RequestWithId
+  const requestId = authReq.requestId || 'unknown'
+  
+  try {
+    const { organization_id, id: userId, role: userRole = 'member', email: userEmail } = authReq.user
+    const { readiness_item_id, rule_code, action_type, payload } = req.body
+    const idempotencyKey = getIdempotencyKey(req) || undefined
+
+    // Validation: Required fields
+    if (!readiness_item_id || !rule_code || !action_type) {
+      return res.status(400).json({ 
+        code: 'VALIDATION_ERROR',
+        message: 'readiness_item_id, rule_code, and action_type are required',
+        fields: {
+          readiness_item_id: !readiness_item_id ? 'required' : undefined,
+          rule_code: !rule_code ? 'required' : undefined,
+          action_type: !action_type ? 'required' : undefined,
+        }
+      })
+    }
+
+    // Validation: Action type and payload requirements
+    const validActionTypes = ['create_evidence', 'request_attestation', 'create_control', 'mark_resolved']
+    if (!validActionTypes.includes(action_type)) {
+      return res.status(400).json({
+        code: 'INVALID_ACTION_TYPE',
+        message: `Invalid action_type: ${action_type}`,
+        allowed_values: validActionTypes,
+      })
+    }
+
+    // Validation: Payload requirements per action_type
+    if (action_type === 'create_evidence') {
+      const { job_id, name, file_path } = payload || {}
+      if (!job_id || !name || !file_path) {
+        return res.status(400).json({
+          code: 'VALIDATION_ERROR',
+          message: 'For create_evidence action_type: job_id, name, and file_path are required in payload',
+          fields: {
+            'payload.job_id': !job_id ? 'required' : undefined,
+            'payload.name': !name ? 'required' : undefined,
+            'payload.file_path': !file_path ? 'required' : undefined,
+          }
+        })
+      }
+      // Validate job belongs to organization
+      const { data: job, error: jobError } = await supabase
+        .from('jobs')
+        .select('id, organization_id')
+        .eq('id', job_id)
+        .eq('organization_id', organization_id)
+        .single()
+      
+      if (jobError || !job) {
+        return res.status(404).json({
+          code: 'JOB_NOT_FOUND',
+          message: `Job ${job_id} not found or does not belong to your organization`,
+        })
+      }
+    } else if (action_type === 'request_attestation') {
+      const { job_id } = payload || {}
+      if (!job_id) {
+        return res.status(400).json({
+          code: 'VALIDATION_ERROR',
+          message: 'For request_attestation action_type: job_id is required in payload',
+          fields: {
+            'payload.job_id': 'required',
+          }
+        })
+      }
+      // Validate job belongs to organization
+      const { data: job, error: jobError } = await supabase
+        .from('jobs')
+        .select('id, organization_id')
+        .eq('id', job_id)
+        .eq('organization_id', organization_id)
+        .single()
+      
+      if (jobError || !job) {
+        return res.status(404).json({
+          code: 'JOB_NOT_FOUND',
+          message: `Job ${job_id} not found or does not belong to your organization`,
+        })
+      }
+    } else if (action_type === 'create_control') {
+      const { job_id, title } = payload || {}
+      if (!job_id || !title) {
+        return res.status(400).json({
+          code: 'VALIDATION_ERROR',
+          message: 'For create_control action_type: job_id and title are required in payload',
+          fields: {
+            'payload.job_id': !job_id ? 'required' : undefined,
+            'payload.title': !title ? 'required' : undefined,
+          }
+        })
+      }
+      // Validate job belongs to organization
+      const { data: job, error: jobError } = await supabase
+        .from('jobs')
+        .select('id, organization_id')
+        .eq('id', job_id)
+        .eq('organization_id', organization_id)
+        .single()
+      
+      if (jobError || !job) {
+        return res.status(404).json({
+          code: 'JOB_NOT_FOUND',
+          message: `Job ${job_id} not found or does not belong to your organization`,
+        })
+      }
+    }
+
+    // Check idempotency if key provided
+    if (idempotencyKey) {
+      const idempotencyCheck = await checkIdempotency(
+        supabase,
+        idempotencyKey,
+        organization_id,
+        userId,
+        '/api/audit/readiness/resolve'
+      )
+
+      if (idempotencyCheck?.isDuplicate && idempotencyCheck.response) {
+        // Return cached response (replay)
+        const cachedResponse = idempotencyCheck.response
+        res.setHeader('X-Idempotency-Replayed', 'true')
+        res.setHeader('X-Request-ID', requestId)
+        res.status(cachedResponse.status)
+        if (cachedResponse.headers) {
+          Object.entries(cachedResponse.headers).forEach(([key, value]) => {
+            res.setHeader(key, value)
+          })
+        }
+        return res.json(cachedResponse.body)
+      }
+    }
+
+    // Authorization: Quick deny (executives cannot resolve)
+    if (userRole === 'executive') {
+      await recordAuditLog({
+        organizationId: organization_id,
+        actorId: userId,
+        eventName: 'auth.role_violation',
+        targetType: 'system',
+        targetId: readiness_item_id,
+        metadata: {
+          attempted_action: 'readiness.resolved',
+          policy_statement: 'Executives have read-only access and cannot resolve readiness items',
+          endpoint: '/api/audit/readiness/resolve',
+        },
+      })
+      return res.status(403).json({ 
+        code: 'AUTH_ROLE_READ_ONLY',
+        message: 'Executives cannot resolve readiness items' 
+      })
+    }
+
+    // Build command context
+    const ctx: CommandContext = {
+      userId,
+      organizationId: organization_id,
+      userRole,
+      userEmail: userEmail ?? undefined,
+      requestId,
+      endpoint: '/api/audit/readiness/resolve',
+      ip: req.ip || req.socket.remoteAddress || undefined,
+      userAgent: req.headers['user-agent'] || undefined,
+    }
+
+    const options: CommandOptions = {
+      idempotencyKey,
+    }
+
+    // Route to appropriate internal handler based on action_type
+    let internalResult: any
+    let targetId: string = readiness_item_id // Default fallback
+    let targetType: string = 'system' // Default fallback
+    let metadata: any = {
+      readiness_item_id,
+      rule_code,
+      action_type,
+      ...payload,
+    }
+
+    if (action_type === 'create_evidence') {
+      // Create evidence/document (payload already validated above)
+      const { job_id, name, file_path, file_size, mime_type, description } = payload || {}
+
+      // Create document record
+      const { data: document, error: docError } = await supabase
+        .from('documents')
+        .insert({
+          job_id,
+          organization_id,
+          name,
+          type: payload?.type || 'evidence',
+          file_path,
+          file_size: file_size || null,
+          mime_type: mime_type || null,
+          description: description || null,
+          uploaded_by: userId,
+        })
+        .select()
+        .single()
+
+      if (docError) {
+        throw new Error(`Failed to create evidence: ${docError.message}`)
+      }
+
+      internalResult = { document_id: document.id }
+      targetId = document.id
+      targetType = 'document'
+      metadata.evidence_id = document.id
+    } else if (action_type === 'request_attestation') {
+      // Request attestation from user/role (job_id already validated above)
+      const { job_id, target_user_id, target_role, due_date, message } = payload || {}
+
+      // Create attestation request (stored in job_signoffs or similar)
+      // For now, we'll create a ledger entry and notification
+      // In a full implementation, this would create a signoff record
+      targetId = job_id
+      targetType = 'job'
+      metadata.target_user_id = target_user_id
+      metadata.target_role = target_role
+      metadata.due_date = due_date
+      metadata.message = message
+
+      internalResult = { 
+        attestation_requested: true,
+        target_user_id,
+        target_role,
+        due_date,
+      }
+    } else if (action_type === 'create_control') {
+      // Create control/mitigation item (job_id and title already validated above)
+      const { job_id, title, description, owner_id, due_date } = payload || {}
+
+      const { data: control, error: controlError } = await supabase
+        .from('mitigation_items')
+        .insert({
+          job_id,
+          title,
+          description: description || null,
+          owner_id: owner_id || null,
+          due_date: due_date || null,
+          done: false,
+          is_completed: false,
+        })
+        .select()
+        .single()
+
+      if (controlError) {
+        throw new Error(`Failed to create control: ${controlError.message}`)
+      }
+
+      internalResult = { control_id: control.id }
+      targetId = control.id
+      targetType = 'mitigation'
+      metadata.control_id = control.id
+    } else if (action_type === 'mark_resolved') {
+      // Simply mark as resolved without creating anything (no payload validation needed)
+      targetId = readiness_item_id
+      targetType = 'system'
+      internalResult = { resolved: true }
+    }
+
+    // Execute command: Emit readiness.resolved ledger event
+    const result = await runCommand(
+      supabase,
+      ctx,
+      options,
+      async (tx) => {
+        // Domain mutations already done above, just return result
+        return internalResult
+      },
+      {
+        eventName: 'readiness.resolved',
+        targetType: targetType as any,
+        targetId: targetId,
+        metadata: {
+          ...metadata,
+          summary: `Resolved readiness gap: ${rule_code} via ${action_type}`,
+        },
+      }
+    )
+
+    if (!result.ok) {
+      const { response: errorResponse, errorId } = createErrorResponse({
+        message: result.error?.message || 'Failed to resolve readiness item',
+        internalMessage: result.error?.internalMessage,
+        code: result.error?.code || 'READINESS_RESOLVE_ERROR',
+        requestId,
+        statusCode: 500,
+      })
+      res.setHeader('X-Error-ID', errorId)
+      logErrorForSupport(500, result.error?.code || 'READINESS_RESOLVE_ERROR', requestId, organization_id, errorResponse.message, errorResponse.internal_message, errorResponse.category, errorResponse.severity, '/api/audit/readiness/resolve')
+      return res.status(500).json(errorResponse)
+    }
+
+    const successResponse = {
+      success: true,
+      message: 'Readiness item resolved successfully',
+      ledger_entry_id: result.ledger_entry_id,
+      action_type,
+      result: internalResult,
+    }
+
+    // Set response headers
+    res.setHeader('X-Idempotency-Replayed', 'false')
+    res.setHeader('X-Request-ID', requestId)
+
+    // Store idempotency key if provided (for future replay detection)
+    if (idempotencyKey) {
+      await storeIdempotencyKey(
+        supabase,
+        idempotencyKey,
+        organization_id,
+        userId,
+        '/api/audit/readiness/resolve',
+        200,
+        successResponse,
+        { 'X-Request-ID': requestId, 'X-Idempotency-Replayed': 'false' }
+      )
+    }
+
+    res.json(successResponse)
+  } catch (err: any) {
+    const { response: errorResponse, errorId } = createErrorResponse({
+      message: 'Failed to resolve readiness item',
+      internalMessage: err?.message || String(err),
+      code: 'READINESS_RESOLVE_ERROR',
+      requestId,
+      statusCode: 500,
+    })
+    res.setHeader('X-Error-ID', errorId)
+    logErrorForSupport(500, 'READINESS_RESOLVE_ERROR', requestId, authReq.user?.organization_id, errorResponse.message, errorResponse.internal_message, errorResponse.category, errorResponse.severity, '/api/audit/readiness/resolve')
+    res.status(500).json(errorResponse)
+  }
+})
+
+// POST /api/audit/readiness/bulk-resolve
+// Bulk resolve multiple readiness items with partial failure handling
+auditRouter.post('/readiness/bulk-resolve', authenticate as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
+  const authReq = req as AuthenticatedRequest & RequestWithId
+  const requestId = authReq.requestId || 'unknown'
+  
+  try {
+    const { organization_id, id: userId, role: userRole = 'member' } = authReq.user
+    const { items } = req.body // Array of { readiness_item_id, rule_code, action_type, payload }
+    const idempotencyKey = getIdempotencyKey(req) || undefined
+
+    // Validation
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ 
+        code: 'VALIDATION_ERROR',
+        message: 'items array is required and must not be empty' 
+      })
+    }
+
+    // Hard limit: prevent abuse
+    if (items.length > 100) {
+      return res.status(400).json({ 
+        code: 'BULK_LIMIT_EXCEEDED',
+        message: 'Maximum 100 items allowed per bulk resolve request',
+        provided: items.length,
+        maximum: 100,
+      })
+    }
+
+    // Authorization: Quick deny (executives cannot resolve)
+    if (userRole === 'executive') {
+      await recordAuditLog({
+        organizationId: organization_id,
+        actorId: userId,
+        eventName: 'auth.role_violation',
+        targetType: 'system',
+        targetId: 'bulk',
+        metadata: {
+          attempted_action: 'readiness.bulk_resolved',
+          policy_statement: 'Executives have read-only access and cannot resolve readiness items',
+          endpoint: '/api/audit/readiness/bulk-resolve',
+        },
+      })
+      return res.status(403).json({ 
+        code: 'AUTH_ROLE_READ_ONLY',
+        message: 'Executives cannot resolve readiness items' 
+      })
+    }
+
+    // Process items in parallel (with concurrency limit)
+    const results: Array<{ item: any; success: boolean; result?: any; error?: string }> = []
+    const BATCH_SIZE = 10 // Process 10 at a time to avoid overwhelming the system
+
+    for (let i = 0; i < items.length; i += BATCH_SIZE) {
+      const batch = items.slice(i, i + BATCH_SIZE)
+      const batchResults = await Promise.all(
+        batch.map(async (item: any) => {
+          try {
+            // Create internal request to resolve endpoint
+            // We'll call the resolve logic directly for efficiency
+            const resolvePayload = {
+              readiness_item_id: item.readiness_item_id,
+              rule_code: item.rule_code,
+              action_type: item.action_type,
+              payload: item.payload,
+            }
+
+            // For bulk operations, generate unique idempotency key per item if not provided
+            const itemIdempotencyKey = item.idempotency_key || `${idempotencyKey || crypto.randomUUID()}-${item.readiness_item_id}`
+
+            // Check idempotency for this specific item
+            const idempotencyCheck = await checkIdempotency(
+              supabase,
+              itemIdempotencyKey,
+              organization_id,
+              userId,
+              '/api/audit/readiness/resolve'
+            )
+
+            if (idempotencyCheck?.isDuplicate && idempotencyCheck.response) {
+              return {
+                item,
+                success: true,
+                result: idempotencyCheck.response.body,
+                fromCache: true,
+              }
+            }
+
+            // Process the resolve (simplified - in production, extract resolve logic to shared function)
+            // For now, we'll create a simplified version that handles the common cases
+            const { readiness_item_id, rule_code, action_type, payload: itemPayload } = resolvePayload
+
+            if (action_type === 'create_evidence') {
+              const { job_id, name, file_path } = itemPayload || {}
+              if (!job_id || !name || !file_path) {
+                throw new Error('job_id, name, and file_path required for create_evidence')
+              }
+
+              const { data: document, error: docError } = await supabase
+                .from('documents')
+                .insert({
+                  job_id,
+                  organization_id,
+                  name,
+                  type: itemPayload?.type || 'evidence',
+                  file_path,
+                  file_size: itemPayload?.file_size || null,
+                  mime_type: itemPayload?.mime_type || null,
+                  description: itemPayload?.description || null,
+                  uploaded_by: userId,
+                })
+                .select()
+                .single()
+
+              if (docError) throw new Error(`Failed to create evidence: ${docError.message}`)
+
+              // Emit readiness.resolved ledger event
+              await recordAuditLog({
+                organizationId: organization_id,
+                actorId: userId,
+                eventName: 'readiness.resolved',
+                targetType: 'document',
+                targetId: document.id,
+                metadata: {
+                  readiness_item_id,
+                  rule_code,
+                  action_type,
+                  evidence_id: document.id,
+                  summary: `Resolved readiness gap: ${rule_code} via ${action_type}`,
+                },
+              })
+
+              return {
+                item,
+                success: true,
+                result: { document_id: document.id },
+              }
+            } else if (action_type === 'mark_resolved') {
+              // Emit readiness.resolved ledger event
+              await recordAuditLog({
+                organizationId: organization_id,
+                actorId: userId,
+                eventName: 'readiness.resolved',
+                targetType: 'system',
+                targetId: readiness_item_id,
+                metadata: {
+                  readiness_item_id,
+                  rule_code,
+                  action_type,
+                  summary: `Resolved readiness gap: ${rule_code} via ${action_type}`,
+                },
+              })
+
+              // Store idempotency key for future duplicate detection
+              if (itemIdempotencyKey) {
+                await storeIdempotencyKey(
+                  supabase,
+                  itemIdempotencyKey,
+                  organization_id,
+                  userId,
+                  '/api/audit/readiness/resolve',
+                  200,
+                  { success: true },
+                  {}
+                )
+              }
+
+              return {
+                item,
+                success: true,
+                result: { resolved: true },
+              }
+            } else {
+              // For other action types, return error (they can be handled individually via single resolve endpoint)
+              throw new Error(`Bulk resolve not yet supported for action_type: ${action_type}`)
+            }
+          } catch (error: any) {
+            return {
+              item,
+              success: false,
+              error: error.message || String(error),
+            }
+          }
+        })
+      )
+
+      results.push(...batchResults)
+    }
+
+    // Count successes and failures
+    const successful = results.filter(r => r.success)
+    const failed = results.filter(r => !r.success)
+
+    // Log bulk operation to ledger
+    await recordAuditLog({
+      organizationId: organization_id,
+      actorId: userId,
+      eventName: 'readiness.bulk_resolved',
+      targetType: 'system',
+      targetId: 'bulk',
+      metadata: {
+        total_items: items.length,
+        successful_count: successful.length,
+        failed_count: failed.length,
+        items: results.map(r => ({
+          readiness_item_id: r.item?.readiness_item_id,
+          rule_code: r.item?.rule_code,
+          success: r.success,
+          error: r.error,
+        })),
+        summary: `Bulk resolved ${successful.length}/${items.length} readiness items`,
+      },
+    })
+
+    // Set response headers
+    res.setHeader('X-Idempotency-Replayed', 'false')
+    res.setHeader('X-Request-ID', requestId)
+
+    res.json({
+      success: true,
+      total: items.length,
+      successful: successful.length,
+      failed: failed.length,
+      results: results.map(r => ({
+        readiness_item_id: r.item?.readiness_item_id,
+        rule_code: r.item?.rule_code,
+        success: r.success,
+        result: r.result,
+        error: r.error,
+      })),
+      // Return failed items for UI to keep selected
+      failed_items: failed.map(r => ({
+        readiness_item_id: r.item?.readiness_item_id,
+        rule_code: r.item?.rule_code,
+        action_type: r.item?.action_type,
+        error: r.error,
+      })),
+    })
+  } catch (err: any) {
+    const { response: errorResponse, errorId } = createErrorResponse({
+      message: 'Failed to bulk resolve readiness items',
+      internalMessage: err?.message || String(err),
+      code: 'READINESS_BULK_RESOLVE_ERROR',
+      requestId,
+      statusCode: 500,
+    })
+    res.setHeader('X-Error-ID', errorId)
+    logErrorForSupport(500, 'READINESS_BULK_RESOLVE_ERROR', requestId, authReq.user?.organization_id, errorResponse.message, errorResponse.internal_message, errorResponse.category, errorResponse.severity, '/api/audit/readiness/bulk-resolve')
     res.status(500).json(errorResponse)
   }
 })
