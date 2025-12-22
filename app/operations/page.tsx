@@ -646,24 +646,24 @@ function DashboardPageInner() {
           {/* KPI Tiles - Only for owners/admins */}
           {!isMember && (analyticsLocked ? (
             <GlassCard className="p-10 text-center mb-16">
-              <p className="text-xs uppercase tracking-[0.36em] text-white/45">Analytics</p>
-              <h2 className="mt-3 text-3xl font-semibold text-white">Upgrade to unlock live analytics</h2>
+              <p className="text-xs uppercase tracking-wider text-white/50 mb-3">Analytics</p>
+              <h2 className="text-3xl font-bold font-display text-white mb-4">Upgrade to unlock live analytics</h2>
               <p className="mt-4 text-sm text-white/65 max-w-2xl mx-auto">
                 The Business plan includes real-time mitigation metrics, evidence reporting, and compliance insights. Upgrade your plan to see live analytics here.
               </p>
               <div className="mt-6 flex flex-col gap-3 items-center">
-                <button
+                <SharedButton
+                  variant="primary"
                   onClick={() => router.push('/pricing#business')}
-                  className={`${buttonStyles.primary} ${buttonStyles.sizes.md}`}
                 >
                   Explore Business Plan
-                </button>
-                <button
+                </SharedButton>
+                <SharedButton
+                  variant="secondary"
                   onClick={() => router.push('/pricing')}
-                  className="px-6 py-3 border border-white/10 rounded-lg hover:border-white/20 transition-colors font-medium text-sm"
                 >
                   View all plans →
-                </button>
+                </SharedButton>
               </div>
             </GlassCard>
           ) : (
@@ -742,7 +742,7 @@ function DashboardPageInner() {
                 {hazards.map((hazard) => (
                   <div
                     key={hazard.code}
-                    className="px-4 py-2 bg-[#121212] rounded-lg border border-white/5 text-sm text-white transition hover:border-white/10"
+                    className="px-4 py-2 bg-white/5 rounded-lg border border-white/10 text-sm text-white transition hover:border-white/20 backdrop-blur-sm"
                   >
                     <span className="font-medium">{hazard.name}</span>
                     <span className="ml-2 text-xs text-white/55">({hazard.count}x)</span>
@@ -774,7 +774,7 @@ function DashboardPageInner() {
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       placeholder="Search jobs..."
-                      className="rounded-lg border border-white/10 bg-[#121212]/80 px-4 py-2 pl-10 text-sm text-white/90 placeholder-white/40 transition focus:outline-none focus:ring-1 focus:ring-white/20 focus:border-white/20 w-64"
+                      className="rounded-lg border border-white/10 bg-white/5 backdrop-blur-sm px-4 py-2 pl-10 text-sm text-white/90 placeholder-white/40 transition focus:outline-none focus:ring-1 focus:ring-white/20 focus:border-white/20 w-64"
                     />
                     <svg
                       className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-white/40"
@@ -880,7 +880,7 @@ function DashboardPageInner() {
                   </>
                 ) : (
                   <>
-                    <p className="mb-2 text-white font-medium">No active jobs</p>
+                    <p className="mb-2 text-lg font-semibold text-white">No active jobs</p>
                     <p className="mb-6 text-sm text-white/60">
                       Create a job to begin compliance tracking and audit logging.
                     </p>
@@ -970,14 +970,7 @@ function DashboardPageInner() {
                         <div className="text-right ml-6 flex-shrink-0">
                           <div className="flex items-baseline justify-end gap-1.5 mb-0.5">
                             <div className="text-3xl font-bold text-white">{job.risk_score}</div>
-                            {/* Risk indicator dot - inline */}
-                            <div className={`w-2 h-2 rounded-full ${
-                              (job.risk_level || '').toLowerCase() === 'low' ? 'bg-green-400' :
-                              (job.risk_level || '').toLowerCase() === 'medium' ? 'bg-yellow-400' :
-                              (job.risk_level || '').toLowerCase() === 'high' ? 'bg-orange-400' :
-                              (job.risk_level || '').toLowerCase() === 'critical' ? 'bg-red-400' :
-                              'bg-white/20'
-                            }`} />
+                            {/* Risk indicator - removed colored dot, using badge instead */}
                           </div>
                           <div className="text-xs text-white/50">Risk Score</div>
                         </div>
