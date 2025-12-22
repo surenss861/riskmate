@@ -77,26 +77,18 @@ export function KpiTile({
     <motion.div
       initial={{ opacity: 0, y: 24 }}
       animate={{ opacity: 1, y: 0 }}
-      whileHover={{ scale: 1.02, y: -6 }}
+      whileHover={{ scale: 1.01 }}
       transition={{ duration: 0.35 }}
       className={clsx(
-        "group relative overflow-hidden rounded-3xl border border-white/10 bg-[#111111]/80 p-6 shadow-[0_24px_80px_rgba(8,8,24,0.55)] backdrop-blur-2xl transition-transform duration-300",
+        "group relative overflow-hidden rounded-3xl border border-white/5",
+        "bg-gradient-to-b from-[#121212] to-transparent backdrop-blur-sm",
+        "shadow-[0_8px_32px_rgba(0,0,0,0.3)] p-6 transition-transform duration-300",
         (href || onClick) && "cursor-pointer"
       )}
       onClick={onClick}
     >
-      <span className="pointer-events-none absolute -top-20 left-10 h-40 w-40 rounded-full bg-[#F97316]/15 blur-[120px]" />
-      <span className="pointer-events-none absolute -bottom-24 right-6 h-44 w-44 rounded-full bg-[#38BDF8]/12 blur-[140px]" />
-      <span className="shine-on-hover pointer-events-none absolute inset-0 rounded-3xl" />
       <div className="flex items-center justify-between">
-        <p className="text-sm uppercase tracking-[0.32em] text-white/55">{title}</p>
-        <span
-          className="glow-indicator h-2 w-2 rounded-full"
-          style={{
-            background: highlightColor,
-            boxShadow: `0 0 12px ${highlightColor}`,
-          }}
-        />
+        <p className="text-sm text-white/60 font-medium">{title}</p>
       </div>
 
       <div className="mt-5 flex items-baseline gap-2">
@@ -112,18 +104,15 @@ export function KpiTile({
       )}
 
       {trendText && (
-        <div className="mt-4 flex items-center gap-2 text-xs">
-          <div
-            className={clsx(
-              'font-medium uppercase tracking-wide',
-              trendColor[trend]
-            )}
-          >
-            {trend === 'up' && '▲'}
-            {trend === 'down' && '▼'}
-            {trend === 'flat' && '■'}
-          </div>
-          <span className="text-[#9FA6BE]">{trendText}</span>
+        <div className="mt-4">
+          <span className={clsx(
+            'inline-flex items-center px-3 py-1 rounded-full text-xs font-medium',
+            trend === 'up' ? 'bg-emerald-500/10 text-emerald-400/90' :
+            trend === 'down' ? 'bg-red-500/10 text-red-400/90' :
+            'bg-white/5 text-white/60'
+          )}>
+            {trendText}
+          </span>
         </div>
       )}
     </motion.div>

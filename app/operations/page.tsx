@@ -581,24 +581,22 @@ function DashboardPageInner() {
             className={`relative ${spacing.section} flex flex-wrap items-start justify-between ${spacing.gap.relaxed} rounded-3xl border border-white/5 bg-gradient-to-b from-[#121212] to-transparent backdrop-blur-sm px-8 py-10`}
           >
             <div className="relative max-w-xl flex-1">
-              <p className="text-xs uppercase tracking-[0.42em] text-white/50">
-                Control Center
-              </p>
-              <h1 className={`${typography.h1} ${spacing.section}`}>
+              <h1 className="text-4xl md:text-5xl font-bold font-display mb-3">
                 Operations Control Center
               </h1>
-              <div className="mt-4 h-[2px] w-24 bg-gradient-to-r from-[#F97316] via-[#FFC857] to-transparent animate-soft-float" />
-              <p className="mt-4 text-base text-white/70">
+              {/* Thin orange hairline divider - signature landing page element */}
+              <div className="h-[1px] w-24 bg-gradient-to-r from-[#F97316] via-[#FFC857] to-transparent mb-6" />
+              <p className="text-lg text-white/70">
                 Live operational view of risk and compliance.
               </p>
-              <div className="mt-6 flex flex-wrap gap-3 text-sm">
-                <span className="px-4 py-2 bg-[#121212] rounded-lg border border-white/5">
+              <div className="mt-8 flex flex-wrap gap-3 text-sm">
+                <span className="px-4 py-2 bg-white/5 rounded-lg border border-white/5 text-white/70">
                   Audit-ready reports
                 </span>
-                <span className="px-4 py-2 bg-[#121212] rounded-lg border border-white/5">
+                <span className="px-4 py-2 bg-white/5 rounded-lg border border-white/5 text-white/70">
                   Timestamped evidence
                 </span>
-                <span className="px-4 py-2 bg-[#121212] rounded-lg border border-white/5">
+                <span className="px-4 py-2 bg-white/5 rounded-lg border border-white/5 text-white/70">
                   Compliance trail
                 </span>
               </div>
