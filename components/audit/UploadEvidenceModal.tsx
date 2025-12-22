@@ -1,17 +1,19 @@
 'use client'
 
 import { useState } from 'react'
-import { X, Upload, FileText, AlertCircle } from 'lucide-react'
+import { X, Upload, AlertCircle } from 'lucide-react'
 import { buttonStyles } from '@/lib/styles/design-system'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
-import { recordAuditLog } from '@/lib/audit/auditLogger'
+import { auditApi } from '@/lib/api'
 
 interface UploadEvidenceModalProps {
   isOpen: boolean
   onClose: () => void
-  onComplete: () => void
+  onComplete: (result?: { meta?: { replayed?: boolean; requestId?: string } }) => void
   workRecordId: string
   workRecordName?: string
+  readinessItemId?: string
+  ruleCode?: string
 }
 
 export function UploadEvidenceModal({
@@ -20,6 +22,8 @@ export function UploadEvidenceModal({
   onComplete,
   workRecordId,
   workRecordName,
+  readinessItemId,
+  ruleCode,
 }: UploadEvidenceModalProps) {
   const [evidenceType, setEvidenceType] = useState<string>('document')
   const [notes, setNotes] = useState('')
@@ -62,77 +66,77 @@ export function UploadEvidenceModal({
         throw new Error('User not found')
       }
 
+      let file_path: string | null = null
+      let file_size: number | null = null
+      let mime_type: string | null = null
+
       // If file is provided, upload it
-      let documentId: string | null = null
       if (file) {
         const fileExt = file.name.split('.').pop()
         const fileName = `${workRecordId}/${Date.now()}.${fileExt}`
-        const filePath = `evidence/${fileName}`
+        const storagePath = `evidence/${fileName}`
 
         const { data: uploadData, error: uploadError } = await supabase.storage
           .from('documents')
-          .upload(filePath, file)
+          .upload(storagePath, file)
 
         if (uploadError) {
           throw new Error(`Upload failed: ${uploadError.message}`)
         }
 
-        // Create document record
-        const { data: docData, error: docError } = await supabase
-          .from('job_documents')
-          .insert({
-            job_id: workRecordId,
-            document_type: evidenceType,
-            file_path: filePath,
-            file_name: file.name,
-            notes: notes.trim() || null,
-            uploaded_by: session.user.id,
-          })
-          .select('id')
-          .single()
-
-        if (docError) {
-          throw new Error(`Failed to create document record: ${docError.message}`)
-        }
-
-        documentId = docData.id
-      } else {
-        // Create document record without file (notes-only evidence)
-        const { data: docData, error: docError } = await supabase
-          .from('job_documents')
-          .insert({
-            job_id: workRecordId,
-            document_type: evidenceType,
-            notes: notes.trim(),
-            uploaded_by: session.user.id,
-          })
-          .select('id')
-          .single()
-
-        if (docError) {
-          throw new Error(`Failed to create document record: ${docError.message}`)
-        }
-
-        documentId = docData.id
+        file_path = storagePath
+        file_size = file.size
+        mime_type = file.type
       }
 
-      // Write ledger entry
-      await recordAuditLog(supabase, {
-        organizationId: userData.organization_id,
-        actorId: session.user.id,
-        eventName: 'evidence.attached',
-        targetType: 'job',
-        targetId: workRecordId,
-        metadata: {
-          work_record_id: workRecordId,
-          work_record_name: workRecordName,
-          document_id: documentId,
-          evidence_type: evidenceType,
-          notes: notes.trim() || null,
-          attached_at: new Date().toISOString(),
-          summary: `Evidence attached to ${workRecordName || 'work record'}: ${evidenceType}`,
-        },
-      })
+      // If we have readiness_item_id and rule_code, use the new readiness/resolve endpoint
+      if (readinessItemId && ruleCode) {
+        const { json, meta } = await auditApi.resolveReadiness({
+          readiness_item_id: readinessItemId,
+          rule_code: ruleCode,
+          action_type: 'create_evidence',
+          payload: {
+            job_id: workRecordId,
+            name: file?.name || `Evidence: ${evidenceType}`,
+            file_path: file_path || null,
+            file_size: file_size || null,
+            mime_type: mime_type || null,
+            type: evidenceType,
+            description: notes.trim() || null,
+          },
+        })
+
+        onComplete({ meta })
+        onClose()
+        
+        // Reset form
+        setFile(null)
+        setNotes('')
+        setEvidenceType('document')
+        return
+      }
+
+      // Legacy path: Direct document creation (if not using readiness/resolve)
+      // This path is kept for backward compatibility but ideally all flows should go through readiness/resolve
+      const { data: docData, error: docError } = await supabase
+        .from('documents')
+        .insert({
+          job_id: workRecordId,
+          organization_id: userData.organization_id,
+          name: file?.name || `Evidence: ${evidenceType}`,
+          type: evidenceType,
+          file_path: file_path,
+          file_size: file_size,
+          mime_type: mime_type,
+          description: notes.trim() || null,
+          uploaded_by: session.user.id,
+        })
+        .select('id')
+        .single()
+
+      if (docError) {
+        throw new Error(`Failed to create evidence: ${docError.message}`)
+      }
 
       onComplete()
       onClose()

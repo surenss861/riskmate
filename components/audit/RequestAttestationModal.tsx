@@ -4,14 +4,16 @@ import { useState, useEffect } from 'react'
 import { X, UserCheck, AlertCircle } from 'lucide-react'
 import { buttonStyles } from '@/lib/styles/design-system'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
-import { recordAuditLog } from '@/lib/audit/auditLogger'
+import { auditApi } from '@/lib/api'
 
 interface RequestAttestationModalProps {
   isOpen: boolean
   onClose: () => void
-  onComplete: () => void
+  onComplete: (result?: { meta?: { replayed?: boolean; requestId?: string } }) => void
   workRecordId: string
   workRecordName?: string
+  readinessItemId?: string
+  ruleCode?: string
 }
 
 export function RequestAttestationModal({
@@ -20,6 +22,8 @@ export function RequestAttestationModal({
   onComplete,
   workRecordId,
   workRecordName,
+  readinessItemId,
+  ruleCode,
 }: RequestAttestationModalProps) {
   const [selectedRole, setSelectedRole] = useState<string>('')
   const [selectedUserId, setSelectedUserId] = useState<string>('')
@@ -85,6 +89,38 @@ export function RequestAttestationModal({
         throw new Error('Not authenticated')
       }
 
+      const selectedUser = users.find(u => u.id === selectedUserId)
+      if (!selectedUser) {
+        throw new Error('Selected user not found')
+      }
+
+      // If we have readiness_item_id and rule_code, use the new readiness/resolve endpoint
+      if (readinessItemId && ruleCode) {
+        const { json, meta } = await auditApi.resolveReadiness({
+          readiness_item_id: readinessItemId,
+          rule_code: ruleCode,
+          action_type: 'request_attestation',
+          payload: {
+            job_id: workRecordId,
+            target_user_id: selectedUserId,
+            target_role: selectedRole || selectedUser.role,
+            due_date: dueDate,
+            message: message.trim(),
+          },
+        })
+
+        onComplete({ meta })
+        onClose()
+        
+        // Reset form
+        setSelectedUserId('')
+        setSelectedRole('')
+        setMessage('')
+        return
+      }
+
+      // Legacy path: Direct signoff creation (if not using readiness/resolve)
+      // This path is kept for backward compatibility but ideally all flows should go through readiness/resolve
       const { data: userData } = await supabase
         .from('users')
         .select('organization_id')
@@ -95,12 +131,6 @@ export function RequestAttestationModal({
         throw new Error('User not found')
       }
 
-      const selectedUser = users.find(u => u.id === selectedUserId)
-      if (!selectedUser) {
-        throw new Error('Selected user not found')
-      }
-
-      // Create attestation request (signoff record)
       const { data: signoffData, error: signoffError } = await supabase
         .from('job_signoffs')
         .insert({
@@ -122,27 +152,6 @@ export function RequestAttestationModal({
       if (signoffError) {
         throw new Error(`Failed to create attestation request: ${signoffError.message}`)
       }
-
-      // Write ledger entry
-      await recordAuditLog(supabase, {
-        organizationId: userData.organization_id,
-        actorId: session.user.id,
-        eventName: 'attestation.requested',
-        targetType: 'job',
-        targetId: workRecordId,
-        metadata: {
-          work_record_id: workRecordId,
-          work_record_name: workRecordName,
-          attestation_id: signoffData.id,
-          requested_user_id: selectedUserId,
-          requested_user_name: selectedUser.full_name || selectedUser.email,
-          requested_role: selectedRole || selectedUser.role,
-          due_date: dueDate,
-          message: message.trim(),
-          requested_at: new Date().toISOString(),
-          summary: `Attestation requested from ${selectedUser.full_name || selectedUser.email} for ${workRecordName || 'work record'}`,
-        },
-      })
 
       onComplete()
       onClose()

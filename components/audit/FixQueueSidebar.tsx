@@ -14,7 +14,7 @@ export type FixQueueItem = {
   work_record_name?: string
   affected_id?: string
   affected_name?: string
-  fix_action_type: 'upload_evidence' | 'request_attestation' | 'complete_controls' | 'resolve_incident' | 'review_item'
+  fix_action_type: 'upload_evidence' | 'create_evidence' | 'request_attestation' | 'complete_controls' | 'create_control' | 'resolve_incident' | 'review_item' | 'mark_resolved'
 }
 
 interface FixQueueSidebarProps {
@@ -23,6 +23,7 @@ interface FixQueueSidebarProps {
   onRemove: (id: string) => void
   onClear: () => void
   onFix: (item: FixQueueItem) => void
+  onBulkResolve?: () => void
 }
 
 export function FixQueueSidebar({
@@ -31,6 +32,7 @@ export function FixQueueSidebar({
   onRemove,
   onClear,
   onFix,
+  onBulkResolve,
 }: FixQueueSidebarProps) {
   if (!isOpen) return null
 
@@ -167,19 +169,52 @@ export function FixQueueSidebar({
           {/* Footer */}
           {items.length > 0 && (
             <div className="p-4 border-t border-white/10">
-              <div className="text-xs text-white/50 mb-2">
+              <div className="text-xs text-white/50 mb-3">
                 {items.filter(i => i.severity === 'critical').length} critical,{' '}
                 {items.filter(i => i.severity === 'material').length} material
               </div>
-              <button
-                onClick={() => {
-                  // Fix all items (batch process)
-                  items.forEach(item => onFix(item))
-                }}
-                className={`${buttonStyles.primary} w-full`}
-              >
-                Fix All ({items.length})
-              </button>
+              
+              {/* Action type breakdown */}
+              <div className="text-xs text-white/40 mb-3 space-y-1">
+                {(() => {
+                  const actionCounts = items.reduce((acc, item) => {
+                    const action = (item.fix_action_type === 'upload_evidence' || item.fix_action_type === 'create_evidence') ? 'evidence' :
+                                   item.fix_action_type === 'request_attestation' ? 'attestation' :
+                                   (item.fix_action_type === 'complete_controls' || item.fix_action_type === 'create_control') ? 'control' :
+                                   'resolve'
+                    acc[action] = (acc[action] || 0) + 1
+                    return acc
+                  }, {} as Record<string, number>)
+                  
+                  const preview = Object.entries(actionCounts)
+                    .map(([action, count]) => {
+                      const label = action === 'evidence' ? 'evidence' : action === 'attestation' ? 'attestations' : action === 'control' ? 'controls' : 'resolutions'
+                      return `${count} ${label}`
+                    })
+                    .join(', ')
+                  
+                  return preview ? `Will create/request: ${preview}` : null
+                })()}
+              </div>
+              
+              {onBulkResolve ? (
+                <button
+                  onClick={onBulkResolve}
+                  className={`${buttonStyles.primary} w-full`}
+                >
+                  Bulk Resolve ({items.length})
+                </button>
+              ) : (
+                <button
+                  onClick={() => {
+                    // Fix all items individually (fallback)
+                    items.forEach(item => onFix(item))
+                  }}
+                  className={`${buttonStyles.primary} w-full`}
+                >
+                  Fix All ({items.length})
+                </button>
+              )}
             </div>
           )}
         </motion.div>

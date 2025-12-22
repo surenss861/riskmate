@@ -2,20 +2,24 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { motion } from 'framer-motion'
-import { AlertTriangle, CheckCircle, Clock, FileText, Shield, User, XCircle, Upload, UserCheck, CheckSquare, ArrowRight } from 'lucide-react'
+import { AlertTriangle, CheckCircle, Clock, Shield, XCircle, CheckSquare, ArrowRight } from 'lucide-react'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import { cardStyles, buttonStyles, typography } from '@/lib/styles/design-system'
 import { DashboardNavbar } from '@/components/dashboard/DashboardNavbar'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { terms } from '@/lib/terms'
 import { UploadEvidenceModal } from '@/components/audit/UploadEvidenceModal'
 import { RequestAttestationModal } from '@/components/audit/RequestAttestationModal'
 import { FixQueueSidebar } from '@/components/audit/FixQueueSidebar'
+import { BulkActionResultModal } from '@/components/audit/BulkActionResultModal'
+import { ToastContainer } from '@/components/ToastContainer'
 import type { FixQueueItem } from '@/components/audit/FixQueueSidebar'
+import { auditApi } from '@/lib/api'
+import { toast } from '@/lib/utils/toast'
 
 type ReadinessCategory = 'evidence' | 'controls' | 'attestations' | 'incidents' | 'access'
 type ReadinessSeverity = 'critical' | 'material' | 'info'
-type FixActionType = 'upload_evidence' | 'request_attestation' | 'complete_controls' | 'resolve_incident' | 'review_item'
+type FixActionType = 'upload_evidence' | 'request_attestation' | 'complete_controls' | 'resolve_incident' | 'review_item' | 'create_evidence' | 'create_control' | 'mark_resolved'
 
 interface ReadinessItem {
   id: string
@@ -137,6 +141,13 @@ export default function AuditReadinessPage() {
   const [showUploadEvidence, setShowUploadEvidence] = useState(false)
   const [showRequestAttestation, setShowRequestAttestation] = useState(false)
   const [exportingPack, setExportingPack] = useState(false)
+  const [showBulkResult, setShowBulkResult] = useState(false)
+  const [bulkResult, setBulkResult] = useState<{
+    succeeded: number
+    failed: number
+    failedItems: Array<{ readiness_item_id: string; rule_code: string; action_type: string; error: string }>
+    requestId?: string
+  } | null>(null)
 
   // Sync filters to URL
   useEffect(() => {
@@ -271,9 +282,14 @@ export default function AuditReadinessPage() {
     }
   }
 
-  const handleModalComplete = () => {
+  const handleModalComplete = async (result?: { meta?: { replayed?: boolean; requestId?: string } }) => {
     setShowUploadEvidence(false)
     setShowRequestAttestation(false)
+    
+    // Show replay toast in dev mode
+    if (result?.meta?.replayed && process.env.NODE_ENV === 'development') {
+      toast.info('Response replayed from cache', result.meta.requestId)
+    }
     
     // Optimistically remove resolved item from queue if present
     if (activeItem) {
@@ -296,8 +312,83 @@ export default function AuditReadinessPage() {
       })
     }
     
+    toast.success('Resolved — readiness updated', result?.meta?.requestId)
+    
     // Refetch in background to sync with backend
     loadReadinessData()
+  }
+
+  const handleBulkResolve = async () => {
+    if (fixQueue.length === 0) return
+
+    try {
+      // Map fix_action_type to API action_type
+      const mapActionType = (type: string): 'create_evidence' | 'request_attestation' | 'create_control' | 'mark_resolved' => {
+        if (type === 'upload_evidence' || type === 'create_evidence') return 'create_evidence'
+        if (type === 'request_attestation') return 'request_attestation'
+        if (type === 'complete_controls' || type === 'create_control') return 'create_control'
+        return 'mark_resolved'
+      }
+
+      // Find full items from data to get rule_code
+      const itemsWithData = fixQueue.map(queueItem => {
+        const fullItem = data?.items.find(i => i.id === queueItem.id)
+        if (!fullItem) {
+          throw new Error(`Item ${queueItem.id} not found in data`)
+        }
+        return {
+          readiness_item_id: queueItem.id,
+          rule_code: fullItem.rule_code,
+          action_type: mapActionType(queueItem.fix_action_type) as 'create_evidence' | 'request_attestation' | 'create_control' | 'mark_resolved',
+          payload: {
+            job_id: queueItem.work_record_id || queueItem.affected_id,
+            // Add other payload fields based on action_type if needed
+          },
+        }
+      })
+
+      const { json: result, meta } = await auditApi.bulkResolveReadiness({
+        items: itemsWithData,
+      })
+
+      // Remove succeeded items from queue and UI
+      const succeededIds = result.results
+        .filter(r => r.success)
+        .map(r => r.readiness_item_id)
+
+      setFixQueue(prev => prev.filter(q => !succeededIds.includes(q.id)))
+      
+      if (data) {
+        setData({
+          ...data,
+          items: data.items.filter(i => !succeededIds.includes(i.id)),
+          summary: {
+            ...data.summary,
+            total_items: Math.max(0, data.summary.total_items - succeededIds.length),
+          },
+        })
+      }
+
+      // Show results
+      if (result.failed > 0) {
+        setBulkResult({
+          succeeded: result.successful,
+          failed: result.failed,
+          failedItems: result.failed_items || [],
+          requestId: meta.requestId,
+        })
+        setShowBulkResult(true)
+        toast.warning(`Resolved ${result.successful}, ${result.failed} failed`, meta.requestId)
+      } else {
+        toast.success(`Resolved ${result.successful} items`, meta.requestId)
+      }
+
+      // Background refetch
+      loadReadinessData()
+    } catch (error: any) {
+      console.error('Bulk resolve failed:', error)
+      toast.error(error.message || 'Failed to resolve items', error.requestId)
+    }
   }
 
   const getSeverityIcon = (severity: string) => {
@@ -323,10 +414,10 @@ export default function AuditReadinessPage() {
   }
 
   const summary = data?.summary
-  const items = data?.items || []
 
   // Sort items
   const sortedItems = useMemo(() => {
+    const items = data?.items || []
     if (!items.length) return []
     const sorted = [...items]
     switch (sort) {
@@ -351,7 +442,7 @@ export default function AuditReadinessPage() {
       default:
         return sorted
     }
-  }, [items, sort])
+  }, [data?.items, sort])
 
   if (loading && !data) {
     return (
@@ -697,7 +788,36 @@ export default function AuditReadinessPage() {
           onRemove={handleRemoveFromQueue}
           onClear={handleClearQueue}
           onFix={handleFixFromQueue}
+          onBulkResolve={handleBulkResolve}
         />
+
+        {/* Toast Container */}
+        <ToastContainer />
+
+        {/* Bulk Result Modal */}
+        {showBulkResult && bulkResult && (
+          <BulkActionResultModal
+            isOpen={showBulkResult}
+            onClose={() => {
+              setShowBulkResult(false)
+              setBulkResult(null)
+            }}
+            title="Bulk Resolve Results"
+            succeededCount={bulkResult.succeeded}
+            failedCount={bulkResult.failed}
+            failures={bulkResult.failedItems.map(f => ({
+              id: f.readiness_item_id,
+              code: f.rule_code,
+              message: f.error,
+            }))}
+            requestId={bulkResult.requestId}
+            onShowInTable={(ids) => {
+              // Keep failed items selected
+              // This could scroll to them or highlight them
+              setShowBulkResult(false)
+            }}
+          />
+        )}
 
         {/* Fix Queue Toggle Button */}
         {fixQueue.length > 0 && (
@@ -722,6 +842,8 @@ export default function AuditReadinessPage() {
           onComplete={handleModalComplete}
           workRecordId={activeItem.work_record_id || activeItem.affected_id}
           workRecordName={activeItem.work_record_name || activeItem.affected_name}
+          readinessItemId={activeItem.id}
+          ruleCode={activeItem.rule_code}
         />
       )}
 
@@ -735,6 +857,8 @@ export default function AuditReadinessPage() {
           onComplete={handleModalComplete}
           workRecordId={activeItem.work_record_id || activeItem.affected_id}
           workRecordName={activeItem.work_record_name || activeItem.affected_name}
+          readinessItemId={activeItem.id}
+          ruleCode={activeItem.rule_code}
         />
       )}
     </ProtectedRoute>
