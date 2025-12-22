@@ -245,6 +245,14 @@ function DashboardPageInner() {
     const newUrl = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ''}`
     window.history.replaceState({}, '', newUrl)
   }, [debouncedSearchQuery, sortBy, currentPage, pageSize, timeRange, filterStatus, filterRiskLevel, searchParams])
+  
+  // Initialize filters from URL on mount (for shareable links)
+  useEffect(() => {
+    const statusParam = searchParams.get('status')
+    const riskParam = searchParams.get('risk_level')
+    if (statusParam && !filterStatus) setFilterStatus(statusParam)
+    if (riskParam && !filterRiskLevel) setFilterRiskLevel(riskParam)
+  }, []) // Only on mount
 
   useEffect(() => {
     loadData()
