@@ -74,7 +74,7 @@ export default function ExecutiveSnapshotPage() {
 
       // Fetch risk posture from backend
       try {
-        const response = await executiveApi.getRiskPosture()
+        const response = await executiveApi.getRiskPosture({ time_range: timeRange })
         if (response?.data) {
           setRiskPosture(response.data)
         } else {

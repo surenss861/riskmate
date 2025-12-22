@@ -615,7 +615,8 @@ export const accountApi = {
 };
 
 export const executiveApi = {
-  getRiskPosture: async () => {
+  getRiskPosture: async (params?: { time_range?: '7d' | '30d' | '90d' | 'all' }) => {
+    const queryParams = params?.time_range ? `?time_range=${params.time_range}` : ''
     return apiRequest<{
       data: {
         exposure_level: 'low' | 'moderate' | 'high'
@@ -634,7 +635,7 @@ export const executiveApi = {
         unsigned_jobs: number
         recent_violations: number
       }
-    }>('/api/executive/risk-posture')
+    }>(`/api/executive/risk-posture${queryParams}`)
   },
 }
 

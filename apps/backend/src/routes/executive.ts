@@ -32,8 +32,21 @@ executiveRouter.get('/risk-posture', authenticate as unknown as express.RequestH
       return res.status(403).json(errorResponse)
     }
 
-    // Check cache (no TTL - invalidated only on material events)
-    const cacheKey = `executive:${organization_id}`
+    // Parse time_range parameter (default to 30d)
+    const timeRange = (authReq.query.time_range as string) || '30d'
+    const validTimeRanges = ['7d', '30d', '90d', 'all']
+    const timeRangeValue = validTimeRanges.includes(timeRange) ? timeRange : '30d'
+
+    // Calculate date cutoff based on time range
+    let dateCutoff: Date | null = null
+    if (timeRangeValue !== 'all') {
+      const days = timeRangeValue === '7d' ? 7 : timeRangeValue === '30d' ? 30 : 90
+      dateCutoff = new Date()
+      dateCutoff.setDate(dateCutoff.getDate() - days)
+    }
+
+    // Check cache (include time_range in cache key)
+    const cacheKey = `executive:${organization_id}:${timeRangeValue}`
     const cached = executiveCache.get(cacheKey)
     if (cached) {
       // Return cached data with provenance
@@ -43,17 +56,24 @@ executiveRouter.get('/risk-posture', authenticate as unknown as express.RequestH
           _provenance: {
             generated_at: new Date(cached.timestamp).toISOString(),
             basis_event_count: cached.basis_event_ids.length,
+            time_range: timeRangeValue,
           }
         }
       })
     }
 
-    // Fetch jobs
-    const { data: jobs, error: jobsError } = await supabase
+    // Build jobs query with time range filter
+    let jobsQuery = supabase
       .from('jobs')
-      .select('id, risk_score, risk_level, review_flag, status')
+      .select('id, risk_score, risk_level, review_flag, status, created_at')
       .eq('organization_id', organization_id)
       .is('deleted_at', null)
+    
+    if (dateCutoff) {
+      jobsQuery = jobsQuery.gte('created_at', dateCutoff.toISOString())
+    }
+
+    const { data: jobs, error: jobsError } = await jobsQuery
 
     if (jobsError) throw jobsError
 
@@ -77,31 +97,44 @@ executiveRouter.get('/risk-posture', authenticate as unknown as express.RequestH
       pendingSignoffs = jobs.length - signedCount
     }
 
-    // Count violations (last 30 days)
-    const thirtyDaysAgo = new Date()
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-
-    const { count: violationsCount } = await supabase
+    // Count violations (within time range)
+    let violationsQuery = supabase
       .from('audit_logs')
       .select('*', { count: 'exact', head: true })
       .eq('organization_id', organization_id)
       .eq('event_type', 'auth.role_violation')
-      .gte('created_at', thirtyDaysAgo.toISOString())
+    
+    if (dateCutoff) {
+      violationsQuery = violationsQuery.gte('created_at', dateCutoff.toISOString())
+    }
 
-    // Count proof packs generated
-    const { count: proofPacksCount } = await supabase
+    const { count: violationsCount } = await violationsQuery
+
+    // Count proof packs generated (within time range)
+    let proofPacksQuery = supabase
       .from('audit_logs')
       .select('*', { count: 'exact', head: true })
       .eq('organization_id', organization_id)
       .like('event_type', 'proof_pack.%')
-      .gte('created_at', thirtyDaysAgo.toISOString())
+    
+    if (dateCutoff) {
+      proofPacksQuery = proofPacksQuery.gte('created_at', dateCutoff.toISOString())
+    }
 
-    // Get last material event (may not exist)
-    const { data: lastMaterialEvent } = await supabase
+    const { count: proofPacksCount } = await proofPacksQuery
+
+    // Get last material event (within time range, may not exist)
+    let lastMaterialEventQuery = supabase
       .from('audit_logs')
       .select('created_at')
       .eq('organization_id', organization_id)
       .in('severity', ['material', 'critical'])
+    
+    if (dateCutoff) {
+      lastMaterialEventQuery = lastMaterialEventQuery.gte('created_at', dateCutoff.toISOString())
+    }
+
+    const { data: lastMaterialEvent } = await lastMaterialEventQuery
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle() // Use maybeSingle() instead of single() to handle no results
@@ -193,7 +226,7 @@ executiveRouter.get('/risk-posture', authenticate as unknown as express.RequestH
       recent_violations: violationsCount || 0,
     }
 
-    // Cache the result with provenance
+    // Cache the result with provenance (cache key includes time_range)
     executiveCache.set(cacheKey, { 
       data: riskPosture, 
       timestamp: Date.now(),
@@ -206,6 +239,7 @@ executiveRouter.get('/risk-posture', authenticate as unknown as express.RequestH
         _provenance: {
           generated_at: new Date().toISOString(),
           basis_event_count: basisEventIds.length,
+          time_range: timeRangeValue,
         }
       }
     })
