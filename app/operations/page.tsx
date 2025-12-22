@@ -457,10 +457,13 @@ function DashboardPageInner() {
   }, [])
 
   const complianceTrend = useMemo(() => {
-    return (analyticsData.trend || []).map((item: any) => ({
+    const trend = (analyticsData.trend || []).map((item: any) => ({
       date: item.date || item.period || '',
       rate: item.completion_rate || item.rate || 0,
     }))
+    // Ensure we only show the last 7 days, sorted by date
+    const sorted = trend.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+    return sorted.slice(-7)
   }, [analyticsData.trend])
 
   // Calculate KPI metrics for hero card (scoped to time range)

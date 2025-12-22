@@ -278,7 +278,7 @@ export function DashboardOverview({
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4 }}
-          className="rounded-xl border border-white/10 bg-[#121212]/80 backdrop-blur-sm p-6"
+          className="rounded-3xl border border-white/10 bg-white/[0.03] backdrop-blur-xl p-6"
         >
           <div className="flex items-center justify-between mb-4">
             <div>
@@ -293,18 +293,23 @@ export function DashboardOverview({
             <p className="text-sm text-white/50">No data available</p>
           ) : (
             <div className="h-32 flex items-end gap-2">
-              {complianceTrend.map((point, i) => (
-                <div
-                  key={i}
-                  className="flex-1 flex flex-col items-center"
-                  style={{ height: `${point.rate * 100}%` }}
-                >
-                  <div className="w-full bg-gradient-to-t from-[#F97316] to-[#FF8A3D] rounded-t" />
-                  <span className="text-xs text-white/50 mt-1">
-                    {new Date(point.date).toLocaleDateString('en-US', { weekday: 'short' })}
-                  </span>
-                </div>
-              ))}
+              {complianceTrend.slice(-7).map((point, i) => {
+                // Get last 7 days only and format correctly
+                const date = new Date(point.date)
+                const dayName = date.toLocaleDateString('en-US', { weekday: 'short' })
+                return (
+                  <div
+                    key={i}
+                    className="flex-1 flex flex-col items-center"
+                    style={{ minHeight: '4px', height: `${Math.max(point.rate * 100, 4)}%` }}
+                  >
+                    <div className="w-full bg-gradient-to-t from-[#F97316] to-[#FF8A3D] rounded-t" />
+                    <span className="text-xs text-white/50 mt-1">
+                      {dayName}
+                    </span>
+                  </div>
+                )
+              })}
             </div>
           )}
         </motion.div>
@@ -314,7 +319,7 @@ export function DashboardOverview({
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.5 }}
-          className="rounded-xl border border-white/10 bg-[#121212]/80 backdrop-blur-sm p-6"
+          className="rounded-3xl border border-white/10 bg-white/[0.03] backdrop-blur-xl p-6"
         >
           <div className="flex items-center justify-between mb-4">
             <div>
