@@ -124,6 +124,8 @@ export default function ExecutiveSnapshotPage() {
             last_material_event_at: null,
             confidence_statement: '✅ No unresolved governance violations. All jobs within acceptable risk thresholds.',
             ledger_integrity: 'not_verified',
+            ledger_integrity_last_verified_at: null,
+            ledger_integrity_verified_through_event_id: null,
             flagged_jobs: 0,
             signed_jobs: 0,
             unsigned_jobs: 0,
