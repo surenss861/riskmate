@@ -732,13 +732,57 @@ export default function ExecutiveSnapshotPage() {
               <p className="text-xs text-white/50 mb-6">
                 Immutable, export-ready, insurer-safe
               </p>
-              <a
-                href="/operations/audit?tab=governance&time_range=90d&severity=material"
-                className={`${buttonStyles.primary} inline-flex items-center gap-2 text-base px-8 py-3`}
-              >
-                View Compliance Ledger
-                <ExternalLink className="w-5 h-5" />
-              </a>
+              <div className="flex items-center justify-center gap-4">
+                <a
+                  href="/operations/audit?tab=governance&time_range=90d&severity=material"
+                  className={`${buttonStyles.primary} inline-flex items-center gap-2 text-base px-8 py-3`}
+                >
+                  View Compliance Ledger
+                  <ExternalLink className="w-5 h-5" />
+                </a>
+                <button
+                  onClick={() => {
+                    const brief = {
+                      generated_at: new Date().toISOString(),
+                      time_range: timeRange,
+                      summary: {
+                        exposure_level: riskPosture.exposure_level,
+                        confidence_statement: riskPosture.confidence_statement,
+                        counts: {
+                          high_risk_jobs: riskPosture.high_risk_jobs,
+                          open_incidents: riskPosture.open_incidents,
+                          violations: riskPosture.recent_violations,
+                          flagged: riskPosture.flagged_jobs,
+                          pending_attestations: riskPosture.pending_signoffs,
+                          signed_attestations: riskPosture.signed_jobs,
+                          proof_packs: riskPosture.proof_packs_generated,
+                        },
+                        deltas: riskPosture.deltas,
+                        top_drivers: riskPosture.drivers,
+                        integrity: {
+                          status: riskPosture.ledger_integrity,
+                          last_verified_at: riskPosture.ledger_integrity_last_verified_at,
+                          verified_through_event_id: riskPosture.ledger_integrity_verified_through_event_id,
+                        },
+                        recommended_actions: riskPosture.recommended_actions,
+                      },
+                    }
+                    const blob = new Blob([JSON.stringify(brief, null, 2)], { type: 'application/json' })
+                    const url = URL.createObjectURL(blob)
+                    const a = document.createElement('a')
+                    a.href = url
+                    a.download = `executive-brief-${timeRange}-${new Date().toISOString().split('T')[0]}.json`
+                    document.body.appendChild(a)
+                    a.click()
+                    document.body.removeChild(a)
+                    URL.revokeObjectURL(url)
+                  }}
+                  className={`${buttonStyles.secondary} inline-flex items-center gap-2 text-base px-8 py-3`}
+                >
+                  Export Executive Brief
+                  <FileCheck className="w-5 h-5" />
+                </button>
+              </div>
             </div>
           </motion.div>
         </div>

@@ -465,6 +465,42 @@ executiveRouter.get('/risk-posture', authenticate as unknown as express.RequestH
 
     const topDrivers = await getTopDrivers()
 
+    // Generate executive action plan (top 3 recommended actions)
+    const actionPlan: Array<{ priority: number; action: string; href: string; reason: string }> = []
+    
+    // Priority 1: Critical violations
+    if (violationsCount && violationsCount > 0) {
+      actionPlan.push({
+        priority: 1,
+        action: `Review ${violationsCount} blocked violation${violationsCount > 1 ? 's' : ''}`,
+        href: `/operations/audit?tab=governance&outcome=blocked${dateCutoff ? `&time_range=${timeRangeValue}` : ''}`,
+        reason: 'Role violations indicate unauthorized access attempts',
+      })
+    }
+
+    // Priority 2: High-risk jobs without evidence
+    if (highRiskJobs > 0 && topDrivers.highRiskJobs[0]?.key === 'MISSING_EVIDENCE.HIGH_RISK') {
+      actionPlan.push({
+        priority: 2,
+        action: `Add evidence to ${highRiskJobs} high-risk job${highRiskJobs > 1 ? 's' : ''}`,
+        href: `/operations/audit/readiness?category=evidence&severity=high${dateCutoff ? `&time_range=${timeRangeValue}` : ''}`,
+        reason: 'High-risk jobs require documented evidence for defensibility',
+      })
+    }
+
+    // Priority 3: Overdue attestations
+    if (pendingSignoffs > 0) {
+      actionPlan.push({
+        priority: 3,
+        action: `Request ${pendingSignoffs} pending attestation${pendingSignoffs > 1 ? 's' : ''}`,
+        href: `/operations/audit/readiness?category=attestations&status=open${dateCutoff ? `&time_range=${timeRangeValue}` : ''}`,
+        reason: 'Unsigned approvals weaken audit defensibility',
+      })
+    }
+
+    // Sort by priority and take top 3
+    const recommendedActions = actionPlan.sort((a, b) => a.priority - b.priority).slice(0, 3)
+
     const riskPosture = {
       exposure_level: exposureLevel,
       unresolved_violations: violationsCount || 0,
@@ -497,6 +533,8 @@ executiveRouter.get('/risk-posture', authenticate as unknown as express.RequestH
         signed_signoffs: signedCount - previousPeriodCounts.signedCount,
         proof_packs: (proofPacksCount || 0) - previousPeriodCounts.proofPacks,
       },
+      // Executive action plan
+      recommended_actions: recommendedActions,
     }
 
     // Cache the result with provenance (cache key includes time_range)
