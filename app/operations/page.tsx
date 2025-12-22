@@ -651,6 +651,7 @@ export default function DashboardPage() {
                 incompleteMitigations={incompleteMitigations}
                 workforceActivity={workforceActivity}
                 complianceTrend={complianceTrend}
+                timeRange={timeRange}
               />
             </motion.div>
           )}
