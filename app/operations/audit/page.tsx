@@ -1645,11 +1645,42 @@ export default function AuditViewPage() {
             ) : filteredEvents.length === 0 ? (
               <div className="text-center py-12 px-4">
                 <div className="max-w-md mx-auto">
-                  <p className="text-white/60 mb-4">
-                    {activeTab === 'governance' && `No Governance Enforcement events in the last ${filters.timeRange === '24h' ? '24 hours' : filters.timeRange === '7d' ? '7 days' : filters.timeRange === '30d' ? '30 days' : 'time period'}.`}
-                    {activeTab === 'operations' && `No Operational Actions in the last ${filters.timeRange === '24h' ? '24 hours' : filters.timeRange === '7d' ? '7 days' : filters.timeRange === '30d' ? '30 days' : 'time period'}.`}
-                    {activeTab === 'access' && `No Access & Security events in the last ${filters.timeRange === '24h' ? '24 hours' : filters.timeRange === '7d' ? '7 days' : filters.timeRange === '30d' ? '30 days' : 'time period'}.`}
-                  </p>
+                  {activeTab === 'governance' && (
+                    <>
+                      <Shield className="w-12 h-12 text-white/20 mx-auto mb-4" />
+                      <h3 className="text-lg font-semibold text-white mb-2">No Policy Blocks</h3>
+                      <p className="text-white/60 mb-1">
+                        No Governance Enforcement events in the last {filters.timeRange === '24h' ? '24 hours' : filters.timeRange === '7d' ? '7 days' : filters.timeRange === '30d' ? '30 days' : 'time period'}.
+                      </p>
+                      <p className="text-white/40 text-sm mb-4">
+                        This tab shows blocked actions, policy enforcement, and violations. Try "All time" or trigger a policy block (e.g., executive attempting a mutation) to verify.
+                      </p>
+                    </>
+                  )}
+                  {activeTab === 'operations' && (
+                    <>
+                      <FileText className="w-12 h-12 text-white/20 mx-auto mb-4" />
+                      <h3 className="text-lg font-semibold text-white mb-2">No Operational Actions</h3>
+                      <p className="text-white/60 mb-1">
+                        No Operational Actions in the last {filters.timeRange === '24h' ? '24 hours' : filters.timeRange === '7d' ? '7 days' : filters.timeRange === '30d' ? '30 days' : 'time period'}.
+                      </p>
+                      <p className="text-white/40 text-sm mb-4">
+                        This tab shows human workflow actions (assign/resolve/waive, corrective actions, incident closures, exports). Assign or resolve items to generate the trail.
+                      </p>
+                    </>
+                  )}
+                  {activeTab === 'access' && (
+                    <>
+                      <User className="w-12 h-12 text-white/20 mx-auto mb-4" />
+                      <h3 className="text-lg font-semibold text-white mb-2">No Access Events</h3>
+                      <p className="text-white/60 mb-1">
+                        No Access & Security events in the last {filters.timeRange === '24h' ? '24 hours' : filters.timeRange === '7d' ? '7 days' : filters.timeRange === '30d' ? '30 days' : 'time period'}.
+                      </p>
+                      <p className="text-white/40 text-sm mb-4">
+                        This tab shows identity and permissions changes (role changes, revocations, logins, security events). Role changes and revocations will appear here.
+                      </p>
+                    </>
+                  )}
                   <div className="flex flex-wrap gap-2 justify-center">
                     <button
                       onClick={() => setFilters({ ...filters, timeRange: 'all' })}
@@ -1663,6 +1694,30 @@ export default function AuditViewPage() {
                     >
                       Clear filters
                     </button>
+                    {process.env.NODE_ENV === 'development' && (
+                      <button
+                        onClick={async () => {
+                          try {
+                            const response = await fetch('/api/dev/generate-sample-events', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                            })
+                            if (response.ok) {
+                              setToast({ message: 'Sample events generated! Refresh to see them.', type: 'success' })
+                              setTimeout(() => loadAuditEvents(), 1000)
+                            } else {
+                              setToast({ message: 'Failed to generate sample events', type: 'error' })
+                            }
+                          } catch (err) {
+                            setToast({ message: 'Failed to generate sample events', type: 'error' })
+                          }
+                        }}
+                        className={`${buttonStyles.secondary} ${buttonStyles.sizes.sm} text-xs border-dashed`}
+                        title="Dev only: Generate sample events for testing"
+                      >
+                        Generate Sample Events (Dev)
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
