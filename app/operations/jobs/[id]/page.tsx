@@ -1061,8 +1061,8 @@ export default function JobDetailPage() {
                         <SkeletonLoader key={i} variant="card" height="80px" />
                       ))}
                     </div>
-                  </div>
-                ) : (
+              </GlassCard>
+            ) : (
                   <JobAssignment
                     jobId={jobId}
                     workers={workers}
