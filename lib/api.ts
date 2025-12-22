@@ -634,6 +634,15 @@ export const executiveApi = {
         signed_jobs: number
         unsigned_jobs: number
         recent_violations: number
+        drivers: {
+          highRiskJobs: Array<{ key: string; label: string; count: number; href?: string }>
+          openIncidents: Array<{ key: string; label: string; count: number; href?: string }>
+          violations: Array<{ key: string; label: string; count: number; href?: string }>
+          flagged: Array<{ key: string; label: string; count: number; href?: string }>
+          pending: Array<{ key: string; label: string; count: number; href?: string }>
+          signed: Array<{ key: string; label: string; count: number; href?: string }>
+          proofPacks: Array<{ key: string; label: string; count: number; href?: string }>
+        }
       }
     }>(`/api/executive/risk-posture${queryParams}`)
   },

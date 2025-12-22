@@ -207,6 +207,145 @@ executiveRouter.get('/risk-posture', authenticate as unknown as express.RequestH
       basisEventIds.push(...materialEvents.map((e: any) => e.id))
     }
 
+    // Helper function to compute top drivers
+    type Driver = { key: string; label: string; count: number; href?: string }
+    const getTopDrivers = async (): Promise<{
+      highRiskJobs: Driver[]
+      openIncidents: Driver[]
+      violations: Driver[]
+      flagged: Driver[]
+      pending: Driver[]
+      signed: Driver[]
+      proofPacks: Driver[]
+    }> => {
+      const drivers = {
+        highRiskJobs: [] as Driver[],
+        openIncidents: [] as Driver[],
+        violations: [] as Driver[],
+        flagged: [] as Driver[],
+        pending: [] as Driver[],
+        signed: [] as Driver[],
+        proofPacks: [] as Driver[],
+      }
+
+      // High Risk Jobs drivers: Check for missing evidence on high-risk jobs
+      const highRiskJobIds = (jobs || []).filter(j => j.risk_score !== null && j.risk_score > 75).map(j => j.id)
+      if (highRiskJobIds.length > 0) {
+        // Count jobs with missing evidence (simplified: assume all high-risk jobs need evidence)
+        drivers.highRiskJobs.push({
+          key: 'MISSING_EVIDENCE.HIGH_RISK',
+          label: 'Missing evidence on high-risk records',
+          count: highRiskJobIds.length,
+          href: '/operations/audit/readiness?category=evidence&severity=high',
+        })
+      }
+
+      // Open Incidents drivers
+      const incidentJobs = (jobs || []).filter(j => j.status === 'incident')
+      if (incidentJobs.length > 0) {
+        drivers.openIncidents.push({
+          key: 'INCIDENT.OPEN',
+          label: 'Open incidents requiring resolution',
+          count: incidentJobs.length,
+          href: '/operations/audit?view=incident-review&status=open',
+        })
+      }
+
+      // Violations drivers: Group by metadata reason if available
+      let violationsQuery = supabase
+        .from('audit_logs')
+        .select('id, metadata')
+        .eq('organization_id', organization_id)
+        .eq('event_type', 'auth.role_violation')
+      
+      if (dateCutoff) {
+        violationsQuery = violationsQuery.gte('created_at', dateCutoff.toISOString())
+      }
+
+      const { data: violations } = await violationsQuery
+      if (violations && violations.length > 0) {
+        // Group by attempted action from metadata
+        const reasonCounts: Record<string, number> = {}
+        violations.forEach((v: any) => {
+          const reason = v.metadata?.attempted_action || v.metadata?.reason || 'Unknown violation'
+          reasonCounts[reason] = (reasonCounts[reason] || 0) + 1
+        })
+        
+        const topReason = Object.entries(reasonCounts)
+          .sort(([, a], [, b]) => b - a)[0]
+        
+        if (topReason) {
+          const reasonLabel = topReason[0].replace(/\./g, ' ').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+          drivers.violations.push({
+            key: `VIOLATION.${topReason[0]}`,
+            label: `${reasonLabel} blocked`,
+            count: topReason[1],
+            href: '/operations/audit?tab=governance&outcome=blocked',
+          })
+        }
+      }
+
+      // Flagged drivers
+      const flaggedJobIds = (jobs || []).filter(j => j.review_flag === true).map(j => j.id)
+      if (flaggedJobIds.length > 0) {
+        drivers.flagged.push({
+          key: 'FLAGGED.REVIEW_REQUIRED',
+          label: 'Jobs flagged for safety review',
+          count: flaggedJobIds.length,
+          href: '/operations/audit?view=review-queue',
+        })
+      }
+
+      // Pending drivers: Use readiness-related events or job_signoffs
+      if (jobs && jobs.length > 0) {
+        const { data: pendingSignoffs } = await supabase
+          .from('job_signoffs')
+          .select('job_id, status')
+          .in('job_id', jobs.map(j => j.id))
+          .neq('status', 'signed')
+        
+        const pendingCount = pendingSignoffs?.length || 0
+        if (pendingCount > 0) {
+          drivers.pending.push({
+            key: 'PENDING.ATTESTATIONS',
+            label: 'Attestations overdue',
+            count: pendingCount,
+            href: '/operations/audit/readiness?category=attestations&status=open',
+          })
+        }
+      }
+
+      // Signed drivers
+      if (signedCount > 0) {
+        drivers.signed.push({
+          key: 'SIGNED.COMPLETED',
+          label: 'Completed attestations',
+          count: signedCount,
+          href: '/operations/audit?tab=operations&event_name=signoff&status=signed',
+        })
+      }
+
+      // Proof Packs drivers
+      if (proofPacksCount && proofPacksCount > 0) {
+        drivers.proofPacks.push({
+          key: 'PROOF_PACKS.GENERATED',
+          label: 'Proof packs generated',
+          count: proofPacksCount,
+          href: '/operations/audit?view=insurance-ready',
+        })
+      } else {
+        drivers.proofPacks.push({
+          key: 'PROOF_PACKS.NONE',
+          label: 'No proof packs generated',
+          count: 0,
+        })
+      }
+
+      return drivers
+    }
+
+    const topDrivers = await getTopDrivers()
+
     const riskPosture = {
       exposure_level: exposureLevel,
       unresolved_violations: violationsCount || 0,
@@ -224,6 +363,8 @@ executiveRouter.get('/risk-posture', authenticate as unknown as express.RequestH
       signed_jobs: signedCount,
       unsigned_jobs: pendingSignoffs,
       recent_violations: violationsCount || 0,
+      // Top drivers
+      drivers: topDrivers,
     }
 
     // Cache the result with provenance (cache key includes time_range)

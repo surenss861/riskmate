@@ -25,6 +25,15 @@ interface RiskPosture {
   signed_jobs: number
   unsigned_jobs: number
   recent_violations: number
+  drivers?: {
+    highRiskJobs: Array<{ key: string; label: string; count: number; href?: string }>
+    openIncidents: Array<{ key: string; label: string; count: number; href?: string }>
+    violations: Array<{ key: string; label: string; count: number; href?: string }>
+    flagged: Array<{ key: string; label: string; count: number; href?: string }>
+    pending: Array<{ key: string; label: string; count: number; href?: string }>
+    signed: Array<{ key: string; label: string; count: number; href?: string }>
+    proofPacks: Array<{ key: string; label: string; count: number; href?: string }>
+  }
 }
 
 type TimeRange = '7d' | '30d' | '90d' | 'all'
@@ -308,6 +317,11 @@ export default function ExecutiveSnapshotPage() {
                     ? 'All clear — no high-risk jobs in range'
                     : `${riskPosture.high_risk_jobs} job${riskPosture.high_risk_jobs > 1 ? 's' : ''} scoring above 75`}
                 </div>
+                {riskPosture.high_risk_jobs > 0 && riskPosture.drivers?.highRiskJobs?.[0] && (
+                  <div className="mt-2 pt-2 border-t border-white/10 text-xs text-white/50">
+                    Top driver: {riskPosture.drivers.highRiskJobs[0].label} ({riskPosture.drivers.highRiskJobs[0].count})
+                  </div>
+                )}
                 {hoveredCard === 'high-risk' && (
                   <div className="mt-3 pt-3 border-t border-white/10 text-xs text-white/70">
                     Jobs above threshold require documented mitigation to remain defensible.
@@ -341,6 +355,11 @@ export default function ExecutiveSnapshotPage() {
                     ? 'All clear — no open incidents'
                     : `${riskPosture.open_incidents} active incident${riskPosture.open_incidents > 1 ? 's' : ''} requiring attention`}
                 </div>
+                {riskPosture.open_incidents > 0 && riskPosture.drivers?.openIncidents?.[0] && (
+                  <div className="mt-2 pt-2 border-t border-white/10 text-xs text-white/50">
+                    Top driver: {riskPosture.drivers.openIncidents[0].label} ({riskPosture.drivers.openIncidents[0].count})
+                  </div>
+                )}
                 {hoveredCard === 'incidents' && (
                   <div className="mt-3 pt-3 border-t border-white/10 text-xs text-white/70">
                     Open incidents indicate unresolved exposure requiring immediate governance review.
@@ -374,6 +393,11 @@ export default function ExecutiveSnapshotPage() {
                     ? 'All clear — no blocked violations'
                     : `${riskPosture.recent_violations} blocked violation${riskPosture.recent_violations > 1 ? 's' : ''} (last 30 days)`}
                 </div>
+                {riskPosture.recent_violations > 0 && riskPosture.drivers?.violations?.[0] && (
+                  <div className="mt-2 pt-2 border-t border-white/10 text-xs text-white/50">
+                    Top driver: {riskPosture.drivers.violations[0].label} ({riskPosture.drivers.violations[0].count})
+                  </div>
+                )}
                 {hoveredCard === 'violations' && (
                   <div className="mt-3 pt-3 border-t border-white/10 text-xs text-white/70">
                     Blocked actions indicate attempted unauthorized access. Each violation is logged and defensible.
@@ -416,6 +440,11 @@ export default function ExecutiveSnapshotPage() {
                     ? 'All clear — no jobs flagged'
                     : `${riskPosture.flagged_jobs} job${riskPosture.flagged_jobs > 1 ? 's' : ''} flagged for review`}
                 </div>
+                {riskPosture.flagged_jobs > 0 && riskPosture.drivers?.flagged?.[0] && (
+                  <div className="mt-2 pt-2 border-t border-white/10 text-xs text-white/50">
+                    Top driver: {riskPosture.drivers.flagged[0].label} ({riskPosture.drivers.flagged[0].count})
+                  </div>
+                )}
                 {hoveredCard === 'flagged' && (
                   <div className="mt-3 pt-3 border-t border-white/10 text-xs text-white/70">
                     Flagged jobs require safety lead oversight. Review ensures accountability and defensibility.
@@ -449,6 +478,11 @@ export default function ExecutiveSnapshotPage() {
                     ? 'All clear — no pending attestations'
                     : `${riskPosture.pending_signoffs} job${riskPosture.pending_signoffs > 1 ? 's' : ''} awaiting attestations`}
                 </div>
+                {riskPosture.pending_signoffs > 0 && riskPosture.drivers?.pending?.[0] && (
+                  <div className="mt-2 pt-2 border-t border-white/10 text-xs text-white/50">
+                    Top driver: {riskPosture.drivers.pending[0].label} ({riskPosture.drivers.pending[0].count})
+                  </div>
+                )}
                 {hoveredCard === 'pending-signoffs' && (
                   <div className="mt-3 pt-3 border-t border-white/10 text-xs text-white/70">
                     Unsigned approvals weaken insurance and dispute defensibility.
@@ -478,6 +512,11 @@ export default function ExecutiveSnapshotPage() {
                     ? 'No completed attestations yet'
                     : `${riskPosture.signed_jobs} job${riskPosture.signed_jobs > 1 ? 's' : ''} with completed attestations`}
                 </div>
+                {riskPosture.signed_jobs > 0 && riskPosture.drivers?.signed?.[0] && (
+                  <div className="mt-2 pt-2 border-t border-white/10 text-xs text-white/50">
+                    Top driver: {riskPosture.drivers.signed[0].label} ({riskPosture.drivers.signed[0].count})
+                  </div>
+                )}
                 {hoveredCard === 'signed' && (
                   <div className="mt-3 pt-3 border-t border-white/10 text-xs text-white/70">
                     Completed sign-offs provide defensible proof of approval and accountability.
@@ -520,6 +559,16 @@ export default function ExecutiveSnapshotPage() {
                     ? 'No proof packs generated yet'
                     : `${riskPosture.proof_packs_generated} pack${riskPosture.proof_packs_generated > 1 ? 's' : ''} generated (last 30 days)`}
                 </div>
+                {riskPosture.drivers?.proofPacks?.[0] && riskPosture.drivers.proofPacks[0].count === 0 && (
+                  <div className="mt-2 pt-2 border-t border-white/10 text-xs text-white/50">
+                    {riskPosture.drivers.proofPacks[0].label}
+                  </div>
+                )}
+                {riskPosture.proof_packs_generated > 0 && riskPosture.drivers?.proofPacks?.[0] && riskPosture.drivers.proofPacks[0].count > 0 && (
+                  <div className="mt-2 pt-2 border-t border-white/10 text-xs text-white/50">
+                    Top driver: {riskPosture.drivers.proofPacks[0].label} ({riskPosture.drivers.proofPacks[0].count})
+                  </div>
+                )}
                 {hoveredCard === 'proof-packs' && (
                   <div className="mt-3 pt-3 border-t border-white/10 text-xs text-white/70">
                     Exportable proof bundles ready for insurer, regulator, or legal review.
