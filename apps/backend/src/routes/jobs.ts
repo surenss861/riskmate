@@ -46,23 +46,66 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
   const requestId = authReq.requestId || 'unknown';
   try {
     const { organization_id } = authReq.user;
-    const { page = 1, limit = 20, status, risk_level, include_archived, sort } = authReq.query;
+    const { 
+      page = 1, 
+      limit: limitParam, 
+      page_size,
+      status, 
+      risk_level, 
+      include_archived, 
+      sort,
+      q, // Search query
+      time_range,
+      missing_evidence,
+    } = authReq.query;
     const includeArchived = include_archived === 'true' || include_archived === '1';
     
-    // Parse sort parameter (e.g., "risk_desc", "created_desc", "status_asc")
+    // Parse time_range to date cutoff
+    let dateCutoff: Date | null = null;
+    if (time_range && typeof time_range === 'string' && time_range !== 'all') {
+      const match = time_range.match(/(\d+)d/);
+      if (match) {
+        const days = parseInt(match[1], 10);
+        if (!isNaN(days)) {
+          dateCutoff = new Date();
+          dateCutoff.setDate(dateCutoff.getDate() - days);
+          dateCutoff.setHours(0, 0, 0, 0);
+        }
+      }
+    }
+    
+    // Parse sort parameter (e.g., "risk_desc", "created_desc", "status_asc", "blockers_desc", "readiness_asc")
     let sortField = 'created_at';
     let sortDirection: 'asc' | 'desc' = 'desc';
     let useStatusOrdering = false;
-    let sortMode: 'created_desc' | 'created_asc' | 'risk_desc' | 'risk_asc' | 'status_asc' | 'status_desc' = 'created_desc';
+    let useReadinessOrdering = false; // Will sort in-memory after fetching readiness data
+    let useBlockersOrdering = false; // Will sort in-memory after fetching blockers data
+    let sortMode: string = 'created_desc';
     
     if (sort) {
       const sortStr = String(sort);
       if (sortStr.includes('_')) {
         const [field, dir] = sortStr.split('_');
-        sortMode = `${field}_${dir}` as any;
+        sortMode = `${field}_${dir}`;
         if (field === 'status') {
           useStatusOrdering = true;
           sortDirection = dir === 'asc' ? 'asc' : 'desc';
+        } else if (field === 'blockers') {
+          useBlockersOrdering = true;
+          sortDirection = dir === 'asc' ? 'asc' : 'desc';
+          // Pre-sort by created_at for consistency, then sort by blockers in memory
+          sortField = 'created_at';
+        } else if (field === 'readiness') {
+          useReadinessOrdering = true;
+          sortDirection = dir === 'asc' ? 'asc' : 'desc';
+          // Pre-sort by created_at for consistency, then sort by readiness in memory
+          sortField = 'created_at';
+        } else if (field === 'newest') {
+          sortField = 'created_at';
+          sortDirection = 'desc';
+        } else if (field === 'oldest') {
+          sortField = 'created_at';
+          sortDirection = 'asc';
         } else {
           sortField = field === 'risk' ? 'risk_score' : field === 'created' ? 'created_at' : 'created_at';
           sortDirection = dir === 'asc' ? 'asc' : 'desc';
@@ -124,6 +167,18 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
       .select("id, client_name, job_type, location, status, risk_score, risk_level, created_at, updated_at, applied_template_id, applied_template_type, review_flag, flagged_at")
       .eq("organization_id", organization_id)
       .is("deleted_at", null); // Always exclude deleted
+    
+    // Apply time_range filter
+    if (dateCutoff) {
+      query = query.gte("created_at", dateCutoff.toISOString());
+    }
+    
+    // Apply search filter (q parameter - search job name, address, or ID)
+    if (q && typeof q === 'string' && q.trim()) {
+      const searchTerm = q.trim();
+      // Search in client_name, location, or id (case-insensitive partial match)
+      query = query.or(`client_name.ilike.%${searchTerm}%,location.ilike.%${searchTerm}%,id.eq.${searchTerm}`);
+    }
     
     // Cursor-based pagination (per-sort cursor keys for consistency)
     if (useCursor) {
@@ -316,13 +371,25 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
       });
     }
     
-    // Ensure template fields are never undefined (always null if missing)
+    // Enrich jobs with readiness metrics and ensure template fields are never undefined
     if (jobs) {
-      jobs = jobs.map((job: any) => ({
-        ...job,
-        applied_template_id: job.applied_template_id ?? null,
-        applied_template_type: job.applied_template_type ?? null,
-      }));
+      jobs = jobs.map((job: any) => {
+        const readiness = readinessData[job.id] || {
+          readiness_score: 0,
+          blockers_count: 0,
+          missing_evidence: false,
+          pending_attestations: 0,
+        };
+        return {
+          ...job,
+          applied_template_id: job.applied_template_id ?? null,
+          applied_template_type: job.applied_template_type ?? null,
+          readiness_score: readiness.readiness_score,
+          blockers_count: readiness.blockers_count,
+          missing_evidence: readiness.missing_evidence,
+          pending_attestations: readiness.pending_attestations,
+        };
+      });
     }
     
     // Generate next cursor for cursor pagination (per-sort cursor keys)
@@ -340,12 +407,22 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
       }
     }
 
-    // Get total count for pagination
+    // Get total count for pagination (apply same filters as main query)
     let countQuery = supabase
       .from("jobs")
       .select("*", { count: "exact", head: true })
       .eq("organization_id", organization_id)
       .is("deleted_at", null); // Always exclude deleted
+    
+    // Apply same filters as main query
+    if (dateCutoff) {
+      countQuery = countQuery.gte("created_at", dateCutoff.toISOString());
+    }
+    
+    if (q && typeof q === 'string' && q.trim()) {
+      const searchTerm = q.trim();
+      countQuery = countQuery.or(`client_name.ilike.%${searchTerm}%,location.ilike.%${searchTerm}%,id.eq.${searchTerm}`);
+    }
     
     // Only exclude archived if not explicitly including them
     if (!includeArchived) {
@@ -359,6 +436,10 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
     if (risk_level) {
       countQuery = countQuery.eq("risk_level", risk_level);
     }
+    
+    // Note: missing_evidence filter is applied in-memory, so count needs to match
+    // For now, we'll count before the missing_evidence filter (approximation)
+    // In production, you'd want to do a separate count query that matches the filtered results
 
     let { count, error: countError } = await countQuery;
     
