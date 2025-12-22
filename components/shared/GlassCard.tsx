@@ -29,8 +29,8 @@ export function GlassCard({
       animate={animate || { opacity: 1, y: 0 }}
       transition={transition || { duration: 0.45 }}
       className={clsx(
-        'relative overflow-hidden rounded-3xl border border-white/5',
-        'bg-gradient-to-b from-[#121212] to-transparent backdrop-blur-sm',
+        'relative overflow-hidden rounded-3xl border border-white/10',
+        'bg-gradient-to-b from-[#121212] to-transparent backdrop-blur-xl',
         'shadow-[0_8px_32px_rgba(0,0,0,0.3)]',
         href || onClick ? 'cursor-pointer transition-transform hover:scale-[1.01]' : '',
         className
