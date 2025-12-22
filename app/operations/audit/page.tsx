@@ -79,6 +79,8 @@ export default function AuditViewPage() {
   const [evidenceJobId, setEvidenceJobId] = useState<string | undefined>()
   const [evidenceJobName, setEvidenceJobName] = useState<string | undefined>()
   const [evidenceSiteName, setEvidenceSiteName] = useState<string | undefined>()
+  const [eventDetailsDrawerOpen, setEventDetailsDrawerOpen] = useState(false)
+  const [selectedEventForDetails, setSelectedEventForDetails] = useState<AuditEvent | null>(null)
   const [assignModalOpen, setAssignModalOpen] = useState(false)
   const [resolveModalOpen, setResolveModalOpen] = useState(false)
   const [selectedTarget, setSelectedTarget] = useState<{
