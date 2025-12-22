@@ -1,10 +1,9 @@
 'use client'
 
-import { X, ExternalLink, User, FileText, Building2, Clock, Copy, Check, Link2, Loader2 } from 'lucide-react'
-import { useState, useEffect } from 'react'
+import { X, ExternalLink, User, FileText, Building2, Clock, Copy, Check } from 'lucide-react'
+import { useState } from 'react'
 import { buttonStyles } from '@/lib/styles/design-system'
 import { useRouter } from 'next/navigation'
-import { auditApi } from '@/lib/api'
 
 interface AuditEvent {
   id: string
@@ -200,15 +199,15 @@ export function EventDetailsDrawer({ isOpen, onClose, event }: EventDetailsDrawe
           )}
 
           {/* Metadata */}
-          {event.metadata && Object.keys(event.metadata).length > 0 && (
+          {event?.metadata && Object.keys(event.metadata || {}).length > 0 && (
             <div>
               <h3 className="text-sm font-medium text-white/60 mb-2">Metadata</h3>
               <div className="bg-black/20 rounded-lg p-4 overflow-x-auto">
                 <pre className="text-xs text-white/80 font-mono whitespace-pre-wrap">
-                  {JSON.stringify(event.metadata, null, 2)}
+                  {JSON.stringify(event.metadata || {}, null, 2)}
                 </pre>
                 <button
-                  onClick={() => handleCopy(JSON.stringify(event.metadata, null, 2), 'metadata')}
+                  onClick={() => handleCopy(JSON.stringify(event.metadata || {}, null, 2), 'metadata')}
                   className="mt-2 text-xs text-[#F97316] hover:text-[#FFC857] flex items-center gap-1"
                 >
                   {copied === 'metadata' ? (
