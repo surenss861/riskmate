@@ -735,7 +735,6 @@ export default function JobDetailPage() {
             <p className="text-xs text-white/50 mt-2">
               Status helps your team understand what stage this job is in.
             </p>
-          </PageSection>
 
           <div className="grid lg:grid-cols-3 gap-6 mb-16">
             <GlassCard className="p-10 flex flex-col h-full">
@@ -952,7 +951,6 @@ export default function JobDetailPage() {
                 </div>
             </GlassCard>
           </div>
-          </PageSection>
 
           {/* Apply Template Inline - Full Width Section */}
           {showApplyTemplate && organizationId && (
