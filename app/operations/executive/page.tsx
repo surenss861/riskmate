@@ -20,7 +20,9 @@ interface RiskPosture {
   proof_packs_generated: number
   last_material_event_at: string | null
   confidence_statement: string
-  ledger_integrity: 'verified' | 'pending' | 'error'
+  ledger_integrity: 'verified' | 'error' | 'not_verified'
+  ledger_integrity_last_verified_at: string | null
+  ledger_integrity_verified_through_event_id: string | null
   flagged_jobs: number
   signed_jobs: number
   unsigned_jobs: number
@@ -33,6 +35,15 @@ interface RiskPosture {
     pending: Array<{ key: string; label: string; count: number; href?: string }>
     signed: Array<{ key: string; label: string; count: number; href?: string }>
     proofPacks: Array<{ key: string; label: string; count: number; href?: string }>
+  }
+  deltas?: {
+    high_risk_jobs: number
+    open_incidents: number
+    violations: number
+    flagged_jobs: number
+    pending_signoffs: number
+    signed_signoffs: number
+    proof_packs: number
   }
 }
 
@@ -176,12 +187,22 @@ export default function ExecutiveSnapshotPage() {
     }
   }
 
-  const getIntegrityText = (status: string) => {
+  const getIntegrityText = (status: string, lastVerifiedAt: string | null) => {
     switch (status) {
       case 'verified': return 'Ledger verified'
-      case 'error': return 'Integrity error'
-      default: return 'Verification pending'
+      case 'error': return 'Integrity mismatch detected'
+      case 'not_verified': 
+        return lastVerifiedAt 
+          ? `Not yet verified (last checked: ${new Date(lastVerifiedAt).toLocaleDateString()})`
+          : 'Not yet verified'
+      default: return 'Verification status unknown'
     }
+  }
+
+  const formatDelta = (delta: number) => {
+    if (delta === 0) return null
+    const sign = delta > 0 ? '+' : ''
+    return `${sign}${delta}`
   }
 
   if (loading || !riskPosture) {
@@ -309,8 +330,15 @@ export default function ExecutiveSnapshotPage() {
                     <span className="text-xs text-white/50 uppercase tracking-wide">High Risk</span>
                   </div>
                 </div>
-                <div className={`text-3xl font-bold mb-1 ${riskPosture.high_risk_jobs > 0 ? 'text-red-200' : 'text-white'}`}>
-                  {riskPosture.high_risk_jobs}
+                <div className="flex items-baseline gap-2 mb-1">
+                  <span className={`text-3xl font-bold ${riskPosture.high_risk_jobs > 0 ? 'text-red-200' : 'text-white'}`}>
+                    {riskPosture.high_risk_jobs}
+                  </span>
+                  {riskPosture.deltas && riskPosture.deltas.high_risk_jobs !== 0 && (
+                    <span className={`text-sm font-medium ${riskPosture.deltas.high_risk_jobs > 0 ? 'text-red-400' : 'text-green-400'}`}>
+                      {formatDelta(riskPosture.deltas.high_risk_jobs)}
+                    </span>
+                  )}
                 </div>
                 <div className="text-sm text-white/60">
                   {riskPosture.high_risk_jobs === 0 
@@ -347,8 +375,15 @@ export default function ExecutiveSnapshotPage() {
                     <span className="text-xs text-white/50 uppercase tracking-wide">Incidents</span>
                   </div>
                 </div>
-                <div className={`text-3xl font-bold mb-1 ${riskPosture.open_incidents > 0 ? 'text-orange-200' : 'text-white'}`}>
-                  {riskPosture.open_incidents}
+                <div className="flex items-baseline gap-2">
+                  <span className={`text-3xl font-bold ${riskPosture.open_incidents > 0 ? 'text-orange-200' : 'text-white'}`}>
+                    {riskPosture.open_incidents}
+                  </span>
+                  {riskPosture.deltas && riskPosture.deltas.open_incidents !== 0 && (
+                    <span className={`text-sm font-medium ${riskPosture.deltas.open_incidents > 0 ? 'text-orange-400' : 'text-green-400'}`}>
+                      {formatDelta(riskPosture.deltas.open_incidents)}
+                    </span>
+                  )}
                 </div>
                 <div className="text-sm text-white/60">
                   {riskPosture.open_incidents === 0
@@ -385,8 +420,15 @@ export default function ExecutiveSnapshotPage() {
                     <span className="text-xs text-white/50 uppercase tracking-wide">Violations</span>
                   </div>
                 </div>
-                <div className={`text-3xl font-bold mb-1 ${riskPosture.recent_violations > 0 ? 'text-red-200' : 'text-white'}`}>
-                  {riskPosture.recent_violations}
+                <div className="flex items-baseline gap-2">
+                  <span className={`text-3xl font-bold ${riskPosture.recent_violations > 0 ? 'text-red-200' : 'text-white'}`}>
+                    {riskPosture.recent_violations}
+                  </span>
+                  {riskPosture.deltas && riskPosture.deltas.violations !== 0 && (
+                    <span className={`text-sm font-medium ${riskPosture.deltas.violations > 0 ? 'text-red-400' : 'text-green-400'}`}>
+                      {formatDelta(riskPosture.deltas.violations)}
+                    </span>
+                  )}
                 </div>
                 <div className="text-sm text-white/60">
                   {riskPosture.recent_violations === 0
@@ -434,7 +476,14 @@ export default function ExecutiveSnapshotPage() {
                     <span className="text-xs text-white/50 uppercase tracking-wide">Flagged</span>
                   </div>
                 </div>
-                <div className="text-3xl font-bold text-white mb-1">{riskPosture.flagged_jobs}</div>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-3xl font-bold text-white">{riskPosture.flagged_jobs}</span>
+                  {riskPosture.deltas && riskPosture.deltas.flagged_jobs !== 0 && (
+                    <span className={`text-sm font-medium ${riskPosture.deltas.flagged_jobs > 0 ? 'text-orange-400' : 'text-green-400'}`}>
+                      {formatDelta(riskPosture.deltas.flagged_jobs)}
+                    </span>
+                  )}
+                </div>
                 <div className="text-sm text-white/60">
                   {riskPosture.flagged_jobs === 0
                     ? 'All clear — no jobs flagged'
@@ -470,8 +519,15 @@ export default function ExecutiveSnapshotPage() {
                     <span className="text-xs text-white/50 uppercase tracking-wide">Pending</span>
                   </div>
                 </div>
-                <div className={`text-3xl font-bold mb-1 ${riskPosture.pending_signoffs > 3 ? 'text-yellow-200' : 'text-white'}`}>
-                  {riskPosture.pending_signoffs}
+                <div className="flex items-baseline gap-2">
+                  <span className={`text-3xl font-bold ${riskPosture.pending_signoffs > 3 ? 'text-yellow-200' : 'text-white'}`}>
+                    {riskPosture.pending_signoffs}
+                  </span>
+                  {riskPosture.deltas && riskPosture.deltas.pending_signoffs !== 0 && (
+                    <span className={`text-sm font-medium ${riskPosture.deltas.pending_signoffs > 0 ? 'text-yellow-400' : 'text-green-400'}`}>
+                      {formatDelta(riskPosture.deltas.pending_signoffs)}
+                    </span>
+                  )}
                 </div>
                 <div className="text-sm text-white/60">
                   {riskPosture.pending_signoffs === 0
@@ -506,7 +562,14 @@ export default function ExecutiveSnapshotPage() {
                     <span className="text-xs text-white/50 uppercase tracking-wide">Signed</span>
                   </div>
                 </div>
-                <div className="text-3xl font-bold text-white mb-1">{riskPosture.signed_jobs}</div>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-3xl font-bold text-white">{riskPosture.signed_jobs}</span>
+                  {riskPosture.deltas && riskPosture.deltas.signed_signoffs !== 0 && (
+                    <span className={`text-sm font-medium ${riskPosture.deltas.signed_signoffs > 0 ? 'text-green-400' : 'text-yellow-400'}`}>
+                      {formatDelta(riskPosture.deltas.signed_signoffs)}
+                    </span>
+                  )}
+                </div>
                 <div className="text-sm text-white/60">
                   {riskPosture.signed_jobs === 0
                     ? 'No completed attestations yet'
@@ -553,7 +616,14 @@ export default function ExecutiveSnapshotPage() {
                     <span className="text-xs text-white/50 uppercase tracking-wide">Proof Packs</span>
                   </div>
                 </div>
-                <div className="text-3xl font-bold text-white mb-1">{riskPosture.proof_packs_generated}</div>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-3xl font-bold text-white">{riskPosture.proof_packs_generated}</span>
+                  {riskPosture.deltas && riskPosture.deltas.proof_packs !== 0 && (
+                    <span className={`text-sm font-medium ${riskPosture.deltas.proof_packs > 0 ? 'text-green-400' : 'text-white/40'}`}>
+                      {formatDelta(riskPosture.deltas.proof_packs)}
+                    </span>
+                  )}
+                </div>
                 <div className="text-sm text-white/60">
                   {riskPosture.proof_packs_generated === 0
                     ? 'No proof packs generated yet'

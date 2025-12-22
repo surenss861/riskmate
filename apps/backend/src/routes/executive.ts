@@ -77,12 +77,78 @@ executiveRouter.get('/risk-posture', authenticate as unknown as express.RequestH
 
     if (jobsError) throw jobsError
 
-    // Count metrics
+    // Count metrics (current period)
     const highRiskJobs = (jobs || []).filter(j => j.risk_score !== null && j.risk_score > 75).length
     const flaggedJobs = (jobs || []).filter(j => j.review_flag === true).length
     const openIncidents = (jobs || []).filter(j => 
       j.status === 'incident' || (j.review_flag === true && j.risk_score !== null && j.risk_score > 75)
     ).length
+
+    // Compute previous period counts for deltas (only if time range is not "all")
+    let previousPeriodCounts = {
+      highRiskJobs: 0,
+      openIncidents: 0,
+      violations: 0,
+      flaggedJobs: 0,
+      pendingSignoffs: 0,
+      signedCount: 0,
+      proofPacks: 0,
+    }
+
+    if (dateCutoff && timeRangeValue !== 'all') {
+      // Calculate previous period dates
+      const periodDays = timeRangeValue === '7d' ? 7 : timeRangeValue === '30d' ? 30 : 90
+      const previousPeriodStart = new Date(dateCutoff)
+      previousPeriodStart.setDate(previousPeriodStart.getDate() - periodDays)
+      const previousPeriodEnd = dateCutoff
+
+      // Count jobs in previous period
+      const { data: prevJobs } = await supabase
+        .from('jobs')
+        .select('id, risk_score, risk_level, review_flag, status')
+        .eq('organization_id', organization_id)
+        .is('deleted_at', null)
+        .gte('created_at', previousPeriodStart.toISOString())
+        .lt('created_at', previousPeriodEnd.toISOString())
+
+      previousPeriodCounts.highRiskJobs = (prevJobs || []).filter(j => j.risk_score !== null && j.risk_score > 75).length
+      previousPeriodCounts.flaggedJobs = (prevJobs || []).filter(j => j.review_flag === true).length
+      previousPeriodCounts.openIncidents = (prevJobs || []).filter(j => 
+        j.status === 'incident' || (j.review_flag === true && j.risk_score !== null && j.risk_score > 75)
+      ).length
+
+      // Count violations in previous period
+      const { count: prevViolationsCount } = await supabase
+        .from('audit_logs')
+        .select('*', { count: 'exact', head: true })
+        .eq('organization_id', organization_id)
+        .eq('event_type', 'auth.role_violation')
+        .gte('created_at', previousPeriodStart.toISOString())
+        .lt('created_at', previousPeriodEnd.toISOString())
+      previousPeriodCounts.violations = prevViolationsCount || 0
+
+      // Count proof packs in previous period
+      const { count: prevProofPacksCount } = await supabase
+        .from('audit_logs')
+        .select('*', { count: 'exact', head: true })
+        .eq('organization_id', organization_id)
+        .like('event_type', 'proof_pack.%')
+        .gte('created_at', previousPeriodStart.toISOString())
+        .lt('created_at', previousPeriodEnd.toISOString())
+      previousPeriodCounts.proofPacks = prevProofPacksCount || 0
+
+      // Count signoffs in previous period
+      if (prevJobs && prevJobs.length > 0) {
+        const { data: prevSignoffs } = await supabase
+          .from('job_signoffs')
+          .select('job_id, status')
+          .in('job_id', prevJobs.map(j => j.id))
+
+        const prevSigned = (prevSignoffs || []).filter(s => s.status === 'signed').length
+        previousPeriodCounts.signedCount = prevSigned
+        previousPeriodCounts.pendingSignoffs = prevJobs.length - prevSigned
+      }
+    }
 
     // Count sign-offs (only if there are jobs)
     let signedCount = 0
@@ -139,32 +205,63 @@ executiveRouter.get('/risk-posture', authenticate as unknown as express.RequestH
       .limit(1)
       .maybeSingle() // Use maybeSingle() instead of single() to handle no results
 
-    // Verify ledger integrity (check hash chain)
-    const { data: integrityCheck, error: integrityError } = await supabase
+    // Verify ledger integrity (check hash chain) - deterministic check
+    const { data: allLogs, error: integrityError } = await supabase
       .from('audit_logs')
-      .select('id, hash, prev_hash')
+      .select('id, hash, prev_hash, created_at')
       .eq('organization_id', organization_id)
       .order('created_at', { ascending: true })
-      .limit(100) // Sample check
 
-    let ledgerIntegrity: 'verified' | 'pending' | 'error' = 'verified'
-    if (integrityError) {
-      console.warn('Failed to check ledger integrity:', integrityError)
-      ledgerIntegrity = 'pending'
-    } else if (integrityCheck && integrityCheck.length > 0) {
-      // Simple integrity check: verify prev_hash links exist
-      const hashes = new Set(integrityCheck.map((e: any) => e.hash).filter(Boolean))
-      const brokenLinks = integrityCheck.filter((e: any) => 
-        e.prev_hash !== null && e.prev_hash !== undefined && !hashes.has(e.prev_hash)
-      )
-      if (brokenLinks.length > 0) {
-        ledgerIntegrity = 'error'
-      } else {
-        ledgerIntegrity = 'verified'
+    let ledgerIntegrity: 'verified' | 'error' | 'not_verified' = 'not_verified'
+    let lastVerifiedAt: string | null = null
+    let verifiedThroughEventId: string | null = null
+
+    if (!integrityError && allLogs && allLogs.length > 0) {
+      // Verify hash chain: each log's prev_hash should match the previous log's hash
+      let isVerified = true
+      let lastGoodIndex = -1
+
+      for (let i = 1; i < allLogs.length; i++) {
+        const current = allLogs[i]
+        const previous = allLogs[i - 1]
+
+        // Skip if prev_hash is null (first log) or if either hash is missing
+        if (!current.prev_hash || !previous.hash) {
+          if (i === 1 && !current.prev_hash) {
+            // First log can have null prev_hash - that's fine
+            lastGoodIndex = i
+            continue
+          }
+          // Missing hashes indicate incomplete verification
+          isVerified = false
+          break
+        }
+
+        // Check if prev_hash matches previous log's hash
+        if (current.prev_hash !== previous.hash) {
+          isVerified = false
+          break
+        }
+
+        lastGoodIndex = i
       }
-    } else {
-      // No audit logs yet
-      ledgerIntegrity = 'pending'
+
+      if (isVerified && lastGoodIndex >= 0) {
+        ledgerIntegrity = 'verified'
+        lastVerifiedAt = new Date().toISOString() // Verification just completed
+        verifiedThroughEventId = allLogs[lastGoodIndex].id
+      } else if (lastGoodIndex >= 0) {
+        // Found a mismatch
+        ledgerIntegrity = 'error'
+        lastVerifiedAt = new Date().toISOString()
+        verifiedThroughEventId = lastGoodIndex > 0 ? allLogs[lastGoodIndex - 1].id : null
+      } else {
+        // No logs to verify or incomplete chain
+        ledgerIntegrity = 'not_verified'
+      }
+    } else if (integrityError) {
+      ledgerIntegrity = 'error'
+      lastVerifiedAt = new Date().toISOString()
     }
 
     // Compute exposure level
@@ -236,7 +333,7 @@ executiveRouter.get('/risk-posture', authenticate as unknown as express.RequestH
           key: 'MISSING_EVIDENCE.HIGH_RISK',
           label: 'Missing evidence on high-risk records',
           count: highRiskJobIds.length,
-          href: '/operations/audit/readiness?category=evidence&severity=high',
+          href: `/operations/audit/readiness?category=evidence&severity=high${dateCutoff ? `&time_range=${timeRangeValue}` : ''}`,
         })
       }
 
@@ -247,7 +344,7 @@ executiveRouter.get('/risk-posture', authenticate as unknown as express.RequestH
           key: 'INCIDENT.OPEN',
           label: 'Open incidents requiring resolution',
           count: incidentJobs.length,
-          href: '/operations/audit?view=incident-review&status=open',
+          href: `/operations/audit?view=incident-review&status=open${dateCutoff ? `&time_range=${timeRangeValue}` : ''}`,
         })
       }
 
@@ -280,7 +377,15 @@ executiveRouter.get('/risk-posture', authenticate as unknown as express.RequestH
             key: `VIOLATION.${topReason[0]}`,
             label: `${reasonLabel} blocked`,
             count: topReason[1],
-            href: '/operations/audit?tab=governance&outcome=blocked',
+            href: `/operations/audit?tab=governance&outcome=blocked${dateCutoff ? `&time_range=${timeRangeValue}` : ''}`,
+          })
+        } else {
+          // Fallback: unknown violation
+          drivers.violations.push({
+            key: 'VIOLATION.UNKNOWN',
+            label: 'Unknown action blocked',
+            count: violations.length,
+            href: `/operations/audit?tab=governance&outcome=blocked${dateCutoff ? `&time_range=${timeRangeValue}` : ''}`,
           })
         }
       }
@@ -292,7 +397,7 @@ executiveRouter.get('/risk-posture', authenticate as unknown as express.RequestH
           key: 'FLAGGED.REVIEW_REQUIRED',
           label: 'Jobs flagged for safety review',
           count: flaggedJobIds.length,
-          href: '/operations/audit?view=review-queue',
+          href: `/operations/audit?view=review-queue${dateCutoff ? `&time_range=${timeRangeValue}` : ''}`,
         })
       }
 
@@ -310,7 +415,7 @@ executiveRouter.get('/risk-posture', authenticate as unknown as express.RequestH
             key: 'PENDING.ATTESTATIONS',
             label: 'Attestations overdue',
             count: pendingCount,
-            href: '/operations/audit/readiness?category=attestations&status=open',
+            href: `/operations/audit/readiness?category=attestations&status=open${dateCutoff ? `&time_range=${timeRangeValue}` : ''}`,
           })
         }
       }
@@ -321,7 +426,7 @@ executiveRouter.get('/risk-posture', authenticate as unknown as express.RequestH
           key: 'SIGNED.COMPLETED',
           label: 'Completed attestations',
           count: signedCount,
-          href: '/operations/audit?tab=operations&event_name=signoff&status=signed',
+          href: `/operations/audit?tab=operations&event_name=signoff&status=signed${dateCutoff ? `&time_range=${timeRangeValue}` : ''}`,
         })
       }
 
@@ -331,7 +436,7 @@ executiveRouter.get('/risk-posture', authenticate as unknown as express.RequestH
           key: 'PROOF_PACKS.GENERATED',
           label: 'Proof packs generated',
           count: proofPacksCount,
-          href: '/operations/audit?view=insurance-ready',
+          href: `/operations/audit?view=insurance-ready${dateCutoff ? `&time_range=${timeRangeValue}` : ''}`,
         })
       } else {
         drivers.proofPacks.push({
@@ -358,6 +463,8 @@ executiveRouter.get('/risk-posture', authenticate as unknown as express.RequestH
       last_material_event_at: lastMaterialEvent?.created_at || null,
       confidence_statement: confidenceStatement,
       ledger_integrity: ledgerIntegrity,
+      ledger_integrity_last_verified_at: lastVerifiedAt,
+      ledger_integrity_verified_through_event_id: verifiedThroughEventId,
       // Raw counts for cards
       flagged_jobs: flaggedJobs,
       signed_jobs: signedCount,
@@ -365,6 +472,16 @@ executiveRouter.get('/risk-posture', authenticate as unknown as express.RequestH
       recent_violations: violationsCount || 0,
       // Top drivers
       drivers: topDrivers,
+      // Deltas (change from previous period)
+      deltas: {
+        high_risk_jobs: highRiskJobs - previousPeriodCounts.highRiskJobs,
+        open_incidents: openIncidents - previousPeriodCounts.openIncidents,
+        violations: (violationsCount || 0) - previousPeriodCounts.violations,
+        flagged_jobs: flaggedJobs - previousPeriodCounts.flaggedJobs,
+        pending_signoffs: pendingSignoffs - previousPeriodCounts.pendingSignoffs,
+        signed_signoffs: signedCount - previousPeriodCounts.signedCount,
+        proof_packs: (proofPacksCount || 0) - previousPeriodCounts.proofPacks,
+      },
     }
 
     // Cache the result with provenance (cache key includes time_range)

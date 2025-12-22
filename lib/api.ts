@@ -629,7 +629,9 @@ export const executiveApi = {
         proof_packs_generated: number
         last_material_event_at: string | null
         confidence_statement: string
-        ledger_integrity: 'verified' | 'pending' | 'error'
+        ledger_integrity: 'verified' | 'error' | 'not_verified'
+        ledger_integrity_last_verified_at: string | null
+        ledger_integrity_verified_through_event_id: string | null
         flagged_jobs: number
         signed_jobs: number
         unsigned_jobs: number
@@ -642,6 +644,15 @@ export const executiveApi = {
           pending: Array<{ key: string; label: string; count: number; href?: string }>
           signed: Array<{ key: string; label: string; count: number; href?: string }>
           proofPacks: Array<{ key: string; label: string; count: number; href?: string }>
+        }
+        deltas: {
+          high_risk_jobs: number
+          open_incidents: number
+          violations: number
+          flagged_jobs: number
+          pending_signoffs: number
+          signed_signoffs: number
+          proof_packs: number
         }
       }
     }>(`/api/executive/risk-posture${queryParams}`)
