@@ -50,20 +50,12 @@ export function EvidenceWidget({
     : Math.round((jobsWithPhotoEvidence / jobsTotal) * 100);
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 24 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.35 }}
-      className="relative overflow-hidden rounded-[30px] border border-white/10 bg-black/45 p-8 shadow-[0_32px_100px_rgba(8,8,20,0.6)] backdrop-blur-2xl"
-    >
-      <span className="pointer-events-none absolute -right-36 -top-36 h-64 w-64 rounded-full bg-[#F97316]/25 blur-[180px]" />
-      <span className="pointer-events-none absolute -left-28 bottom-[-90px] h-56 w-56 rounded-full bg-[#38BDF8]/20 blur-[150px]" />
-
-      <div className="flex flex-col gap-8 md:flex-row md:items-center md:justify-between">
+    <div className="relative">
+      <div className="mb-6">
+        <h3 className="text-xl font-bold font-display text-white mb-2">Evidence Health</h3>
+      </div>
+      <div className="flex flex-col gap-8">
         <div>
-          <p className="text-xs uppercase tracking-[0.34em] text-white/45">
-            Evidence Health
-          </p>
           {jobsTotal === 0 ? (
             <>
               <div className="text-3xl font-bold font-display text-white mb-3">
@@ -87,20 +79,21 @@ export function EvidenceWidget({
             </>
           )}
 
-          <div className="mt-6 flex flex-wrap gap-8 text-sm text-white/65">
+          <div className="mt-8 pt-8 border-t border-white/10 flex flex-wrap gap-8 text-sm">
             <div>
-              <span className="block text-[0.7rem] uppercase tracking-[0.22em] text-white/40">
+            <div>
+              <span className="block text-xs text-white/50 mb-1">
                 Evidence Files
               </span>
-              <span className="mt-1 text-xl font-semibold text-white">
+              <span className="text-xl font-semibold text-white">
                 {isLoading ? '—' : evidenceCount}
               </span>
             </div>
             <div>
-              <span className="block text-[0.7rem] uppercase tracking-[0.22em] text-white/40">
+              <span className="block text-xs text-white/50 mb-1">
                 Avg time to first photo
               </span>
-              <span className="mt-1 text-xl font-semibold text-white">
+              <span className="text-xl font-semibold text-white">
                 {isLoading ? '—' : avg_time_to_first_photo_minutes 
                   ? formatHoursToHuman(avg_time_to_first_photo_minutes / 60)
                   : avgTimeToFirstEvidenceHours > 0
@@ -109,57 +102,17 @@ export function EvidenceWidget({
               </span>
             </div>
             <div>
-              <span className="block text-[0.7rem] uppercase tracking-[0.22em] text-white/40">
+              <span className="block text-xs text-white/50 mb-1">
                 Jobs missing evidence
               </span>
               <Link 
                 href={`/operations/jobs?missing_evidence=true&time_range=${timeRange}`}
-                className="block mt-1 text-xl font-semibold text-white hover:text-[#F97316] transition-colors"
+                className="text-xl font-semibold text-white hover:text-[#F97316] transition-colors"
               >
                 {isLoading ? '—' : jobsMissingEvidence}
               </Link>
             </div>
           </div>
-        </div>
-
-        <div className="relative flex h-36 w-36 items-center justify-center">
-          <svg className="h-full w-full" viewBox="0 0 120 120">
-            <defs>
-              <linearGradient id="evidenceGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#F97316" />
-                <stop offset="100%" stopColor="#38BDF8" />
-              </linearGradient>
-            </defs>
-            <circle
-              cx="60"
-              cy="60"
-              r="52"
-              stroke="rgba(255,255,255,0.08)"
-              strokeWidth="8"
-              fill="none"
-            />
-            <circle
-              cx="60"
-              cy="60"
-              r="52"
-              stroke="url(#evidenceGradient)"
-              strokeWidth="8"
-              fill="none"
-              strokeDasharray={Math.PI * 2 * 52}
-              strokeDashoffset={((100 - percent) / 100) * Math.PI * 2 * 52}
-              strokeLinecap="round"
-            />
-          </svg>
-          <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="text-2xl font-semibold text-white">
-              {isLoading ? '—' : `${percent}%`}
-            </span>
-            <span className="text-[0.72rem] uppercase tracking-[0.18em] text-white/50">
-              Evidence
-            </span>
-          </div>
-
-          <div className="absolute inset-0 rounded-full border border-white/10" />
         </div>
       </div>
     </div>
