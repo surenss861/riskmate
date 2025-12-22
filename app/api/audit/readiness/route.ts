@@ -188,6 +188,10 @@ export async function GET(request: NextRequest) {
               status: 'open',
               why_it_matters: `High-risk work records require evidence documentation for audit defensibility and insurance compliance. Missing evidence increases audit exposure and may impact claims processing.`,
               fix_action_type: 'upload_evidence',
+              metadata: {
+                evidence_types: ['document', 'photo'], // Default types needed
+                risk_score: job.risk_score,
+              },
               created_at: job.created_at,
             })
           }
@@ -336,6 +340,9 @@ export async function GET(request: NextRequest) {
                 ownerName = ownerData?.full_name || ownerData?.email
               }
 
+              // Get control names for inline context
+              const controlNames = overdueControls.slice(0, 3).map((c: any) => c.title || 'Untitled Control')
+
               items.push({
                 id: `control-overdue-${job.id}`,
                 rule_code: isCritical ? 'CONTROL.OVERDUE.CRITICAL' : 'CONTROL.OVERDUE.MATERIAL',
@@ -357,6 +364,8 @@ export async function GET(request: NextRequest) {
                 metadata: {
                   overdue_count: overdueControls.length,
                   control_ids: overdueControls.map((c: any) => c.id),
+                  control_names: controlNames,
+                  risk_score: job.risk_score,
                 },
                 created_at: job.created_at,
               })

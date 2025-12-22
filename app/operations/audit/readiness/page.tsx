@@ -6,10 +6,11 @@ import { AlertTriangle, CheckCircle, Clock, FileText, Shield, User, XCircle, Upl
 import ProtectedRoute from '@/components/ProtectedRoute'
 import { cardStyles, buttonStyles, typography } from '@/lib/styles/design-system'
 import { DashboardNavbar } from '@/components/dashboard/DashboardNavbar'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { terms } from '@/lib/terms'
 import { UploadEvidenceModal } from '@/components/audit/UploadEvidenceModal'
 import { RequestAttestationModal } from '@/components/audit/RequestAttestationModal'
+import { FixQueueSidebar } from '@/components/audit/FixQueueSidebar'
 
 type ReadinessCategory = 'evidence' | 'controls' | 'attestations' | 'incidents' | 'access'
 type ReadinessSeverity = 'critical' | 'material' | 'info'
@@ -102,12 +103,28 @@ function fixActionLabel(type: FixActionType): string {
 export default function AuditReadinessPage() {
   const router = useRouter()
 
-  // Filters & Tabs
+  // Initialize from URL params or defaults (read from window.location on mount)
   const [category, setCategory] = useState<ReadinessCategory>('evidence')
   const [timeRange, setTimeRange] = useState('30d')
   const [severity, setSeverity] = useState<ReadinessSeverity | 'all'>('all')
   const [status, setStatus] = useState<'open' | 'in_progress' | 'waived' | 'resolved' | 'all'>('open')
   const [sort, setSort] = useState<'severity' | 'oldest' | 'score'>('severity')
+
+  // Read URL params on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search)
+      if (params.get('category')) setCategory(params.get('category') as ReadinessCategory)
+      if (params.get('time_range')) setTimeRange(params.get('time_range') || '30d')
+      if (params.get('severity')) setSeverity(params.get('severity') as ReadinessSeverity | 'all')
+      if (params.get('status')) setStatus(params.get('status') as typeof status)
+      if (params.get('sort')) setSort(params.get('sort') as typeof sort)
+    }
+  }, [])
+
+  // Fix Queue state
+  const [fixQueue, setFixQueue] = useState<ReadinessItem[]>([])
+  const [fixQueueOpen, setFixQueueOpen] = useState(false)
 
   // Data state
   const [loading, setLoading] = useState(true)
@@ -119,6 +136,19 @@ export default function AuditReadinessPage() {
   const [showUploadEvidence, setShowUploadEvidence] = useState(false)
   const [showRequestAttestation, setShowRequestAttestation] = useState(false)
   const [exportingPack, setExportingPack] = useState(false)
+
+  // Sync filters to URL
+  useEffect(() => {
+    const params = new URLSearchParams()
+    if (category && category !== 'evidence') params.set('category', category)
+    if (timeRange && timeRange !== '30d') params.set('time_range', timeRange)
+    if (severity && severity !== 'all') params.set('severity', severity)
+    if (status && status !== 'open') params.set('status', status)
+    if (sort && sort !== 'severity') params.set('sort', sort)
+
+    const newUrl = params.toString() ? `?${params.toString()}` : window.location.pathname
+    window.history.replaceState({}, '', newUrl)
+  }, [category, timeRange, severity, status, sort])
 
   const query = useMemo(() => {
     return buildQuery({
@@ -185,10 +215,48 @@ export default function AuditReadinessPage() {
     }
   }
 
+  const handleAddToQueue = (item: ReadinessItem) => {
+    // Add to queue if not already there
+    if (!fixQueue.find(q => q.id === item.id)) {
+      setFixQueue([...fixQueue, item])
+      setFixQueueOpen(true)
+    }
+  }
+
+  const handleRemoveFromQueue = (id: string) => {
+    setFixQueue(fixQueue.filter(q => q.id !== id))
+  }
+
+  const handleClearQueue = () => {
+    setFixQueue([])
+  }
+
   const handleModalComplete = () => {
     setShowUploadEvidence(false)
     setShowRequestAttestation(false)
+    
+    // Optimistically remove resolved item from queue if present
+    if (activeItem) {
+      setFixQueue(prev => prev.filter(q => q.id !== activeItem.id))
+    }
+    
     setActiveItem(null)
+    
+    // Optimistic UI update: remove resolved item from list immediately
+    if (activeItem && data) {
+      setData({
+        ...data,
+        items: data.items.filter(i => i.id !== activeItem.id),
+        summary: {
+          ...data.summary,
+          total_items: data.summary.total_items - 1,
+          [activeItem.severity === 'critical' ? 'critical_blockers' : activeItem.severity === 'material' ? 'material' : 'info']: 
+            Math.max(0, (data.summary[activeItem.severity === 'critical' ? 'critical_blockers' : activeItem.severity === 'material' ? 'material' : 'info'] || 0) - 1),
+        },
+      })
+    }
+    
+    // Refetch in background to sync with backend
     loadReadinessData()
   }
 
@@ -304,6 +372,12 @@ export default function AuditReadinessPage() {
                   ? `${Math.ceil(summary.estimated_time_to_clear_hours)}h`
                   : '—'}
               </div>
+              {summary?.estimated_time_to_clear_hours && summary.estimated_time_to_clear_hours > 0 && (
+                <div className="text-xs text-white/50 mt-1">
+                  {summary.category_breakdown.evidence > 0 && `Evidence: ~${Math.ceil(summary.category_breakdown.evidence * 0.5)}h `}
+                  {summary.category_breakdown.controls > 0 && `Controls: ~${Math.ceil(summary.category_breakdown.controls * 1)}h`}
+                </div>
+              )}
             </div>
             <div className={cardStyles.base + ' p-4 border-blue-500/30 bg-blue-500/10'}>
               <div className="text-sm text-white/60 mb-1">Oldest Overdue</div>
@@ -575,6 +649,26 @@ export default function AuditReadinessPage() {
             </div>
           </div>
         </div>
+
+        {/* Fix Queue Sidebar */}
+        <FixQueueSidebar
+          isOpen={fixQueueOpen}
+          items={fixQueue}
+          onRemove={handleRemoveFromQueue}
+          onClear={handleClearQueue}
+          onFix={handleFix}
+        />
+
+        {/* Fix Queue Toggle Button */}
+        {fixQueue.length > 0 && (
+          <button
+            onClick={() => setFixQueueOpen(!fixQueueOpen)}
+            className="fixed right-4 bottom-4 bg-[#F97316] text-black px-4 py-2 rounded-lg font-semibold shadow-lg hover:bg-[#FB923C] transition-colors flex items-center gap-2 z-30"
+          >
+            <CheckSquare className="w-5 h-5" />
+            Fix Queue ({fixQueue.length})
+          </button>
+        )}
       </div>
 
       {/* Modals */}
