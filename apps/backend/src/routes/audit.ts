@@ -405,11 +405,14 @@ auditRouter.get('/events', authenticate as unknown as express.RequestHandler, as
       .order('created_at', { ascending: false })
 
     // Apply unified audit filters (same logic as exports/readiness)
-    // Note: Only pass defined filters (avoid undefined values)
+    // Note: Don't filter by category at DB level if it's a main tab (governance/operations/access)
+    // We'll filter by category_tab in memory after enrichment to handle old events correctly
+    const isMainTabCategory = category && ['governance', 'operations', 'access'].includes(category as string)
     try {
       query = applyAuditFilters(query, {
         organizationId: organization_id,
-        ...(category && { category: category as any }),
+        // Only pass category to DB filter if it's NOT a main tab (let in-memory filtering handle main tabs)
+        ...(category && !isMainTabCategory && { category: category as any }),
         ...(site_id && { site_id: site_id as string }),
         ...(job_id && { job_id: job_id as string }),
         ...(actor_id && { actor_id: actor_id as string }),
