@@ -27,15 +27,18 @@ interface RiskPosture {
   recent_violations: number
 }
 
+type TimeRange = '7d' | '30d' | '90d' | 'all'
+
 export default function ExecutiveSnapshotPage() {
   const [loading, setLoading] = useState(true)
   const [riskPosture, setRiskPosture] = useState<RiskPosture | null>(null)
   const [user, setUser] = useState<any>(null)
   const [hoveredCard, setHoveredCard] = useState<string | null>(null)
+  const [timeRange, setTimeRange] = useState<TimeRange>('30d')
 
   useEffect(() => {
     loadRiskPosture()
-  }, [])
+  }, [timeRange])
 
   const loadRiskPosture = async () => {
     try {
@@ -198,15 +201,30 @@ export default function ExecutiveSnapshotPage() {
             transition={{ duration: 0.45 }}
             className="mb-8"
           >
-            <div className="flex items-center gap-3 mb-4">
-              <Lock className="w-6 h-6 text-[#F97316]" />
-              <div>
-                <p className="text-xs uppercase tracking-[0.42em] text-white/50">
-                  Executive View
-                </p>
-                <h1 className={`${typography.h1} mt-2`}>
-                  Organizational Risk Posture
-                </h1>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <Lock className="w-6 h-6 text-[#F97316]" />
+                <div>
+                  <p className="text-xs uppercase tracking-[0.42em] text-white/50">
+                    Executive View
+                  </p>
+                  <h1 className={`${typography.h1} mt-2`}>
+                    Organizational Risk Posture
+                  </h1>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <label className="text-sm text-white/60">Time Range:</label>
+                <select
+                  value={timeRange}
+                  onChange={(e) => setTimeRange(e.target.value as TimeRange)}
+                  className="bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white text-sm focus:outline-none focus:border-[#F97316]"
+                >
+                  <option value="7d">Last 7 days</option>
+                  <option value="30d">Last 30 days</option>
+                  <option value="90d">Last 90 days</option>
+                  <option value="all">All time</option>
+                </select>
               </div>
             </div>
             <p className="text-white/60 max-w-2xl">
@@ -269,7 +287,7 @@ export default function ExecutiveSnapshotPage() {
                 className={`${cardStyles.base} p-6 cursor-pointer hover:border-red-500/40 transition-all ${
                   riskPosture.high_risk_jobs > 0 ? 'bg-red-500/5 border-red-500/30' : ''
                 }`}
-                onClick={() => window.location.href = '/operations/audit?view=review-queue&severity=material'}
+                onClick={() => window.location.href = '/operations/jobs?risk_level=high'}
                 onMouseEnter={() => setHoveredCard('high-risk')}
                 onMouseLeave={() => setHoveredCard(null)}
               >
@@ -287,8 +305,8 @@ export default function ExecutiveSnapshotPage() {
                 </div>
                 <div className="text-sm text-white/60">
                   {riskPosture.high_risk_jobs === 0 
-                    ? 'No high-risk jobs recorded in governance record'
-                    : 'Jobs scoring above 75'}
+                    ? 'All clear — no high-risk jobs in range'
+                    : `${riskPosture.high_risk_jobs} job${riskPosture.high_risk_jobs > 1 ? 's' : ''} scoring above 75`}
                 </div>
                 {hoveredCard === 'high-risk' && (
                   <div className="mt-3 pt-3 border-t border-white/10 text-xs text-white/70">
@@ -302,7 +320,7 @@ export default function ExecutiveSnapshotPage() {
                 className={`${cardStyles.base} p-6 cursor-pointer hover:border-orange-500/40 transition-all ${
                   riskPosture.open_incidents > 0 ? 'bg-orange-500/5 border-orange-500/30' : ''
                 }`}
-                onClick={() => window.location.href = '/operations/audit?view=incident-review'}
+                onClick={() => window.location.href = '/operations/audit?view=incident-review&status=open'}
                 onMouseEnter={() => setHoveredCard('incidents')}
                 onMouseLeave={() => setHoveredCard(null)}
               >
@@ -320,8 +338,8 @@ export default function ExecutiveSnapshotPage() {
                 </div>
                 <div className="text-sm text-white/60">
                   {riskPosture.open_incidents === 0
-                    ? 'No open incidents recorded in governance record'
-                    : 'Active incidents requiring attention'}
+                    ? 'All clear — no open incidents'
+                    : `${riskPosture.open_incidents} active incident${riskPosture.open_incidents > 1 ? 's' : ''} requiring attention`}
                 </div>
                 {hoveredCard === 'incidents' && (
                   <div className="mt-3 pt-3 border-t border-white/10 text-xs text-white/70">
@@ -335,7 +353,7 @@ export default function ExecutiveSnapshotPage() {
                 className={`${cardStyles.base} p-6 cursor-pointer hover:border-red-500/40 transition-all ${
                   riskPosture.recent_violations > 0 ? 'bg-red-500/10 border-red-500/40 shadow-lg shadow-red-500/10' : ''
                 }`}
-                onClick={() => window.location.href = '/operations/audit?view=governance-enforcement'}
+                onClick={() => window.location.href = '/operations/audit?tab=governance&outcome=blocked'}
                 onMouseEnter={() => setHoveredCard('violations')}
                 onMouseLeave={() => setHoveredCard(null)}
               >
@@ -353,8 +371,8 @@ export default function ExecutiveSnapshotPage() {
                 </div>
                 <div className="text-sm text-white/60">
                   {riskPosture.recent_violations === 0
-                    ? 'No governance violations recorded (last 30 days)'
-                    : 'Role violations (last 30 days)'}
+                    ? 'All clear — no blocked violations'
+                    : `${riskPosture.recent_violations} blocked violation${riskPosture.recent_violations > 1 ? 's' : ''} (last 30 days)`}
                 </div>
                 {hoveredCard === 'violations' && (
                   <div className="mt-3 pt-3 border-t border-white/10 text-xs text-white/70">
@@ -395,8 +413,8 @@ export default function ExecutiveSnapshotPage() {
                 <div className="text-3xl font-bold text-white mb-1">{riskPosture.flagged_jobs}</div>
                 <div className="text-sm text-white/60">
                   {riskPosture.flagged_jobs === 0
-                    ? 'No jobs flagged for review in governance record'
-                    : 'Jobs flagged for review'}
+                    ? 'All clear — no jobs flagged'
+                    : `${riskPosture.flagged_jobs} job${riskPosture.flagged_jobs > 1 ? 's' : ''} flagged for review`}
                 </div>
                 {hoveredCard === 'flagged' && (
                   <div className="mt-3 pt-3 border-t border-white/10 text-xs text-white/70">
@@ -410,7 +428,7 @@ export default function ExecutiveSnapshotPage() {
                 className={`${cardStyles.base} p-6 cursor-pointer hover:border-yellow-500/40 transition-all ${
                   riskPosture.pending_signoffs > 3 ? 'bg-yellow-500/5 border-yellow-500/30' : ''
                 }`}
-                onClick={() => window.location.href = '/operations/audit?category=operations&event_name=signoff'}
+                onClick={() => window.location.href = '/operations/audit/readiness?category=attestations&status=open'}
                 onMouseEnter={() => setHoveredCard('pending-signoffs')}
                 onMouseLeave={() => setHoveredCard(null)}
               >
@@ -428,8 +446,8 @@ export default function ExecutiveSnapshotPage() {
                 </div>
                 <div className="text-sm text-white/60">
                   {riskPosture.pending_signoffs === 0
-                    ? 'No pending sign-offs recorded in governance record'
-                    : 'Jobs awaiting sign-offs'}
+                    ? 'All clear — no pending attestations'
+                    : `${riskPosture.pending_signoffs} job${riskPosture.pending_signoffs > 1 ? 's' : ''} awaiting attestations`}
                 </div>
                 {hoveredCard === 'pending-signoffs' && (
                   <div className="mt-3 pt-3 border-t border-white/10 text-xs text-white/70">
@@ -441,7 +459,7 @@ export default function ExecutiveSnapshotPage() {
               {/* Completed Sign-offs */}
               <div
                 className={`${cardStyles.base} p-6 cursor-pointer hover:border-green-500/40 transition-all`}
-                onClick={() => window.location.href = '/operations/audit?category=operations&event_name=signoff&status=signed'}
+                onClick={() => window.location.href = '/operations/audit?tab=operations&event_name=signoff&status=signed'}
                 onMouseEnter={() => setHoveredCard('signed')}
                 onMouseLeave={() => setHoveredCard(null)}
               >
@@ -457,8 +475,8 @@ export default function ExecutiveSnapshotPage() {
                 <div className="text-3xl font-bold text-white mb-1">{riskPosture.signed_jobs}</div>
                 <div className="text-sm text-white/60">
                   {riskPosture.signed_jobs === 0
-                    ? 'No completed sign-offs recorded in governance record'
-                    : 'Jobs with completed sign-offs'}
+                    ? 'No completed attestations yet'
+                    : `${riskPosture.signed_jobs} job${riskPosture.signed_jobs > 1 ? 's' : ''} with completed attestations`}
                 </div>
                 {hoveredCard === 'signed' && (
                   <div className="mt-3 pt-3 border-t border-white/10 text-xs text-white/70">
@@ -499,8 +517,8 @@ export default function ExecutiveSnapshotPage() {
                 <div className="text-3xl font-bold text-white mb-1">{riskPosture.proof_packs_generated}</div>
                 <div className="text-sm text-white/60">
                   {riskPosture.proof_packs_generated === 0
-                    ? 'No proof packs generated (last 30 days)'
-                    : 'Generated (last 30 days)'}
+                    ? 'No proof packs generated yet'
+                    : `${riskPosture.proof_packs_generated} pack${riskPosture.proof_packs_generated > 1 ? 's' : ''} generated (last 30 days)`}
                 </div>
                 {hoveredCard === 'proof-packs' && (
                   <div className="mt-3 pt-3 border-t border-white/10 text-xs text-white/70">
@@ -510,7 +528,16 @@ export default function ExecutiveSnapshotPage() {
               </div>
 
               {/* Last Governance Update */}
-              <div className={`${cardStyles.base} p-6`}>
+              <div 
+                className={`${cardStyles.base} p-6 cursor-pointer hover:border-blue-500/40 transition-all ${
+                  riskPosture.last_material_event_at ? '' : 'opacity-60'
+                }`}
+                onClick={() => {
+                  if (riskPosture.last_material_event_at) {
+                    window.location.href = '/operations/audit?tab=governance&severity=material'
+                  }
+                }}
+              >
                 <div className="flex items-center justify-between mb-4">
                   <Lock className="w-5 h-5 text-white/40" />
                   <span className="text-xs text-white/50 uppercase tracking-wide">Last Update</span>
@@ -520,7 +547,11 @@ export default function ExecutiveSnapshotPage() {
                     ? new Date(riskPosture.last_material_event_at).toLocaleDateString()
                     : 'No material events'}
                 </div>
-                <div className="text-sm text-white/60">Last material governance event</div>
+                <div className="text-sm text-white/60">
+                  {riskPosture.last_material_event_at
+                    ? 'Last material governance event'
+                    : 'No material events recorded yet'}
+                </div>
               </div>
 
               {/* Ledger Integrity Status */}
@@ -567,7 +598,7 @@ export default function ExecutiveSnapshotPage() {
                 Immutable, export-ready, insurer-safe
               </p>
               <a
-                href="/operations/audit?view=review-queue"
+                href="/operations/audit?tab=governance&time_range=90d&severity=material"
                 className={`${buttonStyles.primary} inline-flex items-center gap-2 text-base px-8 py-3`}
               >
                 View Compliance Ledger
