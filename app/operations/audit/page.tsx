@@ -2,13 +2,13 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { motion } from 'framer-motion'
 import { Download, Filter, Shield, AlertTriangle, User, Calendar, FileText, Clock, CheckCircle, XCircle, ExternalLink, ChevronDown, ChevronUp, Building2 } from 'lucide-react'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import { jobsApi, auditApi } from '@/lib/api'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
-import { cardStyles, buttonStyles, typography } from '@/lib/styles/design-system'
+import { typography } from '@/lib/styles/design-system'
 import { DashboardNavbar } from '@/components/dashboard/DashboardNavbar'
+import { AppBackground, AppShell, PageSection, GlassCard, Button, Select, PageHeader } from '@/components/shared'
 import { getEventMapping, categorizeEvent, type EventCategory, type EventSeverity, type EventOutcome } from '@/lib/audit/eventMapper'
 import { getIndustryLanguage } from '@/lib/audit/industryLanguage'
 import { SavedViewCards } from '@/components/audit/SavedViewCards'
@@ -1303,42 +1303,22 @@ export default function AuditViewPage() {
 
   return (
     <ProtectedRoute>
-      <div className="relative min-h-screen overflow-hidden bg-[#0A0A0A] text-white">
-        {/* Ambient Gradient Backdrop - Matching landing page */}
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 -z-10"
-        >
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(249,115,22,0.05),_transparent_55%)]" />
-        </div>
-
+      <AppBackground>
         <DashboardNavbar />
-        
-        <div className="relative max-w-7xl mx-auto px-6 pt-24 pb-14">
-          {/* Header */}
-          <div className="mb-8">
-            <div className="flex items-center gap-3 mb-4">
-              <Shield className="w-6 h-6 text-[#F97316]" />
-              <div>
-                <p className="text-xs uppercase tracking-[0.42em] text-white/50">
-                  {terms.complianceLedger.singular}
-                </p>
-                <h1 className={`${typography.h1} mt-2`}>
-                  {terms.complianceLedger.singular}
-                </h1>
-              </div>
-            </div>
-            <p className="text-white/60 max-w-2xl mb-4">
-              Immutable governance record of all actions, decisions, and evidence. This is your single source of truth for audits, claims, and disputes.
-            </p>
-            <div className="flex items-center gap-4 text-xs text-white/50 mb-2">
+        <AppShell>
+          <PageSection>
+            <PageHeader
+              title={terms.complianceLedger.singular}
+              subtitle="Immutable governance record of all actions, decisions, and evidence. This is your single source of truth for audits, claims, and disputes."
+            />
+            <div className="flex items-center gap-4 text-xs text-white/50 mt-4">
               <Shield className="w-4 h-4" />
               <span>Executive access is read-only by database policy. Oversight and authority are intentionally separated.</span>
             </div>
-            <div className="flex items-center gap-2 text-xs text-white/40 italic">
+            <div className="flex items-center gap-2 text-xs text-white/40 italic mt-2">
               <span>All {terms.workRecord.plural.toLowerCase()}, {terms.control.plural.toLowerCase()}, {terms.evidence.plural.toLowerCase()}, and {terms.attestation.plural.toLowerCase()} feed into this {terms.complianceLedger.singular}.</span>
             </div>
-          </div>
+          </PageSection>
 
           {/* Saved View Cards */}
           <SavedViewCards
@@ -1427,35 +1407,38 @@ export default function AuditViewPage() {
           )}
 
           {/* Summary Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
-            <div className={`${cardStyles.base} ${cardStyles.padding.sm} rounded-xl`}>
+          <PageSection>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            <GlassCard className="p-4">
               <div className="text-sm text-white/60 mb-1">Total Events</div>
               <div className="text-2xl font-bold text-white">{summaryMetrics.totalEvents}</div>
-            </div>
-            <div className={`${cardStyles.base} ${cardStyles.padding.sm} rounded-xl`}>
+            </GlassCard>
+            <GlassCard className="p-4">
               <div className="text-sm text-white/60 mb-1">Violations</div>
               <div className="text-2xl font-bold text-red-400">{summaryMetrics.governanceViolations}</div>
-            </div>
-            <div className={`${cardStyles.base} ${cardStyles.padding.sm} rounded-xl`}>
+            </GlassCard>
+            <GlassCard className="p-4">
               <div className="text-sm text-white/60 mb-1">{industryLang.job}s Touched</div>
               <div className="text-2xl font-bold text-[#F97316]">{summaryMetrics.highRiskJobsTouched}</div>
-            </div>
-            <div className={`${cardStyles.base} ${cardStyles.padding.sm} rounded-xl`}>
+            </GlassCard>
+            <GlassCard className="p-4">
               <div className="text-sm text-white/60 mb-1">{industryLang.proofPack}s</div>
               <div className="text-2xl font-bold text-green-400">{summaryMetrics.proofPacksGenerated}</div>
-            </div>
-            <div className={`${cardStyles.base} ${cardStyles.padding.sm} rounded-xl`}>
+            </GlassCard>
+            <GlassCard className="p-4">
               <div className="text-sm text-white/60 mb-1">Sign-offs</div>
               <div className="text-2xl font-bold text-blue-400">{summaryMetrics.signoffsRecorded}</div>
-            </div>
-            <div className={`${cardStyles.base} ${cardStyles.padding.sm} rounded-xl`}>
+            </GlassCard>
+            <GlassCard className="p-4">
               <div className="text-sm text-white/60 mb-1">Access Changes</div>
               <div className="text-2xl font-bold text-yellow-400">{summaryMetrics.accessChanges}</div>
-            </div>
+            </GlassCard>
           </div>
+          </PageSection>
 
           {/* Filters */}
-          <div className={`${cardStyles.base} ${cardStyles.padding.md} rounded-xl mb-6`}>
+          <PageSection>
+            <GlassCard className="p-6">
             <div className="flex items-center gap-4 mb-4">
               <Filter className="w-5 h-5 text-white/60" />
               <h2 className={`${typography.h2}`}>Filters</h2>
@@ -1463,50 +1446,46 @@ export default function AuditViewPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
               <div>
                 <label className="text-sm text-white/60 mb-2 block">Time Range</label>
-                <select
+                <Select
                   value={filters.timeRange}
                   onChange={(e) => setFilters({ ...filters, timeRange: e.target.value as TimeRange })}
-                  className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white"
                 >
                   <option value="24h">Last 24 hours</option>
                   <option value="7d">Last 7 days</option>
                   <option value="30d">Last 30 days</option>
                   <option value="all">All time</option>
-                </select>
+                </Select>
               </div>
               <div>
                 <label className="text-sm text-white/60 mb-2 block">Severity</label>
-                <select
+                <Select
                   value={filters.severity}
                   onChange={(e) => setFilters({ ...filters, severity: e.target.value as EventSeverity | '' })}
-                  className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white"
                 >
                   <option value="">All</option>
                   <option value="info">Info</option>
                   <option value="material">Material</option>
                   <option value="critical">Critical</option>
-                </select>
+                </Select>
               </div>
               <div>
                 <label className="text-sm text-white/60 mb-2 block">Outcome</label>
-                <select
+                <Select
                   value={filters.outcome}
                   onChange={(e) => setFilters({ ...filters, outcome: e.target.value as EventOutcome | '' })}
-                  className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white"
                 >
                   <option value="">All</option>
                   <option value="allowed">Allowed</option>
                   <option value="blocked">Blocked</option>
-                </select>
+                </Select>
               </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className="text-sm text-white/60 mb-2 block">{industryLang.job}</label>
-                <select
+                <Select
                   value={filters.job}
                   onChange={(e) => setFilters({ ...filters, job: e.target.value })}
-                  className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white"
                 >
                   <option value="">All {industryLang.job}s</option>
                   {jobs.map((job) => (
@@ -1514,14 +1493,13 @@ export default function AuditViewPage() {
                       {job.client_name}
                     </option>
                   ))}
-                </select>
+                </Select>
               </div>
               <div>
                 <label className="text-sm text-white/60 mb-2 block">User</label>
-                <select
+                <Select
                   value={filters.user}
                   onChange={(e) => setFilters({ ...filters, user: e.target.value })}
-                  className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white"
                 >
                   <option value="">All Users</option>
                   {users.map((user) => (
@@ -1529,15 +1507,14 @@ export default function AuditViewPage() {
                       {user.name || user.email} {user.role ? `(${user.role})` : ''}
                     </option>
                   ))}
-                </select>
+                </Select>
               </div>
               {sites.length > 0 && (
                 <div>
                   <label className="text-sm text-white/60 mb-2 block">Operational Context</label>
-                  <select
+                  <Select
                     value={filters.site}
                     onChange={(e) => setFilters({ ...filters, site: e.target.value })}
-                    className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white"
                   >
                     <option value="">All {industryLang.site}s</option>
                     {sites.map((site) => (
@@ -1545,11 +1522,12 @@ export default function AuditViewPage() {
                         {site.name}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 </div>
               )}
             </div>
-          </div>
+            </GlassCard>
+          </PageSection>
 
           {/* Tabs */}
           <div className="flex gap-4 mb-6 border-b border-white/10">
@@ -1589,7 +1567,8 @@ export default function AuditViewPage() {
           </div>
 
           {/* Events List */}
-          <div className={`${cardStyles.base} ${cardStyles.padding.md} rounded-xl`}>
+          <PageSection>
+            <GlassCard className="p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className={`${typography.h2}`}>
                 {activeTab === 'governance' && 'Governance Enforcement Events'}
@@ -1599,7 +1578,8 @@ export default function AuditViewPage() {
               <div className="flex items-center gap-4">
                 <span className="text-sm text-white/60">{filteredEvents.length} events</span>
                 <div className="flex items-center gap-2">
-                  <button
+                  <Button
+                    variant="secondary"
                     onClick={async () => {
                       try {
                         await auditApi.export({
@@ -1617,12 +1597,12 @@ export default function AuditViewPage() {
                         alert('Export failed. Please try again.')
                       }
                     }}
-                    className={`${buttonStyles.secondary} flex items-center gap-2`}
                   >
                     <Download className="w-4 h-4" />
                     Export CSV
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    variant="secondary"
                     onClick={async () => {
                       try {
                         await auditApi.export({
@@ -1640,11 +1620,10 @@ export default function AuditViewPage() {
                         alert('Export failed. Please try again.')
                       }
                     }}
-                    className={`${buttonStyles.secondary} flex items-center gap-2`}
                   >
                     <Download className="w-4 h-4" />
                     Export JSON
-                  </button>
+                  </Button>
                 </div>
               </div>
             </div>
@@ -1690,20 +1669,24 @@ export default function AuditViewPage() {
                     </>
                   )}
                   <div className="flex flex-wrap gap-2 justify-center">
-                    <button
+                    <Button
+                      variant="secondary"
+                      size="sm"
                       onClick={() => setFilters({ ...filters, timeRange: 'all' })}
-                      className={`${buttonStyles.secondary} ${buttonStyles.sizes.sm} text-xs`}
                     >
                       Show all time
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
                       onClick={() => setFilters({ ...filters, outcome: '', severity: '' })}
-                      className={`${buttonStyles.secondary} ${buttonStyles.sizes.sm} text-xs`}
                     >
                       Clear filters
-                    </button>
+                    </Button>
                     {process.env.NODE_ENV === 'development' && (
-                      <button
+                      <Button
+                        variant="secondary"
+                        size="sm"
                         onClick={async () => {
                           try {
                             const response = await fetch('/api/dev/generate-sample-events', {
@@ -1720,11 +1703,11 @@ export default function AuditViewPage() {
                             setToast({ message: 'Failed to generate sample events', type: 'error' })
                           }
                         }}
-                        className={`${buttonStyles.secondary} ${buttonStyles.sizes.sm} text-xs border-dashed`}
+                        className="border-dashed"
                         title="Dev only: Generate sample events for testing"
                       >
                         Generate Sample Events (Dev)
-                      </button>
+                      </Button>
                     )}
                   </div>
                 </div>
@@ -2086,20 +2069,22 @@ export default function AuditViewPage() {
                           {/* Review Queue Actions */}
                           {filters.savedView === 'review-queue' && needsAttention && (
                             <div className="mt-3 pt-3 border-t border-white/10 flex gap-2">
-                              <button
+                              <Button
+                                variant="secondary"
+                                size="sm"
                                 onClick={() => handleAssignClick(event)}
-                                className={`${buttonStyles.secondary} text-xs flex items-center gap-1`}
                               >
                                 <User className="w-3 h-3" />
                                 Assign
-                              </button>
-                              <button
+                              </Button>
+                              <Button
+                                variant="primary"
+                                size="sm"
                                 onClick={() => handleResolveClick(event)}
-                                className={`${buttonStyles.primary} text-xs flex items-center gap-1`}
                               >
                                 <CheckCircle className="w-3 h-3" />
                                 Resolve
-                              </button>
+                              </Button>
                             </div>
                           )}
                         </div>
@@ -2109,8 +2094,9 @@ export default function AuditViewPage() {
                 })}
               </div>
             )}
-          </div>
-        </div>
+          </GlassCard>
+          </PageSection>
+        </AppShell>
 
         {/* Evidence Drawer */}
         <EvidenceDrawer
