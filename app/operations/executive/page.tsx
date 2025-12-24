@@ -802,8 +802,6 @@ export default function ExecutiveSnapshotPage() {
                       document.body.removeChild(a)
                       URL.revokeObjectURL(url)
                     }}
-                    variant="secondary"
-                    size="sm"
                     className="inline-flex items-center gap-2"
                   >
                     Export JSON
