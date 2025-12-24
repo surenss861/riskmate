@@ -438,7 +438,7 @@ export default function ExecutiveSnapshotPage() {
                     Blocked actions indicate attempted unauthorized access. Each violation is logged and defensible.
                   </div>
                 )}
-              </div>
+              </GlassCard>
             </div>
           </PageSection>
 
@@ -487,7 +487,7 @@ export default function ExecutiveSnapshotPage() {
                     Flagged jobs require safety lead oversight. Review ensures accountability and defensibility.
                   </div>
                 )}
-              </div>
+              </GlassCard>
 
               {/* Pending Sign-offs */}
               <GlassCard
@@ -532,7 +532,7 @@ export default function ExecutiveSnapshotPage() {
                     Unsigned approvals weaken insurance and dispute defensibility.
                   </div>
                 )}
-              </div>
+              </GlassCard>
 
               {/* Completed Sign-offs */}
               <GlassCard
@@ -627,7 +627,7 @@ export default function ExecutiveSnapshotPage() {
                     Exportable proof bundles ready for insurer, regulator, or legal review.
                   </div>
                 )}
-              </div>
+              </GlassCard>
 
               {/* Last Governance Update */}
               <GlassCard
