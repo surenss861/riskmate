@@ -309,15 +309,11 @@ export default function ExecutiveSnapshotPage() {
                 <GlassCard
                   className={`p-6 cursor-pointer hover:border-red-500/40 transition-all ${
                     riskPosture.high_risk_jobs > 0 ? 'bg-red-500/5 border-red-500/30' : ''
-                }`}
+                  }`}
                   onClick={() => window.location.href = '/operations/jobs?risk_level=high'}
                   onMouseEnter={() => setHoveredCard('high-risk')}
                   onMouseLeave={() => setHoveredCard(null)}
                 >
-                onClick={() => window.location.href = '/operations/jobs?risk_level=high'}
-                onMouseEnter={() => setHoveredCard('high-risk')}
-                onMouseLeave={() => setHoveredCard(null)}
-              >
                 <div className="flex items-center justify-between mb-4">
                   <AlertTriangle className={`w-5 h-5 ${riskPosture.high_risk_jobs > 0 ? 'text-red-400' : 'text-white/40'}`} />
                   <div className="flex items-center gap-2">
@@ -577,17 +573,12 @@ export default function ExecutiveSnapshotPage() {
                     Completed sign-offs provide defensible proof of approval and accountability.
                   </div>
                 )}
-              </div>
+              </GlassCard>
             </div>
-          </motion.div>
+          </PageSection>
 
           {/* Whether proof exists */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.25 }}
-            className="mb-8"
-          >
+          <PageSection>
             <h2 className="text-sm font-semibold text-white/80 mb-4">
               Whether proof exists
             </h2>
