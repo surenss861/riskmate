@@ -657,7 +657,7 @@ export default function ExecutiveSnapshotPage() {
               </div>
 
               {/* Ledger Integrity Status */}
-              <div className={`${cardStyles.base} p-6 ${
+              <GlassCard className={`p-6 ${
                 riskPosture.ledger_integrity === 'verified' 
                   ? 'bg-green-500/5 border-green-500/30' 
                   : riskPosture.ledger_integrity === 'error'
