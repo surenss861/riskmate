@@ -8,7 +8,8 @@ import { InviteSuccessModal } from '@/components/dashboard/InviteSuccessModal'
 import { ConfirmModal } from '@/components/dashboard/ConfirmModal'
 import { teamApi } from '@/lib/api'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
-import { buttonStyles, cardStyles, typography, badgeStyles, emptyStateStyles, spacing } from '@/lib/styles/design-system'
+import { typography, emptyStateStyles, spacing } from '@/lib/styles/design-system'
+import { AppBackground, AppShell, PageSection, GlassCard, Button, Input, Select, PageHeader, Badge } from '@/components/shared'
 
 interface TeamMember {
   id: string
@@ -214,15 +215,17 @@ export default function TeamPage() {
   if (loading) {
     return (
       <ProtectedRoute>
-        <div className="min-h-screen bg-[#0A0A0A] text-white">
+        <AppBackground>
           <DashboardNavbar email={userEmail} onLogout={handleLogout} />
-          <div className="flex items-center justify-center min-h-[60vh]">
-            <div className="text-center space-y-4">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#F97316] mx-auto" />
-              <p className="text-white/60">Loading team...</p>
+          <AppShell>
+            <div className="flex items-center justify-center min-h-[60vh]">
+              <div className="text-center space-y-4">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#F97316] mx-auto" />
+                <p className="text-white/60">Loading team...</p>
+              </div>
             </div>
-          </div>
-        </div>
+          </AppShell>
+        </AppBackground>
       </ProtectedRoute>
     )
   }
@@ -230,40 +233,43 @@ export default function TeamPage() {
   if (!team) {
     return (
       <ProtectedRoute>
-        <div className="min-h-screen bg-[#0A0A0A] text-white">
+        <AppBackground>
           <DashboardNavbar email={userEmail} onLogout={handleLogout} />
-          <div className="flex items-center justify-center min-h-[60vh]">
-            <div className="text-center space-y-4">
-              <p className="text-white/70">{error || 'Failed to load team'}</p>
-              <button
-                onClick={() => router.push('/operations')}
-                className={`${buttonStyles.primary} ${buttonStyles.sizes.lg}`}
-              >
-                Back to Dashboard
-              </button>
+          <AppShell>
+            <div className="flex items-center justify-center min-h-[60vh]">
+              <div className="text-center space-y-4">
+                <p className="text-white/70">{error || 'Failed to load team'}</p>
+                <Button
+                  variant="primary"
+                  size="lg"
+                  onClick={() => router.push('/operations')}
+                >
+                  Back to Dashboard
+                </Button>
+              </div>
             </div>
-          </div>
-        </div>
+          </AppShell>
+        </AppBackground>
       </ProtectedRoute>
     )
   }
 
   return (
     <ProtectedRoute>
-      <div className="min-h-screen bg-[#0A0A0A] text-white">
+      <AppBackground>
         <DashboardNavbar email={userEmail} onLogout={handleLogout} />
+        <AppShell>
+          <PageSection>
+            <PageHeader
+              title="Access & Accountability"
+              subtitle="Define who can view, manage, and approve risk"
+            />
+          </PageSection>
 
-        <main className="mx-auto max-w-7xl px-6 pt-24 pb-14">
-          <div className={spacing.gap.relaxed}>
-            {/* Header */}
-            <div>
-              <h1 className={`${typography.h1} ${spacing.tight}`}>Access & Accountability</h1>
-              <p className="text-white/60">Define who can view, manage, and approve risk</p>
-            </div>
-
-            {/* Risk Coverage */}
-            {team.risk_coverage && (
-            <div className={`${cardStyles.base} ${cardStyles.padding.md}`}>
+          {/* Risk Coverage */}
+          {team.risk_coverage && (
+          <PageSection>
+            <GlassCard className="p-6">
                 <div className={`flex items-center justify-between ${spacing.normal} mb-4`}>
                   <h2 className="text-xl font-semibold text-white">Risk Coverage</h2>
                 </div>
@@ -304,18 +310,22 @@ export default function TeamPage() {
               </div>
                   </div>
               )}
-                </div>
-              )}
+            </GlassCard>
+          </PageSection>
+          )}
 
-            {/* Error Message */}
-            {error && (
-              <div className="bg-red-500/20 border border-red-500/30 rounded-lg p-4">
-                <p className="text-sm text-red-400">{error}</p>
-              </div>
-            )}
+          {/* Error Message */}
+          {error && (
+            <PageSection>
+            <div className="bg-red-500/20 border border-red-500/30 rounded-lg p-4">
+              <p className="text-sm text-red-400">{error}</p>
+            </div>
+            </PageSection>
+          )}
 
-            {/* Invite Form */}
-            <div className={`${cardStyles.base} ${cardStyles.padding.md}`}>
+          {/* Invite Form */}
+          <PageSection>
+            <GlassCard className="p-6">
               <h2 className={`${typography.h3} ${spacing.normal}`}>Invite Team Member</h2>
               <p className="text-xs text-white/50 mb-4">
                 Invited users inherit visibility based on role. All access is logged.
@@ -323,21 +333,19 @@ export default function TeamPage() {
               <form onSubmit={handleInvite} className={spacing.gap.normal}>
                 <div className={`grid grid-cols-1 md:grid-cols-3 ${spacing.gap.normal}`}>
                   <div className="md:col-span-2">
-                    <input
+                    <Input
                       type="email"
                       value={inviteEmail}
                       onChange={(e) => setInviteEmail(e.target.value)}
                       placeholder="Email address"
-                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-[#F97316]"
                       required
                       disabled={inviting || seatLimitReached}
                     />
                   </div>
                   <div>
-                    <select
+                    <Select
                       value={inviteRole}
                       onChange={(e) => setInviteRole(e.target.value as 'member' | 'admin' | 'safety_lead' | 'executive' | 'owner')}
-                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:border-[#F97316]"
                       disabled={inviting}
                     >
                       <option value="member">Member</option>
@@ -347,7 +355,7 @@ export default function TeamPage() {
                       {(team.current_user_role === 'owner') && (
                         <option value="owner">Owner</option>
                       )}
-                    </select>
+                    </Select>
                     <p className="text-xs text-white/40 mt-1">
                       {inviteRole === 'safety_lead' && 'Sees all flagged-for-review jobs automatically'}
                       {inviteRole === 'executive' && 'Read-only visibility into risk & trends'}
@@ -357,18 +365,20 @@ export default function TeamPage() {
                     </p>
                   </div>
                 </div>
-                <button
+                <Button
                   type="submit"
+                  variant="primary"
                   disabled={inviting || seatLimitReached}
-                  className="rounded-lg bg-[#F97316] px-6 py-3 text-black font-semibold hover:bg-[#FB923C] disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {inviting ? 'Sending...' : 'Send Invite'}
-                </button>
+                </Button>
               </form>
-            </div>
+            </GlassCard>
+          </PageSection>
 
-            {/* Team Members */}
-            <div className={`${cardStyles.base} ${cardStyles.padding.md}`}>
+          {/* Team Members */}
+          <PageSection>
+            <GlassCard className="p-6">
               <h2 className={`${typography.h3} ${spacing.normal}`}>Team Members</h2>
               {team.members.length === 0 ? (
                 <p className="text-white/60">No team members yet.</p>
@@ -384,13 +394,13 @@ export default function TeamPage() {
                           <div className="font-semibold text-white">
                             {member.full_name || member.email}
                           </div>
-                          <span className="px-2 py-1 text-xs font-semibold rounded-full bg-white/10 text-white/70" title={getRoleDescription(member.role)}>
+                          <Badge variant="neutral" title={getRoleDescription(member.role)}>
                             {getRoleLabel(member.role)}
-                          </span>
+                          </Badge>
                           {member.must_reset_password && (
-                            <span className="px-2 py-1 text-xs font-semibold rounded-full bg-yellow-500/20 text-yellow-400">
+                            <Badge variant="warning">
                               RESET REQUIRED
-                            </span>
+                            </Badge>
                           )}
                         </div>
                         <div className="text-sm text-white/60 mt-1">{member.email}</div>
@@ -401,23 +411,26 @@ export default function TeamPage() {
                         )}
                       </div>
                       {(team.current_user_role === 'owner' || team.current_user_role === 'admin') && (
-                        <button
+                        <Button
+                          variant="secondary"
+                          size="sm"
                           onClick={() => handleRemoveMember(member.id)}
                           disabled={removing === member.id}
-                          className="px-4 py-2 text-sm text-white/70 hover:text-white border border-white/10 hover:border-white/20 rounded-lg transition-colors disabled:opacity-50"
                         >
                           {removing === member.id ? 'Deactivating...' : 'Deactivate Access'}
-                        </button>
+                        </Button>
                       )}
                     </div>
                   ))}
                 </div>
               )}
-            </div>
+            </GlassCard>
+          </PageSection>
 
-            {/* Pending Invites */}
-            {team.invites.length > 0 && (
-              <div className={`${cardStyles.base} ${cardStyles.padding.md}`}>
+          {/* Pending Invites */}
+          {team.invites.length > 0 && (
+          <PageSection>
+            <GlassCard className="p-6">
                 <h2 className={`${typography.h3} ${spacing.normal}`}>Pending Invites</h2>
                 <div className="space-y-3">
                   {team.invites.map((invite) => (
@@ -428,40 +441,44 @@ export default function TeamPage() {
                       <div className="flex-1">
                         <div className="flex items-center gap-3">
                           <div className="font-semibold text-white">{invite.email}</div>
-                          <span className="px-2 py-1 text-xs font-semibold rounded-full bg-white/10 text-white/70" title={getRoleDescription(invite.role)}>
+                          <Badge variant="neutral" title={getRoleDescription(invite.role)}>
                             {getRoleLabel(invite.role)}
-                          </span>
-                          <span className="px-2 py-1 text-xs font-semibold rounded-full bg-blue-500/20 text-blue-400">
+                          </Badge>
+                          <Badge variant="neutral" className="bg-blue-500/20 text-blue-400">
                             PENDING
-                          </span>
+                          </Badge>
                         </div>
                         <div className="text-sm text-white/60 mt-1">
                           Invited {new Date(invite.created_at).toLocaleDateString()}
                         </div>
                       </div>
                       {(team.current_user_role === 'owner' || team.current_user_role === 'admin') && (
-                        <button
+                        <Button
+                          variant="secondary"
+                          size="sm"
                           onClick={() => handleRevokeInvite(invite.id)}
                           disabled={revoking === invite.id}
-                          className="px-4 py-2 text-sm text-red-400 hover:text-red-300 border border-red-500/30 hover:border-red-500/50 rounded-lg transition-colors disabled:opacity-50"
+                          className="text-red-400 hover:text-red-300 border-red-500/30 hover:border-red-500/50"
                         >
                           {revoking === invite.id ? 'Revoking...' : 'Revoke'}
-                        </button>
+                        </Button>
                       )}
                     </div>
                   ))}
                 </div>
-              </div>
-            )}
+            </GlassCard>
+          </PageSection>
+          )}
 
-            {/* Audit Reassurance Footer */}
-            <div className="mt-8 pt-6 border-t border-white/10">
+          {/* Audit Reassurance Footer */}
+          <PageSection>
+            <div className="pt-6 border-t border-white/10">
               <p className="text-xs text-white/40 text-center">
                 All access changes are recorded for compliance and audit review.
               </p>
             </div>
-          </div>
-        </main>
+          </PageSection>
+        </AppShell>
 
         {/* Invite Success Modal */}
         <InviteSuccessModal
@@ -488,7 +505,7 @@ export default function TeamPage() {
             setMemberToRemove(null)
           }}
         />
-      </div>
+      </AppBackground>
     </ProtectedRoute>
   )
 }
