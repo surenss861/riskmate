@@ -765,7 +765,9 @@ export default function ExecutiveSnapshotPage() {
                     Export PDF Brief
                     <FileCheck className="w-5 h-5" />
                   </Button>
-                  <button
+                  <Button
+                    variant="secondary"
+                    size="sm"
                     onClick={() => {
                       const brief = {
                         generated_at: new Date().toISOString(),
