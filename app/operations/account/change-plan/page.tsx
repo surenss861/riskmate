@@ -2,13 +2,12 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { motion } from 'framer-motion'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import { DashboardNavbar } from '@/components/dashboard/DashboardNavbar'
 import { subscriptionsApi } from '@/lib/api'
 import { ErrorModal } from '@/components/dashboard/ErrorModal'
-import { cardStyles } from '@/lib/styles/design-system'
+import { AppBackground, AppShell, PageSection, GlassCard, Button, PageHeader } from '@/components/shared'
 
 type PlanCode = 'starter' | 'pro' | 'business'
 
@@ -144,57 +143,47 @@ export default function ChangePlanPage() {
   if (loading) {
     return (
       <ProtectedRoute>
-        <div className="min-h-screen bg-[#0A0A0A] text-white flex items-center justify-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-[#F97316]" />
-        </div>
+        <AppBackground>
+          <AppShell>
+            <div className="flex items-center justify-center min-h-[60vh]">
+              <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-[#F97316]" />
+            </div>
+          </AppShell>
+        </AppBackground>
       </ProtectedRoute>
     )
   }
 
   return (
     <ProtectedRoute>
-      <div className="min-h-screen bg-[#0A0A0A] text-white">
+      <AppBackground>
         <DashboardNavbar email={user?.email} onLogout={() => router.push('/logout')} />
+        <AppShell>
+          <PageSection>
+            <PageHeader
+              title="Change Plan"
+              subtitle={currentPlan ? `You're currently on the ${PLANS.find(p => p.code === currentPlan)?.name} plan.` : 'Select a plan that works for you.'}
+            />
+          </PageSection>
 
-        <div className="relative mx-auto max-w-7xl px-6 py-14">
-          <motion.div
-            initial={{ opacity: 0, y: 24 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.45 }}
-            className="mb-8"
-          >
-            <button
-              onClick={() => router.push('/operations/account')}
-              className="text-white/60 hover:text-white mb-4 flex items-center gap-2 transition-colors"
-            >
-              ← Back to Account
-            </button>
-            <h1 className="font-display text-4xl font-bold text-white">Change Plan</h1>
-            <p className="text-white/60 mt-2">
-              {currentPlan ? `You're currently on the ${PLANS.find(p => p.code === currentPlan)?.name} plan.` : 'Select a plan that works for you.'}
-            </p>
-          </motion.div>
+          <PageSection>
+            <div className="grid md:grid-cols-3 gap-6">
+              {PLANS.map((plan) => {
+                const isCurrent = plan.code === currentPlan
+                const isSwitching = switching === plan.code
 
-          <div className="grid md:grid-cols-3 gap-6">
-            {PLANS.map((plan, index) => {
-              const isCurrent = plan.code === currentPlan
-              const isSwitching = switching === plan.code
-
-              return (
-                <motion.div
-                  key={plan.code}
-                  initial={{ opacity: 0, y: 30 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.6, delay: index * 0.1 }}
-                  className={`${cardStyles.base} ${cardStyles.padding.lg} relative ${
-                    plan.popular
-                      ? 'border-2 border-[#F97316]'
-                      : isCurrent
-                      ? 'border-2 border-green-500'
-                      : 'border-white/10'
-                  }`}
-                  style={plan.popular ? { boxShadow: '0 0 40px rgba(249, 115, 22, 0.25)' } : {}}
-                >
+                return (
+                  <GlassCard
+                    key={plan.code}
+                    className={`p-8 relative ${
+                      plan.popular
+                        ? 'border-2 border-[#F97316]'
+                        : isCurrent
+                        ? 'border-2 border-green-500'
+                        : ''
+                    }`}
+                    style={plan.popular ? { boxShadow: '0 0 40px rgba(249, 115, 22, 0.25)' } : {}}
+                  >
                   {plan.popular && (
                     <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 bg-[#F97316] text-black text-xs font-semibold rounded-full">
                       Most Popular
@@ -227,40 +216,32 @@ export default function ChangePlanPage() {
                     ))}
                   </ul>
 
-                  <button
-                    onClick={() => handleSwitchPlan(plan.code)}
-                    disabled={isCurrent || isSwitching || switching !== null}
-                    className={`w-full px-6 py-3 rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                      isCurrent
-                        ? 'border border-green-500 text-green-400 bg-green-500/10'
-                        : plan.popular
-                        ? 'bg-[#F97316] text-black hover:bg-[#FB923C]'
-                        : 'border border-white/10 text-white hover:bg-white/10'
-                    }`}
-                  >
-                    {isCurrent
-                      ? 'Current Plan'
-                      : isSwitching
-                      ? 'Switching...'
-                      : plan.code === 'starter' && currentPlan !== 'starter'
-                      ? 'Switch to Starter'
-                      : plan.code !== 'starter' && currentPlan === 'starter'
-                      ? `Upgrade to ${plan.name}`
-                      : `Switch to ${plan.name}`}
-                  </button>
-                </motion.div>
-              )
-            })}
-          </div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 24 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4, duration: 0.45 }}
-            className="mt-12 text-center"
-          >
-          </motion.div>
-        </div>
+                    <Button
+                      onClick={() => handleSwitchPlan(plan.code)}
+                      disabled={isCurrent || isSwitching || switching !== null}
+                      variant={isCurrent ? 'secondary' : plan.popular ? 'primary' : 'secondary'}
+                      className={`w-full ${
+                        isCurrent
+                          ? 'border border-green-500 text-green-400 bg-green-500/10 hover:bg-green-500/20'
+                          : ''
+                      }`}
+                    >
+                      {isCurrent
+                        ? 'Current Plan'
+                        : isSwitching
+                        ? 'Switching...'
+                        : plan.code === 'starter' && currentPlan !== 'starter'
+                        ? 'Switch to Starter'
+                        : plan.code !== 'starter' && currentPlan === 'starter'
+                        ? `Upgrade to ${plan.name}`
+                        : `Switch to ${plan.name}`}
+                    </Button>
+                  </GlassCard>
+                )
+              })}
+            </div>
+          </PageSection>
+        </AppShell>
 
         <ErrorModal
           isOpen={error !== null}
@@ -268,7 +249,7 @@ export default function ChangePlanPage() {
           message={error || ''}
           onClose={() => setError(null)}
         />
-      </div>
+      </AppBackground>
     </ProtectedRoute>
   )
 }
