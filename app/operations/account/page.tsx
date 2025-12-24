@@ -615,14 +615,11 @@ export default function AccountPage() {
                   )}
 
                       <div className="flex gap-3 pt-2">
-                    <Button
-                      variant="primary"
-                      asChild
-                    >
-                      <Link href="/operations/account/change-plan">
+                    <Link href="/operations/account/change-plan">
+                      <Button variant="primary">
                         Change Plan
-                      </Link>
-                    </Button>
+                      </Button>
+                    </Link>
                         {billing.stripe_customer_id && (
                       <Button
                         variant="secondary"
