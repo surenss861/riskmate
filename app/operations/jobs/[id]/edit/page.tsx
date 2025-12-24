@@ -2,13 +2,13 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter, useParams } from 'next/navigation'
-import { motion } from 'framer-motion'
 import { jobsApi, riskApi } from '@/lib/api'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import RiskMateLogo from '@/components/RiskMateLogo'
 import Image from 'next/image'
 import { ImageModal } from '@/components/report/ImageModal'
-import { buttonStyles, cardStyles, typography, inputStyles, spacing } from '@/lib/styles/design-system'
+import { typography, spacing } from '@/lib/styles/design-system'
+import { AppBackground, AppShell, PageSection, GlassCard, Button, Input, Select, PageHeader } from '@/components/shared'
 
 interface RiskFactor {
   id: string
@@ -196,68 +196,56 @@ export default function EditJobPage() {
   if (loading) {
     return (
       <ProtectedRoute>
-        <div className="min-h-screen bg-[#0A0A0A] text-white flex items-center justify-center">
-          <div className="text-center">
-            <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#F97316] border-t-transparent mx-auto mb-4" />
-            <p className="text-[#A1A1A1]">Loading job details...</p>
-          </div>
-        </div>
+        <AppBackground>
+          <AppShell>
+            <div className="flex items-center justify-center min-h-[60vh]">
+              <div className="text-center">
+                <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#F97316] border-t-transparent mx-auto mb-4" />
+                <p className="text-[#A1A1A1]">Loading job details...</p>
+              </div>
+            </div>
+          </AppShell>
+        </AppBackground>
       </ProtectedRoute>
     )
   }
 
   return (
     <ProtectedRoute>
-      <div className="min-h-screen bg-[#0A0A0A] text-white">
-        {/* Header */}
-        <header className="border-b border-white/5 px-6 py-4">
-          <div className="max-w-7xl mx-auto flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <RiskMateLogo size="sm" showText={true} />
-            </div>
-            <button
-              onClick={() => router.push(`/operations/jobs/${jobId}`)}
-              className="text-sm text-[#A1A1A1] hover:text-white transition-colors"
-            >
-              ← Back to Job
-            </button>
-          </div>
-        </header>
+      <AppBackground>
+        <AppShell>
+          <PageSection>
+            <PageHeader
+              title="Edit Job"
+              subtitle="Update job details and risk factors"
+            />
+          </PageSection>
 
-        <div className="max-w-4xl mx-auto px-6 py-12">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4 }}
-          >
-            <h1 className={`${typography.h1} ${spacing.tight}`}>Edit Job</h1>
-            <p className={`${typography.bodyMuted} ${spacing.section}`}>
-              Update job details and risk factors
-            </p>
-
-            {error && (
-              <div className={`${spacing.relaxed} p-4 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400`}>
+          {error && (
+            <PageSection>
+              <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400">
                 {error}
               </div>
-            )}
+            </PageSection>
+          )}
 
-            <form onSubmit={handleSubmit} className={spacing.gap.relaxed}>
-              {/* Basic Job Info */}
-              <div className={`${cardStyles.base} ${cardStyles.padding.lg}`}>
+          <form onSubmit={handleSubmit}>
+            {/* Basic Job Info */}
+            <PageSection>
+              <GlassCard className="p-8">
                 <h2 className={`${typography.h2} ${spacing.relaxed}`}>Job Information</h2>
                 <div className={`grid md:grid-cols-2 ${spacing.gap.relaxed}`}>
                   <div>
                     <label className="block text-sm font-medium mb-2">
                       Client Name *
                     </label>
-                    <input
+                    <Input
                       type="text"
                       required
                       value={formData.client_name}
                       onChange={(e) =>
                         setFormData({ ...formData, client_name: e.target.value })
                       }
-                      className={inputStyles.base}
                       placeholder="Downtown Office Complex"
                     />
                   </div>
@@ -266,14 +254,13 @@ export default function EditJobPage() {
                     <label className="block text-sm font-medium mb-2">
                       Location *
                     </label>
-                    <input
+                    <Input
                       type="text"
                       required
                       value={formData.location}
                       onChange={(e) =>
                         setFormData({ ...formData, location: e.target.value })
                       }
-                      className={inputStyles.base}
                       placeholder="123 Main St, Suite 400"
                     />
                   </div>
@@ -282,32 +269,30 @@ export default function EditJobPage() {
                     <label className="block text-sm font-medium mb-2">
                       Client Type *
                     </label>
-                    <select
+                    <Select
                       required
                       value={formData.client_type}
                       onChange={(e) =>
                         setFormData({ ...formData, client_type: e.target.value })
                       }
-                      className={inputStyles.select}
                     >
                       <option value="residential">Residential</option>
                       <option value="commercial">Commercial</option>
                       <option value="industrial">Industrial</option>
                       <option value="government">Government</option>
-                    </select>
+                    </Select>
                   </div>
 
                   <div>
                     <label className="block text-sm font-medium mb-2">
                       Job Type *
                     </label>
-                    <select
+                    <Select
                       required
                       value={formData.job_type}
                       onChange={(e) =>
                         setFormData({ ...formData, job_type: e.target.value })
                       }
-                      className={inputStyles.select}
                     >
                       <option value="repair">Repair</option>
                       <option value="installation">Installation</option>
@@ -315,20 +300,19 @@ export default function EditJobPage() {
                       <option value="inspection">Inspection</option>
                       <option value="remodel">Remodel</option>
                       <option value="other">Other</option>
-                    </select>
+                    </Select>
                   </div>
 
                   <div>
                     <label className="block text-sm font-medium mb-2">
                       Start Date
                     </label>
-                    <input
+                    <Input
                       type="date"
                       value={formData.start_date}
                       onChange={(e) =>
                         setFormData({ ...formData, start_date: e.target.value })
                       }
-                      className={inputStyles.select}
                     />
                   </div>
 
@@ -336,18 +320,17 @@ export default function EditJobPage() {
                     <label className="block text-sm font-medium mb-2">
                       Insurance Status
                     </label>
-                    <select
+                    <Select
                       value={formData.insurance_status}
                       onChange={(e) =>
                         setFormData({ ...formData, insurance_status: e.target.value })
                       }
-                      className={inputStyles.select}
                     >
                       <option value="pending">Pending</option>
                       <option value="verified">Verified</option>
                       <option value="missing">Missing</option>
                       <option value="not_required">Not Required</option>
-                    </select>
+                    </Select>
                   </div>
 
                   <div className="md:col-span-2">
@@ -360,7 +343,7 @@ export default function EditJobPage() {
                         setFormData({ ...formData, description: e.target.value })
                       }
                       rows={4}
-                      className={inputStyles.base}
+                      className="w-full px-4 py-3 rounded-lg bg-white/5 border border-white/10 text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-[#F97316] focus:border-transparent resize-none"
                       placeholder="Additional details about the job..."
                     />
                   </div>
@@ -387,7 +370,7 @@ export default function EditJobPage() {
                       <label className="block text-sm font-medium mb-2">
                         Number of Subcontractors
                       </label>
-                      <input
+                      <Input
                         type="number"
                         min="0"
                         value={formData.subcontractor_count}
@@ -397,15 +380,16 @@ export default function EditJobPage() {
                             subcontractor_count: parseInt(e.target.value) || 0,
                           })
                         }
-                        className={inputStyles.select}
                       />
                     </div>
                   )}
                 </div>
-              </div>
+              </GlassCard>
+            </PageSection>
 
-              {/* Photos Section */}
-              <div className={`${cardStyles.base} ${cardStyles.padding.lg}`}>
+            {/* Photos Section */}
+            <PageSection>
+              <GlassCard className="p-8">
                 <h2 className="text-2xl font-semibold mb-4">Photos & Evidence</h2>
                 <p className="text-sm text-[#A1A1A1] mb-6">
                   Upload photos to document job conditions, hazards, and completed work.
@@ -537,18 +521,20 @@ export default function EditJobPage() {
                     <p className="text-white/40 text-xs mt-2">Click &quot;Add Photo&quot; to get started</p>
                   </div>
                 )}
-              </div>
+              </GlassCard>
+            </PageSection>
 
-              {/* Image Modal */}
-              <ImageModal
-                isOpen={selectedImage !== null}
-                imageUrl={selectedImage?.url || null}
-                imageAlt={selectedImage?.alt}
-                onClose={() => setSelectedImage(null)}
-              />
+            {/* Image Modal */}
+            <ImageModal
+              isOpen={selectedImage !== null}
+              imageUrl={selectedImage?.url || null}
+              imageAlt={selectedImage?.alt}
+              onClose={() => setSelectedImage(null)}
+            />
 
-              {/* Risk Factors - Safety Checklist */}
-              <div className={`${cardStyles.base} ${cardStyles.padding.lg}`}>
+            {/* Risk Factors - Safety Checklist */}
+            <PageSection>
+              <GlassCard className="p-8">
                 <h2 className="text-2xl font-semibold mb-4">Hazard Checklist</h2>
                 <p className="text-sm text-[#A1A1A1] mb-6">
                   Update your safety assessment by selecting all hazards that apply to this job. Risk score and required controls will be recalculated automatically.
@@ -612,29 +598,33 @@ export default function EditJobPage() {
                     </p>
                   </div>
                 )}
-              </div>
+              </GlassCard>
+            </PageSection>
 
-              {/* Submit */}
+            {/* Submit */}
+            <PageSection>
               <div className="flex gap-4">
-                <button
+                <Button
                   type="button"
+                  variant="secondary"
                   onClick={() => router.push(`/operations/jobs/${jobId}`)}
-                  className="px-6 py-3 border border-white/10 rounded-lg hover:bg-white/5 transition-colors"
                 >
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button
                   type="submit"
+                  variant="primary"
+                  size="lg"
                   disabled={saving}
-                  className={`${buttonStyles.primary} ${buttonStyles.sizes.lg} flex-1`}
+                  className="flex-1"
                 >
                   {saving ? 'Saving...' : 'Save Changes & Recalculate Risk'}
-                </button>
+                </Button>
               </div>
-            </form>
-          </motion.div>
-        </div>
-      </div>
+            </PageSection>
+          </form>
+        </AppShell>
+      </AppBackground>
     </ProtectedRoute>
   )
 }
