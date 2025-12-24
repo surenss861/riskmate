@@ -2,13 +2,13 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { motion } from 'framer-motion'
 import { jobsApi } from '@/lib/api'
 import { useRiskFactors, useTemplates } from '@/lib/cache'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import RiskMateLogo from '@/components/RiskMateLogo'
-import { buttonStyles, cardStyles, inputStyles, spacing, typography } from '@/lib/styles/design-system'
+import { spacing, typography } from '@/lib/styles/design-system'
+import { AppBackground, AppShell, PageSection, GlassCard, Button, Input, Select, PageHeader } from '@/components/shared'
 
 interface RiskFactor {
   id: string
@@ -202,39 +202,16 @@ export default function NewJobPage() {
 
   return (
     <ProtectedRoute>
-      <div className="min-h-screen bg-[#0A0A0A] text-white">
-        {/* Header */}
-        <header className="border-b border-white/5 px-6 py-4">
-          <div className="max-w-7xl mx-auto flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <RiskMateLogo size="sm" showText={true} />
-            </div>
-            <button
-              onClick={() => router.push('/operations')}
-              className="text-sm text-[#A1A1A1] hover:text-white transition-colors"
-            >
-              ← Back to Dashboard
-            </button>
-          </div>
-        </header>
-
-        <div className="max-w-4xl mx-auto px-6 py-12">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4 }}
-          >
-            <div className="flex items-start justify-between mb-6">
-              <div>
-                <h1 className={`${typography.h1} ${spacing.tight}`}>Create New Job</h1>
-                <p className={`${typography.bodyMuted} ${spacing.section}`}>
-                  Enter job details and select risk factors to get an instant risk score
-                </p>
-              </div>
-              {/* Quick Action: Create Job → Proof Pack */}
-              <div className="text-right">
-                <button
-                  type="button"
+      <AppBackground>
+        <AppShell>
+          <PageSection>
+            <PageHeader
+              title="Create New Job"
+              subtitle="Enter job details and select risk factors to get an instant risk score"
+              actions={
+                <Button
+                  variant="secondary"
+                  size="md"
                   onClick={async () => {
                     // Quick create with default template and redirect to packet view
                     if (!formData.client_name || !formData.job_type) {
@@ -262,33 +239,32 @@ export default function NewJobPage() {
                     }
                   }}
                   disabled={loading || !formData.client_name || !formData.job_type}
-                  className={`${buttonStyles.secondary} ${buttonStyles.sizes.md} disabled:opacity-40 disabled:cursor-not-allowed`}
                 >
                   Create & Generate Proof Pack →
-                </button>
-                <p className="text-xs text-white/50 mt-2">
-                  Quick path to insurance-ready packet
-                </p>
-              </div>
-            </div>
+                </Button>
+              }
+            />
+          </PageSection>
 
-            {error && (
-              <div className={`${spacing.relaxed} p-4 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400`}>
+          {error && (
+            <PageSection>
+              <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400">
                 {error}
               </div>
-            )}
+            </PageSection>
+          )}
 
-            <form onSubmit={handleSubmit} className={spacing.gap.relaxed}>
-              {/* Template Selector */}
-              {jobTemplates.length > 0 && (
-                <div className={`${cardStyles.base} ${cardStyles.padding.md}`}>
+          <form onSubmit={handleSubmit}>
+            {/* Template Selector */}
+            {jobTemplates.length > 0 && (
+              <PageSection>
+                <GlassCard className="p-6">
                   <label className="block text-sm font-medium mb-2">
                     Start from Template (Optional)
                   </label>
-                  <select
+                  <Select
                     value={selectedTemplate}
                     onChange={(e) => setSelectedTemplate(e.target.value)}
-                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:border-[#F97316]"
                   >
                     <option value="">Create from scratch</option>
                     {jobTemplates.map((template) => (
@@ -296,29 +272,30 @@ export default function NewJobPage() {
                         {template.name}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                   <p className={`text-xs text-white/50 ${spacing.tight}`}>
                     Select a template to pre-fill job details and hazards
                   </p>
-                </div>
-              )}
+                </GlassCard>
+              </PageSection>
+            )}
 
-              {/* Basic Job Info */}
-              <div className={`${cardStyles.base} ${cardStyles.padding.lg}`}>
+            {/* Basic Job Info */}
+            <PageSection>
+              <GlassCard className="p-8">
                 <h2 className={`${typography.h2} ${spacing.relaxed}`}>Job Information</h2>
                 <div className={`grid md:grid-cols-2 ${spacing.gap.relaxed}`}>
                   <div>
                     <label className={`block text-sm font-medium ${spacing.tight}`}>
                       Client Name *
                     </label>
-                    <input
+                    <Input
                       type="text"
                       required
                       value={formData.client_name}
                       onChange={(e) =>
                         setFormData({ ...formData, client_name: e.target.value })
                       }
-                      className={inputStyles.base}
                       placeholder="Downtown Office Complex"
                     />
                   </div>
@@ -327,14 +304,13 @@ export default function NewJobPage() {
                     <label className={`block text-sm font-medium ${spacing.tight}`}>
                       Location *
                     </label>
-                    <input
+                    <Input
                       type="text"
                       required
                       value={formData.location}
                       onChange={(e) =>
                         setFormData({ ...formData, location: e.target.value })
                       }
-                      className={inputStyles.base}
                       placeholder="123 Main St, Suite 400"
                     />
                   </div>
@@ -343,32 +319,30 @@ export default function NewJobPage() {
                     <label className={`block text-sm font-medium ${spacing.tight}`}>
                       Client Type *
                     </label>
-                    <select
+                    <Select
                       required
                       value={formData.client_type}
                       onChange={(e) =>
                         setFormData({ ...formData, client_type: e.target.value })
                       }
-                      className="w-full px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-[#F97316]"
                     >
                       <option value="residential">Residential</option>
                       <option value="commercial">Commercial</option>
                       <option value="industrial">Industrial</option>
                       <option value="government">Government</option>
-                    </select>
+                    </Select>
                   </div>
 
                   <div>
                     <label className={`block text-sm font-medium ${spacing.tight}`}>
                       Job Type *
                     </label>
-                    <select
+                    <Select
                       required
                       value={formData.job_type}
                       onChange={(e) =>
                         setFormData({ ...formData, job_type: e.target.value })
                       }
-                      className="w-full px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-[#F97316]"
                     >
                       <option value="repair">Repair</option>
                       <option value="installation">Installation</option>
@@ -376,20 +350,19 @@ export default function NewJobPage() {
                       <option value="inspection">Inspection</option>
                       <option value="remodel">Remodel</option>
                       <option value="other">Other</option>
-                    </select>
+                    </Select>
                   </div>
 
                   <div>
                     <label className={`block text-sm font-medium ${spacing.tight}`}>
                       Start Date
                     </label>
-                    <input
+                    <Input
                       type="date"
                       value={formData.start_date}
                       onChange={(e) =>
                         setFormData({ ...formData, start_date: e.target.value })
                       }
-                      className="w-full px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-[#F97316]"
                     />
                   </div>
 
@@ -397,18 +370,17 @@ export default function NewJobPage() {
                     <label className={`block text-sm font-medium ${spacing.tight}`}>
                       Insurance Status
                     </label>
-                    <select
+                    <Select
                       value={formData.insurance_status}
                       onChange={(e) =>
                         setFormData({ ...formData, insurance_status: e.target.value })
                       }
-                      className="w-full px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-[#F97316]"
                     >
                       <option value="pending">Pending</option>
                       <option value="verified">Verified</option>
                       <option value="missing">Missing</option>
                       <option value="not_required">Not Required</option>
-                    </select>
+                    </Select>
                   </div>
 
                   <div className="md:col-span-2">
@@ -421,7 +393,7 @@ export default function NewJobPage() {
                         setFormData({ ...formData, description: e.target.value })
                       }
                       rows={4}
-                      className={inputStyles.base}
+                      className="w-full px-4 py-3 rounded-lg bg-white/5 border border-white/10 text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-[#F97316] focus:border-transparent resize-none"
                       placeholder="Additional details about the job..."
                     />
                   </div>
@@ -443,10 +415,12 @@ export default function NewJobPage() {
                     </label>
                   </div>
                 </div>
-              </div>
+              </GlassCard>
+            </PageSection>
 
-              {/* Risk Factors - Safety Checklist */}
-              <div className={`${cardStyles.base} ${cardStyles.padding.lg}`}>
+            {/* Risk Factors - Safety Checklist */}
+            <PageSection>
+              <GlassCard className="p-8">
                 <h2 className={`${typography.h2} ${spacing.normal}`}>Hazard Checklist</h2>
                 <p className={`text-sm text-[#A1A1A1] ${spacing.relaxed}`}>
                   Complete your safety assessment by selecting all hazards that apply to this job. Risk score and required controls will be generated automatically. This creates your audit-ready compliance trail.
@@ -513,29 +487,33 @@ export default function NewJobPage() {
                     </p>
                   </div>
                 )}
-              </div>
+              </GlassCard>
+            </PageSection>
 
-              {/* Submit */}
+            {/* Submit */}
+            <PageSection>
               <div className="flex gap-4">
-                <button
+                <Button
                   type="button"
+                  variant="secondary"
                   onClick={() => router.push('/operations')}
-                  className="px-6 py-3 border border-white/10 rounded-lg hover:bg-white/5 transition-colors"
                 >
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button
                   type="submit"
+                  variant="primary"
+                  size="lg"
                   disabled={loading}
-                  className={`${buttonStyles.primary} ${buttonStyles.sizes.lg} flex-1`}
+                  className="flex-1"
                 >
                   {loading ? 'Creating...' : 'Create Job & Calculate Risk'}
-                </button>
+                </Button>
               </div>
-            </form>
-          </motion.div>
-        </div>
-      </div>
+            </PageSection>
+          </form>
+        </AppShell>
+      </AppBackground>
     </ProtectedRoute>
   )
 }
