@@ -1,13 +1,13 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { motion } from 'framer-motion'
 import { Shield, AlertTriangle, FileCheck, TrendingUp, Lock, CheckCircle, Info, ExternalLink } from 'lucide-react'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import { DashboardNavbar } from '@/components/dashboard/DashboardNavbar'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { executiveApi } from '@/lib/api'
-import { cardStyles, typography, buttonStyles } from '@/lib/styles/design-system'
+import { typography } from '@/lib/styles/design-system'
+import { AppBackground, AppShell, PageSection, GlassCard, Button, Select, PageHeader } from '@/components/shared'
 
 interface RiskPosture {
   exposure_level: 'low' | 'moderate' | 'high'
@@ -236,56 +236,35 @@ export default function ExecutiveSnapshotPage() {
     )
   }
 
-  return (
-    <ProtectedRoute>
-      <div className="relative min-h-screen overflow-hidden bg-[#0A0A0A] text-white">
-        <DashboardNavbar email={user?.email} onLogout={handleLogout} />
-
-        <div className="relative mx-auto max-w-7xl px-6 pt-24 pb-14">
-          {/* Header */}
-          <motion.div
-            initial={{ opacity: 0, y: 24 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.45 }}
-            className="mb-8"
-          >
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-3">
-              <Lock className="w-6 h-6 text-[#F97316]" />
-              <div>
-                <p className="text-xs uppercase tracking-[0.42em] text-white/50">
-                  Executive View
-                </p>
-                <h1 className={`${typography.h1} mt-2`}>
-                  Organizational Risk Posture
-                </h1>
+    return (
+      <ProtectedRoute>
+        <AppBackground>
+          <DashboardNavbar email={user?.email} onLogout={handleLogout} />
+          <AppShell>
+            <PageSection>
+              <div className="flex items-center justify-between mb-4">
+                <PageHeader
+                  title="Organizational Risk Posture"
+                  subtitle="Real-time governance confidence based on recorded evidence."
+                />
+                <div className="flex items-center gap-3">
+                  <label className="text-sm text-white/60">Time Range:</label>
+                  <Select
+                    value={timeRange}
+                    onChange={(e) => setTimeRange(e.target.value as TimeRange)}
+                  >
+                    <option value="7d">Last 7 days</option>
+                    <option value="30d">Last 30 days</option>
+                    <option value="90d">Last 90 days</option>
+                    <option value="all">All time</option>
+                  </Select>
                 </div>
               </div>
-              <div className="flex items-center gap-3">
-                <label className="text-sm text-white/60">Time Range:</label>
-                <select
-                  value={timeRange}
-                  onChange={(e) => setTimeRange(e.target.value as TimeRange)}
-                  className="bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white text-sm focus:outline-none focus:border-[#F97316]"
-                >
-                  <option value="7d">Last 7 days</option>
-                  <option value="30d">Last 30 days</option>
-                  <option value="90d">Last 90 days</option>
-                  <option value="all">All time</option>
-                </select>
-              </div>
-            </div>
-            <p className="text-white/60 max-w-2xl">
-              Real-time governance confidence based on recorded evidence.
-            </p>
-          </motion.div>
+            </PageSection>
 
-          {/* Risk Posture Summary Banner - Signed Statement */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className={`${cardStyles.base} p-6 mb-8 ${
+            {/* Risk Posture Summary Banner - Signed Statement */}
+            <PageSection>
+              <GlassCard className={`p-6 ${
               riskPosture.exposure_level === 'high' 
                 ? 'bg-red-500/10 border-red-500/30' 
                 : riskPosture.exposure_level === 'moderate'
@@ -317,24 +296,24 @@ export default function ExecutiveSnapshotPage() {
                 </div>
               </div>
             </div>
-          </motion.div>
+              </GlassCard>
+            </PageSection>
 
-          {/* Where you're exposed */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.15 }}
-            className="mb-8"
-          >
-            <h2 className="text-sm font-semibold text-white/80 mb-4">
-              Where you&apos;re exposed
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Where you're exposed */}
+            <PageSection>
+              <h2 className="text-sm font-semibold text-white/80 mb-4">
+                Where you&apos;re exposed
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {/* High Risk Jobs */}
-              <div
-                className={`${cardStyles.base} p-6 cursor-pointer hover:border-red-500/40 transition-all ${
-                  riskPosture.high_risk_jobs > 0 ? 'bg-red-500/5 border-red-500/30' : ''
+                <GlassCard
+                  className={`p-6 cursor-pointer hover:border-red-500/40 transition-all ${
+                    riskPosture.high_risk_jobs > 0 ? 'bg-red-500/5 border-red-500/30' : ''
                 }`}
+                  onClick={() => window.location.href = '/operations/jobs?risk_level=high'}
+                  onMouseEnter={() => setHoveredCard('high-risk')}
+                  onMouseLeave={() => setHoveredCard(null)}
+                >
                 onClick={() => window.location.href = '/operations/jobs?risk_level=high'}
                 onMouseEnter={() => setHoveredCard('high-risk')}
                 onMouseLeave={() => setHoveredCard(null)}
@@ -376,8 +355,8 @@ export default function ExecutiveSnapshotPage() {
               </div>
 
               {/* Open Incidents */}
-              <div
-                className={`${cardStyles.base} p-6 cursor-pointer hover:border-orange-500/40 transition-all ${
+              <GlassCard
+                className={`p-6 cursor-pointer hover:border-orange-500/40 transition-all ${
                   riskPosture.open_incidents > 0 ? 'bg-orange-500/5 border-orange-500/30' : ''
                 }`}
                 onClick={() => window.location.href = '/operations/audit?view=incident-review&status=open'}
@@ -421,8 +400,8 @@ export default function ExecutiveSnapshotPage() {
               </div>
 
               {/* Governance Violations */}
-              <div
-                className={`${cardStyles.base} p-6 cursor-pointer hover:border-red-500/40 transition-all ${
+              <GlassCard
+                className={`p-6 cursor-pointer hover:border-red-500/40 transition-all ${
                   riskPosture.recent_violations > 0 ? 'bg-red-500/10 border-red-500/40 shadow-lg shadow-red-500/10' : ''
                 }`}
                 onClick={() => window.location.href = '/operations/audit?tab=governance&outcome=blocked'}
@@ -465,22 +444,17 @@ export default function ExecutiveSnapshotPage() {
                 )}
               </div>
             </div>
-          </motion.div>
+          </PageSection>
 
           {/* Whether controls are working */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="mb-8"
-          >
+          <PageSection>
             <h2 className="text-sm font-semibold text-white/80 mb-4">
               Whether controls are working
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {/* Jobs Flagged for Review */}
-              <div
-                className={`${cardStyles.base} p-6 cursor-pointer hover:border-[#F97316]/40 transition-all`}
+              <GlassCard
+                className="p-6 cursor-pointer hover:border-[#F97316]/40 transition-all"
                 onClick={() => window.location.href = '/operations/audit?view=review-queue'}
                 onMouseEnter={() => setHoveredCard('flagged')}
                 onMouseLeave={() => setHoveredCard(null)}
@@ -520,8 +494,8 @@ export default function ExecutiveSnapshotPage() {
               </div>
 
               {/* Pending Sign-offs */}
-              <div
-                className={`${cardStyles.base} p-6 cursor-pointer hover:border-yellow-500/40 transition-all ${
+              <GlassCard
+                className={`p-6 cursor-pointer hover:border-yellow-500/40 transition-all ${
                   riskPosture.pending_signoffs > 3 ? 'bg-yellow-500/5 border-yellow-500/30' : ''
                 }`}
                 onClick={() => window.location.href = '/operations/audit/readiness?category=attestations&status=open'}
@@ -565,8 +539,8 @@ export default function ExecutiveSnapshotPage() {
               </div>
 
               {/* Completed Sign-offs */}
-              <div
-                className={`${cardStyles.base} p-6 cursor-pointer hover:border-green-500/40 transition-all`}
+              <GlassCard
+                className="p-6 cursor-pointer hover:border-green-500/40 transition-all"
                 onClick={() => window.location.href = '/operations/audit?tab=operations&event_name=signoff&status=signed'}
                 onMouseEnter={() => setHoveredCard('signed')}
                 onMouseLeave={() => setHoveredCard(null)}
@@ -619,8 +593,8 @@ export default function ExecutiveSnapshotPage() {
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {/* Proof Packs Generated */}
-              <div
-                className={`${cardStyles.base} p-6 cursor-pointer hover:border-green-500/40 transition-all`}
+              <GlassCard
+                className="p-6 cursor-pointer hover:border-green-500/40 transition-all"
                 onClick={() => window.location.href = '/operations/audit?view=insurance-ready'}
                 onMouseEnter={() => setHoveredCard('proof-packs')}
                 onMouseLeave={() => setHoveredCard(null)}
@@ -665,8 +639,8 @@ export default function ExecutiveSnapshotPage() {
               </div>
 
               {/* Last Governance Update */}
-              <div 
-                className={`${cardStyles.base} p-6 cursor-pointer hover:border-blue-500/40 transition-all ${
+              <GlassCard
+                className={`p-6 cursor-pointer hover:border-blue-500/40 transition-all ${
                   riskPosture.last_material_event_at ? '' : 'opacity-60'
                 }`}
                 onClick={() => {
@@ -754,13 +728,17 @@ export default function ExecutiveSnapshotPage() {
               <div className="flex items-center justify-center gap-4">
               <a
                   href="/operations/audit?tab=governance&time_range=90d&severity=material"
-                className={`${buttonStyles.primary} inline-flex items-center gap-2 text-base px-8 py-3`}
+                variant="primary"
+                size="lg"
+                className="inline-flex items-center gap-2"
               >
                 View Compliance Ledger
                 <ExternalLink className="w-5 h-5" />
               </a>
                 <div className="flex flex-col items-center gap-2">
-                  <button
+                  <Button
+                    variant="primary"
+                    size="lg"
                     onClick={async () => {
                       try {
                         const supabase = createSupabaseBrowserClient()
@@ -794,11 +772,13 @@ export default function ExecutiveSnapshotPage() {
                         alert('Failed to generate PDF. Please try again.')
                       }
                     }}
-                    className={`${buttonStyles.primary} inline-flex items-center gap-2 text-base px-8 py-3`}
+                    variant="primary"
+                size="lg"
+                className="inline-flex items-center gap-2"
                   >
                     Export PDF Brief
                     <FileCheck className="w-5 h-5" />
-                  </button>
+                  </Button>
                   <button
                     onClick={() => {
                       const brief = {
@@ -836,16 +816,20 @@ export default function ExecutiveSnapshotPage() {
                       document.body.removeChild(a)
                       URL.revokeObjectURL(url)
                     }}
-                    className={`${buttonStyles.secondary} inline-flex items-center gap-2 text-sm px-6 py-2`}
+                    variant="secondary"
+                    size="sm"
+                    className="inline-flex items-center gap-2"
                   >
                     Export JSON
-                  </button>
+                  </Button>
                 </div>
               </div>
             </div>
-          </motion.div>
-        </div>
-      </div>
+          </GlassCard>
+          </PageSection>
+        </AppShell>
+      </AppBackground>
     </ProtectedRoute>
   )
 }
+
