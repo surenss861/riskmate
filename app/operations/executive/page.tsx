@@ -393,7 +393,7 @@ export default function ExecutiveSnapshotPage() {
                     Open incidents indicate unresolved exposure requiring immediate governance review.
                   </div>
                 )}
-              </div>
+              </GlassCard>
 
               {/* Governance Violations */}
               <GlassCard
