@@ -3,15 +3,15 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { motion } from 'framer-motion'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import { DashboardNavbar } from '@/components/dashboard/DashboardNavbar'
 import { TemplatesManager } from '@/components/dashboard/TemplatesManager'
 import { ErrorModal } from '@/components/dashboard/ErrorModal'
 import { subscriptionsApi, accountApi } from '@/lib/api'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
-import { cardStyles, buttonStyles, spacing, typography, dividerStyles } from '@/lib/styles/design-system'
+import { spacing, typography } from '@/lib/styles/design-system'
 import { Check, X, Edit2, Save, Loader2 } from 'lucide-react'
+import { AppBackground, AppShell, PageSection, GlassCard, Button, Input, Badge } from '@/components/shared'
 
 interface Profile {
   id: string
@@ -236,15 +236,17 @@ export default function AccountPage() {
   if (loading) {
     return (
       <ProtectedRoute>
-        <div className="min-h-screen bg-[#0A0A0A] text-white">
+        <AppBackground>
           <DashboardNavbar email={userEmail} onLogout={handleLogout} />
-          <div className="flex items-center justify-center min-h-[60vh]">
-            <div className="text-center space-y-4">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#F97316] mx-auto" />
-              <p className="text-white/60">Loading account...</p>
+          <AppShell>
+            <div className="flex items-center justify-center min-h-[60vh]">
+              <div className="text-center space-y-4">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#F97316] mx-auto" />
+                <p className="text-white/60">Loading account...</p>
+              </div>
             </div>
-          </div>
-        </div>
+          </AppShell>
+        </AppBackground>
       </ProtectedRoute>
     )
   }
@@ -252,30 +254,32 @@ export default function AccountPage() {
   if (!profile) {
     return (
       <ProtectedRoute>
-        <div className="min-h-screen bg-[#0A0A0A] text-white">
+        <AppBackground>
           <DashboardNavbar email={userEmail} onLogout={handleLogout} />
-          <div className="flex items-center justify-center min-h-[60vh]">
-            <div className="text-center space-y-4">
-              <p className="text-white/70">{error || 'Failed to load account'}</p>
-              <button
-                onClick={() => router.push('/operations')}
-                className={`${buttonStyles.primary} ${buttonStyles.sizes.lg}`}
-              >
-                Back to Dashboard
-              </button>
+          <AppShell>
+            <div className="flex items-center justify-center min-h-[60vh]">
+              <div className="text-center space-y-4">
+                <p className="text-white/70">{error || 'Failed to load account'}</p>
+                <Button
+                  variant="primary"
+                  size="lg"
+                  onClick={() => router.push('/operations')}
+                >
+                  Back to Dashboard
+                </Button>
+              </div>
             </div>
-          </div>
-        </div>
+          </AppShell>
+        </AppBackground>
       </ProtectedRoute>
     )
   }
 
   return (
     <ProtectedRoute>
-      <div className="min-h-screen bg-[#0A0A0A] text-white">
+      <AppBackground>
         <DashboardNavbar email={userEmail} onLogout={handleLogout} />
-
-        <main className="mx-auto max-w-7xl px-6 pt-24 pb-14">
+        <AppShell>
           <div className="flex gap-8">
             {/* Left Sidebar */}
             <aside className="w-64 flex-shrink-0">
@@ -312,7 +316,8 @@ export default function AccountPage() {
 
             {/* Profile Section */}
               {activeSection === 'profile' && (
-            <div className={`${cardStyles.base} ${cardStyles.padding.md}`}>
+            <PageSection>
+              <GlassCard className="p-6">
                   {/* Record Card Header */}
                   <div className="flex items-center justify-between pb-4 mb-6 border-b border-white/10">
                     <div className="flex items-center gap-3">
@@ -343,11 +348,11 @@ export default function AccountPage() {
                       </label>
                       {editingField === 'full_name' ? (
                         <div className="flex items-center gap-2">
-                          <input
+                          <Input
                             type="text"
                             value={fieldValue}
                             onChange={(e) => setFieldValue(e.target.value)}
-                            className="flex-1 px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-[#F97316]"
+                            className="flex-1"
                             placeholder="Enter your full name"
                             autoFocus
                           />
@@ -392,11 +397,11 @@ export default function AccountPage() {
                       </label>
                       {editingField === 'phone' ? (
                         <div className="flex items-center gap-2">
-                    <input
+                    <Input
                       type="tel"
                             value={fieldValue}
                             onChange={(e) => setFieldValue(e.target.value)}
-                            className="flex-1 px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-[#F97316]"
+                            className="flex-1"
                       placeholder="Enter your phone number"
                             autoFocus
                     />
@@ -443,12 +448,14 @@ export default function AccountPage() {
                       <p className="text-xs text-white/40 mt-1">Source of truth: Assigned by Organization Admin</p>
                   </div>
                   </div>
-                </div>
+              </GlassCard>
+            </PageSection>
               )}
 
             {/* Organization Section */}
               {activeSection === 'organization' && organization && (
-              <div className={`${cardStyles.base} ${cardStyles.padding.md}`}>
+            <PageSection>
+              <GlassCard className="p-6">
                   {/* Record Card Header */}
                   <div className="flex items-center justify-between pb-4 mb-6 border-b border-white/10">
                     <div className="flex items-center gap-3">
@@ -470,11 +477,11 @@ export default function AccountPage() {
                       </label>
                       {editingField === 'org_name' ? (
                         <div className="flex items-center gap-2">
-                      <input
+                      <Input
                         type="text"
                             value={fieldValue}
                             onChange={(e) => setFieldValue(e.target.value)}
-                            className="flex-1 px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-[#F97316]"
+                            className="flex-1"
                         placeholder="Enter organization name"
                             autoFocus
                       />
@@ -519,12 +526,14 @@ export default function AccountPage() {
                       )}
                     </div>
                   </div>
-              </div>
+              </GlassCard>
+            </PageSection>
             )}
 
               {/* Billing Section */}
               {activeSection === 'billing' && (
-            <div className={`${cardStyles.base} ${cardStyles.padding.md}`}>
+            <PageSection>
+              <GlassCard className="p-6">
                   {/* Record Card Header */}
                   <div className="flex items-center justify-between pb-4 mb-6 border-b border-white/10">
                     <div className="flex items-center gap-3">
@@ -606,14 +615,17 @@ export default function AccountPage() {
                   )}
 
                       <div className="flex gap-3 pt-2">
-                    <Link
-                      href="/operations/account/change-plan"
-                      className={`${buttonStyles.primary} inline-block text-center`}
+                    <Button
+                      variant="primary"
+                      asChild
                     >
-                      Change Plan
-                    </Link>
+                      <Link href="/operations/account/change-plan">
+                        Change Plan
+                      </Link>
+                    </Button>
                         {billing.stripe_customer_id && (
-                      <button
+                      <Button
+                        variant="secondary"
                         onClick={async () => {
                           try {
                             const response = await subscriptionsApi.createPortalSession()
@@ -622,10 +634,9 @@ export default function AccountPage() {
                             setError(err?.message || 'Failed to open billing portal')
                           }
                         }}
-                            className={`${buttonStyles.secondary} bg-white/5 hover:bg-white/10 border-white/10`}
                       >
                             View Invoices
-                      </button>
+                      </Button>
                     )}
                   </div>
                 </div>
@@ -651,34 +662,32 @@ export default function AccountPage() {
                   ) : (
                     <div className="space-y-4">
                   <p className="text-white/60">No active subscription</p>
-                    <button
+                    <Button
+                      variant="primary"
                       onClick={() => router.push('/pricing')}
-                      className={buttonStyles.primary}
                     >
                       View Pricing Plans
-                    </button>
+                    </Button>
                 </div>
               )}
-            </div>
+              </GlassCard>
+            </PageSection>
               )}
 
               {/* Templates Section */}
               {activeSection === 'templates' && organization && (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.1 }}
-              >
+            <PageSection>
                 <TemplatesManager 
                   organizationId={organization.id} 
                   subscriptionTier={subscription?.tier || 'starter'}
                 />
-              </motion.div>
+            </PageSection>
             )}
 
               {/* Security Section */}
               {activeSection === 'security' && (
-                <div className={`${cardStyles.base} ${cardStyles.padding.md}`}>
+            <PageSection>
+              <GlassCard className="p-6">
                   {/* Record Card Header */}
                   <div className="flex items-center justify-between pb-4 mb-6 border-b border-white/10">
                     <div className="flex items-center gap-3">
@@ -703,15 +712,15 @@ export default function AccountPage() {
                           Last changed: {formatDate((profile as any).password_changed_at)}
                         </p>
                       )}
-                      <button
-                        className={`${buttonStyles.secondary} bg-white/5 hover:bg-white/10 border-white/10`}
+                      <Button
+                        variant="secondary"
                         onClick={() => {
                           // TODO: Implement password reset flow
                           setError('Password reset coming soon')
                         }}
                       >
                         Change Password
-                      </button>
+                      </Button>
                     </div>
 
                     <div className="pb-4 border-b border-white/10">
@@ -721,8 +730,8 @@ export default function AccountPage() {
                       <p className="text-sm text-white/60 mb-3">
                         Manage your active sessions across devices
                       </p>
-                      <button
-                        className={`${buttonStyles.secondary} bg-white/5 hover:bg-white/10 border-white/10`}
+                      <Button
+                        variant="secondary"
                         onClick={async () => {
                           try {
                             setUpdating(true)
@@ -741,7 +750,7 @@ export default function AccountPage() {
                         disabled={updating}
                       >
                         {updating ? 'Revoking...' : 'Sign Out Everywhere'}
-                      </button>
+                      </Button>
                     </div>
 
                     <div className="pb-4 border-b border-white/10">
@@ -751,12 +760,12 @@ export default function AccountPage() {
                       <p className="text-sm text-white/60 mb-3">
                         Add an extra layer of security to your account
                       </p>
-                      <button
-                        className={`${buttonStyles.secondary} bg-white/5 border-white/10 opacity-50 cursor-not-allowed`}
+                      <Button
+                        variant="secondary"
                         disabled
                       >
                         Enable 2FA
-                      </button>
+                      </Button>
                       <p className="text-xs text-white/40 mt-2">Coming soon</p>
                     </div>
 
@@ -785,12 +794,14 @@ export default function AccountPage() {
                       </div>
                     )}
                   </div>
-                </div>
+              </GlassCard>
+            </PageSection>
               )}
 
               {/* Danger Zone */}
               {activeSection === 'danger' && (
-                <div className={`${cardStyles.base} ${cardStyles.padding.md} border-red-500/20`}>
+            <PageSection>
+              <GlassCard className="p-6 border-red-500/20">
                   {/* Record Card Header */}
                   <div className="flex items-center justify-between pb-4 mb-6 border-b border-red-500/20">
                     <div className="flex items-center gap-3">
@@ -812,12 +823,12 @@ export default function AccountPage() {
                         Data export available upon request during retention period.
                       </p>
                       <div className="space-y-3">
-                        <input
+                        <Input
                           type="text"
                           value={deleteConfirmation}
                           onChange={(e) => setDeleteConfirmation(e.target.value)}
                           placeholder="Type DELETE to confirm"
-                          className="w-full px-4 py-2 bg-white/5 border border-red-500/30 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-red-500/50"
+                          className="w-full border-red-500/30 focus:border-red-500/50"
                         />
                         <button
                           className="w-full px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-400 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -847,11 +858,12 @@ export default function AccountPage() {
                       </div>
                     </div>
                   </div>
-                </div>
+              </GlassCard>
+            </PageSection>
               )}
             </div>
           </div>
-        </main>
+        </AppShell>
 
         {/* Error Modal */}
         <ErrorModal
@@ -860,7 +872,7 @@ export default function AccountPage() {
           message={error || ''}
           onClose={() => setError(null)}
         />
-      </div>
+      </AppBackground>
     </ProtectedRoute>
   )
 }
