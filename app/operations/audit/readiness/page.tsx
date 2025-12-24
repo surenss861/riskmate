@@ -1,10 +1,9 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { motion } from 'framer-motion'
 import { AlertTriangle, CheckCircle, Clock, Shield, XCircle, CheckSquare, ArrowRight } from 'lucide-react'
 import ProtectedRoute from '@/components/ProtectedRoute'
-import { cardStyles, buttonStyles, typography } from '@/lib/styles/design-system'
+import { typography } from '@/lib/styles/design-system'
 import { DashboardNavbar } from '@/components/dashboard/DashboardNavbar'
 import { useRouter } from 'next/navigation'
 import { terms } from '@/lib/terms'
@@ -16,6 +15,7 @@ import { ToastContainer } from '@/components/ToastContainer'
 import type { FixQueueItem } from '@/components/audit/FixQueueSidebar'
 import { auditApi } from '@/lib/api'
 import { toast } from '@/lib/utils/toast'
+import { AppBackground, AppShell, PageSection, GlassCard, Button, Badge, Select, PageHeader } from '@/components/shared'
 
 type ReadinessCategory = 'evidence' | 'controls' | 'attestations' | 'incidents' | 'access'
 type ReadinessSeverity = 'critical' | 'material' | 'info'
@@ -447,56 +447,55 @@ export default function AuditReadinessPage() {
   if (loading && !data) {
     return (
       <ProtectedRoute>
-        <div className="min-h-screen bg-[#0A0A0A] text-white flex items-center justify-center">
-          <div className="text-center">
-            <div className="w-8 h-8 border-2 border-[#F97316] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-            <p className="text-white/60">Loading audit readiness...</p>
-          </div>
-        </div>
+        <AppBackground>
+          <DashboardNavbar />
+          <AppShell>
+            <div className="flex items-center justify-center min-h-[60vh]">
+              <div className="text-center">
+                <div className="w-8 h-8 border-2 border-[#F97316] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+                <p className="text-white/60">Loading audit readiness...</p>
+              </div>
+            </div>
+          </AppShell>
+        </AppBackground>
       </ProtectedRoute>
     )
   }
 
   return (
     <ProtectedRoute>
-      <div className="min-h-screen bg-[#0A0A0A] text-white">
+      <AppBackground>
         <DashboardNavbar />
-        
-        <div className="max-w-7xl mx-auto px-6 pt-24 pb-8">
-          {/* Header */}
-          <div className="mb-8">
-            <div className="flex items-center gap-3 mb-4">
-              <Shield className="w-6 h-6 text-[#F97316]" />
-              <div>
-                <h1 className={typography.h1}>Audit Readiness</h1>
-                <p className="text-white/60 text-sm mt-2">
-                  What&apos;s missing for audit? Fix these items to make your governance record audit-ready.
-                </p>
-              </div>
-            </div>
-          </div>
+        <AppShell>
+          <PageSection>
+            <PageHeader
+              title="Audit Readiness"
+              subtitle="What's missing for audit? Fix these items to make your governance record audit-ready."
+            />
+          </PageSection>
 
           {/* Enhanced Summary Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-8">
-            <div className={`${cardStyles.base} p-4 border-2 ${summary && summary.audit_ready_score >= 80 ? 'border-green-500/30 bg-green-500/10' : summary && summary.audit_ready_score >= 60 ? 'border-yellow-500/30 bg-yellow-500/10' : 'border-red-500/30 bg-red-500/10'}`}>
+          <PageSection>
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
+            <GlassCard className={`p-4 border-2 ${summary && summary.audit_ready_score >= 80 ? 'border-green-500/30 bg-green-500/10' : summary && summary.audit_ready_score >= 60 ? 'border-yellow-500/30 bg-yellow-500/10' : 'border-red-500/30 bg-red-500/10'}`}>
               <div className="text-sm text-white/60 mb-1">Audit-Ready Score</div>
               <div className="text-2xl font-bold text-white">
                 {summary ? summary.audit_ready_score : '—'}<span className="text-lg text-white/40">/100</span>
               </div>
-            </div>
-            <div className={cardStyles.base + ' p-4'}>
+            </GlassCard>
+            <GlassCard className="p-4">
               <div className="text-sm text-white/60 mb-1">Total Items</div>
               <div className="text-2xl font-bold text-white">{summary ? summary.total_items : '—'}</div>
-            </div>
-            <div className={cardStyles.base + ' p-4 border-red-500/30 bg-red-500/10'}>
+            </GlassCard>
+            <GlassCard className="p-4 border-red-500/30 bg-red-500/10">
               <div className="text-sm text-white/60 mb-1">Critical Blockers</div>
               <div className="text-2xl font-bold text-red-400">{summary ? summary.critical_blockers : '—'}</div>
-            </div>
-            <div className={cardStyles.base + ' p-4 border-yellow-500/30 bg-yellow-500/10'}>
+            </GlassCard>
+            <GlassCard className="p-4 border-yellow-500/30 bg-yellow-500/10">
               <div className="text-sm text-white/60 mb-1">Material</div>
               <div className="text-2xl font-bold text-yellow-400">{summary ? summary.material : '—'}</div>
-            </div>
-            <div className={cardStyles.base + ' p-4 border-blue-500/30 bg-blue-500/10'}>
+            </GlassCard>
+            <GlassCard className="p-4 border-blue-500/30 bg-blue-500/10">
               <div className="text-sm text-white/60 mb-1">Time to Clear</div>
               <div className="text-lg font-bold text-blue-400">
                 {summary?.estimated_time_to_clear_hours 
@@ -509,8 +508,8 @@ export default function AuditReadinessPage() {
                   {summary.category_breakdown.controls > 0 && `Controls: ~${Math.ceil(summary.category_breakdown.controls * 1)}h`}
                 </div>
               )}
-            </div>
-            <div className={cardStyles.base + ' p-4 border-blue-500/30 bg-blue-500/10'}>
+            </GlassCard>
+            <GlassCard className="p-4 border-blue-500/30 bg-blue-500/10">
               <div className="text-sm text-white/60 mb-1">Oldest Overdue</div>
               <div className="text-lg font-bold text-blue-400">
                 {summary?.oldest_overdue_date 
@@ -522,11 +521,13 @@ export default function AuditReadinessPage() {
                   {new Date(summary.oldest_overdue_date).toLocaleDateString()}
                 </div>
               )}
-            </div>
+            </GlassCard>
           </div>
+          </PageSection>
 
           {/* Category Tabs + Filters */}
-          <div className={cardStyles.base + ' p-4 mb-8'}>
+          <PageSection>
+            <GlassCard className="p-4">
             <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
               <div className="flex flex-wrap gap-2">
                 <button
@@ -580,73 +581,72 @@ export default function AuditReadinessPage() {
                   Access ({summary?.category_breakdown.access || 0})
                 </button>
               </div>
-              <button
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={loadReadinessData}
-                className={buttonStyles.secondary + ' text-sm'}
               >
                 Refresh
-              </button>
+              </Button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div>
                 <label className="block text-sm text-white/60 mb-2">Time Range</label>
-                <select
+                <Select
                   value={timeRange}
                   onChange={(e) => setTimeRange(e.target.value)}
-                  className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-[#F97316]"
                 >
                   <option value="7d">Last 7 days</option>
                   <option value="30d">Last 30 days</option>
                   <option value="90d">Last 90 days</option>
                   <option value="all">All time</option>
-                </select>
+                </Select>
               </div>
               <div>
                 <label className="block text-sm text-white/60 mb-2">Severity</label>
-                <select
+                <Select
                   value={severity}
                   onChange={(e) => setSeverity(e.target.value as ReadinessSeverity | 'all')}
-                  className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-[#F97316]"
                 >
                   <option value="all">All</option>
                   <option value="critical">Critical</option>
                   <option value="material">Material</option>
                   <option value="info">Info</option>
-                </select>
+                </Select>
               </div>
               <div>
                 <label className="block text-sm text-white/60 mb-2">Status</label>
-                <select
+                <Select
                   value={status}
                   onChange={(e) => setStatus(e.target.value as typeof status)}
-                  className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-[#F97316]"
                 >
                   <option value="open">Open</option>
                   <option value="in_progress">In Progress</option>
                   <option value="waived">Waived</option>
                   <option value="resolved">Resolved</option>
                   <option value="all">All</option>
-                </select>
+                </Select>
               </div>
               <div>
                 <label className="block text-sm text-white/60 mb-2">Sort By</label>
-                <select
+                <Select
                   value={sort}
                   onChange={(e) => setSort(e.target.value as typeof sort)}
-                  className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-[#F97316]"
                 >
                   <option value="severity">Severity</option>
                   <option value="oldest">Oldest First</option>
                   <option value="score">Risk Score</option>
-                </select>
+                </Select>
               </div>
             </div>
-          </div>
+            </GlassCard>
+          </PageSection>
 
           {/* Error State */}
           {error && (
-            <div className={`${cardStyles.base} p-6 border-red-500/30 bg-red-500/10 mb-8`}>
+            <PageSection>
+            <GlassCard className="p-6 border-red-500/30 bg-red-500/10">
               <div className="flex items-center gap-3 mb-2">
                 <XCircle className="w-5 h-5 text-red-400" />
                 <div className="font-semibold text-red-400">Failed to load readiness</div>
@@ -655,48 +655,43 @@ export default function AuditReadinessPage() {
               {error.requestId && process.env.NODE_ENV === 'development' && (
                 <p className="text-xs text-white/50 mt-2">Request ID: {error.requestId}</p>
               )}
-            </div>
+            </GlassCard>
+            </PageSection>
           )}
 
           {/* Readiness Items List */}
           {sortedItems.length === 0 && !loading && !error && (
-            <div className={cardStyles.base + ' p-12 text-center'}>
+            <PageSection>
+            <GlassCard className="p-12 text-center">
               <CheckCircle className="w-16 h-16 text-green-400 mx-auto mb-4" />
               <h3 className={typography.h2 + ' mb-2'}>All Clear</h3>
               <p className="text-white/60 mb-6">
                 No {category} readiness issues found for {timeRange === 'all' ? 'all time' : `the last ${timeRange}`}.
               </p>
-              <button
+              <Button
+                variant="primary"
                 onClick={() => router.push('/operations/audit')}
-                className={buttonStyles.primary}
               >
                 View Compliance Ledger
-              </button>
-            </div>
+              </Button>
+            </GlassCard>
+            </PageSection>
           )}
 
           {sortedItems.length > 0 && (
-            <div className="space-y-4 mb-8">
+            <PageSection>
+            <div className="space-y-4">
               {sortedItems.map((item) => (
-                <motion.div
-                  key={item.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className={`${cardStyles.base} p-6 border-2 ${getSeverityColor(item.severity)}`}
-                >
+                <GlassCard key={item.id} className={`p-6 border-2 ${getSeverityColor(item.severity)}`}>
                   <div className="flex items-start gap-4">
                     <div className="mt-0.5">
                       {getSeverityIcon(item.severity)}
                     </div>
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
-                        <span className={`px-2 py-1 rounded text-xs font-medium ${
-                          item.severity === 'critical' ? 'bg-red-500/30 text-red-300' :
-                          item.severity === 'material' ? 'bg-yellow-500/30 text-yellow-300' :
-                          'bg-blue-500/30 text-blue-300'
-                        }`}>
+                        <Badge variant={item.severity === 'critical' ? 'critical' : item.severity === 'material' ? 'warning' : 'neutral'}>
                           {item.rule_code}
-                        </span>
+                        </Badge>
                         <span className="text-xs text-white/50 uppercase tracking-wide">
                           {item.severity}
                         </span>
@@ -711,20 +706,23 @@ export default function AuditReadinessPage() {
                         </p>
                       )}
                     </div>
-                    <button
+                    <Button
+                      variant="primary"
                       onClick={() => handleFix(item)}
-                      className={buttonStyles.primary + ' whitespace-nowrap'}
+                      className="whitespace-nowrap"
                     >
                       {fixActionLabel(item.fix_action_type)} <ArrowRight className="w-4 h-4 inline ml-1" />
-                    </button>
+                    </Button>
                   </div>
-                </motion.div>
+                </GlassCard>
               ))}
             </div>
+          </PageSection>
           )}
 
           {/* Footer CTA */}
-          <div className={`${cardStyles.base} p-6 border-2 border-[#F97316]/30`}>
+          <PageSection>
+          <GlassCard className="p-6 border-2 border-[#F97316]/30">
             <div className="flex flex-col md:flex-row items-center justify-between gap-4">
               <div className="text-center md:text-left">
                 <p className="text-sm text-white/70 mb-2">
@@ -739,13 +737,14 @@ export default function AuditReadinessPage() {
                 )}
               </div>
               <div className="flex gap-3">
-                <button
+                <Button
+                  variant="secondary"
                   onClick={() => router.push('/operations/audit')}
-                  className={buttonStyles.secondary}
                 >
                   View Compliance Ledger
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="primary"
                   onClick={async () => {
                     setExportingPack(true)
                     try {
@@ -772,14 +771,14 @@ export default function AuditReadinessPage() {
                     }
                   }}
                   disabled={exportingPack}
-                  className={buttonStyles.primary + ' ' + (exportingPack ? 'opacity-50 cursor-not-allowed' : '')}
                 >
                   {exportingPack ? 'Generating...' : 'Export Audit Pack'}
-                </button>
+                </Button>
               </div>
             </div>
-          </div>
-        </div>
+          </GlassCard>
+          </PageSection>
+        </AppShell>
 
         {/* Fix Queue Sidebar */}
         <FixQueueSidebar
@@ -821,15 +820,16 @@ export default function AuditReadinessPage() {
 
         {/* Fix Queue Toggle Button */}
         {fixQueue.length > 0 && (
-          <button
+          <Button
+            variant="primary"
             onClick={() => setFixQueueOpen(!fixQueueOpen)}
-            className="fixed right-4 bottom-4 bg-[#F97316] text-black px-4 py-2 rounded-lg font-semibold shadow-lg hover:bg-[#FB923C] transition-colors flex items-center gap-2 z-30"
+            className="fixed right-4 bottom-4 shadow-lg flex items-center gap-2 z-30"
           >
             <CheckSquare className="w-5 h-5" />
             Fix Queue ({fixQueue.length})
-          </button>
+          </Button>
         )}
-      </div>
+      </AppBackground>
 
       {/* Modals */}
       {activeItem && showUploadEvidence && (
