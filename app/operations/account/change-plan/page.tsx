@@ -177,12 +177,11 @@ export default function ChangePlanPage() {
                     key={plan.code}
                     className={`p-8 relative ${
                       plan.popular
-                        ? 'border-2 border-[#F97316]'
+                        ? 'border-2 border-[#F97316] shadow-[0_0_40px_rgba(249,115,22,0.25)]'
                         : isCurrent
                         ? 'border-2 border-green-500'
                         : ''
                     }`}
-                    style={plan.popular ? { boxShadow: '0 0 40px rgba(249, 115, 22, 0.25)' } : {}}
                   >
                   {plan.popular && (
                     <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 bg-[#F97316] text-black text-xs font-semibold rounded-full">
