@@ -2249,7 +2249,7 @@ export default function AuditViewPage() {
           }}
           event={selectedEventForDetails}
         />
-      </div>
+      </AppBackground>
     </ProtectedRoute>
   )
 }
