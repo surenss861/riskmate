@@ -348,7 +348,7 @@ export default function ExecutiveSnapshotPage() {
                     Jobs above threshold require documented mitigation to remain defensible.
                   </div>
                 )}
-              </div>
+              </GlassCard>
 
               {/* Open Incidents */}
               <GlassCard
@@ -695,18 +695,13 @@ export default function ExecutiveSnapshotPage() {
                     View failing event →
                   </a>
                 )}
-              </div>
+              </GlassCard>
             </div>
-          </motion.div>
+          </PageSection>
 
           {/* Single CTA - Irreversible */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.3 }}
-            className="mt-12"
-          >
-            <div className={`${cardStyles.base} p-8 text-center border-2 border-[#F97316]/30`}>
+          <PageSection>
+            <GlassCard className="p-8 text-center border-2 border-[#F97316]/30">
               <h3 className="text-xl font-semibold text-white mb-2">
                 Open Full Governance Record
               </h3>
