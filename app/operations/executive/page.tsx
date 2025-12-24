@@ -654,7 +654,7 @@ export default function ExecutiveSnapshotPage() {
                     ? 'Last material governance event'
                     : 'No material events recorded yet'}
                 </div>
-              </div>
+              </GlassCard>
 
               {/* Ledger Integrity Status */}
               <GlassCard className={`p-6 ${
