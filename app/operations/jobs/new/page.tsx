@@ -205,10 +205,12 @@ export default function NewJobPage() {
       <AppBackground>
         <AppShell>
           <PageSection>
-            <PageHeader
-              title="Create New Job"
-              subtitle="Enter job details and select risk factors to get an instant risk score"
-              actions={
+            <div className="flex items-start justify-between mb-6">
+              <PageHeader
+                title="Create New Job"
+                subtitle="Enter job details and select risk factors to get an instant risk score"
+              />
+              <div className="text-right">
                 <Button
                   variant="secondary"
                   size="md"
@@ -242,8 +244,11 @@ export default function NewJobPage() {
                 >
                   Create & Generate Proof Pack →
                 </Button>
-              }
-            />
+                <p className="text-xs text-white/50 mt-2">
+                  Quick path to insurance-ready packet
+                </p>
+              </div>
+            </div>
           </PageSection>
 
           {error && (
