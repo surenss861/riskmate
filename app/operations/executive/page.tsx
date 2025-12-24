@@ -758,8 +758,6 @@ export default function ExecutiveSnapshotPage() {
                         alert('Failed to generate PDF. Please try again.')
                       }
                     }}
-                    variant="primary"
-                size="lg"
                 className="inline-flex items-center gap-2"
                   >
                     Export PDF Brief
@@ -812,7 +810,6 @@ export default function ExecutiveSnapshotPage() {
                   </Button>
                 </div>
               </div>
-            </div>
           </GlassCard>
           </PageSection>
         </AppShell>
