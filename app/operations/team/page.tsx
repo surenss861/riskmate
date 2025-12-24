@@ -394,9 +394,11 @@ export default function TeamPage() {
                           <div className="font-semibold text-white">
                             {member.full_name || member.email}
                           </div>
-                          <Badge variant="neutral" title={getRoleDescription(member.role)}>
-                            {getRoleLabel(member.role)}
-                          </Badge>
+                          <span title={getRoleDescription(member.role)}>
+                            <Badge variant="neutral">
+                              {getRoleLabel(member.role)}
+                            </Badge>
+                          </span>
                           {member.must_reset_password && (
                             <Badge variant="warning">
                               RESET REQUIRED
@@ -441,9 +443,11 @@ export default function TeamPage() {
                       <div className="flex-1">
                         <div className="flex items-center gap-3">
                           <div className="font-semibold text-white">{invite.email}</div>
-                          <Badge variant="neutral" title={getRoleDescription(invite.role)}>
-                            {getRoleLabel(invite.role)}
-                          </Badge>
+                          <span title={getRoleDescription(invite.role)}>
+                            <Badge variant="neutral">
+                              {getRoleLabel(invite.role)}
+                            </Badge>
+                          </span>
                           <Badge variant="neutral" className="bg-blue-500/20 text-blue-400">
                             PENDING
                           </Badge>
