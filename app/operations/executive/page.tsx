@@ -712,15 +712,15 @@ export default function ExecutiveSnapshotPage() {
                 Immutable, export-ready, insurer-safe
               </p>
               <div className="flex items-center justify-center gap-4">
-              <a
-                  href="/operations/audit?tab=governance&time_range=90d&severity=material"
+              <Button
                 variant="primary"
                 size="lg"
+                onClick={() => window.location.href = '/operations/audit?tab=governance&time_range=90d&severity=material'}
                 className="inline-flex items-center gap-2"
               >
                 View Compliance Ledger
                 <ExternalLink className="w-5 h-5" />
-              </a>
+              </Button>
                 <div className="flex flex-col items-center gap-2">
                   <Button
                     variant="primary"
