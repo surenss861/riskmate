@@ -148,7 +148,7 @@ export async function POST(
         signer_id: user.id,
         signoff_type: signoff_type || 'general',
         comments: comments || null,
-        role: role || userData.role,
+        role: role || userRole,
       })
       .select()
       .single()
