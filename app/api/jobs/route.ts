@@ -449,24 +449,24 @@ export async function POST(request: NextRequest) {
     // Log successful job creation with standardized schema
     await logFeatureUsage({
       feature: 'job_creation',
-        action: 'created',
-        allowed: true,
-        organizationId: organization_id,
-        actorId: userId,
-        entitlements, // Pass snapshot (no re-fetch)
-        source: 'api',
-        requestId,
-        resourceType: 'job',
-        resourceId: jobId,
-        additionalMetadata: {
-          job_id: jobId,
-          client_name,
-          job_type,
-          location,
-          risk_factors_count: risk_factor_codes?.length || 0,
-        },
-        logUsage: true,
-      })
+      action: 'created',
+      allowed: true,
+      organizationId: organization_id,
+      actorId: userId,
+      entitlements, // Pass snapshot (no re-fetch)
+      source: 'api',
+      requestId,
+      resourceType: 'job',
+      resourceId: jobId,
+      additionalMetadata: {
+        job_id: jobId,
+        client_name,
+        job_type,
+        location,
+        risk_factors_count: risk_factor_codes?.length || 0,
+      },
+      logUsage: true,
+    })
 
     // Calculate risk score if risk factors provided
     let riskScoreResult = null
