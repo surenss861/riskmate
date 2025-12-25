@@ -448,8 +448,7 @@ export async function POST(request: NextRequest) {
 
     // Log successful job creation with standardized schema
     await logFeatureUsage({
-      await logFeatureUsage({
-        feature: 'job_creation',
+      feature: 'job_creation',
         action: 'created',
         allowed: true,
         organizationId: organization_id,
