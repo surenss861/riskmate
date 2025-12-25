@@ -173,9 +173,9 @@ export async function POST(request: NextRequest) {
     const normalizedJobType = job_type?.toLowerCase().trim()
     const normalizedInsuranceStatus = insurance_status?.toLowerCase().trim()
 
-    // Validate enum values (common values - adjust based on your actual schema)
-    const validClientTypes = ['residential', 'commercial', 'industrial', 'mixed']
-    const validJobTypes = ['repair', 'maintenance', 'installation', 'inspection', 'renovation', 'new_construction']
+    // Validate enum values (match UI options)
+    const validClientTypes = ['residential', 'commercial', 'industrial', 'government', 'mixed']
+    const validJobTypes = ['repair', 'maintenance', 'installation', 'inspection', 'renovation', 'new_construction', 'remodel', 'other']
     const validInsuranceStatuses = ['pending', 'approved', 'rejected', 'not_required']
 
     if (!validClientTypes.includes(normalizedClientType)) {
