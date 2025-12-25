@@ -307,14 +307,25 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (jobError) {
-      console.error('Job creation failed:', jobError)
+      console.error('Job creation failed:', JSON.stringify(jobError, null, 2))
+      console.error('Job error details:', {
+        message: jobError.message,
+        code: jobError.code,
+        details: jobError.details,
+        hint: jobError.hint,
+      })
       
       // Return specific error messages based on error type
       let errorMessage = 'Failed to create job'
       let statusCode = 500
       
+      // PGRST204 = No rows returned (RLS blocking select after insert)
+      if (jobError.code === 'PGRST204' || jobError.code === 'PGRST116') {
+        errorMessage = 'Permission denied: Job was created but cannot be retrieved. Row-level security policy may be blocking access. Check your team role and RLS policies.'
+        statusCode = 403
+      }
       // RLS policy violation
-      if (jobError.message?.includes('row-level security') || jobError.message?.includes('RLS')) {
+      else if (jobError.message?.includes('row-level security') || jobError.message?.includes('RLS') || jobError.code === '42501') {
         errorMessage = 'Permission denied: You may not have permission to create jobs. Check your team role.'
         statusCode = 403
       }
@@ -340,8 +351,8 @@ export async function POST(request: NextRequest) {
         errorMessage = 'Duplicate entry: A job with these details already exists.'
         statusCode = 409
       }
-      // Include the actual error message in development
-      else if (process.env.NODE_ENV === 'development') {
+      // Always include actual error details in response for debugging
+      else {
         errorMessage = jobError.message || 'Failed to create job'
       }
       
@@ -350,7 +361,8 @@ export async function POST(request: NextRequest) {
           message: errorMessage,
           error: jobError.message,
           code: jobError.code,
-          details: process.env.NODE_ENV === 'development' ? jobError : undefined
+          hint: jobError.hint,
+          details: jobError.details || (process.env.NODE_ENV === 'development' ? jobError : undefined)
         },
         { status: statusCode }
       )
