@@ -303,3 +303,31 @@ button {
 .animate-soft-float {
   animation: floatSoft 6s ease-in-out infinite;
 }
+
+/* Select dropdown options styling - ensure proper contrast */
+select {
+  color-scheme: dark;
+}
+
+select option {
+  background-color: #1a1a1a !important;
+  color: #ffffff !important;
+  padding: 8px 12px;
+}
+
+/* Selected option styling */
+select option:checked {
+  background-color: #F97316 !important;
+  color: #000000 !important;
+}
+
+/* Hover state for options */
+select option:hover {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Focus state - ensure selected option is visible */
+select:focus option:checked {
+  background-color: #F97316 !important;
+  color: #000000 !important;
+}
