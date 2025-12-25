@@ -226,9 +226,51 @@ export async function POST(request: NextRequest) {
 
     if (jobError) {
       console.error('Job creation failed:', jobError)
+      
+      // Return specific error messages based on error type
+      let errorMessage = 'Failed to create job'
+      let statusCode = 500
+      
+      // RLS policy violation
+      if (jobError.message?.includes('row-level security') || jobError.message?.includes('RLS')) {
+        errorMessage = 'Permission denied: You may not have permission to create jobs. Check your team role.'
+        statusCode = 403
+      }
+      // Foreign key constraint violation
+      else if (jobError.message?.includes('foreign key') || jobError.code === '23503') {
+        errorMessage = 'Invalid reference: One of the selected values (template, organization, etc.) is invalid.'
+        statusCode = 400
+      }
+      // Not null constraint violation
+      else if (jobError.message?.includes('null value') || jobError.code === '23502') {
+        const fieldMatch = jobError.message?.match(/column "(\w+)"/)
+        const field = fieldMatch ? fieldMatch[1] : 'required field'
+        errorMessage = `Missing required field: ${field}`
+        statusCode = 400
+      }
+      // Enum/invalid value
+      else if (jobError.message?.includes('invalid input') || jobError.code === '22P02') {
+        errorMessage = 'Invalid value: One of the field values is not allowed. Check job type, client type, or status.'
+        statusCode = 400
+      }
+      // Unique constraint violation
+      else if (jobError.code === '23505') {
+        errorMessage = 'Duplicate entry: A job with these details already exists.'
+        statusCode = 409
+      }
+      // Include the actual error message in development
+      else if (process.env.NODE_ENV === 'development') {
+        errorMessage = jobError.message || 'Failed to create job'
+      }
+      
       return NextResponse.json(
-        { message: 'Failed to create job' },
-        { status: 500 }
+        { 
+          message: errorMessage,
+          error: jobError.message,
+          code: jobError.code,
+          details: process.env.NODE_ENV === 'development' ? jobError : undefined
+        },
+        { status: statusCode }
       )
     }
 

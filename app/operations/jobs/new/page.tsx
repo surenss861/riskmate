@@ -179,7 +179,11 @@ export default function NewJobPage() {
       // Redirect to job detail page
       router.push(`/operations/jobs/${response.data.id}?created=true`)
     } catch (err: any) {
-      setError('We couldn\'t create that job. Your information is still here — check the form and try again. If this continues, refresh the page.')
+      console.error('Job creation failed:', err)
+      // Extract actual error message from API response
+      // The apiRequest function throws an Error with the message property
+      const errorMessage = err?.message || err?.error || 'We couldn\'t create that job. Check the form and try again.'
+      setError(errorMessage)
       setLoading(false)
     }
   }
@@ -249,7 +253,9 @@ export default function NewJobPage() {
                       // Redirect directly to Job Packet view
                       router.push(`/operations/jobs/${response.data.id}?view=packet`)
                     } catch (err: any) {
-                      setError('Failed to create job. Please try the standard form.')
+                      console.error('Quick create job failed:', err)
+                      const errorMessage = err?.message || err?.error || 'Failed to create job. Please try the standard form.'
+                      setError(errorMessage)
                       setLoading(false)
                     }
                   }}
