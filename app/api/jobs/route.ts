@@ -333,11 +333,13 @@ export async function POST(request: NextRequest) {
     console.log('[jobs] request body keys:', Object.keys(body))
 
     // Create job (using filtered, normalized values)
+    // Use .maybeSingle() instead of .single() to handle RLS blocking gracefully
+    // Select only 'id' to minimize chance of schema cache issues
     const { data: job, error: jobError } = await supabase
       .from('jobs')
       .insert(filteredJobRow)
-      .select()
-      .single()
+      .select('id')
+      .maybeSingle()
 
     if (jobError) {
       console.error('Job creation failed:', JSON.stringify(jobError, null, 2))
@@ -352,19 +354,26 @@ export async function POST(request: NextRequest) {
       let errorMessage = 'Failed to create job'
       let statusCode = 500
       
-      // PGRST204 = Column doesn't exist OR no rows returned (RLS blocking)
-      if (jobError.code === 'PGRST204' || jobError.code === 'PGRST116') {
-        // Check if it's a column error (details/hint will mention column)
-        if (jobError.details?.includes('column') || jobError.hint?.includes('column')) {
+      // PGRST204 = Column doesn't exist (schema cache issue)
+      if (jobError.code === 'PGRST204') {
+        // Check if it's a schema cache error (message mentions "schema cache")
+        if (jobError.message?.includes('schema cache') || jobError.details?.includes('schema cache')) {
+          errorMessage = `PostgREST schema cache error: ${jobError.message || jobError.details || 'Column may not exist or schema cache is stale'}. Try reloading the schema cache or check if the column exists in the database.`
+          statusCode = 400
+        } else if (jobError.details?.includes('column') || jobError.hint?.includes('column')) {
+          // Column name issue
           errorMessage = `Invalid column in request: ${jobError.message || jobError.details || 'Unknown column'}. Please check the request payload.`
           statusCode = 400
         } else {
-          // It's an RLS blocking issue
-          errorMessage = 'Permission denied: Job was created but cannot be retrieved. Row-level security policy may be blocking access. Check your team role and RLS policies.'
-          statusCode = 403
+          // Generic PGRST204
+          errorMessage = `Database schema error: ${jobError.message || jobError.details || 'Unknown schema issue'}. Check that all columns exist.`
+          statusCode = 400
         }
-        // Always include the raw error message for debugging
-        errorMessage = `${errorMessage} (${jobError.message || jobError.code})`
+      }
+      // PGRST116 = No rows returned (could be RLS blocking SELECT after INSERT)
+      else if (jobError.code === 'PGRST116') {
+        errorMessage = 'Permission denied: Job was created but cannot be retrieved. Row-level security policy may be blocking access. Check your team role and RLS policies.'
+        statusCode = 403
       }
       // RLS policy violation
       else if (jobError.message?.includes('row-level security') || jobError.message?.includes('RLS') || jobError.code === '42501') {
@@ -410,18 +419,43 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Handle case where insert succeeded but SELECT was blocked by RLS (no error, but no data)
+    if (!job && !jobError) {
+      console.warn('Job insert may have succeeded but could not be retrieved (likely RLS blocking SELECT)')
+      // Return success but warn that we couldn't fetch the created job
+      return NextResponse.json(
+        { 
+          message: 'Job created successfully, but could not retrieve it. This may be due to row-level security policies.',
+          code: 'CREATED_BUT_UNREADABLE',
+          warning: 'Job may have been created but is not immediately accessible. Check the jobs list to verify.'
+        },
+        { status: 201 }
+      )
+    }
+
+    // If we have an error but no job data, log it
+    if (!job?.id && !jobError) {
+      console.error('Job insert returned no data and no error - this should not happen')
+      return NextResponse.json(
+        { message: 'Job creation may have failed. Please check the jobs list to verify.' },
+        { status: 500 }
+      )
+    }
+
     // Log successful job creation with standardized schema
-    await logFeatureUsage({
-      feature: 'job_creation',
-      action: 'created',
-      allowed: true,
-      organizationId: organization_id,
-      actorId: userId,
-      entitlements, // Pass snapshot (no re-fetch)
-      source: 'api',
-      requestId,
-      resourceType: 'job',
-      resourceId: job.id,
+    // Use job.id if available, otherwise we'll skip the audit log (job was created but unreadable)
+    if (job?.id) {
+      await logFeatureUsage({
+        feature: 'job_creation',
+        action: 'created',
+        allowed: true,
+        organizationId: organization_id,
+        actorId: userId,
+        entitlements, // Pass snapshot (no re-fetch)
+        source: 'api',
+        requestId,
+        resourceType: 'job',
+        resourceId: job.id,
       additionalMetadata: {
         job_id: job.id,
         client_name,
