@@ -380,7 +380,7 @@ export default function TeamPage() {
           <PageSection>
             <GlassCard className="p-6">
               <h2 className={`${typography.h3} ${spacing.normal}`}>Team Members</h2>
-              {team.members.length === 0 ? (
+              {!team.members || team.members.length === 0 ? (
                 <p className="text-white/60">No team members yet.</p>
               ) : (
                 <div className="space-y-3">
@@ -430,7 +430,7 @@ export default function TeamPage() {
           </PageSection>
 
           {/* Pending Invites */}
-          {team.invites.length > 0 && (
+          {team.invites && team.invites.length > 0 && (
           <PageSection>
             <GlassCard className="p-6">
                 <h2 className={`${typography.h3} ${spacing.normal}`}>Pending Invites</h2>

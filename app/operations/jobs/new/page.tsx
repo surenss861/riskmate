@@ -152,13 +152,26 @@ export default function NewJobPage() {
         const supabase = createSupabaseBrowserClient()
         const { data: { user } } = await supabase.auth.getUser()
         if (user) {
-          const { data: subData } = await supabase
-            .from('subscriptions')
-            .select('tier')
-            .eq('organization_id', (await supabase.from('users').select('organization_id').eq('id', user.id).single()).data?.organization_id)
-            .eq('status', 'active')
-            .single()
-          trackTemplateApplied(subData?.tier || 'starter', 'job', 'new-job')
+          try {
+            const { data: userData } = await supabase
+              .from('users')
+              .select('organization_id')
+              .eq('id', user.id)
+              .single()
+            
+            if (userData?.organization_id) {
+              const { data: subData } = await supabase
+                .from('subscriptions')
+                .select('tier')
+                .eq('organization_id', userData.organization_id)
+                .eq('status', 'active')
+                .single()
+              trackTemplateApplied(subData?.tier || 'starter', 'job', 'new-job')
+            }
+          } catch (err) {
+            // Silently fail - tracking is not critical
+            console.error('Failed to track template usage:', err)
+          }
         }
       }
 
