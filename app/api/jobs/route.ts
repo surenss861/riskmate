@@ -433,18 +433,21 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // If we have an error but no job data, log it
-    if (!job?.id && !jobError) {
-      console.error('Job insert returned no data and no error - this should not happen')
+    // If we have no job ID, we can't proceed (should have been handled above)
+    if (!job?.id) {
+      // This case should have been handled by the checks above, but safety check
+      console.error('Job insert returned no ID - cannot proceed')
       return NextResponse.json(
         { message: 'Job creation may have failed. Please check the jobs list to verify.' },
         { status: 500 }
       )
     }
 
+    // At this point, TypeScript knows job.id exists
+    const jobId = job.id
+
     // Log successful job creation with standardized schema
-    // Use job.id if available, otherwise we'll skip the audit log (job was created but unreadable)
-    if (job?.id) {
+    await logFeatureUsage({
       await logFeatureUsage({
         feature: 'job_creation',
         action: 'created',
@@ -455,9 +458,9 @@ export async function POST(request: NextRequest) {
         source: 'api',
         requestId,
         resourceType: 'job',
-        resourceId: job.id,
+        resourceId: jobId,
         additionalMetadata: {
-          job_id: job.id,
+          job_id: jobId,
           client_name,
           job_type,
           location,
@@ -465,7 +468,6 @@ export async function POST(request: NextRequest) {
         },
         logUsage: true,
       })
-    }
 
     // Calculate risk score if risk factors provided
     let riskScoreResult = null
@@ -475,7 +477,7 @@ export async function POST(request: NextRequest) {
 
         // Save risk score
         await supabase.from('job_risk_scores').insert({
-          job_id: job.id,
+          job_id: jobId,
           overall_score: riskScoreResult.overall_score,
           risk_level: riskScoreResult.risk_level,
           factors: riskScoreResult.factors,
@@ -488,10 +490,10 @@ export async function POST(request: NextRequest) {
             risk_score: riskScoreResult.overall_score,
             risk_level: riskScoreResult.risk_level,
           })
-          .eq('id', job.id)
+          .eq('id', jobId)
 
         // Generate mitigation items
-        await generateMitigationItems(job.id, risk_factor_codes)
+        await generateMitigationItems(jobId, risk_factor_codes)
       } catch (riskError: any) {
         console.error('Risk scoring failed:', riskError)
         // Continue without risk score - job is still created
@@ -502,7 +504,7 @@ export async function POST(request: NextRequest) {
     const { data: completeJob } = await supabase
       .from('jobs')
       .select('*')
-      .eq('id', job.id)
+      .eq('id', jobId)
       .maybeSingle()
     
     // If we can't fetch the complete job, return what we have
@@ -511,7 +513,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           data: {
-            id: job.id,
+            id: jobId,
             message: 'Job created but full details are not immediately accessible. Check the jobs list.',
           },
         },
@@ -522,7 +524,7 @@ export async function POST(request: NextRequest) {
     const { data: mitigationItems } = await supabase
       .from('mitigation_items')
       .select('id, title, description, done, is_completed')
-      .eq('job_id', job.id)
+      .eq('job_id', jobId)
 
     return NextResponse.json(
       {
