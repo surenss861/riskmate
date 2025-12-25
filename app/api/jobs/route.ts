@@ -284,6 +284,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Allowlist of valid jobs table columns (prevent PGRST204 from unknown columns)
+    // NOTE: Only include columns that actually exist in the jobs table
     const validJobColumns = new Set([
       'organization_id',
       'created_by',
@@ -298,10 +299,8 @@ export async function POST(request: NextRequest) {
       'has_subcontractors',
       'subcontractor_count',
       'insurance_status',
-      'applied_template_id',
-      'applied_template_type',
-      'site_id',
-      'site_name',
+      // Removed: 'applied_template_id', 'applied_template_type' - these columns don't exist in the jobs table
+      // Removed: 'site_id', 'site_name' - check if these exist before including
     ])
 
     // Build job row with only valid columns
@@ -319,8 +318,9 @@ export async function POST(request: NextRequest) {
       has_subcontractors,
       subcontractor_count: has_subcontractors ? (subcontractor_count || 0) : 0,
       insurance_status: normalizedInsuranceStatus,
-      applied_template_id: applied_template_id || null,
-      applied_template_type: applied_template_type || null,
+      // Note: applied_template_id and applied_template_type are not included because
+      // these columns don't exist in the jobs table schema
+      // Template tracking should be handled separately if needed
     }
 
     // Filter to only valid columns (strip any extra fields from request body)
