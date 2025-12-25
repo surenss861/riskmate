@@ -107,10 +107,10 @@ export async function POST(
     const body = await request.json()
     const { signoff_type, comments, role } = body
 
-    // Get user's organization_id
+    // Get user's organization_id and role
     const { data: userData, error: userError } = await supabase
       .from('users')
-      .select('organization_id')
+      .select('organization_id, role')
       .eq('id', user.id)
       .single()
 
@@ -122,6 +122,7 @@ export async function POST(
     }
 
     const organizationId = userData.organization_id
+    const userRole = userData.role || 'member'
 
     // Verify job belongs to organization
     const { data: job, error: jobError } = await supabase
