@@ -111,9 +111,18 @@ export async function DELETE(
     return NextResponse.json({ status: 'removed' })
   } catch (error: any) {
     console.error('Member removal failed:', error)
+    
+    // Return more specific error messages
+    const errorMessage = error?.message || 'Failed to remove teammate'
+    const statusCode = error?.status || error?.code === 'PGRST116' ? 404 : 500
+    
     return NextResponse.json(
-      { message: 'Failed to remove teammate' },
-      { status: 500 }
+      { 
+        message: errorMessage,
+        code: error?.code,
+        details: process.env.NODE_ENV === 'development' ? error?.stack : undefined
+      },
+      { status: statusCode }
     )
   }
 }

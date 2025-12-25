@@ -827,31 +827,47 @@ export default function AccountPage() {
                           placeholder="Type DELETE to confirm"
                           className="w-full border-red-500/30 focus:border-red-500/50"
                         />
-                        <button
-                          className="w-full px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-400 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        <Button
+                          variant="primary"
+                          className="w-full bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-400"
                           onClick={async () => {
                             if (deleteConfirmation !== 'DELETE') {
                               setError('Please type DELETE to confirm')
                               return
                             }
+                            
+                            // Double confirmation
+                            if (!confirm('Are you sure you want to deactivate your account? This action cannot be undone. Your data will be retained for 30 days.')) {
+                              return
+                            }
+                            
                             try {
                               setUpdating(true)
-                              await accountApi.deactivateAccount(deleteConfirmation)
                               setError(null)
-                              alert('Account deactivation requested. Your account will be disabled and data retained for 30 days.')
+                              const response = await accountApi.deactivateAccount(deleteConfirmation)
+                              setError(null)
+                              alert(`Account deactivation successful. Your account will be disabled and data retained for ${response.retention_days || 30} days.`)
                               setDeleteConfirmation('')
                               // Sign out after deactivation
                               await handleLogout()
                             } catch (err: any) {
-                              setError(err?.message || 'Failed to deactivate account')
+                              console.error('Account deactivation failed:', err)
+                              const errorMessage = err?.message || err?.detail || 'Failed to deactivate account'
+                              
+                              // Provide more specific error messages
+                              if (errorMessage.includes('last owner')) {
+                                setError('Cannot deactivate the last owner. Transfer ownership or add another owner first.')
+                              } else {
+                                setError(errorMessage)
+                              }
                             } finally {
                               setUpdating(false)
                             }
                           }}
                           disabled={deleteConfirmation !== 'DELETE' || updating}
                         >
-                          {updating ? 'Processing...' : 'Deactivate Account'}
-                        </button>
+                          {updating ? 'Deactivating...' : 'Deactivate Account'}
+                        </Button>
                       </div>
                     </div>
                   </div>

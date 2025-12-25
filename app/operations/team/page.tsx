@@ -147,11 +147,28 @@ export default function TeamPage() {
     setShowRemoveConfirm(false)
     try {
       await teamApi.removeMember(memberToRemove)
+      // Refresh team data
       const data = await teamApi.get()
       setTeam(data)
+      // Clear any previous errors on success
+      setError(null)
     } catch (err: any) {
       console.error('Failed to remove member:', err)
-      setError('We couldn\'t remove that member. Try again in a moment. If this continues, they may have active assignments that need to be handled first.')
+      // Show actual error message from API if available
+      const errorMessage = err?.message || err?.detail || 'We couldn\'t remove that member. Try again in a moment.'
+      
+      // Provide more specific error messages based on error code or message
+      if (errorMessage.includes('last owner') || errorMessage.includes('Cannot remove')) {
+        setError(errorMessage)
+      } else if (errorMessage.includes('active assignments') || errorMessage.includes('assignments')) {
+        setError('This member has active job assignments. Please reassign or complete those jobs first.')
+      } else if (errorMessage.includes('cannot remove yourself')) {
+        setError('You cannot remove yourself. Ask another owner or admin to remove you.')
+      } else if (errorMessage.includes('Only owners')) {
+        setError('Only owners can remove other owners. Contact an owner to remove this member.')
+      } else {
+        setError(errorMessage)
+      }
     } finally {
       setRemoving(null)
       setMemberToRemove(null)
