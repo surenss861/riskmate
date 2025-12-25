@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { confirmation, reason } = body
+    const { confirmation, reason, transfer_to_user_id } = body
 
     if (confirmation !== 'DELETE') {
       return NextResponse.json(
@@ -44,7 +44,8 @@ export async function POST(request: NextRequest) {
 
     // Check if user is the last owner
     if (userData.role === 'owner') {
-      const { count } = await supabase
+      // Count other owners
+      const { count: ownerCount } = await supabase
         .from('users')
         .select('id', { count: 'exact', head: true })
         .eq('organization_id', organizationId)
@@ -52,13 +53,51 @@ export async function POST(request: NextRequest) {
         .is('archived_at', null)
         .neq('id', user.id)
 
-      if ((count ?? 0) === 0) {
-        return NextResponse.json(
-          {
-            message: 'Cannot deactivate the last owner. Transfer ownership or add another owner first.',
-          },
-          { status: 400 }
-        )
+      // Count other members (non-owners)
+      const { count: memberCount } = await supabase
+        .from('users')
+        .select('id', { count: 'exact', head: true })
+        .eq('organization_id', organizationId)
+        .is('archived_at', null)
+        .neq('id', user.id)
+        .neq('role', 'owner')
+
+      // If this is the last owner
+      if ((ownerCount ?? 0) === 0) {
+        // Option A: If there are other members, require ownership transfer
+        if ((memberCount ?? 0) > 0) {
+          if (!transfer_to_user_id) {
+            return NextResponse.json(
+              {
+                message: 'You are the last owner. Please transfer ownership to another member before deleting your account.',
+                requires_transfer: true,
+                available_members: memberCount,
+              },
+              { status: 400 }
+            )
+          }
+
+          // Transfer ownership before deletion
+          const { data: transferData, error: transferError } = await supabase.rpc(
+            'transfer_team_ownership',
+            {
+              p_organization_id: organizationId,
+              p_new_owner_user_id: transfer_to_user_id,
+            }
+          )
+
+          if (transferError) {
+            return NextResponse.json(
+              {
+                message: transferError.message || 'Failed to transfer ownership',
+                code: transferError.code,
+              },
+              { status: 400 }
+            )
+          }
+        }
+        // Option B: If no other members exist, allow deletion (org will be effectively dissolved)
+        // No transfer needed - proceed with deletion
       }
     }
 

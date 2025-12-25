@@ -645,10 +645,10 @@ export const accountApi = {
     return apiRequest<{ data: any[] }>(`/api/account/security/events${params}`);
   },
 
-  deactivateAccount: async (confirmation: string, reason?: string) => {
+  deactivateAccount: async (confirmation: string, reason?: string, transfer_to_user_id?: string) => {
     return apiRequest<{ message: string; retention_days: number }>('/api/account/deactivate', {
       method: 'POST',
-      body: JSON.stringify({ confirmation, reason }),
+      body: JSON.stringify({ confirmation, reason, transfer_to_user_id }),
     });
   },
 };

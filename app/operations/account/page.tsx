@@ -7,11 +7,11 @@ import ProtectedRoute from '@/components/ProtectedRoute'
 import { DashboardNavbar } from '@/components/dashboard/DashboardNavbar'
 import { TemplatesManager } from '@/components/dashboard/TemplatesManager'
 import { ErrorModal } from '@/components/dashboard/ErrorModal'
-import { subscriptionsApi, accountApi } from '@/lib/api'
+import { subscriptionsApi, accountApi, teamApi } from '@/lib/api'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { spacing, typography } from '@/lib/styles/design-system'
 import { Check, X, Edit2, Save, Loader2 } from 'lucide-react'
-import { AppBackground, AppShell, PageSection, GlassCard, Button, Input, Badge } from '@/components/shared'
+import { AppBackground, AppShell, PageSection, GlassCard, Button, Input, Badge, Select } from '@/components/shared'
 
 interface Profile {
   id: string
@@ -43,6 +43,10 @@ export default function AccountPage() {
   const [userEmail, setUserEmail] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [deleteConfirmation, setDeleteConfirmation] = useState('')
+  const [teamMembers, setTeamMembers] = useState<Array<{ id: string; email: string; full_name: string | null; role: string }>>([])
+  const [transferToUserId, setTransferToUserId] = useState<string>('')
+  const [isLastOwner, setIsLastOwner] = useState(false)
+  const [hasOtherMembers, setHasOtherMembers] = useState(false)
   
   // Inline editing states
   const [editingField, setEditingField] = useState<string | null>(null)
@@ -123,6 +127,31 @@ export default function AccountPage() {
           setSecurityEvents(eventsData.data || [])
         } catch (eventsError) {
           console.warn('Failed to load security events:', eventsError)
+        }
+
+        // Load team members to check if user is last owner
+        try {
+          const teamData = await teamApi.get()
+          if (teamData.members) {
+            setTeamMembers(teamData.members)
+            
+            // Check if current user is last owner
+            const currentUser = teamData.members.find((m: any) => m.email === user.email)
+            if (currentUser?.role === 'owner') {
+              const otherOwners = teamData.members.filter(
+                (m: any) => m.role === 'owner' && m.email !== user.email
+              )
+              const otherMembers = teamData.members.filter(
+                (m: any) => m.role !== 'owner' && m.email !== user.email
+              )
+              
+              setIsLastOwner(otherOwners.length === 0)
+              setHasOtherMembers(otherMembers.length > 0)
+            }
+          }
+        } catch (teamError) {
+          // Silently fail - team data not critical for account page
+          console.warn('Failed to load team data:', teamError)
         }
       } catch (err: any) {
         console.error('Failed to load account data:', err)
@@ -826,62 +855,200 @@ export default function AccountPage() {
                   <div className="space-y-4">
                     <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-lg">
                       <h3 className="text-sm font-semibold text-white mb-2">Deactivate Account</h3>
-                      <p className="text-xs text-white/60 mb-2">
-                        Request account deactivation. Your account will be disabled immediately, and all data will be retained for 30 days before permanent deletion.
-                      </p>
-                      <p className="text-xs text-white/40 mb-4">
-                        Data export available upon request during retention period.
-                      </p>
-                      <div className="space-y-3">
-                        <Input
-                          type="text"
-                          value={deleteConfirmation}
-                          onChange={(e) => setDeleteConfirmation(e.target.value)}
-                          placeholder="Type DELETE to confirm"
-                          className="w-full border-red-500/30 focus:border-red-500/50"
-                        />
-                        <Button
-                          variant="primary"
-                          className="w-full bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-400"
-                          onClick={async () => {
-                            if (deleteConfirmation !== 'DELETE') {
-                              setError('Please type DELETE to confirm')
-                              return
-                            }
-                            
-                            // Double confirmation
-                            if (!confirm('Are you sure you want to deactivate your account? This action cannot be undone. Your data will be retained for 30 days.')) {
-                              return
-                            }
-                            
-                            try {
-                              setUpdating(true)
-                              setError(null)
-                              const response = await accountApi.deactivateAccount(deleteConfirmation)
-                              setError(null)
-                              alert(`Account deactivation successful. Your account will be disabled and data retained for ${response.retention_days || 30} days.`)
-                              setDeleteConfirmation('')
-                              // Sign out after deactivation
-                              await handleLogout()
-                            } catch (err: any) {
-                              console.error('Account deactivation failed:', err)
-                              const errorMessage = err?.message || err?.detail || 'Failed to deactivate account'
-                              
-                              // Provide more specific error messages
-                              if (errorMessage.includes('last owner')) {
-                                setError('Cannot deactivate the last owner. Transfer ownership or add another owner first.')
-                              } else {
-                                setError(errorMessage)
-                              }
-                            } finally {
-                              setUpdating(false)
-                            }
-                          }}
-                          disabled={deleteConfirmation !== 'DELETE' || updating}
-                        >
-                          {updating ? 'Deactivating...' : 'Deactivate Account'}
-                        </Button>
-                      </div>
+                      
+                      {/* Show different UI based on ownership status */}
+                      {isLastOwner && hasOtherMembers ? (
+                        <>
+                          <p className="text-xs text-white/60 mb-2">
+                            You are the last owner. To delete your account, you must transfer ownership to another member.
+                          </p>
+                          <p className="text-xs text-white/40 mb-4">
+                            After transfer, your account will be deactivated and all data retained for 30 days.
+                          </p>
+                          <div className="space-y-3">
+                            <div>
+                              <label className="block text-xs font-medium text-white/60 mb-2">
+                                Transfer Ownership To
+                              </label>
+                              <Select
+                                value={transferToUserId}
+                                onChange={(e) => setTransferToUserId(e.target.value)}
+                                className="w-full"
+                              >
+                                <option value="">Select a member...</option>
+                                {teamMembers
+                                  .filter((m) => m.email !== userEmail && m.role !== 'owner')
+                                  .map((member) => (
+                                    <option key={member.id} value={member.id}>
+                                      {member.full_name || member.email} ({member.role})
+                                    </option>
+                                  ))}
+                              </Select>
+                            </div>
+                            <Input
+                              type="text"
+                              value={deleteConfirmation}
+                              onChange={(e) => setDeleteConfirmation(e.target.value)}
+                              placeholder="Type DELETE to confirm"
+                              className="w-full border-red-500/30 focus:border-red-500/50"
+                            />
+                            <Button
+                              variant="primary"
+                              className="w-full bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-400"
+                              onClick={async () => {
+                                if (deleteConfirmation !== 'DELETE') {
+                                  setError('Please type DELETE to confirm')
+                                  return
+                                }
+                                
+                                if (!transferToUserId) {
+                                  setError('Please select a member to transfer ownership to')
+                                  return
+                                }
+                                
+                                const selectedMember = teamMembers.find((m) => m.id === transferToUserId)
+                                const confirmMessage = `Transfer ownership to ${selectedMember?.full_name || selectedMember?.email} and delete your account? This action cannot be undone.`
+                                
+                                if (!confirm(confirmMessage)) {
+                                  return
+                                }
+                                
+                                try {
+                                  setUpdating(true)
+                                  setError(null)
+                                  const response = await accountApi.deactivateAccount(deleteConfirmation, undefined, transferToUserId)
+                                  setError(null)
+                                  alert(`Ownership transferred and account deactivated. Your account will be disabled and data retained for ${response.retention_days || 30} days.`)
+                                  setDeleteConfirmation('')
+                                  setTransferToUserId('')
+                                  // Sign out after deactivation
+                                  await handleLogout()
+                                } catch (err: any) {
+                                  console.error('Account deactivation failed:', err)
+                                  const errorMessage = err?.message || err?.detail || 'Failed to deactivate account'
+                                  setError(errorMessage)
+                                } finally {
+                                  setUpdating(false)
+                                }
+                              }}
+                              disabled={deleteConfirmation !== 'DELETE' || !transferToUserId || updating}
+                            >
+                              {updating ? 'Transferring & Deactivating...' : 'Transfer Ownership & Deactivate Account'}
+                            </Button>
+                          </div>
+                        </>
+                      ) : isLastOwner && !hasOtherMembers ? (
+                        <>
+                          <p className="text-xs text-white/60 mb-2">
+                            You are the last owner and the only member. Deleting your account will effectively dissolve this organization.
+                          </p>
+                          <p className="text-xs text-white/40 mb-4">
+                            Your account will be deactivated immediately, and all data will be retained for 30 days before permanent deletion.
+                          </p>
+                          <div className="space-y-3">
+                            <Input
+                              type="text"
+                              value={deleteConfirmation}
+                              onChange={(e) => setDeleteConfirmation(e.target.value)}
+                              placeholder="Type DELETE to confirm"
+                              className="w-full border-red-500/30 focus:border-red-500/50"
+                            />
+                            <Button
+                              variant="primary"
+                              className="w-full bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-400"
+                              onClick={async () => {
+                                if (deleteConfirmation !== 'DELETE') {
+                                  setError('Please type DELETE to confirm')
+                                  return
+                                }
+                                
+                                if (!confirm('This will dissolve the organization and delete your account. This action cannot be undone. Continue?')) {
+                                  return
+                                }
+                                
+                                try {
+                                  setUpdating(true)
+                                  setError(null)
+                                  const response = await accountApi.deactivateAccount(deleteConfirmation)
+                                  setError(null)
+                                  alert(`Account deactivated. Organization dissolved. Your data will be retained for ${response.retention_days || 30} days.`)
+                                  setDeleteConfirmation('')
+                                  // Sign out after deactivation
+                                  await handleLogout()
+                                } catch (err: any) {
+                                  console.error('Account deactivation failed:', err)
+                                  const errorMessage = err?.message || err?.detail || 'Failed to deactivate account'
+                                  setError(errorMessage)
+                                } finally {
+                                  setUpdating(false)
+                                }
+                              }}
+                              disabled={deleteConfirmation !== 'DELETE' || updating}
+                            >
+                              {updating ? 'Deactivating...' : 'Dissolve Organization & Deactivate Account'}
+                            </Button>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-xs text-white/60 mb-2">
+                            Request account deactivation. Your account will be disabled immediately, and all data will be retained for 30 days before permanent deletion.
+                          </p>
+                          <p className="text-xs text-white/40 mb-4">
+                            Data export available upon request during retention period.
+                          </p>
+                          <div className="space-y-3">
+                            <Input
+                              type="text"
+                              value={deleteConfirmation}
+                              onChange={(e) => setDeleteConfirmation(e.target.value)}
+                              placeholder="Type DELETE to confirm"
+                              className="w-full border-red-500/30 focus:border-red-500/50"
+                            />
+                            <Button
+                              variant="primary"
+                              className="w-full bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-400"
+                              onClick={async () => {
+                                if (deleteConfirmation !== 'DELETE') {
+                                  setError('Please type DELETE to confirm')
+                                  return
+                                }
+                                
+                                // Double confirmation
+                                if (!confirm('Are you sure you want to deactivate your account? This action cannot be undone. Your data will be retained for 30 days.')) {
+                                  return
+                                }
+                                
+                                try {
+                                  setUpdating(true)
+                                  setError(null)
+                                  const response = await accountApi.deactivateAccount(deleteConfirmation)
+                                  setError(null)
+                                  alert(`Account deactivation successful. Your account will be disabled and data retained for ${response.retention_days || 30} days.`)
+                                  setDeleteConfirmation('')
+                                  // Sign out after deactivation
+                                  await handleLogout()
+                                } catch (err: any) {
+                                  console.error('Account deactivation failed:', err)
+                                  const errorMessage = err?.message || err?.detail || 'Failed to deactivate account'
+                                  
+                                  // Provide more specific error messages
+                                  if (errorMessage.includes('last owner') || errorMessage.includes('requires_transfer')) {
+                                    setError('You are the last owner. Please transfer ownership to another member before deleting your account.')
+                                  } else {
+                                    setError(errorMessage)
+                                  }
+                                } finally {
+                                  setUpdating(false)
+                                }
+                              }}
+                              disabled={deleteConfirmation !== 'DELETE' || updating}
+                            >
+                              {updating ? 'Deactivating...' : 'Deactivate Account'}
+                            </Button>
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
               </GlassCard>
