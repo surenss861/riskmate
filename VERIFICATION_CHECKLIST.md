@@ -1,167 +1,291 @@
-# Compliance Ledger Verification Checklist
+# Team Removal & Account Deletion - Verification Checklist
 
-## Migration Status
-- [ ] Run: `supabase migration up` (or apply via Supabase dashboard)
-- [ ] Verify: `category_tab` column exists on `audit_logs` table
-- [ ] Verify: Old events have `category_tab` populated
+## ✅ Pre-Verification: Confirm Deployment Status
 
-## Card Workflow Smoke Tests
+### A) Check Deployed Commit
 
-### Review Queue Card
+**Current commit:** `83cf6fe` - "fix: Implement server-side team removal and account deletion with RPC functions"
 
-#### Assign Action
-- [ ] Select 1-2 events from Review Queue table
-- [ ] Click "Assign" button
-- [ ] Fill modal: assignee, due date, priority, notes
-- [ ] Submit → Verify API call to `/api/review-queue/assign`
-- [ ] Check: Success toast with "Assigned X item(s)"
-- [ ] Verify: New `review_queue.assigned` ledger event appears in Operations tab
-- [ ] Open drawer on new event → Verify all fields render correctly
-- [ ] Test partial success: Try assigning an already-resolved item → Verify failed items stay selected
+**Required files in commit:**
+- ✅ `supabase/migrations/20241225000000_add_remove_team_member_rpc.sql`
+- ✅ `supabase/migrations/20241225000001_fix_fk_constraints_for_deletion.sql`
+- ✅ `lib/supabase/admin.ts`
+- ✅ `app/api/team/member/[id]/route.ts` (updated)
+- ✅ `app/api/account/deactivate/route.ts` (updated)
 
-#### Resolve Action
-- [ ] Select 1-2 events from Review Queue table
-- [ ] Click "Resolve" button
-- [ ] Fill modal: resolution notes (required), optionally waiver
-- [ ] Submit → Verify API call to `/api/review-queue/resolve`
-- [ ] Check: Success toast
-- [ ] Verify: New `review_queue.resolved` or `review_queue.waived` ledger event appears
-- [ ] Open drawer → Verify resolution details in metadata
+**Verify in Vercel:**
+1. Go to Vercel Dashboard → Deployments → Production
+2. Confirm active deploy shows commit `83cf6fe` (or newer)
+3. Hard refresh app (Cmd+Shift+R / Ctrl+Shift+R) to clear cached JS
 
-#### Export (CSV/JSON)
-- [ ] Set filters (time range, severity, etc.)
-- [ ] Click "Export CSV" → Verify download with headers
-- [ ] Verify: CSV includes `X-Export-*` headers in response
-- [ ] Click "Export JSON" → Verify download
-- [ ] Verify: JSON includes `meta` object with `exportedAt`, `view`, `filters`, `requestId`
-- [ ] Test empty dataset → CSV has headers only, JSON is `[]` with meta
+---
 
-### Insurance-Ready Card
+## 🔧 Database Migrations (CRITICAL - Must Be Applied)
 
-#### Generate Proof Pack
-- [ ] Set time range filter (or leave default)
-- [ ] Click "Generate Proof Pack"
-- [ ] Verify API call to `/api/proof-packs` (or export endpoint)
-- [ ] Verify: ZIP download with PDF + CSVs + manifest.json
-- [ ] Verify: `proof_pack.generated` ledger event appears
-- [ ] Extract ZIP → Verify all files present and readable
+### B) Apply Migrations
 
-#### Export (CSV/JSON)
-- [ ] Click "Export CSV" → Verify download
-- [ ] Verify: Insurance-ready data format (completed work records + controls + attestations)
+**Migration 1:** `20241225000000_add_remove_team_member_rpc.sql`
+- Creates `remove_team_member()` SECURITY DEFINER function
+- **Status:** ⬜ Not Applied / ✅ Applied
 
-### Governance Enforcement Card
+**Migration 2:** `20241225000001_fix_fk_constraints_for_deletion.sql`
+- Fixes FK constraints (ON DELETE SET NULL)
+- **Status:** ⬜ Not Applied / ✅ Applied
 
-#### Export Enforcement Report
-- [ ] Set time range filter
-- [ ] Click "Export PDF" → Verify PDF download
-- [ ] Click "Export CSV" → Verify CSV download
-- [ ] Click "Export JSON" → Verify JSON download
-- [ ] Verify: `enforcement_report.exported` ledger event (if implemented)
-- [ ] Verify: Only governance events (role violations, policy denials) in export
+**How to Apply:**
 
-### Incident Review Card
+**Option A: Supabase Dashboard (Recommended)**
+1. Go to Supabase Dashboard → SQL Editor
+2. Open `supabase/migrations/20241225000000_add_remove_team_member_rpc.sql`
+3. Copy entire contents and paste into SQL Editor
+4. Click "Run" (or Cmd+Enter / Ctrl+Enter)
+5. Wait for success message
+6. Repeat for `20241225000001_fix_fk_constraints_for_deletion.sql`
 
-#### Create Corrective Action
-- [ ] Select 1 incident event from Incident Review table
-- [ ] Click "Create Corrective Action"
-- [ ] Fill modal: title, owner, due date, severity, notes
-- [ ] Submit → Verify API call to `/api/incidents/corrective-action`
-- [ ] Verify: New corrective action (mitigation item) created
-- [ ] Verify: `incident.corrective_action_created` ledger event appears
-- [ ] Open drawer → Verify corrective action details
+**Option B: Supabase CLI**
+```bash
+cd "/Users/surensureshkumar/coding projects/riskmate"
+supabase db push
+```
 
-#### Close Incident
-- [ ] Select 1 incident with corrective actions
-- [ ] Click "Close Incident"
-- [ ] Fill modal: closure notes, root cause, attestation checkbox
-- [ ] Submit → Verify API call to `/api/incidents/close`
-- [ ] Verify: `incident.closed` ledger event appears
-- [ ] Verify: Incident status updated (if applicable)
-- [ ] Test guardrail: Try closing with open corrective actions → Should block or require override
+---
 
-#### Export (CSV/JSON)
-- [ ] Click "Export CSV" → Verify incident timeline format
-- [ ] Verify: Includes work record IDs, corrective actions, evidence links
+## ✅ Database Verification Queries
 
-### Access Review Card
+### C) Verify RPC Function Exists
 
-#### Revoke Access
-- [ ] Select 1 user or access event from Access Review table
-- [ ] Click "Revoke Access"
-- [ ] Fill modal: reason (required), force logout toggle
-- [ ] Submit → Verify API call to `/api/access/revoke`
-- [ ] Verify: `access.revoked` ledger event appears
-- [ ] Verify: `session.terminated` event if force_logout=true
-- [ ] Test guardrail: Try revoking own access → Should block
-- [ ] Test guardrail: Executive trying to revoke → Should 403
+Run in Supabase SQL Editor:
 
-#### Flag Suspicious
-- [ ] Select 1 access event
-- [ ] Click "Flag Suspicious"
-- [ ] Fill modal: reason, severity
-- [ ] Submit → Verify API call to `/api/access/flag-suspicious`
-- [ ] Verify: `access.flagged_suspicious` ledger event appears
-- [ ] Verify: Review Queue item auto-created (bridge to Review Queue)
+```sql
+-- Check function exists
+SELECT proname, prosecdef
+FROM pg_proc
+WHERE proname = 'remove_team_member';
+```
 
-#### Export (CSV/JSON)
-- [ ] Click "Export CSV" → Verify access change log format
-- [ ] Verify: Includes role changes, grants, revokes, logins
+**Expected Result:**
+- ✅ Returns 1 row
+- ✅ `prosecdef = true` (SECURITY DEFINER)
 
-## General Verification
+**If missing:** Migration 1 not applied - apply it now.
 
-### Tab Categorization
-- [ ] Set time range to "All time"
-- [ ] Governance tab: Shows only governance events (role violations, policy denials)
-- [ ] Operations tab: Shows only operational actions (assign, resolve, corrective actions)
-- [ ] Access tab: Shows only access events (revokes, flags, role changes)
-- [ ] Verify: Old events (pre-migration) appear in correct tabs
-- [ ] Verify: New events (post-migration) appear in correct tabs
+---
 
-### EventDetailsDrawer
-- [ ] Open drawer on various event types
-- [ ] Verify: No crashes on missing optional fields
-- [ ] Verify: All copy operations work (Actor ID, metadata JSON, full event JSON)
-- [ ] Verify: Links to work records work (if job_id present)
-- [ ] Verify: All fields render correctly (event name, severity, outcome, actor, target, timestamp, metadata)
+### D) Verify FK Constraints
 
-### Dev Helper (Development Only)
-- [ ] Click "Generate Sample Events" (dev-only button)
-- [ ] Verify: 3 events generated (1 per tab)
-- [ ] Verify: Events appear in correct tabs
-- [ ] Verify: Events have realistic foreign keys when available
-- [ ] Verify: Drawer shows all event details correctly
+Run in Supabase SQL Editor:
 
-### Role Enforcement
-- [ ] Login as Executive role
-- [ ] Verify: Mutation buttons (Assign, Resolve, Revoke, etc.) are disabled with tooltip
-- [ ] Verify: Export buttons still work (read-only operations)
-- [ ] Attempt direct API call as Executive → Verify 403 response
-- [ ] Verify: `auth.role_violation` ledger event created
+```sql
+-- Check FK delete behavior
+SELECT 
+  tc.table_name,
+  kcu.column_name,
+  ccu.table_name AS foreign_table_name,
+  rc.delete_rule,
+  tc.constraint_name
+FROM information_schema.table_constraints AS tc
+JOIN information_schema.key_column_usage AS kcu
+  ON tc.constraint_name = kcu.constraint_name
+JOIN information_schema.constraint_column_usage AS ccu
+  ON ccu.constraint_name = tc.constraint_name
+JOIN information_schema.referential_constraints AS rc
+  ON rc.constraint_name = tc.constraint_name
+WHERE tc.table_name IN ('job_assignments', 'jobs', 'hazards', 'users')
+  AND tc.constraint_type = 'FOREIGN KEY'
+  AND kcu.column_name IN ('user_id', 'created_by', 'invited_by')
+ORDER BY tc.table_name, kcu.column_name;
+```
 
-### Bulk Operations
-- [ ] Select multiple items (3-5)
-- [ ] Perform bulk action (Assign or Resolve)
-- [ ] Verify: Partial success handling works correctly
-- [ ] Verify: Failed items stay selected, succeeded items cleared
-- [ ] Verify: Detailed failure modal/expandable toast shows failures with IDs and reasons
+**Expected Results:**
+- ✅ `job_assignments.user_id` → `delete_rule = 'SET NULL'` or `'CASCADE'`
+- ✅ `jobs.created_by` → `delete_rule = 'SET NULL'`
+- ✅ `hazards.created_by` → `delete_rule = 'SET NULL'`
+- ✅ `users.invited_by` → `delete_rule = 'SET NULL'`
 
-### Empty States
-- [ ] Set filters to return zero results
-- [ ] Verify: Appropriate empty state message per tab
-- [ ] Verify: Export still works (returns headers-only CSV or empty JSON array)
+**If wrong:** Migration 2 not applied - apply it now.
 
-## Production Safety Checks
+---
 
-- [ ] Verify: `/api/dev/generate-sample-events` returns 404 in production (not 403)
-- [ ] Verify: Dev helper button only shows in development mode
-- [ ] Verify: All error responses include `requestId`
-- [ ] Verify: All exports include proper `Content-Type` and `Content-Disposition` headers
-- [ ] Verify: CSV exports always include headers even for empty results
-- [ ] Verify: JSON exports always include `meta` object
+### E) Verify Environment Variables
 
-## Related Events (Future Enhancement)
-- [ ] _TODO: Add related events panel in drawer showing events with same job_id/target_id_
-- [ ] _TODO: Implement API endpoint to fetch related events_
-- [ ] _TODO: Add click-through to related events in drawer_
+**In Vercel Dashboard → Settings → Environment Variables:**
 
+- ✅ `SUPABASE_SERVICE_ROLE_KEY` exists (Production + Preview)
+- ✅ Value is set (not empty)
+- ✅ Not exposed in client-side code (check `lib/supabase/admin.ts` is server-only)
+
+**Verify in code:**
+```bash
+# Should NOT find SERVICE_ROLE_KEY in client code
+grep -r "SERVICE_ROLE_KEY" app/operations components/ --exclude-dir=node_modules
+# Should only find in server files:
+# - lib/supabase/admin.ts ✅
+# - app/api/**/*.ts ✅
+```
+
+---
+
+## 🧪 Real-World Testing
+
+### F) Team Member Removal Tests
+
+#### Test 1: Remove Regular Member ✅ / ❌
+1. Go to `/operations/team`
+2. Click "Deactivate Access" on a regular member (not owner)
+3. **Expected:** Member removed successfully, removed from list
+4. **Error if fails:** [Paste error message here]
+
+#### Test 2: Remove Yourself ✅ / ❌
+1. Try to remove yourself
+2. **Expected:** Error: "cannot remove yourself: ask another owner or admin to remove you"
+3. **Error if fails:** [Paste error message here]
+
+#### Test 3: Remove Last Owner ✅ / ❌
+1. If you're the only owner, try to remove another owner (if exists)
+2. If you're the only owner, try to remove yourself
+3. **Expected:** Error: "cannot remove last owner: transfer ownership or add another owner first"
+4. **Error if fails:** [Paste error message here]
+
+#### Test 4: Remove Member with Active Assignments ✅ / ❌
+1. Create a job and assign it to a member
+2. Try to remove that member
+3. **Expected:** 
+   - Either: Member removed, assignments auto-reassigned to owner/admin
+   - Or: Error asking to reassign first (depending on RPC implementation)
+4. **Actual behavior:** [Describe what happened]
+5. **Error if fails:** [Paste error message here]
+
+---
+
+### G) Account Deactivation Tests
+
+#### Test 5: Deactivate Regular Account ✅ / ❌
+1. Go to `/operations/account` → Danger Zone
+2. Type "DELETE" in confirmation field
+3. Click "Deactivate Account"
+4. Confirm in dialog
+5. **Expected:** 
+   - Success message shown
+   - User logged out
+   - Cannot log back in
+   - User archived in database
+6. **Error if fails:** [Paste error message here]
+
+#### Test 6: Deactivate Last Owner ✅ / ❌
+1. As the last owner, try to deactivate account
+2. **Expected:** Error: "Cannot deactivate the last owner. Transfer ownership or add another owner first."
+3. **Error if fails:** [Paste error message here]
+
+---
+
+## 🔍 Error Verification
+
+### H) Check Error Messages Are Specific
+
+**Before fix:** Generic "API request failed" or "We couldn't remove that member"
+
+**After fix:** Specific messages like:
+- ✅ "cannot remove yourself: ask another owner or admin to remove you"
+- ✅ "cannot remove last owner: transfer ownership or add another owner first"
+- ✅ "member not found or already removed"
+- ✅ "only owners can remove other owners"
+
+**Browser Console:**
+- ✅ No unhandled promise rejections
+- ✅ Errors show specific messages (not generic)
+
+**Vercel Logs:**
+- ✅ API route errors include returned messages/codes
+- ✅ No silent 400s or 500s
+
+---
+
+## 📋 Quick Verification Script
+
+Run this in Supabase SQL Editor to check everything at once:
+
+```sql
+-- 1. Check RPC function
+SELECT 
+  CASE WHEN COUNT(*) > 0 THEN '✅ RPC function exists' 
+       ELSE '❌ RPC function MISSING - apply migration 1' 
+  END AS rpc_status
+FROM pg_proc 
+WHERE proname = 'remove_team_member';
+
+-- 2. Check FK constraints
+SELECT 
+  tc.table_name,
+  kcu.column_name,
+  rc.delete_rule,
+  CASE 
+    WHEN rc.delete_rule IN ('SET NULL', 'CASCADE') THEN '✅'
+    ELSE '❌'
+  END AS status
+FROM information_schema.table_constraints AS tc
+JOIN information_schema.key_column_usage AS kcu
+  ON tc.constraint_name = kcu.constraint_name
+JOIN information_schema.referential_constraints AS rc
+  ON rc.constraint_name = tc.constraint_name
+WHERE tc.table_name IN ('job_assignments', 'jobs', 'hazards')
+  AND kcu.column_name IN ('user_id', 'created_by')
+  AND tc.constraint_type = 'FOREIGN KEY';
+```
+
+---
+
+## 🚨 Troubleshooting
+
+### If "API request failed" still appears:
+
+1. **Check migrations applied:** Run verification queries above
+2. **Check commit deployed:** Verify Vercel shows `83cf6fe`
+3. **Check environment variables:** Verify `SUPABASE_SERVICE_ROLE_KEY` is set
+4. **Check browser cache:** Hard refresh (Cmd+Shift+R)
+5. **Check Vercel logs:** Look for specific error messages
+
+### If RPC function not found:
+
+- Migration 1 not applied
+- Apply `20241225000000_add_remove_team_member_rpc.sql` in Supabase SQL Editor
+
+### If FK constraints wrong:
+
+- Migration 2 not applied
+- Apply `20241225000001_fix_fk_constraints_for_deletion.sql` in Supabase SQL Editor
+
+### If account deletion fails:
+
+- Check `SUPABASE_SERVICE_ROLE_KEY` is set in Vercel
+- Check Vercel logs for admin client errors
+- Verify admin client is only used server-side
+
+---
+
+## ✅ Completion Checklist
+
+- [ ] Commit `83cf6fe` deployed to production
+- [ ] Migration 1 applied (RPC function exists)
+- [ ] Migration 2 applied (FK constraints correct)
+- [ ] `SUPABASE_SERVICE_ROLE_KEY` set in Vercel
+- [ ] Test 1 passed (remove regular member)
+- [ ] Test 2 passed (remove yourself blocked)
+- [ ] Test 3 passed (remove last owner blocked)
+- [ ] Test 4 passed (remove member with assignments)
+- [ ] Test 5 passed (deactivate account)
+- [ ] Test 6 passed (deactivate last owner blocked)
+- [ ] Error messages are specific (not generic)
+- [ ] No unhandled promise rejections in console
+
+---
+
+**Status:** ⬜ Not Verified / ✅ Verified and Working
+
+**Date Verified:** _______________
+
+**Verified By:** _______________
+
+**Notes:** 
+_________________________________________________
+_________________________________________________
+_________________________________________________
