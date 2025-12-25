@@ -456,15 +456,16 @@ export async function POST(request: NextRequest) {
         requestId,
         resourceType: 'job',
         resourceId: job.id,
-      additionalMetadata: {
-        job_id: job.id,
-        client_name,
-        job_type,
-        location,
-        risk_factors_count: risk_factor_codes?.length || 0,
-      },
-      logUsage: true,
-    })
+        additionalMetadata: {
+          job_id: job.id,
+          client_name,
+          job_type,
+          location,
+          risk_factors_count: risk_factor_codes?.length || 0,
+        },
+        logUsage: true,
+      })
+    }
 
     // Calculate risk score if risk factors provided
     let riskScoreResult = null
@@ -497,12 +498,26 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Fetch complete job with risk details
+    // Fetch complete job with risk details (use maybeSingle in case RLS blocks)
     const { data: completeJob } = await supabase
       .from('jobs')
       .select('*')
       .eq('id', job.id)
-      .single()
+      .maybeSingle()
+    
+    // If we can't fetch the complete job, return what we have
+    if (!completeJob) {
+      console.warn('Could not fetch complete job details after creation (RLS may be blocking)')
+      return NextResponse.json(
+        {
+          data: {
+            id: job.id,
+            message: 'Job created but full details are not immediately accessible. Check the jobs list.',
+          },
+        },
+        { status: 201 }
+      )
+    }
 
     const { data: mitigationItems } = await supabase
       .from('mitigation_items')
