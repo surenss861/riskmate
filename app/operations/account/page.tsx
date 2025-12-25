@@ -730,23 +730,44 @@ export default function AccountPage() {
                       <Button
                         variant="secondary"
                         onClick={async () => {
+                          setUpdating(true)
+                          setError(null)
                           try {
-                            setUpdating(true)
-                            await accountApi.revokeSessions()
-                            setError(null)
-                            // Reload security events
-                            const eventsData = await accountApi.getSecurityEvents(5)
-                            setSecurityEvents(eventsData.data || [])
-                            alert('All sessions revoked successfully. You will need to sign in again.')
+                            // Call server-side signout route to properly clear cookies
+                            const res = await fetch('/api/auth/signout', { 
+                              method: 'POST',
+                              credentials: 'include'
+                            })
+                            
+                            const json = await res.json().catch(() => ({}))
+                            
+                            if (!res.ok) {
+                              throw new Error(json?.error || 'Sign out failed')
+                            }
+                            
+                            // Also call client-side signOut for belt-and-suspenders
+                            const supabase = createSupabaseBrowserClient()
+                            await supabase.auth.signOut({ scope: 'global' })
+                            
+                            // Reload security events before redirect
+                            try {
+                              const eventsData = await accountApi.getSecurityEvents(5)
+                              setSecurityEvents(eventsData.data || [])
+                            } catch (e) {
+                              // Ignore errors loading events - we're signing out anyway
+                            }
+                            
+                            // Redirect to login
+                            router.push('/login')
                           } catch (err: any) {
-                            setError(err?.message || 'Failed to revoke sessions')
-                          } finally {
+                            console.error('Sign out failed:', err)
+                            setError(err?.message || 'Failed to sign out everywhere')
                             setUpdating(false)
                           }
                         }}
                         disabled={updating}
                       >
-                        {updating ? 'Revoking...' : 'Sign Out Everywhere'}
+                        {updating ? 'Signing Out...' : 'Sign Out Everywhere'}
                       </Button>
                     </div>
 
