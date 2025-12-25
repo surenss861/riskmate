@@ -749,16 +749,8 @@ export default function AccountPage() {
                             const supabase = createSupabaseBrowserClient()
                             await supabase.auth.signOut({ scope: 'global' })
                             
-                            // Reload security events before redirect
-                            try {
-                              const eventsData = await accountApi.getSecurityEvents(5)
-                              setSecurityEvents(eventsData.data || [])
-                            } catch (e) {
-                              // Ignore errors loading events - we're signing out anyway
-                            }
-                            
-                            // Redirect to login
-                            router.push('/login')
+                            // Redirect to login immediately
+                            window.location.href = '/login'
                           } catch (err: any) {
                             console.error('Sign out failed:', err)
                             setError(err?.message || 'Failed to sign out everywhere')
