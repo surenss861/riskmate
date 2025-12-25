@@ -283,26 +283,59 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Create job (using normalized enum values)
+    // Allowlist of valid jobs table columns (prevent PGRST204 from unknown columns)
+    const validJobColumns = new Set([
+      'organization_id',
+      'created_by',
+      'client_name',
+      'client_type',
+      'job_type',
+      'location',
+      'description',
+      'start_date',
+      'end_date',
+      'status',
+      'has_subcontractors',
+      'subcontractor_count',
+      'insurance_status',
+      'applied_template_id',
+      'applied_template_type',
+      'site_id',
+      'site_name',
+    ])
+
+    // Build job row with only valid columns
+    const jobRow: Record<string, any> = {
+      organization_id,
+      created_by: userId,
+      client_name: client_name.trim(),
+      client_type: normalizedClientType,
+      job_type: normalizedJobType,
+      location: location.trim(),
+      description: description?.trim() || null,
+      start_date: start_date || null,
+      end_date: end_date || null,
+      status: 'draft',
+      has_subcontractors,
+      subcontractor_count: has_subcontractors ? (subcontractor_count || 0) : 0,
+      insurance_status: normalizedInsuranceStatus,
+      applied_template_id: applied_template_id || null,
+      applied_template_type: applied_template_type || null,
+    }
+
+    // Filter to only valid columns (strip any extra fields from request body)
+    const filteredJobRow = Object.fromEntries(
+      Object.entries(jobRow).filter(([key]) => validJobColumns.has(key))
+    )
+
+    // Log payload keys for debugging (helps identify bad columns)
+    console.log('[jobs] insert keys:', Object.keys(filteredJobRow))
+    console.log('[jobs] request body keys:', Object.keys(body))
+
+    // Create job (using filtered, normalized values)
     const { data: job, error: jobError } = await supabase
       .from('jobs')
-      .insert({
-        organization_id,
-        created_by: userId,
-        client_name: client_name.trim(),
-        client_type: normalizedClientType,
-        job_type: normalizedJobType,
-        location: location.trim(),
-        description: description?.trim() || null,
-        start_date: start_date || null,
-        end_date: end_date || null,
-        status: 'draft',
-        has_subcontractors,
-        subcontractor_count: has_subcontractors ? (subcontractor_count || 0) : 0,
-        insurance_status: normalizedInsuranceStatus,
-        applied_template_id: applied_template_id || null,
-        applied_template_type: applied_template_type || null,
-      })
+      .insert(filteredJobRow)
       .select()
       .single()
 
@@ -319,10 +352,19 @@ export async function POST(request: NextRequest) {
       let errorMessage = 'Failed to create job'
       let statusCode = 500
       
-      // PGRST204 = No rows returned (RLS blocking select after insert)
+      // PGRST204 = Column doesn't exist OR no rows returned (RLS blocking)
       if (jobError.code === 'PGRST204' || jobError.code === 'PGRST116') {
-        errorMessage = 'Permission denied: Job was created but cannot be retrieved. Row-level security policy may be blocking access. Check your team role and RLS policies.'
-        statusCode = 403
+        // Check if it's a column error (details/hint will mention column)
+        if (jobError.details?.includes('column') || jobError.hint?.includes('column')) {
+          errorMessage = `Invalid column in request: ${jobError.message || jobError.details || 'Unknown column'}. Please check the request payload.`
+          statusCode = 400
+        } else {
+          // It's an RLS blocking issue
+          errorMessage = 'Permission denied: Job was created but cannot be retrieved. Row-level security policy may be blocking access. Check your team role and RLS policies.'
+          statusCode = 403
+        }
+        // Always include the raw error message for debugging
+        errorMessage = `${errorMessage} (${jobError.message || jobError.code})`
       }
       // RLS policy violation
       else if (jobError.message?.includes('row-level security') || jobError.message?.includes('RLS') || jobError.code === '42501') {
