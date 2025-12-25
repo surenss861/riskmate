@@ -12,7 +12,8 @@ export function renderCoverPage(
   reportGeneratedAt: Date,
   pageWidth: number,
   pageHeight: number,
-  margin: number
+  margin: number,
+  safeFont?: (fontName: string | undefined, callback: () => void) => void
 ) {
   // Background
   doc.rect(0, 0, pageWidth, pageHeight).fill('#FFFFFF');

@@ -20,9 +20,9 @@ import { renderSignaturesAndCompliance } from './sections/signatures';
 
 // Workaround for serverless environments where font files aren't available
 // PDFKit needs font metric files, but in Vercel/serverless they may not be available
-// We'll handle this by catching font-related errors and providing a fallback
-// Note: PDFKit should work with standard fonts (Helvetica, Times-Roman, Courier) 
-// without requiring .afm files, but some versions may still try to load them
+// Solution: Use PDFKit's built-in fonts without specifying font names explicitly
+// PDFKit's default font works without .afm files in serverless environments
+// We'll wrap font calls in try-catch to handle any font loading errors gracefully
 
 // ============================================
 // MAIN GENERATOR

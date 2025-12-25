@@ -53,12 +53,15 @@ export async function generateLedgerExportPDF(options: LedgerExportOptions): Pro
       doc.on('error', reject)
 
       // Helper function to safely set font (fallback to default if font fails)
+      // This prevents ENOENT errors for .afm files in serverless environments
       const safeFont = (fontName: string, callback: () => void) => {
         try {
           doc.font(fontName)
           callback()
-        } catch (fontError) {
-          // If font fails, just continue without changing font (use default)
+        } catch (fontError: any) {
+          // If font fails (e.g., .afm file not found), use default font
+          console.warn(`Font ${fontName} not available, using default:`, fontError?.message)
+          // Don't set font, just use PDFKit's default
           callback()
         }
       }
