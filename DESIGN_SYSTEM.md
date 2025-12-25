@@ -1,5 +1,7 @@
 # Design System - Product-Wide Standard
 
+> **✅ Migration Complete:** All operations app pages have been migrated to this design system. See `MIGRATION_COMPLETE.md` and `VERIFICATION_REPORT.md` for details.
+
 ## Canonical Tokens (Single Source of Truth)
 
 ### Surfaces (CANONICAL - Single Source of Truth)
@@ -82,8 +84,13 @@
 ## Migration Order
 
 1. ✅ Operations page (done)
-2. ⏳ Jobs list/roster pages
-3. ⏳ Job detail page
-4. ⏳ Mitigations/Evidence pages
-5. ⏳ Settings/Account pages
+2. ✅ Jobs list/roster pages
+3. ✅ Job detail page
+4. ✅ Mitigations/Evidence pages (Audit Readiness)
+5. ✅ Settings/Account pages
+6. ✅ Executive snapshot page
+7. ✅ All operations pages migrated
+
+**Migration Status:** ✅ COMPLETE (2024-12-19)
+See `MIGRATION_COMPLETE.md` for full details.
 

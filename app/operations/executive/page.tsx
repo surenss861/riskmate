@@ -70,6 +70,7 @@ export default function ExecutiveSnapshotPage() {
 
   useEffect(() => {
     loadRiskPosture()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timeRange])
 
   const loadRiskPosture = async () => {
@@ -236,11 +237,11 @@ export default function ExecutiveSnapshotPage() {
     )
   }
 
-    return (
-      <ProtectedRoute>
-        <AppBackground>
-          <DashboardNavbar email={user?.email} onLogout={handleLogout} />
-          <AppShell>
+  return (
+    <ProtectedRoute>
+      <AppBackground>
+        <DashboardNavbar email={user?.email} onLogout={handleLogout} />
+        <AppShell>
             <PageSection>
               <div className="flex items-center justify-between mb-4">
                 <PageHeader
@@ -306,13 +307,15 @@ export default function ExecutiveSnapshotPage() {
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {/* High Risk Jobs */}
+                <div
+                  onMouseEnter={() => setHoveredCard('high-risk')}
+                  onMouseLeave={() => setHoveredCard(null)}
+                >
                 <GlassCard
                   className={`p-6 cursor-pointer hover:border-red-500/40 transition-all ${
                     riskPosture.high_risk_jobs > 0 ? 'bg-red-500/5 border-red-500/30' : ''
                   }`}
                   onClick={() => window.location.href = '/operations/jobs?risk_level=high'}
-                  onMouseEnter={() => setHoveredCard('high-risk')}
-                  onMouseLeave={() => setHoveredCard(null)}
                 >
                 <div className="flex items-center justify-between mb-4">
                   <AlertTriangle className={`w-5 h-5 ${riskPosture.high_risk_jobs > 0 ? 'text-red-400' : 'text-white/40'}`} />
@@ -349,15 +352,18 @@ export default function ExecutiveSnapshotPage() {
                   </div>
                 )}
               </GlassCard>
+              </div>
 
               {/* Open Incidents */}
+              <div
+                onMouseEnter={() => setHoveredCard('incidents')}
+                onMouseLeave={() => setHoveredCard(null)}
+              >
               <GlassCard
                 className={`p-6 cursor-pointer hover:border-orange-500/40 transition-all ${
                   riskPosture.open_incidents > 0 ? 'bg-orange-500/5 border-orange-500/30' : ''
                 }`}
                 onClick={() => window.location.href = '/operations/audit?view=incident-review&status=open'}
-                onMouseEnter={() => setHoveredCard('incidents')}
-                onMouseLeave={() => setHoveredCard(null)}
               >
                 <div className="flex items-center justify-between mb-4">
                   <AlertTriangle className={`w-5 h-5 ${riskPosture.open_incidents > 0 ? 'text-orange-400' : 'text-white/40'}`} />
@@ -394,15 +400,18 @@ export default function ExecutiveSnapshotPage() {
                   </div>
                 )}
               </GlassCard>
+              </div>
 
               {/* Governance Violations */}
+              <div
+                onMouseEnter={() => setHoveredCard('violations')}
+                onMouseLeave={() => setHoveredCard(null)}
+              >
               <GlassCard
                 className={`p-6 cursor-pointer hover:border-red-500/40 transition-all ${
                   riskPosture.recent_violations > 0 ? 'bg-red-500/10 border-red-500/40 shadow-lg shadow-red-500/10' : ''
                 }`}
                 onClick={() => window.location.href = '/operations/audit?tab=governance&outcome=blocked'}
-                onMouseEnter={() => setHoveredCard('violations')}
-                onMouseLeave={() => setHoveredCard(null)}
               >
                 <div className="flex items-center justify-between mb-4">
                   <TrendingUp className={`w-5 h-5 ${riskPosture.recent_violations > 0 ? 'text-red-400' : 'text-white/40'}`} />
@@ -439,7 +448,8 @@ export default function ExecutiveSnapshotPage() {
                   </div>
                 )}
               </GlassCard>
-            </div>
+              </div>
+              </div>
           </PageSection>
 
           {/* Whether controls are working */}
@@ -449,11 +459,13 @@ export default function ExecutiveSnapshotPage() {
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {/* Jobs Flagged for Review */}
+              <div
+                onMouseEnter={() => setHoveredCard('flagged')}
+                onMouseLeave={() => setHoveredCard(null)}
+              >
               <GlassCard
                 className="p-6 cursor-pointer hover:border-[#F97316]/40 transition-all"
                 onClick={() => window.location.href = '/operations/audit?view=review-queue'}
-                onMouseEnter={() => setHoveredCard('flagged')}
-                onMouseLeave={() => setHoveredCard(null)}
               >
                 <div className="flex items-center justify-between mb-4">
                   <Shield className="w-5 h-5 text-[#F97316]" />
@@ -488,15 +500,18 @@ export default function ExecutiveSnapshotPage() {
                   </div>
                 )}
               </GlassCard>
+              </div>
 
               {/* Pending Sign-offs */}
+              <div
+                onMouseEnter={() => setHoveredCard('pending-signoffs')}
+                onMouseLeave={() => setHoveredCard(null)}
+              >
               <GlassCard
                 className={`p-6 cursor-pointer hover:border-yellow-500/40 transition-all ${
                   riskPosture.pending_signoffs > 3 ? 'bg-yellow-500/5 border-yellow-500/30' : ''
                 }`}
                 onClick={() => window.location.href = '/operations/audit/readiness?category=attestations&status=open'}
-                onMouseEnter={() => setHoveredCard('pending-signoffs')}
-                onMouseLeave={() => setHoveredCard(null)}
               >
                 <div className="flex items-center justify-between mb-4">
                   <FileCheck className={`w-5 h-5 ${riskPosture.pending_signoffs > 3 ? 'text-yellow-400' : 'text-white/40'}`} />
@@ -533,13 +548,16 @@ export default function ExecutiveSnapshotPage() {
                   </div>
                 )}
               </GlassCard>
+              </div>
 
               {/* Completed Sign-offs */}
+              <div
+                onMouseEnter={() => setHoveredCard('signed')}
+                onMouseLeave={() => setHoveredCard(null)}
+              >
               <GlassCard
                 className="p-6 cursor-pointer hover:border-green-500/40 transition-all"
                 onClick={() => window.location.href = '/operations/audit?tab=operations&event_name=signoff&status=signed'}
-                onMouseEnter={() => setHoveredCard('signed')}
-                onMouseLeave={() => setHoveredCard(null)}
               >
                 <div className="flex items-center justify-between mb-4">
                   <FileCheck className="w-5 h-5 text-green-400" />
@@ -574,6 +592,7 @@ export default function ExecutiveSnapshotPage() {
                   </div>
                 )}
               </GlassCard>
+              </div>
             </div>
           </PageSection>
 
@@ -584,11 +603,13 @@ export default function ExecutiveSnapshotPage() {
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {/* Proof Packs Generated */}
+              <div
+                onMouseEnter={() => setHoveredCard('proof-packs')}
+                onMouseLeave={() => setHoveredCard(null)}
+              >
               <GlassCard
                 className="p-6 cursor-pointer hover:border-green-500/40 transition-all"
                 onClick={() => window.location.href = '/operations/audit?view=insurance-ready'}
-                onMouseEnter={() => setHoveredCard('proof-packs')}
-                onMouseLeave={() => setHoveredCard(null)}
               >
                 <div className="flex items-center justify-between mb-4">
                   <FileCheck className="w-5 h-5 text-green-400" />
@@ -628,6 +649,7 @@ export default function ExecutiveSnapshotPage() {
                   </div>
                 )}
               </GlassCard>
+              </div>
 
               {/* Last Governance Update */}
               <GlassCard

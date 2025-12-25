@@ -346,20 +346,20 @@ export default function TeamPage() {
                     <Select
                       value={inviteRole}
                       onChange={(e) => setInviteRole(e.target.value as 'member' | 'admin' | 'safety_lead' | 'executive' | 'owner')}
-                      disabled={inviting}
+                      disabled={inviting || seatLimitReached}
                     >
                       <option value="member">Member</option>
                       <option value="safety_lead">Safety Lead</option>
                       <option value="executive">Executive</option>
                       <option value="admin">Admin</option>
-                      {(team.current_user_role === 'owner') && (
+                      {team?.current_user_role === 'owner' && (
                         <option value="owner">Owner</option>
                       )}
                     </Select>
                     <p className="text-xs text-white/40 mt-1">
+                      {inviteRole === 'member' && 'Can create/update jobs, no governance authority'}
                       {inviteRole === 'safety_lead' && 'Sees all flagged-for-review jobs automatically'}
                       {inviteRole === 'executive' && 'Read-only visibility into risk & trends'}
-                      {inviteRole === 'member' && 'Can create/update jobs, no governance authority'}
                       {inviteRole === 'admin' && 'Team management, no org-level authority'}
                       {inviteRole === 'owner' && 'Org-level authority, billing, deletion'}
                     </p>
