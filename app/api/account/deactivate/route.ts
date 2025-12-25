@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
-import { createClient } from '@supabase/supabase-js'
+import { createSupabaseAdminClient } from '@/lib/supabase/admin'
 
 export const runtime = 'nodejs'
 
@@ -62,32 +62,27 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Archive user account
+    // Archive user account (soft delete)
     const { error: archiveError } = await supabase
       .from('users')
-      .update({ 
-        archived_at: new Date().toISOString(),
-        account_status: 'deactivated'
-      })
+      .update({ archived_at: new Date().toISOString() })
       .eq('id', user.id)
       .is('archived_at', null)
 
     if (archiveError) {
-      // Try without account_status if column doesn't exist
-      const { error: retryError } = await supabase
-        .from('users')
-        .update({ archived_at: new Date().toISOString() })
-        .eq('id', user.id)
-        .is('archived_at', null)
-
-      if (retryError) {
-        throw retryError
-      }
+      throw archiveError
     }
 
-    // Optionally delete auth user (or mark as disabled)
-    // For now, we'll just archive the user record
-    // The auth user can be deleted separately if needed
+    // Use admin client to delete auth user (hard delete)
+    // This requires service role key and bypasses RLS
+    const adminClient = createSupabaseAdminClient()
+    const { error: deleteError } = await adminClient.auth.admin.deleteUser(user.id)
+
+    if (deleteError) {
+      // Log but don't fail - user is already archived in database
+      console.error('Failed to delete auth user (user is archived):', deleteError)
+      // Continue - the user is archived which is sufficient for deactivation
+    }
 
     return NextResponse.json({ 
       message: 'Account deactivated successfully',

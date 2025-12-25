@@ -18,7 +18,7 @@ export async function DELETE(
       )
     }
 
-    // Get user's organization_id and role
+    // Get user's organization_id
     const { data: userData, error: userError } = await supabase
       .from('users')
       .select('organization_id, role')
@@ -32,89 +32,53 @@ export async function DELETE(
       )
     }
 
-    if (!['owner', 'admin'].includes(userData.role ?? '')) {
-      return NextResponse.json(
-        { message: 'Only owners and admins can remove teammates' },
-        { status: 403 }
-      )
-    }
-
     const { id: memberId } = await params
-
-    if (user.id === memberId) {
-      return NextResponse.json(
-        { message: 'You cannot remove yourself.' },
-        { status: 400 }
-      )
-    }
-
     const organizationId = userData.organization_id
 
-    // Check if target member is an owner
-    const { data: targetMember, error: targetError } = await supabase
-      .from('users')
-      .select('id, role')
-      .eq('id', memberId)
-      .eq('organization_id', organizationId)
-      .is('archived_at', null)
-      .maybeSingle()
+    // Get optional reassign_to from query params
+    const { searchParams } = new URL(request.url)
+    const reassignTo = searchParams.get('reassign_to') || null
 
-    if (targetError) {
-      throw targetError
-    }
+    // Call SECURITY DEFINER RPC function
+    // This handles all authorization, dependency cleanup, and soft removal
+    const { data, error } = await supabase.rpc('remove_team_member', {
+      p_organization_id: organizationId,
+      p_member_user_id: memberId,
+      p_reassign_to: reassignTo,
+    })
 
-    if (!targetMember) {
+    if (error) {
+      // RPC function returns user-friendly error messages
+      const errorMessage = error.message || 'Failed to remove teammate'
+      
+      // Map common error codes to HTTP status codes
+      let statusCode = 500
+      if (errorMessage.includes('not authorized') || errorMessage.includes('only owners')) {
+        statusCode = 403
+      } else if (errorMessage.includes('not found') || errorMessage.includes('already removed')) {
+        statusCode = 404
+      } else if (errorMessage.includes('cannot remove') || errorMessage.includes('last owner')) {
+        statusCode = 400
+      }
+
       return NextResponse.json(
-        { message: 'Teammate not found' },
-        { status: 404 }
+        {
+          message: errorMessage,
+          code: error.code,
+        },
+        { status: statusCode }
       )
     }
 
-    // Prevent removing owners unless there are multiple
-    if (targetMember.role === 'owner') {
-      if (userData.role !== 'owner') {
-        return NextResponse.json(
-          { message: 'Only owners can remove other owners' },
-          { status: 403 }
-        )
-      }
-
-      const { count } = await supabase
-        .from('users')
-        .select('id', { count: 'exact', head: true })
-        .eq('organization_id', organizationId)
-        .eq('role', 'owner')
-        .is('archived_at', null)
-
-      if ((count ?? 0) <= 1) {
-        return NextResponse.json(
-          {
-            message: 'Cannot remove the last owner. Transfer ownership or add another owner first.',
-          },
-          { status: 400 }
-        )
-      }
-    }
-
-    // Archive member
-    const { error } = await supabase
-      .from('users')
-      .update({ archived_at: new Date().toISOString() })
-      .eq('id', memberId)
-      .eq('organization_id', organizationId)
-      .is('archived_at', null)
-
-    if (error) {
-      throw error
-    }
-
-    return NextResponse.json({ status: 'removed' })
+    return NextResponse.json({
+      status: 'removed',
+      ...data,
+    })
   } catch (error: any) {
     console.error('Member removal failed:', error)
     
-    // Return more specific error messages
     const errorMessage = error?.message || 'Failed to remove teammate'
-    const statusCode = error?.status || error?.code === 'PGRST116' ? 404 : 500
+    const statusCode = error?.status || 500
     
     return NextResponse.json(
       { 
