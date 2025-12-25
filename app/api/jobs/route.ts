@@ -143,10 +143,92 @@ export async function POST(request: NextRequest) {
       applied_template_type,
     } = body
 
-    // Validate required fields
+    // Preflight validation: Required fields
     if (!client_name || !client_type || !job_type || !location) {
       return NextResponse.json(
         { message: 'Missing required fields: client_name, client_type, job_type, location' },
+        { status: 400 }
+      )
+    }
+
+    // Preflight validation: Verify user has permission to create jobs
+    // Check if user is an active member with appropriate role
+    const { data: membership, error: membershipError } = await supabase
+      .from('users')
+      .select('role, archived_at')
+      .eq('id', userId)
+      .eq('organization_id', organization_id)
+      .is('archived_at', null)
+      .single()
+
+    if (membershipError || !membership) {
+      return NextResponse.json(
+        { message: 'Permission denied: You are not an active member of this organization.' },
+        { status: 403 }
+      )
+    }
+
+    // Preflight validation: Normalize enum values (lowercase)
+    const normalizedClientType = client_type?.toLowerCase().trim()
+    const normalizedJobType = job_type?.toLowerCase().trim()
+    const normalizedInsuranceStatus = insurance_status?.toLowerCase().trim()
+
+    // Validate enum values (common values - adjust based on your actual schema)
+    const validClientTypes = ['residential', 'commercial', 'industrial', 'mixed']
+    const validJobTypes = ['repair', 'maintenance', 'installation', 'inspection', 'renovation', 'new_construction']
+    const validInsuranceStatuses = ['pending', 'approved', 'rejected', 'not_required']
+
+    if (!validClientTypes.includes(normalizedClientType)) {
+      return NextResponse.json(
+        { message: `Invalid client_type: "${client_type}". Must be one of: ${validClientTypes.join(', ')}` },
+        { status: 400 }
+      )
+    }
+
+    if (!validJobTypes.includes(normalizedJobType)) {
+      return NextResponse.json(
+        { message: `Invalid job_type: "${job_type}". Must be one of: ${validJobTypes.join(', ')}` },
+        { status: 400 }
+      )
+    }
+
+    if (!validInsuranceStatuses.includes(normalizedInsuranceStatus)) {
+      return NextResponse.json(
+        { message: `Invalid insurance_status: "${insurance_status}". Must be one of: ${validInsuranceStatuses.join(', ')}` },
+        { status: 400 }
+      )
+    }
+
+    // Preflight validation: Validate template reference if provided
+    if (applied_template_id) {
+      if (!applied_template_type || !['job', 'hazard'].includes(applied_template_type)) {
+        return NextResponse.json(
+          { message: 'If applied_template_id is provided, applied_template_type must be "job" or "hazard"' },
+          { status: 400 }
+        )
+      }
+
+      // Verify template exists and belongs to organization
+      const templateTable = applied_template_type === 'job' ? 'job_templates' : 'hazard_templates'
+      const { data: template, error: templateError } = await supabase
+        .from(templateTable)
+        .select('id, organization_id')
+        .eq('id', applied_template_id)
+        .eq('organization_id', organization_id)
+        .single()
+
+      if (templateError || !template) {
+        return NextResponse.json(
+          { message: `Template not found or does not belong to your organization.` },
+          { status: 400 }
+        )
+      }
+    }
+
+    // Preflight validation: Validate subcontractor count
+    if (has_subcontractors && (subcontractor_count === undefined || subcontractor_count < 0)) {
+      return NextResponse.json(
+        { message: 'If has_subcontractors is true, subcontractor_count must be a non-negative number' },
         { status: 400 }
       )
     }
@@ -201,23 +283,23 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Create job
+    // Create job (using normalized enum values)
     const { data: job, error: jobError } = await supabase
       .from('jobs')
       .insert({
         organization_id,
         created_by: userId,
-        client_name,
-        client_type,
-        job_type,
-        location,
-        description,
+        client_name: client_name.trim(),
+        client_type: normalizedClientType,
+        job_type: normalizedJobType,
+        location: location.trim(),
+        description: description?.trim() || null,
         start_date: start_date || null,
         end_date: end_date || null,
         status: 'draft',
         has_subcontractors,
-        subcontractor_count,
-        insurance_status,
+        subcontractor_count: has_subcontractors ? (subcontractor_count || 0) : 0,
+        insurance_status: normalizedInsuranceStatus,
         applied_template_id: applied_template_id || null,
         applied_template_type: applied_template_type || null,
       })
