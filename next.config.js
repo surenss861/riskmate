@@ -3,6 +3,25 @@
 // for enterprise language consistency
 const nextConfig = {
   reactStrictMode: true,
+  
+  // Externalize PDFKit to prevent bundling issues with font metric files
+  // PDFKit expects its AFM files to be in node_modules/pdfkit/js/data/
+  // When bundled, these paths break in serverless environments
+  serverExternalPackages: ['pdfkit'],
+
+  experimental: {
+    // Ensure PDFKit font metric files are included in the serverless function bundle
+    outputFileTracingIncludes: {
+      // Include AFM files for all PDF generation routes
+      '/api/reports/generate/[id]': ['node_modules/pdfkit/js/data/*.afm'],
+      '/api/proof-packs': ['node_modules/pdfkit/js/data/*.afm'],
+      '/api/audit/export': ['node_modules/pdfkit/js/data/*.afm'],
+      '/api/enforcement-reports/export': ['node_modules/pdfkit/js/data/*.afm'],
+      '/api/sample-report': ['node_modules/pdfkit/js/data/*.afm'],
+      '/api/sample-risk-report.pdf': ['node_modules/pdfkit/js/data/*.afm'],
+    },
+  },
+
   images: {
     domains: ['localhost'],
     remotePatterns: [
@@ -56,24 +75,8 @@ const nextConfig = {
       },
     ]
   },
-  webpack: (config, { isServer }) => {
-    if (isServer) {
-      // Ensure PDFKit and its font data are bundled for serverless
-      config.externals = config.externals || [];
-      // Don't externalize pdfkit - we need it bundled with font data
-      config.externals = config.externals.filter(
-        (external) => typeof external !== 'string' || !external.includes('pdfkit')
-      );
-      
-      // Add resolve fallback for font files (they're bundled in pdfkit)
-      config.resolve = config.resolve || {};
-      config.resolve.fallback = {
-        ...(config.resolve.fallback || {}),
-        fs: false, // PDFKit doesn't need fs in browser/serverless
-      };
-    }
-    return config;
-  },
+  // Removed webpack PDFKit bundling config - now using serverExternalPackages
+  // to keep PDFKit external so it can resolve fonts from node_modules/pdfkit/js/data/
 }
 
 module.exports = nextConfig
