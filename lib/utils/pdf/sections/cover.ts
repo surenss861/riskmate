@@ -1,6 +1,5 @@
 import PDFDocument from 'pdfkit';
 import { STYLES } from '../styles';
-import { addWatermark } from '../helpers';
 import { formatDate } from '../utils';
 import type { JobData, OrganizationData } from '../types';
 
@@ -18,7 +17,8 @@ export function renderCoverPage(
   // Background
   doc.rect(0, 0, pageWidth, pageHeight).fill('#FFFFFF');
 
-  addWatermark(doc);
+  // Watermark removed - will be added in post-pass if needed
+  // Cover page has its own design, so no watermark needed here
 
   doc
     .save()

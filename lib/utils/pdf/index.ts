@@ -40,6 +40,7 @@ export async function generateRiskSnapshotPDF(
     try {
       doc = new PDFDocument({
         size: 'LETTER',
+        bufferPages: true, // Enable page buffering for post-pass header/footer rendering
         margins: {
           top: STYLES.spacing.pageMargin,
           bottom: 60,
@@ -52,47 +53,20 @@ export async function generateRiskSnapshotPDF(
     }
 
     const chunks: Buffer[] = [];
-    let currentPage = 1;
-    let totalPages = 1; // Track total as we render
-
     const pageWidth = doc.page.width;
     const pageHeight = doc.page.height;
     const margin = STYLES.spacing.pageMargin;
 
-    // Safe add page function - tracks count accurately
+    // Simple add page function - NO headers/footers/watermarks here
+    // We'll add those in a post-pass after all content is rendered
     const safeAddPage = () => {
-      // Add footer to current page before switching (except first page)
-      if (currentPage > 1) {
-        // Use current totalPages (which is the best estimate we have)
-        // It will be close, and the last page will be exact
-        addFooterInline(
-          doc,
-          organization,
-          job.id,
-          reportGeneratedAt,
-          currentPage - 1,
-          totalPages
-        );
-      }
-
-      // Create new page
       doc.addPage();
-      currentPage++;
-      totalPages = currentPage; // Update total as we go
-      
-      // Add watermark to new page
-      if (isDraft) {
-        addDraftWatermark(doc);
-      } else {
-        addWatermark(doc);
-      }
-      
       // Reset cursor to top of content area
       doc.y = STYLES.spacing.sectionTop;
     };
 
     // ============================================
-    // WIRING IT ALL TOGETHER
+    // RENDER ALL CONTENT FIRST (no headers/footers/watermarks)
     // ============================================
 
     doc.on('data', (chunk: Buffer) => chunks.push(chunk));
@@ -109,12 +83,7 @@ export async function generateRiskSnapshotPDF(
       }
     });
 
-    // First page (cover) is created by PDFKit constructor
-    if (isDraft) {
-      addDraftWatermark(doc);
-    } else {
-      addWatermark(doc);
-    }
+    // First page (cover) - render content only
     renderCoverPage(
       doc,
       job,
@@ -186,8 +155,34 @@ export async function generateRiskSnapshotPDF(
       safeAddPage
     );
 
-    // Final footer for last page with correct total
-    addFooterInline(doc, organization, job.id, reportGeneratedAt, totalPages, totalPages);
+    // ============================================
+    // POST-PASS: Add headers/footers/watermarks to all pages
+    // ============================================
+    
+    // Get buffered page range (all pages that have been created)
+    const range = doc.bufferedPageRange();
+    const totalPages = range.count;
+
+    // Loop through all pages and add headers/footers/watermarks
+    for (let i = range.start; i < range.start + range.count; i++) {
+      doc.switchToPage(i);
+      
+      // Add watermark to all pages except cover (cover has its own design)
+      if (i > range.start) {
+        // All non-cover pages get watermark
+        if (isDraft) {
+          addDraftWatermark(doc);
+        } else {
+          addWatermark(doc);
+        }
+      }
+      
+      // Add footer to all pages except cover (cover typically doesn't have footer)
+      if (i > range.start) {
+        const pageNumber = i - range.start + 1; // Page numbers start at 1
+        addFooterInline(doc, organization, job.id, reportGeneratedAt, pageNumber, totalPages);
+      }
+    }
 
     doc.end();
   });
