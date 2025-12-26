@@ -48,27 +48,30 @@ export function drawHeaderFooterAndWatermark(
       lineBreak: false,
     });
 
-  // Footer: "CONFIDENTIAL" (center) - explicit x, y with large width and no line breaks
+  // Footer: "CONFIDENTIAL" (center) - manually centered (no align option to avoid bounding box issues)
+  // Calculate text width and center manually
+  doc.fontSize(STYLES.sizes.caption);
+  doc.font(STYLES.fonts.light);
+  const confidentialText = 'CONFIDENTIAL - For Internal Use Only';
+  const textWidth = doc.widthOfString(confidentialText);
+  const confidentialX = (width - textWidth) / 2;
   doc
     .fillColor(STYLES.colors.secondaryText)
-    .fontSize(STYLES.sizes.caption)
-    .font(STYLES.fonts.light)
-    .text('CONFIDENTIAL - For Internal Use Only', width / 2, footerY + 8, {
-      align: 'center',
-      width: width - marginX * 2,
+    .text(confidentialText, confidentialX, footerY + 8, {
       lineBreak: false,
     });
 
-  // Footer: Page number (right) - explicit x, y with large width and no line breaks
+  // Footer: Page number (right) - manually right-aligned (no align option)
   const safeTotalPages = Math.max(totalPages, 1);
   const safePageNum = Math.max(pageNumber, 1);
+  const pageText = `Page ${safePageNum} of ${safeTotalPages}`;
+  doc.fontSize(STYLES.sizes.caption);
+  doc.font(STYLES.fonts.body);
+  const pageTextWidth = doc.widthOfString(pageText);
+  const pageTextX = width - marginX - pageTextWidth;
   doc
     .fillColor(STYLES.colors.secondaryText)
-    .fontSize(STYLES.sizes.caption)
-    .font(STYLES.fonts.body)
-    .text(`Page ${safePageNum} of ${safeTotalPages}`, width - marginX - 240, footerY + 8, {
-      width: 240,
-      align: 'right',
+    .text(pageText, pageTextX, footerY + 8, {
       lineBreak: false,
     });
 
