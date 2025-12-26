@@ -20,13 +20,14 @@ type StampOptions = {
 export async function stampPdf(input: Buffer, opts: StampOptions = {}): Promise<Buffer> {
   const pdf = await PDFDocument.load(input);
   const font = await pdf.embedFont(StandardFonts.Helvetica);
-  const fontBold = await PDFDocument.load(input).then(async (d) => {
-    try {
-      return await d.embedFont(StandardFonts.HelveticaBold);
-    } catch {
-      return font; // Fallback to regular font
-    }
-  });
+  
+  // Embed bold font (fallback to regular if embedding fails)
+  let fontBold = font;
+  try {
+    fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  } catch (err) {
+    console.warn('[pdf-stamp] Failed to embed HelveticaBold, using regular font');
+  }
 
   const pages = pdf.getPages();
   const total = pages.length;
