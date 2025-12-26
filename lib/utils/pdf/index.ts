@@ -9,7 +9,7 @@ import type {
 } from './types';
 import { STYLES } from './styles';
 import { fetchLogoBuffer, categorizePhotos } from './utils';
-import { drawHeaderFooterAndWatermark, groupTimelineEvents } from './helpers';
+import { groupTimelineEvents } from './helpers';
 import { renderCoverPage } from './sections/cover';
 import { renderExecutiveSummary } from './sections/executiveSummary';
 import { renderHazardChecklist } from './sections/hazardChecklist';
