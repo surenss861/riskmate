@@ -9,13 +9,13 @@ export function renderTimeline(
   pageWidth: number,
   pageHeight: number,
   margin: number,
-  safeAddPage: (estimatedPages?: number) => void,
-  estimatedTotalPages: number
+  safeAddPage: () => void
 ) {
   const groupedTimeline = groupTimelineEvents(auditLogs);
+  // Only render if there are events - prevents empty pages
   if (!groupedTimeline.length) return;
 
-  safeAddPage(estimatedTotalPages);
+  safeAddPage();
   addSectionHeader(doc, 'Job Log Timeline');
 
   let timelineY = doc.y;
@@ -24,7 +24,7 @@ export function renderTimeline(
 
   groupedTimeline.forEach((event, index) => {
     if (doc.y > pageHeight - 100) {
-      safeAddPage(estimatedTotalPages);
+      safeAddPage();
       // Don't re-add header, just reset position for timeline continuation
       doc.y = STYLES.spacing.sectionTop + 40;
     }

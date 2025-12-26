@@ -11,12 +11,12 @@ export function renderHazardChecklist(
   pageWidth: number,
   pageHeight: number,
   margin: number,
-  safeAddPage: (estimatedPages?: number) => void,
-  estimatedTotalPages: number
+  safeAddPage: () => void
 ) {
+  // Only render if there are factors - prevents empty pages
   if (!riskScore || !riskScore.factors.length) return;
 
-  safeAddPage(estimatedTotalPages);
+  safeAddPage();
   addSectionHeader(doc, 'Hazard Checklist');
 
   const tableY = doc.y;
@@ -58,10 +58,25 @@ export function renderHazardChecklist(
 
   doc.y = tableY + 32;
   let rowIndex = 0;
+  
+  // Check if all timestamps are the same (common in test data)
+  const timestamps = riskScore.factors.map(() => job.created_at);
+  const allSameTimestamp = timestamps.length > 0 && timestamps.every(ts => ts === timestamps[0]);
+  const commonTimestamp = allSameTimestamp && timestamps[0] ? formatTime(timestamps[0]) : null;
+
+  // If all timestamps are the same, show a single "Captured at" line above table
+  if (commonTimestamp) {
+    doc
+      .fillColor(STYLES.colors.secondaryText)
+      .fontSize(STYLES.sizes.caption)
+      .font(STYLES.fonts.light)
+      .text(`All hazards captured at ${commonTimestamp}`, margin, doc.y);
+    doc.moveDown(0.5);
+  }
 
   riskScore.factors.forEach((factor) => {
     if (doc.y > pageHeight - 100) {
-      safeAddPage(estimatedTotalPages);
+      safeAddPage();
       // Don't re-add header, just reset position for table continuation
       doc.y = STYLES.spacing.sectionTop + 40;
       rowIndex = 0;
@@ -78,7 +93,7 @@ export function renderHazardChecklist(
     const severity = factor.severity || 'low';
     const severityColor = getSeverityColor(severity);
     const factorName = factor.name || factor.code || 'Unknown Hazard';
-    const notes = truncateText((factor as any).description || '—', 30);
+    const notes = truncateText((factor as any).description || 'None', 30);
 
     doc
       .fillColor(STYLES.colors.primaryText)
@@ -116,14 +131,17 @@ export function renderHazardChecklist(
         width: col4Width - 16,
       });
 
-    doc
-      .fillColor(STYLES.colors.secondaryText)
-      .fontSize(STYLES.sizes.caption)
-      .font(STYLES.fonts.light)
-      .text(formatTime(job.created_at), col5X, rowY + 2, {
-        width: col5Width,
-        align: 'right',
-      });
+    // Only show timestamp if they're not all the same (already shown above)
+    if (!commonTimestamp) {
+      doc
+        .fillColor(STYLES.colors.secondaryText)
+        .fontSize(STYLES.sizes.caption)
+        .font(STYLES.fonts.light)
+        .text(formatTime(job.created_at), col5X, rowY + 2, {
+          width: col5Width,
+          align: 'right',
+        });
+    }
 
     doc.y = rowY + 24;
     rowIndex++;

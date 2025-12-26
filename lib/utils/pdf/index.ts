@@ -9,7 +9,7 @@ import type {
 } from './types';
 import { STYLES } from './styles';
 import { fetchLogoBuffer, categorizePhotos } from './utils';
-import { addWatermark, addFooterInline, groupTimelineEvents } from './helpers';
+import { addWatermark, addFooterInline, groupTimelineEvents, addDraftWatermark } from './helpers';
 import { renderCoverPage } from './sections/cover';
 import { renderExecutiveSummary } from './sections/executiveSummary';
 import { renderHazardChecklist } from './sections/hazardChecklist';
@@ -17,12 +17,6 @@ import { renderControlsApplied } from './sections/controlsApplied';
 import { renderTimeline } from './sections/timeline';
 import { renderPhotosSection } from './sections/photos';
 import { renderSignaturesAndCompliance } from './sections/signatures';
-
-// Workaround for serverless environments where font files aren't available
-// PDFKit needs font metric files, but in Vercel/serverless they may not be available
-// Solution: Use PDFKit's built-in fonts without specifying font names explicitly
-// PDFKit's default font works without .afm files in serverless environments
-// We'll wrap font calls in try-catch to handle any font loading errors gracefully
 
 // ============================================
 // MAIN GENERATOR
@@ -38,8 +32,7 @@ export async function generateRiskSnapshotPDF(
   const accent = organization.accent_color || '#F97316';
   const logoBuffer = await fetchLogoBuffer(organization.logo_url);
   const reportGeneratedAt = new Date();
-  const jobStartDate = job.start_date ? new Date(job.start_date) : null;
-  const jobEndDate = job.end_date ? new Date(job.end_date) : null;
+  const isDraft = job.status?.toLowerCase() === 'draft';
 
   return new Promise((resolve, reject) => {
     let doc: PDFKit.PDFDocument;
@@ -59,49 +52,42 @@ export async function generateRiskSnapshotPDF(
     }
 
     const chunks: Buffer[] = [];
-    let pageCount = 1;
     let currentPage = 1;
+    let totalPages = 1; // Track total as we render
 
     const pageWidth = doc.page.width;
     const pageHeight = doc.page.height;
     const margin = STYLES.spacing.pageMargin;
 
-    const groupedTimeline = groupTimelineEvents(auditLogs);
-    const { before, during, after } = categorizePhotos(photos, job.start_date);
-
-    // Rough estimate for footer page numbers
-    const estimatedTotalPages =
-      1 + // cover
-      1 + // executive
-      (riskScore?.factors?.length ? 1 : 0) +
-      (mitigationItems.length ? 1 : 0) +
-      (groupedTimeline.length ? 1 : 0) +
-      (photos.length ? Math.ceil(photos.length / 9) : 0) +
-      1; // signatures
-
-    const safeAddPage = (estimatedPages?: number) => {
-      // Add footer to current page before switching (skip first page)
-      if (pageCount > 1) {
+    // Safe add page function - tracks count accurately
+    const safeAddPage = () => {
+      // Add footer to current page before switching (except first page)
+      if (currentPage > 1) {
+        // Use current totalPages (which is the best estimate we have)
+        // It will be close, and the last page will be exact
         addFooterInline(
           doc,
           organization,
           job.id,
           reportGeneratedAt,
-          currentPage,
-          estimatedPages || pageCount
+          currentPage - 1,
+          totalPages
         );
       }
 
       // Create new page
       doc.addPage();
-      pageCount++;
-      currentPage = pageCount;
-
-      // Add watermark to new page
-      addWatermark(doc);
+      currentPage++;
+      totalPages = currentPage; // Update total as we go
       
-      // Reset cursor to top of content area (below header/watermark)
-      // This ensures content starts at the right position
+      // Add watermark to new page
+      if (isDraft) {
+        addDraftWatermark(doc);
+      } else {
+        addWatermark(doc);
+      }
+      
+      // Reset cursor to top of content area
       doc.y = STYLES.spacing.sectionTop;
     };
 
@@ -110,9 +96,12 @@ export async function generateRiskSnapshotPDF(
     // ============================================
 
     doc.on('data', (chunk: Buffer) => chunks.push(chunk));
-    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    
+    doc.on('end', () => {
+      resolve(Buffer.concat(chunks));
+    });
+    
     doc.on('error', (err: any) => {
-      // Handle font loading errors in serverless environments
       if (err?.message?.includes('ENOENT') && err?.message?.includes('.afm')) {
         reject(new Error('PDF generation failed: Font files not available. This is a known issue in serverless environments. Please ensure PDFKit font data is included in the deployment.'));
       } else {
@@ -121,7 +110,11 @@ export async function generateRiskSnapshotPDF(
     });
 
     // First page (cover) is created by PDFKit constructor
-    addWatermark(doc);
+    if (isDraft) {
+      addDraftWatermark(doc);
+    } else {
+      addWatermark(doc);
+    }
     renderCoverPage(
       doc,
       job,
@@ -133,6 +126,7 @@ export async function generateRiskSnapshotPDF(
       margin
     );
 
+    // Render all sections - they will only add pages when there's content
     renderExecutiveSummary(
       doc,
       job,
@@ -142,7 +136,7 @@ export async function generateRiskSnapshotPDF(
       pageWidth,
       margin,
       safeAddPage,
-      estimatedTotalPages
+      isDraft
     );
 
     renderHazardChecklist(
@@ -152,8 +146,7 @@ export async function generateRiskSnapshotPDF(
       pageWidth,
       pageHeight,
       margin,
-      safeAddPage,
-      estimatedTotalPages
+      safeAddPage
     );
 
     renderControlsApplied(
@@ -163,8 +156,7 @@ export async function generateRiskSnapshotPDF(
       pageWidth,
       pageHeight,
       margin,
-      safeAddPage,
-      estimatedTotalPages
+      safeAddPage
     );
 
     renderTimeline(
@@ -173,8 +165,7 @@ export async function generateRiskSnapshotPDF(
       pageWidth,
       pageHeight,
       margin,
-      safeAddPage,
-      estimatedTotalPages
+      safeAddPage
     );
 
     renderPhotosSection(
@@ -184,8 +175,7 @@ export async function generateRiskSnapshotPDF(
       pageWidth,
       pageHeight,
       margin,
-      safeAddPage,
-      estimatedTotalPages
+      safeAddPage
     );
 
     renderSignaturesAndCompliance(
@@ -193,12 +183,11 @@ export async function generateRiskSnapshotPDF(
       pageWidth,
       pageHeight,
       margin,
-      safeAddPage,
-      estimatedTotalPages
+      safeAddPage
     );
 
-    // Final footer for last page
-    addFooterInline(doc, organization, job.id, reportGeneratedAt, pageCount, pageCount);
+    // Final footer for last page with correct total
+    addFooterInline(doc, organization, job.id, reportGeneratedAt, totalPages, totalPages);
 
     doc.end();
   });
@@ -213,4 +202,3 @@ export type {
   JobDocumentAsset,
   AuditLogEntry,
 };
-

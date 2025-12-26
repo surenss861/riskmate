@@ -11,12 +11,12 @@ export function renderControlsApplied(
   pageWidth: number,
   pageHeight: number,
   margin: number,
-  safeAddPage: (estimatedPages?: number) => void,
-  estimatedTotalPages: number
+  safeAddPage: () => void
 ) {
+  // Only render if there are items - prevents empty pages
   if (!mitigationItems.length) return;
 
-  safeAddPage(estimatedTotalPages);
+  safeAddPage();
   addSectionHeader(doc, 'Controls Applied');
 
   const completedCount = mitigationItems.filter(
@@ -116,7 +116,7 @@ export function renderControlsApplied(
 
   mitigationItems.forEach((item, index) => {
     if (doc.y > pageHeight - 100) {
-      safeAddPage(estimatedTotalPages);
+      safeAddPage();
       // Don't re-add header, just reset position for table continuation
       doc.y = STYLES.spacing.sectionTop + 40;
       rowIndex = 0;
@@ -172,7 +172,7 @@ export function renderControlsApplied(
       .font(STYLES.fonts.body)
       .text(isCompleted ? 'Yes' : 'No', col2X, rowY);
 
-    const fullNotes = item.description || '—';
+    const fullNotes = item.description || 'None';
     let notes = fullNotes
       .replace(/^Request\s+/i, '')
       .replace(/^Verify\s+/i, '')

@@ -20,6 +20,29 @@ export function addWatermark(doc: PDFKit.PDFDocument) {
     .opacity(1.0);
 }
 
+// DRAFT Watermark (diagonal, consistent across pages)
+export function addDraftWatermark(doc: PDFKit.PDFDocument) {
+  const pageWidth = doc.page.width;
+  const pageHeight = doc.page.height;
+  
+  doc.save();
+  doc.opacity(0.15);
+  doc.fillColor('#FF6B35'); // Orange for draft
+  doc.fontSize(72);
+  doc.font(STYLES.fonts.header);
+  
+  // Rotate 45 degrees and center
+  doc.translate(pageWidth / 2, pageHeight / 2);
+  doc.rotate(-45);
+  doc.text('DRAFT', 0, 0, {
+    align: 'center',
+    width: 400,
+  });
+  
+  doc.restore();
+  doc.opacity(1.0);
+}
+
 // Section header
 export function addSectionHeader(doc: PDFKit.PDFDocument, title: string, prefix?: string): void {
   const margin = STYLES.spacing.pageMargin;

@@ -12,10 +12,10 @@ export function renderExecutiveSummary(
   photos: JobDocumentAsset[],
   pageWidth: number,
   margin: number,
-  safeAddPage: (estimatedPages?: number) => void,
-  estimatedTotalPages: number
+  safeAddPage: () => void,
+  isDraft: boolean
 ) {
-  safeAddPage(estimatedTotalPages);
+  safeAddPage();
   addSectionHeader(doc, 'Executive Summary');
 
   // Calculate stats
@@ -111,27 +111,8 @@ export function renderExecutiveSummary(
     .text(jobDuration, detailCol2X, detailStartY + detailLineHeight)
     .text(`Hazards Found: ${hazardsCount}`, detailCol2X, detailStartY + detailLineHeight * 2);
 
-  // DRAFT badge (upper-right corner of card)
-  if (job.status.toLowerCase() === 'draft') {
-    const badgeX = margin + jobSummaryWidth - 80;
-    const badgeY = jobSummaryY + 15;
-    const badgeWidth = 60;
-    const badgeHeight = 20;
-
-    doc
-      .roundedRect(badgeX, badgeY, badgeWidth, badgeHeight, 10)
-      .fill('#F5F5F5')
-      .stroke('#D0D0D0')
-      .lineWidth(1);
-
-    doc
-      .fillColor(STYLES.colors.secondaryText)
-      .fontSize(9)
-      .font(STYLES.fonts.header)
-      .text('DRAFT', badgeX + badgeWidth / 2, badgeY + 5, {
-        align: 'center',
-      });
-  }
+  // DRAFT badge removed - now using watermark across all pages
+  // Removed to avoid duplication with watermark
 
   doc.y = jobSummaryY + jobSummaryHeight + 20;
 
@@ -180,29 +161,37 @@ export function renderExecutiveSummary(
 
   // Column 2: Controls
   const col2X = margin + colWidth + colWidth / 2;
+  const controlsText = controlsCount === 0 
+    ? '—'
+    : `${completedControls}/${controlsCount}`;
+  const controlsLabel = controlsCount === 0
+    ? 'Controls (None required)'
+    : 'Controls';
   doc
     .fillColor(STYLES.colors.primaryText)
     .fontSize(24)
     .font(STYLES.fonts.header)
-    .text(`${completedControls}/${controlsCount}`, col2X, statsNumberY, { align: 'center' });
+    .text(controlsText, col2X, statsNumberY, { align: 'center' });
   doc
     .fillColor(STYLES.colors.secondaryText)
     .fontSize(STYLES.sizes.body)
     .font(STYLES.fonts.body)
-    .text('Controls', col2X, statsLabelY, { align: 'center' });
+    .text(controlsLabel, col2X, statsLabelY, { align: 'center' });
 
   // Column 3: Photos
   const col3X = margin + colWidth * 2 + colWidth / 2;
+  const photosText = photosCount === 0 ? '0' : photosCount.toString();
+  const photosLabel = photosCount === 0 ? 'Photos (None yet)' : 'Photos';
   doc
     .fillColor(STYLES.colors.primaryText)
     .fontSize(24)
     .font(STYLES.fonts.header)
-    .text(photosCount.toString(), col3X, statsNumberY, { align: 'center' });
+    .text(photosText, col3X, statsNumberY, { align: 'center' });
   doc
     .fillColor(STYLES.colors.secondaryText)
     .fontSize(STYLES.sizes.body)
     .font(STYLES.fonts.body)
-    .text('Photos', col3X, statsLabelY, { align: 'center' });
+    .text(photosLabel, col3X, statsLabelY, { align: 'center' });
 
   // Column 4: Status
   const col4X = margin + colWidth * 3 + colWidth / 2;

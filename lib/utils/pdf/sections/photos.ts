@@ -11,8 +11,7 @@ export function renderPhotosSection(
   pageWidth: number,
   pageHeight: number,
   margin: number,
-  safeAddPage: (estimatedPages?: number) => void,
-  estimatedTotalPages: number
+  safeAddPage: () => void
 ) {
   const { before, during, after } = categorizePhotos(photos, jobStartDate);
 
@@ -23,9 +22,10 @@ export function renderPhotosSection(
   ];
 
   sections.forEach((section) => {
+    // Only render sections with photos - prevents empty pages
     if (!section.photos.length) return;
 
-    safeAddPage(estimatedTotalPages);
+    safeAddPage();
     addSectionHeader(doc, section.title);
 
     const gridY = doc.y;
@@ -44,7 +44,7 @@ export function renderPhotosSection(
         y += imageHeight + 80;
 
         if (y + imageHeight > pageHeight - 100) {
-          safeAddPage(estimatedTotalPages);
+          safeAddPage();
           // Reset position for photo grid continuation
           doc.y = STYLES.spacing.sectionTop + 40;
           y = doc.y;

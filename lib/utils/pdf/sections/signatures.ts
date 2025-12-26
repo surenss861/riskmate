@@ -7,10 +7,9 @@ export function renderSignaturesAndCompliance(
   pageWidth: number,
   pageHeight: number,
   margin: number,
-  safeAddPage: (estimatedPages?: number) => void,
-  estimatedTotalPages: number
+  safeAddPage: () => void
 ) {
-  safeAddPage(estimatedTotalPages);
+  safeAddPage();
   addSectionHeader(doc, 'Signatures & Compliance');
 
   doc
@@ -33,7 +32,7 @@ export function renderSignaturesAndCompliance(
     const sigX = margin + col * (sigBoxWidth + sigSpacing);
 
     if (sigY + sigBoxHeight > pageHeight - 200) {
-      safeAddPage(estimatedTotalPages);
+      safeAddPage();
       const newY = STYLES.spacing.sectionTop + 40;
       const adjustedRow = Math.floor(i / 2);
       const adjustedY = newY + adjustedRow * (sigBoxHeight + sigSpacing);
