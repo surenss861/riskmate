@@ -3,61 +3,105 @@ import { STYLES } from './styles';
 import type { OrganizationData, AuditLogEntry } from './types';
 import { formatTime, truncateText } from './utils';
 
-// Watermark - Draw-only function (uses absolute positions ONLY, never calls addPage or modifies doc.y)
-export function addWatermark(doc: PDFKit.PDFDocument) {
-  const pageWidth = doc.page.width;
-  const pageHeight = doc.page.height;
-  const centerX = pageWidth / 2;
-  const centerY = pageHeight / 2;
-  
-  // Save state to avoid affecting anything
-  doc.save();
-  
-  // Set styles
-  doc.fillColor(STYLES.colors.watermark);
-  doc.fontSize(72);
-  doc.font(STYLES.fonts.light);
-  doc.opacity(0.08); // Subtle opacity
-  
-  // Draw text at absolute center position with very large width and NO line breaks
-  // Use explicit x, y coordinates - never rely on current doc.y
-  doc.text('RiskMate', centerX, centerY, {
-    align: 'center',
-    width: pageWidth * 0.8, // Very large width (80% of page)
-    lineBreak: false, // CRITICAL: no line breaks
-  });
-  
-  doc.restore(); // Restore all state
-}
+// Draw header, footer, and watermark on a single page - ALL with explicit x,y coordinates
+// This function is called AFTER doc.switchToPage(i), so we use the current page's dimensions
+export function drawHeaderFooterAndWatermark(
+  doc: PDFKit.PDFDocument,
+  organization: OrganizationData,
+  jobId: string,
+  reportGeneratedAt: Date,
+  pageNumber: number,
+  totalPages: number,
+  isDraft: boolean
+) {
+  // Get current page dimensions AFTER switchToPage()
+  const { width, height } = doc.page;
+  const marginX = STYLES.spacing.pageMargin;
+  const topY = 24;
+  const footerY = height - 36;
 
-// DRAFT Watermark (diagonal) - Draw-only function (uses absolute positions ONLY)
-export function addDraftWatermark(doc: PDFKit.PDFDocument) {
-  const pageWidth = doc.page.width;
-  const pageHeight = doc.page.height;
-  const centerX = pageWidth / 2;
-  const centerY = pageHeight / 2;
-  
-  // Save state to avoid affecting anything
   doc.save();
-  
-  // Set styles
-  doc.opacity(0.08); // Subtle opacity
-  doc.fillColor('#FF6B35'); // Orange for draft
-  doc.fontSize(72);
-  doc.font(STYLES.fonts.header);
-  
-  // Transform: translate to center, then rotate
-  doc.translate(centerX, centerY);
-  doc.rotate(-45);
-  
-  // Draw text at (0, 0) in transformed coordinates with very large width and NO line breaks
-  doc.text('DRAFT', 0, 0, {
-    align: 'center',
-    width: pageWidth * 0.8, // Very large width (80% of page)
-    lineBreak: false, // CRITICAL: no line breaks
-  });
-  
-  doc.restore(); // Restore all state (including transformations)
+
+  // Footer divider line (absolute position)
+  doc
+    .strokeColor(STYLES.colors.divider)
+    .lineWidth(0.5)
+    .moveTo(marginX, footerY)
+    .lineTo(width - marginX, footerY)
+    .stroke();
+
+  // Footer: "RiskMate" (left) - explicit x, y
+  doc
+    .fillColor(STYLES.colors.accent)
+    .fontSize(10)
+    .font(STYLES.fonts.header)
+    .text('RiskMate', marginX, footerY + 8, {
+      width: 240,
+      lineBreak: false,
+    });
+
+  // Footer: "CONFIDENTIAL" (center) - explicit x, y
+  doc
+    .fillColor(STYLES.colors.secondaryText)
+    .fontSize(STYLES.sizes.caption)
+    .font(STYLES.fonts.light)
+    .text('CONFIDENTIAL - For Internal Use Only', width / 2, footerY + 8, {
+      align: 'center',
+      width: width - marginX * 2,
+      lineBreak: false,
+    });
+
+  // Footer: Page number (right) - explicit x, y
+  const safeTotalPages = Math.max(totalPages, 1);
+  const safePageNum = Math.max(pageNumber, 1);
+  doc
+    .fillColor(STYLES.colors.secondaryText)
+    .fontSize(STYLES.sizes.caption)
+    .font(STYLES.fonts.body)
+    .text(`Page ${safePageNum} of ${safeTotalPages}`, width - marginX - 240, footerY + 8, {
+      width: 240,
+      align: 'right',
+      lineBreak: false,
+    });
+
+  // Draft watermark (only if draft, and only on content pages)
+  if (isDraft) {
+    const centerX = width / 2;
+    const centerY = height / 2;
+
+    doc.save();
+    doc.opacity(0.05); // Very subtle - background texture
+    doc.rotate(-45, { origin: [centerX, centerY] });
+    doc
+      .font(STYLES.fonts.header)
+      .fontSize(72) // Smaller than before
+      .fillColor('#FF6B35')
+      .text('DRAFT', centerX - 200, centerY - 36, {
+        width: 400,
+        align: 'center',
+        lineBreak: false,
+      });
+    doc.restore();
+  } else {
+    // Regular watermark (very subtle background texture)
+    const centerX = width / 2;
+    const centerY = height / 2;
+
+    doc.save();
+    doc.opacity(0.04); // Very subtle
+    doc
+      .fillColor(STYLES.colors.watermark)
+      .fontSize(72)
+      .font(STYLES.fonts.light)
+      .text('RiskMate', centerX - 200, centerY - 36, {
+        width: 400,
+        align: 'center',
+        lineBreak: false,
+      });
+    doc.restore();
+  }
+
+  doc.restore();
 }
 
 // Section header (used during content rendering, not post-pass)
@@ -232,7 +276,18 @@ export function groupTimelineEvents(
   });
 }
 
-// Footer - Draw-only function (uses absolute positions ONLY, never calls addPage or modifies doc.y)
+// Legacy functions - DEPRECATED, use drawHeaderFooterAndWatermark instead
+// Keeping for backward compatibility but they should not be used in post-pass
+export function addWatermark(doc: PDFKit.PDFDocument) {
+  // This should not be used in post-pass
+  console.warn('addWatermark is deprecated, use drawHeaderFooterAndWatermark instead');
+}
+
+export function addDraftWatermark(doc: PDFKit.PDFDocument) {
+  // This should not be used in post-pass
+  console.warn('addDraftWatermark is deprecated, use drawHeaderFooterAndWatermark instead');
+}
+
 export function addFooterInline(
   doc: PDFKit.PDFDocument,
   organization: OrganizationData,
@@ -241,56 +296,7 @@ export function addFooterInline(
   pageNumber: number,
   totalPages: number
 ) {
-  const margin = STYLES.spacing.pageMargin;
-  const pageWidth = doc.page.width;
-  const pageHeight = doc.page.height;
-  const footerY = pageHeight - 40;
-
-  // Save state to avoid affecting anything
-  doc.save();
-
-  // Draw footer divider line using absolute coordinates
-  doc
-    .strokeColor(STYLES.colors.divider)
-    .lineWidth(0.5)
-    .moveTo(margin, footerY)
-    .lineTo(pageWidth - margin, footerY)
-    .stroke();
-
-  // Draw "RiskMate" text at absolute position - left side
-  doc
-    .fillColor(STYLES.colors.accent)
-    .fontSize(10)
-    .font(STYLES.fonts.header)
-    .text('RiskMate', margin, footerY + 8, {
-      width: 200, // Wide width
-      lineBreak: false, // CRITICAL: no line breaks
-    });
-
-  // Draw "CONFIDENTIAL" text at absolute position - center
-  doc
-    .fillColor(STYLES.colors.secondaryText)
-    .fontSize(STYLES.sizes.caption)
-    .font(STYLES.fonts.light)
-    .text('CONFIDENTIAL - For Internal Use Only', pageWidth / 2, footerY + 8, {
-      align: 'center',
-      width: pageWidth - margin * 2, // Full width minus margins
-      lineBreak: false, // CRITICAL: no line breaks
-    });
-
-  // Draw page number at absolute position - right side
-  const safeTotalPages = Math.max(totalPages, 1);
-  const safePageNum = Math.max(pageNumber, 1);
-  
-  doc
-    .fillColor(STYLES.colors.secondaryText)
-    .fontSize(STYLES.sizes.caption)
-    .font(STYLES.fonts.body)
-    .text(`Page ${safePageNum} of ${safeTotalPages}`, pageWidth - margin - 100, footerY + 8, {
-      align: 'right',
-      width: 100, // Fixed width for right alignment
-      lineBreak: false, // CRITICAL: no line breaks
-    });
-
-  doc.restore(); // Restore all state
+  // This should not be used in post-pass
+  console.warn('addFooterInline is deprecated, use drawHeaderFooterAndWatermark instead');
+  drawHeaderFooterAndWatermark(doc, organization, jobId, reportGeneratedAt, pageNumber, totalPages, false);
 }

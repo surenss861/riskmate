@@ -9,7 +9,7 @@ import type {
 } from './types';
 import { STYLES } from './styles';
 import { fetchLogoBuffer, categorizePhotos } from './utils';
-import { addWatermark, addFooterInline, groupTimelineEvents, addDraftWatermark } from './helpers';
+import { drawHeaderFooterAndWatermark, groupTimelineEvents } from './helpers';
 import { renderCoverPage } from './sections/cover';
 import { renderExecutiveSummary } from './sections/executiveSummary';
 import { renderHazardChecklist } from './sections/hazardChecklist';
@@ -163,8 +163,9 @@ export async function generateRiskSnapshotPDF(
     const range = doc.bufferedPageRange();
     const totalPages = range.count;
 
-    // SINGLE LOOP: Add watermark + footer together on each page
-    // Use absolute positions only, no doc.y manipulation, no addPage()
+    // SINGLE LOOP: Draw header/footer/watermark together on each page
+    // Calculate positions AFTER switchToPage() so we use current page dimensions
+    // ALL text calls use explicit x, y coordinates (no options-only overload)
     for (let i = range.start; i < range.start + range.count; i++) {
       doc.switchToPage(i);
       
@@ -173,18 +174,21 @@ export async function generateRiskSnapshotPDF(
         // Calculate page number (starts at 1 for first content page after cover)
         const pageNumber = i - range.start; // Page 1, 2, 3, etc. (cover is page 0)
         
-        // Add watermark FIRST (drawn behind content) - uses absolute positions only
-        if (isDraft) {
-          addDraftWatermark(doc);
-        } else {
-          addWatermark(doc);
-        }
-        
-        // Add footer LAST (drawn on top, at bottom of page) - uses absolute positions only
-        addFooterInline(doc, organization, job.id, reportGeneratedAt, pageNumber, totalPages);
+        // Draw header, footer, and watermark together
+        // Positions are calculated inside the function AFTER switchToPage()
+        drawHeaderFooterAndWatermark(
+          doc,
+          organization,
+          job.id,
+          reportGeneratedAt,
+          pageNumber,
+          totalPages,
+          isDraft
+        );
       }
     }
 
+    doc.flushPages(); // Flush after stamping all pages
     doc.end();
   });
 }
