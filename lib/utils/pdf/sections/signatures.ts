@@ -1,9 +1,22 @@
 import PDFDocument from 'pdfkit';
 import { STYLES } from '../styles';
 import { addSectionHeader } from '../helpers';
+import type { JobData } from '../types';
 
+/**
+ * Signatures & Compliance - Legal/Compliance Style
+ * 
+ * Hybrid approach: Pages 2+ = legal/compliance style
+ * 
+ * Improvements:
+ * - Add "Prepared by RiskMate" line
+ * - Add Document ID / hash style line
+ * - Put compliance paragraph into bordered callout block
+ * - Keep signature rows aligned, less vertical sprawl
+ */
 export function renderSignaturesAndCompliance(
   doc: PDFKit.PDFDocument,
+  job: JobData,
   pageWidth: number,
   pageHeight: number,
   margin: number,
@@ -12,16 +25,31 @@ export function renderSignaturesAndCompliance(
   safeAddPage();
   addSectionHeader(doc, 'Signatures & Compliance');
 
+  // ============================================
+  // PREPARED BY & DOCUMENT ID
+  // ============================================
+  doc
+    .fillColor(STYLES.colors.secondaryText)
+    .fontSize(9)
+    .font(STYLES.fonts.body)
+    .text('Prepared by RiskMate', margin, doc.y)
+    .text(`Document ID: ${job.id.substring(0, 8).toUpperCase()}`, margin, doc.y + 12);
+
+  doc.moveDown(2);
+
+  // ============================================
+  // CREW SIGNATURES
+  // ============================================
   doc
     .fillColor(STYLES.colors.primaryText)
-    .fontSize(STYLES.sizes.h3)
+    .fontSize(14)
     .font(STYLES.fonts.header)
     .text('Crew Signatures', { align: 'left' });
 
-  doc.moveDown(0.5);
+  doc.moveDown(0.8);
 
   const sigBoxY = doc.y;
-  const sigBoxHeight = 100;
+  const sigBoxHeight = 90; // Reduced from 100 for tighter layout
   const sigBoxWidth = (pageWidth - margin * 2 - 20) / 2;
   const sigSpacing = 20;
 
@@ -61,16 +89,16 @@ export function renderSignaturesAndCompliance(
         .fillColor(STYLES.colors.primaryText)
         .fontSize(STYLES.sizes.body)
         .font(STYLES.fonts.body)
-        .text('Printed Name: _________________', adjustedX + 15, adjustedY + 50, {
+        .text('Printed Name: _________________', adjustedX + 15, adjustedY + 45, {
           width: sigBoxWidth - 30,
         })
-        .text('Crew Role: _________________', adjustedX + 15, adjustedY + 70, {
+        .text('Crew Role: _________________', adjustedX + 15, adjustedY + 65, {
           width: sigBoxWidth - 30,
         })
         .fillColor(STYLES.colors.secondaryText)
         .fontSize(STYLES.sizes.caption)
         .font(STYLES.fonts.light)
-        .text('Date: _________________', adjustedX + 15, adjustedY + 85);
+        .text('Date: _________________', adjustedX + 15, adjustedY + 80);
     } else {
       doc
         .rect(sigX, sigY, sigBoxWidth, sigBoxHeight)
@@ -95,40 +123,62 @@ export function renderSignaturesAndCompliance(
         .fillColor(STYLES.colors.primaryText)
         .fontSize(STYLES.sizes.body)
         .font(STYLES.fonts.body)
-        .text('Printed Name: _________________', sigX + 15, sigY + 50, {
+        .text('Printed Name: _________________', sigX + 15, sigY + 45, {
           width: sigBoxWidth - 30,
         })
-        .text('Crew Role: _________________', sigX + 15, sigY + 70, {
+        .text('Crew Role: _________________', sigX + 15, sigY + 65, {
           width: sigBoxWidth - 30,
         })
         .fillColor(STYLES.colors.secondaryText)
         .fontSize(STYLES.sizes.caption)
         .font(STYLES.fonts.light)
-        .text('Date: _________________', sigX + 15, sigY + 85);
+        .text('Date: _________________', sigX + 15, sigY + 80);
     }
   }
 
-  doc.y = sigBoxY + 2 * (sigBoxHeight + sigSpacing) + 40;
+  doc.y = sigBoxY + 2 * (sigBoxHeight + sigSpacing) + 30; // Reduced spacing
   const complianceY = doc.y;
 
+  // ============================================
+  // COMPLIANCE STATEMENT (Bordered Callout Block)
+  // ============================================
   doc
     .fillColor(STYLES.colors.primaryText)
-    .fontSize(STYLES.sizes.h3)
+    .fontSize(14)
     .font(STYLES.fonts.header)
     .text('Compliance Statement', margin, complianceY);
+
+  doc.moveDown(0.8);
 
   const complianceText =
     'This report was generated through RiskMate and includes all safety, hazard, and control ' +
     'documentation submitted by the assigned crew. All data is timestamped and stored securely. ' +
     'This documentation serves as evidence of compliance with safety protocols and regulatory requirements.';
 
+  // Calculate text height for callout box
+  const complianceTextHeight = doc.heightOfString(complianceText, {
+    width: pageWidth - margin * 2 - 32,
+    lineGap: 4,
+  });
+
+  const calloutY = doc.y;
+  const calloutHeight = complianceTextHeight + 24;
+  const calloutWidth = pageWidth - margin * 2;
+
+  // Bordered callout block
+  doc
+    .roundedRect(margin, calloutY, calloutWidth, calloutHeight, 6)
+    .fill(STYLES.colors.lightGrayBg)
+    .stroke(STYLES.colors.borderGray)
+    .lineWidth(1.5);
+
+  // Compliance text inside callout
   doc
     .fillColor(STYLES.colors.secondaryText)
     .fontSize(STYLES.sizes.body)
-    .font(STYLES.fonts.light)
-    .text(complianceText, margin, complianceY + 24, {
-      width: pageWidth - margin * 2,
+    .font(STYLES.fonts.body)
+    .text(complianceText, margin + 16, calloutY + 12, {
+      width: calloutWidth - 32,
       lineGap: 4,
     });
 }
-

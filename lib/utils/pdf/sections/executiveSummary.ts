@@ -1,9 +1,19 @@
 import PDFDocument from 'pdfkit';
 import { STYLES } from '../styles';
 import { addSectionHeader } from '../helpers';
-import { formatDate, getRiskColor, truncateText } from '../utils';
+import { formatDate, getRiskColor, getSeverityColor, truncateText } from '../utils';
 import type { JobData, RiskScoreData, MitigationItem, JobDocumentAsset } from '../types';
 
+/**
+ * Executive Summary - Redesigned Layout
+ * 
+ * Hybrid approach: Legal/compliance style (Pages 2+)
+ * 
+ * Layout:
+ * - Left column: Job details (Client, Location, Dates, Status)
+ * - Right column: Risk block (Score + severity label + top drivers)
+ * - Below: "Key Findings" bullets (top 3-5 hazards)
+ */
 export function renderExecutiveSummary(
   doc: PDFKit.PDFDocument,
   job: JobData,
@@ -24,11 +34,10 @@ export function renderExecutiveSummary(
   const completedControls = mitigationItems.filter(
     (m) => m.done || m.is_completed
   ).length;
-  const photosCount = photos.length;
   const riskLevel = riskScore?.risk_level || 'unknown';
 
   // ============================================
-  // 1. OVERVIEW PARAGRAPH
+  // OVERVIEW PARAGRAPH
   // ============================================
   const overviewText =
     job.description ||
@@ -47,28 +56,27 @@ export function renderExecutiveSummary(
       align: 'left',
     });
 
-  doc.moveDown(1.5);
-
-  // Separator line
-  doc
-    .strokeColor(STYLES.colors.divider)
-    .lineWidth(0.5)
-    .moveTo(margin, doc.y)
-    .lineTo(pageWidth - margin, doc.y)
-    .stroke();
-
-  doc.moveDown(1.5);
+  doc.moveDown(2);
 
   // ============================================
-  // 2. JOB SUMMARY CARD
+  // TWO-COLUMN LAYOUT: Job Details | Risk Block
   // ============================================
-  const jobSummaryY = doc.y;
-  const jobSummaryHeight = 100;
-  const jobSummaryWidth = pageWidth - margin * 2;
+  const twoColY = doc.y;
+  const twoColHeight = 140;
+  const twoColWidth = pageWidth - margin * 2;
+  const colSpacing = 20;
+  const colWidth = (twoColWidth - colSpacing) / 2;
+  const col1X = margin;
+  const col2X = margin + colWidth + colSpacing;
 
+  // ============================================
+  // LEFT COLUMN: Job Details
+  // ============================================
+  const jobDetailsY = twoColY;
+  
   // Card background
   doc
-    .roundedRect(margin, jobSummaryY, jobSummaryWidth, jobSummaryHeight, 6)
+    .roundedRect(col1X, jobDetailsY, colWidth, twoColHeight, 6)
     .fill(STYLES.colors.sectionBg)
     .stroke(STYLES.colors.borderGray)
     .lineWidth(1);
@@ -76,148 +84,117 @@ export function renderExecutiveSummary(
   // Card title
   doc
     .fillColor(STYLES.colors.primaryText)
-    .fontSize(STYLES.sizes.h3)
+    .fontSize(14)
     .font(STYLES.fonts.header)
-    .text('Job Summary', margin + 20, jobSummaryY + 15);
+    .text('Job Details', col1X + 16, jobDetailsY + 16);
 
-  // Job details in two columns
-  const detailCol1X = margin + 20;
-  const detailCol2X = margin + jobSummaryWidth / 2 + 10;
-  const detailStartY = jobSummaryY + 40;
-  const detailLineHeight = 18;
-
-  // Left column
+  // Job details list
+  const detailStartY = jobDetailsY + 40;
+  const detailLineHeight = 20;
+  
   doc
     .fillColor(STYLES.colors.secondaryText)
     .fontSize(STYLES.sizes.body)
     .font(STYLES.fonts.body)
-    .text(`Client: ${job.client_name}`, detailCol1X, detailStartY)
-    .text(`Location: ${job.location}`, detailCol1X, detailStartY + detailLineHeight)
-    .text(`Job Type: ${job.job_type}`, detailCol1X, detailStartY + detailLineHeight * 2);
+    .text(`Client: ${job.client_name}`, col1X + 16, detailStartY)
+    .text(`Location: ${job.location}`, col1X + 16, detailStartY + detailLineHeight, {
+      width: colWidth - 32,
+    })
+    .text(`Job Type: ${job.job_type}`, col1X + 16, detailStartY + detailLineHeight * 2);
 
-  // Right column
+  // Dates
   const jobDuration =
     job.start_date && job.end_date
       ? `${formatDate(job.start_date)} - ${formatDate(job.end_date)}`
       : job.start_date
       ? `Started: ${formatDate(job.start_date)}`
       : 'Duration: N/A';
+  
+  doc.text(jobDuration, col1X + 16, detailStartY + detailLineHeight * 3, {
+    width: colWidth - 32,
+  });
 
-  doc
-    .fillColor(STYLES.colors.secondaryText)
-    .fontSize(STYLES.sizes.body)
-    .font(STYLES.fonts.body)
-    .text(`Status: ${job.status}`, detailCol2X, detailStartY)
-    .text(jobDuration, detailCol2X, detailStartY + detailLineHeight)
-    .text(`Hazards Found: ${hazardsCount}`, detailCol2X, detailStartY + detailLineHeight * 2);
-
-  // DRAFT badge removed - now using watermark across all pages
-  // Removed to avoid duplication with watermark
-
-  doc.y = jobSummaryY + jobSummaryHeight + 20;
-
-  // Separator line
-  doc
-    .strokeColor(STYLES.colors.divider)
-    .lineWidth(0.5)
-    .moveTo(margin, doc.y)
-    .lineTo(pageWidth - margin, doc.y)
-    .stroke();
-
-  doc.moveDown(1.5);
+  // Status
+  doc.text(`Status: ${job.status}`, col1X + 16, detailStartY + detailLineHeight * 4);
 
   // ============================================
-  // 3. QUICK STATS - 4-COLUMN GRID CARD
+  // RIGHT COLUMN: Risk Block
   // ============================================
-  const statsY = doc.y;
-  const statsBoxHeight = 90;
-  const statsBoxWidth = pageWidth - margin * 2;
-
-  // Card background
+  const riskBlockY = twoColY;
+  const riskColor = getRiskColor(riskLevel);
+  
+  // Card background with left accent border
   doc
-    .roundedRect(margin, statsY, statsBoxWidth, statsBoxHeight, 6)
+    .roundedRect(col2X, riskBlockY, colWidth, twoColHeight, 6)
     .fill(STYLES.colors.sectionBg)
     .stroke(STYLES.colors.borderGray)
     .lineWidth(1);
 
-  // 4-column grid
-  const colWidth = statsBoxWidth / 4;
-  const statsContentY = statsY + 25;
-  const statsNumberY = statsContentY;
-  const statsLabelY = statsContentY + 28;
+  // Left accent border
+  doc
+    .rect(col2X, riskBlockY, 4, twoColHeight)
+    .fill(riskColor);
 
-  // Column 1: Hazards
-  const col1X = margin + colWidth / 2;
+  // Card title
   doc
     .fillColor(STYLES.colors.primaryText)
-    .fontSize(24)
+    .fontSize(14)
     .font(STYLES.fonts.header)
-    .text(hazardsCount.toString(), col1X, statsNumberY, { align: 'center' });
-  doc
-    .fillColor(STYLES.colors.secondaryText)
-    .fontSize(STYLES.sizes.body)
-    .font(STYLES.fonts.body)
-    .text('Hazards', col1X, statsLabelY, { align: 'center' });
+    .text('Risk Assessment', col2X + 16, riskBlockY + 16);
 
-  // Column 2: Controls
-  const col2X = margin + colWidth + colWidth / 2;
-  const controlsText = controlsCount === 0 
-    ? '—'
-    : `${completedControls}/${controlsCount}`;
-  const controlsLabel = controlsCount === 0
-    ? 'Controls (None required)'
-    : 'Controls';
+  // Risk Score (centered in column)
+  const riskScoreValue = riskScore?.overall_score || 0;
+  const scoreX = col2X + colWidth / 2;
+  const scoreY = riskBlockY + 45;
+
   doc
-    .fillColor(STYLES.colors.primaryText)
-    .fontSize(24)
+    .fillColor(riskColor)
+    .fontSize(42)
     .font(STYLES.fonts.header)
-    .text(controlsText, col2X, statsNumberY, { align: 'center' });
-  doc
-    .fillColor(STYLES.colors.secondaryText)
-    .fontSize(STYLES.sizes.body)
-    .font(STYLES.fonts.body)
-    .text(controlsLabel, col2X, statsLabelY, { align: 'center' });
+    .text(riskScoreValue.toString(), scoreX, scoreY, {
+      align: 'center',
+    });
 
-  // Column 3: Photos
-  const col3X = margin + colWidth * 2 + colWidth / 2;
-  const photosText = photosCount === 0 ? '0' : photosCount.toString();
-  const photosLabel = photosCount === 0 ? 'Photos (None yet)' : 'Photos';
+  // Risk level badge
+  const badgeY = scoreY + 40;
+  const badgeWidth = 90;
+  const badgeHeight = 22;
+  const badgeX = col2X + colWidth / 2 - badgeWidth / 2;
+
   doc
-    .fillColor(STYLES.colors.primaryText)
-    .fontSize(24)
+    .roundedRect(badgeX, badgeY, badgeWidth, badgeHeight, 11)
+    .fill(riskColor + '20')
+    .stroke(riskColor)
+    .lineWidth(1.5);
+
+  doc
+    .fillColor(riskColor)
+    .fontSize(11)
     .font(STYLES.fonts.header)
-    .text(photosText, col3X, statsNumberY, { align: 'center' });
-  doc
-    .fillColor(STYLES.colors.secondaryText)
-    .fontSize(STYLES.sizes.body)
-    .font(STYLES.fonts.body)
-    .text(photosLabel, col3X, statsLabelY, { align: 'center' });
+    .text(riskLevel.toUpperCase(), scoreX, badgeY + 5, {
+      align: 'center',
+    });
 
-  // Column 4: Status
-  const col4X = margin + colWidth * 3 + colWidth / 2;
-  doc
-    .fillColor(STYLES.colors.primaryText)
-    .fontSize(24)
-    .font(STYLES.fonts.header)
-    .text(job.status.toUpperCase(), col4X, statsNumberY, { align: 'center' });
-  doc
-    .fillColor(STYLES.colors.secondaryText)
-    .fontSize(STYLES.sizes.body)
-    .font(STYLES.fonts.body)
-    .text('Status', col4X, statsLabelY, { align: 'center' });
-
-  // Vertical dividers between columns
-  for (let i = 1; i < 4; i++) {
-    const dividerX = margin + colWidth * i;
+  // Top risk drivers (if available)
+  if (riskScore?.factors && riskScore.factors.length > 0) {
+    const driversY = badgeY + badgeHeight + 12;
     doc
-      .strokeColor(STYLES.colors.divider)
-      .lineWidth(0.5)
-      .moveTo(dividerX, statsY + 10)
-      .lineTo(dividerX, statsY + statsBoxHeight - 10)
-      .stroke();
+      .fillColor(STYLES.colors.secondaryText)
+      .fontSize(9)
+      .font(STYLES.fonts.body)
+      .text('Top Drivers:', col2X + 16, driversY);
+
+    // Show top 3 factors
+    const topFactors = riskScore.factors.slice(0, 3);
+    topFactors.forEach((factor, idx) => {
+      const factorName = truncateText(factor.name || factor.code || 'Unknown', 25);
+      doc.text(`• ${factorName}`, col2X + 16, driversY + 14 + idx * 12, {
+        width: colWidth - 32,
+      });
+    });
   }
 
-  doc.y = statsY + statsBoxHeight + 20;
+  doc.y = twoColY + twoColHeight + 24;
 
   // Separator line
   doc
@@ -230,89 +207,56 @@ export function renderExecutiveSummary(
   doc.moveDown(1.5);
 
   // ============================================
-  // 4. RISK SCORE CARD (Integrated)
+  // KEY FINDINGS BULLETS (Top 3-5 Hazards)
   // ============================================
-  if (riskScore) {
-    const riskY = doc.y;
-    const riskBoxHeight = 120;
-    const riskBoxWidth = pageWidth - margin * 2;
-    const riskColor = getRiskColor(riskScore.risk_level);
-    const riskLevelText = truncateText(
-      (riskScore.risk_level || 'unknown').toUpperCase(),
-      12
-    );
-
-    // Card background with left accent border
-    doc
-      .roundedRect(margin, riskY, riskBoxWidth, riskBoxHeight, 6)
-      .fill(STYLES.colors.sectionBg)
-      .stroke(STYLES.colors.borderGray)
-      .lineWidth(1);
-
-    // Left accent border
-    doc
-      .rect(margin, riskY, 4, riskBoxHeight)
-      .fill(riskColor);
-
-    // Risk Score label
+  if (riskScore?.factors && riskScore.factors.length > 0) {
     doc
       .fillColor(STYLES.colors.primaryText)
-      .fontSize(STYLES.sizes.h3)
+      .fontSize(16)
       .font(STYLES.fonts.header)
-      .text('Risk Score', margin + 20, riskY + 15);
+      .text('Key Findings', margin, doc.y);
 
-    // Score and level (centered horizontally)
-    const scoreX = margin + riskBoxWidth / 2;
-    const scoreY = riskY + 45;
+    doc.moveDown(0.8);
 
-    doc
-      .fillColor(riskColor)
-      .fontSize(48)
-      .font(STYLES.fonts.header)
-      .text(riskScore.overall_score.toString(), scoreX, scoreY, {
-        align: 'center',
-      });
+    // Show top 5 hazards as bullets
+    const topHazards = riskScore.factors.slice(0, 5);
+    topHazards.forEach((factor, idx) => {
+      const factorName = factor.name || factor.code || 'Unknown Hazard';
+      const severity = factor.severity || 'low';
+      const severityColor = getRiskColor(severity);
+      const description = truncateText((factor as any).description || 'No description provided', 60);
 
-    // Risk level badge
-    const badgeY = scoreY + 40;
-    const badgeWidth = 100;
-    const badgeHeight = 24;
-    const badgeX = margin + riskBoxWidth / 2 - badgeWidth / 2;
-
-    doc
-      .roundedRect(badgeX, badgeY, badgeWidth, badgeHeight, 12)
-      .fill(riskColor + '20')
-      .stroke(riskColor)
-      .lineWidth(1.5);
-
-    doc
-      .fillColor(riskColor)
-      .fontSize(12)
-      .font(STYLES.fonts.header)
-      .text(riskLevelText, scoreX, badgeY + 5, {
-        align: 'center',
-      });
-
-    // Progress bar (below badge, centered)
-    const barY = badgeY + badgeHeight + 10;
-    const barWidth = riskBoxWidth - 80;
-    const barHeight = 8;
-    const barX = margin + riskBoxWidth / 2 - barWidth / 2;
-
-    doc
-      .roundedRect(barX, barY, barWidth, barHeight, 4)
-      .fill(STYLES.colors.lightGrayBg)
-      .stroke(STYLES.colors.borderGray)
-      .lineWidth(0.5);
-
-    if (riskScore.overall_score > 0) {
-      const progressWidth = (riskScore.overall_score / 100) * barWidth;
+      // Bullet point with severity indicator
+      const bulletY = doc.y;
+      
+      // Severity dot
       doc
-        .roundedRect(barX, barY, progressWidth, barHeight, 4)
-        .fill(riskColor);
-    }
+        .circle(margin + 8, bulletY + 5, 4)
+        .fill(severityColor);
 
-    doc.y = riskY + riskBoxHeight + 20;
+      // Hazard name (bold)
+      doc
+        .fillColor(STYLES.colors.primaryText)
+        .fontSize(STYLES.sizes.body)
+        .font(STYLES.fonts.header)
+        .text(factorName, margin + 20, bulletY, {
+          width: pageWidth - margin * 2 - 20,
+        });
+
+      // Description (regular)
+      if (description && description !== 'No description provided') {
+        doc
+          .fillColor(STYLES.colors.secondaryText)
+          .fontSize(STYLES.sizes.body - 0.5)
+          .font(STYLES.fonts.body)
+          .text(description, margin + 20, bulletY + 14, {
+            width: pageWidth - margin * 2 - 20,
+            lineGap: 2,
+          });
+        doc.moveDown(1.2);
+      } else {
+        doc.moveDown(0.8);
+      }
+    });
   }
 }
-

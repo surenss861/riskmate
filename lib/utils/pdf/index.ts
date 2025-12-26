@@ -84,6 +84,7 @@ export async function generateRiskSnapshotPDF(
     });
 
     // First page (cover) - render content only
+    // Cover page now includes KPI pills, so we pass riskScore, mitigationItems, photos
     renderCoverPage(
       doc,
       job,
@@ -92,7 +93,10 @@ export async function generateRiskSnapshotPDF(
       reportGeneratedAt,
       pageWidth,
       pageHeight,
-      margin
+      margin,
+      riskScore,
+      mitigationItems,
+      photos
     );
 
     // Render all sections - they will only add pages when there's content
@@ -149,6 +153,7 @@ export async function generateRiskSnapshotPDF(
 
     renderSignaturesAndCompliance(
       doc,
+      job,
       pageWidth,
       pageHeight,
       margin,

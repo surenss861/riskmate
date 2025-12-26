@@ -19,18 +19,18 @@ export function renderHazardChecklist(
   safeAddPage();
   addSectionHeader(doc, 'Hazard Checklist');
 
+  // Tighter column layout: Hazard | Severity | Present | Notes
+  // Removed Timestamp column - shown as meta text above table if all same
   const tableY = doc.y;
   const tableWidth = pageWidth - margin * 2;
   const col1X = margin;
-  const col1Width = tableWidth * 0.35;
+  const col1Width = tableWidth * 0.4; // Hazard name (wider)
   const col2X = col1X + col1Width;
-  const col2Width = tableWidth * 0.15;
+  const col2Width = tableWidth * 0.2; // Severity
   const col3X = col2X + col2Width;
-  const col3Width = tableWidth * 0.1;
+  const col3Width = tableWidth * 0.15; // Present
   const col4X = col3X + col3Width;
-  const col4Width = tableWidth * 0.2;
-  const col5X = col4X + col4Width;
-  const col5Width = tableWidth * 0.2;
+  const col4Width = tableWidth * 0.25; // Notes (wider)
 
   // Table header with subtle background (audit-style)
   doc
@@ -39,16 +39,12 @@ export function renderHazardChecklist(
 
   doc
     .fillColor(STYLES.colors.primaryText)
-    .fontSize(STYLES.sizes.body)
+    .fontSize(STYLES.sizes.caption)
     .font(STYLES.fonts.header)
-    .text('Hazard', col1X, tableY + 6, { width: col1Width })
-    .text('Severity', col2X, tableY + 6, { width: col2Width })
-    .text('Present', col3X, tableY + 6, { width: col3Width })
-    .text('Notes', col4X, tableY + 6, { width: col4Width })
-    .text('Timestamp', col5X, tableY + 6, {
-      width: col5Width,
-      align: 'right',
-    });
+    .text('Hazard', col1X + 8, tableY + 7, { width: col1Width - 16 })
+    .text('Severity', col2X + 8, tableY + 7, { width: col2Width - 16 })
+    .text('Present', col3X + 8, tableY + 7, { width: col3Width - 16 })
+    .text('Notes', col4X + 8, tableY + 7, { width: col4Width - 16 });
 
   doc
     .strokeColor(STYLES.colors.borderGray)
@@ -65,14 +61,14 @@ export function renderHazardChecklist(
   const allSameTimestamp = timestamps.length > 0 && timestamps.every(ts => ts === timestamps[0]);
   const commonTimestamp = allSameTimestamp && timestamps[0] ? formatTime(timestamps[0]) : null;
 
-  // If all timestamps are the same, show a single "Captured at" line above table
+  // If all timestamps are the same, show a single "Captured at" line above table (meta text)
   if (commonTimestamp) {
     doc
       .fillColor(STYLES.colors.secondaryText)
-      .fontSize(STYLES.sizes.caption)
+      .fontSize(8.5)
       .font(STYLES.fonts.light)
       .text(`All hazards captured at ${commonTimestamp}`, margin, doc.y);
-    doc.moveDown(0.5);
+    doc.moveDown(0.3);
   }
 
   riskScore.factors.forEach((factor) => {
@@ -98,9 +94,9 @@ export function renderHazardChecklist(
 
     doc
       .fillColor(STYLES.colors.primaryText)
-      .fontSize(STYLES.sizes.body)
+      .fontSize(STYLES.sizes.caption)
       .font(STYLES.fonts.header)
-      .text(truncateText(factorName, 30), col1X + 8, rowY, {
+      .text(truncateText(factorName, 40), col1X + 8, rowY, {
         width: col1Width - 16,
       });
 
@@ -120,29 +116,19 @@ export function renderHazardChecklist(
 
     doc
       .fillColor(STYLES.colors.secondaryText)
-      .fontSize(STYLES.sizes.body)
+      .fontSize(STYLES.sizes.caption)
       .font(STYLES.fonts.body)
-      .text('Yes', col3X, rowY);
+      .text('Yes', col3X + 8, rowY, {
+        width: col3Width - 16,
+      });
 
     doc
       .fillColor(STYLES.colors.secondaryText)
-      .fontSize(STYLES.sizes.body)
+      .fontSize(STYLES.sizes.caption)
       .font(STYLES.fonts.body)
       .text(notes, col4X + 8, rowY, {
         width: col4Width - 16,
       });
-
-    // Only show timestamp if they're not all the same (already shown above)
-    if (!commonTimestamp) {
-      doc
-        .fillColor(STYLES.colors.secondaryText)
-        .fontSize(STYLES.sizes.caption)
-        .font(STYLES.fonts.light)
-        .text(formatTime(job.created_at), col5X, rowY + 2, {
-          width: col5Width,
-          align: 'right',
-        });
-    }
 
     doc.y = rowY + 24;
     rowIndex++;

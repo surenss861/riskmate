@@ -47,19 +47,22 @@ export async function stampPdf(input: Buffer, opts: StampOptions = {}): Promise<
       const centerY = height / 2;
 
       // Calculate text width and height for proper centering
+      // For DRAFT, ensure it's treated as a single word (no wrapping)
       const textWidth = font.widthOfTextAtSize(watermarkText, wmSize);
       const textHeight = font.heightAtSize(wmSize);
       
       // Draw watermark at center with rotation
-      // Opacity reduced to 0.02-0.03 for very subtle background texture (not competing with content)
+      // Opacity max 0.02 for very subtle background texture (not competing with content)
+      // DRAFT is drawn as single line - pdf-lib drawText doesn't wrap by default
       page.drawText(watermarkText, {
-        x: centerX - textWidth / 2,
+        x: centerX - textWidth / 2, // Explicitly center based on measured width
         y: centerY - textHeight / 2,
         size: wmSize,
         font,
         color: rgb(0, 0, 0),
-        opacity: opts.draft ? 0.03 : 0.02, // Even more subtle - texture only
+        opacity: 0.02, // Max 0.02 opacity (same for DRAFT and brand)
         rotate: degrees(-45),
+        // No width/lineBreak options - pdf-lib drawText doesn't wrap by default
       });
     }
 
