@@ -163,23 +163,24 @@ export async function generateRiskSnapshotPDF(
     const range = doc.bufferedPageRange();
     const totalPages = range.count;
 
-    // Loop through all pages and add headers/footers/watermarks
+    // SINGLE LOOP: Add watermark + footer together on each page
+    // Use absolute positions only, no doc.y manipulation, no addPage()
     for (let i = range.start; i < range.start + range.count; i++) {
       doc.switchToPage(i);
       
-      // Add watermark to all pages except cover (cover has its own design)
+      // Skip cover page (page 0) - it has its own design
       if (i > range.start) {
-        // All non-cover pages get watermark
+        // Calculate page number (starts at 1 for first content page after cover)
+        const pageNumber = i - range.start; // Page 1, 2, 3, etc. (cover is page 0)
+        
+        // Add watermark FIRST (drawn behind content) - uses absolute positions only
         if (isDraft) {
           addDraftWatermark(doc);
         } else {
           addWatermark(doc);
         }
-      }
-      
-      // Add footer to all pages except cover (cover typically doesn't have footer)
-      if (i > range.start) {
-        const pageNumber = i - range.start + 1; // Page numbers start at 1
+        
+        // Add footer LAST (drawn on top, at bottom of page) - uses absolute positions only
         addFooterInline(doc, organization, job.id, reportGeneratedAt, pageNumber, totalPages);
       }
     }

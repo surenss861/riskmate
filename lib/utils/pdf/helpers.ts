@@ -3,50 +3,49 @@ import { STYLES } from './styles';
 import type { OrganizationData, AuditLogEntry } from './types';
 import { formatTime, truncateText } from './utils';
 
-// Watermark
+// Watermark - Draw-only function (uses absolute positions, never calls addPage)
 export function addWatermark(doc: PDFKit.PDFDocument) {
+  const pageWidth = doc.page.width;
+  const pageHeight = doc.page.height;
+  
+  // Use absolute positions, no doc.y manipulation
   doc
     .fillColor(STYLES.colors.watermark)
     .fontSize(72)
-    .font(STYLES.fonts.light);
-
-  doc
-    .opacity(0.05)
-    .text('RiskMate', doc.page.width / 2, doc.page.height / 2, {
+    .font(STYLES.fonts.light)
+    .opacity(0.08) // Subtle opacity
+    .text('RiskMate', pageWidth / 2, pageHeight / 2, {
       align: 'center',
-      width: 200,
-      lineBreak: false,
+      width: pageWidth - 100, // Large width to prevent wrapping
+      lineBreak: false, // Prevent line breaks
     })
-    .opacity(1.0);
+    .opacity(1.0); // Restore opacity
 }
 
-// DRAFT Watermark (diagonal, consistent across pages) - Draw-only function (never calls addPage)
+// DRAFT Watermark (diagonal, consistent across pages) - Draw-only function (uses absolute positions)
 export function addDraftWatermark(doc: PDFKit.PDFDocument) {
   const pageWidth = doc.page.width;
   const pageHeight = doc.page.height;
   
-  // Save current state
-  const savedY = doc.y;
-  
+  // Use save/restore for transformations - all drawing uses absolute positions
   doc.save();
-  doc.opacity(0.15);
+  doc.opacity(0.08); // Subtle opacity - won't interfere with content
   doc.fillColor('#FF6B35'); // Orange for draft
   doc.fontSize(72);
   doc.font(STYLES.fonts.header);
   
-  // Rotate 45 degrees and center
+  // Rotate 45 degrees and center - using absolute positions only
   doc.translate(pageWidth / 2, pageHeight / 2);
   doc.rotate(-45);
+  
+  // Draw text with very large width and no line breaks to prevent wrapping
   doc.text('DRAFT', 0, 0, {
     align: 'center',
-    width: 400,
-    lineBreak: false, // Prevent wrapping
+    width: pageWidth - 50, // Very large width to prevent wrapping
+    lineBreak: false, // Prevent wrapping - critical
   });
   
-  doc.restore(); // restore() handles opacity restoration
-  
-  // Restore original y position
-  doc.y = savedY;
+  doc.restore(); // restore() handles opacity, transformations, and all state
 }
 
 // Section header
@@ -221,7 +220,7 @@ export function groupTimelineEvents(
   });
 }
 
-// Footer - Draw-only function (never calls addPage)
+// Footer - Draw-only function (uses absolute positions, never calls addPage)
 export function addFooterInline(
   doc: PDFKit.PDFDocument,
   organization: OrganizationData,
@@ -231,54 +230,51 @@ export function addFooterInline(
   totalPages: number
 ) {
   const margin = STYLES.spacing.pageMargin;
-  const footerY = doc.page.height - 40;
+  const pageWidth = doc.page.width;
+  const pageHeight = doc.page.height;
+  const footerY = pageHeight - 40;
 
-  // Save current y position to restore after drawing footer
-  const savedY = doc.y;
-
+  // Use absolute positions only - no doc.y manipulation
   // Draw footer divider line
   doc
     .strokeColor(STYLES.colors.divider)
     .lineWidth(0.5)
     .moveTo(margin, footerY)
-    .lineTo(doc.page.width - margin, footerY)
+    .lineTo(pageWidth - margin, footerY)
     .stroke();
 
-  // Draw "RiskMate" text - use wider width and lineBreak: false to prevent wrapping
+  // Draw "RiskMate" text - use absolute position, large width, no line breaks
   doc
     .fillColor(STYLES.colors.accent)
     .fontSize(10)
     .font(STYLES.fonts.header)
     .text('RiskMate', margin, footerY + 8, {
-      width: 200, // Wider width to prevent wrapping
+      width: 200, // Wide width to prevent wrapping
       lineBreak: false, // Prevent line breaks
     });
 
-  // Draw "CONFIDENTIAL" text
+  // Draw "CONFIDENTIAL" text - use absolute position
   doc
     .fillColor(STYLES.colors.secondaryText)
     .fontSize(STYLES.sizes.caption)
     .font(STYLES.fonts.light)
-    .text('CONFIDENTIAL - For Internal Use Only', doc.page.width / 2, footerY + 8, {
+    .text('CONFIDENTIAL - For Internal Use Only', pageWidth / 2, footerY + 8, {
       align: 'center',
-      width: doc.page.width - margin * 2, // Full width minus margins
+      width: pageWidth - margin * 2, // Full width minus margins
+      lineBreak: false, // Prevent wrapping
     });
 
   const safeTotalPages = Math.max(totalPages, 1);
   const safePageNum = Math.max(pageNumber, 1);
 
-  // Draw page number
+  // Draw page number - use absolute position
   doc
     .fillColor(STYLES.colors.secondaryText)
     .fontSize(STYLES.sizes.caption)
     .font(STYLES.fonts.body)
-    .text(`Page ${safePageNum} of ${safeTotalPages}`, doc.page.width - margin - 100, footerY + 8, {
+    .text(`Page ${safePageNum} of ${safeTotalPages}`, pageWidth - margin - 100, footerY + 8, {
       align: 'right',
       width: 100, // Fixed width for right alignment
-      lineBreak: false,
+      lineBreak: false, // Prevent wrapping
     });
-
-  // Restore original y position (footer should not affect content position)
-  doc.y = savedY;
 }
-
