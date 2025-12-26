@@ -92,9 +92,10 @@ export function renderControlsApplied(
   const col3X = col2X + col2Width;
   const col3Width = tableWidth * 0.45;
 
+  // Table header with subtle background (audit-style)
   doc
     .rect(margin, tableY, tableWidth, 24)
-    .fill(STYLES.colors.cardBg);
+    .fill(STYLES.colors.lightGrayBg); // Use light gray for header instead of cardBg
 
   doc
     .fillColor(STYLES.colors.primaryText)

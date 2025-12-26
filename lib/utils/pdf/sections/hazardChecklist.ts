@@ -32,9 +32,10 @@ export function renderHazardChecklist(
   const col5X = col4X + col4Width;
   const col5Width = tableWidth * 0.2;
 
+  // Table header with subtle background (audit-style)
   doc
     .rect(margin, tableY, tableWidth, 24)
-    .fill(STYLES.colors.cardBg);
+    .fill(STYLES.colors.lightGrayBg); // Use light gray for header instead of cardBg
 
   doc
     .fillColor(STYLES.colors.primaryText)

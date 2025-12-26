@@ -42,7 +42,7 @@ export async function generateRiskSnapshotPDF(
         size: 'LETTER',
         bufferPages: true, // Enable page buffering for post-pass header/footer rendering
         margins: {
-          top: STYLES.spacing.pageMargin,
+          top: STYLES.spacing.pageMargin, // 48pt for more breathing room
           bottom: 60,
           left: STYLES.spacing.pageMargin,
           right: STYLES.spacing.pageMargin,

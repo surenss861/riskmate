@@ -46,14 +46,19 @@ export async function stampPdf(input: Buffer, opts: StampOptions = {}): Promise<
       const centerX = width / 2;
       const centerY = height / 2;
 
+      // Calculate text width and height for proper centering
+      const textWidth = font.widthOfTextAtSize(watermarkText, wmSize);
+      const textHeight = font.heightAtSize(wmSize);
+      
       // Draw watermark at center with rotation
+      // Opacity reduced to 0.02-0.03 for very subtle background texture (not competing with content)
       page.drawText(watermarkText, {
-        x: centerX - wmSize / 2, // Approximate center (pdf-lib doesn't have widthOfTextAtSize easily)
-        y: centerY,
+        x: centerX - textWidth / 2,
+        y: centerY - textHeight / 2,
         size: wmSize,
         font,
         color: rgb(0, 0, 0),
-        opacity: opts.draft ? 0.05 : 0.03, // Very subtle
+        opacity: opts.draft ? 0.03 : 0.02, // Even more subtle - texture only
         rotate: degrees(-45),
       });
     }
