@@ -4,8 +4,46 @@ import { buildJobReport } from '@/lib/utils/jobReport'
 // Import PDF generator from lib utils (copied from backend)
 import { generateRiskSnapshotPDF } from '@/lib/utils/pdf'
 import crypto from 'crypto'
+import fs from 'fs'
+import path from 'path'
 
 export const runtime = 'nodejs'
+
+// Debug helper to check where PDFKit font files exist
+function checkFontPaths() {
+  const cwd = process.cwd()
+  const candidates = [
+    path.join(cwd, 'assets/pdfkit/Helvetica.afm'),
+    path.join(cwd, 'node_modules/pdfkit/js/data/Helvetica.afm'),
+    path.join(cwd, '.next/server/chunks/data/Helvetica.afm'),
+    '/var/task/assets/pdfkit/Helvetica.afm',
+    '/var/task/node_modules/pdfkit/js/data/Helvetica.afm',
+    '/var/task/.next/server/chunks/data/Helvetica.afm',
+  ]
+
+  const results: Record<string, boolean> = {}
+  for (const candidate of candidates) {
+    try {
+      results[candidate] = fs.existsSync(candidate)
+    } catch {
+      results[candidate] = false
+    }
+  }
+
+  console.log('[pdf] cwd:', cwd)
+  console.log('[pdf] Font path check results:', JSON.stringify(results, null, 2))
+
+  // Set PDFKit data directory to our controlled assets folder
+  const assetsPath = path.join(cwd, 'assets/pdfkit')
+  if (fs.existsSync(assetsPath)) {
+    process.env.PDFKIT_DATA_DIR = assetsPath
+    console.log('[pdf] Set PDFKIT_DATA_DIR to:', assetsPath)
+  } else {
+    console.warn('[pdf] assets/pdfkit directory not found, PDFKit will use default location')
+  }
+
+  return results
+}
 
 export async function POST(
   request: NextRequest,
