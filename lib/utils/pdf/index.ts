@@ -40,7 +40,7 @@ export async function generateRiskSnapshotPDF(
     try {
       doc = new PDFDocument({
         size: 'LETTER',
-        bufferPages: true, // Enable page buffering for post-pass header/footer rendering
+        // NO bufferPages - stamping is now handled by pdf-lib, not PDFKit
         margins: {
           top: STYLES.spacing.pageMargin, // 48pt for more breathing room
           bottom: 60,
