@@ -72,17 +72,20 @@ export function drawHeaderFooterAndWatermark(
 
     doc.save(); // Isolate transform state
     doc.opacity(0.05); // Very subtle - background texture
-    doc.rotate(-45, { origin: [centerX, centerY] });
     
-    // Draw watermark text with explicit x, y in transformed space
-    // Use large width and no line breaks to prevent wrapping
+    // Manual transform: translate to center, rotate, then draw at (0,0) in transformed space
+    // This avoids issues with origin parameter causing bounding box miscalculations
+    doc.translate(centerX, centerY);
+    doc.rotate(-45);
+    
+    // Draw watermark text at (0,0) in transformed space (which is center of page in original space)
+    // Use explicit width and no line breaks, NO align (just use x=0 which is center after translate)
     doc
       .font(STYLES.fonts.header)
       .fontSize(72)
       .fillColor('#FF6B35')
-      .text('DRAFT', centerX - 200, centerY - 36, {
-        width: 400,
-        align: 'center',
+      .text('DRAFT', -100, -36, { // x=-100 to center 200px wide text (72pt font ~100px wide, so ~100px offset)
+        width: 200,
         lineBreak: false,
       });
     
@@ -95,15 +98,14 @@ export function drawHeaderFooterAndWatermark(
     doc.save(); // Isolate opacity state
     doc.opacity(0.04); // Very subtle
     
-    // Draw watermark text with explicit x, y
+    // Draw watermark text with explicit x, y (no transforms)
     // Use large width and no line breaks to prevent wrapping
     doc
       .fillColor(STYLES.colors.watermark)
       .fontSize(72)
       .font(STYLES.fonts.light)
-      .text('RiskMate', centerX - 200, centerY - 36, {
-        width: 400,
-        align: 'center',
+      .text('RiskMate', centerX - 100, centerY - 36, { // x offset to center (approx half text width)
+        width: 200,
         lineBreak: false,
       });
     
