@@ -9,17 +9,8 @@ const nextConfig = {
   // When bundled, these paths break in serverless environments
   serverExternalPackages: ['pdfkit'],
 
-  // Ensure PDFKit font metric files are included in the serverless function bundle
-  // Moved out of experimental in Next.js 15+
-  outputFileTracingIncludes: {
-    // Include AFM files for all PDF generation routes
-    '/api/reports/generate/[id]': ['node_modules/pdfkit/js/data/*.afm'],
-    '/api/proof-packs': ['node_modules/pdfkit/js/data/*.afm'],
-    '/api/audit/export': ['node_modules/pdfkit/js/data/*.afm'],
-    '/api/enforcement-reports/export': ['node_modules/pdfkit/js/data/*.afm'],
-    '/api/sample-report': ['node_modules/pdfkit/js/data/*.afm'],
-    '/api/sample-risk-report.pdf': ['node_modules/pdfkit/js/data/*.afm'],
-  },
+  // Note: We're using assets/pdfkit/ directory with PDFKIT_DATA_DIR env var
+  // instead of outputFileTracingIncludes to avoid Vercel deployment issues
 
   images: {
     domains: ['localhost'],
