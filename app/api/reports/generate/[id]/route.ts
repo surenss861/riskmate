@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { buildJobReport } from '@/lib/utils/jobReport'
 // Import PDF generator from lib utils (copied from backend)
 import { generateRiskSnapshotPDF } from '@/lib/utils/pdf'
+import { stampPdf } from '@/lib/utils/pdf/stamp'
 import crypto from 'crypto'
 import fs from 'fs'
 import path from 'path'

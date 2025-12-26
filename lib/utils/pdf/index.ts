@@ -156,65 +156,12 @@ export async function generateRiskSnapshotPDF(
     );
 
     // ============================================
-    // POST-PASS: Add headers/footers/watermarks to all pages
+    // NO POST-PASS STAMPING - PDFKit generation complete
+    // Stamping (headers/footers/watermarks) is now handled by pdf-lib
+    // after this buffer is returned. This eliminates ghost pages caused
+    // by PDFKit's flow-mode pagination during stamping.
     // ============================================
     
-    // Get buffered page range (all pages that have been created)
-    const range = doc.bufferedPageRange();
-    const totalPages = range.count;
-    
-    // Debug: Log page count before stamping
-    console.log('[PDF] Pages before stamping:', totalPages);
-
-    // GUARD: Block addPage() during post-pass to catch any accidental page creation
-    const originalAddPage = doc.addPage.bind(doc);
-    doc.addPage = (...args: any[]) => {
-      const err = new Error('[PDF][POSTPASS] addPage() was called during post-pass stamping - this should never happen');
-      console.error('[PDF][POSTPASS] addPage() call stack:', err.stack);
-      throw err;
-    };
-
-    // Helper to wrap stamp operations with labels for error reporting
-    const stamp = (label: string, fn: () => void) => {
-      try {
-        fn();
-      } catch (e: any) {
-        throw new Error(`[PDF][POSTPASS:${label}] ${e?.message ?? e}`);
-      }
-    };
-
-    try {
-      // SINGLE LOOP: Draw header/footer/watermark together on each page
-      // Calculate positions AFTER switchToPage() so we use current page dimensions
-      // ALL text calls use explicit x, y coordinates (no options-only overload)
-      for (let i = range.start; i < range.start + range.count; i++) {
-        doc.switchToPage(i);
-        
-        // Skip cover page (page 0) - it has its own design
-        if (i > range.start) {
-          // Calculate page number (starts at 1 for first content page after cover)
-          const pageNumber = i - range.start; // Page 1, 2, 3, etc. (cover is page 0)
-          
-          // Draw header, footer, and watermark together with labels for error reporting
-          stamp('drawHeaderFooterAndWatermark', () => {
-            drawHeaderFooterAndWatermark(
-              doc,
-              organization,
-              job.id,
-              reportGeneratedAt,
-              pageNumber,
-              totalPages,
-              isDraft
-            );
-          });
-        }
-      }
-    } finally {
-      // Restore original addPage after post-pass
-      doc.addPage = originalAddPage;
-    }
-
-    doc.flushPages(); // Flush after stamping all pages
     doc.end();
   });
 }
