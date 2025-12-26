@@ -148,7 +148,8 @@ export async function POST(
         reportData.audit || []
       )
     } catch (pdfError: any) {
-      console.error('PDF generation error:', pdfError)
+      console.error('[reports] generate failed:', pdfError)
+      console.error('[reports] generate failed stack:', pdfError?.stack)
       throw new Error(`PDF generation failed: ${pdfError?.message || String(pdfError)}`)
     }
 
@@ -258,7 +259,8 @@ export async function POST(
       },
     })
   } catch (error: any) {
-    console.error('PDF generation failed:', error)
+    console.error('[reports] generate failed in route handler:', error)
+    console.error('[reports] generate failed stack:', error?.stack)
     return NextResponse.json(
       {
         message: 'Failed to generate PDF report',
