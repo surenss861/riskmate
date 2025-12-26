@@ -17,12 +17,12 @@ export function drawHeaderFooterAndWatermark(
   // Get current page dimensions AFTER switchToPage()
   const { width, height } = doc.page;
   const marginX = STYLES.spacing.pageMargin;
-  const topY = 24;
-  const footerY = height - 36;
+  const footerY = height - 36; // Keep footer within page bounds
 
+  // Outer save to protect all drawing
   doc.save();
 
-  // Footer divider line (absolute position)
+  // Footer divider line (absolute position) - this should never cause page breaks
   doc
     .strokeColor(STYLES.colors.divider)
     .lineWidth(0.5)
@@ -30,7 +30,7 @@ export function drawHeaderFooterAndWatermark(
     .lineTo(width - marginX, footerY)
     .stroke();
 
-  // Footer: "RiskMate" (left) - explicit x, y
+  // Footer: "RiskMate" (left) - explicit x, y with large width and no line breaks
   doc
     .fillColor(STYLES.colors.accent)
     .fontSize(10)
@@ -40,7 +40,7 @@ export function drawHeaderFooterAndWatermark(
       lineBreak: false,
     });
 
-  // Footer: "CONFIDENTIAL" (center) - explicit x, y
+  // Footer: "CONFIDENTIAL" (center) - explicit x, y with large width and no line breaks
   doc
     .fillColor(STYLES.colors.secondaryText)
     .fontSize(STYLES.sizes.caption)
@@ -51,7 +51,7 @@ export function drawHeaderFooterAndWatermark(
       lineBreak: false,
     });
 
-  // Footer: Page number (right) - explicit x, y
+  // Footer: Page number (right) - explicit x, y with large width and no line breaks
   const safeTotalPages = Math.max(totalPages, 1);
   const safePageNum = Math.max(pageNumber, 1);
   doc
@@ -64,31 +64,39 @@ export function drawHeaderFooterAndWatermark(
       lineBreak: false,
     });
 
-  // Draft watermark (only if draft, and only on content pages)
+  // Watermark (draw AFTER footer to ensure it's in background)
+  // Use save/restore around transformations to isolate coordinate space
   if (isDraft) {
     const centerX = width / 2;
     const centerY = height / 2;
 
-    doc.save();
+    doc.save(); // Isolate transform state
     doc.opacity(0.05); // Very subtle - background texture
     doc.rotate(-45, { origin: [centerX, centerY] });
+    
+    // Draw watermark text with explicit x, y in transformed space
+    // Use large width and no line breaks to prevent wrapping
     doc
       .font(STYLES.fonts.header)
-      .fontSize(72) // Smaller than before
+      .fontSize(72)
       .fillColor('#FF6B35')
       .text('DRAFT', centerX - 200, centerY - 36, {
         width: 400,
         align: 'center',
         lineBreak: false,
       });
-    doc.restore();
+    
+    doc.restore(); // Restore transform state
   } else {
     // Regular watermark (very subtle background texture)
     const centerX = width / 2;
     const centerY = height / 2;
 
-    doc.save();
+    doc.save(); // Isolate opacity state
     doc.opacity(0.04); // Very subtle
+    
+    // Draw watermark text with explicit x, y
+    // Use large width and no line breaks to prevent wrapping
     doc
       .fillColor(STYLES.colors.watermark)
       .fontSize(72)
@@ -98,10 +106,11 @@ export function drawHeaderFooterAndWatermark(
         align: 'center',
         lineBreak: false,
       });
-    doc.restore();
+    
+    doc.restore(); // Restore opacity state
   }
 
-  doc.restore();
+  doc.restore(); // Restore outer state
 }
 
 // Section header (used during content rendering, not post-pass)

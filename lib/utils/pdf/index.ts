@@ -169,9 +169,18 @@ export async function generateRiskSnapshotPDF(
     // GUARD: Block addPage() during post-pass to catch any accidental page creation
     const originalAddPage = doc.addPage.bind(doc);
     doc.addPage = (...args: any[]) => {
-      const error = new Error('[PDF] addPage() was called during post-pass stamping - this should never happen');
-      console.error('[PDF] addPage() call stack:', error.stack);
-      throw error;
+      const err = new Error('[PDF][POSTPASS] addPage() was called during post-pass stamping - this should never happen');
+      console.error('[PDF][POSTPASS] addPage() call stack:', err.stack);
+      throw err;
+    };
+
+    // Helper to wrap stamp operations with labels for error reporting
+    const stamp = (label: string, fn: () => void) => {
+      try {
+        fn();
+      } catch (e: any) {
+        throw new Error(`[PDF][POSTPASS:${label}] ${e?.message ?? e}`);
+      }
     };
 
     try {
@@ -186,17 +195,18 @@ export async function generateRiskSnapshotPDF(
           // Calculate page number (starts at 1 for first content page after cover)
           const pageNumber = i - range.start; // Page 1, 2, 3, etc. (cover is page 0)
           
-          // Draw header, footer, and watermark together
-          // Positions are calculated inside the function AFTER switchToPage()
-          drawHeaderFooterAndWatermark(
-            doc,
-            organization,
-            job.id,
-            reportGeneratedAt,
-            pageNumber,
-            totalPages,
-            isDraft
-          );
+          // Draw header, footer, and watermark together with labels for error reporting
+          stamp('drawHeaderFooterAndWatermark', () => {
+            drawHeaderFooterAndWatermark(
+              doc,
+              organization,
+              job.id,
+              reportGeneratedAt,
+              pageNumber,
+              totalPages,
+              isDraft
+            );
+          });
         }
       }
     } finally {
