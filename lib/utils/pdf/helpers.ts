@@ -5,6 +5,7 @@ import { formatTime, truncateText } from './utils';
 
 // Draw header, footer, and watermark on a single page - ALL with explicit x,y coordinates
 // This function is called AFTER doc.switchToPage(i), so we use the current page's dimensions
+// CRITICAL: All operations must use absolute x,y coordinates - no cursor usage, no flow mode
 export function drawHeaderFooterAndWatermark(
   doc: PDFKit.PDFDocument,
   organization: OrganizationData,
@@ -17,7 +18,14 @@ export function drawHeaderFooterAndWatermark(
   // Get current page dimensions AFTER switchToPage()
   const { width, height } = doc.page;
   const marginX = STYLES.spacing.pageMargin;
-  const footerY = height - 36; // Keep footer within page bounds
+  
+  // CLAMP footer Y to prevent edge-of-page auto pagination
+  // PDFKit will trigger addPage() if text goes too close to bottom margin
+  const bottomMargin = doc.page.margins.bottom || 60;
+  const lineHeight = 12; // Approximate line height for footer text
+  const maxSafeY = height - bottomMargin - lineHeight - 2; // Extra 2pt buffer
+  const requestedFooterY = height - 36;
+  const footerY = Math.min(requestedFooterY, maxSafeY);
 
   // Outer save to protect all drawing
   doc.save();
