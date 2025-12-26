@@ -130,6 +130,9 @@ export async function POST(
       )
     ).filter((item): item is NonNullable<typeof item> => item !== null)
 
+    // Debug: Check font paths before generating PDF
+    checkFontPaths()
+
     // Generate PDF
     let pdfBuffer: Buffer
     try {
