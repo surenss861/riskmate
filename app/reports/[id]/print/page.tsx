@@ -6,6 +6,11 @@ import type { JobReportPayload } from '@/lib/utils/jobReport'
 import { colors } from '@/lib/design-system/tokens'
 import { verifyPrintToken } from '@/lib/utils/printToken'
 
+// Force dynamic rendering and Node.js runtime for server-side auth/token verification
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 interface PrintPageProps {
   params: Promise<{ id: string }>
   searchParams: Promise<{ token?: string; report_run_id?: string }>
@@ -26,7 +31,7 @@ export default async function PrintReportPage({ params, searchParams }: PrintPag
     const rawToken = searchParamsResolved.token
     const report_run_id = searchParamsResolved.report_run_id
 
-    console.log('[print] Route accessed', { jobId, hasToken: !!rawToken, hasReportRunId: !!report_run_id })
+    console.log('[PRINT] Route accessed', { jobId, hasToken: !!rawToken, hasReportRunId: !!report_run_id })
 
     let organization_id: string | null = null
 
@@ -38,49 +43,75 @@ export default async function PrintReportPage({ params, searchParams }: PrintPag
         token = decodeURIComponent(rawToken)
       } catch (decodeError) {
         // If decode fails, use raw token (it might already be decoded)
-        console.warn('[print] decodeURIComponent failed, using raw token:', decodeError)
+        console.warn('[PRINT] decodeURIComponent failed, using raw token:', decodeError)
         token = rawToken
       }
       
-      console.log('[print] Token provided, verifying...', { tokenLength: token.length, jobId })
+      console.log('[PRINT] Token provided, verifying...', { tokenLength: token.length, jobId })
       const tokenPayload = verifyPrintToken(token)
       if (!tokenPayload) {
-        console.error('[print] Token verification failed - invalid token')
-        notFound()
+        console.error('[PRINT] token signature mismatch or expired')
+        return (
+          <div style={{ padding: '20px', fontFamily: 'system-ui' }}>
+            <h1>403 - Invalid Token</h1>
+            <p>Token verification failed. This link may have expired or been tampered with.</p>
+          </div>
+        )
       }
       if (tokenPayload.jobId !== jobId) {
-        console.error('[print] Token verification failed - jobId mismatch', { 
-          tokenJobId: tokenPayload.jobId, 
-          expectedJobId: jobId 
-        })
-        notFound()
+        console.error('[PRINT] job mismatch', { params: jobId, token: tokenPayload.jobId })
+        return (
+          <div style={{ padding: '20px', fontFamily: 'system-ui' }}>
+            <h1>403 - Token Mismatch</h1>
+            <p>Token job ID does not match the requested job.</p>
+          </div>
+        )
       }
-      console.log('[print] Token verified successfully', { organizationId: tokenPayload.organizationId })
+      console.log('[PRINT] Token verified successfully', { organizationId: tokenPayload.organizationId })
       organization_id = tokenPayload.organizationId
     } else {
+      console.log('[PRINT] token missing - using cookie auth')
       // Otherwise, use cookie-based auth (for browser access)
-    const supabase = await createSupabaseServerClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-      notFound()
+      const supabase = await createSupabaseServerClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        console.error('[PRINT] user not authenticated')
+        return (
+          <div style={{ padding: '20px', fontFamily: 'system-ui' }}>
+            <h1>401 - Unauthorized</h1>
+            <p>Please log in to view this report.</p>
+          </div>
+        )
+      }
+
+      // Get user's organization
+      const { data: userData } = await supabase
+        .from('users')
+        .select('organization_id')
+        .eq('id', user.id)
+        .single()
+
+      if (!userData?.organization_id) {
+        console.error('[PRINT] user missing organization_id')
+        return (
+          <div style={{ padding: '20px', fontFamily: 'system-ui' }}>
+            <h1>403 - No Organization</h1>
+            <p>Your account is not associated with an organization.</p>
+          </div>
+        )
+      }
+      organization_id = userData.organization_id
     }
 
-    // Get user's organization
-    const { data: userData } = await supabase
-      .from('users')
-      .select('organization_id')
-      .eq('id', user.id)
-      .single()
-
-    if (!userData?.organization_id) {
-      notFound()
+    if (!organization_id) {
+      console.error('[PRINT] organization_id is null after auth')
+      return (
+        <div style={{ padding: '20px', fontFamily: 'system-ui' }}>
+          <h1>500 - Internal Error</h1>
+          <p>Failed to determine organization.</p>
+        </div>
+      )
     }
-    organization_id = userData.organization_id
-  }
-
-  if (!organization_id) {
-    notFound()
-  }
 
   const supabase = await createSupabaseServerClient()
 
@@ -94,40 +125,50 @@ export default async function PrintReportPage({ params, searchParams }: PrintPag
     generated_at: string
   } | null = null
 
-  if (report_run_id) {
-    // Fetch report_run to get frozen snapshot info
-    try {
-      const { data: run } = await supabase
-        .from('report_runs')
-        .select('id, data_hash, status, generated_at')
-        .eq('id', report_run_id)
-        .single()
+    if (report_run_id) {
+      // Fetch report_run to get frozen snapshot info
+      try {
+        const { data: run } = await supabase
+          .from('report_runs')
+          .select('id, data_hash, status, generated_at')
+          .eq('id', report_run_id)
+          .eq('organization_id', organization_id)
+          .single()
 
-      if (run) {
-        reportRun = run
+        if (run) {
+          reportRun = run
+          console.log('[PRINT] report_run found', { id: run.id, status: run.status })
+        } else {
+          console.warn('[PRINT] report_run not found', { id: report_run_id, organization_id })
+        }
+      } catch (error) {
+        console.error('[PRINT] report_run lookup failed', error)
+        // Non-fatal, continue with live data
       }
-    } catch (error) {
-      console.error('Failed to fetch report_run:', error)
     }
-  }
 
-  // Build report data (this will be current/live data)
-  // Note: For production hardening, you might want to store the full payload
-  // in report_runs and use that instead, but for now we use live data
-  // and rely on hash verification via the verify endpoint
-  try {
-    console.log('[print] Building report data...', { organization_id, jobId })
-    reportData = await buildJobReport(organization_id, jobId)
-    console.log('[print] Report data built successfully')
-  } catch (error) {
-    console.error('[print] Failed to build report:', error)
-    notFound()
-  }
+    // Build report data (this will be current/live data)
+    // Note: For production hardening, you might want to store the full payload
+    // in report_runs and use that instead, but for now we use live data
+    // and rely on hash verification via the verify endpoint
+    try {
+      console.log('[PRINT] Building report data...', { organization_id, jobId })
+      reportData = await buildJobReport(organization_id, jobId)
+      console.log('[PRINT] Report data built successfully')
+    } catch (error: any) {
+      console.error('[PRINT] buildJobReport threw', error?.message || error)
+      throw error // Re-throw to be caught by outer try-catch as 500
+    }
 
-  if (!reportData.job) {
-    console.error('[print] Report data missing job')
-    notFound()
-  }
+    if (!reportData.job) {
+      console.error('[PRINT] reportData.job is missing')
+      return (
+        <div style={{ padding: '20px', fontFamily: 'system-ui' }}>
+          <h1>404 - Job Not Found</h1>
+          <p>The requested job could not be found.</p>
+        </div>
+      )
+    }
 
   // If report_run exists and is final, log a warning if data might have changed
   // (In production, consider using stored payload instead of live data)
@@ -484,8 +525,16 @@ export default async function PrintReportPage({ params, searchParams }: PrintPag
       </html>
     )
   } catch (error: any) {
-    console.error('[print] Unexpected error:', error)
-    notFound()
+    console.error('[PRINT] Unexpected error:', error?.message || error, error?.stack)
+    return (
+      <div style={{ padding: '20px', fontFamily: 'system-ui' }}>
+        <h1>500 - Internal Server Error</h1>
+        <p>An unexpected error occurred while generating the report.</p>
+        <pre style={{ fontSize: '12px', color: '#666', marginTop: '20px' }}>
+          {error?.message || String(error)}
+        </pre>
+      </div>
+    )
   }
 }
 
