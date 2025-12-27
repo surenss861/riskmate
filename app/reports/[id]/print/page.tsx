@@ -222,7 +222,7 @@ export default async function PrintReportPage({ params, searchParams }: PrintPag
     } catch (error) {
       console.error('Failed to fetch signatures:', error)
     }
-  }
+    }
 
     return (
       <html lang="en">
