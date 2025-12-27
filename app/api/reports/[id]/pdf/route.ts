@@ -82,6 +82,7 @@ export async function POST(
     // Then run: npx playwright install chromium
     let playwright: any
     try {
+      // @ts-expect-error - Playwright is optional and handled at runtime
       playwright = await import('playwright')
     } catch (error) {
       console.error('[PDF] Playwright not installed. Install with: npm install playwright @playwright/test --save-dev')
