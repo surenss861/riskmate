@@ -11,9 +11,6 @@ export async function generatePdfFromUrl({ url, jobId, organizationId }: PdfOpti
     const start = Date.now()
     console.log(`[PDF] START generating for Job:${jobId.substring(0, 8)} Org:${organizationId}`)
 
-    // Configure Chromium for serverless (Vercel/Lambda)
-    chromium.setGraphicsMode(false) // Important for serverless environments
-
     let attempt = 1
     const maxAttempts = 2
 
