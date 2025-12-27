@@ -11,7 +11,7 @@
     "lint": "next lint",
     "type-check": "tsc --noEmit",
     "check:error-codes": "ts-node scripts/check-error-codes.ts",
-    "postinstall": "npx playwright install --with-deps chromium || echo 'Playwright browser installation skipped (non-fatal)'"
+    "postinstall": "playwright install chromium || echo 'Playwright browser installation skipped (non-fatal)'"
   },
   "dependencies": {
     "@gsap/react": "^2.1.2",
