@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Image from 'next/image'
 import { JobReportData } from '@/types/report'
 import { ImageModal } from './ImageModal'
+import { TeamSignatures } from './TeamSignatures'
 
 interface ReportViewProps {
   data: JobReportData
@@ -312,6 +313,13 @@ export function ReportView({
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Team Signatures */}
+      {!readOnly && (
+        <div className="space-y-4">
+          <TeamSignatures jobId={job.id} reportRunId={null} readOnly={readOnly} />
         </div>
       )}
 

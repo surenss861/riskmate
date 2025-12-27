@@ -20,7 +20,7 @@ interface PrintPageProps {
  */
 export default async function PrintReportPage({ params, searchParams }: PrintPageProps) {
   const { id: jobId } = await params
-  const { token } = await searchParams
+  const { token, report_run_id } = await searchParams
 
   // TODO: Verify token if needed (for now, we'll rely on the PDF API endpoint to handle auth)
   // In production, you'd validate the token here
@@ -70,6 +70,33 @@ export default async function PrintReportPage({ params, searchParams }: PrintPag
 
   // Get logo if available
   const logoUrl = organization?.logo_url || null
+
+  // Fetch signatures if report_run_id is provided
+  let signatures: Array<{
+    id: string
+    signer_name: string
+    signer_title: string
+    signature_role: string
+    signature_svg: string
+    signed_at: string
+  }> = []
+
+  if (report_run_id) {
+    try {
+      const { data: sigs, error: sigError } = await supabase
+        .from('report_signatures')
+        .select('*')
+        .eq('report_run_id', report_run_id)
+        .is('revoked_at', null)
+        .order('signed_at', { ascending: true })
+
+      if (!sigError && sigs) {
+        signatures = sigs
+      }
+    } catch (error) {
+      console.error('Failed to fetch signatures:', error)
+    }
+  }
 
   return (
     <html lang="en">
@@ -290,17 +317,46 @@ export default async function PrintReportPage({ params, searchParams }: PrintPag
         {/* Signatures & Compliance */}
         <div className="page">
           <h2 className="section-header">Signatures & Compliance</h2>
-          <div className="signatures-grid">
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="signature-box">
-                <div className="signature-line"></div>
-                <div className="signature-label">Signature</div>
-                <div className="signature-field">Printed Name: _________________</div>
-                <div className="signature-field">Crew Role: _________________</div>
-                <div className="signature-field">Date: _________________</div>
-              </div>
-            ))}
-          </div>
+          
+          {/* Render actual signatures if available */}
+          {signatures.length > 0 ? (
+            <div className="signatures-grid">
+              {signatures.map((sig) => {
+                const roleLabels: Record<string, string> = {
+                  prepared_by: 'Prepared By',
+                  reviewed_by: 'Reviewed By',
+                  approved_by: 'Approved By',
+                  other: 'Signature',
+                }
+                return (
+                  <div key={sig.id} className="signature-box">
+                    <div className="signature-label">{roleLabels[sig.signature_role] || 'Signature'}</div>
+                    <div 
+                      className="signature-svg-container"
+                      dangerouslySetInnerHTML={{ __html: sig.signature_svg }}
+                    />
+                    <div className="signature-field"><strong>Name:</strong> {sig.signer_name}</div>
+                    <div className="signature-field"><strong>Title:</strong> {sig.signer_title}</div>
+                    <div className="signature-field">
+                      <strong>Date:</strong> {formatDate(sig.signed_at)} at {formatTime(sig.signed_at)}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          ) : (
+            <div className="signatures-grid">
+              {['Prepared By', 'Reviewed By', 'Approved By', 'Other'].map((label, i) => (
+                <div key={i} className="signature-box">
+                  <div className="signature-line"></div>
+                  <div className="signature-label">{label}</div>
+                  <div className="signature-field">Printed Name: _________________</div>
+                  <div className="signature-field">Crew Role: _________________</div>
+                  <div className="signature-field">Date: _________________</div>
+                </div>
+              ))}
+            </div>
+          )}
 
           <div className="compliance-callout">
             <h3 className="callout-title">Compliance Statement</h3>
@@ -699,6 +755,23 @@ const printStyles = (colors: typeof import('@/lib/design-system/tokens').colors)
   .signature-line {
     border-top: 1pt dashed ${colors.gray500};
     margin-bottom: 8pt;
+  }
+
+  .signature-svg-container {
+    margin: 8pt 0;
+    padding: 8pt;
+    border: 1pt solid ${colors.borderLight};
+    border-radius: 4pt;
+    background-color: ${colors.white};
+    min-height: 60pt;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .signature-svg-container svg {
+    max-width: 100%;
+    max-height: 80pt;
   }
 
   .signature-label {
