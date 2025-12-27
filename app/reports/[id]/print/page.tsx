@@ -113,17 +113,17 @@ export default async function PrintReportPage({ params, searchParams }: PrintPag
       )
     }
 
-  const supabase = await createSupabaseServerClient()
+    const supabase = await createSupabaseServerClient()
 
-  // If report_run_id is provided, use frozen data from that run
-  // Otherwise, use current live data (for draft generation)
-  let reportData: JobReportPayload
-  let reportRun: {
-    id: string
-    data_hash: string
-    status: string
-    generated_at: string
-  } | null = null
+    // If report_run_id is provided, use frozen data from that run
+    // Otherwise, use current live data (for draft generation)
+    let reportData: JobReportPayload
+    let reportRun: {
+      id: string
+      data_hash: string
+      status: string
+      generated_at: string
+    } | null = null
 
     if (report_run_id) {
       // Fetch report_run to get frozen snapshot info
