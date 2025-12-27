@@ -80,7 +80,7 @@ export async function POST(
     // Import Playwright dynamically (only when needed)
     // Note: Playwright must be installed: npm install playwright @playwright/test --save-dev
     // Then run: npx playwright install chromium
-    let playwright: typeof import('playwright')
+    let playwright: any
     try {
       playwright = await import('playwright')
     } catch (error) {
