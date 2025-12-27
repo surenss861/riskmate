@@ -1,0 +1,131 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { createSupabaseServerClient } from '@/lib/supabase/server'
+
+export const runtime = 'nodejs'
+
+/**
+ * POST /api/reports/runs/[id]/finalize
+ * Finalizes a report run after checking signature completeness
+ */
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const supabase = await createSupabaseServerClient()
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+
+    if (authError || !user) {
+      return NextResponse.json(
+        { message: 'Unauthorized' },
+        { status: 401 }
+      )
+    }
+
+    const { id: reportRunId } = await params
+
+    // Get report run and verify access
+    const { data: reportRun, error: runError } = await supabase
+      .from('report_runs')
+      .select('organization_id, status, generated_by')
+      .eq('id', reportRunId)
+      .single()
+
+    if (runError || !reportRun) {
+      return NextResponse.json(
+        { message: 'Report run not found' },
+        { status: 404 }
+      )
+    }
+
+    // Verify user belongs to organization
+    const { data: userData } = await supabase
+      .from('users')
+      .select('organization_id')
+      .eq('id', user.id)
+      .single()
+
+    if (!userData || userData.organization_id !== reportRun.organization_id) {
+      return NextResponse.json(
+        { message: 'Access denied' },
+        { status: 403 }
+      )
+    }
+
+    // Check if already finalized
+    if (reportRun.status === 'final') {
+      return NextResponse.json(
+        { message: 'Report run is already finalized' },
+        { status: 400 }
+      )
+    }
+
+    // Check signature completeness
+    const REQUIRED_ROLES = ['prepared_by', 'reviewed_by', 'approved_by']
+    const { data: signatures } = await supabase
+      .from('report_signatures')
+      .select('signature_role')
+      .eq('report_run_id', reportRunId)
+      .is('revoked_at', null)
+
+    const signedRoles = new Set(signatures?.map((s) => s.signature_role) || [])
+    const missingRoles = REQUIRED_ROLES.filter((role) => !signedRoles.has(role))
+
+    if (missingRoles.length > 0) {
+      return NextResponse.json(
+        {
+          message: 'Cannot finalize: missing required signatures',
+          missingRoles,
+          signedRoles: Array.from(signedRoles),
+        },
+        { status: 400 }
+      )
+    }
+
+    // Verify user can finalize (creator or admin)
+    const { data: member } = await supabase
+      .from('organization_members')
+      .select('role')
+      .eq('user_id', user.id)
+      .eq('organization_id', reportRun.organization_id)
+      .single()
+
+    const isCreator = reportRun.generated_by === user.id
+    const isAdmin = member && ['owner', 'admin'].includes(member.role)
+
+    if (!isCreator && !isAdmin) {
+      return NextResponse.json(
+        { message: 'Only the report creator or an admin can finalize' },
+        { status: 403 }
+      )
+    }
+
+    // Finalize the report run
+    const { data: finalized, error: updateError } = await supabase
+      .from('report_runs')
+      .update({ status: 'final' })
+      .eq('id', reportRunId)
+      .select()
+      .single()
+
+    if (updateError || !finalized) {
+      console.error('[reports/runs/finalize] Failed to finalize:', updateError)
+      return NextResponse.json(
+        { message: 'Failed to finalize report run', detail: updateError?.message },
+        { status: 500 }
+      )
+    }
+
+    return NextResponse.json({
+      data: finalized,
+      message: 'Report run finalized successfully',
+    })
+  } catch (error: any) {
+    console.error('[reports/runs/finalize] Error:', error)
+    return NextResponse.json(
+      { message: 'Internal server error', detail: error?.message },
+      { status: 500 }
+    )
+  }
+}
+

@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
-import { chromium } from 'playwright'
-import crypto from 'crypto'
+import { generatePdfFromUrl } from '@/lib/utils/playwright'
+import { buildJobReport } from '@/lib/utils/jobReport'
+import { computeCanonicalHash } from '@/lib/utils/canonicalJson'
 
 export const runtime = 'nodejs'
 // Set max duration to handle browser launch and navigation
@@ -39,63 +40,76 @@ export async function POST(
     const organization_id = userData.organization_id
     const { id: jobId } = await params
 
-    // Prepare URL for the print page
+    // Verify job belongs to organization
+    const { data: job } = await supabase
+      .from('jobs')
+      .select('id, status')
+      .eq('id', jobId)
+      .eq('organization_id', organization_id)
+      .single()
+
+    if (!job) {
+      return NextResponse.json(
+        { message: 'Job not found' },
+        { status: 404 }
+      )
+    }
+
+    // Build report payload (same data structure used for rendering)
+    const reportPayload = await buildJobReport(organization_id, jobId)
+
+    // Compute canonical data hash for audit integrity
+    const dataHash = computeCanonicalHash(reportPayload)
+
+    // Get status from request body (default to draft)
+    const body = await request.json().catch(() => ({}))
+    const status = body.status || 'draft'
+
+    // Create report_run (frozen snapshot)
+    const { data: reportRun, error: runError } = await supabase
+      .from('report_runs')
+      .insert({
+        organization_id,
+        job_id: jobId,
+        status,
+        generated_by: user.id,
+        data_hash: dataHash,
+      })
+      .select()
+      .single()
+
+    if (runError || !reportRun) {
+      console.error('[reports] Failed to create report_run:', runError)
+      return NextResponse.json(
+        { message: 'Failed to create report run', detail: runError?.message },
+        { status: 500 }
+      )
+    }
+
+    console.log(`[reports] Created report_run ${reportRun.id} for job ${jobId}`)
+
+    // Prepare URL for the print page with report_run_id
     const protocol = request.headers.get('x-forwarded-proto') || 'http'
     const host = request.headers.get('host')
     const origin = `${protocol}://${host}`
-    const printUrl = `${origin}/reports/${jobId}/print`
+    const printUrl = `${origin}/reports/${jobId}/print?report_run_id=${reportRun.id}`
 
     console.log('[reports] Generating PDF from:', printUrl)
 
-    // Launch Playwright
-    const browser = await chromium.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--font-render-hinting=none']
-    })
-
+    // Generate PDF using Playwright utility
     let pdfBuffer: Buffer
     try {
-      const context = await browser.newContext()
-
-      // Forward cookies to share authentication session
-      const cookies = request.cookies.getAll().map(cookie => ({
-        name: cookie.name,
-        value: cookie.value,
-        domain: host?.split(':')[0] || 'localhost',
-        path: '/',
-      }))
-
-      if (cookies.length > 0) {
-        await context.addCookies(cookies)
-      }
-
-      const page = await context.newPage()
-
-      // Navigate to the print page
-      await page.goto(printUrl, { waitUntil: 'networkidle' })
-
-      // Wait specifically for the cover page to ensure React has fully hydrated/rendered
-      await page.waitForSelector('.cover-page', { timeout: 10000 })
-
-      // Generate PDF
-      // preferCSSPageSize: true allows our @page CSS to control size/margins
-      pdfBuffer = await page.pdf({
-        format: 'A4',
-        printBackground: true,
-        preferCSSPageSize: true,
+      pdfBuffer = await generatePdfFromUrl({
+        url: printUrl,
+        jobId,
+        organizationId: organization_id,
       })
-
     } catch (browserError: any) {
       console.error('[reports] Playwright failed:', browserError)
       throw new Error(`Browser generation failed: ${browserError.message}`)
-    } finally {
-      await browser.close()
     }
 
-    // --- Upload and Verification Logic (Same as before) ---
-
     // Calculate hash for deduplication/verification
-    const hash = crypto.createHash('sha256').update(pdfBuffer).digest('hex')
     const pdfBase64 = pdfBuffer.toString('base64')
 
     // Create snapshot payload (re-fetch data to match schema if needed, 
@@ -119,7 +133,8 @@ export async function POST(
     }
 
     // Upload PDF to storage
-    const storagePath = `${organization_id}/${jobId}/${hash}.pdf`
+    const pdfHash = require('crypto').createHash('sha256').update(pdfBuffer).digest('hex')
+    const storagePath = `${organization_id}/${jobId}/${reportRun.id}/${pdfHash}.pdf`
     let pdfUrl: string | null = null
 
     try {
@@ -127,7 +142,7 @@ export async function POST(
         .from('reports')
         .upload(storagePath, pdfBuffer, {
           contentType: 'application/pdf',
-          upsert: true,
+          upsert: false, // Don't overwrite - each run is unique
         })
 
       if (!uploadError && uploadData) {
@@ -137,55 +152,30 @@ export async function POST(
           .createSignedUrl(storagePath, 60 * 60 * 24 * 365) // 1 year
 
         pdfUrl = signed?.signedUrl || null
+
+        // Update report_run with PDF metadata
+        await supabase
+          .from('report_runs')
+          .update({
+            pdf_path: storagePath,
+            pdf_signed_url: pdfUrl,
+            pdf_generated_at: new Date().toISOString(),
+          })
+          .eq('id', reportRun.id)
       }
     } catch (uploadError) {
       console.warn('PDF upload failed:', uploadError)
     }
 
-    // Save or update report record
-    const { data: existingReport } = await supabase
-      .from('reports')
-      .select('id')
-      .eq('job_id', jobId)
-      .maybeSingle()
-
-    const reportPayload = {
-      job_id: jobId,
-      organization_id,
-      pdf_url: pdfUrl,
-      storage_path: storagePath,
-      hash,
-      pdf_base64: pdfBase64,
-      generated_at: new Date().toISOString(),
-      // snapshot_id: null // Skipping snapshot creation in this simplified flow to avoid double-fetch
-    }
-
-    let reportRecord
-    if (existingReport) {
-      const { data: updated } = await supabase
-        .from('reports')
-        .update(reportPayload)
-        .eq('id', existingReport.id)
-        .select()
-        .single()
-
-      reportRecord = updated
-    } else {
-      const { data: inserted } = await supabase
-        .from('reports')
-        .insert(reportPayload)
-        .select()
-        .single()
-
-      reportRecord = inserted
-    }
-
     return NextResponse.json({
       data: {
-        id: reportRecord?.id || null,
+        report_run_id: reportRun.id,
         pdf_url: pdfUrl,
         storage_path: storagePath,
-        generated_at: reportPayload.generated_at,
+        pdf_base64: pdfBase64,
+        data_hash: dataHash,
+        generated_at: reportRun.generated_at,
+        status: reportRun.status,
       },
     })
   } catch (error: any) {

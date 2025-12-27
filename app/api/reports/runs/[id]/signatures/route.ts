@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { createHash } from 'crypto'
+import { validateSignatureSvg } from '@/lib/utils/signatureValidation'
 
 export const runtime = 'nodejs'
 
@@ -43,6 +44,15 @@ export async function POST(
     if (!['prepared_by', 'reviewed_by', 'approved_by', 'other'].includes(signature_role)) {
       return NextResponse.json(
         { message: 'Invalid signature_role. Must be: prepared_by, reviewed_by, approved_by, or other' },
+        { status: 400 }
+      )
+    }
+
+    // Validate SVG signature
+    const svgValidation = validateSignatureSvg(signature_svg)
+    if (!svgValidation.valid) {
+      return NextResponse.json(
+        { message: svgValidation.error || 'Invalid signature SVG' },
         { status: 400 }
       )
     }

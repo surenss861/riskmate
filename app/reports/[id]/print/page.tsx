@@ -71,7 +71,14 @@ export default async function PrintReportPage({ params, searchParams }: PrintPag
   // Get logo if available
   const logoUrl = organization?.logo_url || null
 
-  // Fetch signatures if report_run_id is provided
+  // Fetch report_run and signatures if report_run_id is provided
+  let reportRun: {
+    id: string
+    data_hash: string
+    status: string
+    generated_at: string
+  } | null = null
+
   let signatures: Array<{
     id: string
     signer_name: string
@@ -83,6 +90,18 @@ export default async function PrintReportPage({ params, searchParams }: PrintPag
 
   if (report_run_id) {
     try {
+      // Fetch report_run for audit info
+      const { data: run, error: runError } = await supabase
+        .from('report_runs')
+        .select('id, data_hash, status, generated_at')
+        .eq('id', report_run_id)
+        .single()
+
+      if (!runError && run) {
+        reportRun = run
+      }
+
+      // Fetch signatures
       const { data: sigs, error: sigError } = await supabase
         .from('report_signatures')
         .select('*')
@@ -94,7 +113,7 @@ export default async function PrintReportPage({ params, searchParams }: PrintPag
         signatures = sigs
       }
     } catch (error) {
-      console.error('Failed to fetch signatures:', error)
+      console.error('Failed to fetch report_run or signatures:', error)
     }
   }
 
@@ -369,8 +388,31 @@ export default async function PrintReportPage({ params, searchParams }: PrintPag
 
           <div className="document-meta">
             <div>Prepared by RiskMate</div>
-            <div>Document ID: {job.id.substring(0, 8).toUpperCase()}</div>
+            {reportRun && (
+              <>
+                <div>Report Run ID: {reportRun.id.substring(0, 8).toUpperCase()}</div>
+                <div>Document Hash: {reportRun.data_hash.substring(0, 12).toUpperCase()}</div>
+                <div>Generated: {formatDate(reportRun.generated_at)} at {formatTime(reportRun.generated_at)}</div>
+                <div>Status: {reportRun.status.toUpperCase()}</div>
+              </>
+            )}
+            {!reportRun && <div>Document ID: {job.id.substring(0, 8).toUpperCase()}</div>}
           </div>
+
+          {/* Audit Trail */}
+          {reportRun && signatures.length > 0 && (
+            <div className="audit-trail">
+              <h3 className="audit-title">Signature Audit Trail</h3>
+              {signatures.map((sig) => (
+                <div key={sig.id} className="audit-entry">
+                  <div className="audit-role">{sig.signer_name} ({sig.signer_title})</div>
+                  <div className="audit-details">
+                    Signed as {sig.signature_role.replace('_', ' ')} on {formatDate(sig.signed_at)} at {formatTime(sig.signed_at)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </body>
     </html>
@@ -814,5 +856,38 @@ const printStyles = (colors: typeof import('@/lib/design-system/tokens').colors)
     display: flex;
     flex-direction: column;
     gap: 4pt;
+  }
+
+  .audit-trail {
+    margin-top: 24pt;
+    padding-top: 16pt;
+    border-top: 1pt solid ${colors.borderLight};
+  }
+
+  .audit-title {
+    font-size: 12pt;
+    font-weight: bold;
+    color: ${colors.black};
+    margin-bottom: 12pt;
+  }
+
+  .audit-entry {
+    margin-bottom: 12pt;
+    padding: 8pt;
+    background-color: ${colors.bgSecondary};
+    border-radius: 4pt;
+    border-left: 3pt solid ${colors.cordovan};
+  }
+
+  .audit-role {
+    font-size: 10pt;
+    font-weight: 600;
+    color: ${colors.black};
+    margin-bottom: 4pt;
+  }
+
+  .audit-details {
+    font-size: 9pt;
+    color: ${colors.gray600};
   }
 `
