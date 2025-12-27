@@ -44,8 +44,37 @@ export default async function PrintReportPage({ params, searchParams }: PrintPag
     notFound()
   }
 
-  // Build report data
+  // If report_run_id is provided, use frozen data from that run
+  // Otherwise, use current live data (for draft generation)
   let reportData: JobReportPayload
+  let reportRun: {
+    id: string
+    data_hash: string
+    status: string
+    generated_at: string
+  } | null = null
+
+  if (report_run_id) {
+    // Fetch report_run to get frozen snapshot info
+    try {
+      const { data: run } = await supabase
+        .from('report_runs')
+        .select('id, data_hash, status, generated_at')
+        .eq('id', report_run_id)
+        .single()
+
+      if (run) {
+        reportRun = run
+      }
+    } catch (error) {
+      console.error('Failed to fetch report_run:', error)
+    }
+  }
+
+  // Build report data (this will be current/live data)
+  // Note: For production hardening, you might want to store the full payload
+  // in report_runs and use that instead, but for now we use live data
+  // and rely on hash verification via the verify endpoint
   try {
     reportData = await buildJobReport(userData.organization_id, jobId)
   } catch (error) {
@@ -55,6 +84,18 @@ export default async function PrintReportPage({ params, searchParams }: PrintPag
 
   if (!reportData.job) {
     notFound()
+  }
+
+  // If report_run exists and is final, log a warning if data might have changed
+  // (In production, consider using stored payload instead of live data)
+  if (reportRun && reportRun.status === 'final') {
+    const { computeCanonicalHash } = await import('@/lib/utils/canonicalJson')
+    const currentHash = computeCanonicalHash(reportData)
+    if (currentHash !== reportRun.data_hash) {
+      console.warn(
+        `[print] Final report_run ${reportRun.id} data mismatch - using live data (hash changed)`
+      )
+    }
   }
 
   const { job, risk_score, mitigations, documents, organization, audit } = reportData
@@ -71,14 +112,7 @@ export default async function PrintReportPage({ params, searchParams }: PrintPag
   // Get logo if available
   const logoUrl = organization?.logo_url || null
 
-  // Fetch report_run and signatures if report_run_id is provided
-  let reportRun: {
-    id: string
-    data_hash: string
-    status: string
-    generated_at: string
-  } | null = null
-
+  // Fetch signatures if report_run_id is provided
   let signatures: Array<{
     id: string
     signer_name: string
@@ -90,17 +124,6 @@ export default async function PrintReportPage({ params, searchParams }: PrintPag
 
   if (report_run_id) {
     try {
-      // Fetch report_run for audit info
-      const { data: run, error: runError } = await supabase
-        .from('report_runs')
-        .select('id, data_hash, status, generated_at')
-        .eq('id', report_run_id)
-        .single()
-
-      if (!runError && run) {
-        reportRun = run
-      }
-
       // Fetch signatures
       const { data: sigs, error: sigError } = await supabase
         .from('report_signatures')
@@ -113,7 +136,7 @@ export default async function PrintReportPage({ params, searchParams }: PrintPag
         signatures = sigs
       }
     } catch (error) {
-      console.error('Failed to fetch report_run or signatures:', error)
+      console.error('Failed to fetch signatures:', error)
     }
   }
 

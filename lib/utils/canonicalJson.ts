@@ -2,27 +2,50 @@
  * Canonical JSON stringify helper
  * 
  * Ensures stable, deterministic JSON stringification for hashing.
- * Keys are sorted to avoid non-deterministic object key ordering.
+ * Handles:
+ * - Key sorting (deterministic order)
+ * - Null/undefined normalization
+ * - Date normalization (ISO strings, UTC)
+ * - Array stability
+ * - Deep object normalization
  */
 export function canonicalStringify(obj: any): string {
-  if (obj === null || obj === undefined) {
-    return String(obj)
+  // Normalize null and undefined to consistent representation
+  if (obj === null) {
+    return 'null'
+  }
+  
+  if (obj === undefined) {
+    return 'null' // Treat undefined as null for consistency
   }
 
+  // Handle primitives
   if (typeof obj !== 'object') {
     return JSON.stringify(obj)
   }
 
+  // Handle Date objects - normalize to ISO UTC string
+  if (obj instanceof Date) {
+    return JSON.stringify(obj.toISOString())
+  }
+
+  // Handle arrays - maintain order but normalize elements
   if (Array.isArray(obj)) {
     return '[' + obj.map((item) => canonicalStringify(item)).join(',') + ']'
   }
 
-  // Sort object keys for deterministic output
+  // Handle objects - sort keys for deterministic output
   const sortedKeys = Object.keys(obj).sort()
-  const pairs = sortedKeys.map((key) => {
-    const value = obj[key]
-    return JSON.stringify(key) + ':' + canonicalStringify(value)
-  })
+  const pairs = sortedKeys
+    .filter((key) => {
+      // Filter out undefined values (but keep null)
+      const value = obj[key]
+      return value !== undefined
+    })
+    .map((key) => {
+      const value = obj[key]
+      return JSON.stringify(key) + ':' + canonicalStringify(value)
+    })
 
   return '{' + pairs.join(',') + '}'
 }

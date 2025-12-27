@@ -65,28 +65,55 @@ export async function POST(
     const body = await request.json().catch(() => ({}))
     const status = body.status || 'draft'
 
-    // Create report_run (frozen snapshot)
-    const { data: reportRun, error: runError } = await supabase
+    // Idempotency: Check for recent duplicate run (same hash + status within 30 seconds)
+    const thirtySecondsAgo = new Date(Date.now() - 30 * 1000).toISOString()
+    const { data: existingRun } = await supabase
       .from('report_runs')
-      .insert({
-        organization_id,
-        job_id: jobId,
-        status,
-        generated_by: user.id,
-        data_hash: dataHash,
-      })
-      .select()
-      .single()
+      .select('*')
+      .eq('job_id', jobId)
+      .eq('organization_id', organization_id)
+      .eq('data_hash', dataHash)
+      .eq('status', status)
+      .eq('generated_by', user.id)
+      .gte('created_at', thirtySecondsAgo)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
 
-    if (runError || !reportRun) {
-      console.error('[reports] Failed to create report_run:', runError)
-      return NextResponse.json(
-        { message: 'Failed to create report run', detail: runError?.message },
-        { status: 500 }
+    let reportRun
+    if (existingRun) {
+      // Reuse existing run (idempotency)
+      reportRun = existingRun
+      console.log(
+        `[reports] Reusing existing report_run ${reportRun.id} for job ${jobId} (idempotency)`
+      )
+    } else {
+      // Create new report_run (frozen snapshot)
+      const { data: newRun, error: runError } = await supabase
+        .from('report_runs')
+        .insert({
+          organization_id,
+          job_id: jobId,
+          status,
+          generated_by: user.id,
+          data_hash: dataHash,
+        })
+        .select()
+        .single()
+
+      if (runError || !newRun) {
+        console.error('[reports] Failed to create report_run:', runError)
+        return NextResponse.json(
+          { message: 'Failed to create report run', detail: runError?.message },
+          { status: 500 }
+        )
+      }
+
+      reportRun = newRun
+      console.log(
+        `[reports] Created report_run ${reportRun.id} for job ${jobId} | hash: ${dataHash.substring(0, 12)} | status: ${status}`
       )
     }
-
-    console.log(`[reports] Created report_run ${reportRun.id} for job ${jobId}`)
 
     // Prepare URL for the print page with report_run_id
     const protocol = request.headers.get('x-forwarded-proto') || 'http'

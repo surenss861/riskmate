@@ -116,6 +116,11 @@ export async function POST(
       )
     }
 
+    // Log finalization event
+    console.log(
+      `[reports/runs/finalize] Report run ${reportRunId} finalized | job: ${finalized.job_id} | hash: ${finalized.data_hash.substring(0, 12)} | signed_by: ${user.id}`
+    )
+
     return NextResponse.json({
       data: finalized,
       message: 'Report run finalized successfully',

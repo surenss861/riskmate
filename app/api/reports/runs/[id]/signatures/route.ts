@@ -103,6 +103,24 @@ export async function POST(
       }
     }
 
+    // Check if report_run is finalized - block new signatures unless admin
+    if (reportRun.status === 'final') {
+      // Check if user is admin (for revocation flow)
+      const { data: member } = await supabase
+        .from('organization_members')
+        .select('role')
+        .eq('user_id', user.id)
+        .eq('organization_id', reportRun.organization_id)
+        .single()
+
+      if (!member || !['owner', 'admin'].includes(member.role)) {
+        return NextResponse.json(
+          { message: 'Cannot add signatures to a finalized report. Only admins can revoke and add new signatures.' },
+          { status: 403 }
+        )
+      }
+    }
+
     // Check if signature for this role already exists (non-revoked)
     const { data: existing } = await supabase
       .from('report_signatures')
@@ -156,6 +174,11 @@ export async function POST(
         { status: 500 }
       )
     }
+
+    // Log signature creation
+    console.log(
+      `[reports/runs/signatures] Signature created | run: ${reportRunId} | role: ${signature_role} | signer: ${signer_name} (${signer_user_id || 'external'})`
+    )
 
     return NextResponse.json({ data: signature })
   } catch (error: any) {
