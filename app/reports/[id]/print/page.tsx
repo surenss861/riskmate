@@ -4,6 +4,7 @@ import { buildJobReport } from '@/lib/utils/jobReport'
 import { formatDate, formatTime, getRiskColor, getSeverityColor } from '@/lib/utils/reportUtils'
 import type { JobReportPayload } from '@/lib/utils/jobReport'
 import { colors } from '@/lib/design-system/tokens'
+import { verifyPrintToken } from '@/lib/utils/printToken'
 
 interface PrintPageProps {
   params: Promise<{ id: string }>
@@ -22,27 +23,41 @@ export default async function PrintReportPage({ params, searchParams }: PrintPag
   const { id: jobId } = await params
   const { token, report_run_id } = await searchParams
 
-  // TODO: Verify token if needed (for now, we'll rely on the PDF API endpoint to handle auth)
-  // In production, you'd validate the token here
+  let organization_id: string | null = null
+
+  // If token is provided, verify it (for serverless PDF generation)
+  if (token) {
+    const tokenPayload = verifyPrintToken(token)
+    if (!tokenPayload || tokenPayload.jobId !== jobId) {
+      notFound()
+    }
+    organization_id = tokenPayload.organizationId
+  } else {
+    // Otherwise, use cookie-based auth (for browser access)
+    const supabase = await createSupabaseServerClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      notFound()
+    }
+
+    // Get user's organization
+    const { data: userData } = await supabase
+      .from('users')
+      .select('organization_id')
+      .eq('id', user.id)
+      .single()
+
+    if (!userData?.organization_id) {
+      notFound()
+    }
+    organization_id = userData.organization_id
+  }
+
+  if (!organization_id) {
+    notFound()
+  }
 
   const supabase = await createSupabaseServerClient()
-  
-  // Get user for organization access
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
-    notFound()
-  }
-
-  // Get user's organization
-  const { data: userData } = await supabase
-    .from('users')
-    .select('organization_id')
-    .eq('id', user.id)
-    .single()
-
-  if (!userData?.organization_id) {
-    notFound()
-  }
 
   // If report_run_id is provided, use frozen data from that run
   // Otherwise, use current live data (for draft generation)
@@ -76,7 +91,7 @@ export default async function PrintReportPage({ params, searchParams }: PrintPag
   // in report_runs and use that instead, but for now we use live data
   // and rely on hash verification via the verify endpoint
   try {
-    reportData = await buildJobReport(userData.organization_id, jobId)
+    reportData = await buildJobReport(organization_id, jobId)
   } catch (error) {
     console.error('Failed to build report:', error)
     notFound()

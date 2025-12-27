@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { generatePdfFromUrl } from '@/lib/utils/playwright'
 import { buildJobReport } from '@/lib/utils/jobReport'
 import { computeCanonicalHash } from '@/lib/utils/canonicalJson'
+import { signPrintToken } from '@/lib/utils/printToken'
 
 export const runtime = 'nodejs'
 // Set max duration to handle browser launch and navigation
@@ -115,11 +116,17 @@ export async function POST(
       )
     }
 
-    // Prepare URL for the print page with report_run_id
+    // Generate signed token for print route (bypasses auth requirement)
+    const token = signPrintToken({
+      jobId,
+      organizationId: organization_id,
+    })
+
+    // Prepare URL for the print page with report_run_id and token
     const protocol = request.headers.get('x-forwarded-proto') || 'http'
     const host = request.headers.get('host')
     const origin = `${protocol}://${host}`
-    const printUrl = `${origin}/reports/${jobId}/print?report_run_id=${reportRun.id}`
+    const printUrl = `${origin}/reports/${jobId}/print?token=${token}&report_run_id=${reportRun.id}`
 
     console.log('[reports] Generating PDF from:', printUrl)
 
