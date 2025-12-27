@@ -123,10 +123,11 @@ export async function POST(
     })
 
     // Prepare URL for the print page with report_run_id and token
+    // URL-encode the token since it's base64 and may contain special characters
     const protocol = request.headers.get('x-forwarded-proto') || 'http'
     const host = request.headers.get('host')
     const origin = `${protocol}://${host}`
-    const printUrl = `${origin}/reports/${jobId}/print?token=${token}&report_run_id=${reportRun.id}`
+    const printUrl = `${origin}/reports/${jobId}/print?token=${encodeURIComponent(token)}&report_run_id=${reportRun.id}`
 
     console.log('[reports] Generating PDF from:', printUrl)
 

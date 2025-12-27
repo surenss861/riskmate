@@ -21,16 +21,28 @@ interface PrintPageProps {
  */
 export default async function PrintReportPage({ params, searchParams }: PrintPageProps) {
   const { id: jobId } = await params
-  const { token, report_run_id } = await searchParams
+  const { token: rawToken, report_run_id } = await searchParams
 
   let organization_id: string | null = null
 
   // If token is provided, verify it (for serverless PDF generation)
-  if (token) {
+  if (rawToken) {
+    // Next.js should automatically decode URL-encoded query params, but be explicit
+    const token = decodeURIComponent(rawToken)
+    console.log('[print] Token provided, verifying...', { tokenLength: token.length, jobId })
     const tokenPayload = verifyPrintToken(token)
-    if (!tokenPayload || tokenPayload.jobId !== jobId) {
+    if (!tokenPayload) {
+      console.error('[print] Token verification failed - invalid token')
       notFound()
     }
+    if (tokenPayload.jobId !== jobId) {
+      console.error('[print] Token verification failed - jobId mismatch', { 
+        tokenJobId: tokenPayload.jobId, 
+        expectedJobId: jobId 
+      })
+      notFound()
+    }
+    console.log('[print] Token verified successfully', { organizationId: tokenPayload.organizationId })
     organization_id = tokenPayload.organizationId
   } else {
     // Otherwise, use cookie-based auth (for browser access)
@@ -91,13 +103,16 @@ export default async function PrintReportPage({ params, searchParams }: PrintPag
   // in report_runs and use that instead, but for now we use live data
   // and rely on hash verification via the verify endpoint
   try {
+    console.log('[print] Building report data...', { organization_id, jobId })
     reportData = await buildJobReport(organization_id, jobId)
+    console.log('[print] Report data built successfully')
   } catch (error) {
-    console.error('Failed to build report:', error)
+    console.error('[print] Failed to build report:', error)
     notFound()
   }
 
   if (!reportData.job) {
+    console.error('[print] Report data missing job')
     notFound()
   }
 
