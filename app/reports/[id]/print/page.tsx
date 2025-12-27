@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { buildJobReport } from '@/lib/utils/jobReport'
 import { formatDate, formatTime, getRiskColor, getSeverityColor } from '@/lib/utils/reportUtils'
 import type { JobReportPayload } from '@/lib/utils/jobReport'
+import { colors } from '@/lib/design-system/tokens'
 
 interface PrintPageProps {
   params: Promise<{ id: string }>
@@ -13,7 +14,7 @@ interface PrintPageProps {
  * Print-friendly report page
  * 
  * This page renders the report as HTML optimized for PDF export.
- * It uses Tailwind print utilities and CSS @page rules for proper pagination.
+ * Uses RiskMate design tokens and proper CSS layering for watermark.
  * 
  * Security: Uses signed token in URL for access (not relying on cookies in headless browser)
  */
@@ -65,6 +66,7 @@ export default async function PrintReportPage({ params, searchParams }: PrintPag
   const riskLevel = risk_score?.risk_level || 'unknown'
   const riskScoreValue = risk_score?.overall_score || 0
   const riskColor = getRiskColor(riskLevel)
+  const isDraft = job.status === 'draft' || job.status === 'pending'
 
   // Get logo if available
   const logoUrl = organization?.logo_url || null
@@ -74,10 +76,15 @@ export default async function PrintReportPage({ params, searchParams }: PrintPag
       <head>
         <meta charSet="utf-8" />
         <title>Risk Snapshot Report - {job.job_type}</title>
-        <style dangerouslySetInnerHTML={{ __html: printStyles }} />
+        <style dangerouslySetInnerHTML={{ __html: printStyles(colors) }} />
       </head>
       <body className="print-body">
-        {/* Cover Page */}
+        {/* Fixed watermark - behind all content, never collides */}
+        {isDraft && (
+          <div className="watermark">DRAFT</div>
+        )}
+
+        {/* Cover Page - Dark branded deck */}
         <div className="cover-page">
           <div className="cover-header">
             {logoUrl && (
@@ -104,7 +111,9 @@ export default async function PrintReportPage({ params, searchParams }: PrintPag
               <div className="kpi-value" style={{ color: riskColor }}>
                 {riskScoreValue}
               </div>
-              <div className="kpi-label">{riskLevel.toUpperCase()}</div>
+              <div className="kpi-label" style={{ color: riskColor }}>
+                {riskLevel.toUpperCase()}
+              </div>
             </div>
 
             <div className="kpi-pill">
@@ -178,7 +187,7 @@ export default async function PrintReportPage({ params, searchParams }: PrintPag
                 <div className="risk-score-value" style={{ color: riskColor }}>
                   {riskScoreValue}
                 </div>
-                <div className="risk-badge" style={{ backgroundColor: riskColor + '20', borderColor: riskColor }}>
+                <div className="risk-badge" style={{ backgroundColor: riskColor + '20', borderColor: riskColor, color: riskColor }}>
                   {riskLevel.toUpperCase()}
                 </div>
               </div>
@@ -312,35 +321,68 @@ export default async function PrintReportPage({ params, searchParams }: PrintPag
   )
 }
 
-// Print styles with @page rules for proper PDF pagination
-const printStyles = `
+// Print styles with RiskMate branding, proper watermark layering, and CSS print rules
+const printStyles = (colors: typeof import('@/lib/design-system/tokens').colors) => `
   @page {
     size: A4;
     margin: 48pt 48pt 60pt 48pt;
+  }
+
+  * {
+    box-sizing: border-box;
   }
 
   @media print {
     body {
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
-      color: #111111;
+      color: ${colors.black};
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
       font-size: 11pt;
       line-height: 1.4;
+      background: ${colors.white};
+      margin: 0;
+      padding: 0;
     }
 
+    /* Fixed watermark - behind everything, never collides */
+    .watermark {
+      position: fixed;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      transform: rotate(-35deg);
+      font-size: 120px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      opacity: 0.03;
+      z-index: 0;
+      pointer-events: none;
+      color: ${colors.black};
+      user-select: none;
+    }
+
+    /* All content pages have z-index above watermark */
+    .page {
+      position: relative;
+      z-index: 1;
+      page-break-before: always;
+      break-inside: avoid;
+      background: ${colors.white};
+    }
+
+    /* Cover page - no watermark, branded deck mode */
     .cover-page {
+      position: relative;
+      z-index: 1;
       page-break-after: always;
       min-height: 100vh;
       display: flex;
       flex-direction: column;
       justify-content: flex-start;
-      padding-top: 60pt;
-    }
-
-    .page {
-      page-break-before: always;
-      break-inside: avoid;
+      padding: 60pt 0;
+      background: linear-gradient(135deg, ${colors.gray900} 0%, ${colors.gray800} 100%);
+      color: ${colors.white};
     }
 
     .section-header {
@@ -357,6 +399,7 @@ const printStyles = `
     }
   }
 
+  /* Cover page styles - dark branded deck */
   .cover-header {
     display: flex;
     justify-content: space-between;
@@ -367,78 +410,100 @@ const printStyles = `
   .cover-logo {
     height: 50pt;
     width: auto;
+    filter: brightness(0) invert(1);
   }
 
   .cover-brand {
     font-size: 20pt;
     font-weight: bold;
-    color: #912F40;
+    color: ${colors.white};
+    letter-spacing: 0.05em;
   }
 
   .cover-title {
-    font-size: 36pt;
+    font-size: 42pt;
     font-weight: bold;
-    color: #111111;
+    color: ${colors.white};
     margin: 0 0 20pt 0;
+    letter-spacing: -0.02em;
   }
 
   .cover-accent-line {
     width: 280pt;
-    height: 3pt;
-    background-color: #912F40;
+    height: 4pt;
+    background-color: ${colors.cordovan};
     margin-bottom: 30pt;
   }
 
   .cover-subheader {
     font-size: 10.5pt;
-    color: #555555;
+    color: ${colors.gray300};
     margin-bottom: 50pt;
     display: flex;
     gap: 8pt;
     flex-wrap: wrap;
+    line-height: 1.6;
   }
 
   .cover-kpis {
     display: flex;
     gap: 12pt;
     margin-top: auto;
+    flex-wrap: wrap;
   }
 
+  /* Bulletproof KPI pills - explicit colors, fixed dimensions */
   .kpi-pill {
     flex: 1;
-    border: 1pt solid #E6E6E6;
+    min-width: 100pt;
+    border: 1.5pt solid ${colors.gray700};
     border-radius: 8pt;
-    padding: 12pt;
+    padding: 16pt 12pt;
     text-align: center;
-    background-color: #FAFAFA;
+    background-color: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(10px);
   }
 
   .kpi-pill-risk {
-    background-color: rgba(145, 47, 64, 0.15);
+    border-color: ${colors.cordovan};
+    background-color: rgba(145, 47, 64, 0.2);
   }
 
   .kpi-value {
     font-size: 32pt;
-    font-weight: bold;
-    color: #111111;
+    font-weight: 700;
+    color: ${colors.white};
     margin-bottom: 8pt;
+    line-height: 1.2;
+    min-height: 38pt;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .kpi-label {
     font-size: 9pt;
-    color: #555555;
+    color: ${colors.gray300};
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    line-height: 1.4;
+    font-weight: 600;
   }
 
+  /* Content page styles - clean compliance look */
   .section-header {
     font-size: 22pt;
     font-weight: bold;
-    color: #111111;
+    color: ${colors.black};
     margin-bottom: 24pt;
+    padding-bottom: 8pt;
+    border-bottom: 2pt solid ${colors.cordovan};
   }
 
   .overview-text {
     margin-bottom: 24pt;
-    line-height: 1.5;
+    line-height: 1.6;
+    color: ${colors.gray700};
   }
 
   .two-column-layout {
@@ -449,10 +514,10 @@ const printStyles = `
   }
 
   .column-card {
-    border: 1pt solid #E6E6E6;
+    border: 1pt solid ${colors.borderLight};
     border-radius: 6pt;
     padding: 16pt;
-    background-color: #FFFFFF;
+    background-color: ${colors.white};
   }
 
   .risk-card {
@@ -462,7 +527,7 @@ const printStyles = `
   .card-title {
     font-size: 14pt;
     font-weight: bold;
-    color: #111111;
+    color: ${colors.black};
     margin-bottom: 16pt;
   }
 
@@ -474,7 +539,13 @@ const printStyles = `
 
   .detail-item {
     font-size: 11pt;
-    color: #555555;
+    color: ${colors.gray700};
+    line-height: 1.5;
+  }
+
+  .detail-item strong {
+    color: ${colors.black};
+    font-weight: 600;
   }
 
   .risk-score-display {
@@ -486,6 +557,7 @@ const printStyles = `
     font-size: 42pt;
     font-weight: bold;
     margin-bottom: 16pt;
+    line-height: 1.2;
   }
 
   .risk-badge {
@@ -500,16 +572,18 @@ const printStyles = `
   .risk-drivers {
     margin-top: 16pt;
     font-size: 9pt;
-    color: #555555;
+    color: ${colors.gray600};
   }
 
   .risk-drivers-label {
     font-weight: bold;
     margin-bottom: 8pt;
+    color: ${colors.black};
   }
 
   .risk-driver-item {
     margin-left: 8pt;
+    margin-bottom: 4pt;
   }
 
   .key-findings {
@@ -519,7 +593,7 @@ const printStyles = `
   .findings-title {
     font-size: 16pt;
     font-weight: bold;
-    color: #111111;
+    color: ${colors.black};
     margin-bottom: 16pt;
   }
 
@@ -530,8 +604,8 @@ const printStyles = `
   }
 
   .finding-severity-dot {
-    width: 8pt;
-    height: 8pt;
+    width: 10pt;
+    height: 10pt;
     border-radius: 50%;
     margin-top: 6pt;
     flex-shrink: 0;
@@ -540,49 +614,57 @@ const printStyles = `
   .finding-name {
     font-weight: bold;
     font-size: 11pt;
-    color: #111111;
+    color: ${colors.black};
     margin-bottom: 4pt;
   }
 
   .finding-description {
     font-size: 10.5pt;
-    color: #555555;
+    color: ${colors.gray600};
+    line-height: 1.5;
   }
 
+  /* Audit-grade tables */
   .audit-table {
     width: 100%;
     border-collapse: collapse;
     font-size: 9.5pt;
+    background: ${colors.white};
   }
 
   .audit-table thead {
-    background-color: #FAFAFA;
+    background-color: ${colors.bgSecondary};
   }
 
   .audit-table th {
-    padding: 8pt;
+    padding: 10pt 8pt;
     text-align: left;
-    font-weight: bold;
-    color: #111111;
-    border-bottom: 1pt solid #E6E6E6;
+    font-weight: 600;
+    color: ${colors.black};
+    border-bottom: 1.5pt solid ${colors.borderLight};
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-size: 9pt;
   }
 
   .audit-table td {
-    padding: 8pt;
-    color: #555555;
-    border-bottom: 0.5pt solid #E6E6E6;
+    padding: 10pt 8pt;
+    color: ${colors.gray700};
+    border-bottom: 0.5pt solid ${colors.borderLight};
   }
 
   .audit-table .even-row {
-    background-color: #FAFAFA;
+    background-color: ${colors.bgSecondary};
   }
 
   .severity-badge {
     display: inline-block;
-    padding: 2pt 6pt;
+    padding: 3pt 8pt;
     border-radius: 3pt;
-    font-size: 9pt;
-    font-weight: bold;
+    font-size: 8.5pt;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
   }
 
   .signatures-grid {
@@ -593,57 +675,57 @@ const printStyles = `
   }
 
   .signature-box {
-    border: 1.5pt solid #E6E6E6;
+    border: 1.5pt solid ${colors.borderLight};
     border-radius: 6pt;
     padding: 15pt;
-    background-color: #FFFFFF;
+    background-color: ${colors.white};
     min-height: 90pt;
   }
 
   .signature-line {
-    border-top: 1pt dashed #555555;
+    border-top: 1pt dashed ${colors.gray500};
     margin-bottom: 8pt;
   }
 
   .signature-label {
     font-size: 9pt;
-    color: #555555;
+    color: ${colors.gray600};
     margin-bottom: 12pt;
+    font-weight: 600;
   }
 
   .signature-field {
     font-size: 11pt;
-    color: #111111;
+    color: ${colors.black};
     margin-bottom: 8pt;
   }
 
   .compliance-callout {
-    border: 1.5pt solid #E6E6E6;
+    border: 1.5pt solid ${colors.borderLight};
     border-radius: 6pt;
     padding: 16pt;
-    background-color: #FAFAFA;
+    background-color: ${colors.bgSecondary};
     margin-bottom: 24pt;
   }
 
   .callout-title {
     font-size: 14pt;
     font-weight: bold;
-    color: #111111;
+    color: ${colors.black};
     margin-bottom: 12pt;
   }
 
   .callout-text {
     font-size: 11pt;
-    color: #555555;
-    line-height: 1.5;
+    color: ${colors.gray700};
+    line-height: 1.6;
   }
 
   .document-meta {
     font-size: 9pt;
-    color: #555555;
+    color: ${colors.gray600};
     display: flex;
     flex-direction: column;
     gap: 4pt;
   }
 `
-
