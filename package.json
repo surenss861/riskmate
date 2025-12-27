@@ -10,7 +10,8 @@
     "start": "next start",
     "lint": "next lint",
     "type-check": "tsc --noEmit",
-    "check:error-codes": "ts-node scripts/check-error-codes.ts"
+    "check:error-codes": "ts-node scripts/check-error-codes.ts",
+    "postinstall": "npx playwright install --with-deps chromium || echo 'Playwright browser installation skipped (non-fatal)'"
   },
   "dependencies": {
     "@gsap/react": "^2.1.2",
@@ -40,6 +41,7 @@
     "next": "^15.1.9",
     "pdf-lib": "^1.17.1",
     "pdfkit": "^0.17.2",
+    "playwright": "^1.57.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-hook-form": "^7.49.2",

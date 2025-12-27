@@ -368,34 +368,44 @@ const printStyles = (colors: typeof import('@/lib/design-system/tokens').colors)
       z-index: 1;
       page-break-before: always;
       break-inside: avoid;
-      background: ${colors.white};
+      background: rgba(255, 255, 255, 0.95); /* Partial opacity for watermark pass-through if needed, but white usually best */
+      padding: 40pt 0; /* consistent padding */
     }
 
     /* Cover page - no watermark, branded deck mode */
     .cover-page {
       position: relative;
-      z-index: 1;
+      z-index: 2; /* Cover sits above watermark if it spans */
       page-break-after: always;
       min-height: 100vh;
       display: flex;
       flex-direction: column;
       justify-content: flex-start;
-      padding: 60pt 0;
-      background: linear-gradient(135deg, ${colors.gray900} 0%, ${colors.gray800} 100%);
+      margin: -48pt; /* Break out of page margins */
+      padding: 60pt 48pt;
+      background: #121212; /* Hardcoded dark for print consistency */
       color: ${colors.white};
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
     }
 
     .section-header {
       page-break-after: avoid;
       break-after: avoid;
+      margin-top: 0;
     }
 
     table {
-      page-break-inside: avoid;
+      page-break-inside: auto;
     }
 
     tr {
       page-break-inside: avoid;
+      page-break-after: auto;
+    }
+
+    thead {
+      display: table-header-group;
     }
   }
 
@@ -466,7 +476,9 @@ const printStyles = (colors: typeof import('@/lib/design-system/tokens').colors)
 
   .kpi-pill-risk {
     border-color: ${colors.cordovan};
-    background-color: rgba(145, 47, 64, 0.2);
+    background-color: rgba(145, 47, 64, 0.4) !important; /* Ensure visibility on print */
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 
   .kpi-value {
@@ -645,6 +657,8 @@ const printStyles = (colors: typeof import('@/lib/design-system/tokens').colors)
     text-transform: uppercase;
     letter-spacing: 0.05em;
     font-size: 9pt;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 
   .audit-table td {
