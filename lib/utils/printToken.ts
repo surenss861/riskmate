@@ -22,14 +22,21 @@ export function verifyPrintToken(token: string): PrintTokenPayload | null {
 
         // Verify signature
         const expectedSignature = crypto.createHmac('sha256', SECRET).update(data).digest('hex')
-        if (signature !== expectedSignature) return null
+        if (signature !== expectedSignature) {
+            console.error('[printToken] Signature mismatch')
+            return null
+        }
 
         // Verify expiration
         const payload = JSON.parse(data) as PrintTokenPayload
-        if (Date.now() / 1000 > payload.exp) return null
+        if (Date.now() / 1000 > payload.exp) {
+            console.error('[printToken] Token expired', { exp: payload.exp, now: Date.now() / 1000 })
+            return null
+        }
 
         return payload
-    } catch {
+    } catch (error: any) {
+        console.error('[printToken] Token verification failed:', error?.message || error)
         return null
     }
 }
