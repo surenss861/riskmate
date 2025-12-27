@@ -20,32 +20,45 @@ interface PrintPageProps {
  * Security: Uses signed token in URL for access (not relying on cookies in headless browser)
  */
 export default async function PrintReportPage({ params, searchParams }: PrintPageProps) {
-  const { id: jobId } = await params
-  const { token: rawToken, report_run_id } = await searchParams
+  try {
+    const { id: jobId } = await params
+    const searchParamsResolved = await searchParams
+    const rawToken = searchParamsResolved.token
+    const report_run_id = searchParamsResolved.report_run_id
 
-  let organization_id: string | null = null
+    console.log('[print] Route accessed', { jobId, hasToken: !!rawToken, hasReportRunId: !!report_run_id })
 
-  // If token is provided, verify it (for serverless PDF generation)
-  if (rawToken) {
-    // Next.js should automatically decode URL-encoded query params, but be explicit
-    const token = decodeURIComponent(rawToken)
-    console.log('[print] Token provided, verifying...', { tokenLength: token.length, jobId })
-    const tokenPayload = verifyPrintToken(token)
-    if (!tokenPayload) {
-      console.error('[print] Token verification failed - invalid token')
-      notFound()
-    }
-    if (tokenPayload.jobId !== jobId) {
-      console.error('[print] Token verification failed - jobId mismatch', { 
-        tokenJobId: tokenPayload.jobId, 
-        expectedJobId: jobId 
-      })
-      notFound()
-    }
-    console.log('[print] Token verified successfully', { organizationId: tokenPayload.organizationId })
-    organization_id = tokenPayload.organizationId
-  } else {
-    // Otherwise, use cookie-based auth (for browser access)
+    let organization_id: string | null = null
+
+    // If token is provided, verify it (for serverless PDF generation)
+    if (rawToken) {
+      // Next.js should automatically decode URL-encoded query params, but handle it safely
+      let token: string
+      try {
+        token = decodeURIComponent(rawToken)
+      } catch (decodeError) {
+        // If decode fails, use raw token (it might already be decoded)
+        console.warn('[print] decodeURIComponent failed, using raw token:', decodeError)
+        token = rawToken
+      }
+      
+      console.log('[print] Token provided, verifying...', { tokenLength: token.length, jobId })
+      const tokenPayload = verifyPrintToken(token)
+      if (!tokenPayload) {
+        console.error('[print] Token verification failed - invalid token')
+        notFound()
+      }
+      if (tokenPayload.jobId !== jobId) {
+        console.error('[print] Token verification failed - jobId mismatch', { 
+          tokenJobId: tokenPayload.jobId, 
+          expectedJobId: jobId 
+        })
+        notFound()
+      }
+      console.log('[print] Token verified successfully', { organizationId: tokenPayload.organizationId })
+      organization_id = tokenPayload.organizationId
+    } else {
+      // Otherwise, use cookie-based auth (for browser access)
     const supabase = await createSupabaseServerClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) {
@@ -170,14 +183,14 @@ export default async function PrintReportPage({ params, searchParams }: PrintPag
     }
   }
 
-  return (
-    <html lang="en">
-      <head>
-        <meta charSet="utf-8" />
-        <title>Risk Snapshot Report - {job.job_type}</title>
-        <style dangerouslySetInnerHTML={{ __html: printStyles(colors) }} />
-      </head>
-      <body className="print-body">
+    return (
+      <html lang="en">
+        <head>
+          <meta charSet="utf-8" />
+          <title>Risk Snapshot Report - {job.job_type}</title>
+          <style dangerouslySetInnerHTML={{ __html: printStyles(colors) }} />
+        </head>
+        <body className="print-body">
         {/* Fixed watermark - behind all content, never collides */}
         {isDraft && (
           <div className="watermark">DRAFT</div>
@@ -467,9 +480,13 @@ export default async function PrintReportPage({ params, searchParams }: PrintPag
             </div>
           )}
         </div>
-      </body>
-    </html>
-  )
+        </body>
+      </html>
+    )
+  } catch (error: any) {
+    console.error('[print] Unexpected error:', error)
+    notFound()
+  }
 }
 
 // Print styles with RiskMate branding, proper watermark layering, and CSS print rules
