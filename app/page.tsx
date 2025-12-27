@@ -6,12 +6,20 @@ import Image from 'next/image'
 import { motion } from 'framer-motion'
 import ScrollToTop from '@/components/ScrollToTop'
 import RiskMateLogo from '@/components/RiskMateLogo'
+import { MarketingHero, SocialProof, HowItWorks, Features, SampleReportModal } from '@/components/marketing'
 
 export default function HomePage() {
   const router = useRouter()
   const [scrolled, setScrolled] = useState(false)
   const [navOpacity, setNavOpacity] = useState(0.4)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [sampleReportOpen, setSampleReportOpen] = useState(false)
+
+  useEffect(() => {
+    const handleOpenSampleReport = () => setSampleReportOpen(true)
+    window.addEventListener('openSampleReport', handleOpenSampleReport as EventListener)
+    return () => window.removeEventListener('openSampleReport', handleOpenSampleReport as EventListener)
+  }, [])
 
   useEffect(() => {
     const handleScroll = () => {
@@ -226,155 +234,13 @@ export default function HomePage() {
         {/* Spacer for fixed nav */}
         <div className="h-20" />
 
-        {/* Hero - Minimal & Clean */}
-        <section 
-          className="relative max-w-4xl mx-auto px-6 py-32 text-center overflow-hidden"
-          data-string=""
-          data-string-parallax="-0.02"
-        >
-          {/* Background gradient pulse */}
-          <div className="absolute inset-0 opacity-30">
-            <motion.div
-              className="absolute inset-0 bg-gradient-to-b from-[#F97316]/5 via-transparent to-transparent"
-              animate={{
-                opacity: [0.3, 0.5, 0.3],
-              }}
-              transition={{
-                duration: 4,
-                repeat: Infinity,
-                ease: 'easeInOut',
-              }}
-            />
-          </div>
+        {/* Hero - New GSAP + Three.js Version */}
+        <MarketingHero />
 
-          <div className="relative z-10">
-            <motion.h1 
-              className="text-5xl md:text-7xl font-bold mb-6 leading-tight font-display"
-              style={{ 
-                letterSpacing: '-0.02em',
-                maxWidth: '60ch',
-                margin: '0 auto'
-              }}
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8, ease: 'easeOut' }}
-            >
-              <motion.span
-                initial={{ opacity: 0, x: -30 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.8, delay: 0.2 }}
-              >
-                Audit-defensible job governance
-              </motion.span>
-              <br />
-              <motion.span 
-                className="text-[#F97316] relative inline-block"
-                initial={{ opacity: 0, x: 30 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.8, delay: 0.3 }}
-              >
-                for high-liability field operations
-                <motion.span
-                  className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#F97316]"
-                  initial={{ scaleX: 0 }}
-                  animate={{ scaleX: 1 }}
-                  transition={{ duration: 0.6, delay: 1.1 }}
-                />
-              </motion.span>
-            </motion.h1>
-            <motion.p 
-              className="text-xl md:text-2xl text-[#A1A1A1] mb-6 max-w-2xl mx-auto leading-relaxed"
-              data-string=""
-              data-string-parallax="0.01"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.4 }}
-            >
-              Role-based enforcement. Immutable audit trails. Insurance-ready proof packs. RiskMate doesn&apos;t just track risk—it proves governance.
-            </motion.p>
-            <motion.div
-              className="max-w-3xl mx-auto mb-10 p-6 bg-[#121212]/50 border border-white/10 rounded-xl"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.5 }}
-            >
-              <p className="text-lg text-white font-medium mb-2">
-                RiskMate exists to answer one hard question:
-              </p>
-              <p className="text-xl text-[#F97316] font-semibold italic">
-                &ldquo;When something goes wrong, can you prove who knew what, when, and why?&rdquo;
-              </p>
-              <p className="text-sm text-white/60 mt-3">
-                That&apos;s the whole product. Everything else flows from that.
-              </p>
-            </motion.div>
-            <motion.div 
-              className="flex flex-col items-center gap-4 mb-8"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.5 }}
-            >
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <motion.button
-                  onClick={() => router.push('/login')}
-                  className="px-8 py-4 bg-[#F97316] text-black rounded-lg hover:bg-[#FB923C] transition-all font-semibold text-lg btn-primary relative overflow-hidden group"
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                >
-                  <span className="relative z-10">Get Started</span>
-                  <motion.span
-                    className="absolute inset-0 bg-white/20"
-                    initial={{ x: '-100%' }}
-                    whileHover={{ x: '100%' }}
-                    transition={{ duration: 0.6 }}
-                  />
-                </motion.button>
-                <motion.button
-                  onClick={() => router.push('/demo')}
-                  className="px-8 py-4 border border-white/10 rounded-lg hover:border-white/20 transition-colors font-semibold text-lg btn-secondary"
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                >
-                  Try Interactive Demo →
-                </motion.button>
-              </div>
-              <p className="text-sm text-white/50">
-                No credit card · Demo data available
-              </p>
-            </motion.div>
-
-            {/* Trust Badges */}
-            <motion.div 
-              className="flex flex-wrap justify-center gap-4 text-sm mb-12"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.6, delay: 0.6 }}
-            >
-              <div className="px-4 py-2 bg-[#121212] rounded-lg border border-white/5">
-                Audit-ready documentation
-              </div>
-              <div className="px-4 py-2 bg-[#121212] rounded-lg border border-white/5">
-                Timestamped evidence trail
-              </div>
-              <div className="px-4 py-2 bg-[#121212] rounded-lg border border-white/5">
-                Insurer-approved reports
-              </div>
-            </motion.div>
-          </div>
-
-          {/* Proof Chips - Minimal */}
-          <div className="flex flex-wrap justify-center gap-4 text-sm relative z-10" data-string="" data-string-show="">
-            <div className="px-4 py-2 bg-[#121212] rounded-lg border border-white/5">
-              Used by electricians, plumbers, HVAC crews
-            </div>
-            <div className="px-4 py-2 bg-[#121212] rounded-lg border border-white/5">
-              Everything timestamped automatically
-            </div>
-            <div className="px-4 py-2 bg-[#121212] rounded-lg border border-white/5">
-              Share with clients, insurers, auditors
-            </div>
-          </div>
-        </section>
+        {/* New Marketing Sections */}
+        <SocialProof />
+        <HowItWorks />
+        <Features />
 
         {/* Enhanced Trust Signals Section */}
         <section className="max-w-6xl mx-auto px-6 py-16 border-t border-white/5">
@@ -1017,77 +883,6 @@ export default function HomePage() {
           </motion.p>
         </section>
 
-        {/* How It Works - Minimal Steps */}
-        <section 
-          id="how-it-works"
-          className="max-w-6xl mx-auto px-6 py-20"
-          data-string=""
-          data-string-show=""
-        >
-          <motion.h2 
-            className="text-4xl font-bold text-center mb-12 font-display"
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6 }}
-          >
-            How it works
-          </motion.h2>
-          <div className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto relative">
-            {/* Connecting arrows - hidden on mobile */}
-            <div className="hidden md:block absolute top-6 left-1/3 right-1/3 h-0.5 bg-gradient-to-r from-[#F97316]/30 via-[#F97316]/50 to-[#F97316]/30" />
-            <div className="hidden md:block absolute top-6 left-2/3 right-0 h-0.5 bg-gradient-to-r from-[#F97316]/30 via-[#F97316]/50 to-transparent" />
-            
-            {/* Mobile: Vertical flow indicator */}
-            <div className="md:hidden absolute left-6 top-14 bottom-0 w-0.5 bg-gradient-to-b from-[#F97316]/30 via-[#F97316]/50 to-transparent" />
-            
-            <motion.div 
-              className="text-center"
-              data-string=""
-              data-string-show=""
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.6, delay: 0.1 }}
-            >
-              <div className="w-14 h-14 rounded-lg number-badge flex items-center justify-center text-2xl font-bold text-[#F97316] mx-auto mb-4 relative z-10">
-                1
-              </div>
-              <h3 className="text-xl font-semibold mb-2">Before the job</h3>
-              <p className="text-[#A1A1A1]">Complete hazard checklists, risk assessments, and required controls. Upload photos and capture team signatures—all timestamped automatically.</p>
-            </motion.div>
-            <motion.div 
-              className="text-center"
-              data-string=""
-              data-string-show=""
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.6, delay: 0.2 }}
-            >
-              <div className="w-14 h-14 rounded-lg number-badge flex items-center justify-center text-2xl font-bold text-[#F97316] mx-auto mb-4 relative z-10">
-                2
-              </div>
-              <h3 className="text-xl font-semibold mb-2">During the job</h3>
-              <p className="text-[#A1A1A1]">Track site changes, new hazards, and additional photos. See who&apos;s on-site and who submitted what—your living job log.</p>
-            </motion.div>
-            <motion.div 
-              className="text-center"
-              data-string=""
-              data-string-show=""
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.6, delay: 0.3 }}
-            >
-              <div className="w-14 h-14 rounded-lg number-badge flex items-center justify-center text-2xl font-bold text-[#F97316] mx-auto mb-4 relative z-10">
-                3
-              </div>
-              <h3 className="text-xl font-semibold mb-2">After the job</h3>
-              <p className="text-[#A1A1A1]">Generate audit-ready PDF reports with job summary, evidence photos, and compliance trail. Share with clients, insurers, or auditors.</p>
-            </motion.div>
-          </div>
-        </section>
 
         {/* Pricing - Minimal Cards */}
         <section 
@@ -1362,6 +1157,9 @@ export default function HomePage() {
 
         {/* Scroll to Top */}
         <ScrollToTop />
+
+        {/* Sample Report Modal */}
+        <SampleReportModal isOpen={sampleReportOpen} onClose={() => setSampleReportOpen(false)} />
       </motion.main>
   )
 }

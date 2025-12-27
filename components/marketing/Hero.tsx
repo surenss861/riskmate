@@ -90,8 +90,11 @@ export function MarketingHero() {
     }
 
     // Dynamic import for Three.js
-    import('@/components/marketing/HeroBackground').then((module) => {
+    import('@/components/marketing/HeroBackground').then(() => {
       setThreeLoaded(true)
+    }).catch(() => {
+      // Fallback if Three.js fails to load
+      console.warn('Three.js background failed to load, using gradient fallback')
     })
   }, [])
 
@@ -104,9 +107,10 @@ export function MarketingHero() {
       }}
     >
       {/* Three.js Background (lazy-loaded) */}
-      {threeLoaded && (
+      {threeLoaded && typeof window !== 'undefined' && (
         <div className="absolute inset-0 z-0">
-          {/* HeroBackground component will be rendered here */}
+          {/* HeroBackground component - loaded dynamically */}
+          {/* For now, using gradient fallback. Three.js can be added later if needed */}
         </div>
       )}
 
