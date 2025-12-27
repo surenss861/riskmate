@@ -67,11 +67,8 @@ export async function POST(
 
     // Generate short-lived signed token for print route
     const token = crypto.randomBytes(32).toString('hex')
-    const expiresAt = Date.now() + 5 * 60 * 1000 // 5 minutes
-
-    // Store token temporarily (in production, use Redis or similar)
+    // Note: Token expiry would be validated in production using Redis or similar
     // For now, we'll pass it in the URL and validate it in the print route
-    // In a real implementation, you'd store this in a database or cache
 
     // Build print URL
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin

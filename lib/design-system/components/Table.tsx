@@ -90,7 +90,7 @@ export function TableHeaderCell({ children, className, ...props }: TableHeaderCe
         textAlign: 'left',
         fontWeight: 600,
         color: colors.black,
-        backgroundColor: colors.lightGrayBg,
+        backgroundColor: colors.bgSecondary, // Light gray background for headers
         fontSize: '0.875rem',
         textTransform: 'uppercase',
         letterSpacing: '0.05em',
