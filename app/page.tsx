@@ -6,7 +6,7 @@ import Image from 'next/image'
 import { motion } from 'framer-motion'
 import ScrollToTop from '@/components/ScrollToTop'
 import RiskMateLogo from '@/components/RiskMateLogo'
-import { MarketingHero, SocialProof, HowItWorks, Features, SampleReportModal } from '@/components/marketing'
+import { SampleReportModal } from '@/components/marketing'
 
 export default function HomePage() {
   const router = useRouter()
@@ -234,13 +234,59 @@ export default function HomePage() {
         {/* Spacer for fixed nav */}
         <div className="h-20" />
 
-        {/* Hero - New GSAP + Three.js Version */}
-        <MarketingHero />
-
-        {/* New Marketing Sections */}
-        <SocialProof />
-        <HowItWorks />
-        <Features />
+        {/* Hero Section */}
+        <section className="relative min-h-[80vh] flex items-center justify-center overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-b from-[#0A0A0A] via-[#0A0A0A] to-black"></div>
+          <div className="relative z-10 max-w-4xl mx-auto px-6 py-20 text-center">
+            <motion.h1
+              className="text-5xl md:text-6xl font-bold mb-6 font-display"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6 }}
+            >
+              Protect Every Job Before It Starts
+            </motion.h1>
+            <motion.p
+              className="text-xl text-[#A1A1A1] mb-8 max-w-2xl mx-auto"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.2 }}
+            >
+              Instant risk scoring, auto-mitigation checklists, and shareable PDF reports for service contractors.
+            </motion.p>
+            <motion.div
+              className="flex flex-col sm:flex-row gap-4 justify-center mb-8"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.4 }}
+            >
+              <motion.button
+                onClick={() => router.push('/signup')}
+                className="px-8 py-4 bg-[#F97316] text-black rounded-lg hover:bg-[#FB923C] transition-all font-semibold text-lg"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                Start Free
+              </motion.button>
+              <motion.button
+                onClick={() => setSampleReportOpen(true)}
+                className="px-8 py-4 border border-white/10 rounded-lg hover:border-white/20 transition-colors font-semibold text-lg"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                View Sample Report
+              </motion.button>
+            </motion.div>
+            <motion.p
+              className="text-sm text-white/50"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.6, delay: 0.6 }}
+            >
+              No credit card required
+            </motion.p>
+          </div>
+        </section>
 
         {/* Enhanced Trust Signals Section */}
         <section className="max-w-6xl mx-auto px-6 py-16 border-t border-white/5">
