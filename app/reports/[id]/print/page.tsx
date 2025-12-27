@@ -170,43 +170,43 @@ export default async function PrintReportPage({ params, searchParams }: PrintPag
       )
     }
 
-  // If report_run exists and is final, log a warning if data might have changed
-  // (In production, consider using stored payload instead of live data)
-  if (reportRun && reportRun.status === 'final') {
-    const { computeCanonicalHash } = await import('@/lib/utils/canonicalJson')
-    const currentHash = computeCanonicalHash(reportData)
-    if (currentHash !== reportRun.data_hash) {
-      console.warn(
-        `[print] Final report_run ${reportRun.id} data mismatch - using live data (hash changed)`
-      )
+    // If report_run exists and is final, log a warning if data might have changed
+    // (In production, consider using stored payload instead of live data)
+    if (reportRun && reportRun.status === 'final') {
+      const { computeCanonicalHash } = await import('@/lib/utils/canonicalJson')
+      const currentHash = computeCanonicalHash(reportData)
+      if (currentHash !== reportRun.data_hash) {
+        console.warn(
+          `[PRINT] Final report_run ${reportRun.id} data mismatch - using live data (hash changed)`
+        )
+      }
     }
-  }
 
-  const { job, risk_score, mitigations, documents, organization, audit } = reportData
-  const hazardsCount = risk_score?.factors?.length || 0
-  const controlsCount = mitigations.length
-  const completedControls = mitigations.filter((m) => m.done || m.is_completed).length
-  const photos = documents.filter((doc) => doc.type === 'photo')
-  const photosCount = photos.length
-  const riskLevel = risk_score?.risk_level || 'unknown'
-  const riskScoreValue = risk_score?.overall_score || 0
-  const riskColor = getRiskColor(riskLevel)
-  const isDraft = job.status === 'draft' || job.status === 'pending'
+    const { job, risk_score, mitigations, documents, organization, audit } = reportData
+    const hazardsCount = risk_score?.factors?.length || 0
+    const controlsCount = mitigations.length
+    const completedControls = mitigations.filter((m) => m.done || m.is_completed).length
+    const photos = documents.filter((doc) => doc.type === 'photo')
+    const photosCount = photos.length
+    const riskLevel = risk_score?.risk_level || 'unknown'
+    const riskScoreValue = risk_score?.overall_score || 0
+    const riskColor = getRiskColor(riskLevel)
+    const isDraft = job.status === 'draft' || job.status === 'pending'
 
-  // Get logo if available
-  const logoUrl = organization?.logo_url || null
+    // Get logo if available
+    const logoUrl = organization?.logo_url || null
 
-  // Fetch signatures if report_run_id is provided
-  let signatures: Array<{
-    id: string
-    signer_name: string
-    signer_title: string
-    signature_role: string
-    signature_svg: string
-    signed_at: string
-  }> = []
+    // Fetch signatures if report_run_id is provided
+    let signatures: Array<{
+      id: string
+      signer_name: string
+      signer_title: string
+      signature_role: string
+      signature_svg: string
+      signed_at: string
+    }> = []
 
-  if (report_run_id) {
+    if (report_run_id) {
     try {
       // Fetch signatures
       const { data: sigs, error: sigError } = await supabase
