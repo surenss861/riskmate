@@ -18,7 +18,7 @@ export function HowItWorks() {
     {
       number: '2',
       title: 'During the job',
-      description: 'Track site changes, new hazards, and additional photos. See who\'s on-site and who submitted what—your living job log.',
+      description: 'Track site changes, new hazards, and additional photos. See who&apos;s on-site and who submitted what—your living job log.',
     },
     {
       number: '3',
