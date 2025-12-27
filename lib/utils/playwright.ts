@@ -46,25 +46,38 @@ export async function generatePdfFromUrl({ url, jobId, organizationId }: PdfOpti
                 throw new Error(`Page returned status ${response.status()}: ${url}`)
             }
 
-            // Wait for stable state with longer timeout and more lenient selector
+            // Wait for stable state and verify we're on the actual report page (not an error page)
             try {
-                await Promise.all([
-                    page.waitForSelector('.cover-page, .page, body', { timeout: 15000 }).catch(() => {
-                        // If cover-page not found, try other selectors or proceed
-                        console.warn('[PDF] .cover-page not found, trying fallback selectors')
-                        return page.waitForSelector('body', { timeout: 5000 })
-                    }),
-                    page.evaluate(() => document.fonts.ready).catch(() => {
-                        console.warn('[PDF] Font loading check failed, proceeding anyway')
-                    }),
-                ])
-                console.log(`[PDF] Page stable (selectors + fonts) after ${Date.now() - gotoStart}ms`)
+                // First, wait for the cover page selector - this confirms we're on the report page
+                await page.waitForSelector('.cover-page', { timeout: 15000 })
+                
+                // Double-check we're not on an error page by checking for error indicators
+                const hasError = await page.evaluate(() => {
+                    const bodyText = document.body.textContent || ''
+                    return bodyText.includes('Internal Server Error') || 
+                           bodyText.includes('500') || 
+                           bodyText.includes('Cannot coerce')
+                })
+                
+                if (hasError) {
+                    const pageContent = await page.content().catch(() => 'Could not get page content')
+                    throw new Error('Page contains error content instead of report')
+                }
+                
+                // Wait for fonts to be ready
+                await page.evaluate(() => document.fonts.ready).catch(() => {
+                    console.warn('[PDF] Font loading check failed, proceeding anyway')
+                })
+                
+                console.log(`[PDF] Page stable (cover-page found) after ${Date.now() - gotoStart}ms`)
             } catch (waitError: any) {
                 // Log page content for debugging
                 const pageContent = await page.content().catch(() => 'Could not get page content')
+                const pageTitle = await page.title().catch(() => 'Could not get title')
                 console.error('[PDF] Page wait failed:', waitError.message)
-                console.error('[PDF] Page HTML snippet:', pageContent.substring(0, 500))
-                throw new Error(`Page did not load correctly: ${waitError.message}`)
+                console.error('[PDF] Page title:', pageTitle)
+                console.error('[PDF] Page HTML snippet:', pageContent.substring(0, 1000))
+                throw new Error(`Page did not load correctly or contains error: ${waitError.message}`)
             }
 
             const pdfStart = Date.now()

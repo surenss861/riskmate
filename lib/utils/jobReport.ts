@@ -29,10 +29,15 @@ export async function buildJobReport(
     .select('*')
     .eq('id', jobId)
     .eq('organization_id', organizationId)
-    .single()
+    .maybeSingle()
 
-  if (jobError || !job) {
-    throw jobError ?? new Error('Job not found')
+  if (jobError) {
+    console.error('[buildJobReport] Job query error:', jobError)
+    throw jobError
+  }
+  
+  if (!job) {
+    throw new Error('Job not found')
   }
 
   const { data: riskScore } = await supabase

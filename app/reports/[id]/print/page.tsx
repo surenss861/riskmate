@@ -89,7 +89,7 @@ export default async function PrintReportPage({ params, searchParams }: PrintPag
         .from('users')
         .select('organization_id')
         .eq('id', user.id)
-        .single()
+        .maybeSingle()
 
       if (!userData?.organization_id) {
         console.error('[PRINT] user missing organization_id')
@@ -128,14 +128,16 @@ export default async function PrintReportPage({ params, searchParams }: PrintPag
     if (report_run_id) {
       // Fetch report_run to get frozen snapshot info
       try {
-        const { data: run } = await supabase
+        const { data: run, error: runError } = await supabase
           .from('report_runs')
           .select('id, data_hash, status, generated_at')
           .eq('id', report_run_id)
           .eq('organization_id', organization_id)
-          .single()
+          .maybeSingle()
 
-        if (run) {
+        if (runError) {
+          console.error('[PRINT] report_run lookup error', runError)
+        } else if (run) {
           reportRun = run
           console.log('[PRINT] report_run found', { id: run.id, status: run.status })
         } else {
