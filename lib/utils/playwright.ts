@@ -1,19 +1,5 @@
-// Dynamic import to handle cases where Playwright isn't installed
-let playwright: any = null
-
-async function getPlaywright() {
-    if (playwright) return playwright
-    
-    try {
-        playwright = await import('playwright')
-        return playwright
-    } catch (error: any) {
-        throw new Error(
-            `Playwright is not installed. Please run: npx playwright install chromium\n` +
-            `Original error: ${error?.message ?? String(error)}`
-        )
-    }
-}
+import playwright from 'playwright-core'
+import chromium from '@sparticuz/chromium'
 
 interface PdfOptions {
     url: string
@@ -25,9 +11,8 @@ export async function generatePdfFromUrl({ url, jobId, organizationId }: PdfOpti
     const start = Date.now()
     console.log(`[PDF] START generating for Job:${jobId.substring(0, 8)} Org:${organizationId}`)
 
-    // Ensure Playwright is available
-    const playwrightModule = await getPlaywright()
-    const { chromium } = playwrightModule
+    // Configure Chromium for serverless (Vercel/Lambda)
+    chromium.setGraphicsMode(false) // Important for serverless environments
 
     let attempt = 1
     const maxAttempts = 2
@@ -38,17 +23,12 @@ export async function generatePdfFromUrl({ url, jobId, organizationId }: PdfOpti
             if (attempt > 1) console.log(`[PDF] Retry attempt ${attempt}/${maxAttempts}...`)
 
             const launchStart = Date.now()
-            browser = await chromium.launch({
-                headless: true,
-                args: [
-                    '--no-sandbox',
-                    '--disable-setuid-sandbox',
-                    '--font-render-hinting=none',
-                    // Disable GPU to save resources in serverless
-                    '--disable-gpu',
-                    // Disable shared memory to prevent crashes
-                    '--disable-dev-shm-usage',
-                ]
+            
+            // Use @sparticuz/chromium for serverless-compatible browser
+            browser = await playwright.chromium.launch({
+                args: chromium.args,
+                executablePath: await chromium.executablePath(),
+                headless: chromium.headless,
             })
             console.log(`[PDF] Browser launched in ${Date.now() - launchStart}ms`)
 
