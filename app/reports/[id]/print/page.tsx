@@ -7,7 +7,7 @@ import { colors } from '@/lib/design-system/tokens'
 
 interface PrintPageProps {
   params: Promise<{ id: string }>
-  searchParams: Promise<{ token?: string }>
+  searchParams: Promise<{ token?: string; report_run_id?: string }>
 }
 
 /**
