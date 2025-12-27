@@ -36,15 +36,36 @@ export async function generatePdfFromUrl({ url, jobId, organizationId }: PdfOpti
             await page.setViewportSize({ width: 794, height: 1123 }) // approx A4 @ 96dpi
 
             const gotoStart = Date.now()
-            await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 })
-            console.log(`[PDF] Page navigation took ${Date.now() - gotoStart}ms`)
+            
+            // Navigate to page with longer timeout for serverless
+            const response = await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 })
+            console.log(`[PDF] Page navigation took ${Date.now() - gotoStart}ms, status: ${response?.status()}`)
 
-            // Wait for stable state
-            await Promise.all([
-                page.waitForSelector('.cover-page', { timeout: 10000 }),
-                page.evaluate(() => document.fonts.ready),
-            ])
-            console.log(`[PDF] Page stable (selectors + fonts) after ${Date.now() - gotoStart}ms`)
+            // Check if page loaded successfully
+            if (response && response.status() >= 400) {
+                throw new Error(`Page returned status ${response.status()}: ${url}`)
+            }
+
+            // Wait for stable state with longer timeout and more lenient selector
+            try {
+                await Promise.all([
+                    page.waitForSelector('.cover-page, .page, body', { timeout: 15000 }).catch(() => {
+                        // If cover-page not found, try other selectors or proceed
+                        console.warn('[PDF] .cover-page not found, trying fallback selectors')
+                        return page.waitForSelector('body', { timeout: 5000 })
+                    }),
+                    page.evaluate(() => document.fonts.ready).catch(() => {
+                        console.warn('[PDF] Font loading check failed, proceeding anyway')
+                    }),
+                ])
+                console.log(`[PDF] Page stable (selectors + fonts) after ${Date.now() - gotoStart}ms`)
+            } catch (waitError: any) {
+                // Log page content for debugging
+                const pageContent = await page.content().catch(() => 'Could not get page content')
+                console.error('[PDF] Page wait failed:', waitError.message)
+                console.error('[PDF] Page HTML snippet:', pageContent.substring(0, 500))
+                throw new Error(`Page did not load correctly: ${waitError.message}`)
+            }
 
             const pdfStart = Date.now()
             const pdfBuffer = await page.pdf({
