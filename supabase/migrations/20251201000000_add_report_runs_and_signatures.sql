@@ -185,8 +185,10 @@ WITH CHECK (
   AND revoked_at IS NULL -- Cannot create revoked signatures
 );
 
--- Signatures are immutable (no UPDATE allowed)
--- If revocation is needed, it's done via UPDATE, but this should be rare
+-- Signatures are immutable (no UPDATE allowed except revocation)
+-- We use a trigger to enforce immutability of signature fields
+-- RLS policy just checks admin access
+
 CREATE POLICY "Admins can revoke signatures"
 ON report_signatures
 FOR UPDATE
@@ -201,16 +203,39 @@ USING (
     AND om.organization_id = report_signatures.organization_id
     AND om.role IN ('owner', 'admin')
   )
-)
-WITH CHECK (
-  -- Only allow setting revoked_at, revoked_by, revoked_reason
-  (OLD.signature_svg = NEW.signature_svg)
-  AND (OLD.signature_hash = NEW.signature_hash)
-  AND (OLD.signer_name = NEW.signer_name)
-  AND (OLD.signer_title = NEW.signer_title)
-  AND (OLD.signature_role = NEW.signature_role)
-  AND (OLD.signed_at = NEW.signed_at)
 );
+
+-- Trigger to enforce immutability of signature fields (except revocation)
+CREATE OR REPLACE FUNCTION enforce_signature_immutability()
+RETURNS TRIGGER AS $$
+BEGIN
+  -- Only allow changes to revocation fields
+  IF (
+    OLD.signature_svg IS DISTINCT FROM NEW.signature_svg
+    OR OLD.signature_hash IS DISTINCT FROM NEW.signature_hash
+    OR OLD.signer_name IS DISTINCT FROM NEW.signer_name
+    OR OLD.signer_title IS DISTINCT FROM NEW.signer_title
+    OR OLD.signature_role IS DISTINCT FROM NEW.signature_role
+    OR OLD.signed_at IS DISTINCT FROM NEW.signed_at
+    OR OLD.report_run_id IS DISTINCT FROM NEW.report_run_id
+    OR OLD.organization_id IS DISTINCT FROM NEW.organization_id
+    OR OLD.signer_user_id IS DISTINCT FROM NEW.signer_user_id
+    OR OLD.ip_address IS DISTINCT FROM NEW.ip_address
+    OR OLD.user_agent IS DISTINCT FROM NEW.user_agent
+  ) THEN
+    RAISE EXCEPTION 'Signature fields are immutable. Only revocation fields (revoked_at, revoked_by, revoked_reason) can be updated.';
+  END IF;
+  
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Apply trigger
+DROP TRIGGER IF EXISTS signature_immutability_trigger ON report_signatures;
+CREATE TRIGGER signature_immutability_trigger
+BEFORE UPDATE ON report_signatures
+FOR EACH ROW
+EXECUTE FUNCTION enforce_signature_immutability();
 
 -- Comments for documentation
 COMMENT ON TABLE report_runs IS 'Frozen report versions with data hash for audit integrity';
