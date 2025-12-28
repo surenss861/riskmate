@@ -577,7 +577,7 @@ export default async function PrintReportPage({ params, searchParams }: PrintPag
 const printStyles = (colors: typeof import('@/lib/design-system/tokens').colors) => `
   @page {
     size: A4;
-    margin: 48pt 48pt 60pt 48pt;
+    margin: 16mm;
   }
 
   * {
@@ -631,11 +631,13 @@ const printStyles = (colors: typeof import('@/lib/design-system/tokens').colors)
       page-break-after: always;
       break-after: page;
       /* Removed min-height: 100vh - causes issues in print */
+      min-height: auto !important;
+      height: auto !important;
       display: flex;
       flex-direction: column;
       justify-content: flex-start;
-      margin: -48pt; /* Break out of page margins */
-      padding: 60pt 48pt;
+      margin: -16mm; /* Break out of page margins (match @page margin) */
+      padding: 40pt 16mm;
       background: #121212; /* Hardcoded dark for print consistency */
       color: ${colors.white};
       -webkit-print-color-adjust: exact;
@@ -731,7 +733,9 @@ const printStyles = (colors: typeof import('@/lib/design-system/tokens').colors)
   /* For print, ensure KPI pills don't wrap awkwardly */
   @media print {
     .cover-kpis {
-      grid-template-columns: repeat(2, 1fr);
+      display: grid !important;
+      grid-template-columns: 1fr 1fr !important; /* 2-col always */
+      gap: 10pt !important;
     }
   }
 
@@ -746,6 +750,12 @@ const printStyles = (colors: typeof import('@/lib/design-system/tokens').colors)
     backdrop-filter: blur(10px);
     break-inside: avoid;
     page-break-inside: avoid;
+  }
+
+  .kpi-pill .kpi-label {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
 
   .kpi-pill-risk {
