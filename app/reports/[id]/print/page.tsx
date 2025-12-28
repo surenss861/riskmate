@@ -242,12 +242,7 @@ export default async function PrintReportPage({ params, searchParams }: PrintPag
           <style dangerouslySetInnerHTML={{ __html: printStyles(colors) }} />
         </head>
         <body className="print-body">
-        <div className="report-root">
-          {/* Fixed watermark - behind all content, never collides */}
-          {isDraft && (
-            <div className="watermark">DRAFT</div>
-          )}
-
+        <div className="report-root" data-draft={isDraft ? 'true' : undefined}>
           <div className="report-content">
             {/* Cover Page - Dark branded deck */}
             <div className="cover-page">
@@ -665,13 +660,14 @@ const printStyles = (colors: typeof import('@/lib/design-system/tokens').colors)
     /* Cover page - no watermark, branded deck mode - force block layout */
     .cover-page {
       position: relative !important;
-      z-index: 2 !important; /* Cover sits above watermark if it spans */
+      z-index: 1 !important; /* Same z-index as report-content */
       page-break-after: always;
       break-after: page;
-      min-height: auto !important;
+      min-height: 0 !important;
       height: auto !important;
       display: block !important; /* Force block, not flex */
       justify-content: unset !important;
+      align-items: unset !important;
       margin: 0 !important;
       padding: 40pt 16mm !important;
       background: #121212 !important; /* Hardcoded dark for print consistency */
@@ -681,8 +677,11 @@ const printStyles = (colors: typeof import('@/lib/design-system/tokens').colors)
       break-inside: avoid;
     }
 
-    /* Kill flex spacing on cover */
-    .cover-page.flex {
+    /* Kill flex spacing on cover and all ancestors */
+    .cover-page.flex,
+    .cover-page[class*="flex"],
+    .report-content[class*="flex"],
+    .report-root[class*="flex"] {
       display: block !important;
     }
 
@@ -777,12 +776,24 @@ const printStyles = (colors: typeof import('@/lib/design-system/tokens').colors)
       display: grid !important;
       grid-template-columns: repeat(2, minmax(0, 1fr)) !important; /* 2-col always, flexible */
       gap: 10mm !important;
+      position: relative !important; /* Reset any absolute positioning */
     }
 
     .kpi-pill,
     .kpi-card {
+      position: relative !important; /* Reset any absolute positioning */
+      min-width: 0 !important; /* Allow grid items to shrink below content size */
       break-inside: avoid !important;
       page-break-inside: avoid !important;
+      overflow-wrap: anywhere !important;
+      word-wrap: break-word !important;
+      white-space: normal !important;
+    }
+
+    /* Ensure KPI children can wrap */
+    .kpi-pill *,
+    .kpi-card * {
+      white-space: normal !important;
       overflow-wrap: anywhere !important;
       word-wrap: break-word !important;
     }
