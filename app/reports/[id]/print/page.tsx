@@ -619,52 +619,67 @@ const printStyles = (colors: typeof import('@/lib/design-system/tokens').colors)
       padding: 0;
     }
 
+    /* Report root and content - ensure they're above watermark */
+    .report-root,
+    .report-content {
+      position: relative !important;
+      z-index: 2 !important;
+    }
+
     /* Fixed watermark - behind everything, never collides */
-    .watermark {
-      position: fixed;
-      inset: 0;
-      display: grid;
-      place-items: center;
-      transform: rotate(-35deg);
-      font-size: 120px;
-      font-weight: 700;
-      letter-spacing: 0.08em;
-      opacity: 0.03;
-      z-index: 0;
-      pointer-events: none;
+    .watermark,
+    .draft-watermark {
+      position: fixed !important;
+      inset: 0 !important;
+      display: grid !important;
+      place-items: center !important;
+      z-index: 1 !important;
+      opacity: 0.08 !important;
+      pointer-events: none !important;
       color: ${colors.black};
       user-select: none;
     }
 
+    .watermark > *,
+    .draft-watermark > * {
+      transform: rotate(-25deg) !important;
+      font-size: 120px !important;
+      font-weight: 700 !important;
+      letter-spacing: 0.08em !important;
+    }
+
     /* All content pages have z-index above watermark */
     .page {
-      position: relative;
-      z-index: 1;
+      position: relative !important;
+      z-index: 2 !important;
       page-break-before: always;
       break-inside: avoid;
-      background: rgba(255, 255, 255, 0.95); /* Partial opacity for watermark pass-through if needed, but white usually best */
+      background: ${colors.white} !important;
       padding: 40pt 0; /* consistent padding */
     }
 
-    /* Cover page - no watermark, branded deck mode */
+    /* Cover page - no watermark, branded deck mode - force block layout */
     .cover-page {
-      position: relative;
-      z-index: 2; /* Cover sits above watermark if it spans */
+      position: relative !important;
+      z-index: 2 !important; /* Cover sits above watermark if it spans */
       page-break-after: always;
       break-after: page;
-      /* Removed min-height: 100vh - causes issues in print */
       min-height: auto !important;
       height: auto !important;
-      display: flex;
-      flex-direction: column;
-      justify-content: flex-start;
-      margin: -16mm; /* Break out of page margins (match @page margin) */
-      padding: 40pt 16mm;
-      background: #121212; /* Hardcoded dark for print consistency */
+      display: block !important; /* Force block, not flex */
+      justify-content: unset !important;
+      margin: 0 !important;
+      padding: 40pt 16mm !important;
+      background: #121212 !important; /* Hardcoded dark for print consistency */
       color: ${colors.white};
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
       break-inside: avoid;
+    }
+
+    /* Kill flex spacing on cover */
+    .cover-page.flex {
+      display: block !important;
     }
 
     .section-header {
@@ -673,15 +688,15 @@ const printStyles = (colors: typeof import('@/lib/design-system/tokens').colors)
       margin-top: 0;
     }
 
-    table {
-      page-break-inside: auto;
-      break-inside: auto;
-    }
-
-    tr {
-      page-break-inside: avoid;
-      break-inside: avoid;
-      page-break-after: auto;
+    /* Prevent table row splits - keep rows together */
+    table,
+    thead,
+    tbody,
+    tr,
+    td,
+    th {
+      break-inside: avoid !important;
+      page-break-inside: avoid !important;
     }
 
     thead {
@@ -757,7 +772,15 @@ const printStyles = (colors: typeof import('@/lib/design-system/tokens').colors)
     .cover-kpis {
       display: grid !important;
       grid-template-columns: repeat(2, minmax(0, 1fr)) !important; /* 2-col always, flexible */
-      gap: 10pt !important;
+      gap: 10mm !important;
+    }
+
+    .kpi-pill,
+    .kpi-card {
+      break-inside: avoid !important;
+      page-break-inside: avoid !important;
+      overflow-wrap: anywhere !important;
+      word-wrap: break-word !important;
     }
   }
 
