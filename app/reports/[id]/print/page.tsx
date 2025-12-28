@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { createSupabaseServiceClient } from '@/lib/supabase/client'
 import { buildJobReport } from '@/lib/utils/jobReport'
 import { formatDate, formatTime, getRiskColor, getSeverityColor } from '@/lib/utils/reportUtils'
 import type { JobReportPayload } from '@/lib/utils/jobReport'
@@ -113,7 +114,13 @@ export default async function PrintReportPage({ params, searchParams }: PrintPag
       )
     }
 
-    const supabase = await createSupabaseServerClient()
+    // Use service role client for serverless PDF generation (bypasses RLS)
+    // Use regular client for browser access (respects user's RLS)
+    const supabase = rawToken 
+      ? createSupabaseServiceClient() 
+      : await createSupabaseServerClient()
+    
+    console.log('[PRINT] Using supabase client:', rawToken ? 'service-role (token auth)' : 'server-client (cookie auth)')
 
     // If report_run_id is provided, use frozen data from that run
     // Otherwise, use current live data (for draft generation)
@@ -154,8 +161,9 @@ export default async function PrintReportPage({ params, searchParams }: PrintPag
     // in report_runs and use that instead, but for now we use live data
     // and rely on hash verification via the verify endpoint
     try {
-      console.log('[PRINT] Building report data...', { organization_id, jobId })
-      reportData = await buildJobReport(organization_id, jobId)
+      console.log('[PRINT] Building report data...', { organization_id, jobId, usingServiceRole: !!rawToken })
+      // Pass the supabase client to buildJobReport so it uses service role for token-based access
+      reportData = await buildJobReport(organization_id, jobId, supabase)
       console.log('[PRINT] Report data built successfully')
     } catch (error: any) {
       console.error('[PRINT] buildJobReport threw', error?.message || error)

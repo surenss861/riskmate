@@ -1,4 +1,5 @@
 import { createSupabaseServerClient } from '@/lib/supabase/server'
+import type { SupabaseClient } from '@supabase/supabase-js'
 
 export interface OrganizationBranding {
   id: string
@@ -20,9 +21,12 @@ export interface JobReportPayload {
 
 export async function buildJobReport(
   organizationId: string,
-  jobId: string
+  jobId: string,
+  supabaseClient?: SupabaseClient
 ): Promise<JobReportPayload> {
-  const supabase = await createSupabaseServerClient()
+  // Use provided client (e.g., service role for serverless PDF generation) 
+  // or create a server client (respects RLS for browser access)
+  const supabase = supabaseClient || await createSupabaseServerClient()
 
   const { data: job, error: jobError } = await supabase
     .from('jobs')
