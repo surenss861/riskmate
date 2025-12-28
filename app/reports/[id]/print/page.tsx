@@ -750,9 +750,21 @@ const printStyles = (colors: typeof import('@/lib/design-system/tokens').colors)
     backdrop-filter: blur(10px);
     break-inside: avoid;
     page-break-inside: avoid;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
   }
 
+  .kpi-pill .label,
   .kpi-pill .kpi-label {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    line-height: 1.3;
+  }
+
+  .kpi-pill .value,
+  .kpi-pill .kpi-value {
     white-space: normal;
     overflow-wrap: anywhere;
     word-break: break-word;
