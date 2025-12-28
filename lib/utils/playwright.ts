@@ -71,6 +71,7 @@ export async function generatePdfFromUrl({ url, jobId, organizationId }: PdfOpti
                                     bodyText.includes('403 -') ||
                                     bodyText.includes('401 -') ||
                                     bodyText.includes('404 -') ||
+                                    bodyText.includes('Job not found') ||
                                     h1Text.includes('Error') ||
                                     h1Text.includes('Unauthorized') ||
                                     h1Text.includes('Not Found')
