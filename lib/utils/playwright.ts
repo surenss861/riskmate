@@ -84,8 +84,10 @@ export async function generatePdfFromUrl({ url, jobId, organizationId }: PdfOpti
                 }
                 
                 // Wait for fonts to be ready (critical for layout stability)
-                await page.evaluate(() => {
-                    return document.fonts ? document.fonts.ready : Promise.resolve()
+                await page.evaluate(async () => {
+                    if (document.fonts) {
+                        await document.fonts.ready
+                    }
                 }).catch(() => {
                     console.warn('[PDF] Font loading check failed, proceeding anyway')
                 })
