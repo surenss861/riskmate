@@ -93,7 +93,7 @@ export async function POST(
         .select('role')
         .eq('user_id', user.id)
         .eq('organization_id', reportRun.organization_id)
-        .single()
+        .maybeSingle()
 
       if (!member || !['owner', 'admin'].includes(member.role)) {
         return NextResponse.json(
@@ -111,7 +111,7 @@ export async function POST(
         .select('role')
         .eq('user_id', user.id)
         .eq('organization_id', reportRun.organization_id)
-        .single()
+        .maybeSingle()
 
       if (!member || !['owner', 'admin'].includes(member.role)) {
         return NextResponse.json(
@@ -122,13 +122,14 @@ export async function POST(
     }
 
     // Check if signature for this role already exists (non-revoked)
+    // Use maybeSingle() since 0 rows is expected when no signature exists
     const { data: existing } = await supabase
       .from('report_signatures')
       .select('id')
       .eq('report_run_id', reportRunId)
       .eq('signature_role', signature_role)
       .is('revoked_at', null)
-      .single()
+      .maybeSingle()
 
     if (existing) {
       return NextResponse.json(

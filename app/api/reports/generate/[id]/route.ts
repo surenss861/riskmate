@@ -29,7 +29,7 @@ export async function POST(
       .from('users')
       .select('organization_id')
       .eq('id', user.id)
-      .single()
+      .maybeSingle()
 
     if (userError || !userData?.organization_id) {
       return NextResponse.json(
