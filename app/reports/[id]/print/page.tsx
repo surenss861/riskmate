@@ -584,6 +584,12 @@ const printStyles = (colors: typeof import('@/lib/design-system/tokens').colors)
   }
 
   @media print {
+    /* Nuclear print reset - kill all transforms, filters, and positioning that break stacking */
+    * {
+      transform: none !important;
+      filter: none !important;
+    }
+
     /* Print reset - kill all screen-height rules from Tailwind/app CSS */
     *,
     body,
@@ -618,33 +624,40 @@ const printStyles = (colors: typeof import('@/lib/design-system/tokens').colors)
       padding: 0;
     }
 
-    /* Report root and content - ensure they're above watermark */
-    .report-root,
-    .report-content {
+    /* Report root - watermark pseudo-element lives here for proper stacking */
+    .report-root {
       position: relative !important;
-      z-index: 2 !important;
     }
 
-    /* Fixed watermark - behind everything, never collides */
-    .watermark,
-    .draft-watermark {
+    /* Watermark as pseudo-element on root - can't be broken by stacking contexts */
+    .report-root[data-draft="true"]::before {
+      content: 'DRAFT';
       position: fixed !important;
       inset: 0 !important;
       display: grid !important;
       place-items: center !important;
-      z-index: 1 !important;
+      z-index: 0 !important;
       opacity: 0.08 !important;
       pointer-events: none !important;
       color: ${colors.black};
       user-select: none;
-    }
-
-    .watermark > *,
-    .draft-watermark > * {
-      transform: rotate(-25deg) !important;
       font-size: 120px !important;
       font-weight: 700 !important;
       letter-spacing: 0.08em !important;
+      /* Use CSS transform only for watermark rotation (allowed exception) */
+      transform: rotate(-25deg) !important;
+    }
+
+    /* Report content - above watermark */
+    .report-content {
+      position: relative !important;
+      z-index: 1 !important;
+    }
+
+    /* Kill old watermark class (shouldn't be used anymore, but just in case) */
+    .watermark,
+    .draft-watermark {
+      display: none !important;
     }
 
     /* All content pages have z-index above watermark */
