@@ -58,30 +58,49 @@ export async function generatePdfFromUrl({ url, jobId, organizationId }: PdfOpti
 
             // Wait for stable state and verify we're on the actual report page (not an error page)
             try {
-                // Wait for the PDF ready marker - this confirms data is loaded and page is rendered
-                // Use 'attached' state since the marker is hidden with CSS
-                await page.waitForSelector('#pdf-ready', { state: 'attached', timeout: 20000 })
-                console.log(`[PDF] PDF ready marker found after ${Date.now() - gotoStart}ms`)
-                
-                // Double-check we're not on an error page by checking for error indicators
-                const hasError = await page.evaluate(() => {
+                // First, quickly check if we're on an error page (don't wait for marker if we're erroring)
+                const quickErrorCheck = await page.evaluate(() => {
+                    if (!document.body) return { hasError: false, errorText: null }
                     const bodyText = document.body.textContent || ''
-                    return bodyText.includes('Internal Server Error') || 
-                           bodyText.includes('500 - Internal Server Error') || 
-                           bodyText.includes('Cannot coerce') ||
-                           bodyText.includes('403 -') ||
-                           bodyText.includes('401 -') ||
-                           bodyText.includes('404 -')
-                })
+                    const hasError = bodyText.includes('Internal Server Error') || 
+                                    bodyText.includes('500 - Internal Server Error') || 
+                                    bodyText.includes('Cannot coerce') ||
+                                    bodyText.includes('403 -') ||
+                                    bodyText.includes('401 -') ||
+                                    bodyText.includes('404 -')
+                    return { hasError, errorText: hasError ? bodyText.substring(0, 500) : null }
+                }).catch(() => ({ hasError: false, errorText: null }))
                 
-                if (hasError) {
+                if (quickErrorCheck.hasError) {
                     const pageContent = await page.content().catch(() => 'Could not get page content')
                     const pageTitle = await page.title().catch(() => 'Could not get title')
-                    console.error('[PDF] Page contains error content')
+                    console.error('[PDF] Page contains error content (early check)')
                     console.error('[PDF] Page title:', pageTitle)
                     console.error('[PDF] Page URL:', finalUrl)
-                    console.error('[PDF] Page HTML snippet:', pageContent.substring(0, 2000))
+                    console.error('[PDF] Error text:', quickErrorCheck.errorText)
+                    console.error('[PDF] Page HTML snippet:', pageContent.substring(0, 3000))
                     throw new Error('Page contains error content instead of report')
+                }
+                
+                // Wait for either the PDF ready marker OR the cover page (fallback)
+                // Use Promise.race to wait for whichever appears first
+                try {
+                    await Promise.race([
+                        page.waitForSelector('#pdf-ready', { state: 'attached', timeout: 20000 }),
+                        page.waitForSelector('.cover-page', { timeout: 20000 }),
+                    ])
+                    console.log(`[PDF] Page ready marker or cover-page found after ${Date.now() - gotoStart}ms`)
+                } catch (selectorError: any) {
+                    // If both fail, check what's actually on the page
+                    const hasPdfReady = await page.evaluate(() => !!document.getElementById('pdf-ready')).catch(() => false)
+                    const hasCoverPage = await page.evaluate(() => !!document.querySelector('.cover-page')).catch(() => false)
+                    const bodyText = await page.evaluate(() => document.body?.textContent?.substring(0, 500) || 'No body').catch(() => 'Error getting body')
+                    
+                    console.error('[PDF] Neither #pdf-ready nor .cover-page found')
+                    console.error('[PDF] #pdf-ready exists:', hasPdfReady)
+                    console.error('[PDF] .cover-page exists:', hasCoverPage)
+                    console.error('[PDF] Body text:', bodyText)
+                    throw selectorError
                 }
                 
                 // Wait for fonts to be ready (critical for layout stability)
