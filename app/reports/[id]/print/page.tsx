@@ -525,7 +525,7 @@ export default async function PrintReportPage({ params, searchParams }: PrintPag
         </div>
 
         {/* PDF Ready Marker - Used by Playwright to detect when page is fully loaded */}
-        <div id="pdf-ready" data-ready="true" style={{ display: 'none' }} />
+        <div id="pdf-ready" data-ready="true" aria-hidden="true" style={{ position: 'absolute', left: '-9999px', width: '1px', height: '1px', overflow: 'hidden' }} />
         </body>
       </html>
     )

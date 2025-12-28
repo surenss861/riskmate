@@ -59,7 +59,8 @@ export async function generatePdfFromUrl({ url, jobId, organizationId }: PdfOpti
             // Wait for stable state and verify we're on the actual report page (not an error page)
             try {
                 // Wait for the PDF ready marker - this confirms data is loaded and page is rendered
-                await page.waitForSelector('#pdf-ready', { timeout: 20000 })
+                // Use 'attached' state since the marker is hidden with CSS
+                await page.waitForSelector('#pdf-ready', { state: 'attached', timeout: 20000 })
                 console.log(`[PDF] PDF ready marker found after ${Date.now() - gotoStart}ms`)
                 
                 // Double-check we're not on an error page by checking for error indicators
@@ -100,12 +101,20 @@ export async function generatePdfFromUrl({ url, jobId, organizationId }: PdfOpti
                 // Comprehensive debugging on failure
                 const pageTitle = await page.title().catch(() => 'Could not get title')
                 const pageContent = await page.content().catch(() => 'Could not get page content')
+                const hasPdfReady = await page.evaluate(() => {
+                    return !!document.getElementById('pdf-ready')
+                }).catch(() => false)
+                const bodyText = await page.evaluate(() => {
+                    return document.body ? document.body.textContent?.substring(0, 500) : 'No body'
+                }).catch(() => 'Could not get body text')
                 const screenshot = await page.screenshot({ fullPage: false }).catch(() => null)
                 
                 console.error('[PDF] Page wait failed:', waitError.message)
                 console.error('[PDF] Page title:', pageTitle)
                 console.error('[PDF] Page URL:', finalUrl)
-                console.error('[PDF] Page HTML snippet (first 2000 chars):', pageContent.substring(0, 2000))
+                console.error('[PDF] #pdf-ready exists in DOM:', hasPdfReady)
+                console.error('[PDF] Body text snippet:', bodyText)
+                console.error('[PDF] Page HTML snippet (first 3000 chars):', pageContent.substring(0, 3000))
                 if (screenshot) {
                     console.error('[PDF] Screenshot captured (base64 length):', screenshot.length)
                 }
