@@ -88,7 +88,7 @@ export async function POST(
       .select('role')
       .eq('user_id', user.id)
       .eq('organization_id', reportRun.organization_id)
-      .single()
+      .maybeSingle()
 
     const isCreator = reportRun.generated_by === user.id
     const isAdmin = member && ['owner', 'admin'].includes(member.role)
