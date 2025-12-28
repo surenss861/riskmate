@@ -523,6 +523,9 @@ export default async function PrintReportPage({ params, searchParams }: PrintPag
             </div>
           )}
         </div>
+
+        {/* PDF Ready Marker - Used by Playwright to detect when page is fully loaded */}
+        <div id="pdf-ready" data-ready="true" style={{ display: 'none' }} />
         </body>
       </html>
     )
@@ -596,7 +599,8 @@ const printStyles = (colors: typeof import('@/lib/design-system/tokens').colors)
       position: relative;
       z-index: 2; /* Cover sits above watermark if it spans */
       page-break-after: always;
-      min-height: 100vh;
+      break-after: page;
+      /* Removed min-height: 100vh - causes issues in print */
       display: flex;
       flex-direction: column;
       justify-content: flex-start;
@@ -606,6 +610,7 @@ const printStyles = (colors: typeof import('@/lib/design-system/tokens').colors)
       color: ${colors.white};
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
+      break-inside: avoid;
     }
 
     .section-header {
@@ -616,15 +621,26 @@ const printStyles = (colors: typeof import('@/lib/design-system/tokens').colors)
 
     table {
       page-break-inside: auto;
+      break-inside: auto;
     }
 
     tr {
       page-break-inside: avoid;
+      break-inside: avoid;
       page-break-after: auto;
     }
 
     thead {
       display: table-header-group;
+    }
+
+    /* Ensure cards and sections don't break awkwardly */
+    .column-card,
+    .risk-card,
+    .compliance-callout,
+    .audit-entry {
+      break-inside: avoid;
+      page-break-inside: avoid;
     }
   }
 
@@ -675,15 +691,22 @@ const printStyles = (colors: typeof import('@/lib/design-system/tokens').colors)
   }
 
   .cover-kpis {
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
     gap: 12pt;
     margin-top: auto;
-    flex-wrap: wrap;
+    break-inside: avoid;
+  }
+
+  /* For print, ensure KPI pills don't wrap awkwardly */
+  @media print {
+    .cover-kpis {
+      grid-template-columns: repeat(2, 1fr);
+    }
   }
 
   /* Bulletproof KPI pills - explicit colors, fixed dimensions */
   .kpi-pill {
-    flex: 1;
     min-width: 100pt;
     border: 1.5pt solid ${colors.gray700};
     border-radius: 8pt;
@@ -691,6 +714,8 @@ const printStyles = (colors: typeof import('@/lib/design-system/tokens').colors)
     text-align: center;
     background-color: rgba(255, 255, 255, 0.08);
     backdrop-filter: blur(10px);
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
 
   .kpi-pill-risk {
@@ -749,6 +774,8 @@ const printStyles = (colors: typeof import('@/lib/design-system/tokens').colors)
     border-radius: 6pt;
     padding: 16pt;
     background-color: ${colors.white};
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
 
   .risk-card {
