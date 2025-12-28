@@ -585,6 +585,28 @@ const printStyles = (colors: typeof import('@/lib/design-system/tokens').colors)
   }
 
   @media print {
+    /* Print reset - kill all screen-height rules from Tailwind/app CSS */
+    *,
+    body,
+    html,
+    #__next,
+    main {
+      min-height: auto !important;
+      height: auto !important;
+      max-height: none !important;
+    }
+
+    /* Reset any containers that might have screen-height classes */
+    .cover-page,
+    .page,
+    section,
+    div[class*="min-h"],
+    div[class*="h-screen"],
+    div[class*="h-full"] {
+      min-height: auto !important;
+      height: auto !important;
+    }
+
     body {
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
@@ -734,7 +756,7 @@ const printStyles = (colors: typeof import('@/lib/design-system/tokens').colors)
   @media print {
     .cover-kpis {
       display: grid !important;
-      grid-template-columns: 1fr 1fr !important; /* 2-col always */
+      grid-template-columns: repeat(2, minmax(0, 1fr)) !important; /* 2-col always, flexible */
       gap: 10pt !important;
     }
   }
