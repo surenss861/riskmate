@@ -242,13 +242,15 @@ export default async function PrintReportPage({ params, searchParams }: PrintPag
           <style dangerouslySetInnerHTML={{ __html: printStyles(colors) }} />
         </head>
         <body className="print-body">
-        {/* Fixed watermark - behind all content, never collides */}
-        {isDraft && (
-          <div className="watermark">DRAFT</div>
-        )}
+        <div className="report-root">
+          {/* Fixed watermark - behind all content, never collides */}
+          {isDraft && (
+            <div className="watermark">DRAFT</div>
+          )}
 
-        {/* Cover Page - Dark branded deck */}
-        <div className="cover-page">
+          <div className="report-content">
+            {/* Cover Page - Dark branded deck */}
+            <div className="cover-page">
           <div className="cover-header">
             {logoUrl && (
               <img src={logoUrl} alt="Logo" className="cover-logo" />
