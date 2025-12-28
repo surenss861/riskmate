@@ -33,11 +33,13 @@ export async function buildJobReport(
 
   if (jobError) {
     console.error('[buildJobReport] Job query error:', jobError)
-    throw jobError
+    console.error('[buildJobReport] Job query details:', { jobId, organizationId, errorCode: jobError.code, errorMessage: jobError.message })
+    throw new Error(`Failed to fetch job: ${jobError.message} (code: ${jobError.code})`)
   }
   
   if (!job) {
-    throw new Error('Job not found')
+    console.error('[buildJobReport] Job not found:', { jobId, organizationId })
+    throw new Error(`Job not found: ${jobId} (organization: ${organizationId})`)
   }
 
   const { data: riskScore } = await supabase

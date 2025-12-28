@@ -530,15 +530,37 @@ export default async function PrintReportPage({ params, searchParams }: PrintPag
       </html>
     )
   } catch (error: any) {
-    console.error('[PRINT] Unexpected error:', error?.message || error, error?.stack)
+    const errorMessage = error?.message || String(error)
+    const errorStack = error?.stack
+    console.error('[PRINT] Unexpected error:', errorMessage)
+    console.error('[PRINT] Error stack:', errorStack)
+    console.error('[PRINT] Full error object:', JSON.stringify(error, Object.getOwnPropertyNames(error)))
+    
     return (
-      <div style={{ padding: '20px', fontFamily: 'system-ui' }}>
-        <h1>500 - Internal Server Error</h1>
-        <p>An unexpected error occurred while generating the report.</p>
-        <pre style={{ fontSize: '12px', color: '#666', marginTop: '20px' }}>
-          {error?.message || String(error)}
-        </pre>
-      </div>
+      <html lang="en">
+        <head>
+          <meta charSet="utf-8" />
+          <title>Error - Report Generation Failed</title>
+        </head>
+        <body style={{ padding: '20px', fontFamily: 'system-ui', backgroundColor: '#fff' }}>
+          <h1 style={{ color: '#d32f2f' }}>500 - Internal Server Error</h1>
+          <p>An unexpected error occurred while generating the report.</p>
+          <div style={{ marginTop: '20px', padding: '15px', backgroundColor: '#f5f5f5', borderRadius: '4px' }}>
+            <h2 style={{ fontSize: '14px', marginTop: 0 }}>Error Details:</h2>
+            <pre style={{ fontSize: '12px', color: '#666', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+              {errorMessage}
+            </pre>
+            {errorStack && (
+              <details style={{ marginTop: '10px' }}>
+                <summary style={{ cursor: 'pointer', fontSize: '12px', color: '#666' }}>Stack Trace</summary>
+                <pre style={{ fontSize: '11px', color: '#999', whiteSpace: 'pre-wrap', wordBreak: 'break-word', marginTop: '5px' }}>
+                  {errorStack}
+                </pre>
+              </details>
+            )}
+          </div>
+        </body>
+      </html>
     )
   }
 }
