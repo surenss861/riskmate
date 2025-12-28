@@ -60,16 +60,28 @@ export async function generatePdfFromUrl({ url, jobId, organizationId }: PdfOpti
             try {
                 // First, quickly check if we're on an error page (don't wait for marker if we're erroring)
                 const quickErrorCheck = await page.evaluate(() => {
-                    if (!document.body) return { hasError: false, errorText: null }
+                    if (!document.body) return { hasError: false, errorText: null, errorDetails: null }
                     const bodyText = document.body.textContent || ''
+                    const h1Text = document.querySelector('h1')?.textContent || ''
+                    const preText = document.querySelector('pre')?.textContent || ''
+                    
                     const hasError = bodyText.includes('Internal Server Error') || 
-                                    bodyText.includes('500 - Internal Server Error') || 
+                                    bodyText.includes('500 -') || 
                                     bodyText.includes('Cannot coerce') ||
                                     bodyText.includes('403 -') ||
                                     bodyText.includes('401 -') ||
-                                    bodyText.includes('404 -')
-                    return { hasError, errorText: hasError ? bodyText.substring(0, 500) : null }
-                }).catch(() => ({ hasError: false, errorText: null }))
+                                    bodyText.includes('404 -') ||
+                                    h1Text.includes('Error') ||
+                                    h1Text.includes('Unauthorized') ||
+                                    h1Text.includes('Not Found')
+                    
+                    return { 
+                        hasError, 
+                        errorText: hasError ? bodyText.substring(0, 1000) : null,
+                        errorTitle: h1Text || null,
+                        errorDetails: preText || null
+                    }
+                }).catch(() => ({ hasError: false, errorText: null, errorDetails: null, errorTitle: null }))
                 
                 if (quickErrorCheck.hasError) {
                     const pageContent = await page.content().catch(() => 'Could not get page content')
@@ -77,9 +89,14 @@ export async function generatePdfFromUrl({ url, jobId, organizationId }: PdfOpti
                     console.error('[PDF] Page contains error content (early check)')
                     console.error('[PDF] Page title:', pageTitle)
                     console.error('[PDF] Page URL:', finalUrl)
+                    console.error('[PDF] Error title:', quickErrorCheck.errorTitle)
+                    console.error('[PDF] Error details:', quickErrorCheck.errorDetails)
                     console.error('[PDF] Error text:', quickErrorCheck.errorText)
-                    console.error('[PDF] Page HTML snippet:', pageContent.substring(0, 3000))
-                    throw new Error('Page contains error content instead of report')
+                    console.error('[PDF] Page HTML snippet:', pageContent.substring(0, 5000))
+                    
+                    // Extract the actual error message for a clearer error
+                    const errorMsg = quickErrorCheck.errorDetails || quickErrorCheck.errorTitle || 'Unknown error'
+                    throw new Error(`Page contains error content: ${errorMsg}`)
                 }
                 
                 // Wait for either the PDF ready marker OR the cover page (fallback)
