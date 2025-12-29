@@ -707,8 +707,17 @@ const printStyles = (colors: typeof import('@/lib/design-system/tokens').colors)
     /* Prevent table row splits - keep rows together */
     table,
     thead,
-    tbody,
-    tr,
+    tbody {
+      break-inside: avoid !important;
+      page-break-inside: avoid !important;
+    }
+
+    /* Allow rows to break, but prevent individual cells from breaking */
+    tr {
+      break-inside: avoid !important;
+      page-break-inside: avoid !important;
+    }
+
     td,
     th {
       break-inside: avoid !important;
