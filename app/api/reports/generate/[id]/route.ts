@@ -214,6 +214,13 @@ export async function POST(
         status: reportRun.status,
       },
     })
+
+    // Set cache control headers to prevent serving stale/error PDFs
+    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
+    response.headers.set('Pragma', 'no-cache')
+    response.headers.set('Expires', '0')
+
+    return response
   } catch (error: any) {
     console.error('[reports] generate failed:', error)
     return NextResponse.json(
