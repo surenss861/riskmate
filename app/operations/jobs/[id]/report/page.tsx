@@ -320,10 +320,21 @@ export default function JobReportPage() {
           <ReportView
             data={data}
             readOnly={false}
-            onExport={handleExport}
+            onExport={() => setShowPacketSelector(true)}
             exportInProgress={exporting}
           />
         </main>
+
+        {showPacketSelector && (
+          <PacketSelector
+            onSelect={async (packetType) => {
+              setShowPacketSelector(false)
+              await handleExport(packetType)
+            }}
+            onCancel={() => setShowPacketSelector(false)}
+            isLoading={exporting}
+          />
+        )}
 
         {/* Error Modal */}
         <ErrorModal
