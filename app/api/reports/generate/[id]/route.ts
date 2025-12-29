@@ -14,7 +14,7 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  // Generate request ID for observability/tracing
+  // Generate request ID for observability/tracing (outside try block for error handler access)
   const requestId = crypto.randomUUID()
   console.log(`[reports][${requestId}] PDF generation request started`)
 
