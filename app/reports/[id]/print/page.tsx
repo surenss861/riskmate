@@ -683,7 +683,7 @@ const printStyles = (colors: typeof import('@/lib/design-system/tokens').colors)
       align-items: unset !important;
       margin: 0 !important;
       padding: 40pt 16mm !important;
-      background: #121212 !important; /* Hardcoded dark for print consistency */
+      background: ${colors.black} !important; /* RiskMate black (#111111) */
       color: ${colors.white};
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
