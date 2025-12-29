@@ -14,6 +14,10 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // Generate request ID for observability/tracing
+  const requestId = crypto.randomUUID()
+  console.log(`[reports][${requestId}] PDF generation request started`)
+
   try {
     const supabase = await createSupabaseServerClient()
     const { data: { user }, error: authError } = await supabase.auth.getUser()
@@ -87,7 +91,7 @@ export async function POST(
       // Reuse existing run (idempotency)
       reportRun = existingRun
       console.log(
-        `[reports] Reusing existing report_run ${reportRun.id} for job ${jobId} (idempotency)`
+        `[reports][${requestId}] Reusing existing report_run ${reportRun.id} for job ${jobId} (idempotency)`
       )
     } else {
       // Create new report_run (frozen snapshot)
@@ -225,7 +229,6 @@ export async function POST(
     console.log(`[reports][${requestId}] PDF generation completed successfully`)
     return response
   } catch (error: any) {
-    const requestId = crypto.randomUUID() // Generate request ID even in error case if not set
     console.error(`[reports][${requestId}] generate failed:`, error)
     return NextResponse.json(
       {
