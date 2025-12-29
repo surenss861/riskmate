@@ -7,7 +7,7 @@ import ProtectedRoute from '@/components/ProtectedRoute'
 import RiskMateLogo from '@/components/RiskMateLogo'
 import { ReportView } from '@/components/report/ReportView'
 import { ErrorModal } from '@/components/dashboard/ErrorModal'
-import { reportsApi } from '@/lib/api'
+// Removed reportsApi import - using fetch directly for packet type support
 import { useFullJob } from '@/hooks/useFullJob'
 import { typography, dividerStyles } from '@/lib/styles/design-system'
 
@@ -39,6 +39,7 @@ export default function JobReportPage() {
   const [exporting, setExporting] = useState(false)
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null)
   const [exportError, setExportError] = useState<string | null>(null)
+  const [showPacketSelector, setShowPacketSelector] = useState(false)
 
   useEffect(() => {
     return () => {
@@ -73,11 +74,11 @@ export default function JobReportPage() {
     return `${sanitizedClient}-${sanitizedJobType}-report.pdf`
   }
 
-  const handleExport = async () => {
+  const handleExport = async (packetType?: PacketType) => {
     if (!jobId) return
     setExporting(true)
     try {
-      const response = await reportsApi.generate(jobId)
+      const response = await reportsApi.generate(jobId, packetType ? { packetType } : undefined)
       console.log('PDF generation response:', response)
       const { pdf_url, pdf_base64 } = response.data ?? {}
 
