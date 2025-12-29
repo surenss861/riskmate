@@ -789,26 +789,63 @@ const printStyles = (colors: typeof import('@/lib/design-system/tokens').colors)
       display: grid !important;
       grid-template-columns: repeat(2, minmax(0, 1fr)) !important; /* 2-col always, flexible */
       gap: 10mm !important;
-      position: relative !important; /* Reset any absolute positioning */
     }
 
     .kpi-pill,
     .kpi-card {
+      display: flex !important;
+      flex-direction: column !important;
+      align-items: flex-start !important;
+      justify-content: flex-start !important;
+      gap: 2mm !important;
+      padding: 5mm 6mm !important;
       position: relative !important; /* Reset any absolute positioning */
       min-width: 0 !important; /* Allow grid items to shrink below content size */
       break-inside: avoid !important;
       page-break-inside: avoid !important;
-      overflow-wrap: anywhere !important;
-      word-wrap: break-word !important;
-      white-space: normal !important;
     }
 
-    /* Ensure KPI children can wrap */
+    /* Kill any absolute positioning inside KPI content */
     .kpi-pill *,
     .kpi-card * {
+      position: static !important;
+    }
+
+    /* Hard-lock KPI value typography for print */
+    .kpi-pill .kpi-value,
+    .kpi-pill .value,
+    .kpi-card .kpi-value,
+    .kpi-card .value {
+      font-size: 18pt !important;       /* Smaller, fixed size */
+      line-height: 1.05 !important;     /* Tight line height */
+      font-weight: 700 !important;
+      white-space: nowrap !important;   /* Prevents DRA / FT split */
+      letter-spacing: 0 !important;
+      overflow: hidden !important;
+      text-overflow: ellipsis !important;
+    }
+
+    /* Status pill gets even smaller text */
+    .kpi-pill--status .kpi-value,
+    .kpi-pill--status .value,
+    .kpi-pill .kpi-value[data-status],
+    .kpi-pill .value[data-status] {
+      font-size: 14pt !important;
+      white-space: nowrap !important;
+      letter-spacing: 0.06em !important;
+    }
+
+    /* Hard-lock KPI label typography for print */
+    .kpi-pill .kpi-label,
+    .kpi-pill .label,
+    .kpi-card .kpi-label,
+    .kpi-card .label {
+      font-size: 9pt !important;
+      line-height: 1.2 !important;
       white-space: normal !important;
       overflow-wrap: anywhere !important;
       word-wrap: break-word !important;
+      opacity: 0.85 !important;
     }
   }
 
