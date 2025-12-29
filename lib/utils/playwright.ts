@@ -132,6 +132,20 @@ export async function generatePdfFromUrl({ url, jobId, organizationId }: PdfOpti
                 
                 // Small delay to ensure layout is stable after fonts load
                 await page.waitForTimeout(500)
+
+                // Print sanity check: log computed styles for KPI value to catch layout issues
+                const kpiDebug = await page.evaluate(() => {
+                    const el = document.querySelector('.kpi-pill .kpi-value, .kpi-pill .value') as HTMLElement | null
+                    if (!el) return null
+                    const cs = window.getComputedStyle(el)
+                    return {
+                        fontSize: cs.fontSize,
+                        lineHeight: cs.lineHeight,
+                        whiteSpace: cs.whiteSpace,
+                        fontWeight: cs.fontWeight,
+                    }
+                }).catch(() => null)
+                console.log('[PDF] KPI debug (computed styles):', kpiDebug)
                 
                 console.log(`[PDF] Page stable (fonts loaded, ready marker found) after ${Date.now() - gotoStart}ms`)
             } catch (waitError: any) {
