@@ -283,7 +283,7 @@ export default async function PrintReportPage({ params, searchParams }: PrintPag
 
             <div className="kpi-pill" data-pill="kpi">
               <div className="kpi-value" data-pill-value="true">
-                {controlsCount === 0 ? '—' : `${completedControls}/${controlsCount}`}
+                {controlsCount === 0 ? '0' : `${completedControls}/${controlsCount}`}
               </div>
               <div className="kpi-label" data-pill-label="true">Controls</div>
             </div>
