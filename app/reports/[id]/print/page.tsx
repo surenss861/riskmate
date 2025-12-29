@@ -791,6 +791,9 @@ const printStyles = (colors: typeof import('@/lib/design-system/tokens').colors)
       gap: 10mm !important;
     }
 
+    /* Target all pills with data-pill attribute for unmissable targeting */
+    [data-pill="kpi"],
+    [data-pill="status"],
     .kpi-pill,
     .kpi-card {
       display: flex !important;
@@ -799,19 +802,24 @@ const printStyles = (colors: typeof import('@/lib/design-system/tokens').colors)
       justify-content: flex-start !important;
       gap: 2mm !important;
       padding: 5mm 6mm !important;
-      position: relative !important; /* Reset any absolute positioning */
+      position: relative !important;
       min-width: 0 !important; /* Allow grid items to shrink below content size */
       break-inside: avoid !important;
       page-break-inside: avoid !important;
     }
 
-    /* Kill any absolute positioning inside KPI content */
+    /* Kill any absolute positioning inside pill content */
+    [data-pill] *,
     .kpi-pill *,
     .kpi-card * {
       position: static !important;
     }
 
-    /* Hard-lock KPI value typography for print */
+    /* Hard-lock KPI value typography for print - using data-pill-value for unmissable targeting */
+    [data-pill-value="true"],
+    [data-pill="kpi"] [data-pill-value="true"],
+    [data-pill="kpi"] .kpi-value,
+    [data-pill="kpi"] .value,
     .kpi-pill .kpi-value,
     .kpi-pill .value,
     .kpi-card .kpi-value,
@@ -823,19 +831,27 @@ const printStyles = (colors: typeof import('@/lib/design-system/tokens').colors)
       letter-spacing: 0 !important;
       overflow: hidden !important;
       text-overflow: ellipsis !important;
+      min-width: 0 !important;          /* Allow shrinking */
     }
 
-    /* Status pill gets even smaller text */
+    /* Status pill gets even smaller text - using data-pill="status" for unmissable targeting */
+    [data-pill="status"] [data-pill-value="true"],
+    [data-pill="status"] .kpi-value,
+    [data-pill="status"] .value,
     .kpi-pill--status .kpi-value,
-    .kpi-pill--status .value,
-    .kpi-pill .kpi-value[data-status],
-    .kpi-pill .value[data-status] {
+    .kpi-pill--status .value {
       font-size: 14pt !important;
       white-space: nowrap !important;
       letter-spacing: 0.06em !important;
+      overflow: hidden !important;
+      text-overflow: ellipsis !important;
     }
 
-    /* Hard-lock KPI label typography for print */
+    /* Hard-lock KPI label typography for print - using data-pill-label for unmissable targeting */
+    [data-pill-label="true"],
+    [data-pill] [data-pill-label="true"],
+    [data-pill] .kpi-label,
+    [data-pill] .label,
     .kpi-pill .kpi-label,
     .kpi-pill .label,
     .kpi-card .kpi-label,
