@@ -202,7 +202,8 @@ export async function POST(
       console.warn('PDF upload failed:', uploadError)
     }
 
-    return NextResponse.json({
+    // Return response with no-cache headers to prevent stale/error PDFs
+    const response = NextResponse.json({
       data: {
         report_run_id: reportRun.id,
         pdf_url: pdfUrl,
