@@ -59,6 +59,9 @@ export async function buildJobPacket({
   // Build sections based on packet definition
   const sections: SectionData[] = []
 
+  // Get supabase client if not provided
+  const client = supabaseClient || await (await import('@/lib/supabase/server')).createSupabaseServerClient()
+
   for (const sectionType of packetDef.sections) {
     const sectionData = await buildSectionData({
       sectionType,
@@ -66,7 +69,7 @@ export async function buildJobPacket({
       packetDef,
       organizationId,
       jobId,
-      supabaseClient: supabaseClient || (await import('@/lib/supabase/server')).createSupabaseServerClient(),
+      supabaseClient: client,
     })
 
     if (sectionData) {

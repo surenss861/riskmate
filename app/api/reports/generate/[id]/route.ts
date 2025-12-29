@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { generatePdfFromUrl } from '@/lib/utils/playwright'
 import { buildJobReport } from '@/lib/utils/jobReport'
+import { buildJobPacket } from '@/lib/utils/packets/builder'
 import { computeCanonicalHash } from '@/lib/utils/canonicalJson'
 import { signPrintToken } from '@/lib/utils/printToken'
+import { isValidPacketType, type PacketType } from '@/lib/utils/packets/types'
 import crypto from 'crypto'
 
 export const runtime = 'nodejs'
@@ -61,23 +63,42 @@ export async function POST(
       )
     }
 
-    // Build report payload (same data structure used for rendering)
-    const reportPayload = await buildJobReport(organization_id, jobId)
-
-    // Compute canonical data hash for audit integrity
-    const dataHash = computeCanonicalHash(reportPayload)
-
-    // Get status from request body (default to draft)
+    // Get packet type and status from request body
     const body = await request.json().catch(() => ({}))
+    const packetType: PacketType = isValidPacketType(body.packetType)
+      ? body.packetType
+      : 'insurance' // Default to insurance for backwards compatibility
     const status = body.status || 'draft'
 
-    // Idempotency: Check for recent duplicate run (same hash + status within 30 seconds)
+    // Build packet payload (new packet-driven approach)
+    // For backwards compatibility, if no packetType, use old buildJobReport
+    let reportPayload: any
+    let dataHash: string
+
+    if (packetType && isValidPacketType(packetType)) {
+      // Use new packet builder
+      const packetData = await buildJobPacket({
+        jobId,
+        packetType,
+        organizationId: organization_id,
+      })
+      // Compute hash from packet data structure
+      dataHash = computeCanonicalHash(packetData)
+      reportPayload = packetData
+    } else {
+      // Legacy: use old buildJobReport
+      reportPayload = await buildJobReport(organization_id, jobId)
+      dataHash = computeCanonicalHash(reportPayload)
+    }
+
+    // Idempotency: Check for recent duplicate run (same hash + status + packet_type within 30 seconds)
     const thirtySecondsAgo = new Date(Date.now() - 30 * 1000).toISOString()
     const { data: existingRun } = await supabase
       .from('report_runs')
       .select('*')
       .eq('job_id', jobId)
       .eq('organization_id', organization_id)
+      .eq('packet_type', packetType)
       .eq('data_hash', dataHash)
       .eq('status', status)
       .eq('generated_by', user.id)
@@ -100,6 +121,7 @@ export async function POST(
         .insert({
           organization_id,
           job_id: jobId,
+          packet_type: packetType,
           status,
           generated_by: user.id,
           data_hash: dataHash,
@@ -127,12 +149,20 @@ export async function POST(
       organizationId: organization_id,
     })
 
-    // Prepare URL for the print page with report_run_id and token
-    // URL-encode the token since it's base64 and may contain special characters
+    // Prepare URL for the print page
+    // Use new packet print route if packetType is specified, otherwise use legacy route
     const protocol = request.headers.get('x-forwarded-proto') || 'http'
     const host = request.headers.get('host')
     const origin = `${protocol}://${host}`
-    const printUrl = `${origin}/reports/${jobId}/print?token=${encodeURIComponent(token)}&report_run_id=${reportRun.id}`
+    
+    let printUrl: string
+    if (packetType && isValidPacketType(packetType)) {
+      // New packet-driven route
+      printUrl = `${origin}/reports/packet/print/${reportRun.id}?token=${encodeURIComponent(token)}`
+    } else {
+      // Legacy route for backwards compatibility
+      printUrl = `${origin}/reports/${jobId}/print?token=${encodeURIComponent(token)}&report_run_id=${reportRun.id}`
+    }
 
     console.log('[reports] Generating PDF from:', printUrl)
 
