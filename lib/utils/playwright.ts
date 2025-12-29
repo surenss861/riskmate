@@ -135,7 +135,8 @@ export async function generatePdfFromUrl({ url, jobId, organizationId }: PdfOpti
 
                 // Print sanity check: log computed styles for KPI value to catch layout issues
                 const kpiDebug = await page.evaluate(() => {
-                    const el = document.querySelector('.kpi-pill .kpi-value, .kpi-pill .value') as HTMLElement | null
+                    // Try to find KPI value using data attribute first, then fallback to class
+                    const el = document.querySelector('[data-pill-value="true"], .kpi-pill .kpi-value, .kpi-pill .value') as HTMLElement | null
                     if (!el) return null
                     const cs = window.getComputedStyle(el)
                     return {
@@ -143,9 +144,17 @@ export async function generatePdfFromUrl({ url, jobId, organizationId }: PdfOpti
                         lineHeight: cs.lineHeight,
                         whiteSpace: cs.whiteSpace,
                         fontWeight: cs.fontWeight,
+                        selector: el.className || 'no-class',
+                        hasDataAttr: el.hasAttribute('data-pill-value'),
                     }
                 }).catch(() => null)
                 console.log('[PDF] KPI debug (computed styles):', kpiDebug)
+                
+                // Also check if print CSS is active (check for print media query)
+                const printMediaActive = await page.evaluate(() => {
+                    return window.matchMedia && window.matchMedia('print').matches
+                }).catch(() => false)
+                console.log('[PDF] Print media query active:', printMediaActive)
                 
                 console.log(`[PDF] Page stable (fonts loaded, ready marker found) after ${Date.now() - gotoStart}ms`)
             } catch (waitError: any) {

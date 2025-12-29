@@ -267,35 +267,35 @@ export default async function PrintReportPage({ params, searchParams }: PrintPag
           </div>
 
           <div className="cover-kpis">
-            <div className="kpi-pill kpi-pill-risk" style={{ borderColor: riskColor }}>
-              <div className="kpi-value" style={{ color: riskColor }}>
+            <div className="kpi-pill kpi-pill-risk" data-pill="kpi" style={{ borderColor: riskColor }}>
+              <div className="kpi-value" data-pill-value="true" style={{ color: riskColor }}>
                 {riskScoreValue}
               </div>
-              <div className="kpi-label" style={{ color: riskColor }}>
+              <div className="kpi-label" data-pill-label="true" style={{ color: riskColor }}>
                 {riskLevel.toUpperCase()}
               </div>
             </div>
 
-            <div className="kpi-pill">
-              <div className="kpi-value">{hazardsCount}</div>
-              <div className="kpi-label">Hazards</div>
+            <div className="kpi-pill" data-pill="kpi">
+              <div className="kpi-value" data-pill-value="true">{hazardsCount}</div>
+              <div className="kpi-label" data-pill-label="true">Hazards</div>
             </div>
 
-            <div className="kpi-pill">
-              <div className="kpi-value">
+            <div className="kpi-pill" data-pill="kpi">
+              <div className="kpi-value" data-pill-value="true">
                 {controlsCount === 0 ? '—' : `${completedControls}/${controlsCount}`}
               </div>
-              <div className="kpi-label">Controls</div>
+              <div className="kpi-label" data-pill-label="true">Controls</div>
             </div>
 
-            <div className="kpi-pill">
-              <div className="kpi-value">{photosCount}</div>
-              <div className="kpi-label">Photos</div>
+            <div className="kpi-pill" data-pill="kpi">
+              <div className="kpi-value" data-pill-value="true">{photosCount}</div>
+              <div className="kpi-label" data-pill-label="true">Photos</div>
             </div>
 
-            <div className="kpi-pill">
-              <div className="kpi-value">{job.status.toUpperCase()}</div>
-              <div className="kpi-label">Status</div>
+            <div className="kpi-pill" data-pill="status">
+              <div className="kpi-value" data-pill-value="true">{job.status.toUpperCase()}</div>
+              <div className="kpi-label" data-pill-label="true">Status</div>
             </div>
           </div>
         </div>
