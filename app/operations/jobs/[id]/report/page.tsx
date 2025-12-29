@@ -7,7 +7,8 @@ import ProtectedRoute from '@/components/ProtectedRoute'
 import RiskMateLogo from '@/components/RiskMateLogo'
 import { ReportView } from '@/components/report/ReportView'
 import { ErrorModal } from '@/components/dashboard/ErrorModal'
-// Removed reportsApi import - using fetch directly for packet type support
+import { PacketSelector } from '@/components/report/PacketSelector'
+import type { PacketType } from '@/lib/utils/packets/types'
 import { useFullJob } from '@/hooks/useFullJob'
 import { typography, dividerStyles } from '@/lib/styles/design-system'
 
