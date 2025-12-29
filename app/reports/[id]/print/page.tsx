@@ -993,6 +993,13 @@ const printStyles = (colors: typeof import('@/lib/design-system/tokens').colors)
     font-weight: 600;
   }
 
+  /* Prevent Duration and other detail values from wrapping in print */
+  @media print {
+    .detail-item {
+      white-space: nowrap;
+    }
+  }
+
   .risk-score-display {
     text-align: center;
     margin: 20pt 0;
