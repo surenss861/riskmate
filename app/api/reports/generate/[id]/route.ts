@@ -4,6 +4,7 @@ import { generatePdfFromUrl } from '@/lib/utils/playwright'
 import { buildJobReport } from '@/lib/utils/jobReport'
 import { computeCanonicalHash } from '@/lib/utils/canonicalJson'
 import { signPrintToken } from '@/lib/utils/printToken'
+import crypto from 'crypto'
 
 export const runtime = 'nodejs'
 // Set max duration to handle browser launch and navigation
@@ -199,7 +200,7 @@ export async function POST(
           .eq('id', reportRun.id)
       }
     } catch (uploadError) {
-      console.warn('PDF upload failed:', uploadError)
+      console.warn(`[reports][${requestId}] PDF upload failed:`, uploadError)
     }
 
     // Return response with no-cache headers to prevent stale/error PDFs
@@ -212,6 +213,7 @@ export async function POST(
         data_hash: dataHash,
         generated_at: reportRun.generated_at,
         status: reportRun.status,
+        requestId, // Include request ID for tracing
       },
     })
 
@@ -220,13 +222,16 @@ export async function POST(
     response.headers.set('Pragma', 'no-cache')
     response.headers.set('Expires', '0')
 
+    console.log(`[reports][${requestId}] PDF generation completed successfully`)
     return response
   } catch (error: any) {
-    console.error('[reports] generate failed:', error)
+    const requestId = crypto.randomUUID() // Generate request ID even in error case if not set
+    console.error(`[reports][${requestId}] generate failed:`, error)
     return NextResponse.json(
       {
         message: 'Failed to generate PDF report',
         detail: error?.message ?? String(error),
+        requestId,
       },
       { status: 500 }
     )
