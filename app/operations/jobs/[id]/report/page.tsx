@@ -79,9 +79,26 @@ export default function JobReportPage() {
     if (!jobId) return
     setExporting(true)
     try {
-      const response = await reportsApi.generate(jobId, packetType ? { packetType } : undefined)
-      console.log('PDF generation response:', response)
-      const { pdf_url, pdf_base64 } = response.data ?? {}
+      // Call API with packet type
+      const response = await fetch(`/api/reports/generate/${jobId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          status: 'draft',
+          packetType: packetType || 'insurance', // Default to insurance
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.message || `Failed to generate PDF: ${response.statusText}`)
+      }
+
+      const result = await response.json()
+      console.log('PDF generation response:', result)
+      const { pdf_url, pdf_base64 } = result.data ?? {}
 
       console.log('PDF URL:', pdf_url)
       console.log('PDF Base64 present:', !!pdf_base64)
