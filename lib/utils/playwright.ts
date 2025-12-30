@@ -5,11 +5,13 @@ interface PdfOptions {
     url: string
     jobId: string
     organizationId: string // for logging context
+    requestId?: string // Optional request ID for log correlation
 }
 
-export async function generatePdfFromUrl({ url, jobId, organizationId }: PdfOptions): Promise<Buffer> {
+export async function generatePdfFromUrl({ url, jobId, organizationId, requestId }: PdfOptions): Promise<Buffer> {
     const start = Date.now()
-    console.log(`[PDF] START generating for Job:${jobId.substring(0, 8)} Org:${organizationId}`)
+    const logRequestId = requestId || `PDF-${jobId.substring(0, 8)}-${organizationId.substring(0, 8)}`
+    console.log(`[${logRequestId}] START generating for Job:${jobId.substring(0, 8)} Org:${organizationId}`)
 
     let attempt = 1
     const maxAttempts = 2
