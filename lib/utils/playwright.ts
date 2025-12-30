@@ -42,7 +42,10 @@ async function getPerRunChromiumPath(sharedPath: string, requestId: string): Pro
         // CRITICAL: Set executable permissions explicitly
         await fs.promises.chmod(uniquePath, 0o755)
         
-        // Hard-check: verify file exists and is executable
+        // Hard-check: verify file exists and is executable using fs.access
+        await fs.promises.access(uniquePath, fs.constants.X_OK)
+        
+        // Also verify via stat for logging
         const stats = await fs.promises.stat(uniquePath)
         const mode = stats.mode
         const isExecutable = (mode & parseInt('111', 8)) !== 0
@@ -50,7 +53,10 @@ async function getPerRunChromiumPath(sharedPath: string, requestId: string): Pro
         if (!isExecutable) {
             // Try chmod again if permissions weren't set correctly
             await fs.promises.chmod(uniquePath, 0o755)
-            throw new Error(`Chromium copy is not executable after chmod. Mode: ${mode.toString(8)}`)
+            // Verify again
+            await fs.promises.access(uniquePath, fs.constants.X_OK).catch(() => {
+                throw new Error(`Chromium copy is not executable after chmod. Mode: ${mode.toString(8)}, Path: ${uniquePath}`)
+            })
         }
         
         return uniquePath
@@ -317,16 +323,26 @@ export async function generatePdfFromUrl({ url, jobId, organizationId, requestId
             })
             console.log(`[${logRequestId}][stage] pdf_ok duration=${Date.now() - pdfStart}ms size=${(pdfBuffer.length / 1024).toFixed(2)}KB`)
 
+            // CRITICAL: Wait for browser to fully close before cleanup
             await browser.close()
+            console.log(`[${logRequestId}][stage] browser_close_ok`)
             console.log(`[PDF] Total duration: ${Date.now() - start}ms`)
 
-            // Clean up unique Chromium copy (best effort, don't fail if it doesn't work)
+            // Clean up unique Chromium copy AFTER browser is fully closed
+            // Use a small delay to ensure process cleanup completes
+            await new Promise(resolve => setTimeout(resolve, 100))
+            
             try {
-                await fs.promises.unlink(executablePath).catch(() => {
-                    // Ignore cleanup errors - file might already be gone or in use
+                // Verify file still exists before trying to delete
+                await fs.promises.access(executablePath).catch(() => {
+                    // File already gone, that's fine
+                    return
                 })
+                await fs.promises.unlink(executablePath)
+                console.log(`[${logRequestId}][stage] cleanup_ok path=${executablePath}`)
             } catch (cleanupError) {
-                // Silently ignore cleanup failures
+                // Silently ignore cleanup failures - file might be in use or already deleted
+                console.warn(`[${logRequestId}] Cleanup warning (non-fatal):`, cleanupError)
             }
 
             return pdfBuffer
@@ -358,19 +374,29 @@ export async function generatePdfFromUrl({ url, jobId, organizationId, requestId
                 console.error(`[${logRequestId}] error_object (stringify failed):`, error)
             }
             
-            if (browser) await browser.close().catch(() => { })
+            // CRITICAL: Wait for browser to fully close before cleanup
+            if (browser) {
+                try {
+                    await browser.close()
+                    console.log(`[${logRequestId}][stage] browser_close_ok (on error)`)
+                    // Small delay to ensure process cleanup completes
+                    await new Promise(resolve => setTimeout(resolve, 100))
+                } catch (closeError) {
+                    console.warn(`[${logRequestId}] Browser close warning:`, closeError)
+                }
+            }
 
-            // Clean up unique Chromium copy on error (best effort)
+            // Clean up unique Chromium copy on error (best effort, after browser is closed)
             try {
-                const sharedPath = await getSharedChromiumPath().catch(() => null)
-                if (sharedPath) {
-                    // Find and clean up any unique copies for this request
-                    const tmpDir = os.tmpdir()
-                    const files = await fs.promises.readdir(tmpDir).catch(() => [])
-                    const uniqueFiles = files.filter(f => f.startsWith(`chromium-${logRequestId.substring(0, 8)}`))
-                    for (const file of uniqueFiles) {
-                        await fs.promises.unlink(path.join(tmpDir, file)).catch(() => {})
-                    }
+                // Try to clean up the specific executable path we created
+                if (typeof executablePath === 'string' && executablePath) {
+                    await fs.promises.access(executablePath).catch(() => {
+                        // File doesn't exist, that's fine
+                        return
+                    })
+                    await fs.promises.unlink(executablePath).catch(() => {
+                        // Ignore if already deleted or in use
+                    })
                 }
             } catch (cleanupError) {
                 // Silently ignore cleanup failures
