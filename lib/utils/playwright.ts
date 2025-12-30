@@ -9,6 +9,17 @@ interface PdfOptions {
     requestId?: string // Optional request ID for log correlation
 }
 
+// Cache the decompressed Chromium path to avoid re-extracting on every call
+let cachedChromiumPath: string | null = null
+
+async function getChromiumPath(): Promise<string> {
+    if (cachedChromiumPath) {
+        return cachedChromiumPath
+    }
+    cachedChromiumPath = await chromium.executablePath()
+    return cachedChromiumPath
+}
+
 export async function generatePdfFromUrl({ url, jobId, organizationId, requestId }: PdfOptions): Promise<Buffer> {
     const start = Date.now()
     const logRequestId = requestId || `PDF-${jobId.substring(0, 8)}-${organizationId.substring(0, 8)}`
