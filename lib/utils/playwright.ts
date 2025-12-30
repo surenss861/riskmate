@@ -1,6 +1,8 @@
 import playwright from 'playwright-core'
 import chromium from '@sparticuz/chromium'
 import fs from 'node:fs'
+import path from 'node:path'
+import crypto from 'node:crypto'
 
 interface PdfOptions {
     url: string
@@ -20,6 +22,26 @@ async function getSharedChromiumPath(): Promise<string> {
     return cachedSharedChromiumPath
 }
 
+/**
+ * Copy Chromium to a unique path per request to avoid ETXTBSY errors.
+ * Vercel serverless functions can share /tmp across concurrent invocations
+ * in the same warm container, causing file locking conflicts when multiple
+ * requests try to use the same Chromium binary simultaneously.
+ */
+async function getPerRequestChromiumPath(requestId: string): Promise<string> {
+    const sharedPath = await getSharedChromiumPath()
+    const uniqueSuffix = crypto.randomBytes(8).toString('hex')
+    const uniquePath = path.join('/tmp', `chromium-${requestId.substring(0, 8)}-${uniqueSuffix}`)
+    
+    // Copy the shared Chromium binary to unique path
+    await fs.promises.copyFile(sharedPath, uniquePath)
+    
+    // Ensure executable permissions
+    await fs.promises.chmod(uniquePath, 0o755)
+    
+    return uniquePath
+}
+
 export async function generatePdfFromUrl({ url, jobId, organizationId, requestId }: PdfOptions): Promise<Buffer> {
     const start = Date.now()
     const logRequestId = requestId || `PDF-${jobId.substring(0, 8)}-${organizationId.substring(0, 8)}`
@@ -30,15 +52,16 @@ export async function generatePdfFromUrl({ url, jobId, organizationId, requestId
 
     while (attempt <= maxAttempts) {
         let browser = null
+        let executablePath: string | null = null // Declare outside try for cleanup access
         try {
             if (attempt > 1) console.log(`[${logRequestId}] Retry attempt ${attempt}/${maxAttempts}...`)
 
             const launchStart = Date.now()
             
             // STAGE: Prepare Chromium
-            // Use shared Chromium path directly (no copying - serverless functions are isolated, so ETXTBSY is rare)
+            // Copy to unique path per request to avoid ETXTBSY when concurrent requests share /tmp
             console.log(`[${logRequestId}][stage] prepare_chromium_start`)
-            const executablePath = await getSharedChromiumPath()
+            executablePath = await getPerRequestChromiumPath(logRequestId)
             
             // Hard-check: verify file exists and is executable before launch
             if (!executablePath || typeof executablePath !== 'string') {
@@ -151,11 +174,11 @@ export async function generatePdfFromUrl({ url, jobId, organizationId, requestId
             if (response && response.status() >= 400) {
                 const pageTitle = await page.title().catch(() => 'Could not get title')
                 const pageContent = await page.content().catch(() => 'Could not get page content')
-                console.error('[PDF] Page returned error status:', response.status())
-                console.error('[PDF] Page title:', pageTitle)
-                console.error('[PDF] Page URL:', finalUrl)
-                console.error('[PDF] Page HTML snippet:', pageContent.substring(0, 2000))
-                throw new Error(`Page returned status ${response.status()}: ${url}`)
+                console.error(`[${logRequestId}][stage] render_html_failed: Page returned error status: ${response.status()}`)
+                console.error(`[${logRequestId}] Page title:`, pageTitle)
+                console.error(`[${logRequestId}] Page URL:`, finalUrl)
+                console.error(`[${logRequestId}] Page HTML snippet:`, pageContent.substring(0, 2000))
+                throw new Error(`[stage=render_html] Page returned status ${response.status()}: ${url}`)
             }
 
             // Wait for stable state and verify we're on the actual report page (not an error page)
@@ -189,17 +212,17 @@ export async function generatePdfFromUrl({ url, jobId, organizationId, requestId
                 if (quickErrorCheck.hasError) {
                     const pageContent = await page.content().catch(() => 'Could not get page content')
                     const pageTitle = await page.title().catch(() => 'Could not get title')
-                    console.error('[PDF] Page contains error content (early check)')
-                    console.error('[PDF] Page title:', pageTitle)
-                    console.error('[PDF] Page URL:', finalUrl)
-                    console.error('[PDF] Error title:', quickErrorCheck.errorTitle)
-                    console.error('[PDF] Error details:', quickErrorCheck.errorDetails)
-                    console.error('[PDF] Error text:', quickErrorCheck.errorText)
-                    console.error('[PDF] Page HTML snippet:', pageContent.substring(0, 5000))
+                    console.error(`[${logRequestId}][stage] render_html_failed: Page contains error content (early check)`)
+                    console.error(`[${logRequestId}] Page title:`, pageTitle)
+                    console.error(`[${logRequestId}] Page URL:`, finalUrl)
+                    console.error(`[${logRequestId}] Error title:`, quickErrorCheck.errorTitle)
+                    console.error(`[${logRequestId}] Error details:`, quickErrorCheck.errorDetails)
+                    console.error(`[${logRequestId}] Error text:`, quickErrorCheck.errorText)
+                    console.error(`[${logRequestId}] Page HTML snippet:`, pageContent.substring(0, 5000))
                     
                     // Extract the actual error message for a clearer error
                     const errorMsg = quickErrorCheck.errorDetails || quickErrorCheck.errorTitle || 'Unknown error'
-                    throw new Error(`Page contains error content: ${errorMsg}`)
+                    throw new Error(`[stage=render_html] Page contains error content: ${errorMsg}`)
                 }
                 
                 // Wait for either the PDF ready marker OR the cover page (fallback)
@@ -209,17 +232,17 @@ export async function generatePdfFromUrl({ url, jobId, organizationId, requestId
                         page.waitForSelector('#pdf-ready', { state: 'attached', timeout: 20000 }),
                         page.waitForSelector('.cover-page', { timeout: 20000 }),
                     ])
-                    console.log(`[PDF] Page ready marker or cover-page found after ${Date.now() - gotoStart}ms`)
+                    console.log(`[${logRequestId}][stage] render_html_ok: Page ready marker or cover-page found after ${Date.now() - gotoStart}ms`)
                 } catch (selectorError: any) {
                     // If both fail, check what's actually on the page
                     const hasPdfReady = await page.evaluate(() => !!document.getElementById('pdf-ready')).catch(() => false)
                     const hasCoverPage = await page.evaluate(() => !!document.querySelector('.cover-page')).catch(() => false)
                     const bodyText = await page.evaluate(() => document.body?.textContent?.substring(0, 500) || 'No body').catch(() => 'Error getting body')
                     
-                    console.error('[PDF] Neither #pdf-ready nor .cover-page found')
-                    console.error('[PDF] #pdf-ready exists:', hasPdfReady)
-                    console.error('[PDF] .cover-page exists:', hasCoverPage)
-                    console.error('[PDF] Body text:', bodyText)
+                    console.error(`[${logRequestId}][stage] render_html_failed: Neither #pdf-ready nor .cover-page found`)
+                    console.error(`[${logRequestId}] #pdf-ready exists:`, hasPdfReady)
+                    console.error(`[${logRequestId}] .cover-page exists:`, hasCoverPage)
+                    console.error(`[${logRequestId}] Body text:`, bodyText)
                     throw selectorError
                 }
                 
@@ -229,7 +252,7 @@ export async function generatePdfFromUrl({ url, jobId, organizationId, requestId
                         await document.fonts.ready
                     }
                 }).catch(() => {
-                    console.warn('[PDF] Font loading check failed, proceeding anyway')
+                    console.warn(`[${logRequestId}] Font loading check failed, proceeding anyway`)
                 })
                 
                 // Small delay to ensure layout is stable after fonts load
@@ -250,15 +273,15 @@ export async function generatePdfFromUrl({ url, jobId, organizationId, requestId
                         hasDataAttr: el.hasAttribute('data-pill-value'),
                     }
                 }).catch(() => null)
-                console.log('[PDF] KPI debug (computed styles):', kpiDebug)
+                console.log(`[${logRequestId}] KPI debug (computed styles):`, kpiDebug)
                 
                 // Also check if print CSS is active (check for print media query)
                 const printMediaActive = await page.evaluate(() => {
                     return window.matchMedia && window.matchMedia('print').matches
                 }).catch(() => false)
-                console.log('[PDF] Print media query active:', printMediaActive)
+                console.log(`[${logRequestId}] Print media query active:`, printMediaActive)
                 
-                console.log(`[PDF] Page stable (fonts loaded, ready marker found) after ${Date.now() - gotoStart}ms`)
+                console.log(`[${logRequestId}][stage] render_html_ok: Page stable (fonts loaded, ready marker found) after ${Date.now() - gotoStart}ms`)
             } catch (waitError: any) {
                 // Comprehensive debugging on failure
                 const pageTitle = await page.title().catch(() => 'Could not get title')
@@ -271,17 +294,17 @@ export async function generatePdfFromUrl({ url, jobId, organizationId, requestId
                 }).catch(() => 'Could not get body text')
                 const screenshot = await page.screenshot({ fullPage: false }).catch(() => null)
                 
-                console.error('[PDF] Page wait failed:', waitError.message)
-                console.error('[PDF] Page title:', pageTitle)
-                console.error('[PDF] Page URL:', finalUrl)
-                console.error('[PDF] #pdf-ready exists in DOM:', hasPdfReady)
-                console.error('[PDF] Body text snippet:', bodyText)
-                console.error('[PDF] Page HTML snippet (first 3000 chars):', pageContent.substring(0, 3000))
+                console.error(`[${logRequestId}][stage] render_html_failed: Page wait failed:`, waitError.message)
+                console.error(`[${logRequestId}] Page title:`, pageTitle)
+                console.error(`[${logRequestId}] Page URL:`, finalUrl)
+                console.error(`[${logRequestId}] #pdf-ready exists in DOM:`, hasPdfReady)
+                console.error(`[${logRequestId}] Body text snippet:`, bodyText)
+                console.error(`[${logRequestId}] Page HTML snippet (first 3000 chars):`, pageContent.substring(0, 3000))
                 if (screenshot) {
-                    console.error('[PDF] Screenshot captured (base64 length):', screenshot.length)
+                    console.error(`[${logRequestId}] Screenshot captured (base64 length):`, screenshot.length)
                 }
                 
-                throw new Error(`Page did not load correctly: ${waitError.message}`)
+                throw new Error(`[stage=render_html] Page did not load correctly: ${waitError.message}`)
             }
 
             // STAGE: Generate PDF
@@ -297,6 +320,18 @@ export async function generatePdfFromUrl({ url, jobId, organizationId, requestId
             // CRITICAL: Wait for browser to fully close
             await browser.close()
             console.log(`[${logRequestId}][stage] browser_close_ok`)
+            
+            // Cleanup: Delete unique Chromium copy
+            if (executablePath && executablePath.startsWith('/tmp/chromium-')) {
+                try {
+                    await fs.promises.unlink(executablePath)
+                    console.log(`[${logRequestId}][stage] cleanup_chromium_ok path=${executablePath}`)
+                } catch (cleanupError: any) {
+                    // Don't fail the request if cleanup fails, just log warning
+                    console.warn(`[${logRequestId}] Cleanup warning (non-fatal):`, cleanupError.message)
+                }
+            }
+            
             console.log(`[${logRequestId}] Total duration: ${Date.now() - start}ms`)
 
             return pdfBuffer
@@ -337,8 +372,21 @@ export async function generatePdfFromUrl({ url, jobId, organizationId, requestId
                     console.warn(`[${logRequestId}] Browser close warning:`, closeError)
                 }
             }
+            
+            // Cleanup: Delete unique Chromium copy on error
+            if (executablePath && executablePath.startsWith('/tmp/chromium-')) {
+                try {
+                    // Small delay to ensure browser process fully releases the file
+                    await new Promise(resolve => setTimeout(resolve, 100))
+                    await fs.promises.unlink(executablePath)
+                    console.log(`[${logRequestId}][stage] cleanup_chromium_ok (on error) path=${executablePath}`)
+                } catch (cleanupError: any) {
+                    // Don't fail the request if cleanup fails, just log warning
+                    console.warn(`[${logRequestId}] Cleanup warning (non-fatal):`, cleanupError.message)
+                }
+            }
 
-            // For ETXTBSY errors, add exponential backoff retry (rare in serverless, but handle gracefully)
+            // For ETXTBSY errors, add exponential backoff retry
             const isETXTBSY = errorMessage.includes('ETXTBSY') || errorMessage.includes('text file busy')
             
             if (attempt === maxAttempts) {
