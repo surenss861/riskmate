@@ -31,7 +31,7 @@ export async function generatePdfFromUrl({ url, jobId, organizationId }: PdfOpti
             browser = await playwright.chromium.launch({
                 args: chromiumArgs,
                 executablePath: executablePath,
-                headless: chromium.headless ?? true, // Use chromium.headless if available, otherwise true
+                headless: true, // Always headless in serverless
             })
             console.log(`[PDF] Browser launched in ${Date.now() - launchStart}ms`)
 
