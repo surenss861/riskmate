@@ -35,17 +35,36 @@ async function getPerRunChromiumPath(sharedPath: string, requestId: string): Pro
     const runId = requestId.substring(0, 8) || crypto.randomUUID().substring(0, 8)
     const uniquePath = path.join(os.tmpdir(), `chromium-${runId}-${Date.now()}`)
     
-    // Copy the shared Chromium to a unique location
-    await fs.promises.copyFile(sharedPath, uniquePath)
-    await fs.promises.chmod(uniquePath, 0o755)
-    
-    return uniquePath
+    try {
+        // Copy the shared Chromium to a unique location
+        await fs.promises.copyFile(sharedPath, uniquePath)
+        
+        // CRITICAL: Set executable permissions explicitly
+        await fs.promises.chmod(uniquePath, 0o755)
+        
+        // Hard-check: verify file exists and is executable
+        const stats = await fs.promises.stat(uniquePath)
+        const mode = stats.mode
+        const isExecutable = (mode & parseInt('111', 8)) !== 0
+        
+        if (!isExecutable) {
+            // Try chmod again if permissions weren't set correctly
+            await fs.promises.chmod(uniquePath, 0o755)
+            throw new Error(`Chromium copy is not executable after chmod. Mode: ${mode.toString(8)}`)
+        }
+        
+        return uniquePath
+    } catch (error: any) {
+        // Clean up on failure
+        await fs.promises.unlink(uniquePath).catch(() => {})
+        throw new Error(`Failed to create unique Chromium copy: ${error.message} (code: ${error.code})`)
+    }
 }
 
 export async function generatePdfFromUrl({ url, jobId, organizationId, requestId }: PdfOptions): Promise<Buffer> {
     const start = Date.now()
     const logRequestId = requestId || `PDF-${jobId.substring(0, 8)}-${organizationId.substring(0, 8)}`
-    console.log(`[${logRequestId}] START generating for Job:${jobId.substring(0, 8)} Org:${organizationId}`)
+    console.log(`[${logRequestId}][stage] START generating for Job:${jobId.substring(0, 8)} Org:${organizationId}`)
 
     let attempt = 1
     const maxAttempts = 2
@@ -57,42 +76,37 @@ export async function generatePdfFromUrl({ url, jobId, organizationId, requestId
 
             const launchStart = Date.now()
             
-            // Get shared Chromium path (cached to avoid re-extraction)
+            // STAGE: Prepare Chromium
+            console.log(`[${logRequestId}][stage] prepare_chromium_start`)
             const sharedChromiumPath = await getSharedChromiumPath()
-            
-            // CRITICAL: Create a unique copy per run to prevent ETXTBSY errors
-            // when multiple PDF generations run in parallel. Each request gets
-            // its own executable copy, so concurrent writes/extractions don't conflict.
             const executablePath = await getPerRunChromiumPath(sharedChromiumPath, logRequestId)
             
-            // Diagnostic logging before launch (critical for debugging serverless failures)
-            console.log(`[${logRequestId}] sharedChromiumPath=`, sharedChromiumPath)
-            console.log(`[${logRequestId}] uniqueExecutablePath=`, executablePath)
-            console.log(`[${logRequestId}] chromiumExists=`, fs.existsSync(executablePath))
-            console.log(`[${logRequestId}] argsCount=${chromium.args?.length || 0}`)
-            console.log(`[${logRequestId}] node=${process.version} vercel=${process.env.VERCEL || 'local'}`)
-            
+            // Hard-check: verify file exists and is executable before launch
             if (!executablePath || typeof executablePath !== 'string') {
-                throw new Error(`Chromium executable path is invalid: ${executablePath} (type: ${typeof executablePath})`)
+                throw new Error(`[stage=prepare_chromium] Chromium executable path is invalid: ${executablePath} (type: ${typeof executablePath})`)
             }
             
             if (!fs.existsSync(executablePath)) {
-                throw new Error(`Chromium executable does not exist at path: ${executablePath}`)
+                throw new Error(`[stage=prepare_chromium] Chromium executable does not exist at path: ${executablePath}`)
             }
             
-            // Verify executable permissions
-            try {
-                const stats = fs.statSync(executablePath)
-                const isExecutable = (stats.mode & parseInt('111', 8)) !== 0
-                console.log(`[${logRequestId}] chromiumStats: mode=${stats.mode.toString(8)}, size=${stats.size}, isExecutable=${isExecutable}`)
-                
-                if (!isExecutable) {
-                    fs.chmodSync(executablePath, 0o755)
-                    console.log(`[${logRequestId}] Made Chromium executable`)
+            // Final permission check (should already be set by getPerRunChromiumPath, but verify)
+            const stats = fs.statSync(executablePath)
+            const isExecutable = (stats.mode & parseInt('111', 8)) !== 0
+            if (!isExecutable) {
+                fs.chmodSync(executablePath, 0o755)
+                // Verify again after chmod
+                const newStats = fs.statSync(executablePath)
+                const nowExecutable = (newStats.mode & parseInt('111', 8)) !== 0
+                if (!nowExecutable) {
+                    throw new Error(`[stage=prepare_chromium] Chromium is not executable after chmod. Path: ${executablePath}, mode: ${newStats.mode.toString(8)}`)
                 }
-            } catch (statError) {
-                console.warn(`[${logRequestId}] Could not check Chromium stats:`, statError)
             }
+            
+            console.log(`[${logRequestId}][stage] prepare_chromium_ok path=${executablePath} size=${stats.size} mode=${stats.mode.toString(8)}`)
+            console.log(`[${logRequestId}] sharedChromiumPath=`, sharedChromiumPath)
+            console.log(`[${logRequestId}] uniqueExecutablePath=`, executablePath)
+            console.log(`[${logRequestId}] node=${process.version} vercel=${process.env.VERCEL || 'local'}`)
             
             // Use known-good Chromium args for Vercel/serverless
             // @sparticuz/chromium already provides good defaults, but we ensure critical ones are present
@@ -110,16 +124,18 @@ export async function generatePdfFromUrl({ url, jobId, organizationId, requestId
             const uniqueArgs = Array.from(new Set(launchArgs))
             console.log(`[${logRequestId}] Launch args (${uniqueArgs.length}):`, uniqueArgs.slice(0, 10).join(' '), '...')
             
-            // Launch with defensive error handling
+            // STAGE: Launch browser
+            console.log(`[${logRequestId}][stage] launch_start executablePath=${executablePath}`)
             try {
                 browser = await playwright.chromium.launch({
                     executablePath,
                     args: uniqueArgs,
                     headless: true,
                     timeout: 30000, // 30 second timeout for launch
-            })
-            console.log(`[PDF] Browser launched in ${Date.now() - launchStart}ms`)
+                })
+                console.log(`[${logRequestId}][stage] launch_ok duration=${Date.now() - launchStart}ms`)
             } catch (launchError: any) {
+                console.error(`[${logRequestId}][stage] launch_failed error_code=${launchError?.code} error_name=${launchError?.name}`)
                 // CRITICAL: Log full error details for debugging
                 console.error(`[${logRequestId}] Browser launch failed:`)
                 console.error(`[${logRequestId}] Error message:`, launchError?.message || 'No message')
@@ -139,21 +155,20 @@ export async function generatePdfFromUrl({ url, jobId, organizationId, requestId
                 throw launchError
             }
 
+            // STAGE: Create page
+            console.log(`[${logRequestId}][stage] create_page_start`)
             const context = await browser.newContext()
             const page = await context.newPage()
-
-            // Set explicit viewport matching A4 ratio to avoid layout shifts
             await page.setViewportSize({ width: 794, height: 1123 }) // approx A4 @ 96dpi
-            
-            // Emulate print media for proper CSS print rules
             await page.emulateMedia({ media: 'print' })
+            console.log(`[${logRequestId}][stage] create_page_ok`)
 
+            // STAGE: Render HTML
+            console.log(`[${logRequestId}][stage] render_html_start url=${url}`)
             const gotoStart = Date.now()
-            
-            // Navigate to page with longer timeout for serverless
             const response = await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 })
             const finalUrl = page.url()
-            console.log(`[PDF] Page navigation took ${Date.now() - gotoStart}ms, status: ${response?.status()}, final URL: ${finalUrl}`)
+            console.log(`[${logRequestId}][stage] render_html_ok duration=${Date.now() - gotoStart}ms status=${response?.status()} url=${finalUrl}`)
 
             // Check if page loaded successfully
             if (response && response.status() >= 400) {
@@ -292,13 +307,15 @@ export async function generatePdfFromUrl({ url, jobId, organizationId, requestId
                 throw new Error(`Page did not load correctly: ${waitError.message}`)
             }
 
+            // STAGE: Generate PDF
+            console.log(`[${logRequestId}][stage] pdf_start`)
             const pdfStart = Date.now()
             const pdfBuffer = await page.pdf({
                 format: 'A4',
                 printBackground: true,
                 preferCSSPageSize: true,
             })
-            console.log(`[PDF] PDF generated in ${Date.now() - pdfStart}ms. Size: ${(pdfBuffer.length / 1024).toFixed(2)}KB`)
+            console.log(`[${logRequestId}][stage] pdf_ok duration=${Date.now() - pdfStart}ms size=${(pdfBuffer.length / 1024).toFixed(2)}KB`)
 
             await browser.close()
             console.log(`[PDF] Total duration: ${Date.now() - start}ms`)
@@ -315,16 +332,31 @@ export async function generatePdfFromUrl({ url, jobId, organizationId, requestId
             return pdfBuffer
 
         } catch (error: any) {
-            // CRITICAL: Log full error details for debugging (full message, stack, properties)
-            console.error(`[${logRequestId}] Attempt ${attempt} failed:`)
-            console.error(`[${logRequestId}] Error message (full):`, error?.message || 'No message')
-            console.error(`[${logRequestId}] Error name:`, error?.name || 'Unknown')
-            console.error(`[${logRequestId}] Error code:`, error?.code || 'No code')
-            console.error(`[${logRequestId}] Error stack:`, error?.stack || 'No stack')
-            // Log full error object (includes all properties like stderr, stdout, etc.)
-            console.error(`[${logRequestId}] Full error object:`, JSON.stringify(error, Object.getOwnPropertyNames(error), 2))
-            // Also log raw error for non-serializable properties
-            console.error(`[${logRequestId}] Raw error:`, error)
+            // CRITICAL: Log full error details with stage and error code
+            const errorCode = error?.code || 'NO_CODE'
+            const errorName = error?.name || 'Unknown'
+            const errorMessage = error?.message || 'No message'
+            const stage = errorMessage.match(/\[stage=(\w+)\]/)?.[1] || 'unknown'
+            
+            console.error(`[${logRequestId}][stage] ${stage}_failed attempt=${attempt}/${maxAttempts}`)
+            console.error(`[${logRequestId}] error_code=${errorCode} error_name=${errorName}`)
+            console.error(`[${logRequestId}] error_message=`, errorMessage)
+            console.error(`[${logRequestId}] error_stack=`, error?.stack || 'No stack')
+            
+            // Try to extract stderr/stdout if available
+            if (error.stderr) {
+                console.error(`[${logRequestId}] error_stderr=`, error.stderr.toString().substring(0, 1000))
+            }
+            if (error.stdout) {
+                console.error(`[${logRequestId}] error_stdout=`, error.stdout.toString().substring(0, 1000))
+            }
+            
+            // Log full error object for debugging
+            try {
+                console.error(`[${logRequestId}] error_object=`, JSON.stringify(error, Object.getOwnPropertyNames(error), 2))
+            } catch (stringifyError) {
+                console.error(`[${logRequestId}] error_object (stringify failed):`, error)
+            }
             
             if (browser) await browser.close().catch(() => { })
 

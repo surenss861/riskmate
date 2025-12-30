@@ -19,18 +19,22 @@ export async function POST(
 ) {
   // Generate request ID for observability/tracing (outside try block for error handler access)
   const requestId = crypto.randomUUID()
-  console.log(`[reports][${requestId}] PDF generation request started`)
+  console.log(`[reports][${requestId}][stage] request_start`)
 
   try {
+    // STAGE: Authenticate
+    console.log(`[reports][${requestId}][stage] auth_start`)
     const supabase = await createSupabaseServerClient()
     const { data: { user }, error: authError } = await supabase.auth.getUser()
 
     if (authError || !user) {
+      console.log(`[reports][${requestId}][stage] auth_failed`)
       return NextResponse.json(
-        { message: 'Unauthorized' },
+        { message: 'Unauthorized', requestId, stage: 'auth' },
         { status: 401 }
       )
     }
+    console.log(`[reports][${requestId}][stage] auth_ok`)
 
     // Get user's organization_id
     const { data: userData, error: userError } = await supabase
@@ -49,7 +53,8 @@ export async function POST(
     const organization_id = userData.organization_id
     const { id: jobId } = await params
 
-    // Verify job belongs to organization
+    // STAGE: Fetch job
+    console.log(`[reports][${requestId}][stage] fetch_job_start jobId=${jobId}`)
     const { data: job } = await supabase
       .from('jobs')
       .select('id, status')
@@ -58,11 +63,13 @@ export async function POST(
       .single()
 
     if (!job) {
+      console.log(`[reports][${requestId}][stage] fetch_job_failed job_not_found`)
       return NextResponse.json(
-        { message: 'Job not found' },
+        { message: 'Job not found', requestId, stage: 'fetch_job', error_code: 'JOB_NOT_FOUND' },
         { status: 404 }
       )
     }
+    console.log(`[reports][${requestId}][stage] fetch_job_ok`)
 
     // Get packet type and status from request body
     const body = await request.json().catch(() => ({}))
@@ -86,8 +93,8 @@ export async function POST(
       packetType = rawPacketType
     }
 
-    // Build packet payload (new packet-driven approach)
-    // For backwards compatibility, if no packetType, use old buildJobReport
+    // STAGE: Build packet data
+    console.log(`[reports][${requestId}][stage] build_packet_start packetType=${packetType}`)
     let reportPayload: any
     let dataHash: string
 
@@ -106,6 +113,7 @@ export async function POST(
       reportPayload = await buildJobReport(organization_id, jobId)
       dataHash = computeCanonicalHash(reportPayload)
     }
+    console.log(`[reports][${requestId}][stage] build_packet_ok hash=${dataHash.substring(0, 12)}`)
 
     // Idempotency: Check for recent duplicate run (same hash + status + packet_type within 30 seconds)
     const thirtySecondsAgo = new Date(Date.now() - 30 * 1000).toISOString()
@@ -182,7 +190,7 @@ export async function POST(
       printUrl = `${origin}/reports/${jobId}/print?token=${encodeURIComponent(token)}&report_run_id=${reportRun.id}`
     }
 
-    console.log(`[reports][${requestId}] Generating PDF from: ${printUrl}`)
+    console.log(`[reports][${requestId}][stage] generate_pdf_start url=${printUrl}`)
 
     // Generate PDF using Playwright utility
     let pdfBuffer: Buffer
@@ -193,16 +201,19 @@ export async function POST(
         organizationId: organization_id,
         requestId, // Pass requestId for better log correlation
       })
+      console.log(`[reports][${requestId}][stage] generate_pdf_ok size=${(pdfBuffer.length / 1024).toFixed(2)}KB`)
     } catch (browserError: any) {
-      // CRITICAL: Log full error details for debugging
-      console.error(`[reports][${requestId}] Playwright failed:`)
-      console.error(`[reports][${requestId}] Error message (full):`, browserError?.message || 'No message')
-      console.error(`[reports][${requestId}] Error stack:`, browserError?.stack || 'No stack')
-      console.error(`[reports][${requestId}] Full error object:`, JSON.stringify(browserError, Object.getOwnPropertyNames(browserError), 2))
-      console.error(`[reports][${requestId}] Raw error:`, browserError)
-      // Return full error message (don't truncate)
-      const fullErrorMessage = browserError?.message || browserError?.toString() || 'Unknown browser error'
-      throw new Error(`Browser generation failed: ${fullErrorMessage}`)
+      // Extract stage and error code from the error
+      const errorMessage = browserError?.message || 'Unknown browser error'
+      const stage = errorMessage.match(/\[stage=(\w+)\]/)?.[1] || 'generate_pdf'
+      const errorCode = browserError?.code || 'NO_CODE'
+      
+      console.error(`[reports][${requestId}][stage] ${stage}_failed error_code=${errorCode}`)
+      console.error(`[reports][${requestId}] error_message=`, errorMessage)
+      console.error(`[reports][${requestId}] error_stack=`, browserError?.stack || 'No stack')
+      
+      // Return structured error with stage and code
+      throw new Error(`[stage=${stage}] Browser generation failed: ${errorMessage} (code: ${errorCode})`)
     }
 
     // Calculate hash for deduplication/verification
@@ -236,6 +247,8 @@ export async function POST(
       : `${organization_id}/${jobId}/${reportRun.id}/${pdfHash}.pdf`
     let pdfUrl: string | null = null
 
+    // STAGE: Upload PDF
+    console.log(`[reports][${requestId}][stage] upload_start path=${storagePath}`)
     try {
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('reports')
@@ -245,6 +258,7 @@ export async function POST(
         })
 
       if (!uploadError && uploadData) {
+        console.log(`[reports][${requestId}][stage] upload_ok`)
         // Create signed URL (1 year)
         const { data: signedUrlData } = await supabase.storage
           .from('reports')
@@ -296,12 +310,21 @@ export async function POST(
       }
     )
   } catch (error: any) {
-    console.error(`[reports][${requestId}] PDF generation failed:`, error)
+    // Extract stage and error code for better debugging
+    const errorMessage = error?.message || 'Unknown error'
+    const stage = errorMessage.match(/\[stage=(\w+)\]/)?.[1] || 'unknown'
+    const errorCode = error?.code || 'NO_CODE'
+    
+    console.error(`[reports][${requestId}][stage] ${stage}_failed error_code=${errorCode}`)
+    console.error(`[reports][${requestId}] error_message=`, errorMessage)
+    console.error(`[reports][${requestId}] error_stack=`, error?.stack || 'No stack')
+    
     return NextResponse.json(
-      { 
-        message: 'PDF generation failed', 
-        detail: error?.message || String(error),
+      {
+        message: errorMessage,
         requestId,
+        stage,
+        error_code: errorCode,
       },
       { status: 500 }
     )
