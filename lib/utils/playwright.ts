@@ -36,12 +36,12 @@ export async function generatePdfFromUrl({ url, jobId, organizationId, requestId
                 throw new Error('Chromium executable path is missing - @sparticuz/chromium not properly initialized')
             }
             
-            // Minimal launch config - use chromium's defaults for args and headless
-            // chromium.headless should be available, but fallback to true for safety
+            // Minimal launch config - use chromium's defaults for args
+            // Note: @sparticuz/chromium doesn't expose headless property, always use true for serverless
             browser = await playwright.chromium.launch({
                 args: chromium.args,
                 executablePath: executablePath,
-                headless: chromium.headless ?? true,
+                headless: true, // Always headless in serverless environment
             })
             console.log(`[PDF] Browser launched in ${Date.now() - launchStart}ms`)
 
