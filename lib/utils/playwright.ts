@@ -377,7 +377,6 @@ export async function generatePdfFromUrl({ url, jobId, organizationId, requestId
             }
 
             // For ETXTBSY errors, add exponential backoff retry
-            const errorMessage = String(error?.message || '')
             const isETXTBSY = errorMessage.includes('ETXTBSY') || errorMessage.includes('text file busy')
             
             if (attempt === maxAttempts) {
