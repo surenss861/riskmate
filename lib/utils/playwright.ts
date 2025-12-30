@@ -1,6 +1,9 @@
 import playwright from 'playwright-core'
 import chromium from '@sparticuz/chromium'
 import fs from 'node:fs'
+import path from 'node:path'
+import os from 'node:os'
+import crypto from 'node:crypto'
 
 interface PdfOptions {
     url: string
@@ -9,15 +12,34 @@ interface PdfOptions {
     requestId?: string // Optional request ID for log correlation
 }
 
-// Cache the decompressed Chromium path to avoid re-extracting on every call
-let cachedChromiumPath: string | null = null
+// Cache the shared Chromium path to avoid re-extracting on every call
+let cachedSharedChromiumPath: string | null = null
 
-async function getChromiumPath(): Promise<string> {
-    if (cachedChromiumPath) {
-        return cachedChromiumPath
+async function getSharedChromiumPath(): Promise<string> {
+    if (cachedSharedChromiumPath) {
+        return cachedSharedChromiumPath
     }
-    cachedChromiumPath = await chromium.executablePath()
-    return cachedChromiumPath
+    cachedSharedChromiumPath = await chromium.executablePath()
+    return cachedSharedChromiumPath
+}
+
+/**
+ * Get a unique Chromium executable path per run to prevent ETXTBSY errors
+ * when multiple PDF generations run in parallel.
+ * 
+ * Creates a copy of the shared Chromium binary in /tmp with a unique name.
+ * This ensures each request has its own executable that won't conflict with
+ * concurrent writes/extractions.
+ */
+async function getPerRunChromiumPath(sharedPath: string, requestId: string): Promise<string> {
+    const runId = requestId.substring(0, 8) || crypto.randomUUID().substring(0, 8)
+    const uniquePath = path.join(os.tmpdir(), `chromium-${runId}-${Date.now()}`)
+    
+    // Copy the shared Chromium to a unique location
+    await fs.promises.copyFile(sharedPath, uniquePath)
+    await fs.promises.chmod(uniquePath, 0o755)
+    
+    return uniquePath
 }
 
 export async function generatePdfFromUrl({ url, jobId, organizationId, requestId }: PdfOptions): Promise<Buffer> {
@@ -35,15 +57,18 @@ export async function generatePdfFromUrl({ url, jobId, organizationId, requestId
 
             const launchStart = Date.now()
             
-            // Use @sparticuz/chromium for serverless-compatible browser
-            // CRITICAL: await executablePath() - it's async and returns a Promise
-            // Use cached path to avoid re-extracting on every call
-            const executablePath = await getChromiumPath()
+            // Get shared Chromium path (cached to avoid re-extraction)
+            const sharedChromiumPath = await getSharedChromiumPath()
+            
+            // CRITICAL: Create a unique copy per run to prevent ETXTBSY errors
+            // when multiple PDF generations run in parallel. Each request gets
+            // its own executable copy, so concurrent writes/extractions don't conflict.
+            const executablePath = await getPerRunChromiumPath(sharedChromiumPath, logRequestId)
             
             // Diagnostic logging before launch (critical for debugging serverless failures)
-            console.log(`[${logRequestId}] chromiumPath=`, executablePath)
-            console.log(`[${logRequestId}] chromiumPathType=`, typeof executablePath)
-            console.log(`[${logRequestId}] chromiumExists=`, !!executablePath && fs.existsSync(executablePath))
+            console.log(`[${logRequestId}] sharedChromiumPath=`, sharedChromiumPath)
+            console.log(`[${logRequestId}] uniqueExecutablePath=`, executablePath)
+            console.log(`[${logRequestId}] chromiumExists=`, fs.existsSync(executablePath))
             console.log(`[${logRequestId}] argsCount=${chromium.args?.length || 0}`)
             console.log(`[${logRequestId}] node=${process.version} vercel=${process.env.VERCEL || 'local'}`)
             
@@ -55,13 +80,12 @@ export async function generatePdfFromUrl({ url, jobId, organizationId, requestId
                 throw new Error(`Chromium executable does not exist at path: ${executablePath}`)
             }
             
-            // Check executable permissions
+            // Verify executable permissions
             try {
                 const stats = fs.statSync(executablePath)
                 const isExecutable = (stats.mode & parseInt('111', 8)) !== 0
                 console.log(`[${logRequestId}] chromiumStats: mode=${stats.mode.toString(8)}, size=${stats.size}, isExecutable=${isExecutable}`)
                 
-                // Make executable if needed (shouldn't be needed but defensive)
                 if (!isExecutable) {
                     fs.chmodSync(executablePath, 0o755)
                     console.log(`[${logRequestId}] Made Chromium executable`)
@@ -279,6 +303,15 @@ export async function generatePdfFromUrl({ url, jobId, organizationId, requestId
             await browser.close()
             console.log(`[PDF] Total duration: ${Date.now() - start}ms`)
 
+            // Clean up unique Chromium copy (best effort, don't fail if it doesn't work)
+            try {
+                await fs.promises.unlink(executablePath).catch(() => {
+                    // Ignore cleanup errors - file might already be gone or in use
+                })
+            } catch (cleanupError) {
+                // Silently ignore cleanup failures
+            }
+
             return pdfBuffer
 
         } catch (error: any) {
@@ -295,11 +328,39 @@ export async function generatePdfFromUrl({ url, jobId, organizationId, requestId
             
             if (browser) await browser.close().catch(() => { })
 
+            // Clean up unique Chromium copy on error (best effort)
+            try {
+                const sharedPath = await getSharedChromiumPath().catch(() => null)
+                if (sharedPath) {
+                    // Find and clean up any unique copies for this request
+                    const tmpDir = os.tmpdir()
+                    const files = await fs.promises.readdir(tmpDir).catch(() => [])
+                    const uniqueFiles = files.filter(f => f.startsWith(`chromium-${logRequestId.substring(0, 8)}`))
+                    for (const file of uniqueFiles) {
+                        await fs.promises.unlink(path.join(tmpDir, file)).catch(() => {})
+                    }
+                }
+            } catch (cleanupError) {
+                // Silently ignore cleanup failures
+            }
+
+            // For ETXTBSY errors, add exponential backoff retry
+            const errorMessage = String(error?.message || '')
+            const isETXTBSY = errorMessage.includes('ETXTBSY') || errorMessage.includes('text file busy')
+            
             if (attempt === maxAttempts) {
                 // Throw error with full message (don't truncate)
                 const fullErrorMessage = error?.message || error?.toString() || 'Unknown error'
                 throw new Error(`Failed to generate PDF after ${maxAttempts} attempts: ${fullErrorMessage}`)
             }
+            
+            // Add exponential backoff for ETXTBSY errors
+            if (isETXTBSY && attempt < maxAttempts) {
+                const backoffMs = 150 + Math.random() * 250 + (attempt - 1) * 400
+                console.log(`[${logRequestId}] ETXTBSY detected, waiting ${backoffMs.toFixed(0)}ms before retry...`)
+                await new Promise(resolve => setTimeout(resolve, backoffMs))
+            }
+            
             attempt++
         }
     }
