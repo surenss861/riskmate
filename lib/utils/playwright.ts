@@ -1,5 +1,6 @@
 import playwright from 'playwright-core'
 import chromium from '@sparticuz/chromium'
+import fs from 'node:fs'
 
 interface PdfOptions {
     url: string

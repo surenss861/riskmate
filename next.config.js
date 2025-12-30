@@ -4,10 +4,10 @@
 const nextConfig = {
   reactStrictMode: true,
   
-  // Externalize PDFKit to prevent bundling issues with font metric files
+  // Externalize packages to prevent bundling issues in serverless environments
   // PDFKit expects its AFM files to be in node_modules/pdfkit/js/data/
-  // When bundled, these paths break in serverless environments
-  serverExternalPackages: ['pdfkit'],
+  // Playwright and Chromium need to be external to avoid "works locally, breaks on Vercel" issues
+  serverExternalPackages: ['pdfkit', 'playwright-core', '@sparticuz/chromium'],
 
   // Note: We're using assets/pdfkit/ directory with PDFKIT_DATA_DIR env var
   // instead of outputFileTracingIncludes to avoid Vercel deployment issues
