@@ -226,7 +226,14 @@ export default function JobDetailPage() {
         }
       })
       setVersionHistoryEntries(entries)
-    } catch (err) {
+    } catch (err: any) {
+      // Don't log plan gate 403s as errors (they're expected for starter plan)
+      // The API returns code: 'FEATURE_RESTRICTED' for plan gate denials
+      if (err?.code === 'FEATURE_RESTRICTED') {
+        // Silently skip - feature not available on current plan
+        return
+      }
+      // Only log actual errors
       console.error('Failed to load version history:', err)
     } finally {
       setLoadingVersionHistory(false)

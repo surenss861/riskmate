@@ -331,17 +331,25 @@ export const jobsApi = {
   },
 
   exportProofPack: async (jobId: string, packType: 'insurance' | 'audit' | 'incident' | 'compliance') => {
+    // Use the new Packet Engine endpoint
     return apiRequest<{
       data: {
-        id: string | null
-        pdf_url: string
+        report_run_id: string
+        pdf_url: string | null
         pdf_base64: string
-        hash: string
+        storage_path: string
+        data_hash: string
         generated_at: string
+        status: string
+        packet_type: string
+        requestId?: string
       }
-    }>(`/api/jobs/${jobId}/proof-pack`, {
+    }>(`/api/reports/generate/${jobId}`, {
       method: 'POST',
-      body: JSON.stringify({ pack_type: packType }),
+      body: JSON.stringify({ 
+        status: 'draft',
+        packetType: packType === 'compliance' ? 'client_compliance' : packType,
+      }),
     });
   },
 
