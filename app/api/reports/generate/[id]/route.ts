@@ -191,6 +191,7 @@ export async function POST(
         url: printUrl,
         jobId,
         organizationId: organization_id,
+        requestId, // Pass requestId for better log correlation
       })
     } catch (browserError: any) {
       console.error(`[reports][${requestId}] Playwright failed:`, browserError)
