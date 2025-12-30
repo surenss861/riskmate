@@ -194,8 +194,15 @@ export async function POST(
         requestId, // Pass requestId for better log correlation
       })
     } catch (browserError: any) {
-      console.error(`[reports][${requestId}] Playwright failed:`, browserError)
-      throw new Error(`Browser generation failed: ${browserError.message}`)
+      // CRITICAL: Log full error details for debugging
+      console.error(`[reports][${requestId}] Playwright failed:`)
+      console.error(`[reports][${requestId}] Error message (full):`, browserError?.message || 'No message')
+      console.error(`[reports][${requestId}] Error stack:`, browserError?.stack || 'No stack')
+      console.error(`[reports][${requestId}] Full error object:`, JSON.stringify(browserError, Object.getOwnPropertyNames(browserError), 2))
+      console.error(`[reports][${requestId}] Raw error:`, browserError)
+      // Return full error message (don't truncate)
+      const fullErrorMessage = browserError?.message || browserError?.toString() || 'Unknown browser error'
+      throw new Error(`Browser generation failed: ${fullErrorMessage}`)
     }
 
     // Calculate hash for deduplication/verification

@@ -56,12 +56,23 @@ export async function generatePdfFromUrl({ url, jobId, organizationId, requestId
             }
             
             // Dead-simple launch config - no overrides, no tweaks
-            browser = await playwright.chromium.launch({
-                executablePath,
-                args: chromium.args,
-                headless: true,
-            })
-            console.log(`[PDF] Browser launched in ${Date.now() - launchStart}ms`)
+            try {
+                browser = await playwright.chromium.launch({
+                    executablePath,
+                    args: chromium.args,
+                    headless: true,
+                })
+                console.log(`[PDF] Browser launched in ${Date.now() - launchStart}ms`)
+            } catch (launchError: any) {
+                // CRITICAL: Log full error details for debugging
+                console.error(`[${logRequestId}] Browser launch failed:`)
+                console.error(`[${logRequestId}] Error message:`, launchError?.message || 'No message')
+                console.error(`[${logRequestId}] Error name:`, launchError?.name || 'Unknown')
+                console.error(`[${logRequestId}] Error code:`, launchError?.code || 'No code')
+                console.error(`[${logRequestId}] Error stack:`, launchError?.stack || 'No stack')
+                console.error(`[${logRequestId}] Full error object:`, JSON.stringify(launchError, Object.getOwnPropertyNames(launchError), 2))
+                throw launchError
+            }
 
             const context = await browser.newContext()
             const page = await context.newPage()
@@ -230,11 +241,23 @@ export async function generatePdfFromUrl({ url, jobId, organizationId, requestId
             return pdfBuffer
 
         } catch (error: any) {
-            console.error(`[PDF] Attempt ${attempt} failed:`, error.message)
+            // CRITICAL: Log full error details for debugging (full message, stack, properties)
+            console.error(`[${logRequestId}] Attempt ${attempt} failed:`)
+            console.error(`[${logRequestId}] Error message (full):`, error?.message || 'No message')
+            console.error(`[${logRequestId}] Error name:`, error?.name || 'Unknown')
+            console.error(`[${logRequestId}] Error code:`, error?.code || 'No code')
+            console.error(`[${logRequestId}] Error stack:`, error?.stack || 'No stack')
+            // Log full error object (includes all properties like stderr, stdout, etc.)
+            console.error(`[${logRequestId}] Full error object:`, JSON.stringify(error, Object.getOwnPropertyNames(error), 2))
+            // Also log raw error for non-serializable properties
+            console.error(`[${logRequestId}] Raw error:`, error)
+            
             if (browser) await browser.close().catch(() => { })
 
             if (attempt === maxAttempts) {
-                throw new Error(`Failed to generate PDF after ${maxAttempts} attempts: ${error.message}`)
+                // Throw error with full message (don't truncate)
+                const fullErrorMessage = error?.message || error?.toString() || 'Unknown error'
+                throw new Error(`Failed to generate PDF after ${maxAttempts} attempts: ${fullErrorMessage}`)
             }
             attempt++
         }
