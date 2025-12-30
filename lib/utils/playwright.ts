@@ -141,24 +141,43 @@ export async function generatePdfFromUrl({ url, jobId, organizationId, requestId
                 })
                 console.log(`[${logRequestId}][stage] launch_ok duration=${Date.now() - launchStart}ms`)
             } catch (launchError: any) {
-                console.error(`[${logRequestId}][stage] launch_failed error_code=${launchError?.code} error_name=${launchError?.name}`)
-                // CRITICAL: Log full error details for debugging
-                console.error(`[${logRequestId}] Browser launch failed:`)
-                console.error(`[${logRequestId}] Error message:`, launchError?.message || 'No message')
-                console.error(`[${logRequestId}] Error name:`, launchError?.name || 'Unknown')
-                console.error(`[${logRequestId}] Error code:`, launchError?.code || 'No code')
-                console.error(`[${logRequestId}] Error stack:`, launchError?.stack || 'No stack')
+                // CRITICAL: Log full error details with executable path info
+                const errorCode = launchError?.code || 'NO_CODE'
+                const errorName = launchError?.name || 'Unknown'
+                const errorMessage = launchError?.message || 'No message'
+                
+                console.error(`[${logRequestId}][stage] launch_failed error_code=${errorCode} error_name=${errorName}`)
+                console.error(`[${logRequestId}] executablePath=${executablePath}`)
+                console.error(`[${logRequestId}] executablePathExists=${fs.existsSync(executablePath)}`)
+                try {
+                    const finalStats = fs.statSync(executablePath)
+                    console.error(`[${logRequestId}] executablePathMode=${finalStats.mode.toString(8)} executablePathSize=${finalStats.size}`)
+                    // Try access check
+                    fs.accessSync(executablePath, fs.constants.X_OK)
+                    console.error(`[${logRequestId}] executablePathAccessible=true`)
+                } catch (accessCheckError: any) {
+                    console.error(`[${logRequestId}] executablePathAccessible=false accessError=${accessCheckError.message}`)
+                }
+                console.error(`[${logRequestId}] error_message=`, errorMessage)
+                console.error(`[${logRequestId}] error_stack=`, launchError?.stack || 'No stack')
                 
                 // Try to extract stderr if available
                 if (launchError.stderr) {
-                    console.error(`[${logRequestId}] Error stderr:`, launchError.stderr.toString())
+                    console.error(`[${logRequestId}] error_stderr=`, launchError.stderr.toString().substring(0, 1000))
                 }
                 if (launchError.stdout) {
-                    console.error(`[${logRequestId}] Error stdout:`, launchError.stdout.toString())
+                    console.error(`[${logRequestId}] error_stdout=`, launchError.stdout.toString().substring(0, 1000))
                 }
                 
-                console.error(`[${logRequestId}] Full error object:`, JSON.stringify(launchError, Object.getOwnPropertyNames(launchError), 2))
-                throw launchError
+                // Log full error object
+                try {
+                    console.error(`[${logRequestId}] error_object=`, JSON.stringify(launchError, Object.getOwnPropertyNames(launchError), 2))
+                } catch (stringifyError) {
+                    console.error(`[${logRequestId}] error_object (stringify failed):`, launchError)
+                }
+                
+                // Re-throw with stage context
+                throw new Error(`[stage=launch] ${errorMessage} (code: ${errorCode}, path: ${executablePath})`)
             }
 
             // STAGE: Create page
