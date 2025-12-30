@@ -77,6 +77,7 @@ export async function generatePdfFromUrl({ url, jobId, organizationId, requestId
 
     while (attempt <= maxAttempts) {
         let browser = null
+        let executablePath: string | null = null // Declare outside try block for cleanup access
         try {
             if (attempt > 1) console.log(`[PDF] Retry attempt ${attempt}/${maxAttempts}...`)
 
@@ -85,7 +86,7 @@ export async function generatePdfFromUrl({ url, jobId, organizationId, requestId
             // STAGE: Prepare Chromium
             console.log(`[${logRequestId}][stage] prepare_chromium_start`)
             const sharedChromiumPath = await getSharedChromiumPath()
-            const executablePath = await getPerRunChromiumPath(sharedChromiumPath, logRequestId)
+            executablePath = await getPerRunChromiumPath(sharedChromiumPath, logRequestId)
             
             // Hard-check: verify file exists and is executable before launch
             if (!executablePath || typeof executablePath !== 'string') {
