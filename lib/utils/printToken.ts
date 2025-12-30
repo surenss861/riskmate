@@ -5,6 +5,7 @@ const SECRET = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXTAUTH_SEC
 interface PrintTokenPayload {
     jobId: string
     organizationId: string
+    reportRunId?: string // Optional for backwards compatibility, but required for packet print route security
     exp: number
 }
 

@@ -10,6 +10,7 @@ import { verifyPrintToken } from '@/lib/utils/printToken'
 import { buildJobPacket } from '@/lib/utils/packets/builder'
 import { SectionRenderer } from '@/components/report/SectionRenderer'
 import { colors } from '@/lib/design-system/tokens'
+import { isValidPacketType } from '@/lib/utils/packets/types'
 import type { JobPacketPayload } from '@/lib/utils/packets/builder'
 
 // Force dynamic rendering and Node.js runtime for server-side auth/token verification
@@ -118,6 +119,34 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
         <div style={{ padding: '20px', fontFamily: 'system-ui' }}>
           <h1>404 - Report Run Not Found</h1>
           <p>The requested report run could not be found.</p>
+        </div>
+      )
+    }
+
+    // CRITICAL: Validate runId matches token (prevents token reuse across runs)
+    if (rawToken && tokenPayload?.reportRunId && tokenPayload.reportRunId !== runId) {
+      console.error('[PACKET-PRINT] Token runId mismatch:', { 
+        tokenRunId: tokenPayload.reportRunId, 
+        urlRunId: runId 
+      })
+      return (
+        <div style={{ padding: '20px', fontFamily: 'system-ui' }}>
+          <h1>403 - Token Mismatch</h1>
+          <p>Token is not valid for this report run.</p>
+        </div>
+      )
+    }
+
+    // CRITICAL: Validate token jobId matches reportRun.job_id (prevents cross-job access)
+    if (rawToken && tokenPayload?.jobId && tokenPayload.jobId !== reportRun.job_id) {
+      console.error('[PACKET-PRINT] Token jobId mismatch:', { 
+        tokenJobId: tokenPayload.jobId, 
+        runJobId: reportRun.job_id 
+      })
+      return (
+        <div style={{ padding: '20px', fontFamily: 'system-ui' }}>
+          <h1>403 - Token Mismatch</h1>
+          <p>Token is not valid for this job.</p>
         </div>
       )
     }

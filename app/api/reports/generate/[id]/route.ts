@@ -5,7 +5,7 @@ import { buildJobReport } from '@/lib/utils/jobReport'
 import { buildJobPacket } from '@/lib/utils/packets/builder'
 import { computeCanonicalHash } from '@/lib/utils/canonicalJson'
 import { signPrintToken } from '@/lib/utils/printToken'
-import { isValidPacketType, type PacketType } from '@/lib/utils/packets/types'
+import { isValidPacketType, type PacketType, PACKETS } from '@/lib/utils/packets/types'
 import crypto from 'crypto'
 
 export const runtime = 'nodejs'
@@ -65,10 +65,25 @@ export async function POST(
 
     // Get packet type and status from request body
     const body = await request.json().catch(() => ({}))
-    const packetType: PacketType = isValidPacketType(body.packetType)
-      ? body.packetType
-      : 'insurance' // Default to insurance for backwards compatibility
+    const rawPacketType = body.packetType
     const status = body.status || 'draft'
+
+    // CRITICAL: Validate packetType with allowlist (prevents injection/typos)
+    let packetType: PacketType = 'insurance' // Default for backwards compatibility
+    if (rawPacketType) {
+      if (!isValidPacketType(rawPacketType)) {
+        console.error(`[reports][${requestId}] Invalid packetType: ${rawPacketType}`)
+        return NextResponse.json(
+          { 
+            message: 'Invalid packet type',
+            detail: `packetType must be one of: ${Object.keys(PACKETS).join(', ')}`,
+            received: rawPacketType
+          },
+          { status: 400 }
+        )
+      }
+      packetType = rawPacketType
+    }
 
     // Build packet payload (new packet-driven approach)
     // For backwards compatibility, if no packetType, use old buildJobReport
@@ -130,7 +145,7 @@ export async function POST(
         .single()
 
       if (runError || !newRun) {
-        console.error('[reports] Failed to create report_run:', runError)
+        console.error(`[reports][${requestId}] Failed to create report_run:`, runError)
         return NextResponse.json(
           { message: 'Failed to create report run', detail: runError?.message },
           { status: 500 }
@@ -139,14 +154,16 @@ export async function POST(
 
       reportRun = newRun
       console.log(
-        `[reports] Created report_run ${reportRun.id} for job ${jobId} | hash: ${dataHash.substring(0, 12)} | status: ${status}`
+        `[reports][${requestId}] Created report_run ${reportRun.id} for job ${jobId} | packetType: ${packetType} | hash: ${dataHash.substring(0, 12)} | status: ${status}`
       )
     }
 
     // Generate signed token for print route (bypasses auth requirement)
+    // CRITICAL: Token must include both jobId AND runId for security
     const token = signPrintToken({
       jobId,
       organizationId: organization_id,
+      reportRunId: reportRun.id, // Include runId in token for validation
     })
 
     // Prepare URL for the print page
@@ -157,14 +174,14 @@ export async function POST(
     
     let printUrl: string
     if (packetType && isValidPacketType(packetType)) {
-      // New packet-driven route
+      // New packet-driven route (runId-based for frozen snapshot rendering)
       printUrl = `${origin}/reports/packet/print/${reportRun.id}?token=${encodeURIComponent(token)}`
     } else {
-      // Legacy route for backwards compatibility
+      // Legacy route for backwards compatibility (jobId-based)
       printUrl = `${origin}/reports/${jobId}/print?token=${encodeURIComponent(token)}&report_run_id=${reportRun.id}`
     }
 
-    console.log('[reports] Generating PDF from:', printUrl)
+    console.log(`[reports][${requestId}] Generating PDF from: ${printUrl}`)
 
     // Generate PDF using Playwright utility
     let pdfBuffer: Buffer
@@ -175,7 +192,7 @@ export async function POST(
         organizationId: organization_id,
       })
     } catch (browserError: any) {
-      console.error('[reports] Playwright failed:', browserError)
+      console.error(`[reports][${requestId}] Playwright failed:`, browserError)
       throw new Error(`Browser generation failed: ${browserError.message}`)
     }
 
@@ -199,12 +216,15 @@ export async function POST(
         })
       }
     } catch (bucketError) {
-      console.warn('Bucket check/create failed:', bucketError)
+      console.warn(`[reports][${requestId}] Bucket check/create failed:`, bucketError)
     }
 
-    // Upload PDF to storage
+    // Upload PDF to storage (use packet_type in path for organization)
     const pdfHash = require('crypto').createHash('sha256').update(pdfBuffer).digest('hex')
-    const storagePath = `${organization_id}/${jobId}/${reportRun.id}/${pdfHash}.pdf`
+    // CRITICAL: Storage path includes packet_type for organization: {orgId}/{jobId}/{packetType}/{runId}.pdf
+    const storagePath = packetType && isValidPacketType(packetType)
+      ? `${organization_id}/${jobId}/${packetType}/${reportRun.id}.pdf`
+      : `${organization_id}/${jobId}/${reportRun.id}/${pdfHash}.pdf`
     let pdfUrl: string | null = null
 
     try {
@@ -217,11 +237,13 @@ export async function POST(
 
       if (!uploadError && uploadData) {
         // Create signed URL (1 year)
-        const { data: signed } = await supabase.storage
+        const { data: signedUrlData } = await supabase.storage
           .from('reports')
-          .createSignedUrl(storagePath, 60 * 60 * 24 * 365) // 1 year
+          .createSignedUrl(storagePath, 60 * 60 * 24 * 365)
 
-        pdfUrl = signed?.signedUrl || null
+        if (signedUrlData?.signedUrl) {
+          pdfUrl = signedUrlData.signedUrl
+        }
 
         // Update report_run with PDF metadata
         await supabase
@@ -232,42 +254,47 @@ export async function POST(
             pdf_generated_at: new Date().toISOString(),
           })
           .eq('id', reportRun.id)
+
+        console.log(`[reports][${requestId}] PDF uploaded to: ${storagePath}`)
+      } else {
+        console.error(`[reports][${requestId}] Upload failed:`, uploadError)
       }
-    } catch (uploadError) {
-      console.warn(`[reports][${requestId}] PDF upload failed:`, uploadError)
+    } catch (uploadError: any) {
+      console.error(`[reports][${requestId}] Upload exception:`, uploadError)
+      // Don't fail the request if upload fails - PDF is still generated
     }
 
-    // Return response with no-cache headers to prevent stale/error PDFs
-    const response = NextResponse.json({
-      data: {
-        report_run_id: reportRun.id,
-        pdf_url: pdfUrl,
-        storage_path: storagePath,
-        pdf_base64: pdfBase64,
-        data_hash: dataHash,
-        generated_at: reportRun.generated_at,
-        status: reportRun.status,
-        requestId, // Include request ID for tracing
-      },
-    })
-
-    // Set cache control headers to prevent serving stale/error PDFs
-    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
-    response.headers.set('Pragma', 'no-cache')
-    response.headers.set('Expires', '0')
-
-    console.log(`[reports][${requestId}] PDF generation completed successfully`)
-    return response
-  } catch (error: any) {
-    console.error(`[reports][${requestId}] generate failed:`, error)
     return NextResponse.json(
       {
-        message: 'Failed to generate PDF report',
-        detail: error?.message ?? String(error),
+        data: {
+          report_run_id: reportRun.id,
+          pdf_url: pdfUrl,
+          storage_path: storagePath,
+          pdf_base64: pdfBase64,
+          data_hash: dataHash,
+          generated_at: reportRun.generated_at,
+          status: reportRun.status,
+          packet_type: packetType,
+          requestId, // Include request ID for tracing
+        },
+      },
+      {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0',
+        },
+      }
+    )
+  } catch (error: any) {
+    console.error(`[reports][${requestId}] PDF generation failed:`, error)
+    return NextResponse.json(
+      { 
+        message: 'PDF generation failed', 
+        detail: error?.message || String(error),
         requestId,
       },
       { status: 500 }
     )
   }
 }
-
