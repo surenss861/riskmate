@@ -25,24 +25,30 @@ export async function generatePdfFromUrl({ url, jobId, organizationId, requestId
             const launchStart = Date.now()
             
             // Use @sparticuz/chromium for serverless-compatible browser
-            // Follow the known-good pattern: don't override args, use chromium's defaults
-            const executablePath = await chromium.executablePath()
+            // CRITICAL: await executablePath() - it's async and returns a Promise
+            // Use cached path to avoid re-extracting on every call
+            const executablePath = await getChromiumPath()
             
             // Diagnostic logging before launch (critical for debugging serverless failures)
-            console.log(`[${logRequestId}] chromiumPath=${executablePath || 'MISSING'}`)
+            console.log(`[${logRequestId}] chromiumPath=`, executablePath)
+            console.log(`[${logRequestId}] chromiumPathType=`, typeof executablePath)
+            console.log(`[${logRequestId}] chromiumExists=`, !!executablePath && fs.existsSync(executablePath))
             console.log(`[${logRequestId}] argsCount=${chromium.args?.length || 0}`)
             console.log(`[${logRequestId}] node=${process.version} vercel=${process.env.VERCEL || 'local'}`)
             
-            if (!executablePath) {
-                throw new Error('Chromium executable path is missing - @sparticuz/chromium not properly initialized')
+            if (!executablePath || typeof executablePath !== 'string') {
+                throw new Error(`Chromium executable path is invalid: ${executablePath} (type: ${typeof executablePath})`)
             }
             
-            // Minimal launch config - use chromium's defaults for args
-            // Note: @sparticuz/chromium doesn't expose headless property, always use true for serverless
+            if (!fs.existsSync(executablePath)) {
+                throw new Error(`Chromium executable does not exist at path: ${executablePath}`)
+            }
+            
+            // Dead-simple launch config - no overrides, no tweaks
             browser = await playwright.chromium.launch({
+                executablePath,
                 args: chromium.args,
-                executablePath: executablePath,
-                headless: true, // Always headless in serverless environment
+                headless: true,
             })
             console.log(`[PDF] Browser launched in ${Date.now() - launchStart}ms`)
 
