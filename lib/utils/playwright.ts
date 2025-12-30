@@ -22,10 +22,16 @@ export async function generatePdfFromUrl({ url, jobId, organizationId }: PdfOpti
             const launchStart = Date.now()
             
             // Use @sparticuz/chromium for serverless-compatible browser
+            // chromium.args already includes --no-sandbox, --disable-setuid-sandbox, and other serverless-required args
+            const chromiumArgs = chromium.args || []
+            const executablePath = await chromium.executablePath()
+            
+            console.log(`[PDF] Launching Chromium: executablePath=${executablePath ? 'found' : 'missing'}, args count=${chromiumArgs.length}`)
+            
             browser = await playwright.chromium.launch({
-                args: chromium.args,
-                executablePath: await chromium.executablePath(),
-                headless: true, // Always headless in serverless
+                args: chromiumArgs,
+                executablePath: executablePath,
+                headless: chromium.headless ?? true, // Use chromium.headless if available, otherwise true
             })
             console.log(`[PDF] Browser launched in ${Date.now() - launchStart}ms`)
 

@@ -61,8 +61,12 @@ export async function GET(
               : entitlements.status === 'canceled' && entitlements.period_end && new Date(entitlements.period_end) < new Date()
               ? 'SUBSCRIPTION_CANCELED_PERIOD_ENDED'
               : 'PLAN_TIER_INSUFFICIENT',
+            requestId, // Include request ID for tracing
           },
-          { status: 403 }
+          { 
+            status: 403,
+            headers: { 'X-Request-ID': requestId }
+          }
         )
       }
       throw err
@@ -103,19 +107,26 @@ export async function GET(
 
     return NextResponse.json({
       data: auditLogs || [],
+      requestId, // Include request ID for tracing
+    }, {
+      headers: { 'X-Request-ID': requestId }
     })
   } catch (error: any) {
     if (error instanceof EntitlementError) {
       throw error
     }
 
-    console.error('Failed to fetch audit log:', error)
+    console.error(`[audit][${requestId}] Failed to fetch audit log:`, error)
     return NextResponse.json(
       {
         error: error.message || 'Failed to fetch audit log',
         code: 'FETCH_FAILED',
+        requestId, // Include request ID for tracing
       },
-      { status: 500 }
+      { 
+        status: 500,
+        headers: { 'X-Request-ID': requestId }
+      }
     )
   }
 }

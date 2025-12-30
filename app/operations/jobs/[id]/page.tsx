@@ -1232,7 +1232,8 @@ export default function JobDetailPage() {
           <PageSection>
             <div
               onMouseEnter={() => {
-                if (!showVersionHistory && !loadingVersionHistory) {
+                // Only load version history if feature is available (Business plan)
+                if (!showVersionHistory && !loadingVersionHistory && subscriptionTier === 'business') {
                   setShowVersionHistory(true)
                   loadVersionHistory()
                 }

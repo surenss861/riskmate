@@ -327,7 +327,17 @@ export const jobsApi = {
   },
 
   getAuditLog: async (jobId: string) => {
-    return apiRequest<{ data: any[] }>(`/api/jobs/${jobId}/audit`);
+    try {
+      return await apiRequest<{ data: any[] }>(`/api/jobs/${jobId}/audit`);
+    } catch (err: any) {
+      // Silently handle plan-gate 403s (expected for starter plan)
+      if (err?.code === 'FEATURE_RESTRICTED' || err?.code === 'PLAN_TIER_INSUFFICIENT') {
+        // Return empty data so UI doesn't break, but also doesn't spam errors
+        return { data: [] } as { data: any[] };
+      }
+      // Re-throw other errors
+      throw err;
+    }
   },
 
   exportProofPack: async (jobId: string, packType: 'insurance' | 'audit' | 'incident' | 'compliance') => {
