@@ -29,6 +29,7 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
     const { token: rawToken } = await searchParams
 
     let organization_id: string | null = null
+    let tokenPayload: { jobId: string; organizationId: string; reportRunId?: string } | null = null
 
     // Verify token if provided (for serverless PDF generation)
     if (rawToken) {
