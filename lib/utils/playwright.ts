@@ -55,14 +55,46 @@ export async function generatePdfFromUrl({ url, jobId, organizationId, requestId
                 throw new Error(`Chromium executable does not exist at path: ${executablePath}`)
             }
             
-            // Dead-simple launch config - no overrides, no tweaks
+            // Check executable permissions
+            try {
+                const stats = fs.statSync(executablePath)
+                const isExecutable = (stats.mode & parseInt('111', 8)) !== 0
+                console.log(`[${logRequestId}] chromiumStats: mode=${stats.mode.toString(8)}, size=${stats.size}, isExecutable=${isExecutable}`)
+                
+                // Make executable if needed (shouldn't be needed but defensive)
+                if (!isExecutable) {
+                    fs.chmodSync(executablePath, 0o755)
+                    console.log(`[${logRequestId}] Made Chromium executable`)
+                }
+            } catch (statError) {
+                console.warn(`[${logRequestId}] Could not check Chromium stats:`, statError)
+            }
+            
+            // Use known-good Chromium args for Vercel/serverless
+            // @sparticuz/chromium already provides good defaults, but we ensure critical ones are present
+            const launchArgs = [
+                ...chromium.args,
+                '--disable-dev-shm-usage',
+                '--disable-gpu',
+                '--disable-software-rasterizer',
+                '--disable-setuid-sandbox',
+                    '--no-sandbox',
+                '--single-process', // Critical for serverless (runs in single process)
+            ]
+            
+            // Remove duplicates
+            const uniqueArgs = Array.from(new Set(launchArgs))
+            console.log(`[${logRequestId}] Launch args (${uniqueArgs.length}):`, uniqueArgs.slice(0, 10).join(' '), '...')
+            
+            // Launch with defensive error handling
             try {
                 browser = await playwright.chromium.launch({
                     executablePath,
-                    args: chromium.args,
+                    args: uniqueArgs,
                     headless: true,
-                })
-                console.log(`[PDF] Browser launched in ${Date.now() - launchStart}ms`)
+                    timeout: 30000, // 30 second timeout for launch
+            })
+            console.log(`[PDF] Browser launched in ${Date.now() - launchStart}ms`)
             } catch (launchError: any) {
                 // CRITICAL: Log full error details for debugging
                 console.error(`[${logRequestId}] Browser launch failed:`)
@@ -70,6 +102,15 @@ export async function generatePdfFromUrl({ url, jobId, organizationId, requestId
                 console.error(`[${logRequestId}] Error name:`, launchError?.name || 'Unknown')
                 console.error(`[${logRequestId}] Error code:`, launchError?.code || 'No code')
                 console.error(`[${logRequestId}] Error stack:`, launchError?.stack || 'No stack')
+                
+                // Try to extract stderr if available
+                if (launchError.stderr) {
+                    console.error(`[${logRequestId}] Error stderr:`, launchError.stderr.toString())
+                }
+                if (launchError.stdout) {
+                    console.error(`[${logRequestId}] Error stdout:`, launchError.stdout.toString())
+                }
+                
                 console.error(`[${logRequestId}] Full error object:`, JSON.stringify(launchError, Object.getOwnPropertyNames(launchError), 2))
                 throw launchError
             }
