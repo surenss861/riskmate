@@ -41,8 +41,8 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
       }
 
       console.log('[PACKET-PRINT] Token provided, verifying...', { tokenLength: token.length, runId })
-      const tokenPayload = verifyPrintToken(token)
-      if (!tokenPayload) {
+      const verifiedPayload = verifyPrintToken(token)
+      if (!verifiedPayload) {
         console.error('[PACKET-PRINT] token signature mismatch or expired')
         return (
           <div style={{ padding: '20px', fontFamily: 'system-ui' }}>
@@ -51,8 +51,9 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
           </div>
         )
       }
-      console.log('[PACKET-PRINT] Token verified successfully', { organizationId: tokenPayload.organizationId })
-      organization_id = tokenPayload.organizationId
+      console.log('[PACKET-PRINT] Token verified successfully', { organizationId: verifiedPayload.organizationId })
+      organization_id = verifiedPayload.organizationId
+      tokenPayload = verifiedPayload // Store for later validation
     } else {
       console.log('[PACKET-PRINT] token missing - using cookie auth')
       // For browser access, use cookie-based auth
