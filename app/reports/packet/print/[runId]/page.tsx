@@ -24,12 +24,13 @@ interface PacketPrintPageProps {
 }
 
 export default async function PacketPrintPage({ params, searchParams }: PacketPrintPageProps) {
+  let tokenPayload: { jobId: string; organizationId: string; reportRunId?: string } | null = null
+
   try {
     const { runId } = await params
     const { token: rawToken } = await searchParams
 
     let organization_id: string | null = null
-    let tokenPayload: { jobId: string; organizationId: string; reportRunId?: string } | null = null
 
     // Verify token if provided (for serverless PDF generation)
     if (rawToken) {
@@ -153,12 +154,24 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
       )
     }
 
+    // CRITICAL: Validate packet_type from DB is valid (prevents rendering with invalid/compromised packet_type)
+    const packetType = reportRun.packet_type
+    if (!isValidPacketType(packetType)) {
+      console.error('[PACKET-PRINT] Invalid packet_type from database:', { runId, packetType })
+      return (
+        <div style={{ padding: '20px', fontFamily: 'system-ui' }}>
+          <h1>500 - Invalid Packet Type</h1>
+          <p>The report run references an unknown packet type: {packetType}.</p>
+        </div>
+      )
+    }
+
     // Build packet data
     let packetData: JobPacketPayload
     try {
       packetData = await buildJobPacket({
         jobId: reportRun.job_id,
-        packetType: (reportRun.packet_type as any) || 'insurance', // Default to insurance for backwards compatibility
+        packetType: packetType,
         organizationId: organization_id,
         supabaseClient: supabase,
       })
@@ -180,27 +193,31 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
       .maybeSingle()
 
     const logoUrl = organization?.logo_url || null
+    const organizationName = organization?.name || 'RiskMate'
     const isDraft = reportRun.status === 'draft' || reportRun.status === 'pending'
+    
+    // Get packet title from packet data
+    const packetTitle = packetData.meta.packetTitle || 'Report'
 
     return (
       <html lang="en">
         <head>
           <meta charSet="utf-8" />
           <meta name="viewport" content="width=device-width, initial-scale=1" />
-          <title>{packetData.meta.packetTitle} - RiskMate</title>
+          <title>{packetTitle} - {organizationName}</title>
           <style dangerouslySetInnerHTML={{ __html: getPrintStyles() }} />
         </head>
         <body>
-          <div className="report-root" data-draft={isDraft}>
+          <div className="report-root" data-draft={isDraft ? 'true' : undefined}>
             <div className="report-content">
               {/* Cover Page */}
               <div className="cover-page">
                 <div className="cover-header">
                   {logoUrl && <img src={logoUrl} alt="Logo" className="cover-logo" />}
-                  <div className="cover-brand">RiskMate</div>
+                  <div className="cover-brand">{organizationName}</div>
                 </div>
 
-                <h1 className="cover-title">{packetData.meta.packetTitle}</h1>
+                <h1 className="cover-title">{packetTitle}</h1>
                 <div className="cover-accent-line"></div>
 
                 <div className="cover-subheader">
