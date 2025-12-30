@@ -9,7 +9,8 @@ import { isValidPacketType, type PacketType, PACKETS } from '@/lib/utils/packets
 import crypto from 'crypto'
 
 export const runtime = 'nodejs'
-// Set max duration to handle browser launch and navigation
+export const dynamic = 'force-dynamic'
+// Set max duration to handle browser launch and navigation (if plan supports it)
 export const maxDuration = 60
 
 export async function POST(

@@ -22,16 +22,24 @@ export async function generatePdfFromUrl({ url, jobId, organizationId }: PdfOpti
             const launchStart = Date.now()
             
             // Use @sparticuz/chromium for serverless-compatible browser
-            // chromium.args already includes --no-sandbox, --disable-setuid-sandbox, and other serverless-required args
-            const chromiumArgs = chromium.args || []
+            // Follow the known-good pattern: don't override args, use chromium's defaults
             const executablePath = await chromium.executablePath()
             
-            console.log(`[PDF] Launching Chromium: executablePath=${executablePath ? 'found' : 'missing'}, args count=${chromiumArgs.length}`)
+            // Diagnostic logging before launch (critical for debugging serverless failures)
+            console.log(`[${logRequestId}] chromiumPath=${executablePath || 'MISSING'}`)
+            console.log(`[${logRequestId}] argsCount=${chromium.args?.length || 0}`)
+            console.log(`[${logRequestId}] node=${process.version} vercel=${process.env.VERCEL || 'local'}`)
             
+            if (!executablePath) {
+                throw new Error('Chromium executable path is missing - @sparticuz/chromium not properly initialized')
+            }
+            
+            // Minimal launch config - use chromium's defaults for args and headless
+            // chromium.headless should be available, but fallback to true for safety
             browser = await playwright.chromium.launch({
-                args: chromiumArgs,
+                args: chromium.args,
                 executablePath: executablePath,
-                headless: true, // Always headless in serverless
+                headless: chromium.headless ?? true,
             })
             console.log(`[PDF] Browser launched in ${Date.now() - launchStart}ms`)
 
