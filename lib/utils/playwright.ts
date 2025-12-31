@@ -80,12 +80,14 @@ export async function generatePdfFromUrl({ url, jobId, organizationId, requestId
                 fs.chmodSync(executablePath, 0o755)
                 // Verify again after chmod
                 await fs.promises.access(executablePath, fs.constants.X_OK).catch(() => {
-                    const stats = fs.statSync(executablePath)
+                    // executablePath is guaranteed to be a string here (checked above)
+                    const stats = fs.statSync(executablePath!)
                     throw new Error(`[stage=prepare_chromium] Chromium is not executable after chmod. Path: ${executablePath}, mode: ${stats.mode.toString(8)}`)
                 })
             }
             
-            const stats = fs.statSync(executablePath)
+            // executablePath is guaranteed to be a string here (checked above)
+            const stats = fs.statSync(executablePath!)
             console.log(`[${logRequestId}][stage] prepare_chromium_ok path=${executablePath} size=${stats.size} mode=${stats.mode.toString(8)}`)
             console.log(`[${logRequestId}] node=${process.version} vercel=${process.env.VERCEL || 'local'}`)
             
