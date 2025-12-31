@@ -19,7 +19,9 @@ export async function POST(
 ) {
   // Generate request ID for observability/tracing (outside try block for error handler access)
   const requestId = crypto.randomUUID()
-  console.log(`[reports][${requestId}][stage] request_start`)
+  // Log build SHA to verify deployment (critical for debugging stale builds)
+  const buildSha = process.env.VERCEL_GIT_COMMIT_SHA || process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA || 'no-sha'
+  console.log(`[reports][${requestId}][stage] request_start build=${buildSha}`)
 
   try {
     // STAGE: Authenticate
@@ -44,8 +46,14 @@ export async function POST(
       .maybeSingle()
 
     if (userError || !userData?.organization_id) {
+      console.error(`[reports][${requestId}][stage] fetch_user_failed`, userError)
       return NextResponse.json(
-        { message: 'Failed to get organization ID' },
+        { 
+          message: 'Failed to get organization ID', 
+          requestId, 
+          stage: 'fetch_user',
+          error_code: userError?.code || 'NO_ORG_ID'
+        },
         { status: 500 }
       )
     }
@@ -154,9 +162,15 @@ export async function POST(
         .single()
 
       if (runError || !newRun) {
-        console.error(`[reports][${requestId}] Failed to create report_run:`, runError)
+        console.error(`[reports][${requestId}][stage] create_report_run_failed`, runError)
         return NextResponse.json(
-          { message: 'Failed to create report run', detail: runError?.message },
+          { 
+            message: 'Failed to create report run', 
+            detail: runError?.message,
+            requestId,
+            stage: 'create_report_run',
+            error_code: runError?.code || 'DB_ERROR'
+          },
           { status: 500 }
         )
       }
@@ -287,6 +301,9 @@ export async function POST(
       // Don't fail the request if upload fails - PDF is still generated
     }
 
+    // Include build SHA in response header for deployment verification
+    const buildSha = process.env.VERCEL_GIT_COMMIT_SHA || process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA || 'no-sha'
+    
     return NextResponse.json(
       {
         data: {
@@ -306,6 +323,7 @@ export async function POST(
           'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
           'Pragma': 'no-cache',
           'Expires': '0',
+          'X-Build-SHA': buildSha, // Include build SHA for deployment verification
         },
       }
     )
@@ -314,6 +332,7 @@ export async function POST(
     const errorMessage = error?.message || 'Unknown error'
     const stage = errorMessage.match(/\[stage=(\w+)\]/)?.[1] || 'unknown'
     const errorCode = error?.code || 'NO_CODE'
+    const buildSha = process.env.VERCEL_GIT_COMMIT_SHA || process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA || 'no-sha'
     
     console.error(`[reports][${requestId}][stage] ${stage}_failed error_code=${errorCode}`)
     console.error(`[reports][${requestId}] error_message=`, errorMessage)
@@ -326,7 +345,12 @@ export async function POST(
         stage,
         error_code: errorCode,
       },
-      { status: 500 }
+      { 
+        status: 500,
+        headers: {
+          'X-Build-SHA': buildSha, // Include build SHA for deployment verification
+        },
+      }
     )
   }
 }
