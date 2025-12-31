@@ -21,7 +21,10 @@ export async function POST(
   const requestId = crypto.randomUUID()
   // Log build SHA to verify deployment (critical for debugging stale builds)
   const buildSha = process.env.VERCEL_GIT_COMMIT_SHA || process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA || 'no-sha'
-  console.log(`[reports][${requestId}][stage] request_start build=${buildSha}`)
+  
+  // Extract jobId early for logging (outside try block)
+  const { id: jobId } = await params
+  console.log(`[reports][${requestId}][stage] request_start build=${buildSha} jobId=${jobId}`)
 
   try {
     // STAGE: Authenticate
@@ -38,7 +41,8 @@ export async function POST(
     }
     console.log(`[reports][${requestId}][stage] auth_ok`)
 
-    // Get user's organization_id
+    // STAGE: Get user organization
+    console.log(`[reports][${requestId}][stage] fetch_user_start`)
     const { data: userData, error: userError } = await supabase
       .from('users')
       .select('organization_id')
@@ -57,9 +61,8 @@ export async function POST(
         { status: 500 }
       )
     }
-
     const organization_id = userData.organization_id
-    const { id: jobId } = await params
+    console.log(`[reports][${requestId}][stage] fetch_user_ok organization_id=${organization_id}`)
 
     // STAGE: Fetch job
     console.log(`[reports][${requestId}][stage] fetch_job_start jobId=${jobId}`)
@@ -84,22 +87,28 @@ export async function POST(
     const rawPacketType = body.packetType
     const status = body.status || 'draft'
 
+    // STAGE: Validate packet type
+    console.log(`[reports][${requestId}][stage] validate_packet_type_start`)
     // CRITICAL: Validate packetType with allowlist (prevents injection/typos)
     let packetType: PacketType = 'insurance' // Default for backwards compatibility
     if (rawPacketType) {
       if (!isValidPacketType(rawPacketType)) {
-        console.error(`[reports][${requestId}] Invalid packetType: ${rawPacketType}`)
+        console.error(`[reports][${requestId}][stage] validate_packet_type_failed received=${rawPacketType}`)
         return NextResponse.json(
           { 
             message: 'Invalid packet type',
             detail: `packetType must be one of: ${Object.keys(PACKETS).join(', ')}`,
-            received: rawPacketType
+            received: rawPacketType,
+            requestId,
+            stage: 'validate_packet_type',
+            error_code: 'INVALID_PACKET_TYPE'
           },
           { status: 400 }
         )
       }
       packetType = rawPacketType
     }
+    console.log(`[reports][${requestId}][stage] validate_packet_type_ok packetType=${packetType}`)
 
     // STAGE: Build packet data
     console.log(`[reports][${requestId}][stage] build_packet_start packetType=${packetType}`)
@@ -123,7 +132,8 @@ export async function POST(
     }
     console.log(`[reports][${requestId}][stage] build_packet_ok hash=${dataHash.substring(0, 12)}`)
 
-    // Idempotency: Check for recent duplicate run (same hash + status + packet_type within 30 seconds)
+    // STAGE: Check for existing run (idempotency)
+    console.log(`[reports][${requestId}][stage] check_existing_run_start`)
     const thirtySecondsAgo = new Date(Date.now() - 30 * 1000).toISOString()
     const { data: existingRun } = await supabase
       .from('report_runs')
@@ -143,11 +153,10 @@ export async function POST(
     if (existingRun) {
       // Reuse existing run (idempotency)
       reportRun = existingRun
-      console.log(
-        `[reports][${requestId}] Reusing existing report_run ${reportRun.id} for job ${jobId} (idempotency)`
-      )
+      console.log(`[reports][${requestId}][stage] check_existing_run_ok reused_runId=${reportRun.id}`)
     } else {
-      // Create new report_run (frozen snapshot)
+      // STAGE: Create new report_run (frozen snapshot)
+      console.log(`[reports][${requestId}][stage] create_report_run_start`)
       const { data: newRun, error: runError } = await supabase
         .from('report_runs')
         .insert({
@@ -176,21 +185,21 @@ export async function POST(
       }
 
       reportRun = newRun
-      console.log(
-        `[reports][${requestId}] Created report_run ${reportRun.id} for job ${jobId} | packetType: ${packetType} | hash: ${dataHash.substring(0, 12)} | status: ${status}`
-      )
+      console.log(`[reports][${requestId}][stage] create_report_run_ok runId=${reportRun.id}`)
     }
 
-    // Generate signed token for print route (bypasses auth requirement)
+    // STAGE: Generate signed token
+    console.log(`[reports][${requestId}][stage] sign_token_start`)
     // CRITICAL: Token must include both jobId AND runId for security
     const token = signPrintToken({
       jobId,
       organizationId: organization_id,
       reportRunId: reportRun.id, // Include runId in token for validation
     })
+    console.log(`[reports][${requestId}][stage] sign_token_ok`)
 
-    // Prepare URL for the print page
-    // Use new packet print route if packetType is specified, otherwise use legacy route
+    // STAGE: Build print URL
+    console.log(`[reports][${requestId}][stage] build_url_start`)
     const protocol = request.headers.get('x-forwarded-proto') || 'http'
     const host = request.headers.get('host')
     const origin = `${protocol}://${host}`
@@ -203,8 +212,10 @@ export async function POST(
       // Legacy route for backwards compatibility (jobId-based)
       printUrl = `${origin}/reports/${jobId}/print?token=${encodeURIComponent(token)}&report_run_id=${reportRun.id}`
     }
+    console.log(`[reports][${requestId}][stage] build_url_ok url=${printUrl}`)
 
-    console.log(`[reports][${requestId}][stage] generate_pdf_start url=${printUrl}`)
+    // STAGE: Generate PDF
+    console.log(`[reports][${requestId}][stage] generate_pdf_start`)
 
     // Generate PDF using Playwright utility
     let pdfBuffer: Buffer
@@ -233,14 +244,8 @@ export async function POST(
     // Calculate hash for deduplication/verification
     const pdfBase64 = pdfBuffer.toString('base64')
 
-    // Create snapshot payload (re-fetch data to match schema if needed, 
-    // or we can rely on what the print page fetched. 
-    // For now, to keep legacy compatibility, we won't insert a "payload" snapshot 
-    // here because we didn't fetch the raw data in this API route. 
-    // We can fetch it if "report_snapshots" requires it, but for now 
-    // let's focus on the PDF upload success.)
-
-    // Ensure reports bucket exists
+    // STAGE: Ensure storage bucket exists
+    console.log(`[reports][${requestId}][stage] check_bucket_start`)
     try {
       const { data: bucket } = await supabase.storage.getBucket('reports')
       if (!bucket) {
@@ -249,20 +254,24 @@ export async function POST(
           fileSizeLimit: 50 * 1024 * 1024,
         })
       }
-    } catch (bucketError) {
-      console.warn(`[reports][${requestId}] Bucket check/create failed:`, bucketError)
+      console.log(`[reports][${requestId}][stage] check_bucket_ok`)
+    } catch (bucketError: any) {
+      console.warn(`[reports][${requestId}][stage] check_bucket_warning`, bucketError)
+      // Continue anyway - bucket might already exist
     }
 
-    // Upload PDF to storage (use packet_type in path for organization)
+    // STAGE: Prepare storage path
+    console.log(`[reports][${requestId}][stage] prepare_storage_path_start`)
     const pdfHash = require('crypto').createHash('sha256').update(pdfBuffer).digest('hex')
     // CRITICAL: Storage path includes packet_type for organization: {orgId}/{jobId}/{packetType}/{runId}.pdf
     const storagePath = packetType && isValidPacketType(packetType)
       ? `${organization_id}/${jobId}/${packetType}/${reportRun.id}.pdf`
       : `${organization_id}/${jobId}/${reportRun.id}/${pdfHash}.pdf`
-    let pdfUrl: string | null = null
+    console.log(`[reports][${requestId}][stage] prepare_storage_path_ok path=${storagePath}`)
 
     // STAGE: Upload PDF
     console.log(`[reports][${requestId}][stage] upload_start path=${storagePath}`)
+    let pdfUrl: string | null = null
     try {
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('reports')
@@ -271,36 +280,55 @@ export async function POST(
           upsert: false, // Don't overwrite - each run is unique
         })
 
-      if (!uploadError && uploadData) {
-        console.log(`[reports][${requestId}][stage] upload_ok`)
-        // Create signed URL (1 year)
-        const { data: signedUrlData } = await supabase.storage
-          .from('reports')
-          .createSignedUrl(storagePath, 60 * 60 * 24 * 365)
-
-        if (signedUrlData?.signedUrl) {
-          pdfUrl = signedUrlData.signedUrl
-        }
-
-        // Update report_run with PDF metadata
-        await supabase
-          .from('report_runs')
-          .update({
-            pdf_path: storagePath,
-            pdf_signed_url: pdfUrl,
-            pdf_generated_at: new Date().toISOString(),
-          })
-          .eq('id', reportRun.id)
-
-        console.log(`[reports][${requestId}] PDF uploaded to: ${storagePath}`)
-      } else {
-        console.error(`[reports][${requestId}] Upload failed:`, uploadError)
+      if (uploadError) {
+        console.error(`[reports][${requestId}][stage] upload_failed error_code=${uploadError.errorCode || 'UNKNOWN'}`)
+        throw new Error(`[stage=upload] Storage upload failed: ${uploadError.message} (code: ${uploadError.errorCode || 'UNKNOWN'})`)
       }
+
+      if (!uploadData) {
+        console.error(`[reports][${requestId}][stage] upload_failed no_data`)
+        throw new Error(`[stage=upload] Storage upload returned no data`)
+      }
+
+      console.log(`[reports][${requestId}][stage] upload_ok path=${storagePath}`)
+
+      // STAGE: Create signed URL
+      console.log(`[reports][${requestId}][stage] create_signed_url_start`)
+      const { data: signedUrlData } = await supabase.storage
+        .from('reports')
+        .createSignedUrl(storagePath, 60 * 60 * 24 * 365)
+
+      if (signedUrlData?.signedUrl) {
+        pdfUrl = signedUrlData.signedUrl
+        console.log(`[reports][${requestId}][stage] create_signed_url_ok`)
+      } else {
+        console.warn(`[reports][${requestId}][stage] create_signed_url_warning no_url`)
+      }
+
+      // STAGE: Update report_run with PDF metadata
+      console.log(`[reports][${requestId}][stage] update_report_run_start`)
+      await supabase
+        .from('report_runs')
+        .update({
+          pdf_path: storagePath,
+          pdf_signed_url: pdfUrl,
+          pdf_generated_at: new Date().toISOString(),
+        })
+        .eq('id', reportRun.id)
+      console.log(`[reports][${requestId}][stage] update_report_run_ok`)
     } catch (uploadError: any) {
-      console.error(`[reports][${requestId}] Upload exception:`, uploadError)
-      // Don't fail the request if upload fails - PDF is still generated
+      const errorMessage = uploadError?.message || 'Unknown upload error'
+      const stage = errorMessage.match(/\[stage=(\w+)\]/)?.[1] || 'upload'
+      const errorCode = uploadError?.errorCode || uploadError?.code || 'NO_CODE'
+      
+      console.error(`[reports][${requestId}][stage] ${stage}_failed error_code=${errorCode}`)
+      console.error(`[reports][${requestId}] error_message=`, errorMessage)
+      throw new Error(`[stage=${stage}] ${errorMessage} (code: ${errorCode})`)
     }
 
+    // STAGE: Request complete
+    console.log(`[reports][${requestId}][stage] request_complete runId=${reportRun.id} pdfUrl=${pdfUrl ? 'yes' : 'no'}`)
+    
     // Include build SHA in response header for deployment verification
     const buildSha = process.env.VERCEL_GIT_COMMIT_SHA || process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA || 'no-sha'
     
