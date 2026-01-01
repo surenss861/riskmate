@@ -281,8 +281,10 @@ export async function POST(
         })
 
       if (uploadError) {
-        console.error(`[reports][${requestId}][stage] upload_failed error_code=${uploadError.errorCode || 'UNKNOWN'}`)
-        throw new Error(`[stage=upload] Storage upload failed: ${uploadError.message} (code: ${uploadError.errorCode || 'UNKNOWN'})`)
+        // StorageError from Supabase doesn't have errorCode, use message and status if available
+        const errorCode = (uploadError as any).statusCode || (uploadError as any).status || 'UNKNOWN'
+        console.error(`[reports][${requestId}][stage] upload_failed error_code=${errorCode}`, uploadError)
+        throw new Error(`[stage=upload] Storage upload failed: ${uploadError.message} (code: ${errorCode})`)
       }
 
       if (!uploadData) {
@@ -319,7 +321,8 @@ export async function POST(
     } catch (uploadError: any) {
       const errorMessage = uploadError?.message || 'Unknown upload error'
       const stage = errorMessage.match(/\[stage=(\w+)\]/)?.[1] || 'upload'
-      const errorCode = uploadError?.errorCode || uploadError?.code || 'NO_CODE'
+      // Try multiple ways to get error code (StorageError doesn't have a standard errorCode property)
+      const errorCode = uploadError?.statusCode || uploadError?.status || uploadError?.code || 'NO_CODE'
       
       console.error(`[reports][${requestId}][stage] ${stage}_failed error_code=${errorCode}`)
       console.error(`[reports][${requestId}] error_message=`, errorMessage)
