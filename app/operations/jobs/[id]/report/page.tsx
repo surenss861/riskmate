@@ -89,14 +89,39 @@ export default function JobReportPage() {
           status: 'draft',
           packetType: packetType || 'insurance', // Default to insurance
         }),
+        cache: 'no-store',
       })
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.message || `Failed to generate PDF: ${response.statusText}`)
+      // Extract build SHA from headers for deployment verification
+      const buildSha = response.headers.get('x-build-sha')
+      const raw = await response.text()
+
+      let data: any = null
+      try {
+        data = JSON.parse(raw)
+      } catch {
+        // Not JSON, keep data as null
       }
 
-      const result = await response.json()
+      if (!response.ok) {
+        console.error('[API Error]', {
+          status: response.status,
+          buildSha,
+          raw,
+          data,
+        })
+        // Throw error with structured data for better debugging
+        const errorMessage = data?.message || raw || `Failed to generate PDF: ${response.statusText}`
+        const error = new Error(errorMessage) as any
+        error.status = response.status
+        error.buildSha = buildSha
+        error.requestId = data?.requestId
+        error.stage = data?.stage
+        error.errorCode = data?.error_code
+        throw error
+      }
+
+      const result = data || JSON.parse(raw)
       console.log('PDF generation response:', result)
       const { pdf_url, pdf_base64 } = result.data ?? {}
 
@@ -228,10 +253,32 @@ export default function JobReportPage() {
           setExportError('Report generated but couldn\'t download it. Try refreshing the page and exporting again.')
       }
     } catch (err: any) {
-      console.error('Failed to export PDF', err)
+      console.error('[PDF Export Failed]', {
+        message: err?.message,
+        status: err?.status,
+        buildSha: err?.buildSha,
+        requestId: err?.requestId,
+        stage: err?.stage,
+        errorCode: err?.errorCode,
+        fullError: err,
+      })
+      
+      // Use structured error info if available
       const errorMessage = err?.message || err?.detail || 'Failed to export PDF'
-      console.error('Error details:', err)
-      setExportError(`We couldn't generate the PDF report. Your job data is safe — try again in a moment. If this continues, check your internet connection.`)
+      const stage = err?.stage || 'unknown'
+      const requestId = err?.requestId || 'none'
+      
+      // Provide more specific error message based on stage
+      let userMessage = `We couldn't generate the PDF report.`
+      if (stage !== 'unknown') {
+        userMessage += ` (Stage: ${stage})`
+      }
+      if (requestId !== 'none') {
+        userMessage += ` Request ID: ${requestId.substring(0, 8)}...`
+      }
+      userMessage += ` Your job data is safe — try again in a moment.`
+      
+      setExportError(userMessage)
     } finally {
       setExporting(false)
     }
