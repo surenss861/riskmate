@@ -218,29 +218,39 @@ export async function POST(
     // STAGE: Generate PDF
     console.log(`[reports][${requestId}][stage] generate_pdf_start`)
 
-    // Use Browserless if available (eliminates all serverless Chromium issues)
-    // Fallback to local Chromium if BROWSERLESS_TOKEN is not set
-    const useBrowserless = !!process.env.BROWSERLESS_TOKEN
-    console.log(`[reports][${requestId}] PDF generation method: ${useBrowserless ? 'Browserless (remote)' : 'Local Chromium (serverless)'}`)
+    // CRITICAL: Require Browserless (no fallback to local Chromium)
+    // Fallback hides the real problem and keeps you debugging serverless Chromium issues forever
+    const browserlessToken = process.env.BROWSERLESS_TOKEN
+    if (!browserlessToken) {
+      console.error(`[reports][${requestId}][stage] browserless_missing_token`)
+      return NextResponse.json(
+        {
+          message: 'Browserless token not configured. Add BROWSERLESS_TOKEN to Vercel environment variables.',
+          requestId,
+          stage: 'browserless_missing_token',
+          error_code: 'MISSING_BROWSERLESS_TOKEN',
+        },
+        {
+          status: 500,
+          headers: {
+            'X-PDF-Method': 'none',
+            'X-Build-SHA': buildSha,
+          },
+        }
+      )
+    }
 
-    // Generate PDF using Playwright utility
+    console.log(`[reports][${requestId}] PDF generation method: Browserless (remote)`)
+
+    // Generate PDF using Browserless
     let pdfBuffer: Buffer
     try {
-      if (useBrowserless) {
-        pdfBuffer = await generatePdfRemote({
-          url: printUrl,
-          jobId,
-          organizationId: organization_id,
-          requestId, // Pass requestId for better log correlation
-        })
-      } else {
-        pdfBuffer = await generatePdfFromUrl({
-          url: printUrl,
-          jobId,
-          organizationId: organization_id,
-          requestId, // Pass requestId for better log correlation
-        })
-      }
+      pdfBuffer = await generatePdfRemote({
+        url: printUrl,
+        jobId,
+        organizationId: organization_id,
+        requestId, // Pass requestId for better log correlation
+      })
       console.log(`[reports][${requestId}][stage] generate_pdf_ok size=${(pdfBuffer.length / 1024).toFixed(2)}KB`)
     } catch (browserError: any) {
       // Extract stage and error code from the error
@@ -347,9 +357,6 @@ export async function POST(
     // STAGE: Request complete
     console.log(`[reports][${requestId}][stage] request_complete runId=${reportRun.id} pdfUrl=${pdfUrl ? 'yes' : 'no'}`)
     
-    // Include build SHA in response header for deployment verification
-    const buildSha = process.env.VERCEL_GIT_COMMIT_SHA || process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA || 'no-sha'
-    
     return NextResponse.json(
       {
         data: {
@@ -370,6 +377,7 @@ export async function POST(
           'Pragma': 'no-cache',
           'Expires': '0',
           'X-Build-SHA': buildSha, // Include build SHA for deployment verification
+          'X-PDF-Method': 'browserless', // Indicate which PDF generation method was used
         },
       }
     )
@@ -395,6 +403,7 @@ export async function POST(
         status: 500,
         headers: {
           'X-Build-SHA': buildSha, // Include build SHA for deployment verification
+          'X-PDF-Method': stage === 'browserless_missing_token' ? 'none' : 'browserless', // Indicate which PDF generation method was used (or attempted)
         },
       }
     )
