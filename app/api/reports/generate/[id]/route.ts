@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { generatePdfFromUrl } from '@/lib/utils/playwright'
+import { generatePdfRemote } from '@/lib/utils/playwright-remote'
 import { buildJobReport } from '@/lib/utils/jobReport'
 import { buildJobPacket } from '@/lib/utils/packets/builder'
 import { computeCanonicalHash } from '@/lib/utils/canonicalJson'
@@ -217,15 +218,29 @@ export async function POST(
     // STAGE: Generate PDF
     console.log(`[reports][${requestId}][stage] generate_pdf_start`)
 
+    // Use Browserless if available (eliminates all serverless Chromium issues)
+    // Fallback to local Chromium if BROWSERLESS_TOKEN is not set
+    const useBrowserless = !!process.env.BROWSERLESS_TOKEN
+    console.log(`[reports][${requestId}] PDF generation method: ${useBrowserless ? 'Browserless (remote)' : 'Local Chromium (serverless)'}`)
+
     // Generate PDF using Playwright utility
     let pdfBuffer: Buffer
     try {
-      pdfBuffer = await generatePdfFromUrl({
-        url: printUrl,
-        jobId,
-        organizationId: organization_id,
-        requestId, // Pass requestId for better log correlation
-      })
+      if (useBrowserless) {
+        pdfBuffer = await generatePdfRemote({
+          url: printUrl,
+          jobId,
+          organizationId: organization_id,
+          requestId, // Pass requestId for better log correlation
+        })
+      } else {
+        pdfBuffer = await generatePdfFromUrl({
+          url: printUrl,
+          jobId,
+          organizationId: organization_id,
+          requestId, // Pass requestId for better log correlation
+        })
+      }
       console.log(`[reports][${requestId}][stage] generate_pdf_ok size=${(pdfBuffer.length / 1024).toFixed(2)}KB`)
     } catch (browserError: any) {
       // Extract stage and error code from the error
