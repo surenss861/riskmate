@@ -238,6 +238,7 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
 
             {/* PDF Ready Marker */}
             <div id="pdf-ready" style={{ display: 'none' }} />
+            <div data-report-ready="true" style={{ display: 'none' }} aria-hidden="true" />
           </div>
         </body>
       </html>
