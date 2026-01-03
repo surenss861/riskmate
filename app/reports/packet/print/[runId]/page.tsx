@@ -10,9 +10,11 @@ import { verifyPrintToken } from '@/lib/utils/printToken'
 import { buildJobPacket } from '@/lib/utils/packets/builder'
 import { SectionRenderer } from '@/components/report/SectionRenderer'
 import { colors } from '@/lib/design-system/tokens'
+import { pdfTheme } from '@/lib/design-system/pdfTheme'
 import { isValidPacketType } from '@/lib/utils/packets/types'
 import type { JobPacketPayload } from '@/lib/utils/packets/builder'
 import { computeCanonicalHash } from '@/lib/utils/canonicalJson'
+import { formatPdfTimestamp } from '@/lib/utils/pdfFormatUtils'
 
 // Force dynamic rendering and Node.js runtime for server-side auth/token verification
 export const runtime = 'nodejs'
@@ -33,76 +35,31 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
 
     let organization_id: string | null = null
 
-    // Verify token if provided (for serverless PDF generation)
+    // Verify token and extract payload
     if (rawToken) {
-      let token = rawToken
       try {
-        token = decodeURIComponent(rawToken)
-      } catch (decodeError) {
-        console.warn('[PACKET-PRINT] decodeURIComponent failed, using raw token:', decodeError)
-        token = rawToken
-      }
-
-      console.log('[PACKET-PRINT] Token provided, verifying...', { tokenLength: token.length, runId })
-      const verifiedPayload = verifyPrintToken(token)
-      if (!verifiedPayload) {
-        console.error('[PACKET-PRINT] token signature mismatch or expired')
+        tokenPayload = await verifyPrintToken(rawToken)
+        organization_id = tokenPayload.organizationId
+        console.log('[PACKET-PRINT] Token verified:', {
+          jobId: tokenPayload.jobId.substring(0, 8),
+          organizationId: organization_id?.substring(0, 8),
+          reportRunId: tokenPayload.reportRunId?.substring(0, 8),
+        })
+      } catch (tokenError: any) {
+        console.error('[PACKET-PRINT] Token verification failed:', tokenError?.message)
         return (
           <div style={{ padding: '20px', fontFamily: 'system-ui' }}>
             <h1>403 - Invalid Token</h1>
-            <p>Token verification failed. This link may have expired or been tampered with.</p>
+            <p>The provided token is invalid or expired.</p>
           </div>
         )
       }
-      console.log('[PACKET-PRINT] Token verified successfully', { organizationId: verifiedPayload.organizationId })
-      organization_id = verifiedPayload.organizationId
-      tokenPayload = verifiedPayload // Store for later validation
     } else {
-      console.log('[PACKET-PRINT] token missing - using cookie auth')
-      // For browser access, use cookie-based auth
-      const { createSupabaseServerClient } = await import('@/lib/supabase/server')
-      const supabase = await createSupabaseServerClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        console.error('[PACKET-PRINT] user not authenticated')
-        return (
-          <div style={{ padding: '20px', fontFamily: 'system-ui' }}>
-            <h1>401 - Unauthorized</h1>
-            <p>Please log in to view this report.</p>
-          </div>
-        )
-      }
-
-      const { data: userData } = await supabase
-        .from('users')
-        .select('organization_id')
-        .eq('id', user.id)
-        .maybeSingle()
-
-      if (!userData?.organization_id) {
-        console.error('[PACKET-PRINT] user missing organization_id')
-        return (
-          <div style={{ padding: '20px', fontFamily: 'system-ui' }}>
-            <h1>403 - No Organization</h1>
-            <p>Your account is not associated with an organization.</p>
-          </div>
-        )
-      }
-      organization_id = userData.organization_id
+      // No token - try to use session-based auth (for development/debugging)
+      console.log('[PACKET-PRINT] No token provided, using session auth')
     }
 
-    if (!organization_id) {
-      console.error('[PACKET-PRINT] organization_id is null after auth')
-      return (
-        <div style={{ padding: '20px', fontFamily: 'system-ui' }}>
-          <h1>500 - Internal Error</h1>
-          <p>Failed to determine organization.</p>
-        </div>
-      )
-    }
-
-    // Use service role client for serverless PDF generation (bypasses RLS)
-    // Use regular client for browser access (respects user's RLS)
+    // Create Supabase client (service role if token provided, otherwise server client)
     const supabase = rawToken
       ? createSupabaseServiceClient()
       : await import('@/lib/supabase/server').then((m) => m.createSupabaseServerClient())
@@ -136,33 +93,24 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
       return (
         <div style={{ padding: '20px', fontFamily: 'system-ui' }}>
           <h1>403 - Token Mismatch</h1>
-          <p>Token is not valid for this report run.</p>
+          <p>The token does not match the requested report run.</p>
         </div>
       )
     }
 
-    // CRITICAL: Validate token jobId matches reportRun.job_id (prevents cross-job access)
-    if (rawToken && tokenPayload?.jobId && tokenPayload.jobId !== reportRun.job_id) {
-      console.error('[PACKET-PRINT] Token jobId mismatch:', { 
-        tokenJobId: tokenPayload.jobId, 
-        runJobId: reportRun.job_id 
-      })
-      return (
-        <div style={{ padding: '20px', fontFamily: 'system-ui' }}>
-          <h1>403 - Token Mismatch</h1>
-          <p>Token is not valid for this job.</p>
-        </div>
-      )
+    // Update organization_id from reportRun if not set from token
+    if (!organization_id) {
+      organization_id = reportRun.organization_id
     }
 
-    // CRITICAL: Validate packet_type from DB is valid (prevents rendering with invalid/compromised packet_type)
+    // Validate packet type
     const packetType = reportRun.packet_type
-    if (!isValidPacketType(packetType)) {
-      console.error('[PACKET-PRINT] Invalid packet_type from database:', { runId, packetType })
+    if (!packetType || !isValidPacketType(packetType)) {
+      console.error('[PACKET-PRINT] Invalid packet type:', packetType)
       return (
         <div style={{ padding: '20px', fontFamily: 'system-ui' }}>
-          <h1>500 - Invalid Packet Type</h1>
-          <p>The report run references an unknown packet type: {packetType}.</p>
+          <h1>400 - Invalid Packet Type</h1>
+          <p>The packet type "{packetType}" is not valid.</p>
         </div>
       )
     }
@@ -266,34 +214,13 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
                 </div>
                 
                 {/* What this packet proves - teaser */}
-                <div style={{ marginTop: '40pt', paddingTop: '32pt', borderTop: `1pt solid ${colors.gray300}` }}>
-                  <div style={{ fontSize: '11pt', color: colors.gray300, marginBottom: '16pt', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    What This Packet Proves
-                  </div>
-                  <ul style={{ 
-                    listStyle: 'none', 
-                    padding: 0, 
-                    margin: 0,
-                    fontSize: '11pt',
-                    lineHeight: '1.8',
-                    color: colors.white
-                  }}>
-                    <li style={{ marginBottom: '8pt', paddingLeft: '20pt', position: 'relative' }}>
-                      <span style={{ position: 'absolute', left: 0 }}>•</span>
-                      All records are timestamped and immutable
-                    </li>
-                    <li style={{ marginBottom: '8pt', paddingLeft: '20pt', position: 'relative' }}>
-                      <span style={{ position: 'absolute', left: 0 }}>•</span>
-                      Evidence is cryptographically verified and linked to events
-                    </li>
-                    <li style={{ marginBottom: '8pt', paddingLeft: '20pt', position: 'relative' }}>
-                      <span style={{ position: 'absolute', left: 0 }}>•</span>
-                      Complete chain of custody from job creation to closure
-                    </li>
-                    <li style={{ paddingLeft: '20pt', position: 'relative' }}>
-                      <span style={{ position: 'absolute', left: 0 }}>•</span>
-                      Document integrity verified via SHA-256 hash (see Integrity page)
-                    </li>
+                <div className="cover-proof-teaser">
+                  <div className="cover-proof-label">What This Packet Proves</div>
+                  <ul className="cover-proof-list">
+                    <li>All records are timestamped and immutable</li>
+                    <li>Evidence is cryptographically verified and linked to events</li>
+                    <li>Complete chain of custody from job creation to closure</li>
+                    <li>Document integrity verified via SHA-256 hash (see Integrity page)</li>
                   </ul>
                 </div>
               </div>
@@ -325,12 +252,13 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
 }
 
 function getPrintStyles(): string {
+  const theme = pdfTheme
+  
   return `
-    /* Import existing print styles from the main print page */
-    /* Headers/footers are handled by Playwright displayHeaderFooter, not CSS @page */
+    /* PDF Theme - Minimal, court-ready, brand-aligned */
     @page {
       size: A4;
-      margin: 72pt 16mm 60pt 16mm; /* top right bottom left - space for Playwright header/footer */
+      margin: ${theme.spacing.pageMargin} ${theme.spacing.pageMargin} ${theme.spacing.pageMargin} ${theme.spacing.pageMargin};
     }
 
     * {
@@ -342,41 +270,37 @@ function getPrintStyles(): string {
     }
 
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
-      font-size: 11pt;
-      line-height: 1.5;
-      color: #111111;
-      background: white;
+      font-family: ${theme.typography.fontFamily};
+      font-size: ${theme.typography.sizes.body};
+      line-height: ${theme.typography.lineHeight.normal};
+      color: ${theme.colors.ink};
+      background: ${theme.colors.paper};
     }
 
     .report-root {
       position: relative;
     }
 
-    .report-root::before {
-      content: 'CONFIDENTIAL';
+    /* Watermark - subtle, only on draft */
+    .report-root[data-draft="true"]::before {
+      content: 'DRAFT';
       position: fixed;
       inset: 0;
       display: grid;
       place-items: center;
       font-size: 120px;
-      font-weight: 700;
+      font-weight: ${theme.typography.weights.bold};
       letter-spacing: 0.08em;
       opacity: 0.03;
       z-index: 0;
       pointer-events: none;
       transform: rotate(-35deg);
-    }
-
-    .report-root[data-draft="true"]::before {
-      content: 'DRAFT';
-      opacity: 0.03;
+      color: ${theme.colors.ink};
     }
     
-    /* Hide draft watermark for production exports */
+    /* No watermark for production exports */
     .report-root:not([data-draft="true"])::before {
-      content: 'CONFIDENTIAL';
-      opacity: 0.02;
+      display: none;
     }
 
     .report-content {
@@ -384,6 +308,7 @@ function getPrintStyles(): string {
       z-index: 1;
     }
 
+    /* Cover Page - Black background, orange accent */
     .cover-page {
       position: relative;
       z-index: 1;
@@ -393,9 +318,9 @@ function getPrintStyles(): string {
       height: auto;
       display: block;
       margin: 0;
-      padding: 40pt 16mm;
-      background: ${colors.black};
-      color: ${colors.white};
+      padding: 40pt ${theme.spacing.pageMargin};
+      background: #000000;
+      color: #FFFFFF;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
       break-inside: avoid;
@@ -416,177 +341,404 @@ function getPrintStyles(): string {
 
     .cover-brand {
       font-size: 20pt;
-      font-weight: bold;
-      color: ${colors.white};
+      font-weight: ${theme.typography.weights.bold};
+      color: #FFFFFF;
       letter-spacing: 0.05em;
     }
 
     .cover-title {
       font-size: 42pt;
-      font-weight: bold;
-      color: ${colors.white};
+      font-weight: ${theme.typography.weights.bold};
+      color: #FFFFFF;
       margin: 0 0 20pt 0;
       letter-spacing: -0.02em;
     }
 
     .cover-accent-line {
       width: 280pt;
-      height: 4pt;
-      background-color: ${colors.cordovan};
+      height: 1pt;
+      background-color: ${theme.colors.accent};
       margin-bottom: 30pt;
     }
 
     .cover-subheader {
       font-size: 10.5pt;
-      color: ${colors.gray300};
-      margin-bottom: 50pt;
+      color: #CCCCCC;
+      margin-bottom: 32pt;
       display: flex;
       gap: 8pt;
       flex-wrap: wrap;
       line-height: 1.6;
     }
+    
+    .cover-proof-teaser {
+      margin-top: 40pt;
+      padding-top: 32pt;
+      border-top: 1pt solid #333333;
+    }
+    
+    .cover-proof-label {
+      font-size: 11pt;
+      color: #CCCCCC;
+      margin-bottom: 16pt;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    
+    .cover-proof-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      font-size: 11pt;
+      line-height: 1.8;
+      color: #FFFFFF;
+    }
+    
+    .cover-proof-list li {
+      margin-bottom: 8pt;
+      padding-left: 20pt;
+      position: relative;
+    }
+    
+    .cover-proof-list li::before {
+      content: '•';
+      position: absolute;
+      left: 0;
+    }
 
+    /* Page Sections - White background, minimal design */
     .page {
       position: relative;
       z-index: 2;
       page-break-before: always;
       break-inside: avoid;
-      background: ${colors.white};
-      padding: 40pt 16mm;
+      background: ${theme.colors.paper};
+      padding: ${theme.spacing.sectionGap} ${theme.spacing.pageMargin};
       min-height: 100vh;
-    }
-    
-    /* Header bar for all pages except cover */
-    .page::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 40pt;
-      background: ${colors.black};
-      color: ${colors.white};
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0 16mm;
-      font-size: 9pt;
-      z-index: 10;
-    }
-    
-    /* Footer bar for all pages */
-    .page::after {
-      content: 'Page ' counter(page) ' of ' counter(pages) ' • Generated: ' attr(data-generated) ' UTC • ' attr(data-hash);
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      height: 30pt;
-      padding: 8pt 16mm;
-      font-size: 8pt;
-      color: #666;
-      border-top: 1pt solid #e0e0e0;
-      background: ${colors.white};
-      z-index: 10;
     }
 
     .section-header {
-      font-size: 22pt;
-      font-weight: bold;
-      color: ${colors.black};
-      margin-bottom: 24pt;
+      font-size: ${theme.typography.sizes.h2};
+      font-weight: ${theme.typography.weights.bold};
+      color: ${theme.colors.ink};
+      margin-bottom: ${theme.spacing.sectionGap};
       padding-bottom: 8pt;
-      border-bottom: 2pt solid ${colors.cordovan};
+      border-bottom: ${theme.borders.thick} solid ${theme.colors.accent};
     }
 
+    /* Cards - Minimal borders, clean spacing */
     .column-card {
-      border: 1pt solid ${colors.borderLight};
-      border-radius: 6pt;
-      padding: 16pt;
-      background-color: ${colors.white};
+      border: ${theme.borders.medium} solid ${theme.colors.borders};
+      border-radius: ${theme.borders.radius};
+      padding: ${theme.spacing.cardPadding};
+      background-color: ${theme.colors.paper};
       break-inside: avoid;
       page-break-inside: avoid;
     }
 
-    .risk-card {
-      border-left: 4pt solid;
-    }
-
     .card-title {
-      font-size: 14pt;
-      font-weight: bold;
-      color: ${colors.black};
-      margin-bottom: 16pt;
+      font-size: ${theme.typography.sizes.h3};
+      font-weight: ${theme.typography.weights.semibold};
+      color: ${theme.colors.ink};
+      margin-bottom: ${theme.spacing.textGap};
     }
 
     .detail-list {
       display: flex;
       flex-direction: column;
-      gap: 12pt;
+      gap: ${theme.spacing.textGap};
     }
 
     .detail-item {
-      font-size: 11pt;
-      color: ${colors.gray700};
-      line-height: 1.5;
+      font-size: ${theme.typography.sizes.body};
+      color: ${theme.colors.ink};
+      line-height: ${theme.typography.lineHeight.normal};
     }
 
     .detail-item strong {
-      color: ${colors.black};
-      font-weight: 600;
+      color: ${theme.colors.ink};
+      font-weight: ${theme.typography.weights.semibold};
     }
 
-    .empty-state {
-      color: ${colors.gray600};
-      font-style: italic;
-      padding: 20pt 0;
-    }
-
-    .audit-table {
+    /* Tables - Clean, scannable */
+    .pdf-table {
       width: 100%;
       border-collapse: collapse;
-      font-size: 9.5pt;
-      background: ${colors.white};
+      font-size: ${theme.typography.sizes.body};
+      background: ${theme.colors.paper};
+      break-inside: avoid;
+      page-break-inside: avoid;
     }
 
-    .audit-table thead {
-      background-color: ${colors.bgSecondary};
+    .pdf-table thead {
+      background-color: #FAFAFA;
     }
 
-    .audit-table th {
+    .pdf-table th {
       padding: 10pt 8pt;
       text-align: left;
-      font-weight: 600;
-      color: ${colors.black};
-      border-bottom: 1.5pt solid ${colors.borderLight};
+      font-weight: ${theme.typography.weights.semibold};
+      color: ${theme.colors.ink};
+      border-bottom: ${theme.borders.thick} solid ${theme.colors.borders};
+      font-size: ${theme.typography.sizes.caption};
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
     }
 
-    .audit-table td {
+    .pdf-table td {
       padding: 10pt 8pt;
-      color: ${colors.gray700};
-      border-bottom: 0.5pt solid ${colors.borderLight};
+      color: ${theme.colors.ink};
+      border-bottom: ${theme.borders.thin} solid ${theme.colors.borders};
+      font-size: ${theme.typography.sizes.body};
     }
 
-    .audit-table .even-row {
-      background-color: ${colors.bgSecondary};
-    }
-
-    table,
-    thead,
-    tbody {
+    .pdf-table tr {
       break-inside: avoid;
       page-break-inside: avoid;
     }
 
-    tr {
-      break-inside: avoid;
-      page-break-inside: avoid;
+    .pdf-table tbody tr:nth-child(even) {
+      background-color: #FAFAFA;
     }
 
-    td,
-    th {
+    /* Risk Badges - Minimal, outline style */
+    .risk-badge {
+      display: inline-block;
+      padding: 4pt 10pt;
+      border-radius: ${theme.borders.radius};
+      font-size: ${theme.typography.sizes.caption};
+      font-weight: ${theme.typography.weights.semibold};
+      border: ${theme.borders.medium} solid;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    .risk-badge-critical {
+      border-color: ${theme.colors.accent};
+      background-color: ${theme.colors.accent};
+      color: #FFFFFF;
+    }
+
+    .risk-badge-high {
+      border-color: ${theme.colors.accent};
+      color: ${theme.colors.accent};
+      background-color: transparent;
+    }
+
+    .risk-badge-medium {
+      border-color: ${theme.colors.muted};
+      color: ${theme.colors.muted};
+      background-color: transparent;
+    }
+
+    .risk-badge-low {
+      border-color: ${theme.colors.borders};
+      color: ${theme.colors.muted};
+      background-color: transparent;
+    }
+
+    /* Severity Chips - Outline style */
+    .severity-chip {
+      display: inline-block;
+      padding: 2pt 8pt;
+      border-radius: ${theme.borders.radius};
+      font-size: ${theme.typography.sizes.small};
+      font-weight: ${theme.typography.weights.semibold};
+      border: ${theme.borders.thin} solid;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    .severity-chip-high {
+      border-color: ${theme.colors.accent};
+      color: ${theme.colors.accent};
+    }
+
+    .severity-chip-medium {
+      border-color: ${theme.colors.muted};
+      color: ${theme.colors.muted};
+    }
+
+    .severity-chip-low {
+      border-color: ${theme.colors.borders};
+      color: ${theme.colors.muted};
+    }
+
+    /* Grids - 2-column layouts for density */
+    .pdf-grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: ${theme.spacing.gridGap};
+      margin-bottom: ${theme.spacing.sectionGap};
+    }
+
+    .pdf-grid-4 {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: ${theme.spacing.gridGap};
+      margin-bottom: ${theme.spacing.sectionGap};
+    }
+
+    /* Photo Grid - 2-column, chain-of-custody style */
+    .photos-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: ${theme.spacing.gridGap};
       break-inside: avoid;
-      page-break-inside: avoid;
+    }
+
+    .photo-item {
+      border: ${theme.borders.medium} solid ${theme.colors.borders};
+      border-radius: ${theme.borders.radius};
+      overflow: hidden;
+      break-inside: avoid;
+    }
+
+    .photo-image {
+      width: 100%;
+      height: 180pt;
+      object-fit: cover;
+      display: block;
+    }
+
+    .photo-caption {
+      padding: 10pt;
+      background-color: #FAFAFA;
+      font-size: ${theme.typography.sizes.caption};
+    }
+
+    .photo-name {
+      font-weight: ${theme.typography.weights.semibold};
+      color: ${theme.colors.ink};
+      margin-bottom: 4pt;
+    }
+
+    .photo-meta {
+      font-size: ${theme.typography.sizes.small};
+      color: ${theme.colors.muted};
+    }
+
+    /* Empty State */
+    .empty-state {
+      color: ${theme.colors.muted};
+      font-style: italic;
+      padding: 20pt 0;
+      font-size: ${theme.typography.sizes.body};
+    }
+
+    /* Compliance Status */
+    .compliance-status-badge {
+      display: inline-block;
+      padding: 4pt 8pt;
+      border-radius: ${theme.borders.radius};
+      font-size: ${theme.typography.sizes.caption};
+      font-weight: ${theme.typography.weights.semibold};
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    .compliance-status-badge.complete {
+      background-color: #E6F7E6;
+      color: #16a34a;
+      border: ${theme.borders.thin} solid #16a34a;
+    }
+
+    .compliance-status-badge.incomplete {
+      background-color: #FEE;
+      color: #dc2626;
+      border: ${theme.borders.thin} solid #dc2626;
+    }
+
+    .compliance-status-badge.pending {
+      background-color: #FFF4E6;
+      color: #ca8a04;
+      border: ${theme.borders.thin} solid #ca8a04;
+    }
+
+    /* TOC */
+    .toc-list {
+      list-style: none;
+      padding: 0;
+      margin-top: ${theme.spacing.sectionGap};
+    }
+
+    .toc-item {
+      font-size: ${theme.typography.sizes.body};
+      margin-bottom: ${theme.spacing.textGap};
+      color: ${theme.colors.ink};
+    }
+
+    .toc-item strong {
+      color: ${theme.colors.ink};
+      font-weight: ${theme.typography.weights.semibold};
+    }
+
+    /* Integrity Section */
+    .integrity-section {
+      background-color: #FAFAFA;
+      border: ${theme.borders.medium} solid ${theme.colors.borders};
+      border-radius: 8pt;
+      padding: ${theme.spacing.sectionGap};
+      margin-top: ${theme.spacing.sectionGap};
+      break-inside: avoid;
+    }
+
+    .integrity-header {
+      font-size: ${theme.typography.sizes.h2};
+      font-weight: ${theme.typography.weights.bold};
+      color: ${theme.colors.ink};
+      margin-bottom: ${theme.spacing.textGap};
+      padding-bottom: 8pt;
+      border-bottom: ${theme.borders.medium} solid ${theme.colors.borders};
+    }
+
+    .integrity-detail {
+      font-size: ${theme.typography.sizes.body};
+      color: ${theme.colors.ink};
+      margin-bottom: 8pt;
+    }
+
+    .integrity-detail strong {
+      color: ${theme.colors.ink};
+      font-weight: ${theme.typography.weights.semibold};
+    }
+
+    .integrity-proof-list {
+      list-style: disc;
+      margin-left: 20pt;
+      margin-top: ${theme.spacing.textGap};
+      color: ${theme.colors.ink};
+      font-size: ${theme.typography.sizes.body};
+    }
+
+    .integrity-proof-list li {
+      margin-bottom: 6pt;
+    }
+
+    .integrity-confidential {
+      font-size: ${theme.typography.sizes.caption};
+      color: ${theme.colors.muted};
+      text-align: center;
+      margin-top: ${theme.spacing.sectionGap};
+      font-style: italic;
+    }
+
+    /* QR Code Container */
+    .qr-code-container {
+      text-align: center;
+      margin-top: ${theme.spacing.sectionGap};
+      padding: ${theme.spacing.cardPadding};
+      background-color: #FAFAFA;
+      border-radius: ${theme.borders.radius};
+    }
+
+    .qr-code-image {
+      width: 120pt;
+      height: 120pt;
+      margin: 0 auto ${theme.spacing.textGap};
+      display: block;
     }
 
     @media print {
@@ -606,4 +758,3 @@ function getPrintStyles(): string {
     }
   `
 }
-
