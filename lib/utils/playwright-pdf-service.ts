@@ -29,8 +29,10 @@ export async function generatePdfFromService({ url, jobId, organizationId, reque
 
     // Generate HMAC auth token
     const authToken = generatePdfServiceAuthToken(serviceSecret, logRequestId)
-
-    console.log(`[${logRequestId}][stage] call_pdf_service_start url=${serviceUrl}`)
+    
+    // Debug logging for auth (helps verify format matches service expectations)
+    const [timestamp, hmac] = authToken.split(':')
+    console.log(`[${logRequestId}][stage] call_pdf_service_start url=${serviceUrl} token_timestamp=${timestamp} token_hmac_prefix=${hmac?.substring(0, 8)}...`)
 
     try {
         const response = await fetch(`${serviceUrl}/generate`, {

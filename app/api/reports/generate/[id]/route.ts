@@ -220,6 +220,7 @@ export async function POST(
     console.log(`[reports][${requestId}][stage] generate_pdf_start`)
 
     // Check which PDF service to use (prefer self-hosted, fallback to Browserless)
+    // Declare pdfMethod outside try block so it's accessible in catch handler
     const pdfServiceUrl = process.env.PDF_SERVICE_URL
     const pdfServiceSecret = process.env.PDF_SERVICE_SECRET
     const browserlessToken = process.env.BROWSERLESS_TOKEN
@@ -404,7 +405,7 @@ export async function POST(
           'Pragma': 'no-cache',
           'Expires': '0',
           'X-Build-SHA': buildSha, // Include build SHA for deployment verification
-          'X-PDF-Method': 'browserless', // Indicate which PDF generation method was used
+          'X-PDF-Method': pdfMethod, // Indicate which PDF generation method was used
         },
       }
     )
@@ -426,7 +427,7 @@ export async function POST(
     // Add Retry-After header for 429 errors
     const headers: Record<string, string> = {
       'X-Build-SHA': buildSha, // Include build SHA for deployment verification
-          'X-PDF-Method': stage === 'pdf_service_missing_config' ? 'none' : (stage === 'browserless_missing_token' ? 'none' : 'browserless'), // Indicate which PDF generation method was used (or attempted)
+          'X-PDF-Method': pdfMethod === 'self-hosted' ? 'self-hosted' : (pdfMethod === 'browserless' ? 'browserless' : 'none'), // Indicate which PDF generation method was used (or attempted)
     }
     
     if (isRateLimited) {
