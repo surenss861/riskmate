@@ -1,9 +1,10 @@
 /**
- * Attachments Index Section Component
- * Renders list of all attachments/documents
+ * Evidence Index Section Component
+ * Renders comprehensive list of all attachments/documents with chain-of-custody information
  */
 
-import { formatDate } from '@/lib/utils/reportUtils'
+import { formatPdfTimestamp } from '@/lib/utils/pdfFormatUtils'
+import { pdfTheme } from '@/lib/design-system/pdfTheme'
 
 interface AttachmentsIndexSectionProps {
   data: {
@@ -12,6 +13,8 @@ interface AttachmentsIndexSectionProps {
       name: string
       type: string
       createdAt?: string | null
+      uploadedBy?: string | null
+      uploadedByEmail?: string | null
     }>
     count: number
   }
@@ -31,26 +34,57 @@ export function AttachmentsIndexSection({
 
   return (
     <div className="page">
-      <h2 className="section-header">Attachments</h2>
-      <table className="audit-table">
+      <h2 className="section-header">Evidence Index</h2>
+      
+      <table className="pdf-table">
         <thead>
           <tr>
+            <th>Evidence ID</th>
             <th>Document Name</th>
             <th>Type</th>
-            <th>Date</th>
+            <th>Captured</th>
+            <th>Captured By</th>
           </tr>
         </thead>
         <tbody>
           {data.documents.map((doc, idx) => (
-            <tr key={doc.id} className={idx % 2 === 0 ? 'even-row' : ''}>
-              <td>{doc.name || 'Untitled'}</td>
-              <td>{doc.type || 'N/A'}</td>
-              <td>{doc.createdAt ? formatDate(doc.createdAt) : 'N/A'}</td>
+            <tr key={doc.id}>
+              <td style={{ 
+                fontFamily: 'monospace', 
+                fontSize: pdfTheme.typography.sizes.caption,
+                color: pdfTheme.colors.muted
+              }}>
+                {doc.id.substring(0, 8).toUpperCase()}
+              </td>
+              <td style={{ fontWeight: pdfTheme.typography.weights.semibold }}>
+                {doc.name || 'Untitled'}
+              </td>
+              <td style={{ textTransform: 'capitalize' }}>
+                {doc.type || 'N/A'}
+              </td>
+              <td>
+                {doc.createdAt ? formatPdfTimestamp(doc.createdAt) : 'N/A'}
+              </td>
+              <td>
+                {doc.uploadedBy || 'Unknown'}
+              </td>
             </tr>
           ))}
         </tbody>
       </table>
+      
+      <div style={{ 
+        marginTop: pdfTheme.spacing.sectionGap,
+        padding: pdfTheme.spacing.textGap,
+        backgroundColor: '#FAFAFA',
+        borderRadius: pdfTheme.borders.radius,
+        fontSize: pdfTheme.typography.sizes.caption,
+        color: pdfTheme.colors.muted,
+        fontStyle: 'italic',
+        textAlign: 'center'
+      }}>
+        Total: {data.count} evidence item{data.count !== 1 ? 's' : ''} • All items timestamped and linked to job events
+      </div>
     </div>
   )
 }
-

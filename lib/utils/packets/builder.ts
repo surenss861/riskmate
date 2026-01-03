@@ -1,8 +1,8 @@
 /**
  * Packet Builder
  * 
- * Builds job packet data for any packet type.
- * Sections are independent - no section relies on DOM/layout to compute anything.
+ * Builds packet data structures from job data for PDF generation.
+ * Uses packet definitions to determine which sections to include.
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -27,7 +27,6 @@ export interface JobPacketPayload {
     packetType: PacketType
     packetTitle: string
     generatedAt: string
-    generatedBy?: string
   }
   sections: SectionData[]
   computed: {
@@ -37,7 +36,7 @@ export interface JobPacketPayload {
 }
 
 /**
- * Build job packet data for a specific packet type
+ * Build a complete packet payload for a job
  */
 export async function buildJobPacket({
   jobId,
@@ -129,7 +128,7 @@ async function buildSectionData({
             risk_score: 'Risk Assessment',
             mitigations: 'Controls Applied',
             audit_timeline: 'Audit Timeline',
-            attachments_index: 'Attachments',
+            attachments_index: 'Evidence Index',
             attestations: 'Attestations',
             evidence_photos: 'Evidence Photos',
             compliance_status: 'Compliance Status',
@@ -142,6 +141,7 @@ async function buildSectionData({
             escalation_trail: 'Escalation Trail',
             accountability_timeline: 'Accountability Timeline',
             mitigation_checklist: 'Mitigation Checklist',
+            requirements_evidence_matrix: 'Requirements vs Evidence',
           }
           return {
             title: titleMap[sectionType] || sectionType.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()),
@@ -308,6 +308,64 @@ async function buildSectionData({
         },
       }
 
+    case 'requirements_evidence_matrix': {
+      const photos = documents.filter((doc) => doc.type === 'photo')
+      const completedControls = mitigations.filter((m) => m.done || m.is_completed).length
+      const totalControls = mitigations.length
+      
+      // Build requirements matrix based on available data
+      const requirements = [
+        {
+          category: 'Controls',
+          item: 'Risk Mitigation Controls',
+          required: totalControls > 0,
+          present: completedControls === totalControls && totalControls > 0,
+          evidenceId: totalControls > 0 ? 'MITIGATIONS' : null,
+          completedBy: totalControls > 0 ? `${completedControls}/${totalControls} complete` : null,
+          completedAt: null,
+        },
+        {
+          category: 'Evidence',
+          item: 'Site Condition Photos',
+          required: true,
+          present: photos.length > 0,
+          evidenceId: photos.length > 0 ? photos[0]?.id : null,
+          completedBy: photos.length > 0 ? `${photos.length} photo(s)` : null,
+          completedAt: photos.length > 0 ? photos[0]?.created_at : null,
+        },
+        {
+          category: 'Assessment',
+          item: 'Risk Assessment',
+          required: true,
+          present: risk_score !== null && risk_score.overall_score !== null,
+          evidenceId: risk_score?.overall_score ? 'RISK_SCORE' : null,
+          completedBy: risk_score?.overall_score ? `Score: ${risk_score.overall_score}` : null,
+          completedAt: null,
+        },
+        {
+          category: 'Attestations',
+          item: 'Sign-off/Signatures',
+          required: false, // Optional for now
+          present: false, // TODO: Check if attestations exist
+          evidenceId: null,
+          completedBy: null,
+          completedAt: null,
+        },
+      ]
+      
+      return {
+        type: 'requirements_evidence_matrix',
+        data: {
+          requirements,
+        },
+        meta: {
+          title: 'Requirements vs Evidence',
+          empty: requirements.length === 0,
+          emptyMessage: 'No requirements defined',
+        },
+      }
+    }
+
     case 'audit_timeline':
       const auditEvents = audit || []
       return {
@@ -329,24 +387,45 @@ async function buildSectionData({
         },
       }
 
-    case 'attachments_index':
+    case 'attachments_index': {
+      // Fetch user names for uploaded_by IDs
+      const uploadedByIds = [...new Set(documents.map(d => d.uploaded_by).filter(Boolean))] as string[]
+      const usersMap = new Map<string, { name: string; email: string }>()
+      
+      if (uploadedByIds.length > 0) {
+        const { data: users } = await supabaseClient
+          .from('users')
+          .select('id, full_name, email')
+          .in('id', uploadedByIds)
+        
+        users?.forEach(user => {
+          usersMap.set(user.id, { name: user.full_name || 'Unknown', email: user.email || '' })
+        })
+      }
+      
       return {
         type: 'attachments_index',
         data: {
-          documents: documents.map((doc) => ({
-            id: doc.id,
-            name: doc.name,
-            type: doc.type,
-            createdAt: doc.created_at,
-          })),
+          documents: documents.map((doc) => {
+            const uploader = doc.uploaded_by ? usersMap.get(doc.uploaded_by) : null
+            return {
+              id: doc.id,
+              name: doc.name,
+              type: doc.type,
+              createdAt: doc.created_at,
+              uploadedBy: uploader?.name || null,
+              uploadedByEmail: uploader?.email || null,
+            }
+          }),
           count: documents.length,
         },
         meta: {
-          title: 'Attachments',
+          title: 'Evidence Index',
           empty: documents.length === 0,
           emptyMessage: 'No attachments',
         },
       }
+    }
 
     // Placeholder sections (to be implemented)
     case 'capability_violations':
@@ -386,4 +465,3 @@ async function buildSectionData({
       return null
   }
 }
-

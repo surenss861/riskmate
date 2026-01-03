@@ -16,6 +16,7 @@ import {
   IntegrityVerificationSection,
   TableOfContentsSection,
   AuditTimelineSection,
+  RequirementsEvidenceMatrixSection,
 } from './sections'
 
 interface SectionRendererProps {

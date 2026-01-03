@@ -27,6 +27,7 @@ export type SectionType =
   | 'checklist_completion'
   | 'evidence_photos'
   | 'compliance_status'
+  | 'requirements_evidence_matrix'
   | 'integrity_verification'
 
 export interface PacketDefinition {
