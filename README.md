@@ -119,6 +119,12 @@ STRIPE_SECRET_KEY=your_stripe_secret_key
 STRIPE_PRODUCT_STARTER=prod_xxx
 STRIPE_PRODUCT_PRO=prod_xxx
 STRIPE_PRODUCT_BUSINESS=prod_xxx
+
+# PDF Generation Service (self-hosted on Fly.io)
+PDF_SERVICE_URL=https://pdf-service-dawn-silence-4921.fly.dev
+PDF_SERVICE_SECRET=your_pdf_service_secret
+# OR use Browserless (alternative):
+# BROWSERLESS_TOKEN=your_browserless_token
 ```
 
 ## 📁 Project Structure
