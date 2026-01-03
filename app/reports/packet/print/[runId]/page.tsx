@@ -111,7 +111,7 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
       return (
         <div style={{ padding: '20px', fontFamily: 'system-ui' }}>
           <h1>400 - Invalid Packet Type</h1>
-          <p>The packet type "{packetType}" is not valid.</p>
+          <p>The packet type &quot;{packetType}&quot; is not valid.</p>
         </div>
       )
     }
@@ -229,7 +229,7 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
                     <li>All records are timestamped and immutable</li>
                     <li>Evidence is cryptographically verified and linked to events</li>
                     <li>Complete chain of custody from job creation to closure</li>
-                    <li>Document integrity verified via SHA-256 hash (see Integrity page)</li>
+                    <li>Document integrity verified via SHA-256 hash (see Integrity &amp; Verification page)</li>
                   </ul>
                 </div>
               </div>
