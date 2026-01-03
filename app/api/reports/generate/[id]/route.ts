@@ -404,6 +404,16 @@ export async function POST(
     // Return 429 status for rate limit errors, 500 for everything else
     const statusCode = isRateLimited ? 429 : 500
     
+    // Add Retry-After header for 429 errors
+    const headers: Record<string, string> = {
+      'X-Build-SHA': buildSha, // Include build SHA for deployment verification
+      'X-PDF-Method': stage === 'browserless_missing_token' ? 'none' : 'browserless', // Indicate which PDF generation method was used (or attempted)
+    }
+    
+    if (isRateLimited) {
+      headers['Retry-After'] = '2' // Suggest retry after 2 seconds
+    }
+    
     return NextResponse.json(
       {
         message: errorMessage,
@@ -413,10 +423,7 @@ export async function POST(
       },
       { 
         status: statusCode,
-        headers: {
-          'X-Build-SHA': buildSha, // Include build SHA for deployment verification
-          'X-PDF-Method': stage === 'browserless_missing_token' ? 'none' : 'browserless', // Indicate which PDF generation method was used (or attempted)
-        },
+        headers,
       }
     )
   }

@@ -77,7 +77,15 @@ export default function JobReportPage() {
 
   const handleExport = async (packetType?: PacketType) => {
     if (!jobId) return
+    
+    // Hard lock: prevent multiple exports at once (double-click, re-render, retry wrapper)
+    if (exporting) {
+      console.warn('[Export] Already exporting, ignoring duplicate request')
+      return
+    }
+    
     setExporting(true)
+    setExportError(null) // Clear previous errors
     try {
       // Call API with packet type
       const response = await fetch(`/api/reports/generate/${jobId}`, {
@@ -110,6 +118,22 @@ export default function JobReportPage() {
           raw,
           data,
         })
+        
+        // Handle 429 rate limit with retry
+        if (response.status === 429) {
+          const retryAfter = response.headers.get('Retry-After') || '2'
+          const retrySeconds = parseInt(retryAfter, 10)
+          
+          setExportError(`PDF service is busy. Retrying in ${retrySeconds} seconds...`)
+          
+          // Wait and retry once
+          await new Promise(resolve => setTimeout(resolve, retrySeconds * 1000))
+          
+          // Retry the export (will be blocked by exporting lock if still in progress)
+          setExporting(false) // Reset lock to allow retry
+          return handleExport(packetType)
+        }
+        
         // Throw error with structured data for better debugging
         const errorMessage = data?.message || raw || `Failed to generate PDF: ${response.statusText}`
         const error = new Error(errorMessage) as any
