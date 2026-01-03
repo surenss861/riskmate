@@ -85,6 +85,15 @@ export function SectionRenderer({ section }: SectionRendererProps) {
         />
       )
 
+    case 'requirements_evidence_matrix':
+      return (
+        <RequirementsEvidenceMatrixSection
+          data={section.data}
+          empty={section.meta?.empty}
+          emptyMessage={section.meta?.emptyMessage}
+        />
+      )
+
     case 'compliance_status':
       return <ComplianceStatusSection data={section.data} />
 
