@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { generatePdfFromUrl } from '@/lib/utils/playwright'
 import { generatePdfRemote } from '@/lib/utils/playwright-remote'
+import { generatePdfFromService } from '@/lib/utils/playwright-pdf-service'
 import { buildJobReport } from '@/lib/utils/jobReport'
 import { buildJobPacket } from '@/lib/utils/packets/builder'
 import { computeCanonicalHash } from '@/lib/utils/canonicalJson'
@@ -218,17 +219,26 @@ export async function POST(
     // STAGE: Generate PDF
     console.log(`[reports][${requestId}][stage] generate_pdf_start`)
 
-    // CRITICAL: Require Browserless (no fallback to local Chromium)
-    // Fallback hides the real problem and keeps you debugging serverless Chromium issues forever
+    // Check which PDF service to use (prefer self-hosted, fallback to Browserless)
+    const pdfServiceUrl = process.env.PDF_SERVICE_URL
+    const pdfServiceSecret = process.env.PDF_SERVICE_SECRET
     const browserlessToken = process.env.BROWSERLESS_TOKEN
-    if (!browserlessToken) {
-      console.error(`[reports][${requestId}][stage] browserless_missing_token`)
+    
+    let pdfMethod = 'none'
+    if (pdfServiceUrl && pdfServiceSecret) {
+      pdfMethod = 'self-hosted'
+    } else if (browserlessToken) {
+      pdfMethod = 'browserless'
+    }
+
+    if (pdfMethod === 'none') {
+      console.error(`[reports][${requestId}][stage] pdf_service_missing_config`)
       return NextResponse.json(
         {
-          message: 'Browserless token not configured. Add BROWSERLESS_TOKEN to Vercel environment variables.',
+          message: 'PDF service not configured. Add PDF_SERVICE_URL + PDF_SERVICE_SECRET (for self-hosted) or BROWSERLESS_TOKEN (for Browserless) to Vercel environment variables.',
           requestId,
-          stage: 'browserless_missing_token',
-          error_code: 'MISSING_BROWSERLESS_TOKEN',
+          stage: 'pdf_service_missing_config',
+          error_code: 'MISSING_PDF_SERVICE_CONFIG',
         },
         {
           status: 500,
@@ -240,17 +250,26 @@ export async function POST(
       )
     }
 
-    console.log(`[reports][${requestId}] PDF generation method: Browserless (remote)`)
+    console.log(`[reports][${requestId}] PDF generation method: ${pdfMethod}`)
 
-    // Generate PDF using Browserless
+    // Generate PDF using configured service
     let pdfBuffer: Buffer
     try {
-      pdfBuffer = await generatePdfRemote({
-        url: printUrl,
-        jobId,
-        organizationId: organization_id,
-        requestId, // Pass requestId for better log correlation
-      })
+      if (pdfMethod === 'self-hosted') {
+        pdfBuffer = await generatePdfFromService({
+          url: printUrl,
+          jobId,
+          organizationId: organization_id,
+          requestId, // Pass requestId for better log correlation
+        })
+      } else {
+        pdfBuffer = await generatePdfRemote({
+          url: printUrl,
+          jobId,
+          organizationId: organization_id,
+          requestId, // Pass requestId for better log correlation
+        })
+      }
       console.log(`[reports][${requestId}][stage] generate_pdf_ok size=${(pdfBuffer.length / 1024).toFixed(2)}KB`)
     } catch (browserError: any) {
       // Extract stage and error code from the error
@@ -407,7 +426,7 @@ export async function POST(
     // Add Retry-After header for 429 errors
     const headers: Record<string, string> = {
       'X-Build-SHA': buildSha, // Include build SHA for deployment verification
-      'X-PDF-Method': stage === 'browserless_missing_token' ? 'none' : 'browserless', // Indicate which PDF generation method was used (or attempted)
+          'X-PDF-Method': stage === 'pdf_service_missing_config' ? 'none' : (stage === 'browserless_missing_token' ? 'none' : 'browserless'), // Indicate which PDF generation method was used (or attempted)
     }
     
     if (isRateLimited) {
