@@ -6,11 +6,11 @@
 
 export const pdfTheme = {
   colors: {
-    ink: '#0A0A0A', // Primary text
+    ink: '#0B0B0B', // Primary text (near-black)
     muted: '#525252', // Secondary text
-    borders: '#E5E5E5', // Lines and borders
-    paper: '#FFFFFF', // Background
-    accent: '#F97316', // Brand orange - only for emphasis (headers, dividers, badges)
+    borders: '#EAEAEA', // Lines and borders (light gray)
+    paper: '#FFFFFF', // Background (white)
+    accent: '#F97316', // RiskMate Orange - only for emphasis (headers, dividers, badges)
     accentLight: '#FED7AA', // Lighter orange for backgrounds if needed
   },
   

@@ -67,13 +67,24 @@ export function IntegrityVerificationSection({ data }: IntegrityVerificationSect
               fontFamily: 'monospace', 
               fontSize: pdfTheme.typography.sizes.caption,
               wordBreak: 'break-all',
+              overflowWrap: 'break-word',
               backgroundColor: '#FAFAFA',
-              padding: '8pt',
+              padding: '12pt',
               borderRadius: pdfTheme.borders.radius,
-              border: `${pdfTheme.borders.thin} solid ${pdfTheme.colors.borders}`
+              border: `${pdfTheme.borders.thin} solid ${pdfTheme.colors.borders}`,
+              lineHeight: '1.6',
+              whiteSpace: 'pre-wrap'
             }}>
-              <strong>Hash Value:</strong><br />
-              {data.documentHash}
+              <strong style={{ display: 'block', marginBottom: '6pt' }}>Hash Value (SHA-256):</strong>
+              <div style={{ 
+                fontFamily: 'monospace',
+                fontSize: '9pt',
+                letterSpacing: '0.5px',
+                wordBreak: 'break-all',
+                overflowWrap: 'break-word'
+              }}>
+                {data.documentHash}
+              </div>
             </div>
           </div>
         </div>

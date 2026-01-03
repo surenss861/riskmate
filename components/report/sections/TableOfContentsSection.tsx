@@ -38,17 +38,6 @@ export function TableOfContentsSection({ data }: TableOfContentsSectionProps) {
         ))}
       </div>
       
-      <div style={{ 
-        marginTop: '32pt',
-        padding: '16pt',
-        backgroundColor: '#f9f9f9',
-        borderRadius: '6pt',
-        fontSize: '9pt',
-        color: '#666',
-        lineHeight: '1.6'
-      }}>
-        <strong>Note:</strong> Page numbers are approximate. Use the section headers to navigate.
-      </div>
     </div>
   )
 }
