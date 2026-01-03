@@ -232,7 +232,15 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
           <title>{packetTitle} - {organizationName}</title>
           <style dangerouslySetInnerHTML={{ __html: getPrintStyles() }} />
         </head>
-        <body>
+        <body 
+          data-organization-name={organizationName}
+          data-packet-title={packetTitle}
+          data-job-id={packetData.meta.jobId.substring(0, 8).toUpperCase()}
+          data-run-id={runId.substring(0, 8).toUpperCase()}
+          data-generated={formatPdfTimestamp(reportRun.generated_at || packetData.meta.generatedAt)}
+          data-hash={documentHash.substring(0, 16)}
+          data-draft={isDraft ? 'true' : undefined}
+        >
           <div className="report-root" data-draft={isDraft ? 'true' : undefined}>
             <div className="report-content">
               {/* Cover Page */}
@@ -250,11 +258,43 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
                   <span>•</span>
                   <span>Report Run ID: {runId.substring(0, 8).toUpperCase()}</span>
                   <span>•</span>
-                  <span>Generated: {new Date(packetData.meta.generatedAt).toLocaleString('en-US', { 
-                    timeZone: 'UTC',
-                    dateStyle: 'long',
-                    timeStyle: 'short'
-                  })} UTC</span>
+                  <span>Generated: {formatPdfTimestamp(reportRun.generated_at || packetData.meta.generatedAt)}</span>
+                  {!isDraft && <span>•</span>}
+                  {!isDraft && <span>Status: Final</span>}
+                  {isDraft && <span>•</span>}
+                  {isDraft && <span>Status: Draft</span>}
+                </div>
+                
+                {/* What this packet proves - teaser */}
+                <div style={{ marginTop: '40pt', paddingTop: '32pt', borderTop: `1pt solid ${colors.gray300}` }}>
+                  <div style={{ fontSize: '11pt', color: colors.gray300, marginBottom: '16pt', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    What This Packet Proves
+                  </div>
+                  <ul style={{ 
+                    listStyle: 'none', 
+                    padding: 0, 
+                    margin: 0,
+                    fontSize: '11pt',
+                    lineHeight: '1.8',
+                    color: colors.white
+                  }}>
+                    <li style={{ marginBottom: '8pt', paddingLeft: '20pt', position: 'relative' }}>
+                      <span style={{ position: 'absolute', left: 0 }}>•</span>
+                      All records are timestamped and immutable
+                    </li>
+                    <li style={{ marginBottom: '8pt', paddingLeft: '20pt', position: 'relative' }}>
+                      <span style={{ position: 'absolute', left: 0 }}>•</span>
+                      Evidence is cryptographically verified and linked to events
+                    </li>
+                    <li style={{ marginBottom: '8pt', paddingLeft: '20pt', position: 'relative' }}>
+                      <span style={{ position: 'absolute', left: 0 }}>•</span>
+                      Complete chain of custody from job creation to closure
+                    </li>
+                    <li style={{ paddingLeft: '20pt', position: 'relative' }}>
+                      <span style={{ position: 'absolute', left: 0 }}>•</span>
+                      Document integrity verified via SHA-256 hash (see Integrity page)
+                    </li>
+                  </ul>
                 </div>
               </div>
 
@@ -287,40 +327,10 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
 function getPrintStyles(): string {
   return `
     /* Import existing print styles from the main print page */
-    /* This is a simplified version - in production, extract to shared CSS file */
+    /* Headers/footers are handled by Playwright displayHeaderFooter, not CSS @page */
     @page {
       size: A4;
-      margin: 0;
-      @top-center {
-        content: '';
-        display: block;
-        height: 40pt;
-        background: ${colors.black};
-        color: ${colors.white};
-        padding: 8pt 16mm;
-        font-size: 9pt;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-      }
-      @bottom-center {
-        content: 'Page ' counter(page) ' of ' counter(pages) ' • ' counter(page, lower-roman);
-        display: block;
-        height: 30pt;
-        padding: 8pt 16mm;
-        font-size: 8pt;
-        color: #666;
-        border-top: 1pt solid #e0e0e0;
-      }
-    }
-    
-    @page:first {
-      @top-center {
-        content: none;
-      }
-      @bottom-center {
-        content: none;
-      }
+      margin: 72pt 16mm 60pt 16mm; /* top right bottom left - space for Playwright header/footer */
     }
 
     * {

@@ -132,13 +132,52 @@ app.post('/generate', authenticate, async (req, res) => {
 
     await page.waitForTimeout(500)
 
+    // Extract metadata from page for header/footer
+    const metadata = await page.evaluate(() => {
+      const body = document.body
+      return {
+        organizationName: body.getAttribute('data-organization-name') || 'RiskMate',
+        packetTitle: body.getAttribute('data-packet-title') || 'Report',
+        jobId: body.getAttribute('data-job-id') || '',
+        runId: body.getAttribute('data-run-id') || '',
+        generated: body.getAttribute('data-generated') || '',
+        hash: body.getAttribute('data-hash') || '',
+        isDraft: body.getAttribute('data-draft') === 'true',
+      }
+    })
+
     // STAGE: Generate PDF
     currentStage = 'generate_pdf'
     console.log(`[${logRequestId}][stage] generate_pdf_start`)
+    
+    // Build header/footer HTML templates
+    const headerTemplate = `
+      <div style="font-size: 9pt; color: #ffffff; background: #000000; padding: 8px 16mm; display: flex; justify-content: space-between; align-items: center; width: 100%; box-sizing: border-box;">
+        <span>${metadata.organizationName} • ${metadata.packetTitle}</span>
+        <span>Job ID: ${metadata.jobId} • Run ID: ${metadata.runId}</span>
+      </div>
+    `
+    
+    const footerTemplate = `
+      <div style="font-size: 8pt; color: #666666; padding: 8px 16mm; display: flex; justify-content: space-between; align-items: center; width: 100%; box-sizing: border-box; border-top: 1px solid #e0e0e0;">
+        <span>Page <span class="pageNumber"></span> of <span class="totalPages"></span> • Generated: ${metadata.generated} • Hash: ${metadata.hash}...</span>
+        <span style="color: #999999;">CONFIDENTIAL</span>
+      </div>
+    `
+    
     const pdfBuffer = await page.pdf({
       format: 'A4',
       printBackground: true,
       preferCSSPageSize: true,
+      displayHeaderFooter: true,
+      headerTemplate: headerTemplate,
+      footerTemplate: footerTemplate,
+      margin: {
+        top: '72pt',
+        right: '16mm',
+        bottom: '60pt',
+        left: '16mm',
+      },
     })
     console.log(`[${logRequestId}][stage] generate_pdf_ok size=${pdfBuffer.length} bytes`)
 
