@@ -28,6 +28,10 @@ export async function POST(
   const { id: jobId } = await params
   console.log(`[reports][${requestId}][stage] request_start build=${buildSha} jobId=${jobId}`)
 
+  // Declare pdfMethod at function scope so it's accessible in both try and catch blocks
+  type PdfMethod = 'self-hosted' | 'browserless' | 'none'
+  let pdfMethod: PdfMethod = 'none'
+
   try {
     // STAGE: Authenticate
     console.log(`[reports][${requestId}][stage] auth_start`)
@@ -220,12 +224,10 @@ export async function POST(
     console.log(`[reports][${requestId}][stage] generate_pdf_start`)
 
     // Check which PDF service to use (prefer self-hosted, fallback to Browserless)
-    // Declare pdfMethod outside try block so it's accessible in catch handler
     const pdfServiceUrl = process.env.PDF_SERVICE_URL
     const pdfServiceSecret = process.env.PDF_SERVICE_SECRET
     const browserlessToken = process.env.BROWSERLESS_TOKEN
     
-    let pdfMethod = 'none'
     if (pdfServiceUrl && pdfServiceSecret) {
       pdfMethod = 'self-hosted'
     } else if (browserlessToken) {
@@ -427,7 +429,7 @@ export async function POST(
     // Add Retry-After header for 429 errors
     const headers: Record<string, string> = {
       'X-Build-SHA': buildSha, // Include build SHA for deployment verification
-          'X-PDF-Method': pdfMethod === 'self-hosted' ? 'self-hosted' : (pdfMethod === 'browserless' ? 'browserless' : 'none'), // Indicate which PDF generation method was used (or attempted)
+      'X-PDF-Method': pdfMethod, // Indicate which PDF generation method was used (or attempted)
     }
     
     if (isRateLimited) {
