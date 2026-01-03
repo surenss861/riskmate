@@ -19,35 +19,62 @@ interface JobSummarySectionProps {
 
 export function JobSummarySection({ data }: JobSummarySectionProps) {
   return (
-    <div className="column-card">
-      <h3 className="card-title">Job Details</h3>
-      <div className="detail-list">
-        <div className="detail-item">
-          <strong>Client:</strong> {data.client}
-        </div>
-        <div className="detail-item">
-          <strong>Location:</strong> {data.location}
-        </div>
-        <div className="detail-item">
-          <strong>Job Type:</strong> {data.jobType}
-        </div>
-        <div className="detail-item">
-          <strong>Duration:</strong>{' '}
-          {data.startDate && data.endDate
-            ? `${formatDate(data.startDate)} - ${formatDate(data.endDate)}`
-            : data.startDate
-            ? `Started: ${formatDate(data.startDate)}`
-            : 'N/A'}
-        </div>
-        <div className="detail-item">
-          <strong>Status:</strong> {data.status}
-        </div>
-        {data.description && (
-          <div className="detail-item">
-            <strong>Description:</strong> {data.description}
+    <div className="page">
+      <h2 className="section-header">Job Summary</h2>
+      
+      {/* 2-column grid layout */}
+      <div style={{ 
+        display: 'grid', 
+        gridTemplateColumns: '1fr 1fr', 
+        gap: '24pt',
+        marginBottom: '24pt'
+      }}>
+        <div className="column-card">
+          <h3 className="card-title">Job Details</h3>
+          <div className="detail-list">
+            <div className="detail-item">
+              <strong>Client:</strong> {data.client}
+            </div>
+            <div className="detail-item">
+              <strong>Location:</strong> {data.location}
+            </div>
+            <div className="detail-item">
+              <strong>Job Type:</strong> {data.jobType}
+            </div>
+            <div className="detail-item">
+              <strong>Status:</strong> <span style={{ textTransform: 'capitalize' }}>{data.status}</span>
+            </div>
           </div>
-        )}
+        </div>
+
+        <div className="column-card">
+          <h3 className="card-title">Timeline</h3>
+          <div className="detail-list">
+            <div className="detail-item">
+              <strong>Start Date:</strong>{' '}
+              {data.startDate ? formatDate(data.startDate) : 'Not set'}
+            </div>
+            <div className="detail-item">
+              <strong>End Date:</strong>{' '}
+              {data.endDate ? formatDate(data.endDate) : 'Not set'}
+            </div>
+            {data.startDate && data.endDate && (
+              <div className="detail-item" style={{ fontSize: '10pt', color: '#666', fontStyle: 'italic' }}>
+                Duration: {Math.ceil((new Date(data.endDate).getTime() - new Date(data.startDate).getTime()) / (1000 * 60 * 60 * 24))} days
+              </div>
+            )}
+          </div>
+        </div>
       </div>
+
+      {data.description && (
+        <div className="column-card">
+          <h3 className="card-title">Description</h3>
+          <p style={{ fontSize: '11pt', lineHeight: '1.6', color: '#333', margin: 0 }}>
+            {data.description}
+          </p>
+        </div>
+      )}
     </div>
   )
 }

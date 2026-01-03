@@ -117,6 +117,72 @@ async function buildSectionData({
   const { job, risk_score, mitigations, documents, organization, audit } = baseReport
 
   switch (sectionType) {
+    case 'table_of_contents':
+      // Generate TOC from packet definition sections
+      const tocSections = packetDef.sections
+        .filter((s) => s !== 'table_of_contents' && s !== 'integrity_verification')
+        .map((sectionType) => {
+          // Map section types to titles
+          const titleMap: Record<string, string> = {
+            executive_summary: 'Executive Summary',
+            job_summary: 'Job Summary',
+            risk_score: 'Risk Assessment',
+            mitigations: 'Controls Applied',
+            audit_timeline: 'Audit Timeline',
+            attachments_index: 'Attachments',
+            attestations: 'Attestations',
+            evidence_photos: 'Evidence Photos',
+            compliance_status: 'Compliance Status',
+            checklist_completion: 'Checklist Completion',
+            capability_violations: 'Capability Violations',
+            role_assignment_record: 'Role Assignment Record',
+            access_governance_trail: 'Access Governance Trail',
+            corrective_actions: 'Corrective Actions',
+            flagged_job_details: 'Flagged Job Details',
+            escalation_trail: 'Escalation Trail',
+            accountability_timeline: 'Accountability Timeline',
+            mitigation_checklist: 'Mitigation Checklist',
+          }
+          return {
+            title: titleMap[sectionType] || sectionType.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()),
+            page: undefined, // Page numbers would need to be computed after rendering
+          }
+        })
+      
+      return {
+        type: 'table_of_contents',
+        data: {
+          sections: tocSections,
+        },
+        meta: {
+          title: 'Table of Contents',
+        },
+      }
+
+    case 'executive_summary':
+      const photos = documents.filter((doc) => doc.type === 'photo')
+      const completedControls = mitigations.filter((m) => m.done || m.is_completed).length
+      const totalControls = mitigations.length
+      const hazardCount = risk_score?.factors?.length || 0
+      
+      return {
+        type: 'executive_summary',
+        data: {
+          riskScore: risk_score?.overall_score || null,
+          riskLevel: risk_score?.risk_level || null,
+          hazardCount,
+          controlsTotal: totalControls,
+          controlsComplete: completedControls,
+          attestationsCount: 0, // TODO: Fetch actual attestations
+          evidenceCount: photos.length,
+          jobStatus: job.status,
+          packetType: packetDef.title,
+        },
+        meta: {
+          title: 'Executive Summary',
+        },
+      }
+
     case 'job_summary':
       return {
         type: 'job_summary',
@@ -172,6 +238,7 @@ async function buildSectionData({
 
     case 'attestations':
       // TODO: Fetch attestations/signatures if available
+      // Mark as empty to skip rendering (no empty pages)
       return {
         type: 'attestations',
         data: {
@@ -179,8 +246,8 @@ async function buildSectionData({
         },
         meta: {
           title: 'Attestations',
-          empty: true,
-          emptyMessage: 'No attestations available',
+          empty: true, // Skip empty sections - no page rendered
+          emptyMessage: 'Attestations required for closure — pending',
         },
       }
 
@@ -219,16 +286,23 @@ async function buildSectionData({
       }
 
     case 'audit_timeline':
-      // TODO: Fetch audit logs if available
+      const auditEvents = audit || []
       return {
         type: 'audit_timeline',
         data: {
-          events: [], // Will be populated from audit logs
+          events: auditEvents.map((event) => ({
+            id: event.id,
+            eventType: event.event_type,
+            userName: event.user_name || event.actor_name,
+            createdAt: event.created_at,
+            metadata: event.metadata,
+          })),
+          count: auditEvents.length,
         },
         meta: {
           title: 'Audit Timeline',
-          empty: true,
-          emptyMessage: 'No audit events available',
+          empty: auditEvents.length === 0,
+          emptyMessage: 'No audit events recorded',
         },
       }
 
@@ -265,6 +339,24 @@ async function buildSectionData({
       // For now, return null to skip them
       console.warn(`[packet-builder] Section type "${sectionType}" not yet implemented`)
       return null
+
+    case 'integrity_verification':
+      // This section will be populated by the print page with run ID and hash
+      // Return placeholder - actual data comes from report_run and computed hash
+      return {
+        type: 'integrity_verification',
+        data: {
+          reportRunId: '', // Will be set by print page
+          documentHash: '', // Will be set by print page
+          hashAlgorithm: 'SHA-256',
+          generatedAt: new Date().toISOString(),
+          jobId,
+          packetType: packetDef.title,
+        },
+        meta: {
+          title: 'Integrity & Verification',
+        },
+      }
 
     default:
       console.warn(`[packet-builder] Unknown section type: ${sectionType}`)

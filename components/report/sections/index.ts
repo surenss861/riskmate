@@ -10,6 +10,10 @@ import { HazardChecklistSection } from './HazardChecklistSection'
 import { EvidencePhotosSection } from './EvidencePhotosSection'
 import { AttachmentsIndexSection } from './AttachmentsIndexSection'
 import { ComplianceStatusSection } from './ComplianceStatusSection'
+import { ExecutiveSummarySection } from './ExecutiveSummarySection'
+import { IntegrityVerificationSection } from './IntegrityVerificationSection'
+import { TableOfContentsSection } from './TableOfContentsSection'
+import { AuditTimelineSection } from './AuditTimelineSection'
 
 export {
   JobSummarySection,
@@ -19,5 +23,9 @@ export {
   EvidencePhotosSection,
   AttachmentsIndexSection,
   ComplianceStatusSection,
+  ExecutiveSummarySection,
+  IntegrityVerificationSection,
+  TableOfContentsSection,
+  AuditTimelineSection,
 }
 

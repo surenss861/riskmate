@@ -12,6 +12,10 @@ import {
   EvidencePhotosSection,
   AttachmentsIndexSection,
   ComplianceStatusSection,
+  ExecutiveSummarySection,
+  IntegrityVerificationSection,
+  TableOfContentsSection,
+  AuditTimelineSection,
 } from './sections'
 
 interface SectionRendererProps {
@@ -19,7 +23,18 @@ interface SectionRendererProps {
 }
 
 export function SectionRenderer({ section }: SectionRendererProps) {
+  // Skip empty sections entirely (no empty pages)
+  if (section.meta?.empty) {
+    return null
+  }
+
   switch (section.type) {
+    case 'table_of_contents':
+      return <TableOfContentsSection data={section.data} />
+
+    case 'executive_summary':
+      return <ExecutiveSummarySection data={section.data} />
+
     case 'job_summary':
       return <JobSummarySection data={section.data} />
 
@@ -72,16 +87,22 @@ export function SectionRenderer({ section }: SectionRendererProps) {
     case 'compliance_status':
       return <ComplianceStatusSection data={section.data} />
 
-    case 'attestations':
-      // Placeholder - will implement when signatures are ready
+    case 'audit_timeline':
       return (
-        <div className="page">
-          <h2 className="section-header">Attestations</h2>
-          <p className="empty-state">
-            {section.meta?.emptyMessage || 'No attestations available'}
-          </p>
-        </div>
+        <AuditTimelineSection
+          data={section.data}
+          empty={section.meta?.empty}
+          emptyMessage={section.meta?.emptyMessage}
+        />
       )
+
+    case 'integrity_verification':
+      return <IntegrityVerificationSection data={section.data} />
+
+    case 'attestations':
+      // Skip empty attestations (no empty page)
+      // Will show when signatures are implemented
+      return null
 
     // Placeholder sections (to be implemented)
     case 'audit_timeline':
@@ -93,7 +114,7 @@ export function SectionRenderer({ section }: SectionRendererProps) {
     case 'escalation_trail':
     case 'accountability_timeline':
     case 'checklist_completion':
-      // Skip unimplemented sections for now
+      // Skip unimplemented sections (no empty pages)
       return null
 
     default:

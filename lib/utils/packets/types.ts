@@ -8,6 +8,8 @@
 export type PacketType = 'insurance' | 'audit' | 'incident' | 'client_compliance'
 
 export type SectionType =
+  | 'table_of_contents'
+  | 'executive_summary'
   | 'job_summary'
   | 'risk_score'
   | 'mitigations'
@@ -25,6 +27,7 @@ export type SectionType =
   | 'checklist_completion'
   | 'evidence_photos'
   | 'compliance_status'
+  | 'integrity_verification'
 
 export interface PacketDefinition {
   /** Display title for the packet */
@@ -52,11 +55,14 @@ export const PACKETS: Record<PacketType, PacketDefinition> = {
   insurance: {
     title: 'Insurance Report',
     sections: [
+      'table_of_contents',
+      'executive_summary',
       'job_summary',
       'risk_score',
       'mitigations',
       'audit_timeline',
       'attachments_index',
+      'integrity_verification',
     ],
     clientFacingOnly: false, // Insurance may include internal notes
     redactInternal: false,
@@ -64,12 +70,15 @@ export const PACKETS: Record<PacketType, PacketDefinition> = {
   audit: {
     title: 'Audit Report',
     sections: [
+      'table_of_contents',
+      'executive_summary',
       'capability_violations',
       'role_assignment_record',
       'access_governance_trail',
       'corrective_actions',
       'job_summary',
       'risk_score',
+      'integrity_verification',
     ],
     redactInternal: false, // Audit includes governance data
     clientFacingOnly: false,
@@ -77,11 +86,14 @@ export const PACKETS: Record<PacketType, PacketDefinition> = {
   incident: {
     title: 'Incident Report',
     sections: [
+      'table_of_contents',
+      'executive_summary',
       'flagged_job_details',
       'escalation_trail',
       'accountability_timeline',
       'mitigation_checklist',
       'risk_score',
+      'integrity_verification',
     ],
     redactInternal: false,
     clientFacingOnly: false,
@@ -89,12 +101,15 @@ export const PACKETS: Record<PacketType, PacketDefinition> = {
   client_compliance: {
     title: 'Client Compliance Report',
     sections: [
+      'table_of_contents',
+      'executive_summary',
       'attestations',
       'checklist_completion',
       'evidence_photos',
       'compliance_status',
       'job_summary',
       'mitigations',
+      'integrity_verification',
     ],
     clientFacingOnly: true, // Client-facing only, redact internal data
     redactInternal: true,

@@ -12,6 +12,7 @@ import { SectionRenderer } from '@/components/report/SectionRenderer'
 import { colors } from '@/lib/design-system/tokens'
 import { isValidPacketType } from '@/lib/utils/packets/types'
 import type { JobPacketPayload } from '@/lib/utils/packets/builder'
+import { computeCanonicalHash } from '@/lib/utils/canonicalJson'
 
 // Force dynamic rendering and Node.js runtime for server-side auth/token verification
 export const runtime = 'nodejs'
@@ -198,6 +199,30 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
     
     // Get packet title from packet data
     const packetTitle = packetData.meta.packetTitle || 'Report'
+    
+    // Compute document hash for integrity verification
+    const documentHash = computeCanonicalHash(packetData)
+    
+    // Update integrity_verification section with actual data
+    const sectionsWithIntegrity = packetData.sections.map((section) => {
+      if (section.type === 'integrity_verification') {
+        return {
+          ...section,
+          data: {
+            ...section.data,
+            reportRunId: runId,
+            documentHash,
+            generatedAt: reportRun.generated_at || packetData.meta.generatedAt,
+          },
+        }
+      }
+      return section
+    })
+    
+    const finalPacketData = {
+      ...packetData,
+      sections: sectionsWithIntegrity,
+    }
 
     return (
       <html lang="en">
@@ -223,17 +248,22 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
                 <div className="cover-subheader">
                   <span>Job ID: {packetData.meta.jobId.substring(0, 8).toUpperCase()}</span>
                   <span>•</span>
-                  <span>Generated: {new Date(packetData.meta.generatedAt).toLocaleDateString()}</span>
+                  <span>Report Run ID: {runId.substring(0, 8).toUpperCase()}</span>
+                  <span>•</span>
+                  <span>Generated: {new Date(packetData.meta.generatedAt).toLocaleString('en-US', { 
+                    timeZone: 'UTC',
+                    dateStyle: 'long',
+                    timeStyle: 'short'
+                  })} UTC</span>
                 </div>
               </div>
 
-              {/* Render Sections */}
-              {packetData.sections.map((section, idx) => {
-                const rendered = <SectionRenderer key={`${section.type}-${idx}`} section={section} />
-                // Skip null sections (unimplemented)
-                if (!rendered) return null
-                return rendered
-              })}
+              {/* Render Sections - Empty sections are skipped by SectionRenderer */}
+              {finalPacketData.sections
+                .map((section, idx) => (
+                  <SectionRenderer key={`${section.type}-${idx}`} section={section} />
+                ))
+                .filter((rendered) => rendered !== null)}
             </div>
 
             {/* PDF Ready Marker */}
@@ -261,6 +291,36 @@ function getPrintStyles(): string {
     @page {
       size: A4;
       margin: 0;
+      @top-center {
+        content: '';
+        display: block;
+        height: 40pt;
+        background: ${colors.black};
+        color: ${colors.white};
+        padding: 8pt 16mm;
+        font-size: 9pt;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      @bottom-center {
+        content: 'Page ' counter(page) ' of ' counter(pages) ' • ' counter(page, lower-roman);
+        display: block;
+        height: 30pt;
+        padding: 8pt 16mm;
+        font-size: 8pt;
+        color: #666;
+        border-top: 1pt solid #e0e0e0;
+      }
+    }
+    
+    @page:first {
+      @top-center {
+        content: none;
+      }
+      @bottom-center {
+        content: none;
+      }
     }
 
     * {
@@ -301,6 +361,12 @@ function getPrintStyles(): string {
     .report-root[data-draft="true"]::before {
       content: 'DRAFT';
       opacity: 0.03;
+    }
+    
+    /* Hide draft watermark for production exports */
+    .report-root:not([data-draft="true"])::before {
+      content: 'CONFIDENTIAL';
+      opacity: 0.02;
     }
 
     .report-content {
@@ -376,7 +442,42 @@ function getPrintStyles(): string {
       page-break-before: always;
       break-inside: avoid;
       background: ${colors.white};
-      padding: 40pt 0;
+      padding: 40pt 16mm;
+      min-height: 100vh;
+    }
+    
+    /* Header bar for all pages except cover */
+    .page::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 40pt;
+      background: ${colors.black};
+      color: ${colors.white};
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16mm;
+      font-size: 9pt;
+      z-index: 10;
+    }
+    
+    /* Footer bar for all pages */
+    .page::after {
+      content: 'Page ' counter(page) ' of ' counter(pages) ' • Generated: ' attr(data-generated) ' UTC • ' attr(data-hash);
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 30pt;
+      padding: 8pt 16mm;
+      font-size: 8pt;
+      color: #666;
+      border-top: 1pt solid #e0e0e0;
+      background: ${colors.white};
+      z-index: 10;
     }
 
     .section-header {

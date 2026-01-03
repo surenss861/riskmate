@@ -24,13 +24,9 @@ export function AttachmentsIndexSection({
   empty,
   emptyMessage,
 }: AttachmentsIndexSectionProps) {
+  // Skip empty sections (no page rendered)
   if (empty || data.count === 0) {
-    return (
-      <div className="page">
-        <h2 className="section-header">Attachments</h2>
-        <p className="empty-state">{emptyMessage || 'No attachments'}</p>
-      </div>
-    )
+    return null
   }
 
   return (
