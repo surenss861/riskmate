@@ -22,13 +22,8 @@ export function JobSummarySection({ data }: JobSummarySectionProps) {
     <div className="page">
       <h2 className="section-header">Job Summary</h2>
       
-      {/* 2-column grid layout */}
-      <div style={{ 
-        display: 'grid', 
-        gridTemplateColumns: '1fr 1fr', 
-        gap: '24pt',
-        marginBottom: '24pt'
-      }}>
+      {/* 2-column grid layout using PDF theme */}
+      <div className="pdf-grid-2">
         <div className="column-card">
           <h3 className="card-title">Job Details</h3>
           <div className="detail-list">
