@@ -14,6 +14,7 @@ import { ExecutiveSummarySection } from './ExecutiveSummarySection'
 import { IntegrityVerificationSection } from './IntegrityVerificationSection'
 import { TableOfContentsSection } from './TableOfContentsSection'
 import { AuditTimelineSection } from './AuditTimelineSection'
+import { RequirementsEvidenceMatrixSection } from './RequirementsEvidenceMatrixSection'
 
 export {
   JobSummarySection,
@@ -27,5 +28,6 @@ export {
   IntegrityVerificationSection,
   TableOfContentsSection,
   AuditTimelineSection,
+  RequirementsEvidenceMatrixSection,
 }
 

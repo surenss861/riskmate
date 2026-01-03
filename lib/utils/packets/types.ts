@@ -104,12 +104,14 @@ export const PACKETS: Record<PacketType, PacketDefinition> = {
     sections: [
       'table_of_contents',
       'executive_summary',
+      'job_summary',
+      'compliance_status',
+      'requirements_evidence_matrix',
+      'mitigations',
       'attestations',
       'checklist_completion',
       'evidence_photos',
-      'compliance_status',
-      'job_summary',
-      'mitigations',
+      'attachments_index',
       'integrity_verification',
     ],
     clientFacingOnly: true, // Client-facing only, redact internal data
