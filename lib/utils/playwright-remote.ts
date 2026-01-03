@@ -65,17 +65,28 @@ export async function generatePdfRemote({ url, jobId, organizationId, requestId 
 
     // Use region-specific Browserless endpoint (avoids 429s on shared chrome.browserless.io)
     // Default to production-sfo if not specified, but allow override via env var
+    // IMPORTANT: Never use chrome.browserless.io (deprecated, rate-limits fast)
     const baseUrl = process.env.BROWSERLESS_URL || 'wss://production-sfo.browserless.io'
+    
+    // Ensure we're not using the deprecated endpoint
+    if (baseUrl.includes('chrome.browserless.io')) {
+        throw new Error(`[${logRequestId}][stage] browserless_invalid_endpoint: chrome.browserless.io is deprecated. Use region endpoint like wss://production-sfo.browserless.io`)
+    }
+    
     const cdpUrl = `${baseUrl}?token=${token}&timeout=300000` // 5 minute timeout
     console.log(`[${logRequestId}][stage] connect_browserless_start url=${baseUrl}`)
 
+    // Track current stage for better error messages
+    let currentStage = 'connect_browserless'
     let browser = null
     try {
         // STAGE: Connect to Browserless with retry on 429
+        currentStage = 'connect_browserless'
         browser = await connectWithBackoff(cdpUrl, logRequestId)
         console.log(`[${logRequestId}][stage] connect_browserless_ok`)
 
         // STAGE: Create browser context
+        currentStage = 'create_context'
         console.log(`[${logRequestId}][stage] create_context_start`)
         const context = await browser.newContext({
             viewport: { width: 794, height: 1123 }, // approx A4 @ 96dpi
@@ -83,12 +94,14 @@ export async function generatePdfRemote({ url, jobId, organizationId, requestId 
         console.log(`[${logRequestId}][stage] create_context_ok`)
 
         // STAGE: Create page
+        currentStage = 'create_page'
         console.log(`[${logRequestId}][stage] create_page_start`)
         const page = await context.newPage()
         await page.emulateMedia({ media: 'print' })
         console.log(`[${logRequestId}][stage] create_page_ok`)
 
         // STAGE: Navigate and render HTML
+        currentStage = 'render_html'
         console.log(`[${logRequestId}][stage] render_html_start url=${url}`)
         const gotoStart = Date.now()
         const response = await page.goto(url, { 
@@ -154,6 +167,7 @@ export async function generatePdfRemote({ url, jobId, organizationId, requestId 
         await page.waitForTimeout(500)
 
         // STAGE: Generate PDF
+        currentStage = 'generate_pdf'
         console.log(`[${logRequestId}][stage] pdf_start`)
         const pdfStart = Date.now()
         const pdfBuffer = await page.pdf({
@@ -175,10 +189,15 @@ export async function generatePdfRemote({ url, jobId, organizationId, requestId 
     } catch (error: any) {
         const errorCode = error?.code || 'NO_CODE'
         const errorName = error?.name || 'Unknown'
-        const errorMessage = error?.message || 'No message'
-        const stage = errorMessage.match(/\[stage=(\w+)\]/)?.[1] || 'unknown'
+        const errorMessage = String(error?.message ?? error ?? 'No message')
         
-        console.error(`[${logRequestId}][stage] ${stage}_failed error_code=${errorCode} error_name=${errorName}`)
+        // Use tracked stage instead of parsing from error message (more reliable)
+        const stage = currentStage || 'unknown'
+        
+        // Check if this is a 429 rate limit error (check error message, not just error object)
+        const isRateLimited = is429(error) || is429(errorMessage)
+        
+        console.error(`[${logRequestId}][stage] ${stage}_failed error_code=${errorCode} error_name=${errorName} is_429=${isRateLimited}`)
         console.error(`[${logRequestId}] error_message=`, errorMessage)
         console.error(`[${logRequestId}] error_stack=`, error?.stack || 'No stack')
         
@@ -192,7 +211,15 @@ export async function generatePdfRemote({ url, jobId, organizationId, requestId 
             }
         }
 
-        // Re-throw with stage context
+        // For 429 errors, throw with specific stage and code so API can return 429 status
+        if (isRateLimited) {
+            const rateLimitError = new Error(`[stage=${stage}] RATE_LIMITED: Browserless returned 429. You are over concurrency/rate limits.`) as any
+            rateLimitError.is429 = true
+            rateLimitError.errorCode = 'BROWSERLESS_RATE_LIMITED'
+            throw rateLimitError
+        }
+
+        // Re-throw with stage context for other errors
         throw new Error(`[stage=${stage}] Browserless PDF generation failed: ${errorMessage} (code: ${errorCode})`)
     }
 }
