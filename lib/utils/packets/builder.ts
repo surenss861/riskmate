@@ -120,8 +120,8 @@ async function buildSectionData({
     case 'table_of_contents':
       // Generate TOC from packet definition sections
       const tocSections = packetDef.sections
-        .filter((s) => s !== 'table_of_contents' && s !== 'integrity_verification')
-        .map((sectionType) => {
+        .filter((s: SectionType) => s !== 'table_of_contents' && s !== 'integrity_verification')
+        .map((sectionType: SectionType) => {
           // Map section types to titles
           const titleMap: Record<string, string> = {
             executive_summary: 'Executive Summary',
