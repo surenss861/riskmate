@@ -8,6 +8,43 @@ interface PdfOptions {
 }
 
 /**
+ * Check if error is a 429 rate limit error from Browserless
+ */
+function is429(err: unknown): boolean {
+    const msg = String((err as any)?.message ?? err ?? '')
+    return msg.includes('429') || msg.includes('Too Many Requests') || msg.includes('rate limit')
+}
+
+/**
+ * Connect to Browserless with exponential backoff retry on 429 errors
+ */
+async function connectWithBackoff(wsUrl: string, requestId: string, maxRetries = 5) {
+    let delay = 500
+    for (let i = 0; i < maxRetries; i++) {
+        try {
+            return await chromium.connectOverCDP(wsUrl, {
+                timeout: 30000, // 30 second timeout for connection
+            })
+        } catch (err: any) {
+            const isRateLimited = is429(err)
+            const isLastAttempt = i === maxRetries - 1
+            
+            if (!isRateLimited || isLastAttempt) {
+                // Not a 429, or we've exhausted retries - throw immediately
+                throw err
+            }
+            
+            // 429 error - wait and retry with exponential backoff
+            const backoffMs = delay + Math.floor(Math.random() * 250) // Add jitter
+            console.warn(`[${requestId}][stage] connect_browserless_429_retry attempt=${i + 1}/${maxRetries} backoff=${backoffMs}ms`)
+            await new Promise(resolve => setTimeout(resolve, backoffMs))
+            delay *= 2 // Exponential backoff: 500ms, 1s, 2s, 4s, 8s
+        }
+    }
+    throw new Error('Unreachable: connectWithBackoff exhausted retries')
+}
+
+/**
  * Generate PDF using remote Browserless instance via CDP.
  * This eliminates all serverless Chromium issues:
  * - No /tmp/chromium extraction/copy/chmod
@@ -26,16 +63,16 @@ export async function generatePdfRemote({ url, jobId, organizationId, requestId 
         throw new Error(`[${logRequestId}][stage] generate_pdf_failed missing BROWSERLESS_TOKEN - add it to Vercel environment variables`)
     }
 
-    // Browserless CDP endpoint (WebSocket)
-    const cdpUrl = `wss://chrome.browserless.io?token=${token}`
-    console.log(`[${logRequestId}][stage] connect_browserless_start`)
+    // Use region-specific Browserless endpoint (avoids 429s on shared chrome.browserless.io)
+    // Default to production-sfo if not specified, but allow override via env var
+    const baseUrl = process.env.BROWSERLESS_URL || 'wss://production-sfo.browserless.io'
+    const cdpUrl = `${baseUrl}?token=${token}&timeout=300000` // 5 minute timeout
+    console.log(`[${logRequestId}][stage] connect_browserless_start url=${baseUrl}`)
 
     let browser = null
     try {
-        // STAGE: Connect to Browserless
-        browser = await chromium.connectOverCDP(cdpUrl, {
-            timeout: 30000, // 30 second timeout for connection
-        })
+        // STAGE: Connect to Browserless with retry on 429
+        browser = await connectWithBackoff(cdpUrl, logRequestId)
         console.log(`[${logRequestId}][stage] connect_browserless_ok`)
 
         // STAGE: Create browser context

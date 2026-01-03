@@ -256,13 +256,21 @@ export async function POST(
       // Extract stage and error code from the error
       const errorMessage = browserError?.message || 'Unknown browser error'
       const stage = errorMessage.match(/\[stage=(\w+)\]/)?.[1] || 'generate_pdf'
-      const errorCode = browserError?.code || 'NO_CODE'
+      const errorCode = browserError?.is429 ? 'BROWSERLESS_RATE_LIMITED' : (browserError?.errorCode || browserError?.code || 'NO_CODE')
       
-      console.error(`[reports][${requestId}][stage] ${stage}_failed error_code=${errorCode}`)
+      console.error(`[reports][${requestId}][stage] ${stage}_failed error_code=${errorCode} is_429=${browserError?.is429 || false}`)
       console.error(`[reports][${requestId}] error_message=`, errorMessage)
       console.error(`[reports][${requestId}] error_stack=`, browserError?.stack || 'No stack')
       
-      // Return structured error with stage and code
+      // For 429 rate limit errors, throw with specific properties so we can return 429 status
+      if (browserError?.is429) {
+        const rateLimitError = new Error(`[stage=browser_connect] Browserless rate limited: ${errorMessage}`) as any
+        rateLimitError.is429 = true
+        rateLimitError.errorCode = 'BROWSERLESS_RATE_LIMITED'
+        throw rateLimitError
+      }
+      
+      // Return structured error with stage and code for other errors
       throw new Error(`[stage=${stage}] Browser generation failed: ${errorMessage} (code: ${errorCode})`)
     }
 
@@ -385,12 +393,16 @@ export async function POST(
     // Extract stage and error code for better debugging
     const errorMessage = error?.message || 'Unknown error'
     const stage = errorMessage.match(/\[stage=(\w+)\]/)?.[1] || 'unknown'
-    const errorCode = error?.code || 'NO_CODE'
+    const errorCode = error?.is429 ? 'BROWSERLESS_RATE_LIMITED' : (error?.errorCode || error?.code || 'NO_CODE')
+    const isRateLimited = error?.is429 || false
     const buildSha = process.env.VERCEL_GIT_COMMIT_SHA || process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA || 'no-sha'
     
-    console.error(`[reports][${requestId}][stage] ${stage}_failed error_code=${errorCode}`)
+    console.error(`[reports][${requestId}][stage] ${stage}_failed error_code=${errorCode} is_429=${isRateLimited}`)
     console.error(`[reports][${requestId}] error_message=`, errorMessage)
     console.error(`[reports][${requestId}] error_stack=`, error?.stack || 'No stack')
+    
+    // Return 429 status for rate limit errors, 500 for everything else
+    const statusCode = isRateLimited ? 429 : 500
     
     return NextResponse.json(
       {
@@ -400,7 +412,7 @@ export async function POST(
         error_code: errorCode,
       },
       { 
-        status: 500,
+        status: statusCode,
         headers: {
           'X-Build-SHA': buildSha, // Include build SHA for deployment verification
           'X-PDF-Method': stage === 'browserless_missing_token' ? 'none' : 'browserless', // Indicate which PDF generation method was used (or attempted)
