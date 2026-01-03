@@ -159,7 +159,7 @@ async function buildSectionData({
         },
       }
 
-    case 'executive_summary':
+    case 'executive_summary': {
       const photos = documents.filter((doc) => doc.type === 'photo')
       const completedControls = mitigations.filter((m) => m.done || m.is_completed).length
       const totalControls = mitigations.length
@@ -182,6 +182,7 @@ async function buildSectionData({
           title: 'Executive Summary',
         },
       }
+    }
 
     case 'job_summary':
       return {
