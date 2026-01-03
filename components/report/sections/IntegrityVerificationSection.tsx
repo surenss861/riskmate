@@ -1,7 +1,10 @@
 /**
  * Integrity & Verification Section Component
- * Final page showing document hash, run ID, and chain of custody
+ * Final page showing document hash, run ID, chain of custody, and QR code
  */
+
+import { formatPdfTimestamp } from '@/lib/utils/pdfFormatUtils'
+import { pdfTheme } from '@/lib/design-system/pdfTheme'
 
 interface IntegrityVerificationSectionProps {
   data: {
@@ -11,6 +14,8 @@ interface IntegrityVerificationSectionProps {
     generatedAt: string
     jobId: string
     packetType: string
+    verificationUrl?: string
+    qrCodeDataUrl?: string
   }
 }
 
@@ -19,112 +24,132 @@ export function IntegrityVerificationSection({ data }: IntegrityVerificationSect
     <div className="page">
       <h2 className="section-header">Integrity & Verification</h2>
       
-      <div style={{ marginBottom: '32pt' }}>
-        <p style={{ fontSize: '11pt', lineHeight: '1.8', color: '#333', marginBottom: '24pt' }}>
+      <div style={{ marginBottom: pdfTheme.spacing.sectionGap }}>
+        <p style={{ 
+          fontSize: pdfTheme.typography.sizes.body, 
+          lineHeight: pdfTheme.typography.lineHeight.relaxed, 
+          color: pdfTheme.colors.ink, 
+          marginBottom: pdfTheme.spacing.sectionGap 
+        }}>
           This document has been cryptographically signed and verified. The information below provides 
           proof of authenticity, immutability, and chain of custody for this report packet.
         </p>
       </div>
 
-      {/* Verification Details */}
-      <div className="column-card" style={{ marginBottom: '24pt' }}>
-        <h3 className="card-title">Document Verification</h3>
-        <div className="detail-list">
-          <div className="detail-item">
-            <strong>Report Run ID:</strong> {data.reportRunId}
+      {/* Verification Details - 2-column grid */}
+      <div className="pdf-grid-2" style={{ marginBottom: pdfTheme.spacing.sectionGap }}>
+        <div className="column-card">
+          <h3 className="card-title">Document Verification</h3>
+          <div className="detail-list">
+            <div className="detail-item">
+              <strong>Report Run ID:</strong> {data.reportRunId}
+            </div>
+            <div className="detail-item">
+              <strong>Job ID:</strong> {data.jobId.substring(0, 8).toUpperCase()}
+            </div>
+            <div className="detail-item">
+              <strong>Packet Type:</strong> {data.packetType}
+            </div>
+            <div className="detail-item">
+              <strong>Generated:</strong> {formatPdfTimestamp(data.generatedAt)}
+            </div>
           </div>
-          <div className="detail-item">
-            <strong>Job ID:</strong> {data.jobId.substring(0, 8).toUpperCase()}
-          </div>
-          <div className="detail-item">
-            <strong>Packet Type:</strong> {data.packetType}
-          </div>
-          <div className="detail-item">
-            <strong>Generated:</strong> {new Date(data.generatedAt).toLocaleString('en-US', { 
-              timeZone: 'UTC',
-              dateStyle: 'long',
-              timeStyle: 'long'
-            })} UTC
+        </div>
+
+        {/* Hash Information */}
+        <div className="column-card">
+          <h3 className="card-title">Document Hash</h3>
+          <div className="detail-list">
+            <div className="detail-item">
+              <strong>Hash Algorithm:</strong> {data.hashAlgorithm || 'SHA-256'}
+            </div>
+            <div className="detail-item" style={{ 
+              fontFamily: 'monospace', 
+              fontSize: pdfTheme.typography.sizes.caption,
+              wordBreak: 'break-all',
+              backgroundColor: '#FAFAFA',
+              padding: '8pt',
+              borderRadius: pdfTheme.borders.radius,
+              border: `${pdfTheme.borders.thin} solid ${pdfTheme.colors.borders}`
+            }}>
+              <strong>Hash Value:</strong><br />
+              {data.documentHash}
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Hash Information */}
-      <div className="column-card" style={{ marginBottom: '24pt' }}>
-        <h3 className="card-title">Document Hash</h3>
-        <div className="detail-list">
-          <div className="detail-item">
-            <strong>Hash Algorithm:</strong> {data.hashAlgorithm}
-          </div>
-          <div className="detail-item" style={{ 
-            fontFamily: 'monospace', 
-            fontSize: '10pt',
-            wordBreak: 'break-all',
-            backgroundColor: '#f5f5f5',
-            padding: '8pt',
-            borderRadius: '4pt'
+      {/* QR Code Verification */}
+      {data.qrCodeDataUrl && data.verificationUrl && (
+        <div className="qr-code-container">
+          <div style={{ 
+            fontSize: pdfTheme.typography.sizes.h3, 
+            fontWeight: pdfTheme.typography.weights.semibold,
+            marginBottom: pdfTheme.spacing.textGap,
+            color: pdfTheme.colors.ink
           }}>
-            <strong>Hash Value:</strong><br />
-            {data.documentHash}
+            Quick Verification
           </div>
+          <img 
+            src={data.qrCodeDataUrl} 
+            alt="Verification QR Code" 
+            className="qr-code-image"
+          />
+          <div style={{ 
+            fontSize: pdfTheme.typography.sizes.caption, 
+            color: pdfTheme.colors.muted,
+            marginTop: pdfTheme.spacing.textGap
+          }}>
+            Scan to verify this document on RiskMate
+          </div>
+          {data.verificationUrl && (
+            <div style={{ 
+              fontSize: pdfTheme.typography.sizes.small, 
+              color: pdfTheme.colors.muted,
+              fontFamily: 'monospace',
+              marginTop: '4pt',
+              wordBreak: 'break-all'
+            }}>
+              {data.verificationUrl}
+            </div>
+          )}
         </div>
-      </div>
+      )}
 
       {/* What This Proves */}
-      <div style={{ 
-        padding: '20pt', 
-        backgroundColor: '#f9f9f9', 
-        borderRadius: '6pt',
-        border: '1pt solid #e0e0e0'
-      }}>
-        <h3 style={{ fontSize: '14pt', fontWeight: 'bold', marginBottom: '16pt', color: '#111' }}>
+      <div className="integrity-section" style={{ marginTop: pdfTheme.spacing.sectionGap }}>
+        <h3 style={{ 
+          fontSize: pdfTheme.typography.sizes.h3, 
+          fontWeight: pdfTheme.typography.weights.semibold, 
+          marginBottom: pdfTheme.spacing.textGap, 
+          color: pdfTheme.colors.ink 
+        }}>
           What This Proves
         </h3>
-        <ul style={{ 
-          listStyle: 'none', 
-          padding: 0, 
-          margin: 0,
-          fontSize: '10pt',
-          lineHeight: '2',
-          color: '#333'
-        }}>
-          <li style={{ marginBottom: '8pt', paddingLeft: '20pt', position: 'relative' }}>
-            <span style={{ position: 'absolute', left: 0 }}>✓</span>
+        <ul className="integrity-proof-list">
+          <li>
             <strong>Records are timestamped:</strong> All events and data points include precise UTC timestamps
           </li>
-          <li style={{ marginBottom: '8pt', paddingLeft: '20pt', position: 'relative' }}>
-            <span style={{ position: 'absolute', left: 0 }}>✓</span>
+          <li>
             <strong>Edits are logged:</strong> All changes to job data are recorded in the audit trail
           </li>
-          <li style={{ marginBottom: '8pt', paddingLeft: '20pt', position: 'relative' }}>
-            <span style={{ position: 'absolute', left: 0 }}>✓</span>
+          <li>
             <strong>Evidence is tied to event IDs:</strong> All photos, documents, and attestations are linked to specific job events
           </li>
-          <li style={{ marginBottom: '8pt', paddingLeft: '20pt', position: 'relative' }}>
-            <span style={{ position: 'absolute', left: 0 }}>✓</span>
+          <li>
             <strong>Document integrity:</strong> This hash verifies the document has not been altered since generation
           </li>
-          <li style={{ paddingLeft: '20pt', position: 'relative' }}>
-            <span style={{ position: 'absolute', left: 0 }}>✓</span>
+          <li>
             <strong>Chain of custody:</strong> The Report Run ID provides a permanent record of this specific report generation
           </li>
         </ul>
       </div>
 
       {/* Confidential Notice */}
-      <div style={{ 
-        marginTop: '32pt',
-        padding: '12pt',
-        textAlign: 'center',
-        fontSize: '9pt',
-        color: '#666',
-        borderTop: '1pt solid #e0e0e0',
-        paddingTop: '16pt'
-      }}>
+      <div className="integrity-confidential">
         <strong>CONFIDENTIAL</strong> — This document contains sensitive information and is intended only for authorized recipients.
         Unauthorized disclosure, copying, or distribution is prohibited.
       </div>
     </div>
   )
 }
-

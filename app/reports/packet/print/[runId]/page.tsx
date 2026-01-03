@@ -15,6 +15,7 @@ import { isValidPacketType } from '@/lib/utils/packets/types'
 import type { JobPacketPayload } from '@/lib/utils/packets/builder'
 import { computeCanonicalHash } from '@/lib/utils/canonicalJson'
 import { formatPdfTimestamp } from '@/lib/utils/pdfFormatUtils'
+import { generateQRCodeDataURL } from '@/lib/utils/qrCode'
 
 // Force dynamic rendering and Node.js runtime for server-side auth/token verification
 export const runtime = 'nodejs'
@@ -151,6 +152,12 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
     // Compute document hash for integrity verification
     const documentHash = computeCanonicalHash(packetData)
     
+    // Generate verification URL and QR code
+    const protocol = 'https' // Always use HTTPS for verification URLs
+    const host = process.env.NEXT_PUBLIC_APP_URL?.replace(/^https?:\/\//, '') || 'riskmate.vercel.app'
+    const verificationUrl = `${protocol}://${host}/verify/report/${runId}`
+    const qrCodeDataUrl = await generateQRCodeDataURL(verificationUrl)
+    
     // Update integrity_verification section with actual data
     const sectionsWithIntegrity = packetData.sections.map((section) => {
       if (section.type === 'integrity_verification') {
@@ -161,6 +168,8 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
             reportRunId: runId,
             documentHash,
             generatedAt: reportRun.generated_at || packetData.meta.generatedAt,
+            verificationUrl,
+            qrCodeDataUrl,
           },
         }
       }

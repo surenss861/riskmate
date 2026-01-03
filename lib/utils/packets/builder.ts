@@ -254,15 +254,36 @@ async function buildSectionData({
 
     case 'evidence_photos': {
       const photos = documents.filter((doc) => doc.type === 'photo')
+      
+      // Fetch user names for uploaded_by IDs
+      const uploadedByIds = [...new Set(photos.map(p => p.uploaded_by).filter(Boolean))] as string[]
+      const usersMap = new Map<string, { name: string; email: string }>()
+      
+      if (uploadedByIds.length > 0) {
+        const { data: users } = await supabaseClient
+          .from('users')
+          .select('id, full_name, email')
+          .in('id', uploadedByIds)
+        
+        users?.forEach(user => {
+          usersMap.set(user.id, { name: user.full_name || 'Unknown', email: user.email || '' })
+        })
+      }
+      
       return {
         type: 'evidence_photos',
         data: {
-          photos: photos.map((photo) => ({
-            id: photo.id,
-            name: photo.name,
-            url: photo.url,
-            createdAt: photo.created_at,
-          })),
+          photos: photos.map((photo) => {
+            const uploader = photo.uploaded_by ? usersMap.get(photo.uploaded_by) : null
+            return {
+              id: photo.id,
+              name: photo.name,
+              url: photo.url,
+              createdAt: photo.created_at,
+              uploadedBy: uploader?.name || null,
+              uploadedByEmail: uploader?.email || null,
+            }
+          }),
           count: photos.length,
         },
         meta: {
