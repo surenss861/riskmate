@@ -40,6 +40,14 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
     if (rawToken) {
       try {
         tokenPayload = await verifyPrintToken(rawToken)
+        if (!tokenPayload) {
+          return (
+            <div style={{ padding: '20px', fontFamily: 'system-ui' }}>
+              <h1>401 - Unauthorized</h1>
+              <p>Invalid or expired token.</p>
+            </div>
+          )
+        }
         organization_id = tokenPayload.organizationId
         console.log('[PACKET-PRINT] Token verified:', {
           jobId: tokenPayload.jobId.substring(0, 8),
