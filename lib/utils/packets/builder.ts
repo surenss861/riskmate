@@ -252,7 +252,7 @@ async function buildSectionData({
         },
       }
 
-    case 'evidence_photos':
+    case 'evidence_photos': {
       const photos = documents.filter((doc) => doc.type === 'photo')
       return {
         type: 'evidence_photos',
@@ -271,6 +271,7 @@ async function buildSectionData({
           emptyMessage: 'No photos attached',
         },
       }
+    }
 
     case 'compliance_status':
       return {
