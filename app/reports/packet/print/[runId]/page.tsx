@@ -112,6 +112,17 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
       organization_id = reportRun.organization_id
     }
 
+    // Ensure organization_id is set (required for buildJobPacket)
+    if (!organization_id) {
+      console.error('[PACKET-PRINT] Missing organization_id')
+      return (
+        <div style={{ padding: '20px', fontFamily: 'system-ui' }}>
+          <h1>400 - Missing Organization</h1>
+          <p>Unable to determine organization for this report run.</p>
+        </div>
+      )
+    }
+
     // Validate packet type
     const packetType = reportRun.packet_type
     if (!packetType || !isValidPacketType(packetType)) {
