@@ -9,6 +9,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { buildJobReport } from '@/lib/utils/jobReport'
 import type { JobReportPayload } from '@/lib/utils/jobReport'
 import { getPacketDefinition, type PacketType, type SectionType } from './types'
+import { humanize } from '@/lib/utils/stringHelpers'
 
 export interface SectionData {
   type: SectionType
