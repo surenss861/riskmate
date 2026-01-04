@@ -815,6 +815,7 @@ function getPrintStyles(): string {
       font-size: ${theme.typography.sizes.caption};
       text-transform: uppercase;
       letter-spacing: 0.05em;
+      vertical-align: bottom;
     }
 
     .pdf-table td {
@@ -822,6 +823,8 @@ function getPrintStyles(): string {
       color: ${theme.colors.ink};
       border-bottom: ${theme.borders.thin} solid ${theme.colors.borders};
       font-size: ${theme.typography.sizes.body};
+      vertical-align: top;
+      line-height: ${theme.typography.lineHeight.normal};
     }
 
     .pdf-table tr {
@@ -831,6 +834,17 @@ function getPrintStyles(): string {
 
     .pdf-table tbody tr:nth-child(even) {
       background-color: #FAFAFA;
+    }
+
+    /* Chain of custody table styling - for evidence/events */
+    .pdf-table.chain-of-custody th {
+      background-color: ${theme.colors.ink};
+      color: ${theme.colors.paper};
+    }
+
+    .pdf-table.chain-of-custody td {
+      font-family: 'Courier New', monospace;
+      font-size: ${theme.typography.sizes.caption};
     }
 
     /* Risk Badges - Minimal, outline style */
@@ -952,7 +966,55 @@ function getPrintStyles(): string {
       color: ${theme.colors.muted};
     }
 
-    /* Empty State */
+    /* Section Empty State - Court-ready empty sections */
+    .section-empty {
+      padding: ${theme.spacing.cardPadding};
+      border: ${theme.borders.medium} solid ${theme.colors.borders};
+      border-radius: ${theme.borders.radius};
+      background-color: ${theme.colors.paper};
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+
+    .section-empty .section-title {
+      font-size: ${theme.typography.sizes.h2};
+      font-weight: ${theme.typography.weights.bold};
+      color: ${theme.colors.ink};
+      margin-bottom: ${theme.spacing.textGap};
+      padding-bottom: 6pt;
+      border-bottom: ${theme.borders.medium} solid ${theme.colors.accent};
+    }
+
+    .section-empty-content {
+      margin-top: ${theme.spacing.textGap};
+    }
+
+    .section-empty-message {
+      font-size: ${theme.typography.sizes.body};
+      color: ${theme.colors.ink};
+      line-height: ${theme.typography.lineHeight.relaxed};
+      margin-bottom: ${theme.spacing.textGap};
+    }
+
+    .section-empty-note {
+      font-size: ${theme.typography.sizes.body};
+      color: ${theme.colors.muted};
+      line-height: ${theme.typography.lineHeight.normal};
+      margin-top: ${theme.spacing.textGap};
+      padding: ${theme.spacing.textGap};
+      background-color: #FAFAFA;
+      border-left: 3pt solid ${theme.colors.borders};
+      border-radius: 2pt;
+    }
+
+    .section-empty-note strong {
+      color: ${theme.colors.ink};
+      font-weight: ${theme.typography.weights.semibold};
+      display: block;
+      margin-bottom: 4pt;
+    }
+
+    /* Legacy empty-state class (backwards compatibility) */
     .empty-state {
       color: ${theme.colors.muted};
       font-style: italic;
