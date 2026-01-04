@@ -47,69 +47,88 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Install Playwright Chromium
-        run: npx playwright-core install chromium
+      - name: Install Playwright Chromium (with system deps)
+        run: npx playwright install --with-deps chromium
 
-      - name: Run smoke test (if URL provided)
+      - name: Run smoke test (manual URL input)
         if: github.event.inputs.print_url != ''
         env:
           PRINT_URL: ${{ github.event.inputs.print_url }}
           PRINT_TOKEN: ${{ secrets.PDF_TEST_TOKEN }}
-        run: pnpm run test:pdf-smoke "$PRINT_URL" "$PRINT_TOKEN"
+        run: |
+          echo "🧪 Testing provided URL..."
+          pnpm run test:pdf-smoke "$PRINT_URL" "$PRINT_TOKEN"
 
       - name: Check if test URLs are configured
+        if: github.event.inputs.print_url == ''
         id: check_urls
         run: |
-          if [ -z "${{ secrets.PDF_TEST_URL_AUDIT }}" ]; then
+          missing=""
+          for k in PDF_TEST_URL_AUDIT PDF_TEST_URL_INCIDENT PDF_TEST_URL_COMPLIANCE PDF_TEST_URL_INSURANCE PDF_TEST_TOKEN; do
+            if [ -z "${!k}" ]; then
+              missing="$missing $k"
+            fi
+          done
+          
+          # Check secrets (GitHub Actions syntax)
+          if [ -z "${{ secrets.PDF_TEST_URL_AUDIT }}" ] || \
+             [ -z "${{ secrets.PDF_TEST_URL_INCIDENT }}" ] || \
+             [ -z "${{ secrets.PDF_TEST_URL_COMPLIANCE }}" ] || \
+             [ -z "${{ secrets.PDF_TEST_URL_INSURANCE }}" ] || \
+             [ -z "${{ secrets.PDF_TEST_TOKEN }}" ]; then
             echo "skip_tests=true" >> $GITHUB_OUTPUT
             echo "⚠️  PDF test URLs not configured - skipping tests"
-            echo "Configure secrets: PDF_TEST_URL_AUDIT, PDF_TEST_URL_INCIDENT, PDF_TEST_URL_COMPLIANCE, PDF_TEST_URL_INSURANCE"
+            echo "Configure secrets: PDF_TEST_URL_AUDIT, PDF_TEST_URL_INCIDENT, PDF_TEST_URL_COMPLIANCE, PDF_TEST_URL_INSURANCE, PDF_TEST_TOKEN"
           else
             echo "skip_tests=false" >> $GITHUB_OUTPUT
           fi
 
       - name: Run smoke test - Audit Packet
-        if: steps.check_urls.outputs.skip_tests == 'false'
+        if: github.event.inputs.print_url == '' && steps.check_urls.outputs.skip_tests == 'false'
         continue-on-error: true
         env:
           PRINT_URL: ${{ secrets.PDF_TEST_URL_AUDIT }}
           PRINT_TOKEN: ${{ secrets.PDF_TEST_TOKEN }}
+          PACKET_LABEL: AUDIT
         run: |
           echo "🧪 Testing Audit Packet..."
           pnpm run test:pdf-smoke "$PRINT_URL" "$PRINT_TOKEN" || echo "❌ Audit packet test failed" > audit-failure.txt
 
       - name: Run smoke test - Incident Packet
-        if: steps.check_urls.outputs.skip_tests == 'false'
+        if: github.event.inputs.print_url == '' && steps.check_urls.outputs.skip_tests == 'false'
         continue-on-error: true
         env:
           PRINT_URL: ${{ secrets.PDF_TEST_URL_INCIDENT }}
           PRINT_TOKEN: ${{ secrets.PDF_TEST_TOKEN }}
+          PACKET_LABEL: INCIDENT
         run: |
           echo "🧪 Testing Incident Packet..."
           pnpm run test:pdf-smoke "$PRINT_URL" "$PRINT_TOKEN" || echo "❌ Incident packet test failed" > incident-failure.txt
 
       - name: Run smoke test - Compliance Packet
-        if: steps.check_urls.outputs.skip_tests == 'false'
+        if: github.event.inputs.print_url == '' && steps.check_urls.outputs.skip_tests == 'false'
         continue-on-error: true
         env:
           PRINT_URL: ${{ secrets.PDF_TEST_URL_COMPLIANCE }}
           PRINT_TOKEN: ${{ secrets.PDF_TEST_TOKEN }}
+          PACKET_LABEL: COMPLIANCE
         run: |
           echo "🧪 Testing Compliance Packet..."
           pnpm run test:pdf-smoke "$PRINT_URL" "$PRINT_TOKEN" || echo "❌ Compliance packet test failed" > compliance-failure.txt
 
       - name: Run smoke test - Insurance Packet
-        if: steps.check_urls.outputs.skip_tests == 'false'
+        if: github.event.inputs.print_url == '' && steps.check_urls.outputs.skip_tests == 'false'
         continue-on-error: true
         env:
           PRINT_URL: ${{ secrets.PDF_TEST_URL_INSURANCE }}
           PRINT_TOKEN: ${{ secrets.PDF_TEST_TOKEN }}
+          PACKET_LABEL: INSURANCE
         run: |
           echo "🧪 Testing Insurance Packet..."
           pnpm run test:pdf-smoke "$PRINT_URL" "$PRINT_TOKEN" || echo "❌ Insurance packet test failed" > insurance-failure.txt
 
       - name: Check test results
-        if: steps.check_urls.outputs.skip_tests == 'false'
+        if: github.event.inputs.print_url == '' && steps.check_urls.outputs.skip_tests == 'false'
         run: |
           failures=$(find . -name "*-failure.txt" 2>/dev/null | wc -l)
           if [ "$failures" -gt 0 ]; then
@@ -121,18 +140,18 @@ jobs:
           fi
 
       - name: Upload test artifacts (screenshots)
-        if: always() && steps.check_urls.outputs.skip_tests == 'false'
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: pdf-smoke-test-screenshots
           path: |
-            *.png
-            *.jpg
+            pdf-smoke-artifacts/**/*.png
+            pdf-smoke-artifacts/**/*.jpg
           retention-days: 7
           if-no-files-found: ignore
 
       - name: Skip message
-        if: steps.check_urls.outputs.skip_tests == 'true'
+        if: github.event.inputs.print_url == '' && steps.check_urls.outputs.skip_tests == 'true'
         run: |
           echo "ℹ️  PDF test URLs not configured in repository secrets"
           echo "To enable automated testing, add these secrets:"

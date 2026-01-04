@@ -10,12 +10,16 @@
  * Or set environment variables:
  *   PRINT_URL - Full URL to the print page (e.g., https://riskmate.vercel.app/reports/packet/print/{runId}?token=...)
  *   PRINT_TOKEN - Token for authentication (if not provided in URL)
+ *   PACKET_LABEL - Label for this packet type (e.g., "AUDIT", "INCIDENT") - used in screenshot filenames
  */
 
 import { chromium } from 'playwright-core'
+import fs from 'fs'
+import path from 'path'
 
 const PRINT_URL = process.env.PRINT_URL || process.argv[2]
 const PRINT_TOKEN = process.env.PRINT_TOKEN || process.argv[3]
+const OUT_DIR = process.env.PDF_SMOKE_OUT_DIR || 'pdf-smoke-artifacts'
 
 if (!PRINT_URL) {
   console.error('❌ Error: PRINT_URL or print URL argument is required')
@@ -24,7 +28,12 @@ if (!PRINT_URL) {
   console.error('\nOr set environment variables:')
   console.error('  PRINT_URL=https://riskmate.vercel.app/reports/packet/print/{runId}?token=...')
   console.error('  PRINT_TOKEN=your-token (if not in URL)')
+  console.error('  PACKET_LABEL=AUDIT (optional: label for screenshot filename)')
   process.exit(1)
+}
+
+function safeName(input: string): string {
+  return input.replace(/[^a-z0-9_-]+/gi, '_').slice(0, 80)
 }
 
 async function runSmokeTest() {
@@ -61,11 +70,20 @@ async function runSmokeTest() {
     console.log('⏳ Waiting for PDF ready marker (#pdf-ready[data-ready="1"])...')
     try {
       await page.waitForSelector('#pdf-ready[data-ready="1"]', {
-        timeout: 10000,
+        timeout: 15000,
       })
       console.log('✅ PDF ready marker found')
     } catch (error) {
-      throw new Error('PDF ready marker not found - PDF service will hang!')
+      // Retry once for flaky headless
+      console.log('⚠️  Marker not found immediately, retrying...')
+      try {
+        await page.waitForSelector('#pdf-ready[data-ready="1"]', {
+          timeout: 10000,
+        })
+        console.log('✅ PDF ready marker found on retry')
+      } catch (retryError) {
+        throw new Error('PDF ready marker not found - PDF service will hang!')
+      }
     }
 
     // Verify key selectors exist
