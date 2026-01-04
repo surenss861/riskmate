@@ -323,6 +323,8 @@ async function buildSectionData({
           evidenceId: totalControls > 0 ? 'MITIGATIONS' : null,
           completedBy: totalControls > 0 ? `${completedControls}/${totalControls} complete` : null,
           completedAt: null,
+          impact: totalControls > 0 && completedControls < totalControls ? 'Blocks closure' : null,
+          owner: totalControls > 0 && completedControls < totalControls ? 'Project Manager' : null,
         },
         {
           category: 'Evidence',
@@ -332,6 +334,8 @@ async function buildSectionData({
           evidenceId: photos.length > 0 ? photos[0]?.id : null,
           completedBy: photos.length > 0 ? `${photos.length} photo(s)` : null,
           completedAt: photos.length > 0 ? photos[0]?.created_at : null,
+          impact: photos.length === 0 ? 'Blocks insurance submission' : null,
+          owner: photos.length === 0 ? 'Field Team' : null,
         },
         {
           category: 'Assessment',
@@ -341,6 +345,8 @@ async function buildSectionData({
           evidenceId: risk_score?.overall_score ? 'RISK_SCORE' : null,
           completedBy: risk_score?.overall_score ? `Score: ${risk_score.overall_score}` : null,
           completedAt: null,
+          impact: risk_score === null || risk_score.overall_score === null ? 'Audit risk' : null,
+          owner: risk_score === null || risk_score.overall_score === null ? 'Safety Officer' : null,
         },
         {
           category: 'Attestations',
@@ -350,6 +356,8 @@ async function buildSectionData({
           evidenceId: null,
           completedBy: null,
           completedAt: null,
+          impact: null, // Optional requirement
+          owner: null,
         },
       ]
       

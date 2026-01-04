@@ -42,7 +42,7 @@ export function AttachmentsIndexSection({
             <th>Evidence ID</th>
             <th>Document Name</th>
             <th>Type</th>
-            <th>Captured</th>
+            <th>Captured At (UTC)</th>
             <th>Captured By</th>
           </tr>
         </thead>
@@ -54,7 +54,7 @@ export function AttachmentsIndexSection({
                 fontSize: pdfTheme.typography.sizes.caption,
                 color: pdfTheme.colors.muted
               }}>
-                {doc.id.substring(0, 8).toUpperCase()}
+                {doc.id.substring(0, 12).toUpperCase()}...
               </td>
               <td style={{ fontWeight: pdfTheme.typography.weights.semibold }}>
                 {doc.name || 'Untitled'}

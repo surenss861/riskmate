@@ -59,12 +59,14 @@ export function EvidencePhotosSection({ data, empty, emptyMessage }: EvidencePho
                 {photo.name || 'Untitled'}
               </div>
               <div className="photo-meta">
-                <div><strong>Evidence ID:</strong> {photo.id.substring(0, 8).toUpperCase()}</div>
+                <div style={{ fontSize: pdfTheme.typography.sizes.caption, fontFamily: 'monospace', color: pdfTheme.colors.muted }}>
+                  <strong>Evidence ID:</strong> {photo.id.substring(0, 12).toUpperCase()}...
+                </div>
                 {photo.createdAt && (
-                  <div><strong>Captured:</strong> {formatPdfTimestamp(photo.createdAt)}</div>
+                  <div><strong>Captured:</strong> {formatPdfTimestamp(photo.createdAt)} UTC</div>
                 )}
                 {photo.uploadedBy && (
-                  <div><strong>Captured by:</strong> {photo.uploadedBy}</div>
+                  <div><strong>Captured by:</strong> {photo.uploadedBy}{photo.uploadedByEmail ? ` (${photo.uploadedByEmail})` : ''}</div>
                 )}
               </div>
             </div>

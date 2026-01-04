@@ -15,6 +15,8 @@ interface RequirementsEvidenceMatrixSectionProps {
       evidenceId?: string | null
       completedBy?: string | null
       completedAt?: string | null
+      impact?: string | null
+      owner?: string | null
     }>
   }
   empty?: boolean
