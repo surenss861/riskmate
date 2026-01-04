@@ -296,8 +296,8 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
             reportRunId: runId,
             documentHash,
             generatedAt: reportRun.generated_at || packetData.meta.generatedAt,
-            verificationUrl,
-            qrCodeDataUrl,
+            verificationUrl: verificationUrl || undefined,
+            qrCodeDataUrl: qrCodeDataUrl || undefined,
           },
         }
       }
