@@ -291,12 +291,13 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
       packetBuildError = packetError
       
       // Create minimal packet data so page still renders
+      const safePacketTypeForError = String(packetType || 'insurance')
       packetData = {
         meta: {
           jobId: reportRun.job_id,
           organizationId: organization_id || reportRun.organization_id || '',
           packetType: packetType,
-          packetTitle: packetType.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()),
+          packetTitle: safePacketTypeForError.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()),
           generatedAt: reportRun.generated_at || new Date().toISOString(),
         },
         sections: [
