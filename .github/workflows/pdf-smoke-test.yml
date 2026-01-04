@@ -10,8 +10,7 @@ on:
       - 'scripts/pdf-smoke-test.ts'
       - 'pdf-service/**'
   push:
-    branches:
-      - main
+    branches: [main]
     paths:
       - 'app/reports/**'
       - 'components/report/**'
@@ -24,13 +23,19 @@ on:
       print_url:
         description: 'Print URL to test (optional, uses secrets if not provided)'
         required: false
+        default: ''
+
+concurrency:
+  group: pdf-smoke-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   pdf-smoke-test-manual:
-    name: PDF Smoke Test (Manual URL)
+    name: PDF Smoke Test - Manual
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    if: github.event.inputs.print_url != ''
+    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.print_url != '' }}
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -52,7 +57,7 @@ jobs:
       - name: Install Playwright Chromium (with system deps)
         run: npx playwright install --with-deps chromium
 
-      - name: Run smoke test
+      - name: Run smoke test (manual URL)
         env:
           PRINT_URL: ${{ github.event.inputs.print_url }}
           PRINT_TOKEN: ${{ secrets.PDF_TEST_TOKEN }}
@@ -60,11 +65,11 @@ jobs:
           echo "🧪 Testing provided URL..."
           pnpm run test:pdf-smoke "$PRINT_URL" "$PRINT_TOKEN"
 
-      - name: Upload test artifacts (screenshots)
+      - name: Upload artifacts (screenshots)
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: pdf-smoke-test-manual
+          name: pdf-smoke-test-manual-${{ github.run_attempt }}
           path: |
             pdf-smoke-artifacts/**/*.png
             pdf-smoke-artifacts/**/*.jpg
@@ -75,10 +80,8 @@ jobs:
     name: PDF Smoke Test - ${{ matrix.packet.label }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    if: github.event.inputs.print_url == ''
-    concurrency:
-      group: pdf-smoke-${{ github.ref }}
-      cancel-in-progress: true
+    if: ${{ !(github.event_name == 'workflow_dispatch' && github.event.inputs.print_url != '') }}
+
     strategy:
       fail-fast: false
       matrix:
@@ -113,37 +116,63 @@ jobs:
       - name: Install Playwright Chromium (with system deps)
         run: npx playwright install --with-deps chromium
 
+      - name: Validate secrets configured
+        id: secrets_check
+        env:
+          PRINT_TOKEN: ${{ secrets.PDF_TEST_TOKEN }}
+          PDF_TEST_URL_AUDIT: ${{ secrets.PDF_TEST_URL_AUDIT }}
+          PDF_TEST_URL_INCIDENT: ${{ secrets.PDF_TEST_URL_INCIDENT }}
+          PDF_TEST_URL_COMPLIANCE: ${{ secrets.PDF_TEST_URL_COMPLIANCE }}
+          PDF_TEST_URL_INSURANCE: ${{ secrets.PDF_TEST_URL_INSURANCE }}
+        run: |
+          missing=0
+          if [ -z "$PRINT_TOKEN" ]; then echo "Missing: PDF_TEST_TOKEN"; missing=1; fi
+          if [ -z "$PDF_TEST_URL_AUDIT" ]; then echo "Missing: PDF_TEST_URL_AUDIT"; missing=1; fi
+          if [ -z "$PDF_TEST_URL_INCIDENT" ]; then echo "Missing: PDF_TEST_URL_INCIDENT"; missing=1; fi
+          if [ -z "$PDF_TEST_URL_COMPLIANCE" ]; then echo "Missing: PDF_TEST_URL_COMPLIANCE"; missing=1; fi
+          if [ -z "$PDF_TEST_URL_INSURANCE" ]; then echo "Missing: PDF_TEST_URL_INSURANCE"; missing=1; fi
+          if [ "$missing" -eq 1 ]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Skip message (missing secrets)
+        if: steps.secrets_check.outputs.skip == 'true'
+        run: |
+          echo "⚠️  PDF test secrets not configured. Skipping."
+          echo "Add secrets:"
+          echo "  - PDF_TEST_URL_AUDIT"
+          echo "  - PDF_TEST_URL_INCIDENT"
+          echo "  - PDF_TEST_URL_COMPLIANCE"
+          echo "  - PDF_TEST_URL_INSURANCE"
+          echo "  - PDF_TEST_TOKEN"
+          echo ""
+          echo "Note: PDF_TEST_TOKEN should be long-lived for CI."
+
       - name: Run smoke test - ${{ matrix.packet.label }}
+        if: steps.secrets_check.outputs.skip == 'false'
         env:
           PDF_TEST_URL_AUDIT: ${{ secrets.PDF_TEST_URL_AUDIT }}
           PDF_TEST_URL_INCIDENT: ${{ secrets.PDF_TEST_URL_INCIDENT }}
           PDF_TEST_URL_COMPLIANCE: ${{ secrets.PDF_TEST_URL_COMPLIANCE }}
           PDF_TEST_URL_INSURANCE: ${{ secrets.PDF_TEST_URL_INSURANCE }}
           PRINT_TOKEN: ${{ secrets.PDF_TEST_TOKEN }}
-          PACKET_LABEL: ${{ matrix.packet.label }}
         run: |
           case "${{ matrix.packet.url_secret }}" in
-            PDF_TEST_URL_AUDIT)
-              PRINT_URL="$PDF_TEST_URL_AUDIT"
-              ;;
-            PDF_TEST_URL_INCIDENT)
-              PRINT_URL="$PDF_TEST_URL_INCIDENT"
-              ;;
-            PDF_TEST_URL_COMPLIANCE)
-              PRINT_URL="$PDF_TEST_URL_COMPLIANCE"
-              ;;
-            PDF_TEST_URL_INSURANCE)
-              PRINT_URL="$PDF_TEST_URL_INSURANCE"
-              ;;
+            PDF_TEST_URL_AUDIT) PRINT_URL="$PDF_TEST_URL_AUDIT" ;;
+            PDF_TEST_URL_INCIDENT) PRINT_URL="$PDF_TEST_URL_INCIDENT" ;;
+            PDF_TEST_URL_COMPLIANCE) PRINT_URL="$PDF_TEST_URL_COMPLIANCE" ;;
+            PDF_TEST_URL_INSURANCE) PRINT_URL="$PDF_TEST_URL_INSURANCE" ;;
           esac
           echo "🧪 Testing ${{ matrix.packet.label }} Packet..."
           pnpm run test:pdf-smoke "$PRINT_URL" "$PRINT_TOKEN"
 
-      - name: Upload test artifacts (screenshots)
-        if: always()
+      - name: Upload artifacts (screenshots)
+        if: always() && steps.secrets_check.outputs.skip == 'false'
         uses: actions/upload-artifact@v4
         with:
-          name: pdf-smoke-test-${{ matrix.packet.label }}
+          name: pdf-smoke-test-${{ matrix.packet.label }}-${{ github.run_attempt }}
           path: |
             pdf-smoke-artifacts/**/*.png
             pdf-smoke-artifacts/**/*.jpg
