@@ -25,10 +25,11 @@ const formatPercent = (value: number) =>
 const formatDateLabel = (isoDate: string) => {
   const date = new Date(isoDate);
   const options: Intl.DateTimeFormatOptions = {
+    timeZone: 'America/New_York',
     month: 'short',
     day: 'numeric',
   };
-  return date.toLocaleDateString(undefined, options);
+  return date.toLocaleDateString('en-US', options);
 };
 
 const CHART_DIMENSIONS = {

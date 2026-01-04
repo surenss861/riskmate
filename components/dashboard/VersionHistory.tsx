@@ -203,7 +203,7 @@ export function VersionHistory({ jobId, entries }: VersionHistoryProps) {
                       <div className="flex items-center gap-2 text-xs text-white/50">
                         <span>by {entry.changedBy}</span>
                         <span>•</span>
-                        <span>{new Date(entry.changedAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</span>
+                        <span>{new Date(entry.changedAt).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })}</span>
                         {entry.metadata?.templateId && (
                           <>
                             <span>•</span>

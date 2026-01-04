@@ -20,11 +20,13 @@ export function formatDate(dateString?: string | null): string {
     const date = new Date(dateString);
     if (Number.isNaN(date.valueOf())) return 'N/A';
     return date.toLocaleString('en-US', {
+      timeZone: 'America/New_York',
       year: 'numeric',
       month: 'short',
       day: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
+      timeZoneName: 'short',
     });
   } catch {
     return 'N/A';
@@ -37,8 +39,10 @@ export function formatTime(dateString?: string | null): string {
     const date = new Date(dateString);
     if (Number.isNaN(date.valueOf())) return '';
     return date.toLocaleTimeString('en-US', {
+      timeZone: 'America/New_York',
       hour: '2-digit',
       minute: '2-digit',
+      timeZoneName: 'short',
     });
   } catch {
     return '';
@@ -51,6 +55,7 @@ export function formatShortDate(dateString?: string | null): string {
     const date = new Date(dateString);
     if (Number.isNaN(date.valueOf())) return '';
     return date.toLocaleDateString('en-US', {
+      timeZone: 'America/New_York',
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',

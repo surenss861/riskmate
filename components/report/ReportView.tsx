@@ -52,8 +52,10 @@ function formatTime(dateString: string): string {
   try {
     const date = new Date(dateString)
     return date.toLocaleTimeString('en-US', {
+      timeZone: 'America/New_York',
       hour: '2-digit',
       minute: '2-digit',
+      timeZoneName: 'short',
     })
   } catch {
     return ''
@@ -64,11 +66,12 @@ function formatUTCTime(dateString: string): string {
   try {
     const date = new Date(dateString)
     return date.toLocaleTimeString('en-US', {
+      timeZone: 'America/New_York',
       hour: '2-digit',
       minute: '2-digit',
-      timeZone: 'UTC',
       hour12: false,
-    }) + ' UTC'
+      timeZoneName: 'short',
+    })
   } catch {
     return ''
   }

@@ -49,6 +49,7 @@ export function EventDetailsDrawer({ isOpen, onClose, event }: EventDetailsDrawe
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString('en-US', {
+      timeZone: 'America/New_York',
       year: 'numeric',
       month: 'long',
       day: 'numeric',

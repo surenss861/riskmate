@@ -278,8 +278,8 @@ function DataGridRows<T extends { id: string }>({
                       <div className="text-white/70">
                         {rowData.updated_at ? (
                           <div>
-                            <div className="text-xs">{new Date(rowData.updated_at).toLocaleDateString()}</div>
-                            <div className="text-xs text-white/40">{new Date(rowData.updated_at).toLocaleTimeString()}</div>
+                            <div className="text-xs">{new Date(rowData.updated_at).toLocaleDateString('en-US', { timeZone: 'America/New_York' })}</div>
+                            <div className="text-xs text-white/40">{new Date(rowData.updated_at).toLocaleTimeString('en-US', { timeZone: 'America/New_York', timeZoneName: 'short' })}</div>
                           </div>
                         ) : (
                           <div className="text-white/40">No activity</div>

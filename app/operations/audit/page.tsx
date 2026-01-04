@@ -2026,7 +2026,7 @@ export default function AuditViewPage() {
                                   <span>{formatRelativeTime(event.created_at)}</span>
                                 </div>
                                 <div className="text-xs text-white/50 mt-1">
-                                  {new Date(event.created_at).toLocaleString()}
+                                  {new Date(event.created_at).toLocaleString('en-US', { timeZone: 'America/New_York', timeZoneName: 'short' })}
                                 </div>
                               </div>
                             </div>
