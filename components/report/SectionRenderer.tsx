@@ -17,6 +17,14 @@ import {
   TableOfContentsSection,
   AuditTimelineSection,
   RequirementsEvidenceMatrixSection,
+  CapabilityViolationsSection,
+  RoleAssignmentRecordSection,
+  AccessGovernanceTrailSection,
+  CorrectiveActionsSection,
+  FlaggedJobDetailsSection,
+  EscalationTrailSection,
+  AccountabilityTimelineSection,
+  ChecklistCompletionSection,
 } from './sections'
 
 interface SectionRendererProps {
@@ -114,18 +122,77 @@ export function SectionRenderer({ section }: SectionRendererProps) {
       // Will show when signatures are implemented
       return null
 
-    // Placeholder sections (to be implemented)
-    case 'audit_timeline':
     case 'capability_violations':
+      return (
+        <CapabilityViolationsSection
+          data={section.data}
+          empty={section.meta?.empty}
+          emptyMessage={section.meta?.emptyMessage}
+        />
+      )
+
     case 'role_assignment_record':
+      return (
+        <RoleAssignmentRecordSection
+          data={section.data}
+          empty={section.meta?.empty}
+          emptyMessage={section.meta?.emptyMessage}
+        />
+      )
+
     case 'access_governance_trail':
+      return (
+        <AccessGovernanceTrailSection
+          data={section.data}
+          empty={section.meta?.empty}
+          emptyMessage={section.meta?.emptyMessage}
+        />
+      )
+
     case 'corrective_actions':
+      return (
+        <CorrectiveActionsSection
+          data={section.data}
+          empty={section.meta?.empty}
+          emptyMessage={section.meta?.emptyMessage}
+        />
+      )
+
     case 'flagged_job_details':
+      return (
+        <FlaggedJobDetailsSection
+          data={section.data}
+          empty={section.meta?.empty}
+          emptyMessage={section.meta?.emptyMessage}
+        />
+      )
+
     case 'escalation_trail':
+      return (
+        <EscalationTrailSection
+          data={section.data}
+          empty={section.meta?.empty}
+          emptyMessage={section.meta?.emptyMessage}
+        />
+      )
+
     case 'accountability_timeline':
+      return (
+        <AccountabilityTimelineSection
+          data={section.data}
+          empty={section.meta?.empty}
+          emptyMessage={section.meta?.emptyMessage}
+        />
+      )
+
     case 'checklist_completion':
-      // Skip unimplemented sections (no empty pages)
-      return null
+      return (
+        <ChecklistCompletionSection
+          data={section.data}
+          empty={section.meta?.empty}
+          emptyMessage={section.meta?.emptyMessage}
+        />
+      )
 
     default:
       console.warn(`[SectionRenderer] Unknown section type: ${section.type}`)

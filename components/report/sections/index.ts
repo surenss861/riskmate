@@ -15,6 +15,14 @@ import { IntegrityVerificationSection } from './IntegrityVerificationSection'
 import { TableOfContentsSection } from './TableOfContentsSection'
 import { AuditTimelineSection } from './AuditTimelineSection'
 import { RequirementsEvidenceMatrixSection } from './RequirementsEvidenceMatrixSection'
+import { CapabilityViolationsSection } from './CapabilityViolationsSection'
+import { RoleAssignmentRecordSection } from './RoleAssignmentRecordSection'
+import { AccessGovernanceTrailSection } from './AccessGovernanceTrailSection'
+import { CorrectiveActionsSection } from './CorrectiveActionsSection'
+import { FlaggedJobDetailsSection } from './FlaggedJobDetailsSection'
+import { EscalationTrailSection } from './EscalationTrailSection'
+import { AccountabilityTimelineSection } from './AccountabilityTimelineSection'
+import { ChecklistCompletionSection } from './ChecklistCompletionSection'
 
 export {
   JobSummarySection,
@@ -29,5 +37,13 @@ export {
   TableOfContentsSection,
   AuditTimelineSection,
   RequirementsEvidenceMatrixSection,
+  CapabilityViolationsSection,
+  RoleAssignmentRecordSection,
+  AccessGovernanceTrailSection,
+  CorrectiveActionsSection,
+  FlaggedJobDetailsSection,
+  EscalationTrailSection,
+  AccountabilityTimelineSection,
+  ChecklistCompletionSection,
 }
 
