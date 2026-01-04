@@ -219,6 +219,8 @@ export async function POST(
       printUrl = `${origin}/reports/${jobId}/print?token=${encodeURIComponent(token)}&report_run_id=${reportRun.id}`
     }
     console.log(`[reports][${requestId}][stage] build_url_ok url=${printUrl}`)
+    console.log(`[reports][${requestId}] PRINT_URL_FOR_DEBUGGING: ${printUrl}`)
+    console.log(`[reports][${requestId}] To test manually, open this URL in browser: ${printUrl}`)
 
     // STAGE: Generate PDF
     console.log(`[reports][${requestId}][stage] generate_pdf_start`)

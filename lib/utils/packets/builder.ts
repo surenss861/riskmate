@@ -260,14 +260,23 @@ async function buildSectionData({
       const usersMap = new Map<string, { name: string; email: string }>()
       
       if (uploadedByIds.length > 0) {
-        const { data: users } = await supabaseClient
-          .from('users')
-          .select('id, full_name, email')
-          .in('id', uploadedByIds)
-        
-        users?.forEach(user => {
-          usersMap.set(user.id, { name: user.full_name || 'Unknown', email: user.email || '' })
-        })
+        try {
+          const { data: users, error: usersError } = await supabaseClient
+            .from('users')
+            .select('id, full_name, email')
+            .in('id', uploadedByIds)
+          
+          if (usersError) {
+            console.warn(`[packet-builder] Failed to fetch users for evidence_photos: ${usersError.message}`)
+          } else {
+            users?.forEach(user => {
+              usersMap.set(user.id, { name: user.full_name || 'Unknown', email: user.email || '' })
+            })
+          }
+        } catch (userFetchError: any) {
+          console.warn(`[packet-builder] Exception fetching users for evidence_photos: ${userFetchError?.message}`)
+          // Continue without user names - non-fatal
+        }
       }
       
       return {
@@ -401,14 +410,23 @@ async function buildSectionData({
       const usersMap = new Map<string, { name: string; email: string }>()
       
       if (uploadedByIds.length > 0) {
-        const { data: users } = await supabaseClient
-          .from('users')
-          .select('id, full_name, email')
-          .in('id', uploadedByIds)
-        
-        users?.forEach(user => {
-          usersMap.set(user.id, { name: user.full_name || 'Unknown', email: user.email || '' })
-        })
+        try {
+          const { data: users, error: usersError } = await supabaseClient
+            .from('users')
+            .select('id, full_name, email')
+            .in('id', uploadedByIds)
+          
+          if (usersError) {
+            console.warn(`[packet-builder] Failed to fetch users for attachments_index: ${usersError.message}`)
+          } else {
+            users?.forEach(user => {
+              usersMap.set(user.id, { name: user.full_name || 'Unknown', email: user.email || '' })
+            })
+          }
+        } catch (userFetchError: any) {
+          console.warn(`[packet-builder] Exception fetching users for attachments_index: ${userFetchError?.message}`)
+          // Continue without user names - non-fatal
+        }
       }
       
       return {
