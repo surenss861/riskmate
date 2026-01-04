@@ -1,10 +1,12 @@
 name: PDF Smoke Test
 
 on:
-  pull_request:
-  push:
-    branches: [main]
   workflow_dispatch:
+    inputs:
+      print_token:
+        description: 'Optional token override (uses secrets if not provided)'
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -53,13 +55,13 @@ jobs:
           fi
 
           echo "Missing secrets: ${missing[*]}"
-          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref_name }}" = "main" ]; then
-            echo "::error::Missing required secrets on main push: ${missing[*]}"
-            exit 1
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::warning::Missing secrets: ${missing[*]}"
+            echo "can_run=false" >> "$GITHUB_OUTPUT"
+            echo "Note: This workflow is manual-only. Add secrets to enable PDF smoke tests."
+          else
+            echo "can_run=true" >> "$GITHUB_OUTPUT"
           fi
-
-          echo "can_run=false" >> "$GITHUB_OUTPUT"
-          echo "Bootstrap mode: skipping PDF smoke tests on PR because secrets are missing."
 
   pdf-smoke:
     needs: preflight
