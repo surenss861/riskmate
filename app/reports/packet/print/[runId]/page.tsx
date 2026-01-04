@@ -473,8 +473,8 @@ function getPrintStyles(): string {
       font-weight: ${theme.typography.weights.bold};
       color: ${theme.colors.ink};
       margin-bottom: ${theme.spacing.sectionGap};
-      padding-bottom: 8pt;
-      border-bottom: ${theme.borders.thick} solid ${theme.colors.accent};
+      padding-bottom: 6pt;
+      border-bottom: ${theme.borders.medium} solid ${theme.colors.accent};
     }
 
     /* Cards - Minimal borders, clean spacing */
