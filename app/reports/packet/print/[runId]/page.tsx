@@ -450,11 +450,11 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
                   <h1 className="cover-title">{packetTitle}</h1>
 
                   <div className="cover-subheader">
-                    <span>Job ID: {packetData.meta.jobId.substring(0, 8).toUpperCase()}</span>
+                    <span>Job ID: {safeJobId.substring(0, 8).toUpperCase()}</span>
                     <span>•</span>
-                    <span>Report Run ID: {runId.substring(0, 8).toUpperCase()}</span>
+                    <span>Report Run ID: {safeRunId.substring(0, 8).toUpperCase()}</span>
                     <span>•</span>
-                    <span>Generated: {formatPdfTimestamp(reportRun.generated_at || packetData.meta.generatedAt)}</span>
+                    <span>Generated: {formatPdfTimestamp(safeGeneratedAt)}</span>
                     {!isDraft && <span>•</span>}
                     {!isDraft && <span>Status: Final</span>}
                     {isDraft && <span>•</span>}
