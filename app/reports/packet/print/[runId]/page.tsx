@@ -28,11 +28,19 @@ interface PacketPrintPageProps {
 }
 
 export default async function PacketPrintPage({ params, searchParams }: PacketPrintPageProps) {
+  // Debug marker - helps identify if page loads at all
+  const debugMode = process.env.NODE_ENV === 'development' || process.env.VERCEL_ENV === 'preview'
+  
   let tokenPayload: { jobId: string; organizationId: string; reportRunId?: string } | null = null
 
   try {
     const { runId } = await params
     const { token: rawToken } = await searchParams
+
+    // Early debug marker
+    if (debugMode) {
+      console.log('[PACKET-PRINT] Page load started:', { runId: runId?.substring(0, 8) })
+    }
 
     let organization_id: string | null = null
 
@@ -41,10 +49,12 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
       try {
         tokenPayload = await verifyPrintToken(rawToken)
         if (!tokenPayload) {
+          console.error('[PACKET-PRINT] Token verification returned null')
           return (
             <div style={{ padding: '20px', fontFamily: 'system-ui' }}>
               <h1>401 - Unauthorized</h1>
               <p>Invalid or expired token.</p>
+              {debugMode && <p style={{ fontSize: '12px', color: '#666' }}>Debug: Token verification returned null</p>}
             </div>
           )
         }
@@ -55,11 +65,20 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
           reportRunId: tokenPayload.reportRunId?.substring(0, 8),
         })
       } catch (tokenError: any) {
-        console.error('[PACKET-PRINT] Token verification failed:', tokenError?.message)
+        console.error('[PACKET-PRINT] Token verification failed:', {
+          message: tokenError?.message,
+          stack: tokenError?.stack,
+          error: String(tokenError)
+        })
         return (
           <div style={{ padding: '20px', fontFamily: 'system-ui' }}>
             <h1>403 - Invalid Token</h1>
             <p>The provided token is invalid or expired.</p>
+            {debugMode && (
+              <pre style={{ fontSize: '10px', color: '#666', marginTop: '10px' }}>
+                {tokenError?.message || String(tokenError)}
+              </pre>
+            )}
           </div>
         )
       }
@@ -76,21 +95,63 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
     console.log('[PACKET-PRINT] Using supabase client:', rawToken ? 'service-role (token auth)' : 'server-client (cookie auth)')
 
     // Fetch report_run to get job_id and packet_type
-    const { data: reportRun, error: runError } = await supabase
-      .from('report_runs')
-      .select('id, job_id, organization_id, packet_type, status, generated_at')
-      .eq('id', runId)
-      .eq('organization_id', organization_id)
-      .maybeSingle()
+    if (debugMode) {
+      console.log('[PACKET-PRINT] Fetching report run:', { runId: runId?.substring(0, 8), organization_id: organization_id?.substring(0, 8) })
+    }
+
+    let reportRun: any = null
+    let runError: any = null
+    
+    try {
+      const query = supabase
+        .from('report_runs')
+        .select('id, job_id, organization_id, packet_type, status, generated_at')
+        .eq('id', runId)
+      
+      // Only filter by organization_id if we have it
+      if (organization_id) {
+        query.eq('organization_id', organization_id)
+      }
+      
+      const result = await query.maybeSingle()
+      reportRun = result.data
+      runError = result.error
+    } catch (fetchError: any) {
+      console.error('[PACKET-PRINT] Report run fetch exception:', {
+        message: fetchError?.message,
+        stack: fetchError?.stack,
+        error: String(fetchError)
+      })
+      runError = fetchError
+    }
 
     if (runError || !reportRun) {
-      console.error('[PACKET-PRINT] Report run not found:', { runId, organization_id, error: runError })
+      console.error('[PACKET-PRINT] Report run not found:', { 
+        runId: runId?.substring(0, 8), 
+        organization_id: organization_id?.substring(0, 8), 
+        error: runError,
+        errorMessage: runError?.message,
+        errorCode: runError?.code
+      })
       return (
         <div style={{ padding: '20px', fontFamily: 'system-ui' }}>
           <h1>404 - Report Run Not Found</h1>
           <p>The requested report run could not be found.</p>
+          {debugMode && runError && (
+            <pre style={{ fontSize: '10px', color: '#666', marginTop: '10px' }}>
+              {runError?.message || JSON.stringify(runError, null, 2)}
+            </pre>
+          )}
         </div>
       )
+    }
+
+    if (debugMode) {
+      console.log('[PACKET-PRINT] Report run loaded:', {
+        runId: reportRun.id?.substring(0, 8),
+        jobId: reportRun.job_id?.substring(0, 8),
+        packetType: reportRun.packet_type
+      })
     }
 
     // CRITICAL: Validate runId matches token (prevents token reuse across runs)
@@ -136,6 +197,10 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
     }
 
     // Build packet data
+    if (debugMode) {
+      console.log('[PACKET-PRINT] Building packet data...')
+    }
+
     let packetData: JobPacketPayload
     try {
       packetData = await buildJobPacket({
@@ -144,26 +209,63 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
         organizationId: organization_id,
         supabaseClient: supabase,
       })
+      
+      if (debugMode) {
+        console.log('[PACKET-PRINT] Packet data built successfully:', {
+          sections: packetData.sections?.length,
+          packetTitle: packetData.meta?.packetTitle
+        })
+      }
     } catch (packetError: any) {
-      console.error('[PACKET-PRINT] Failed to build packet:', packetError)
+      console.error('[PACKET-PRINT] Failed to build packet:', {
+        message: packetError?.message,
+        stack: packetError?.stack,
+        error: String(packetError),
+        jobId: reportRun.job_id?.substring(0, 8),
+        packetType,
+        organizationId: organization_id?.substring(0, 8)
+      })
       return (
         <div style={{ padding: '20px', fontFamily: 'system-ui' }}>
           <h1>500 - Failed to Build Packet</h1>
           <p>Error: {packetError?.message || 'Unknown error'}</p>
+          {debugMode && (
+            <pre style={{ fontSize: '10px', color: '#666', marginTop: '10px', whiteSpace: 'pre-wrap' }}>
+              {packetError?.stack || packetError?.message || String(packetError)}
+            </pre>
+          )}
         </div>
       )
     }
 
     // Get organization branding
-    const { data: organization } = await supabase
-      .from('organizations')
-      .select('name, logo_url')
-      .eq('id', organization_id)
-      .maybeSingle()
+    let organization: any = null
+    try {
+      const orgResult = await supabase
+        .from('organizations')
+        .select('name, logo_url')
+        .eq('id', organization_id)
+        .maybeSingle()
+      
+      organization = orgResult.data
+      if (orgResult.error) {
+        console.warn('[PACKET-PRINT] Organization fetch error (non-fatal):', orgResult.error)
+      }
+    } catch (orgError: any) {
+      console.warn('[PACKET-PRINT] Organization fetch exception (non-fatal):', orgError?.message)
+    }
 
     const logoUrl = organization?.logo_url || null
     const organizationName = organization?.name || 'RiskMate'
     const isDraft = reportRun.status === 'draft' || reportRun.status === 'pending'
+
+    if (debugMode) {
+      console.log('[PACKET-PRINT] Organization loaded:', {
+        name: organizationName,
+        hasLogo: !!logoUrl,
+        isDraft
+      })
+    }
     
     // Get packet title from packet data
     const packetTitle = packetData.meta.packetTitle || 'Report'
