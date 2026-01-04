@@ -27,16 +27,25 @@ jobs:
         name: Check required secrets
         shell: bash
         env:
-          PDF_TEST_TOKEN: ${{ secrets.PDF_TEST_TOKEN }}
           PDF_TEST_URL_AUDIT: ${{ secrets.PDF_TEST_URL_AUDIT }}
           PDF_TEST_URL_INCIDENT: ${{ secrets.PDF_TEST_URL_INCIDENT }}
           PDF_TEST_URL_COMPLIANCE: ${{ secrets.PDF_TEST_URL_COMPLIANCE }}
           PDF_TEST_URL_INSURANCE: ${{ secrets.PDF_TEST_URL_INSURANCE }}
+          # token is optional; SRK required only if token isn't provided later
+          PDF_TEST_TOKEN: ${{ secrets.PDF_TEST_TOKEN }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           missing=()
-          for k in PDF_TEST_TOKEN PDF_TEST_URL_AUDIT PDF_TEST_URL_INCIDENT PDF_TEST_URL_COMPLIANCE PDF_TEST_URL_INSURANCE; do
+          for k in PDF_TEST_URL_AUDIT PDF_TEST_URL_INCIDENT PDF_TEST_URL_COMPLIANCE PDF_TEST_URL_INSURANCE; do
             if [ -z "${!k}" ]; then missing+=("$k"); fi
           done
+
+          # Token rule:
+          # - OK if PDF_TEST_TOKEN is set
+          # - Otherwise OK only if SUPABASE_SERVICE_ROLE_KEY is set (so we can generate)
+          if [ -z "$PDF_TEST_TOKEN" ] && [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            missing+=("PDF_TEST_TOKEN or SUPABASE_SERVICE_ROLE_KEY")
+          fi
 
           if [ ${#missing[@]} -eq 0 ]; then
             echo "can_run=true" >> "$GITHUB_OUTPUT"
