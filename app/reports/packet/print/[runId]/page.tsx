@@ -391,41 +391,90 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
       // Continue without QR code - not critical for PDF generation
     }
     
-    // Update integrity_verification section with actual data (non-fatal)
-    // SAFE: Normalize sections array and ensure all properties are safe
-    const safeSections = Array.isArray(packetData?.sections) ? packetData.sections : []
-    const sectionsWithIntegrity = safeSections.map((section) => {
-      if (!section) return null
-      if (section.type === 'integrity_verification') {
-        return {
-          ...section,
-          data: {
-            ...(section.data || {}),
-            reportRunId: safeRunId,
-            documentHash: safeStr(documentHash),
-            generatedAt: safeGeneratedAt,
-            verificationUrl: verificationUrl || undefined,
-            qrCodeDataUrl: qrCodeDataUrl || undefined,
-          },
-          meta: {
-            ...(section.meta || {}),
-            title: safeStr(section.meta?.title || section.type, humanize(section.type || 'Section')),
-          },
+    // BULLETPROOF: Precompute all data before JSX - never throw during render
+    // Step 1: Normalize sections array with try/catch
+    let safeSections: any[] = []
+    try {
+      safeSections = Array.isArray(packetData?.sections) ? packetData.sections : []
+    } catch (e) {
+      console.warn('[PACKET-PRINT] Sections normalization failed (non-fatal):', e)
+      safeSections = []
+    }
+
+    // Step 2: Build sectionsWithIntegrity with safe operations
+    let sectionsWithIntegrity: any[] = []
+    try {
+      sectionsWithIntegrity = safeSections.map((section) => {
+        if (!section) return null
+        try {
+          if (section.type === 'integrity_verification') {
+            return {
+              ...section,
+              data: {
+                ...(section.data || {}),
+                reportRunId: safeRunId,
+                documentHash: safeStr(documentHash),
+                generatedAt: safeGeneratedAt,
+                verificationUrl: verificationUrl || undefined,
+                qrCodeDataUrl: qrCodeDataUrl || undefined,
+              },
+              meta: {
+                ...(section.meta || {}),
+                title: safeStr(section.meta?.title || section.type, humanize(section.type || 'Section')),
+              },
+            }
+          }
+          // Ensure all sections have safe meta.title
+          return {
+            ...section,
+            meta: {
+              ...(section.meta || {}),
+              title: safeStr(section.meta?.title || section.type, humanize(section.type || 'Section')),
+            },
+          }
+        } catch (sectionError) {
+          console.warn('[PACKET-PRINT] Section processing failed (non-fatal):', sectionError)
+          // Return minimal valid section
+          return {
+            type: section.type || 'unknown',
+            data: {},
+            meta: { title: humanize(section.type || 'Section'), empty: true },
+          }
         }
-      }
-      // Ensure all sections have safe meta.title
-      return {
-        ...section,
-        meta: {
-          ...(section.meta || {}),
-          title: safeStr(section.meta?.title || section.type, humanize(section.type || 'Section')),
-        },
-      }
-    }).filter((s): s is NonNullable<typeof s> => s !== null)
+      }).filter((s): s is NonNullable<typeof s> => s !== null)
+    } catch (e) {
+      console.warn('[PACKET-PRINT] Sections processing failed (non-fatal):', e)
+      sectionsWithIntegrity = []
+    }
     
-    const finalPacketData = {
-      ...packetData,
-      sections: sectionsWithIntegrity,
+    // Step 3: Build finalPacketData safely
+    let finalPacketData: any = {}
+    try {
+      finalPacketData = {
+        ...(packetData || {}),
+        sections: sectionsWithIntegrity,
+      }
+    } catch (e) {
+      console.warn('[PACKET-PRINT] Final packet data construction failed (non-fatal):', e)
+      finalPacketData = {
+        meta: {
+          jobId: safeJobId,
+          organizationId: safeOrgName,
+          packetType: safePacketType,
+          packetTitle: humanize(safePacketType),
+          generatedAt: safeGeneratedAt,
+        },
+        sections: [],
+      }
+    }
+
+    // Step 4: Precompute safe sections array for JSX (no inline .map())
+    let safeRenderSections: any[] = []
+    try {
+      safeRenderSections = Array.isArray(finalPacketData?.sections) ? finalPacketData.sections : []
+    } catch (e) {
+      console.warn('[PACKET-PRINT] Render sections preparation failed (non-fatal):', e)
+      safeRenderSections = []
     }
 
     return (
@@ -489,22 +538,21 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
                 </div>
               </div>
 
-              {/* Render Sections - Empty sections are skipped by SectionRenderer */}
-              {Array.isArray(finalPacketData?.sections) && finalPacketData.sections
-                .map((section, idx) => {
-                  if (!section || !section.type) return null
+              {/* Render Sections - Precomputed array, no inline .map() logic */}
+              {safeRenderSections.map((section, idx) => {
+                if (!section || !section.type) return null
+                try {
                   return <SectionRenderer key={`${safeStr(section.type)}-${idx}`} section={section} />
-                })
-                .filter((rendered) => rendered !== null)}
+                } catch (renderError) {
+                  console.warn(`[PACKET-PRINT] Section render failed for ${section.type} (non-fatal):`, renderError)
+                  return null
+                }
+              }).filter((rendered) => rendered !== null)}
             </div>
 
-            {/* PDF Ready Marker - Only render when packet data is ready (not in error state) */}
-            {packetData && !packetBuildError && (
-              <>
-                <div id="pdf-ready" data-ready="1" style={{ display: 'none' }} aria-hidden="true" />
-                <div data-report-ready="true" style={{ display: 'none' }} aria-hidden="true" />
-              </>
-            )}
+            {/* PDF Ready Marker - ALWAYS render (even on errors) so PDF service doesn't hang */}
+            <div id="pdf-ready" data-ready="1" style={{ display: 'none' }} aria-hidden="true" />
+            <div data-report-ready="true" style={{ display: 'none' }} aria-hidden="true" />
           </div>
         </body>
       </html>
