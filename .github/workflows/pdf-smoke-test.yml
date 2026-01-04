@@ -1,0 +1,147 @@
+name: PDF Smoke Tests
+
+on:
+  pull_request:
+    paths:
+      - 'app/reports/packet/**'
+      - 'components/report/**'
+      - 'lib/utils/packets/**'
+      - 'lib/design-system/pdfTheme.ts'
+      - 'scripts/pdf-smoke-test.ts'
+  push:
+    branches:
+      - main
+    paths:
+      - 'app/reports/packet/**'
+      - 'components/report/**'
+      - 'lib/utils/packets/**'
+      - 'lib/design-system/pdfTheme.ts'
+      - 'scripts/pdf-smoke-test.ts'
+  workflow_dispatch:
+    inputs:
+      print_url:
+        description: 'Print URL to test (optional, uses secrets if not provided)'
+        required: false
+
+jobs:
+  pdf-smoke-test:
+    name: PDF Generation Smoke Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 10
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright Chromium
+        run: npx playwright-core install chromium
+
+      - name: Run smoke test (if URL provided)
+        if: github.event.inputs.print_url != ''
+        env:
+          PRINT_URL: ${{ github.event.inputs.print_url }}
+          PRINT_TOKEN: ${{ secrets.PDF_TEST_TOKEN }}
+        run: pnpm run test:pdf-smoke "$PRINT_URL" "$PRINT_TOKEN"
+
+      - name: Check if test URLs are configured
+        id: check_urls
+        run: |
+          if [ -z "${{ secrets.PDF_TEST_URL_AUDIT }}" ]; then
+            echo "skip_tests=true" >> $GITHUB_OUTPUT
+            echo "⚠️  PDF test URLs not configured - skipping tests"
+            echo "Configure secrets: PDF_TEST_URL_AUDIT, PDF_TEST_URL_INCIDENT, PDF_TEST_URL_COMPLIANCE, PDF_TEST_URL_INSURANCE"
+          else
+            echo "skip_tests=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run smoke test - Audit Packet
+        if: steps.check_urls.outputs.skip_tests == 'false'
+        continue-on-error: true
+        env:
+          PRINT_URL: ${{ secrets.PDF_TEST_URL_AUDIT }}
+          PRINT_TOKEN: ${{ secrets.PDF_TEST_TOKEN }}
+        run: |
+          echo "🧪 Testing Audit Packet..."
+          pnpm run test:pdf-smoke "$PRINT_URL" "$PRINT_TOKEN" || echo "❌ Audit packet test failed" > audit-failure.txt
+
+      - name: Run smoke test - Incident Packet
+        if: steps.check_urls.outputs.skip_tests == 'false'
+        continue-on-error: true
+        env:
+          PRINT_URL: ${{ secrets.PDF_TEST_URL_INCIDENT }}
+          PRINT_TOKEN: ${{ secrets.PDF_TEST_TOKEN }}
+        run: |
+          echo "🧪 Testing Incident Packet..."
+          pnpm run test:pdf-smoke "$PRINT_URL" "$PRINT_TOKEN" || echo "❌ Incident packet test failed" > incident-failure.txt
+
+      - name: Run smoke test - Compliance Packet
+        if: steps.check_urls.outputs.skip_tests == 'false'
+        continue-on-error: true
+        env:
+          PRINT_URL: ${{ secrets.PDF_TEST_URL_COMPLIANCE }}
+          PRINT_TOKEN: ${{ secrets.PDF_TEST_TOKEN }}
+        run: |
+          echo "🧪 Testing Compliance Packet..."
+          pnpm run test:pdf-smoke "$PRINT_URL" "$PRINT_TOKEN" || echo "❌ Compliance packet test failed" > compliance-failure.txt
+
+      - name: Run smoke test - Insurance Packet
+        if: steps.check_urls.outputs.skip_tests == 'false'
+        continue-on-error: true
+        env:
+          PRINT_URL: ${{ secrets.PDF_TEST_URL_INSURANCE }}
+          PRINT_TOKEN: ${{ secrets.PDF_TEST_TOKEN }}
+        run: |
+          echo "🧪 Testing Insurance Packet..."
+          pnpm run test:pdf-smoke "$PRINT_URL" "$PRINT_TOKEN" || echo "❌ Insurance packet test failed" > insurance-failure.txt
+
+      - name: Check test results
+        if: steps.check_urls.outputs.skip_tests == 'false'
+        run: |
+          failures=$(find . -name "*-failure.txt" 2>/dev/null | wc -l)
+          if [ "$failures" -gt 0 ]; then
+            echo "❌ $failures packet type(s) failed smoke tests:"
+            find . -name "*-failure.txt" -exec cat {} \;
+            exit 1
+          else
+            echo "✅ All packet types passed smoke tests!"
+          fi
+
+      - name: Upload test artifacts (screenshots)
+        if: always() && steps.check_urls.outputs.skip_tests == 'false'
+        uses: actions/upload-artifact@v4
+        with:
+          name: pdf-smoke-test-screenshots
+          path: |
+            *.png
+            *.jpg
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Skip message
+        if: steps.check_urls.outputs.skip_tests == 'true'
+        run: |
+          echo "ℹ️  PDF test URLs not configured in repository secrets"
+          echo "To enable automated testing, add these secrets:"
+          echo "  - PDF_TEST_URL_AUDIT"
+          echo "  - PDF_TEST_URL_INCIDENT"
+          echo "  - PDF_TEST_URL_COMPLIANCE"
+          echo "  - PDF_TEST_URL_INSURANCE"
+          echo "  - PDF_TEST_TOKEN"
+          echo ""
+          echo "You can still run tests manually:"
+          echo "  npm run test:pdf-smoke <print-url> [token]"
+

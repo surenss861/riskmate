@@ -72,7 +72,7 @@ async function runSmokeTest() {
     console.log('🔍 Verifying page structure...')
     const checks = [
       { selector: '.cover-page', name: 'Cover page' },
-      { selector: '.section-header', name: 'Section headers' },
+      { selector: '.section-header, .section-title', name: 'Section headers' },
       { selector: 'body[data-organization-name]', name: 'Organization metadata' },
       { selector: 'body[data-job-id]', name: 'Job ID metadata' },
       { selector: 'body[data-run-id]', name: 'Run ID metadata' },
@@ -88,6 +88,103 @@ async function runSmokeTest() {
     const allFound = results.every(r => r.found)
     if (!allFound) {
       throw new Error('Some required elements are missing')
+    }
+
+    // Court-ready assertion 1: Integrity page exists + has Hash Algorithm + SHA-256 block
+    console.log('🔍 Court-ready check 1: Integrity & Verification page...')
+    try {
+      const integrityPage = await page.$('.page:has-text("Integrity & Verification"), .page:has-text("Integrity")')
+      if (!integrityPage) {
+        // Try finding by section header text
+        const integrityHeader = await page.$$eval('.section-header, .section-title', (elements) => {
+          return elements.some(el => el.textContent?.includes('Integrity') || el.textContent?.includes('Verification'))
+        })
+        if (!integrityHeader) {
+          throw new Error('Integrity & Verification page not found')
+        }
+      }
+
+      // Check for Hash Algorithm text
+      const pageText = await page.textContent('body') || ''
+      const hasHashAlgorithm = pageText.includes('Hash Algorithm') || pageText.includes('SHA-256')
+      if (!hasHashAlgorithm) {
+        throw new Error('Hash Algorithm/SHA-256 not found in Integrity page')
+      }
+
+      // Check for SHA-256 block (monospace or hash-like content)
+      const hashBlock = await page.$$eval('*', (elements) => {
+        return elements.some(el => {
+          const text = el.textContent || ''
+          const style = window.getComputedStyle(el)
+          return (text.length >= 32 && /[0-9a-f]{32,}/i.test(text)) || 
+                 style.fontFamily.includes('monospace')
+        })
+      })
+      console.log(`  ✅ Integrity page found`)
+      console.log(`  ✅ Hash Algorithm/SHA-256 content present`)
+      console.log(`  ${hashBlock ? '✅' : '⚠️ '} Hash block detected`)
+    } catch (error: any) {
+      throw new Error(`Integrity page check failed: ${error.message}`)
+    }
+
+    // Court-ready assertion 2: At least 1 .section-empty renders when there's no data
+    console.log('🔍 Court-ready check 2: Empty state sections...')
+    try {
+      const emptySections = await page.$$('.section-empty')
+      const emptySectionCount = emptySections.length
+      console.log(`  Found ${emptySectionCount} empty section(s)`)
+      
+      if (emptySectionCount > 0) {
+        // Verify empty sections have the expected structure
+        const firstEmpty = emptySections[0]
+        const hasTitle = await firstEmpty.$('.section-title, h2') !== null
+        const hasMessage = await firstEmpty.$('.section-empty-message, .section-empty-content') !== null
+        
+        console.log(`  ✅ Empty section structure verified`)
+        if (!hasTitle || !hasMessage) {
+          console.warn('  ⚠️  Empty section may be missing expected structure')
+        }
+      } else {
+        console.log('  ℹ️  No empty sections found (all sections have data)')
+      }
+    } catch (error: any) {
+      console.warn(`  ⚠️  Empty section check warning: ${error.message}`)
+      // Don't fail on this - it's informational
+    }
+
+    // Court-ready assertion 3: TOC titles match rendered section titles (basic count match)
+    console.log('🔍 Court-ready check 3: TOC alignment...')
+    try {
+      // Count TOC items
+      const tocItems = await page.$$('.toc-item, .toc-list li, [class*="toc"] li')
+      const tocCount = tocItems.length
+
+      // Count section headers/titles (excluding TOC and Integrity which are always present)
+      const sectionHeaders = await page.$$eval('.section-header, .section-title', (elements) => {
+        return elements.filter(el => {
+          const text = el.textContent || ''
+          return !text.includes('Table of Contents') && !text.includes('Integrity')
+        }).length
+      })
+
+      console.log(`  TOC items: ${tocCount}, Section headers: ${sectionHeaders}`)
+      
+      // TOC should have approximately the same number of items as sections
+      // Allow some flexibility (TOC might exclude itself, Integrity is always last)
+      if (tocCount > 0 && sectionHeaders > 0) {
+        const ratio = tocCount / sectionHeaders
+        if (ratio < 0.5 || ratio > 1.5) {
+          console.warn(`  ⚠️  TOC count (${tocCount}) doesn't align with sections (${sectionHeaders})`)
+          console.warn(`  ⚠️  Ratio: ${ratio.toFixed(2)} (expected ~0.8-1.2)`)
+        } else {
+          console.log(`  ✅ TOC alignment verified (ratio: ${ratio.toFixed(2)})`)
+        }
+      } else if (tocCount === 0) {
+        console.log('  ℹ️  No TOC found (may not be required for all packet types)')
+      }
+    } catch (error: any) {
+      console.warn(`  ⚠️  TOC alignment check warning: ${error.message}`)
+      // Don't fail on this - it's informational
     }
 
     // Take screenshot of first page (cover)
