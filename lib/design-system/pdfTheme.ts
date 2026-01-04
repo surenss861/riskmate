@@ -16,10 +16,10 @@ export const pdfTheme = {
   
   spacing: {
     pageMargin: '16mm',
-    sectionGap: '24pt',
-    cardPadding: '16pt',
-    gridGap: '16pt',
-    textGap: '12pt',
+    sectionGap: '20pt',
+    cardPadding: '14pt',
+    gridGap: '14pt',
+    textGap: '10pt',
   },
   
   typography: {

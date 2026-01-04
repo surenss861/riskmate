@@ -221,35 +221,43 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
             <div className="report-content">
               {/* Cover Page */}
               <div className="cover-page">
-                <div className="cover-header">
-                  {logoUrl && <img src={logoUrl} alt="Logo" className="cover-logo" />}
-                  <div className="cover-brand">{organizationName}</div>
-                </div>
-
-                <h1 className="cover-title">{packetTitle}</h1>
-                <div className="cover-accent-line"></div>
-
-                <div className="cover-subheader">
-                  <span>Job ID: {packetData.meta.jobId.substring(0, 8).toUpperCase()}</span>
-                  <span>•</span>
-                  <span>Report Run ID: {runId.substring(0, 8).toUpperCase()}</span>
-                  <span>•</span>
-                  <span>Generated: {formatPdfTimestamp(reportRun.generated_at || packetData.meta.generatedAt)}</span>
-                  {!isDraft && <span>•</span>}
-                  {!isDraft && <span>Status: Final</span>}
-                  {isDraft && <span>•</span>}
-                  {isDraft && <span>Status: Draft</span>}
+                {/* Full-bleed top band */}
+                <div className="cover-top-band">
+                  <div className="cover-header">
+                    {logoUrl && <img src={logoUrl} alt="Logo" className="cover-logo" />}
+                    <div className="cover-brand">{organizationName}</div>
+                  </div>
                 </div>
                 
-                {/* What this packet proves - teaser */}
-                <div className="cover-proof-teaser">
-                  <div className="cover-proof-label">What This Packet Proves</div>
-                  <ul className="cover-proof-list">
-                    <li>All records are timestamped and immutable</li>
-                    <li>Evidence is cryptographically verified and linked to events</li>
-                    <li>Complete chain of custody from job creation to closure</li>
-                    <li>Document integrity verified via SHA-256 hash (see Integrity &amp; Verification page)</li>
-                  </ul>
+                {/* Orange accent rule */}
+                <div className="cover-accent-rule"></div>
+                
+                {/* Content area */}
+                <div className="cover-content">
+                  <h1 className="cover-title">{packetTitle}</h1>
+
+                  <div className="cover-subheader">
+                    <span>Job ID: {packetData.meta.jobId.substring(0, 8).toUpperCase()}</span>
+                    <span>•</span>
+                    <span>Report Run ID: {runId.substring(0, 8).toUpperCase()}</span>
+                    <span>•</span>
+                    <span>Generated: {formatPdfTimestamp(reportRun.generated_at || packetData.meta.generatedAt)}</span>
+                    {!isDraft && <span>•</span>}
+                    {!isDraft && <span>Status: Final</span>}
+                    {isDraft && <span>•</span>}
+                    {isDraft && <span>Status: Draft</span>}
+                  </div>
+                  
+                  {/* What this packet proves - teaser */}
+                  <div className="cover-proof-teaser">
+                    <div className="cover-proof-label">What This Packet Proves</div>
+                    <ul className="cover-proof-list">
+                      <li>All records are timestamped and immutable</li>
+                      <li>Evidence is cryptographically verified and linked to events</li>
+                      <li>Complete chain of custody from job creation to closure</li>
+                      <li>Document integrity verified via SHA-256 hash (see Integrity &amp; Verification page)</li>
+                    </ul>
+                  </div>
                 </div>
               </div>
 
@@ -309,17 +317,17 @@ function getPrintStyles(): string {
       position: relative;
     }
 
-    /* Watermark - subtle, only on draft */
+    /* Watermark - very subtle, only on draft */
     .report-root[data-draft="true"]::before {
       content: 'DRAFT';
       position: fixed;
       inset: 0;
       display: grid;
       place-items: center;
-      font-size: 120px;
+      font-size: 140px;
       font-weight: ${theme.typography.weights.bold};
-      letter-spacing: 0.08em;
-      opacity: 0.03;
+      letter-spacing: 0.1em;
+      opacity: 0.02;
       z-index: 0;
       pointer-events: none;
       transform: rotate(-35deg);
@@ -336,7 +344,7 @@ function getPrintStyles(): string {
       z-index: 1;
     }
 
-    /* Cover Page - Black background, orange accent */
+    /* Cover Page - Full-bleed top band + white content */
     .cover-page {
       position: relative;
       z-index: 1;
@@ -346,19 +354,38 @@ function getPrintStyles(): string {
       height: auto;
       display: block;
       margin: 0;
-      padding: 40pt ${theme.spacing.pageMargin};
-      background: #000000;
-      color: #FFFFFF;
+      padding: 0;
+      background: ${theme.colors.paper};
+      color: ${theme.colors.ink};
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
       break-inside: avoid;
+    }
+
+    .cover-top-band {
+      width: 100%;
+      background: #000000;
+      color: #FFFFFF;
+      padding: 32pt ${theme.spacing.pageMargin} 24pt;
+      margin: 0;
+    }
+
+    .cover-accent-rule {
+      width: 100%;
+      height: 1pt;
+      background-color: ${theme.colors.accent};
+      margin: 0;
+    }
+
+    .cover-content {
+      padding: 40pt ${theme.spacing.pageMargin};
     }
 
     .cover-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 40pt;
+      margin-bottom: 0;
     }
 
     .cover-logo {
@@ -375,23 +402,16 @@ function getPrintStyles(): string {
     }
 
     .cover-title {
-      font-size: 42pt;
+      font-size: 36pt;
       font-weight: ${theme.typography.weights.bold};
-      color: #FFFFFF;
-      margin: 0 0 20pt 0;
+      color: ${theme.colors.ink};
+      margin: 32pt 0 20pt 0;
       letter-spacing: -0.02em;
     }
 
-    .cover-accent-line {
-      width: 280pt;
-      height: 1pt;
-      background-color: ${theme.colors.accent};
-      margin-bottom: 30pt;
-    }
-
     .cover-subheader {
-      font-size: 10.5pt;
-      color: #CCCCCC;
+      font-size: 10pt;
+      color: ${theme.colors.muted};
       margin-bottom: 32pt;
       display: flex;
       gap: 8pt;
@@ -400,31 +420,32 @@ function getPrintStyles(): string {
     }
     
     .cover-proof-teaser {
-      margin-top: 40pt;
-      padding-top: 32pt;
-      border-top: 1pt solid #333333;
+      margin-top: 32pt;
+      padding-top: 24pt;
+      border-top: ${theme.borders.thin} solid ${theme.colors.borders};
     }
     
     .cover-proof-label {
-      font-size: 11pt;
-      color: #CCCCCC;
-      margin-bottom: 16pt;
+      font-size: 10pt;
+      color: ${theme.colors.muted};
+      margin-bottom: 12pt;
       text-transform: uppercase;
       letter-spacing: 0.05em;
+      font-weight: ${theme.typography.weights.semibold};
     }
     
     .cover-proof-list {
       list-style: none;
       padding: 0;
       margin: 0;
-      font-size: 11pt;
-      line-height: 1.8;
-      color: #FFFFFF;
+      font-size: 10.5pt;
+      line-height: 1.7;
+      color: ${theme.colors.ink};
     }
     
     .cover-proof-list li {
-      margin-bottom: 8pt;
-      padding-left: 20pt;
+      margin-bottom: 6pt;
+      padding-left: 18pt;
       position: relative;
     }
     
@@ -432,6 +453,8 @@ function getPrintStyles(): string {
       content: '•';
       position: absolute;
       left: 0;
+      color: ${theme.colors.accent};
+      font-weight: ${theme.typography.weights.bold};
     }
 
     /* Page Sections - White background, minimal design */
