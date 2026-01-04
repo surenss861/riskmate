@@ -274,10 +274,17 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
     const documentHash = computeCanonicalHash(packetData)
     
     // Generate verification URL and QR code
-    const protocol = 'https' // Always use HTTPS for verification URLs
-    const host = process.env.NEXT_PUBLIC_APP_URL?.replace(/^https?:\/\//, '') || 'riskmate.vercel.app'
-    const verificationUrl = `${protocol}://${host}/verify/report/${runId}`
-    const qrCodeDataUrl = await generateQRCodeDataURL(verificationUrl)
+    let qrCodeDataUrl: string | null = null
+    let verificationUrl: string | null = null
+    try {
+      const protocol = 'https' // Always use HTTPS for verification URLs
+      const host = process.env.NEXT_PUBLIC_APP_URL?.replace(/^https?:\/\//, '') || 'riskmate.vercel.app'
+      verificationUrl = `${protocol}://${host}/verify/report/${runId}`
+      qrCodeDataUrl = await generateQRCodeDataURL(verificationUrl)
+    } catch (qrError: any) {
+      console.warn('[PACKET-PRINT] QR code generation failed (non-fatal):', qrError?.message)
+      // Continue without QR code - not critical for PDF generation
+    }
     
     // Update integrity_verification section with actual data
     const sectionsWithIntegrity = packetData.sections.map((section) => {
