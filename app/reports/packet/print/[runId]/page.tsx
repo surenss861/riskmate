@@ -352,8 +352,9 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
       })
     }
     
-    // Get packet title from packet data (with fallback)
-    const packetTitle = packetData?.meta?.packetTitle || packetType.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()) || 'Report'
+    // Get packet title from packet data (with fallback - null-safe)
+    const safePacketType = String(packetType || 'insurance')
+    const packetTitle = packetData?.meta?.packetTitle || safePacketType.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()) || 'Report'
     
     // Compute document hash for integrity verification (non-fatal)
     let documentHash = ''
@@ -368,6 +369,12 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
       console.warn('[PACKET-PRINT] Hash computation failed (non-fatal):', hashError?.message)
       documentHash = 'ERROR: Hash computation failed'
     }
+    
+    // Normalize all string values before rendering (prevent .replace crashes)
+    const safeJobId = String(packetData?.meta?.jobId || reportRun.job_id || '')
+    const safeRunId = String(runId || '')
+    const safeOrgName = String(organizationName || 'RiskMate')
+    const safeGeneratedAt = reportRun.generated_at || packetData?.meta?.generatedAt || new Date().toISOString()
     
     // Generate verification URL and QR code
     let qrCodeDataUrl: string | null = null
@@ -414,12 +421,12 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
           <style dangerouslySetInnerHTML={{ __html: getPrintStyles() }} />
         </head>
         <body 
-          data-organization-name={organizationName}
+          data-organization-name={safeOrgName}
           data-packet-title={packetTitle}
-          data-job-id={packetData.meta.jobId.substring(0, 8).toUpperCase()}
-          data-run-id={runId.substring(0, 8).toUpperCase()}
-          data-generated={formatPdfTimestamp(reportRun.generated_at || packetData.meta.generatedAt)}
-          data-hash={documentHash.substring(0, 16)}
+          data-job-id={safeJobId.substring(0, 8).toUpperCase()}
+          data-run-id={safeRunId.substring(0, 8).toUpperCase()}
+          data-generated={formatPdfTimestamp(safeGeneratedAt)}
+          data-hash={documentHash ? documentHash.substring(0, 16) : ''}
           data-draft={isDraft ? 'true' : undefined}
         >
           <div className="report-root" data-draft={isDraft ? 'true' : undefined}>
