@@ -207,11 +207,13 @@ async function runSmokeTest() {
 
     // Take screenshot of first page (cover)
     console.log('📸 Taking screenshot...')
-    const screenshotBuffer = await page.screenshot({
+    const coverPath = path.join(OUT_DIR, `${label}__cover.png`)
+    await page.screenshot({
+      path: coverPath,
       fullPage: false,
       clip: { x: 0, y: 0, width: 1200, height: 1600 },
     })
-    console.log(`✅ Screenshot captured (${screenshotBuffer.length} bytes)`)
+    console.log(`✅ Saved: ${coverPath}`)
 
     // Check for common error indicators
     console.log('🔍 Checking for error indicators...')
