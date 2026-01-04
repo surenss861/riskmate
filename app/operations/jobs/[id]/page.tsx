@@ -691,14 +691,14 @@ export default function JobDetailPage() {
         </div>
 
         <AppShell>
-          <PageSection>
+          <PageSection className="mb-8">
             <EditableText
               value={job.client_name}
               onSave={async (newValue) => {
                 await jobsApi.update(jobId, { client_name: newValue })
                 setJob({ ...job, client_name: newValue })
               }}
-              className={`${typography.h1} ${spacing.section}`}
+              className={`${typography.h1} mb-2`}
               inputClassName={typography.h1}
             />
             <div className="flex items-center gap-3 mb-1">
