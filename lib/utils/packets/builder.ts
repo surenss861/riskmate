@@ -154,8 +154,9 @@ async function buildSectionData({
             mitigation_checklist: 'Mitigation Checklist',
             requirements_evidence_matrix: 'Requirements vs Evidence',
           }
+          const safeSectionType = String(sectionType || '')
           return {
-            title: titleMap[sectionType] || sectionType.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()),
+            title: titleMap[sectionType] || safeSectionType.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()),
             page: undefined, // Page numbers would need to be computed after rendering
           }
         })
