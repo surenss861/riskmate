@@ -1,313 +1,140 @@
-name: PDF Smoke Tests
+name: PDF Smoke Test
 
 on:
   pull_request:
-    paths:
-      - 'app/reports/**'
-      - 'components/report/**'
-      - 'lib/utils/packets/**'
-      - 'lib/design-system/pdfTheme.ts'
-      - 'scripts/pdf-smoke-test.ts'
-      - 'pdf-service/**'
   push:
     branches: [main]
-    paths:
-      - 'app/reports/**'
-      - 'components/report/**'
-      - 'lib/utils/packets/**'
-      - 'lib/design-system/pdfTheme.ts'
-      - 'scripts/pdf-smoke-test.ts'
-      - 'pdf-service/**'
   workflow_dispatch:
-    inputs:
-      print_url:
-        description: 'Print URL to test (optional, uses secrets if not provided)'
-        required: false
-        default: ''
-      print_token:
-        description: 'Print token for authentication (optional, uses secrets if not provided)'
-        required: false
-        default: ''
-
-concurrency:
-  group: pdf-smoke-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
 
 permissions:
   contents: read
 
+concurrency:
+  group: pdf-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: "20"
+  CI: true
+
 jobs:
-  pdf-smoke-test-manual:
-    name: PDF Smoke Test - Manual
+  preflight:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.print_url != '' }}
-
+    outputs:
+      can_run: ${{ steps.check.outputs.can_run }}
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10
-          run_install: false
-
-      - name: Verify pnpm
-        run: pnpm -v
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Install Playwright Chromium (with system deps)
-        run: npx playwright install --with-deps chromium
-
-      - name: Generate CI print token
-        id: generate_token_manual
-        if: github.event.inputs.print_token == ''
+      - id: check
+        name: Check required secrets
+        shell: bash
         env:
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          CI_JOB_ID: 'ci-manual-test-job'
-          CI_ORG_ID: 'ci-test-org'
-          CI_RUN_ID: 'ci-manual-test-run'
-          TOKEN_EXPIRY_DAYS: '7'
+          PDF_TEST_TOKEN: ${{ secrets.PDF_TEST_TOKEN }}
+          PDF_TEST_URL_AUDIT: ${{ secrets.PDF_TEST_URL_AUDIT }}
+          PDF_TEST_URL_INCIDENT: ${{ secrets.PDF_TEST_URL_INCIDENT }}
+          PDF_TEST_URL_COMPLIANCE: ${{ secrets.PDF_TEST_URL_COMPLIANCE }}
+          PDF_TEST_URL_INSURANCE: ${{ secrets.PDF_TEST_URL_INSURANCE }}
         run: |
-          if [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
-            echo "⚠️  SUPABASE_SERVICE_ROLE_KEY not set - skipping token generation"
-            echo "   Will use PDF_TEST_TOKEN secret if available"
-          else
-            TOKEN=$(node scripts/generate-ci-print-token.ts 2>&1 | grep -A 1 "Generated CI print token" | tail -1 | tr -d '[:space:]')
-            echo "PRINT_TOKEN=${TOKEN}" >> $GITHUB_ENV
-            echo "✅ Generated token for CI (valid 7 days)"
+          missing=()
+          for k in PDF_TEST_TOKEN PDF_TEST_URL_AUDIT PDF_TEST_URL_INCIDENT PDF_TEST_URL_COMPLIANCE PDF_TEST_URL_INSURANCE; do
+            if [ -z "${!k}" ]; then missing+=("$k"); fi
+          done
+
+          if [ ${#missing[@]} -eq 0 ]; then
+            echo "can_run=true" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
 
-      - name: Run smoke test (manual URL)
-        env:
-          PRINT_URL: ${{ github.event.inputs.print_url }}
-          PRINT_TOKEN: ${{ github.event.inputs.print_token || secrets.PDF_TEST_TOKEN || env.PRINT_TOKEN }}
-          PACKET_LABEL: MANUAL
-        run: |
-          echo "🧪 Testing provided URL..."
-          pnpm run test:pdf-smoke "$PRINT_URL" "$PRINT_TOKEN"
+          echo "Missing secrets: ${missing[*]}"
+          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref_name }}" = "main" ]; then
+            echo "::error::Missing required secrets on main push: ${missing[*]}"
+            exit 1
+          fi
 
-      - name: Upload artifacts (screenshots)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: pdf-smoke-test-manual-${{ github.run_attempt }}
-          path: |
-            pdf-smoke-artifacts/**/*.png
-            pdf-smoke-artifacts/**/*.jpg
-          retention-days: 7
-          if-no-files-found: ignore
+          echo "can_run=false" >> "$GITHUB_OUTPUT"
+          echo "Bootstrap mode: skipping PDF smoke tests on PR because secrets are missing."
 
-  pdf-smoke-test:
-    name: PDF Smoke Test - ${{ matrix.packet.label }}
+  pdf-smoke:
+    needs: preflight
+    if: needs.preflight.outputs.can_run == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-    if: ${{ !(github.event_name == 'workflow_dispatch' && github.event.inputs.print_url != '') }}
-
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        packet:
-          - label: AUDIT
-            url_secret: PDF_TEST_URL_AUDIT
-          - label: INCIDENT
-            url_secret: PDF_TEST_URL_INCIDENT
-          - label: COMPLIANCE
-            url_secret: PDF_TEST_URL_COMPLIANCE
-          - label: INSURANCE
-            url_secret: PDF_TEST_URL_INSURANCE
+        include:
+          - packet: AUDIT
+            url: ${{ secrets.PDF_TEST_URL_AUDIT }}
+          - packet: INCIDENT
+            url: ${{ secrets.PDF_TEST_URL_INCIDENT }}
+          - packet: COMPLIANCE
+            url: ${{ secrets.PDF_TEST_URL_COMPLIANCE }}
+          - packet: INSURANCE
+            url: ${{ secrets.PDF_TEST_URL_INSURANCE }}
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Install pnpm
+      - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
           version: 10
-          run_install: false
-
-      - name: Verify pnpm
-        run: pnpm -v
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'pnpm'
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
 
-      - name: Install dependencies
+      - name: Verify pnpm on PATH
+        run: |
+          which pnpm
+          pnpm -v
+          node -v
+
+      - name: Install deps
         run: pnpm install --frozen-lockfile
 
-      - name: Install Playwright Chromium (with system deps)
-        run: npx playwright install --with-deps chromium
+      - name: Install Playwright browsers + deps
+        run: pnpm exec playwright install --with-deps chromium
 
-      - name: Validate secrets configured
-        id: secrets_check
-        env:
-          PRINT_TOKEN: ${{ secrets.PDF_TEST_TOKEN }}
-          PDF_TEST_URL_AUDIT: ${{ secrets.PDF_TEST_URL_AUDIT }}
-          PDF_TEST_URL_INCIDENT: ${{ secrets.PDF_TEST_URL_INCIDENT }}
-          PDF_TEST_URL_COMPLIANCE: ${{ secrets.PDF_TEST_URL_COMPLIANCE }}
-          PDF_TEST_URL_INSURANCE: ${{ secrets.PDF_TEST_URL_INSURANCE }}
-        run: |
-          missing=0
-          missing_secrets=""
-          # PDF_TEST_TOKEN is optional - we can generate it automatically
-          # if [ -z "$PRINT_TOKEN" ]; then echo "Missing: PDF_TEST_TOKEN"; missing_secrets="$missing_secrets PDF_TEST_TOKEN"; missing=1; fi
-          if [ -z "$PDF_TEST_URL_AUDIT" ]; then echo "Missing: PDF_TEST_URL_AUDIT"; missing_secrets="$missing_secrets PDF_TEST_URL_AUDIT"; missing=1; fi
-          if [ -z "$PDF_TEST_URL_INCIDENT" ]; then echo "Missing: PDF_TEST_URL_INCIDENT"; missing_secrets="$missing_secrets PDF_TEST_URL_INCIDENT"; missing=1; fi
-          if [ -z "$PDF_TEST_URL_COMPLIANCE" ]; then echo "Missing: PDF_TEST_URL_COMPLIANCE"; missing_secrets="$missing_secrets PDF_TEST_URL_COMPLIANCE"; missing=1; fi
-          if [ -z "$PDF_TEST_URL_INSURANCE" ]; then echo "Missing: PDF_TEST_URL_INSURANCE"; missing_secrets="$missing_secrets PDF_TEST_URL_INSURANCE"; missing=1; fi
-          
-          if [ "$missing" -eq 1 ]; then
-            echo "skip=true" >> $GITHUB_OUTPUT
-            echo "missing_secrets=$missing_secrets" >> $GITHUB_OUTPUT
-            
-            # On main branch, fail if secrets are missing (enforcement)
-            # This applies to both push and workflow_dispatch events
-            # On PRs, skip gracefully (bootstrap mode)
-            if [ "${{ github.ref }}" == "refs/heads/main" ]; then
-              echo "❌ FAILING: Secrets are required on main branch to prevent regressions"
-              echo "Missing secrets:$missing_secrets"
-              echo ""
-              echo "Add these secrets to enable PDF smoke tests:"
-              echo "  - PDF_TEST_URL_AUDIT"
-              echo "  - PDF_TEST_URL_INCIDENT"
-              echo "  - PDF_TEST_URL_COMPLIANCE"
-              echo "  - PDF_TEST_URL_INSURANCE"
-              echo ""
-              echo "Note: PDF_TEST_TOKEN is optional - tokens are auto-generated if missing"
-              echo "      (requires SUPABASE_SERVICE_ROLE_KEY secret to be set)"
-              exit 1
-            fi
-          else
-            echo "skip=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Skip message (missing secrets - PR only)
-        if: steps.secrets_check.outputs.skip == 'true' && github.event_name == 'pull_request'
-        run: |
-          echo "⚠️  PDF test secrets not configured. Skipping on PR."
-          echo "Missing secrets:${{ steps.secrets_check.outputs.missing_secrets }}"
-          echo ""
-          echo "Add these secrets to enable PDF smoke tests:"
-          echo "  - PDF_TEST_URL_AUDIT"
-          echo "  - PDF_TEST_URL_INCIDENT"
-          echo "  - PDF_TEST_URL_COMPLIANCE"
-          echo "  - PDF_TEST_URL_INSURANCE"
-          echo ""
-          echo "Note: PDF_TEST_TOKEN is optional - tokens are auto-generated if missing"
-          echo "      (requires SUPABASE_SERVICE_ROLE_KEY secret to be set)"
-
-      - name: Generate CI print token
-        id: generate_token_matrix
-        if: steps.secrets_check.outputs.skip == 'false'
+      - name: Generate CI print token (if needed)
+        id: generate_token
+        if: secrets.PDF_TEST_TOKEN == '' && secrets.SUPABASE_SERVICE_ROLE_KEY != ''
         env:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          CI_JOB_ID: 'ci-${{ matrix.packet.label }}-test-job'
+          CI_JOB_ID: 'ci-${{ matrix.packet }}-test-job'
           CI_ORG_ID: 'ci-test-org'
-          CI_RUN_ID: 'ci-${{ matrix.packet.label }}-test-run'
+          CI_RUN_ID: 'ci-${{ matrix.packet }}-test-run'
           TOKEN_EXPIRY_DAYS: '7'
         run: |
-          if [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
-            echo "⚠️  SUPABASE_SERVICE_ROLE_KEY not set - cannot generate token"
-            echo "   Set PDF_TEST_TOKEN secret or SUPABASE_SERVICE_ROLE_KEY to enable token generation"
-            exit 1
-          fi
           TOKEN=$(node scripts/generate-ci-print-token.ts 2>&1 | grep -A 1 "Generated CI print token" | tail -1 | tr -d '[:space:]')
+          echo "::add-mask::$TOKEN"
           echo "PRINT_TOKEN=${TOKEN}" >> $GITHUB_ENV
           echo "✅ Generated token for CI (valid 7 days)"
 
-      - name: Health check (preflight URL validation)
-        if: steps.secrets_check.outputs.skip == 'false'
+      - name: Run PDF smoke test (${{ matrix.packet }})
         env:
-          PDF_TEST_URL_AUDIT: ${{ secrets.PDF_TEST_URL_AUDIT }}
-          PDF_TEST_URL_INCIDENT: ${{ secrets.PDF_TEST_URL_INCIDENT }}
-          PDF_TEST_URL_COMPLIANCE: ${{ secrets.PDF_TEST_URL_COMPLIANCE }}
-          PDF_TEST_URL_INSURANCE: ${{ secrets.PDF_TEST_URL_INSURANCE }}
+          PDF_TEST_TOKEN: ${{ secrets.PDF_TEST_TOKEN || env.PRINT_TOKEN }}
+          PDF_PACKET_TYPE: ${{ matrix.packet }}
+          PDF_URL: ${{ matrix.url }}
           PRINT_TOKEN: ${{ secrets.PDF_TEST_TOKEN || env.PRINT_TOKEN }}
         run: |
-          case "${{ matrix.packet.url_secret }}" in
-            PDF_TEST_URL_AUDIT) PRINT_URL="$PDF_TEST_URL_AUDIT" ;;
-            PDF_TEST_URL_INCIDENT) PRINT_URL="$PDF_TEST_URL_INCIDENT" ;;
-            PDF_TEST_URL_COMPLIANCE) PRINT_URL="$PDF_TEST_URL_COMPLIANCE" ;;
-            PDF_TEST_URL_INSURANCE) PRINT_URL="$PDF_TEST_URL_INSURANCE" ;;
-          esac
-          
-          # Use generated token if secret token not available
-          FINAL_TOKEN="${PRINT_TOKEN:-${GITHUB_ENV_PRINT_TOKEN}}"
-          if [ -z "$FINAL_TOKEN" ]; then
-            echo "❌ No token available (neither PDF_TEST_TOKEN secret nor generated token)"
+          if [ -z "$PDF_URL" ]; then
+            echo "::error::PDF_URL is empty for ${{ matrix.packet }}"
             exit 1
           fi
-          
-          # Add token to URL if not present
-          if [[ "$PRINT_URL" != *"token="* ]]; then
-            if [[ "$PRINT_URL" == *"?"* ]]; then
-              PRINT_URL="${PRINT_URL}&token=${FINAL_TOKEN}"
-            else
-              PRINT_URL="${PRINT_URL}?token=${FINAL_TOKEN}"
-            fi
-          fi
-          
-          echo "🔍 Preflight check: ${{ matrix.packet.label }} Packet URL..."
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$PRINT_URL" || echo "000")
-          
-          if [ "$HTTP_CODE" = "200" ]; then
-            echo "✅ URL is accessible (HTTP 200)"
-          elif [ "$HTTP_CODE" = "401" ] || [ "$HTTP_CODE" = "403" ]; then
-            echo "⚠️  URL returned HTTP $HTTP_CODE (auth issue - token may be expired)"
-            echo "⚠️  Continuing anyway - Playwright will handle auth..."
-          elif [ "$HTTP_CODE" = "404" ]; then
-            echo "❌ URL returned HTTP 404 (URL may be invalid or expired)"
-            exit 1
-          elif [ "$HTTP_CODE" = "000" ]; then
-            echo "⚠️  Preflight check failed (timeout/network) - continuing anyway..."
-          else
-            echo "⚠️  URL returned HTTP $HTTP_CODE - continuing with test..."
-          fi
-
-      - name: Run smoke test - ${{ matrix.packet.label }}
-        if: steps.secrets_check.outputs.skip == 'false'
-        env:
-          PDF_TEST_URL_AUDIT: ${{ secrets.PDF_TEST_URL_AUDIT }}
-          PDF_TEST_URL_INCIDENT: ${{ secrets.PDF_TEST_URL_INCIDENT }}
-          PDF_TEST_URL_COMPLIANCE: ${{ secrets.PDF_TEST_URL_COMPLIANCE }}
-          PDF_TEST_URL_INSURANCE: ${{ secrets.PDF_TEST_URL_INSURANCE }}
-          PRINT_TOKEN: ${{ secrets.PDF_TEST_TOKEN || env.PRINT_TOKEN }}
-        run: |
-          case "${{ matrix.packet.url_secret }}" in
-            PDF_TEST_URL_AUDIT) PRINT_URL="$PDF_TEST_URL_AUDIT" ;;
-            PDF_TEST_URL_INCIDENT) PRINT_URL="$PDF_TEST_URL_INCIDENT" ;;
-            PDF_TEST_URL_COMPLIANCE) PRINT_URL="$PDF_TEST_URL_COMPLIANCE" ;;
-            PDF_TEST_URL_INSURANCE) PRINT_URL="$PDF_TEST_URL_INSURANCE" ;;
-          esac
-          
           if [ -z "$PRINT_TOKEN" ]; then
-            echo "❌ No token available for testing"
+            echo "::error::No token available (neither PDF_TEST_TOKEN secret nor generated token)"
             exit 1
           fi
-          
-          echo "🧪 Testing ${{ matrix.packet.label }} Packet..."
-          pnpm run test:pdf-smoke "$PRINT_URL" "$PRINT_TOKEN"
+          pnpm run test:pdf-smoke "$PDF_URL" "$PRINT_TOKEN"
 
-      - name: Upload artifacts (screenshots)
-        if: always() && steps.secrets_check.outputs.skip == 'false'
+      - name: Upload screenshots/reports (${{ matrix.packet }})
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: pdf-smoke-test-${{ matrix.packet.label }}-${{ github.run_attempt }}
+          name: pdf-smoke-${{ matrix.packet }}-${{ github.run_attempt }}
           path: |
-            pdf-smoke-artifacts/**/*.png
-            pdf-smoke-artifacts/**/*.jpg
-          retention-days: 7
-          if-no-files-found: ignore
+            pdf-smoke-artifacts/**
+          if-no-files-found: warn
+          retention-days: 14

@@ -37,12 +37,14 @@ const token = signPrintToken(
   expiresInSeconds
 )
 
+// Output token (will be masked by GitHub Actions)
 console.log('✅ Generated CI print token:')
 console.log(token)
 console.log('')
 console.log(`📅 Valid for ${TOKEN_EXPIRY_DAYS} days`)
 console.log(`🔑 Payload: jobId=${CI_JOB_ID}, orgId=${CI_ORG_ID}, runId=${CI_RUN_ID}`)
 console.log('')
+console.log('💡 Token will be masked in CI logs')
 console.log('💡 To use in CI, export to GITHUB_ENV:')
 console.log(`   echo "PRINT_TOKEN=${token}" >> $GITHUB_ENV`)
 
