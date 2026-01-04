@@ -13,6 +13,7 @@ interface AuditTimelineSectionProps {
       userName?: string | null
       createdAt: string
       metadata?: any
+      eventId?: string
     }>
     count: number
   }
@@ -20,12 +21,23 @@ interface AuditTimelineSectionProps {
   emptyMessage?: string
 }
 
-function formatEventName(eventType: string | null | undefined): string {
+function formatEventName(eventType: string | null | undefined, eventId?: string): string {
   // Convert event_name to readable format (safe for null/undefined)
-  if (!eventType) return 'Unknown Event'
-  return String(eventType)
-    .replace(/\./g, ' ')
+  if (!eventType) {
+    // Fallback: use event ID short form if available
+    if (eventId) {
+      return `Event ${eventId.substring(0, 8).toUpperCase()}`
+    }
+    return 'Event Recorded'
+  }
+  
+  // Humanize the event type (snake_case/kebab-case to Title Case)
+  const humanized = String(eventType)
+    .replace(/[._-]+/g, ' ')
     .replace(/\b\w/g, (l) => l.toUpperCase())
+    .trim()
+  
+  return humanized || 'Event Recorded'
 }
 
 export function AuditTimelineSection({ data, empty, emptyMessage }: AuditTimelineSectionProps) {
@@ -51,18 +63,24 @@ export function AuditTimelineSection({ data, empty, emptyMessage }: AuditTimelin
           </tr>
         </thead>
         <tbody>
-          {data.events.map((event, idx) => (
-            <tr key={event.id} className={idx % 2 === 0 ? 'even-row' : ''}>
-              <td style={{ fontFamily: 'monospace', fontSize: '9pt' }}>
-                {formatDate(event.createdAt)}
-              </td>
-              <td>{formatEventName(event.eventType)}</td>
-              <td>{event.userName || 'System'}</td>
-              <td style={{ fontSize: '9pt', color: '#666' }}>
-                {event.metadata?.name || event.metadata?.description || '—'}
-              </td>
-            </tr>
-          ))}
+          {data.events.map((event, idx) => {
+            const eventLabel = formatEventName(event.eventType, event.eventId || event.id)
+            const actorLabel = event.userName || 'System'
+            const detailsLabel = event.metadata?.name || event.metadata?.description || event.eventId?.substring(0, 8).toUpperCase() || '—'
+            
+            return (
+              <tr key={event.id} className={idx % 2 === 0 ? 'even-row' : ''}>
+                <td style={{ fontFamily: 'monospace', fontSize: '9pt' }}>
+                  {formatDate(event.createdAt)}
+                </td>
+                <td>{eventLabel}</td>
+                <td>{actorLabel}</td>
+                <td style={{ fontSize: '9pt', color: '#666' }}>
+                  {detailsLabel}
+                </td>
+              </tr>
+            )
+          })}
         </tbody>
       </table>
       <div style={{ 
