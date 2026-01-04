@@ -16,6 +16,7 @@ import type { JobPacketPayload } from '@/lib/utils/packets/builder'
 import { computeCanonicalHash } from '@/lib/utils/canonicalJson'
 import { formatPdfTimestamp } from '@/lib/utils/pdfFormatUtils'
 import { generateQRCodeDataURL } from '@/lib/utils/qrCode'
+import { safeStr, humanize } from '@/lib/utils/stringHelpers'
 
 // Force dynamic rendering and Node.js runtime for server-side auth/token verification
 export const runtime = 'nodejs'
