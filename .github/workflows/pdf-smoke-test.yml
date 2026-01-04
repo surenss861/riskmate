@@ -29,6 +29,9 @@ concurrency:
   group: pdf-smoke-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   pdf-smoke-test-manual:
     name: PDF Smoke Test - Manual
@@ -138,8 +141,9 @@ jobs:
             echo "missing_secrets=$missing_secrets" >> $GITHUB_OUTPUT
             
             # On main branch, fail if secrets are missing (enforcement)
+            # This applies to both push and workflow_dispatch events
             # On PRs, skip gracefully (bootstrap mode)
-            if [ "${{ github.ref }}" == "refs/heads/main" ] && [ "${{ github.event_name }}" == "push" ]; then
+            if [ "${{ github.ref }}" == "refs/heads/main" ]; then
               echo "❌ FAILING: Secrets are required on main branch to prevent regressions"
               echo "Missing secrets:$missing_secrets"
               echo ""
