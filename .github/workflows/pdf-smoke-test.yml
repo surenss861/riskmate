@@ -62,13 +62,9 @@ jobs:
       matrix:
         include:
           - packet: AUDIT
-            url_secret: PDF_TEST_URL_AUDIT
           - packet: INCIDENT
-            url_secret: PDF_TEST_URL_INCIDENT
           - packet: COMPLIANCE
-            url_secret: PDF_TEST_URL_COMPLIANCE
           - packet: INSURANCE
-            url_secret: PDF_TEST_URL_INSURANCE
 
     steps:
       - uses: actions/checkout@v4
@@ -99,37 +95,46 @@ jobs:
 
       - name: Generate CI print token (if needed)
         id: generate_token
+        shell: bash
         env:
           PDF_TEST_TOKEN: ${{ secrets.PDF_TEST_TOKEN }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          CI_JOB_ID: 'ci-${{ matrix.packet }}-test-job'
-          CI_ORG_ID: 'ci-test-org'
-          CI_RUN_ID: 'ci-${{ matrix.packet }}-test-run'
-          TOKEN_EXPIRY_DAYS: '7'
+          CI_JOB_ID: ci-${{ matrix.packet }}-test-job
+          CI_ORG_ID: ci-test-org
+          CI_RUN_ID: ci-${{ matrix.packet }}-test-run
+          TOKEN_EXPIRY_DAYS: "7"
         run: |
           if [ -n "$PDF_TEST_TOKEN" ]; then
+            echo "PRINT_TOKEN=$PDF_TEST_TOKEN" >> "$GITHUB_ENV"
+            echo "::add-mask::$PDF_TEST_TOKEN"
             echo "✅ Using PDF_TEST_TOKEN secret (skipping generation)"
             exit 0
           fi
+
           if [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
             echo "::error::No token available: PDF_TEST_TOKEN not set and SUPABASE_SERVICE_ROLE_KEY not available"
             exit 1
           fi
-          TOKEN=$(node scripts/generate-ci-print-token.ts 2>&1 | grep -A 1 "Generated CI print token" | tail -1 | tr -d '[:space:]')
+
+          TOKEN="$(pnpm -s tsx scripts/generate-ci-print-token.ts)"
+          if [ -z "$TOKEN" ]; then
+            echo "::error::Token generation returned empty output"
+            exit 1
+          fi
+
           echo "::add-mask::$TOKEN"
-          echo "PRINT_TOKEN=${TOKEN}" >> $GITHUB_ENV
+          echo "PRINT_TOKEN=$TOKEN" >> "$GITHUB_ENV"
           echo "✅ Generated token for CI (valid 7 days)"
 
       - name: Run PDF smoke test (${{ matrix.packet }})
+        shell: bash
         env:
           PDF_TEST_URL_AUDIT: ${{ secrets.PDF_TEST_URL_AUDIT }}
           PDF_TEST_URL_INCIDENT: ${{ secrets.PDF_TEST_URL_INCIDENT }}
           PDF_TEST_URL_COMPLIANCE: ${{ secrets.PDF_TEST_URL_COMPLIANCE }}
           PDF_TEST_URL_INSURANCE: ${{ secrets.PDF_TEST_URL_INSURANCE }}
-          PDF_TEST_TOKEN: ${{ secrets.PDF_TEST_TOKEN }}
-          PRINT_TOKEN: ${{ secrets.PDF_TEST_TOKEN || env.PRINT_TOKEN }}
+          PRINT_TOKEN: ${{ env.PRINT_TOKEN }}
         run: |
-          # Get URL from secret based on matrix.packet
           case "${{ matrix.packet }}" in
             AUDIT) PDF_URL="$PDF_TEST_URL_AUDIT" ;;
             INCIDENT) PDF_URL="$PDF_TEST_URL_INCIDENT" ;;
@@ -137,15 +142,16 @@ jobs:
             INSURANCE) PDF_URL="$PDF_TEST_URL_INSURANCE" ;;
             *) echo "::error::Unknown packet type: ${{ matrix.packet }}"; exit 1 ;;
           esac
-          
+
           if [ -z "$PDF_URL" ]; then
             echo "::error::PDF_URL is empty for ${{ matrix.packet }}"
             exit 1
           fi
           if [ -z "$PRINT_TOKEN" ]; then
-            echo "::error::No token available (neither PDF_TEST_TOKEN secret nor generated token)"
+            echo "::error::PRINT_TOKEN is empty"
             exit 1
           fi
+
           pnpm run test:pdf-smoke "$PDF_URL" "$PRINT_TOKEN"
 
       - name: Upload screenshots/reports (${{ matrix.packet }})

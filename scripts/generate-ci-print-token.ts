@@ -38,13 +38,12 @@ const token = signPrintToken(
 )
 
 // Output token (will be masked by GitHub Actions)
-console.log('✅ Generated CI print token:')
+// Output only the token to stdout (for CI consumption)
+// All other output goes to stderr so it doesn't interfere with token capture
+console.error('✅ Generated CI print token')
+console.error(`📅 Valid for ${TOKEN_EXPIRY_DAYS} days`)
+console.error(`🔑 Payload: jobId=${CI_JOB_ID}, orgId=${CI_ORG_ID}, runId=${CI_RUN_ID}`)
+console.error('💡 Token will be masked in CI logs')
+// Output token to stdout (only thing on stdout)
 console.log(token)
-console.log('')
-console.log(`📅 Valid for ${TOKEN_EXPIRY_DAYS} days`)
-console.log(`🔑 Payload: jobId=${CI_JOB_ID}, orgId=${CI_ORG_ID}, runId=${CI_RUN_ID}`)
-console.log('')
-console.log('💡 Token will be masked in CI logs')
-console.log('💡 To use in CI, export to GITHUB_ENV:')
-console.log(`   echo "PRINT_TOKEN=${token}" >> $GITHUB_ENV`)
 
