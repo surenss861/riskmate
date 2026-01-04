@@ -18,6 +18,7 @@ concurrency:
 env:
   NODE_VERSION: "20"
   CI: true
+  TZ: America/New_York
 
 jobs:
   preflight:
