@@ -33,10 +33,8 @@ interface SectionRendererProps {
 }
 
 export function SectionRenderer({ section }: SectionRendererProps) {
-  // Skip empty sections entirely (no empty pages)
-  if (section.meta?.empty) {
-    return null
-  }
+  // NOTE: Empty sections are NOT skipped - they render EmptySection components
+  // This ensures TOC matches content and all sections are included in PDFs
 
   switch (section.type) {
     case 'table_of_contents':
