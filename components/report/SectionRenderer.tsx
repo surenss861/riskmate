@@ -27,6 +27,7 @@ import {
   ChecklistCompletionSection,
 } from './sections'
 import { EmptySection } from './sections/EmptySection'
+import { humanize } from '@/lib/utils/stringHelpers'
 
 interface SectionRendererProps {
   section: SectionData
