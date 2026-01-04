@@ -16,6 +16,7 @@ interface ExecutiveSummarySectionProps {
     evidenceCount: number
     jobStatus: string
     packetType: string
+    previousRunId?: string | null
   }
 }
 
@@ -66,6 +67,36 @@ export function ExecutiveSummarySection({ data }: ExecutiveSummarySectionProps) 
     <div className="page">
       <h2 className="section-header">Executive Summary</h2>
       
+      {/* What Changed Since Last Run */}
+      <div className="column-card" style={{ marginBottom: pdfTheme.spacing.sectionGap, borderLeft: `4pt solid ${pdfTheme.colors.borders}` }}>
+        <h3 className="card-title">What Changed Since Last Run</h3>
+        <div style={{ 
+          fontSize: pdfTheme.typography.sizes.body, 
+          color: pdfTheme.colors.muted,
+          lineHeight: pdfTheme.typography.lineHeight.normal
+        }}>
+          {data.previousRunId ? (
+            <>
+              Prior run exists: <span style={{ fontFamily: 'monospace', fontSize: pdfTheme.typography.sizes.caption }}>
+                {data.previousRunId.substring(0, 8).toUpperCase()}
+              </span>
+              <br />
+              <span style={{ fontSize: pdfTheme.typography.sizes.caption, fontStyle: 'italic' }}>
+                Detailed comparison not yet enabled. Review individual runs for complete change history.
+              </span>
+            </>
+          ) : (
+            <>
+              No prior run found for this job.
+              <br />
+              <span style={{ fontSize: pdfTheme.typography.sizes.caption, fontStyle: 'italic' }}>
+                This is the first report run for this job.
+              </span>
+            </>
+          )}
+        </div>
+      </div>
+
       {/* Defensibility Assessment */}
       <div className="column-card" style={{ marginBottom: pdfTheme.spacing.sectionGap, borderLeft: `4pt solid ${isDefensible ? '#16a34a' : pdfTheme.colors.accent}` }}>
         <h3 className="card-title">Defensibility Status</h3>
