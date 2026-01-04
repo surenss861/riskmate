@@ -10,7 +10,8 @@
     "start": "next start",
     "lint": "next lint",
     "type-check": "tsc --noEmit",
-    "check:error-codes": "ts-node scripts/check-error-codes.ts"
+    "check:error-codes": "ts-node scripts/check-error-codes.ts",
+    "test:pdf-smoke": "ts-node scripts/pdf-smoke-test.ts"
   },
   "dependencies": {
     "@gsap/react": "^2.1.2",
