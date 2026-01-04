@@ -476,10 +476,11 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
               </div>
 
               {/* Render Sections - Empty sections are skipped by SectionRenderer */}
-              {finalPacketData.sections
-                .map((section, idx) => (
-                  <SectionRenderer key={`${section.type}-${idx}`} section={section} />
-                ))
+              {Array.isArray(finalPacketData?.sections) && finalPacketData.sections
+                .map((section, idx) => {
+                  if (!section || !section.type) return null
+                  return <SectionRenderer key={`${safeStr(section.type)}-${idx}`} section={section} />
+                })
                 .filter((rendered) => rendered !== null)}
             </div>
 
