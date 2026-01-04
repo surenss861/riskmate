@@ -42,7 +42,26 @@ async function runSmokeTest() {
 
   try {
     console.log('🔍 Starting PDF smoke test...')
-    console.log(`📍 URL: ${PRINT_URL.replace(/\?token=[^&]+/, '?token=***')}`)
+    
+    // Prepare output directory
+    fs.mkdirSync(OUT_DIR, { recursive: true })
+    
+    // Generate label for screenshots
+    const urlObj = new URL(PRINT_URL)
+    const runId = urlObj.pathname.split('/').pop() || 'unknown_run'
+    const label = safeName(process.env.PACKET_LABEL || runId)
+    
+    // Prepare final URL with token if needed
+    let finalUrl = PRINT_URL
+    if (PRINT_TOKEN && !/[\?&]token=/.test(PRINT_URL)) {
+      const u = new URL(PRINT_URL)
+      u.searchParams.set('token', PRINT_TOKEN)
+      finalUrl = u.toString()
+    }
+    
+    console.log(`📍 URL: ${finalUrl.replace(/\?token=[^&]+/, '?token=***')}`)
+    console.log(`📁 Output directory: ${OUT_DIR}`)
+    console.log(`🏷️  Label: ${label}`)
 
     // Launch browser
     browser = await chromium.launch({
@@ -53,12 +72,27 @@ async function runSmokeTest() {
     // Set viewport for consistent screenshots
     await page.setViewportSize({ width: 1200, height: 1600 })
 
-    // Navigate to print URL
+    // Navigate to print URL (with retry for flaky headless)
     console.log('📄 Loading print page...')
-    const response = await page.goto(PRINT_URL, {
-      waitUntil: 'networkidle',
-      timeout: 30000,
-    })
+    let response
+    let retries = 2
+    while (retries >= 0) {
+      try {
+        response = await page.goto(finalUrl, {
+          waitUntil: 'networkidle',
+          timeout: 30000,
+        })
+        break
+      } catch (err: any) {
+        if (retries > 0) {
+          console.log(`⚠️  Navigation failed, retrying... (${retries} attempts left)`)
+          retries--
+          await new Promise(resolve => setTimeout(resolve, 2000))
+        } else {
+          throw err
+        }
+      }
+    }
 
     if (!response || response.status() !== 200) {
       throw new Error(`Failed to load page: HTTP ${response?.status()}`)
@@ -252,10 +286,14 @@ async function runSmokeTest() {
     if (page) {
       try {
         // Take screenshot of error state
-        const errorScreenshot = await page.screenshot({ fullPage: true })
-        console.error(`   Error screenshot captured (${errorScreenshot.length} bytes)`)
+        const urlObj = new URL(PRINT_URL)
+        const runId = urlObj.pathname.split('/').pop() || 'unknown_run'
+        const errLabel = safeName(process.env.PACKET_LABEL || runId)
+        const errPath = path.join(OUT_DIR, `${errLabel}__error.png`)
+        await page.screenshot({ path: errPath, fullPage: true })
+        console.error(`   Saved error screenshot: ${errPath}`)
       } catch (screenshotError) {
-        console.error('   Could not capture error screenshot')
+        console.error('   Could not capture error screenshot:', screenshotError)
       }
 
       // Try to get page content for debugging
