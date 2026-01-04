@@ -123,7 +123,7 @@ jobs:
           fi
 
           if [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
-            echo "::error::No token available: PDF_TEST_TOKEN not set and SUPABASE_SERVICE_ROLE_KEY not available"
+            echo "::error::No token available: PDF_TEST_TOKEN not set, no manual input, and SUPABASE_SERVICE_ROLE_KEY not available"
             exit 1
           fi
 
