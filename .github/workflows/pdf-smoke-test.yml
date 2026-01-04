@@ -151,20 +151,6 @@ jobs:
       - name: Install Playwright Chromium (with system deps)
         run: npx playwright install --with-deps chromium
 
-      - name: Generate CI print token
-        id: generate_token
-        if: steps.secrets_check.outputs.skip == 'false'
-        env:
-          PRINT_TOKEN_SECRET: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          CI_JOB_ID: 'ci-${{ matrix.packet.label }}-test-job'
-          CI_ORG_ID: 'ci-test-org'
-          CI_RUN_ID: 'ci-${{ matrix.packet.label }}-test-run'
-          TOKEN_EXPIRY_DAYS: '7'
-        run: |
-          TOKEN=$(node scripts/generate-ci-print-token.ts | grep -A 1 "Generated CI print token" | tail -1)
-          echo "PRINT_TOKEN=${TOKEN}" >> $GITHUB_ENV
-          echo "✅ Generated token for CI (valid 7 days)"
-
       - name: Validate secrets configured
         id: secrets_check
         env:
