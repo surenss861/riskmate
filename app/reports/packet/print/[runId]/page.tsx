@@ -184,14 +184,19 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
       )
     }
 
-    // Validate packet type
-    const packetType = reportRun.packet_type
-    if (!packetType || !isValidPacketType(packetType)) {
+    // Validate packet type (fallback to 'insurance' for older records without packet_type)
+    const packetType = reportRun.packet_type || 'insurance'
+    if (!isValidPacketType(packetType)) {
       console.error('[PACKET-PRINT] Invalid packet type:', packetType)
       return (
         <div style={{ padding: '20px', fontFamily: 'system-ui' }}>
           <h1>400 - Invalid Packet Type</h1>
           <p>The packet type &quot;{packetType}&quot; is not valid.</p>
+          {debugMode && (
+            <p style={{ fontSize: '12px', color: '#666' }}>
+              Debug: reportRun.packet_type = {String(reportRun.packet_type)}
+            </p>
+          )}
         </div>
       )
     }
