@@ -26,10 +26,56 @@ on:
         required: false
 
 jobs:
-  pdf-smoke-test:
-    name: PDF Generation Smoke Test - ${{ matrix.packet.label || 'Manual' }}
+  pdf-smoke-test-manual:
+    name: PDF Smoke Test (Manual URL)
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    if: github.event.inputs.print_url != ''
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 10
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright Chromium (with system deps)
+        run: npx playwright install --with-deps chromium
+
+      - name: Run smoke test
+        env:
+          PRINT_URL: ${{ github.event.inputs.print_url }}
+          PRINT_TOKEN: ${{ secrets.PDF_TEST_TOKEN }}
+        run: |
+          echo "🧪 Testing provided URL..."
+          pnpm run test:pdf-smoke "$PRINT_URL" "$PRINT_TOKEN"
+
+      - name: Upload test artifacts (screenshots)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pdf-smoke-test-manual
+          path: |
+            pdf-smoke-artifacts/**/*.png
+            pdf-smoke-artifacts/**/*.jpg
+          retention-days: 7
+          if-no-files-found: ignore
+
+  pdf-smoke-test:
+    name: PDF Smoke Test - ${{ matrix.packet.label }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: github.event.inputs.print_url == ''
     concurrency:
       group: pdf-smoke-${{ github.ref }}
       cancel-in-progress: true
@@ -45,16 +91,6 @@ jobs:
             url_secret: PDF_TEST_URL_COMPLIANCE
           - label: INSURANCE
             url_secret: PDF_TEST_URL_INSURANCE
-      exclude:
-        # Exclude matrix when manual URL is provided
-        - label: AUDIT
-          url_secret: PDF_TEST_URL_AUDIT
-        - label: INCIDENT
-          url_secret: PDF_TEST_URL_INCIDENT
-        - label: COMPLIANCE
-          url_secret: PDF_TEST_URL_COMPLIANCE
-        - label: INSURANCE
-          url_secret: PDF_TEST_URL_INSURANCE
 
     steps:
       - name: Checkout code
@@ -77,26 +113,7 @@ jobs:
       - name: Install Playwright Chromium (with system deps)
         run: npx playwright install --with-deps chromium
 
-      - name: Check if manual URL provided
-        id: check_manual
-        run: |
-          if [ -n "${{ github.event.inputs.print_url }}" ]; then
-            echo "is_manual=true" >> $GITHUB_OUTPUT
-          else
-            echo "is_manual=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Run smoke test (manual URL input)
-        if: steps.check_manual.outputs.is_manual == 'true'
-        env:
-          PRINT_URL: ${{ github.event.inputs.print_url }}
-          PRINT_TOKEN: ${{ secrets.PDF_TEST_TOKEN }}
-        run: |
-          echo "🧪 Testing provided URL..."
-          pnpm run test:pdf-smoke "$PRINT_URL" "$PRINT_TOKEN"
-
       - name: Run smoke test - ${{ matrix.packet.label }}
-        if: github.event.inputs.print_url == ''
         env:
           PDF_TEST_URL_AUDIT: ${{ secrets.PDF_TEST_URL_AUDIT }}
           PDF_TEST_URL_INCIDENT: ${{ secrets.PDF_TEST_URL_INCIDENT }}
@@ -126,17 +143,9 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: pdf-smoke-test-${{ matrix.packet.label || 'manual' }}
+          name: pdf-smoke-test-${{ matrix.packet.label }}
           path: |
             pdf-smoke-artifacts/**/*.png
             pdf-smoke-artifacts/**/*.jpg
           retention-days: 7
           if-no-files-found: ignore
-
-      - name: Skip message
-        if: steps.check_manual.outputs.is_manual == 'false' && steps.check_urls.outputs.skip_test == 'true'
-        run: |
-          echo "⚠️  PDF test URL (${{ matrix.packet.url_secret }}) or PDF_TEST_TOKEN not configured"
-          echo "Configure secrets: ${{ matrix.packet.url_secret }}, PDF_TEST_TOKEN"
-          echo ""
-          echo "Note: PDF_TEST_TOKEN should be long-lived for CI. If it expires, tests will fail."
