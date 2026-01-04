@@ -20,9 +20,10 @@ interface AuditTimelineSectionProps {
   emptyMessage?: string
 }
 
-function formatEventName(eventType: string): string {
-  // Convert event_name to readable format
-  return eventType
+function formatEventName(eventType: string | null | undefined): string {
+  // Convert event_name to readable format (safe for null/undefined)
+  if (!eventType) return 'Unknown Event'
+  return String(eventType)
     .replace(/\./g, ' ')
     .replace(/\b\w/g, (l) => l.toUpperCase())
 }
