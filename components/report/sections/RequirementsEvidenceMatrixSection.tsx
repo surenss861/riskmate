@@ -51,11 +51,10 @@ export function RequirementsEvidenceMatrixSection({
           <tr>
             <th>Category</th>
             <th>Requirement</th>
-            <th>Required</th>
             <th>Present</th>
+            <th>Impact (if missing)</th>
+            <th>Owner</th>
             <th>Evidence ID</th>
-            <th>Completed By</th>
-            <th>Completed At</th>
           </tr>
         </thead>
         <tbody>
@@ -68,13 +67,6 @@ export function RequirementsEvidenceMatrixSection({
                 {req.item}
               </td>
               <td style={{ textAlign: 'center' }}>
-                {req.required ? (
-                  <span style={{ color: pdfTheme.colors.accent, fontWeight: pdfTheme.typography.weights.bold }}>Yes</span>
-                ) : (
-                  <span style={{ color: pdfTheme.colors.muted }}>No</span>
-                )}
-              </td>
-              <td style={{ textAlign: 'center' }}>
                 {req.present ? (
                   <span style={{ color: '#16a34a', fontWeight: pdfTheme.typography.weights.bold }}>✓ Yes</span>
                 ) : (
@@ -82,17 +74,21 @@ export function RequirementsEvidenceMatrixSection({
                 )}
               </td>
               <td style={{ 
+                fontSize: pdfTheme.typography.sizes.caption,
+                color: req.impact ? pdfTheme.colors.accent : pdfTheme.colors.muted,
+                fontStyle: req.impact ? 'italic' : 'normal'
+              }}>
+                {req.impact || (req.required ? '—' : 'Optional')}
+              </td>
+              <td style={{ fontSize: pdfTheme.typography.sizes.caption }}>
+                {req.owner || '—'}
+              </td>
+              <td style={{ 
                 fontFamily: 'monospace', 
                 fontSize: pdfTheme.typography.sizes.caption,
-                color: req.evidenceId ? pdfTheme.colors.muted : pdfTheme.colors.muted
+                color: pdfTheme.colors.muted
               }}>
                 {req.evidenceId ? req.evidenceId.substring(0, 8).toUpperCase() : '—'}
-              </td>
-              <td>
-                {req.completedBy || '—'}
-              </td>
-              <td>
-                {req.completedAt || '—'}
               </td>
             </tr>
           ))}
