@@ -62,17 +62,28 @@ export async function buildJobPacket({
   const client = supabaseClient || await (await import('@/lib/supabase/server')).createSupabaseServerClient()
 
   for (const sectionType of packetDef.sections) {
-    const sectionData = await buildSectionData({
-      sectionType,
-      baseReport,
-      packetDef,
-      organizationId,
-      jobId,
-      supabaseClient: client,
-    })
+    try {
+      const sectionData = await buildSectionData({
+        sectionType,
+        baseReport,
+        packetDef,
+        organizationId,
+        jobId,
+        supabaseClient: client,
+      })
 
-    if (sectionData) {
-      sections.push(sectionData)
+      if (sectionData) {
+        sections.push(sectionData)
+      }
+    } catch (sectionError: any) {
+      console.error(`[packet-builder] Failed to build section "${sectionType}":`, {
+        message: sectionError?.message,
+        stack: sectionError?.stack,
+        jobId: jobId.substring(0, 8),
+        organizationId: organizationId.substring(0, 8),
+      })
+      // Continue building other sections - don't crash entire packet
+      // Failed sections are skipped rather than breaking the whole PDF
     }
   }
 
