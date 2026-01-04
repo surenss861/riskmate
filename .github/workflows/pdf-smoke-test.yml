@@ -170,6 +170,48 @@ jobs:
           echo ""
           echo "Note: On main branch, missing secrets will cause the workflow to fail."
 
+      - name: Health check (preflight URL validation)
+        if: steps.secrets_check.outputs.skip == 'false'
+        env:
+          PDF_TEST_URL_AUDIT: ${{ secrets.PDF_TEST_URL_AUDIT }}
+          PDF_TEST_URL_INCIDENT: ${{ secrets.PDF_TEST_URL_INCIDENT }}
+          PDF_TEST_URL_COMPLIANCE: ${{ secrets.PDF_TEST_URL_COMPLIANCE }}
+          PDF_TEST_URL_INSURANCE: ${{ secrets.PDF_TEST_URL_INSURANCE }}
+          PRINT_TOKEN: ${{ secrets.PDF_TEST_TOKEN }}
+        run: |
+          case "${{ matrix.packet.url_secret }}" in
+            PDF_TEST_URL_AUDIT) PRINT_URL="$PDF_TEST_URL_AUDIT" ;;
+            PDF_TEST_URL_INCIDENT) PRINT_URL="$PDF_TEST_URL_INCIDENT" ;;
+            PDF_TEST_URL_COMPLIANCE) PRINT_URL="$PDF_TEST_URL_COMPLIANCE" ;;
+            PDF_TEST_URL_INSURANCE) PRINT_URL="$PDF_TEST_URL_INSURANCE" ;;
+          esac
+          
+          # Add token to URL if not present
+          if [[ "$PRINT_URL" != *"token="* ]]; then
+            if [[ "$PRINT_URL" == *"?"* ]]; then
+              PRINT_URL="${PRINT_URL}&token=${PRINT_TOKEN}"
+            else
+              PRINT_URL="${PRINT_URL}?token=${PRINT_TOKEN}"
+            fi
+          fi
+          
+          echo "🔍 Preflight check: ${{ matrix.packet.label }} Packet URL..."
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$PRINT_URL" || echo "000")
+          
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "✅ URL is accessible (HTTP 200)"
+          elif [ "$HTTP_CODE" = "401" ] || [ "$HTTP_CODE" = "403" ]; then
+            echo "⚠️  URL returned HTTP $HTTP_CODE (auth issue - token may be expired)"
+            echo "⚠️  Continuing anyway - Playwright will handle auth..."
+          elif [ "$HTTP_CODE" = "404" ]; then
+            echo "❌ URL returned HTTP 404 (URL may be invalid or expired)"
+            exit 1
+          elif [ "$HTTP_CODE" = "000" ]; then
+            echo "⚠️  Preflight check failed (timeout/network) - continuing anyway..."
+          else
+            echo "⚠️  URL returned HTTP $HTTP_CODE - continuing with test..."
+          fi
+
       - name: Run smoke test - ${{ matrix.packet.label }}
         if: steps.secrets_check.outputs.skip == 'false'
         env:
