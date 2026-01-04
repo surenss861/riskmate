@@ -68,10 +68,25 @@ jobs:
       - name: Install Playwright Chromium (with system deps)
         run: npx playwright install --with-deps chromium
 
+      - name: Generate CI print token
+        id: generate_token
+        if: github.event.inputs.print_token == '' && secrets.PDF_TEST_TOKEN == ''
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          CI_JOB_ID: 'ci-manual-test-job'
+          CI_ORG_ID: 'ci-test-org'
+          CI_RUN_ID: 'ci-manual-test-run'
+          TOKEN_EXPIRY_DAYS: '7'
+        run: |
+          TOKEN=$(node scripts/generate-ci-print-token.ts 2>&1 | grep -A 1 "Generated CI print token" | tail -1 | tr -d '[:space:]')
+          echo "PRINT_TOKEN=${TOKEN}" >> $GITHUB_ENV
+          echo "✅ Generated token for CI (valid 7 days)"
+
       - name: Run smoke test (manual URL)
         env:
           PRINT_URL: ${{ github.event.inputs.print_url }}
-          PRINT_TOKEN: ${{ secrets.PDF_TEST_TOKEN }}
+          PRINT_TOKEN: ${{ github.event.inputs.print_token || secrets.PDF_TEST_TOKEN || env.PRINT_TOKEN }}
+          PACKET_LABEL: MANUAL
         run: |
           echo "🧪 Testing provided URL..."
           pnpm run test:pdf-smoke "$PRINT_URL" "$PRINT_TOKEN"
@@ -156,7 +171,8 @@ jobs:
         run: |
           missing=0
           missing_secrets=""
-          if [ -z "$PRINT_TOKEN" ]; then echo "Missing: PDF_TEST_TOKEN"; missing_secrets="$missing_secrets PDF_TEST_TOKEN"; missing=1; fi
+          # PDF_TEST_TOKEN is optional - we can generate it automatically
+          # if [ -z "$PRINT_TOKEN" ]; then echo "Missing: PDF_TEST_TOKEN"; missing_secrets="$missing_secrets PDF_TEST_TOKEN"; missing=1; fi
           if [ -z "$PDF_TEST_URL_AUDIT" ]; then echo "Missing: PDF_TEST_URL_AUDIT"; missing_secrets="$missing_secrets PDF_TEST_URL_AUDIT"; missing=1; fi
           if [ -z "$PDF_TEST_URL_INCIDENT" ]; then echo "Missing: PDF_TEST_URL_INCIDENT"; missing_secrets="$missing_secrets PDF_TEST_URL_INCIDENT"; missing=1; fi
           if [ -z "$PDF_TEST_URL_COMPLIANCE" ]; then echo "Missing: PDF_TEST_URL_COMPLIANCE"; missing_secrets="$missing_secrets PDF_TEST_URL_COMPLIANCE"; missing=1; fi
@@ -178,7 +194,9 @@ jobs:
               echo "  - PDF_TEST_URL_INCIDENT"
               echo "  - PDF_TEST_URL_COMPLIANCE"
               echo "  - PDF_TEST_URL_INSURANCE"
-              echo "  - PDF_TEST_TOKEN (must be long-lived for CI)"
+              echo ""
+              echo "Note: PDF_TEST_TOKEN is optional - tokens are auto-generated if missing"
+              echo "      (requires SUPABASE_SERVICE_ROLE_KEY secret to be set)"
               exit 1
             fi
           else
@@ -207,7 +225,7 @@ jobs:
           PDF_TEST_URL_INCIDENT: ${{ secrets.PDF_TEST_URL_INCIDENT }}
           PDF_TEST_URL_COMPLIANCE: ${{ secrets.PDF_TEST_URL_COMPLIANCE }}
           PDF_TEST_URL_INSURANCE: ${{ secrets.PDF_TEST_URL_INSURANCE }}
-          PRINT_TOKEN: ${{ secrets.PDF_TEST_TOKEN }}
+          PRINT_TOKEN: ${{ secrets.PDF_TEST_TOKEN || env.PRINT_TOKEN }}
         run: |
           case "${{ matrix.packet.url_secret }}" in
             PDF_TEST_URL_AUDIT) PRINT_URL="$PDF_TEST_URL_AUDIT" ;;
@@ -216,12 +234,19 @@ jobs:
             PDF_TEST_URL_INSURANCE) PRINT_URL="$PDF_TEST_URL_INSURANCE" ;;
           esac
           
+          # Use generated token if secret token not available
+          FINAL_TOKEN="${PRINT_TOKEN:-${GITHUB_ENV_PRINT_TOKEN}}"
+          if [ -z "$FINAL_TOKEN" ]; then
+            echo "❌ No token available (neither PDF_TEST_TOKEN secret nor generated token)"
+            exit 1
+          fi
+          
           # Add token to URL if not present
           if [[ "$PRINT_URL" != *"token="* ]]; then
             if [[ "$PRINT_URL" == *"?"* ]]; then
-              PRINT_URL="${PRINT_URL}&token=${PRINT_TOKEN}"
+              PRINT_URL="${PRINT_URL}&token=${FINAL_TOKEN}"
             else
-              PRINT_URL="${PRINT_URL}?token=${PRINT_TOKEN}"
+              PRINT_URL="${PRINT_URL}?token=${FINAL_TOKEN}"
             fi
           fi
           
