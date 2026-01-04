@@ -3,20 +3,22 @@ name: PDF Smoke Tests
 on:
   pull_request:
     paths:
-      - 'app/reports/packet/**'
+      - 'app/reports/**'
       - 'components/report/**'
       - 'lib/utils/packets/**'
       - 'lib/design-system/pdfTheme.ts'
       - 'scripts/pdf-smoke-test.ts'
+      - 'pdf-service/**'
   push:
     branches:
       - main
     paths:
-      - 'app/reports/packet/**'
+      - 'app/reports/**'
       - 'components/report/**'
       - 'lib/utils/packets/**'
       - 'lib/design-system/pdfTheme.ts'
       - 'scripts/pdf-smoke-test.ts'
+      - 'pdf-service/**'
   workflow_dispatch:
     inputs:
       print_url:
@@ -28,6 +30,9 @@ jobs:
     name: PDF Generation Smoke Test
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    concurrency:
+      group: pdf-smoke-${{ github.ref }}
+      cancel-in-progress: true
 
     steps:
       - name: Checkout code
@@ -63,13 +68,6 @@ jobs:
         if: github.event.inputs.print_url == ''
         id: check_urls
         run: |
-          missing=""
-          for k in PDF_TEST_URL_AUDIT PDF_TEST_URL_INCIDENT PDF_TEST_URL_COMPLIANCE PDF_TEST_URL_INSURANCE PDF_TEST_TOKEN; do
-            if [ -z "${!k}" ]; then
-              missing="$missing $k"
-            fi
-          done
-          
           # Check secrets (GitHub Actions syntax)
           if [ -z "${{ secrets.PDF_TEST_URL_AUDIT }}" ] || \
              [ -z "${{ secrets.PDF_TEST_URL_INCIDENT }}" ] || \
@@ -83,49 +81,41 @@ jobs:
             echo "skip_tests=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Run smoke test - Audit Packet
+      - name: Run smoke test - ${{ matrix.packet.label }}
         if: github.event.inputs.print_url == '' && steps.check_urls.outputs.skip_tests == 'false'
         continue-on-error: true
+        strategy:
+          fail-fast: false
+          matrix:
+            packet:
+              - label: AUDIT
+              - label: INCIDENT
+              - label: COMPLIANCE
+              - label: INSURANCE
         env:
-          PRINT_URL: ${{ secrets.PDF_TEST_URL_AUDIT }}
+          PDF_TEST_URL_AUDIT: ${{ secrets.PDF_TEST_URL_AUDIT }}
+          PDF_TEST_URL_INCIDENT: ${{ secrets.PDF_TEST_URL_INCIDENT }}
+          PDF_TEST_URL_COMPLIANCE: ${{ secrets.PDF_TEST_URL_COMPLIANCE }}
+          PDF_TEST_URL_INSURANCE: ${{ secrets.PDF_TEST_URL_INSURANCE }}
           PRINT_TOKEN: ${{ secrets.PDF_TEST_TOKEN }}
-          PACKET_LABEL: AUDIT
+          PACKET_LABEL: ${{ matrix.packet.label }}
         run: |
-          echo "🧪 Testing Audit Packet..."
-          pnpm run test:pdf-smoke "$PRINT_URL" "$PRINT_TOKEN" || echo "❌ Audit packet test failed" > audit-failure.txt
-
-      - name: Run smoke test - Incident Packet
-        if: github.event.inputs.print_url == '' && steps.check_urls.outputs.skip_tests == 'false'
-        continue-on-error: true
-        env:
-          PRINT_URL: ${{ secrets.PDF_TEST_URL_INCIDENT }}
-          PRINT_TOKEN: ${{ secrets.PDF_TEST_TOKEN }}
-          PACKET_LABEL: INCIDENT
-        run: |
-          echo "🧪 Testing Incident Packet..."
-          pnpm run test:pdf-smoke "$PRINT_URL" "$PRINT_TOKEN" || echo "❌ Incident packet test failed" > incident-failure.txt
-
-      - name: Run smoke test - Compliance Packet
-        if: github.event.inputs.print_url == '' && steps.check_urls.outputs.skip_tests == 'false'
-        continue-on-error: true
-        env:
-          PRINT_URL: ${{ secrets.PDF_TEST_URL_COMPLIANCE }}
-          PRINT_TOKEN: ${{ secrets.PDF_TEST_TOKEN }}
-          PACKET_LABEL: COMPLIANCE
-        run: |
-          echo "🧪 Testing Compliance Packet..."
-          pnpm run test:pdf-smoke "$PRINT_URL" "$PRINT_TOKEN" || echo "❌ Compliance packet test failed" > compliance-failure.txt
-
-      - name: Run smoke test - Insurance Packet
-        if: github.event.inputs.print_url == '' && steps.check_urls.outputs.skip_tests == 'false'
-        continue-on-error: true
-        env:
-          PRINT_URL: ${{ secrets.PDF_TEST_URL_INSURANCE }}
-          PRINT_TOKEN: ${{ secrets.PDF_TEST_TOKEN }}
-          PACKET_LABEL: INSURANCE
-        run: |
-          echo "🧪 Testing Insurance Packet..."
-          pnpm run test:pdf-smoke "$PRINT_URL" "$PRINT_TOKEN" || echo "❌ Insurance packet test failed" > insurance-failure.txt
+          case "${{ matrix.packet.label }}" in
+            AUDIT)
+              PRINT_URL="$PDF_TEST_URL_AUDIT"
+              ;;
+            INCIDENT)
+              PRINT_URL="$PDF_TEST_URL_INCIDENT"
+              ;;
+            COMPLIANCE)
+              PRINT_URL="$PDF_TEST_URL_COMPLIANCE"
+              ;;
+            INSURANCE)
+              PRINT_URL="$PDF_TEST_URL_INSURANCE"
+              ;;
+          esac
+          echo "🧪 Testing ${{ matrix.packet.label }} Packet..."
+          pnpm run test:pdf-smoke "$PRINT_URL" "$PRINT_TOKEN" || echo "❌ ${{ matrix.packet.label }} packet test failed" > ${{ matrix.packet.label }}-failure.txt
 
       - name: Check test results
         if: github.event.inputs.print_url == '' && steps.check_urls.outputs.skip_tests == 'false'
@@ -143,7 +133,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: pdf-smoke-test-screenshots
+          name: pdf-smoke-test-screenshots-${{ matrix.packet.label || 'manual' }}
           path: |
             pdf-smoke-artifacts/**/*.png
             pdf-smoke-artifacts/**/*.jpg
@@ -161,6 +151,7 @@ jobs:
           echo "  - PDF_TEST_URL_INSURANCE"
           echo "  - PDF_TEST_TOKEN"
           echo ""
+          echo "Note: PDF_TEST_TOKEN should be long-lived for CI. If it expires, tests will fail."
+          echo ""
           echo "You can still run tests manually:"
           echo "  npm run test:pdf-smoke <print-url> [token]"
-

@@ -49,7 +49,9 @@ async function runSmokeTest() {
     // Generate label for screenshots
     const urlObj = new URL(PRINT_URL)
     const runId = urlObj.pathname.split('/').pop() || 'unknown_run'
-    const label = safeName(process.env.PACKET_LABEL || runId)
+    const packetLabel = process.env.PACKET_LABEL || runId
+    const runAttempt = process.env.GITHUB_RUN_ATTEMPT || process.env.RUN_ATTEMPT || '1'
+    const label = safeName(runAttempt !== '1' ? `${packetLabel}__attempt${runAttempt}` : packetLabel)
     
     // Prepare final URL with token if needed
     let finalUrl = PRINT_URL
