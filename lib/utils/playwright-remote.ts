@@ -129,9 +129,11 @@ export async function generatePdfRemote({ url, jobId, organizationId, requestId 
         
         console.log(`[${logRequestId}][stage] render_html_ok duration=${Date.now() - gotoStart}ms status=${response.status()} url=${finalUrl}`)
 
-        // Wait for page ready marker (data-report-ready or fallback selectors)
+        // Wait for page ready marker (CRITICAL: ensures packet data is fully loaded before PDF generation)
         try {
+            // Primary: wait for #pdf-ready with data-ready="1" attribute (most reliable)
             await Promise.race([
+                page.waitForSelector('#pdf-ready[data-ready="1"]', { state: 'attached', timeout: 30000 }),
                 page.waitForSelector('[data-report-ready="true"]', { state: 'attached', timeout: 30000 }),
                 page.waitForSelector('#pdf-ready', { state: 'attached', timeout: 30000 }),
                 page.waitForSelector('.cover-page', { timeout: 30000 }),
@@ -140,17 +142,23 @@ export async function generatePdfRemote({ url, jobId, organizationId, requestId 
         } catch (selectorError: any) {
             // If all fail, check what's actually on the page
             const hasReportReady = await page.evaluate(() => !!document.querySelector('[data-report-ready="true"]')).catch(() => false)
-            const hasPdfReady = await page.evaluate(() => !!document.getElementById('pdf-ready')).catch(() => false)
+            const hasPdfReady = await page.evaluate(() => {
+                const el = document.getElementById('pdf-ready')
+                return el && el.getAttribute('data-ready') === '1'
+            }).catch(() => false)
+            const hasPdfReadyFallback = await page.evaluate(() => !!document.getElementById('pdf-ready')).catch(() => false)
             const hasCoverPage = await page.evaluate(() => !!document.querySelector('.cover-page')).catch(() => false)
             
-            if (!hasReportReady && !hasPdfReady && !hasCoverPage) {
+            if (!hasReportReady && !hasPdfReady && !hasPdfReadyFallback && !hasCoverPage) {
                 // Log page content snippet for debugging
                 const pageTitle = await page.title().catch(() => 'Could not get title')
                 const bodyText = await page.evaluate(() => document.body?.textContent?.substring(0, 500) || 'No body').catch(() => 'Could not get body')
                 console.error(`[${logRequestId}][stage] render_html_failed no_ready_marker`)
                 console.error(`[${logRequestId}] Page title: ${pageTitle}`)
                 console.error(`[${logRequestId}] Body text snippet: ${bodyText}`)
-                throw new Error(`[stage=render_html] No ready marker found ([data-report-ready], #pdf-ready, or .cover-page). Page may not have loaded correctly. Title: ${pageTitle}`)
+                throw new Error(`[stage=render_html] No ready marker found (#pdf-ready[data-ready="1"], [data-report-ready], or .cover-page). Page may not have loaded correctly. Title: ${pageTitle}`)
+            } else {
+                console.warn(`[${logRequestId}] Ready marker check failed but fallback markers found - proceeding`)
             }
         }
 

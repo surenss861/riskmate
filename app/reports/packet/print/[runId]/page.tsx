@@ -474,9 +474,13 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
                 .filter((rendered) => rendered !== null)}
             </div>
 
-            {/* PDF Ready Marker */}
-            <div id="pdf-ready" style={{ display: 'none' }} />
-            <div data-report-ready="true" style={{ display: 'none' }} aria-hidden="true" />
+            {/* PDF Ready Marker - Only render when packet data is ready (not in error state) */}
+            {packetData && !packetBuildError && (
+              <>
+                <div id="pdf-ready" data-ready="1" style={{ display: 'none' }} aria-hidden="true" />
+                <div data-report-ready="true" style={{ display: 'none' }} aria-hidden="true" />
+              </>
+            )}
           </div>
         </body>
       </html>
