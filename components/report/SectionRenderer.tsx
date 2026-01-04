@@ -26,6 +26,7 @@ import {
   AccountabilityTimelineSection,
   ChecklistCompletionSection,
 } from './sections'
+import { EmptySection } from './sections/EmptySection'
 
 interface SectionRendererProps {
   section: SectionData
@@ -195,8 +196,19 @@ export function SectionRenderer({ section }: SectionRendererProps) {
       )
 
     default:
-      console.warn(`[SectionRenderer] Unknown section type: ${section.type}`)
-      return null
+      // Universal fallback: render EmptySection for unknown types
+      // This ensures TOC matches content and unknown types still render
+      console.warn(`[SectionRenderer] Unknown section type: ${section.type} - rendering EmptySection`)
+      return (
+        <div className="page">
+          <EmptySection
+            title={section.meta?.title || humanize(section.type)}
+            description={section.meta?.emptyMessage || `Section type "${section.type}" is not yet fully implemented.`}
+            whatThisProves="This section is included in the packet structure but data collection is pending."
+            howToSatisfy="This section will be populated when the corresponding data sources are implemented."
+          />
+        </div>
+      )
   }
 }
 
