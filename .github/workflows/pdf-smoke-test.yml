@@ -62,13 +62,13 @@ jobs:
       matrix:
         include:
           - packet: AUDIT
-            url: ${{ secrets.PDF_TEST_URL_AUDIT }}
+            url_secret: PDF_TEST_URL_AUDIT
           - packet: INCIDENT
-            url: ${{ secrets.PDF_TEST_URL_INCIDENT }}
+            url_secret: PDF_TEST_URL_INCIDENT
           - packet: COMPLIANCE
-            url: ${{ secrets.PDF_TEST_URL_COMPLIANCE }}
+            url_secret: PDF_TEST_URL_COMPLIANCE
           - packet: INSURANCE
-            url: ${{ secrets.PDF_TEST_URL_INSURANCE }}
+            url_secret: PDF_TEST_URL_INSURANCE
 
     steps:
       - uses: actions/checkout@v4
@@ -99,14 +99,22 @@ jobs:
 
       - name: Generate CI print token (if needed)
         id: generate_token
-        if: secrets.PDF_TEST_TOKEN == '' && secrets.SUPABASE_SERVICE_ROLE_KEY != ''
         env:
+          PDF_TEST_TOKEN: ${{ secrets.PDF_TEST_TOKEN }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           CI_JOB_ID: 'ci-${{ matrix.packet }}-test-job'
           CI_ORG_ID: 'ci-test-org'
           CI_RUN_ID: 'ci-${{ matrix.packet }}-test-run'
           TOKEN_EXPIRY_DAYS: '7'
         run: |
+          if [ -n "$PDF_TEST_TOKEN" ]; then
+            echo "✅ Using PDF_TEST_TOKEN secret (skipping generation)"
+            exit 0
+          fi
+          if [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "::error::No token available: PDF_TEST_TOKEN not set and SUPABASE_SERVICE_ROLE_KEY not available"
+            exit 1
+          fi
           TOKEN=$(node scripts/generate-ci-print-token.ts 2>&1 | grep -A 1 "Generated CI print token" | tail -1 | tr -d '[:space:]')
           echo "::add-mask::$TOKEN"
           echo "PRINT_TOKEN=${TOKEN}" >> $GITHUB_ENV
@@ -114,11 +122,22 @@ jobs:
 
       - name: Run PDF smoke test (${{ matrix.packet }})
         env:
-          PDF_TEST_TOKEN: ${{ secrets.PDF_TEST_TOKEN || env.PRINT_TOKEN }}
-          PDF_PACKET_TYPE: ${{ matrix.packet }}
-          PDF_URL: ${{ matrix.url }}
+          PDF_TEST_URL_AUDIT: ${{ secrets.PDF_TEST_URL_AUDIT }}
+          PDF_TEST_URL_INCIDENT: ${{ secrets.PDF_TEST_URL_INCIDENT }}
+          PDF_TEST_URL_COMPLIANCE: ${{ secrets.PDF_TEST_URL_COMPLIANCE }}
+          PDF_TEST_URL_INSURANCE: ${{ secrets.PDF_TEST_URL_INSURANCE }}
+          PDF_TEST_TOKEN: ${{ secrets.PDF_TEST_TOKEN }}
           PRINT_TOKEN: ${{ secrets.PDF_TEST_TOKEN || env.PRINT_TOKEN }}
         run: |
+          # Get URL from secret based on matrix.packet
+          case "${{ matrix.packet }}" in
+            AUDIT) PDF_URL="$PDF_TEST_URL_AUDIT" ;;
+            INCIDENT) PDF_URL="$PDF_TEST_URL_INCIDENT" ;;
+            COMPLIANCE) PDF_URL="$PDF_TEST_URL_COMPLIANCE" ;;
+            INSURANCE) PDF_URL="$PDF_TEST_URL_INSURANCE" ;;
+            *) echo "::error::Unknown packet type: ${{ matrix.packet }}"; exit 1 ;;
+          esac
+          
           if [ -z "$PDF_URL" ]; then
             echo "::error::PDF_URL is empty for ${{ matrix.packet }}"
             exit 1
