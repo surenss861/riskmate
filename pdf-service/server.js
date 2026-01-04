@@ -113,16 +113,35 @@ app.post('/generate', authenticate, async (req, res) => {
       throw new Error(`Page redirected to login: ${finalUrl}`)
     }
 
-    // Wait for ready marker
+    // Wait for ready marker (CRITICAL: ensures packet data is fully loaded before PDF generation)
     try {
+      // Primary: wait for #pdf-ready with data-ready="1" attribute (most reliable)
       await Promise.race([
+        page.waitForSelector('#pdf-ready[data-ready="1"]', { timeout: 30000 }),
         page.waitForSelector('[data-report-ready="true"]', { timeout: 30000 }),
         page.waitForSelector('#pdf-ready', { timeout: 30000 }),
         page.waitForSelector('.cover-page', { timeout: 30000 }),
       ])
+      console.log(`[${logRequestId}][stage] render_html_ok: Page ready marker found`)
     } catch (selectorError) {
-      // Continue anyway if marker not found
-      console.warn(`[${logRequestId}] Ready marker not found, proceeding`)
+      // Check if any fallback markers exist
+      const hasPdfReady = await page.evaluate(() => {
+        const el = document.getElementById('pdf-ready')
+        return el && el.getAttribute('data-ready') === '1'
+      }).catch(() => false)
+      const hasReportReady = await page.evaluate(() => !!document.querySelector('[data-report-ready="true"]')).catch(() => false)
+      const hasCoverPage = await page.evaluate(() => !!document.querySelector('.cover-page')).catch(() => false)
+      
+      if (!hasPdfReady && !hasReportReady && !hasCoverPage) {
+        const pageTitle = await page.title().catch(() => 'Could not get title')
+        const bodyText = await page.evaluate(() => document.body?.textContent?.substring(0, 500) || 'No body').catch(() => 'Could not get body')
+        console.error(`[${logRequestId}][stage] render_html_failed no_ready_marker`)
+        console.error(`[${logRequestId}] Page title: ${pageTitle}`)
+        console.error(`[${logRequestId}] Body text snippet: ${bodyText}`)
+        throw new Error(`[stage=render_html] No ready marker found (#pdf-ready[data-ready="1"], [data-report-ready], or .cover-page). Page may not have loaded correctly. Title: ${pageTitle}`)
+      } else {
+        console.warn(`[${logRequestId}] Ready marker check failed but fallback markers found - proceeding`)
+      }
     }
 
     // Wait for fonts
