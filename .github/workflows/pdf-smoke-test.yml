@@ -69,8 +69,8 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Generate CI print token
-        id: generate_token
-        if: github.event.inputs.print_token == '' && secrets.PDF_TEST_TOKEN == ''
+        id: generate_token_manual
+        if: github.event.inputs.print_token == ''
         env:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           CI_JOB_ID: 'ci-manual-test-job'
@@ -78,9 +78,14 @@ jobs:
           CI_RUN_ID: 'ci-manual-test-run'
           TOKEN_EXPIRY_DAYS: '7'
         run: |
-          TOKEN=$(node scripts/generate-ci-print-token.ts 2>&1 | grep -A 1 "Generated CI print token" | tail -1 | tr -d '[:space:]')
-          echo "PRINT_TOKEN=${TOKEN}" >> $GITHUB_ENV
-          echo "✅ Generated token for CI (valid 7 days)"
+          if [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "⚠️  SUPABASE_SERVICE_ROLE_KEY not set - skipping token generation"
+            echo "   Will use PDF_TEST_TOKEN secret if available"
+          else
+            TOKEN=$(node scripts/generate-ci-print-token.ts 2>&1 | grep -A 1 "Generated CI print token" | tail -1 | tr -d '[:space:]')
+            echo "PRINT_TOKEN=${TOKEN}" >> $GITHUB_ENV
+            echo "✅ Generated token for CI (valid 7 days)"
+          fi
 
       - name: Run smoke test (manual URL)
         env:
@@ -219,8 +224,8 @@ jobs:
           echo "      (requires SUPABASE_SERVICE_ROLE_KEY secret to be set)"
 
       - name: Generate CI print token
-        id: generate_token
-        if: steps.secrets_check.outputs.skip == 'false' && secrets.PDF_TEST_TOKEN == ''
+        id: generate_token_matrix
+        if: steps.secrets_check.outputs.skip == 'false'
         env:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           CI_JOB_ID: 'ci-${{ matrix.packet.label }}-test-job'
