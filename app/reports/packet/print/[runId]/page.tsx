@@ -392,22 +392,36 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
     }
     
     // Update integrity_verification section with actual data (non-fatal)
-    const sectionsWithIntegrity = (packetData?.sections || []).map((section) => {
+    // SAFE: Normalize sections array and ensure all properties are safe
+    const safeSections = Array.isArray(packetData?.sections) ? packetData.sections : []
+    const sectionsWithIntegrity = safeSections.map((section) => {
+      if (!section) return null
       if (section.type === 'integrity_verification') {
         return {
           ...section,
           data: {
-            ...section.data,
-            reportRunId: runId,
-            documentHash,
-            generatedAt: reportRun.generated_at || packetData?.meta?.generatedAt || new Date().toISOString(),
+            ...(section.data || {}),
+            reportRunId: safeRunId,
+            documentHash: safeStr(documentHash),
+            generatedAt: safeGeneratedAt,
             verificationUrl: verificationUrl || undefined,
             qrCodeDataUrl: qrCodeDataUrl || undefined,
           },
+          meta: {
+            ...(section.meta || {}),
+            title: safeStr(section.meta?.title || section.type, humanize(section.type || 'Section')),
+          },
         }
       }
-      return section
-    })
+      // Ensure all sections have safe meta.title
+      return {
+        ...section,
+        meta: {
+          ...(section.meta || {}),
+          title: safeStr(section.meta?.title || section.type, humanize(section.type || 'Section')),
+        },
+      }
+    }).filter((s): s is NonNullable<typeof s> => s !== null)
     
     const finalPacketData = {
       ...packetData,
@@ -1028,3 +1042,4 @@ function getPrintStyles(): string {
     }
   `
 }
+
