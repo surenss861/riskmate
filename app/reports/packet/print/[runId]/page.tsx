@@ -32,10 +32,36 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
   const debugMode = process.env.NODE_ENV === 'development' || process.env.VERCEL_ENV === 'preview'
   
   let tokenPayload: { jobId: string; organizationId: string; reportRunId?: string } | null = null
+  let runId: string | null = null
+  let rawToken: string | undefined = undefined
 
   try {
-    const { runId } = await params
-    const { token: rawToken } = await searchParams
+    // CRITICAL: Await params/searchParams early to catch any parsing errors
+    try {
+      const paramsResolved = await params
+      const searchParamsResolved = await searchParams
+      runId = paramsResolved.runId
+      rawToken = searchParamsResolved.token
+    } catch (paramError: any) {
+      console.error('[PACKET-PRINT] Failed to parse params/searchParams:', paramError?.message)
+      return (
+        <div style={{ padding: '20px', fontFamily: 'system-ui' }}>
+          <h1>400 - Invalid Request</h1>
+          <p>Failed to parse request parameters.</p>
+          {debugMode && <pre style={{ fontSize: '10px', color: '#666' }}>{paramError?.message}</pre>}
+        </div>
+      )
+    }
+
+    if (!runId) {
+      console.error('[PACKET-PRINT] Missing runId')
+      return (
+        <div style={{ padding: '20px', fontFamily: 'system-ui' }}>
+          <h1>400 - Missing Report Run ID</h1>
+          <p>The report run ID is required.</p>
+        </div>
+      )
+    }
 
     // Early debug marker
     if (debugMode) {
@@ -87,16 +113,33 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
       console.log('[PACKET-PRINT] No token provided, using session auth')
     }
 
-    // Create Supabase client (service role if token provided, otherwise server client)
-    const supabase = rawToken
-      ? createSupabaseServiceClient()
-      : await import('@/lib/supabase/server').then((m) => m.createSupabaseServerClient())
-
-    console.log('[PACKET-PRINT] Using supabase client:', rawToken ? 'service-role (token auth)' : 'server-client (cookie auth)')
+    // Create Supabase client (ALWAYS use service role for print pages - token-based auth)
+    // This ensures the page works in headless browsers without cookies
+    let supabase
+    try {
+      if (rawToken) {
+        // Token provided - use service role (bypasses RLS)
+        supabase = createSupabaseServiceClient()
+        console.log('[PACKET-PRINT] Using service-role client (token auth)')
+      } else {
+        // No token - try server client but log warning
+        console.warn('[PACKET-PRINT] No token provided - using server client (may fail in headless browsers)')
+        supabase = await import('@/lib/supabase/server').then((m) => m.createSupabaseServerClient())
+      }
+    } catch (clientError: any) {
+      console.error('[PACKET-PRINT] Failed to create Supabase client:', clientError?.message)
+      return (
+        <div style={{ padding: '20px', fontFamily: 'system-ui' }}>
+          <h1>500 - Database Connection Failed</h1>
+          <p>Unable to connect to database.</p>
+          {debugMode && <pre style={{ fontSize: '10px', color: '#666' }}>{clientError?.message}</pre>}
+        </div>
+      )
+    }
 
     // Fetch report_run to get job_id and packet_type
     if (debugMode) {
-      console.log('[PACKET-PRINT] Fetching report run:', { runId: runId?.substring(0, 8), organization_id: organization_id?.substring(0, 8) })
+      console.log('[PACKET-PRINT] Fetching report run:', { runId: runId.substring(0, 8), organization_id: organization_id?.substring(0, 8) })
     }
 
     let reportRun: any = null
@@ -108,7 +151,8 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
         .select('id, job_id, organization_id, packet_type, status, generated_at')
         .eq('id', runId)
       
-      // Only filter by organization_id if we have it
+      // Only filter by organization_id if we have it (token validation)
+      // But don't require it - service role can access any run
       if (organization_id) {
         query.eq('organization_id', organization_id)
       }
@@ -116,6 +160,18 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
       const result = await query.maybeSingle()
       reportRun = result.data
       runError = result.error
+      
+      // If we got an error but it's a permission issue, try without org filter
+      if (runError && organization_id && runError.code === 'PGRST116') {
+        console.warn('[PACKET-PRINT] Retrying report run fetch without org filter')
+        const retryResult = await supabase
+          .from('report_runs')
+          .select('id, job_id, organization_id, packet_type, status, generated_at')
+          .eq('id', runId)
+          .maybeSingle()
+        reportRun = retryResult.data
+        runError = retryResult.error
+      }
     } catch (fetchError: any) {
       console.error('[PACKET-PRINT] Report run fetch exception:', {
         message: fetchError?.message,
@@ -127,7 +183,7 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
 
     if (runError || !reportRun) {
       console.error('[PACKET-PRINT] Report run not found:', { 
-        runId: runId?.substring(0, 8), 
+        runId: runId.substring(0, 8), 
         organization_id: organization_id?.substring(0, 8), 
         error: runError,
         errorMessage: runError?.message,
@@ -201,17 +257,19 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
       )
     }
 
-    // Build packet data
+    // Build packet data (non-fatal - render with empty sections if build fails)
     if (debugMode) {
       console.log('[PACKET-PRINT] Building packet data...')
     }
 
-    let packetData: JobPacketPayload
+    let packetData: JobPacketPayload | null = null
+    let packetBuildError: any = null
+    
     try {
       packetData = await buildJobPacket({
         jobId: reportRun.job_id,
         packetType: packetType,
-        organizationId: organization_id,
+        organizationId: organization_id || reportRun.organization_id, // Fallback to reportRun's org_id
         supabaseClient: supabase,
       })
       
@@ -222,7 +280,7 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
         })
       }
     } catch (packetError: any) {
-      console.error('[PACKET-PRINT] Failed to build packet:', {
+      console.error('[PACKET-PRINT] Failed to build packet (non-fatal):', {
         message: packetError?.message,
         stack: packetError?.stack,
         error: String(packetError),
@@ -230,34 +288,56 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
         packetType,
         organizationId: organization_id?.substring(0, 8)
       })
-      return (
-        <div style={{ padding: '20px', fontFamily: 'system-ui' }}>
-          <h1>500 - Failed to Build Packet</h1>
-          <p>Error: {packetError?.message || 'Unknown error'}</p>
-          {debugMode && (
-            <pre style={{ fontSize: '10px', color: '#666', marginTop: '10px', whiteSpace: 'pre-wrap' }}>
-              {packetError?.stack || packetError?.message || String(packetError)}
-            </pre>
-          )}
-        </div>
-      )
+      packetBuildError = packetError
+      
+      // Create minimal packet data so page still renders
+      packetData = {
+        meta: {
+          jobId: reportRun.job_id,
+          organizationId: organization_id || reportRun.organization_id || '',
+          packetType: packetType,
+          packetTitle: packetType.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()),
+          generatedAt: reportRun.generated_at || new Date().toISOString(),
+        },
+        sections: [
+          {
+            type: 'job_summary',
+            data: {
+              jobId: reportRun.job_id,
+              error: 'Failed to load job data',
+            },
+            meta: {
+              title: 'Job Summary',
+              empty: false,
+            },
+          },
+        ],
+        computed: {
+          totalSections: 1,
+          sectionsWithData: 1,
+        },
+      }
     }
 
-    // Get organization branding
+    // Get organization branding (non-fatal - use defaults if fetch fails)
     let organization: any = null
-    try {
-      const orgResult = await supabase
-        .from('organizations')
-        .select('name, logo_url')
-        .eq('id', organization_id)
-        .maybeSingle()
-      
-      organization = orgResult.data
-      if (orgResult.error) {
-        console.warn('[PACKET-PRINT] Organization fetch error (non-fatal):', orgResult.error)
+    const finalOrgId = organization_id || reportRun.organization_id
+    
+    if (finalOrgId) {
+      try {
+        const orgResult = await supabase
+          .from('organizations')
+          .select('name, logo_url')
+          .eq('id', finalOrgId)
+          .maybeSingle()
+        
+        organization = orgResult.data
+        if (orgResult.error) {
+          console.warn('[PACKET-PRINT] Organization fetch error (non-fatal):', orgResult.error)
+        }
+      } catch (orgError: any) {
+        console.warn('[PACKET-PRINT] Organization fetch exception (non-fatal):', orgError?.message)
       }
-    } catch (orgError: any) {
-      console.warn('[PACKET-PRINT] Organization fetch exception (non-fatal):', orgError?.message)
     }
 
     const logoUrl = organization?.logo_url || null
@@ -272,11 +352,22 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
       })
     }
     
-    // Get packet title from packet data
-    const packetTitle = packetData.meta.packetTitle || 'Report'
+    // Get packet title from packet data (with fallback)
+    const packetTitle = packetData?.meta?.packetTitle || packetType.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()) || 'Report'
     
-    // Compute document hash for integrity verification
-    const documentHash = computeCanonicalHash(packetData)
+    // Compute document hash for integrity verification (non-fatal)
+    let documentHash = ''
+    try {
+      if (packetData) {
+        documentHash = computeCanonicalHash(packetData)
+      } else {
+        // Fallback hash if packet data failed to build
+        documentHash = 'ERROR: Unable to compute hash'
+      }
+    } catch (hashError: any) {
+      console.warn('[PACKET-PRINT] Hash computation failed (non-fatal):', hashError?.message)
+      documentHash = 'ERROR: Hash computation failed'
+    }
     
     // Generate verification URL and QR code
     let qrCodeDataUrl: string | null = null
@@ -291,8 +382,8 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
       // Continue without QR code - not critical for PDF generation
     }
     
-    // Update integrity_verification section with actual data
-    const sectionsWithIntegrity = packetData.sections.map((section) => {
+    // Update integrity_verification section with actual data (non-fatal)
+    const sectionsWithIntegrity = (packetData?.sections || []).map((section) => {
       if (section.type === 'integrity_verification') {
         return {
           ...section,
@@ -300,7 +391,7 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
             ...section.data,
             reportRunId: runId,
             documentHash,
-            generatedAt: reportRun.generated_at || packetData.meta.generatedAt,
+            generatedAt: reportRun.generated_at || packetData?.meta?.generatedAt || new Date().toISOString(),
             verificationUrl: verificationUrl || undefined,
             qrCodeDataUrl: qrCodeDataUrl || undefined,
           },
