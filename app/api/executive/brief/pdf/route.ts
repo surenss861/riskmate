@@ -69,7 +69,10 @@ export async function POST(request: NextRequest) {
     // Generate PDF using PDFKit (ensures valid PDF bytes)
     const pdfBuffer = await buildPdfBuffer()
 
-    return new NextResponse(pdfBuffer, {
+    // Convert Buffer to Uint8Array for NextResponse (TypeScript compatibility)
+    const pdfBytes = new Uint8Array(pdfBuffer)
+
+    return new NextResponse(pdfBytes, {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',
