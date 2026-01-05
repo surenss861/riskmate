@@ -149,7 +149,7 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
     try {
       const query = supabase
         .from('report_runs')
-        .select('id, job_id, organization_id, packet_type, status, generated_at')
+        .select('id, job_id, organization_id, packet_type, status, generated_at, data_hash')
         .eq('id', runId)
       
       // Only filter by organization_id if we have it (token validation)
