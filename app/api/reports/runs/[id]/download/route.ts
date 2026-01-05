@@ -56,11 +56,11 @@ export async function GET(
       )
     }
 
-    // For final reports, serve the stored artifact only (frozen)
-    if (reportRun.status === 'final') {
+    // For final/complete reports, serve the stored artifact only (frozen)
+    if (reportRun.status === 'final' || reportRun.status === 'complete') {
       if (!reportRun.pdf_path) {
         return NextResponse.json(
-          { message: 'Final PDF not yet generated. Please contact support.' },
+          { message: 'PDF not yet generated. Please contact support.' },
           { status: 404 }
         )
       }
@@ -87,7 +87,7 @@ export async function GET(
           'Content-Type': 'application/pdf',
           'Content-Disposition': `attachment; filename="riskmate-report-${reportRunId.substring(0, 8)}.pdf"`,
           'X-Report-Run-ID': reportRunId,
-          'X-Report-Status': 'final',
+          'X-Report-Status': reportRun.status,
         },
       })
     }

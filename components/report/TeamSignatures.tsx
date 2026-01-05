@@ -420,7 +420,7 @@ export function TeamSignatures({
                 <Button
                   variant="primary"
                   onClick={onExport || (() => {
-                    window.location.href = `/api/reports/generate/${jobId}?runId=${reportRunId}`
+                    window.location.href = `/api/reports/runs/${reportRunId}/download`
                   })}
                 >
                   {reportRun?.status === 'complete' || reportRun?.status === 'final' 
@@ -437,7 +437,16 @@ export function TeamSignatures({
                   {creatingReportRun ? 'Creating...' : 'Generate Report Run'}
                 </Button>
               )}
-              {reportRunId && reportRun?.status !== 'superseded' && (
+              {reportRunId && (reportRun?.status !== 'superseded' && reportRun?.status !== 'complete' && reportRun?.status !== 'final') && (
+                <Button
+                  variant="secondary"
+                  onClick={handleCreateReportRun}
+                  disabled={creatingReportRun}
+                >
+                  {creatingReportRun ? 'Creating...' : 'Create New Run'}
+                </Button>
+              )}
+              {(reportRun?.status === 'complete' || reportRun?.status === 'final') && (
                 <Button
                   variant="secondary"
                   onClick={handleCreateReportRun}

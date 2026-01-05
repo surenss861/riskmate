@@ -1,6 +1,7 @@
 'use client'
 
-import { X } from 'lucide-react'
+import { useState } from 'react'
+import { X, ChevronDown, ChevronUp } from 'lucide-react'
 import { formatPdfTimestamp } from '@/lib/utils/pdfFormatUtils'
 import { Button } from '@/components/shared'
 
@@ -40,7 +41,9 @@ export function SignatureDetailsModal({
   reportRun,
   onClose,
 }: SignatureDetailsModalProps) {
+  const [showDeviceInfo, setShowDeviceInfo] = useState(false)
   const attestationText = 'I attest this report is accurate to the best of my knowledge.'
+  const hasDeviceInfo = !!(signature.ip_address || signature.user_agent)
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
@@ -121,23 +124,47 @@ export function SignatureDetailsModal({
             </div>
           </div>
 
-          {/* Audit Trail (Optional) */}
-          {(signature.ip_address || signature.user_agent) && (
-            <div className="border-t border-white/10 pt-4">
-              <div className="text-sm text-white/60 font-medium mb-2">Audit Trail</div>
-              {signature.ip_address && (
-                <div className="text-xs text-white/50 mb-1">
-                  IP Address: {signature.ip_address}
-                </div>
+          {/* Device & Network Information (Collapsible) */}
+          <div className="border-t border-white/10 pt-4">
+            <button
+              onClick={() => setShowDeviceInfo(!showDeviceInfo)}
+              className="flex items-center justify-between w-full text-left"
+            >
+              <div className="text-sm text-white/60 font-medium">Device & Network Information</div>
+              {hasDeviceInfo ? (
+                showDeviceInfo ? (
+                  <ChevronUp className="w-4 h-4 text-white/60" />
+                ) : (
+                  <ChevronDown className="w-4 h-4 text-white/60" />
+                )
+              ) : (
+                <span className="text-xs text-white/40">Not captured</span>
               )}
-              {signature.user_agent && (
-                <div className="text-xs text-white/50 break-all">
-                  User Agent: {signature.user_agent.substring(0, 100)}
-                  {signature.user_agent.length > 100 && '...'}
-                </div>
-              )}
-            </div>
-          )}
+            </button>
+            {showDeviceInfo && hasDeviceInfo && (
+              <div className="mt-3 space-y-2">
+                {signature.ip_address ? (
+                  <div className="text-xs text-white/50">
+                    IP Address: <span className="text-white/70 font-mono">{signature.ip_address}</span>
+                  </div>
+                ) : (
+                  <div className="text-xs text-white/50">IP Address: <span className="text-white/40 italic">Not captured</span></div>
+                )}
+                {signature.user_agent ? (
+                  <div className="text-xs text-white/50 break-all">
+                    User Agent: <span className="text-white/70">{signature.user_agent.substring(0, 150)}{signature.user_agent.length > 150 ? '...' : ''}</span>
+                  </div>
+                ) : (
+                  <div className="text-xs text-white/50">User Agent: <span className="text-white/40 italic">Not captured</span></div>
+                )}
+              </div>
+            )}
+            {showDeviceInfo && !hasDeviceInfo && (
+              <div className="mt-3 text-xs text-white/40 italic">
+                Device and network information was not captured for this signature.
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Footer */}
@@ -150,4 +177,3 @@ export function SignatureDetailsModal({
     </div>
   )
 }
-
