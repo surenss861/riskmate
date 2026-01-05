@@ -25,6 +25,7 @@ interface SignatureProofSectionProps {
     signatures: Signature[]
     isDraft?: boolean
     requiredRoles?: string[]
+    pdfGeneratedAt?: string
   }
 }
 
@@ -36,7 +37,7 @@ const ROLE_LABELS: Record<string, string> = {
 }
 
 export function SignatureProofSection({ data }: SignatureProofSectionProps) {
-  const { reportRunId, reportRunHash, reportRunCreatedAt, signatures, isDraft = false, requiredRoles = [] } = data
+  const { reportRunId, reportRunHash, reportRunCreatedAt, signatures, isDraft = false, requiredRoles = [], pdfGeneratedAt } = data
   
   const signedCount = signatures.length
   const totalRequired = requiredRoles.length || 3 // Default to 3 if not provided
