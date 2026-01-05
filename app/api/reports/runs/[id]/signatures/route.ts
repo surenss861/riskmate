@@ -330,7 +330,6 @@ export async function GET(
     }
 
     console.log(`[reports/runs/signatures] Successfully fetched ${signatures?.length || 0} signatures for run ${reportRunId}`)
-    console.log(`[reports/runs/signatures] Successfully fetched ${signatures?.length || 0} signatures for run ${reportRunId}`)
     return NextResponse.json({ data: signatures || [] })
   } catch (error: any) {
     console.error('[reports/runs/signatures] Unexpected error:', {
