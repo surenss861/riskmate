@@ -106,6 +106,22 @@ function getExposureColor(level: string): string {
 }
 
 /**
+ * Helper: Check if we need a new page and add one if needed
+ */
+function ensureSpace(
+  doc: PDFKit.PDFDocument,
+  needed: number,
+  margin: number
+): void {
+  const pageBottom = doc.page.height - 60 // bottom margin
+  if (doc.y + needed > pageBottom) {
+    doc.addPage()
+    // Reset to top of content area after page break
+    doc.y = STYLES.spacing.margin
+  }
+}
+
+/**
  * Render KPI strip (key metrics at top of page)
  */
 function renderKPIStrip(
@@ -400,6 +416,7 @@ function renderTopDrivers(
     .fillColor(STYLES.colors.primaryText)
 
   drivers.forEach((driver) => {
+    ensureSpace(doc, 20, margin)
     doc.text(`• ${driver.label} (${driver.count})`, {
       indent: 20,
       width: pageWidth - margin * 2 - 20,
