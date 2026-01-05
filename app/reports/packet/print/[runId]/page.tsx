@@ -167,7 +167,7 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
         console.warn('[PACKET-PRINT] Retrying report run fetch without org filter')
         const retryResult = await supabase
           .from('report_runs')
-          .select('id, job_id, organization_id, packet_type, status, generated_at')
+          .select('id, job_id, organization_id, packet_type, status, generated_at, data_hash')
           .eq('id', runId)
           .maybeSingle()
         reportRun = retryResult.data
