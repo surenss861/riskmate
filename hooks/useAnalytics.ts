@@ -98,11 +98,58 @@ export function useAnalytics(options: UseAnalyticsOptions = {}): UseAnalyticsRes
       return;
     }
 
-    const interval = setInterval(() => {
-      fetchData().catch(() => null);
-    }, refreshIntervalMs);
+    let interval: NodeJS.Timeout | null = null;
+    let stopped = false;
 
-    return () => clearInterval(interval);
+    const run = async () => {
+      if (stopped || document.visibilityState !== 'visible') return;
+      try {
+        await fetchData();
+      } catch (e) {
+        // Stop polling on network errors to prevent spam
+        if (!stopped && interval) {
+          clearInterval(interval);
+          interval = null;
+        }
+      }
+    };
+
+    const start = () => {
+      if (interval || stopped) return;
+      run(); // Run immediately
+      interval = setInterval(run, refreshIntervalMs);
+    };
+
+    const stop = () => {
+      if (interval) {
+        clearInterval(interval);
+        interval = null;
+      }
+    };
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        start();
+      } else {
+        stop();
+      }
+    };
+
+    const onOnline = () => {
+      if (!stopped) start();
+    };
+
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('online', onOnline);
+
+    start();
+
+    return () => {
+      stopped = true;
+      stop();
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('online', onOnline);
+    };
   }, [fetchData, refreshIntervalMs, enabled]);
 
   const resultData = useMemo(() => {

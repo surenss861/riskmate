@@ -90,7 +90,10 @@ export function KpiTile({
       <div className="text-xs uppercase tracking-wider text-white/50 mb-2">{title}</div>
       
       <div className="mt-2 flex items-baseline gap-2">
-        <span className="text-3xl font-bold font-display text-white">
+        <span 
+          className="text-3xl font-bold font-display text-white tabular-nums"
+          style={{ fontVariantNumeric: 'tabular-nums slashed-zero' }}
+        >
           {prefix}
           {isLoading ? '—' : displayValue}
           {suffix}
