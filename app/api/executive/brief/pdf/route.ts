@@ -531,18 +531,19 @@ async function buildExecutiveBriefPDF(
     })
 
     const chunks: Buffer[] = []
+    const generatedAt = new Date()
+    const reportId = crypto.randomBytes(16).toString('hex')
+    
     doc.on('data', (chunk) => chunks.push(chunk))
-    doc      .on('end', () => {
-        const buffer = Buffer.concat(chunks)
-        const hash = crypto.createHash('sha256').update(buffer).digest('hex')
-        resolve({ buffer, hash, reportId })
-      })
+    doc.on('end', () => {
+      const buffer = Buffer.concat(chunks)
+      const hash = crypto.createHash('sha256').update(buffer).digest('hex')
+      resolve({ buffer, hash, reportId })
+    })
     doc.on('error', reject)
 
     const pageWidth = doc.page.width
     const margin = STYLES.spacing.margin
-    const generatedAt = new Date()
-    const reportId = crypto.randomBytes(16).toString('hex')
 
     // Cover/Header Block
     doc
