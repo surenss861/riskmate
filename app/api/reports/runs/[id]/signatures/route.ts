@@ -285,23 +285,30 @@ export async function GET(
       )
     }
 
-    // Get signatures (non-revoked only) with signer emails
+    // Get signatures (non-revoked only)
+    // Note: We use stored signer data (name/email/title) for audit integrity
+    // This ensures signatures include the identity snapshot at sign-time
     const { data: signatures, error } = await supabase
       .from('report_signatures')
       .select(`
-        *,
-        signer_user:users!signer_user_id(email)
+        id,
+        report_run_id,
+        signer_user_id,
+        signer_name,
+        signer_title,
+        signature_role,
+        signature_svg,
+        signed_at,
+        signature_hash,
+        ip_address,
+        user_agent,
+        attestation_text,
+        revoked_at,
+        created_at
       `)
       .eq('report_run_id', reportRunId)
       .is('revoked_at', null)
       .order('signed_at', { ascending: true })
-    
-    // Flatten the nested signer_user data
-    const signaturesWithEmail = (signatures || []).map((sig: any) => ({
-      ...sig,
-      signer_email: sig.signer_user?.email || null,
-      signer_user: undefined, // Remove nested object
-    }))
 
     if (error) {
       console.error('[reports/runs/signatures] Failed to fetch signatures:', error)
