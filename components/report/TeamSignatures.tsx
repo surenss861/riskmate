@@ -545,11 +545,12 @@ export function TeamSignatures({
 
                 {isSigned && signature ? (
                   <div className="space-y-2">
-                    <div
-                      className="border border-white/20 rounded p-2 bg-white/5"
-                      dangerouslySetInnerHTML={{ __html: signature.signature_svg }}
-                      style={{ maxHeight: '80px', overflow: 'hidden' }}
-                    />
+                    <div className="h-28 rounded-lg bg-white/95 overflow-hidden p-3 border border-white/20">
+                      <div
+                        className="w-full h-full text-black [&_svg]:w-full [&_svg]:h-full [&_svg]:block [&_svg]:max-w-full [&_svg]:max-h-full [&_path]:stroke-current [&_path]:fill-none [&_path]:stroke-2"
+                        dangerouslySetInnerHTML={{ __html: signature.signature_svg }}
+                      />
+                    </div>
                     <div className="text-sm text-white/90 font-medium">{signature.signer_name}</div>
                     <div className="text-xs text-white/60">{signature.signer_title}</div>
                     <div className="text-xs text-white/40">
