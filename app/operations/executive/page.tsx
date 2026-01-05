@@ -754,6 +754,7 @@ export default function ExecutiveSnapshotPage() {
                         
                         const response = await fetch('/api/executive/brief/pdf', {
                           method: 'POST',
+                          cache: 'no-store',
                           headers: {
                             'Content-Type': 'application/json',
                             ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }),
