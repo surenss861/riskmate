@@ -190,6 +190,8 @@ export async function POST(
     }
 
     // Create signature
+    // Store the exact attestation text for tamper-evident proof
+    const attestationText = 'I attest this report is accurate to the best of my knowledge.'
     const { data: signature, error: createError } = await supabase
       .from('report_signatures')
       .insert({
@@ -203,6 +205,7 @@ export async function POST(
         signature_hash: signatureHash,
         ip_address: ipAddress,
         user_agent: userAgent,
+        attestation_text: attestationText,
       })
       .select()
       .single()
