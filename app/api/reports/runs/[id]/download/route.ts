@@ -60,8 +60,13 @@ export async function GET(
     if (reportRun.status === 'final' || reportRun.status === 'complete') {
       if (!reportRun.pdf_path) {
         return NextResponse.json(
-          { message: 'PDF not yet generated. Please contact support.' },
-          { status: 404 }
+          { 
+            message: 'Final PDF is missing for this completed report run. This may indicate a storage or generation issue. Please contact support.',
+            error_code: 'FINAL_PDF_MISSING_FOR_COMPLETE_RUN',
+            report_run_id: reportRunId,
+            status: reportRun.status
+          },
+          { status: 500 }
         )
       }
 
