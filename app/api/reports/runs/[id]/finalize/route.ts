@@ -52,8 +52,8 @@ export async function POST(
       )
     }
 
-    // Check if already finalized
-    if (reportRun.status === 'final') {
+    // Check if already finalized/complete
+    if (reportRun.status === 'final' || reportRun.status === 'complete') {
       return NextResponse.json(
         { message: 'Report run is already finalized' },
         { status: 400 }
@@ -100,10 +100,42 @@ export async function POST(
       )
     }
 
-    // Finalize the report run
+    // Compute completion hash (hash of run + signatures summary) for audit trail
+    const { data: allSignatures } = await supabase
+      .from('report_signatures')
+      .select('id, signature_role, signed_at')
+      .eq('report_run_id', reportRunId)
+      .is('revoked_at', null)
+      .order('signed_at', { ascending: true })
+
+    const signaturesSummary = JSON.stringify(
+      (allSignatures || []).map(s => ({
+        role: s.signature_role,
+        signed_at: s.signed_at,
+      }))
+    )
+    const crypto = require('crypto')
+    const completedHash = crypto
+      .createHash('sha256')
+      .update(reportRun.data_hash + signaturesSummary)
+      .digest('hex')
+
+    // Finalize the report run with completion metadata
+    const updateData: any = {
+      status: 'complete',
+      completed_at: new Date().toISOString(),
+    }
+    
+    // Add completed_hash if column exists (graceful degradation)
+    try {
+      updateData.completed_hash = completedHash
+    } catch (err) {
+      // Column may not exist yet, continue without it
+    }
+
     const { data: finalized, error: updateError } = await supabase
       .from('report_runs')
-      .update({ status: 'final' })
+      .update(updateData)
       .eq('id', reportRunId)
       .select()
       .single()

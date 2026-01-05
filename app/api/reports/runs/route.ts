@@ -148,13 +148,20 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Get report runs
-    const { data: reportRuns, error } = await supabase
+    // Get report runs with limit support
+    const limit = parseInt(searchParams.get('limit') || '10', 10)
+    let query = supabase
       .from('report_runs')
       .select('*')
       .eq('job_id', jobId)
       .eq('organization_id', userData.organization_id)
       .order('generated_at', { ascending: false })
+    
+    if (limit > 0) {
+      query = query.limit(limit)
+    }
+    
+    const { data: reportRuns, error } = await query
 
     if (error) {
       console.error('[reports/runs] Failed to fetch report runs:', error)

@@ -32,6 +32,7 @@ export async function POST(
       signature_role,
       signature_svg,
       signer_user_id = user.id, // Default to current user
+      attestationAccepted = false, // Must be explicitly true
     } = body
 
     if (!signer_name || !signer_title || !signature_role || !signature_svg) {
@@ -48,6 +49,13 @@ export async function POST(
       )
     }
 
+    if (!attestationAccepted) {
+      return NextResponse.json(
+        { message: 'Attestation acceptance is required to sign' },
+        { status: 400 }
+      )
+    }
+
     // Validate SVG signature
     const svgValidation = validateSignatureSvg(signature_svg)
     if (!svgValidation.valid) {
@@ -60,7 +68,7 @@ export async function POST(
     // Get report run and verify access
     const { data: reportRun, error: runError } = await supabase
       .from('report_runs')
-      .select('organization_id, status')
+      .select('organization_id, status, data_hash')
       .eq('id', reportRunId)
       .single()
 
@@ -103,6 +111,14 @@ export async function POST(
       }
     }
 
+    // Block signing on superseded runs (always)
+    if (reportRun.status === 'superseded') {
+      return NextResponse.json(
+        { message: 'Cannot sign a superseded report run. Please create a new report run.' },
+        { status: 400 }
+      )
+    }
+
     // Check if report_run is finalized - block new signatures unless admin
     if (reportRun.status === 'final') {
       // Check if user is admin (for revocation flow)
@@ -125,15 +141,33 @@ export async function POST(
     // Use maybeSingle() since 0 rows is expected when no signature exists
     const { data: existing } = await supabase
       .from('report_signatures')
-      .select('id')
+      .select('id, signer_name, signed_at')
       .eq('report_run_id', reportRunId)
       .eq('signature_role', signature_role)
       .is('revoked_at', null)
       .maybeSingle()
 
     if (existing) {
+      const signedAt = existing.signed_at 
+        ? new Date(existing.signed_at).toLocaleString('en-US', { 
+            timeZone: 'America/New_York',
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true,
+            timeZoneName: 'short',
+          })
+        : 'previously'
       return NextResponse.json(
-        { message: 'A signature for this role already exists. Revoke it first if needed.' },
+        { 
+          message: `Already signed by ${existing.signer_name} at ${signedAt} ET. Refreshing...`,
+          existing_signature: {
+            signer_name: existing.signer_name,
+            signed_at: existing.signed_at,
+          }
+        },
         { status: 409 }
       )
     }

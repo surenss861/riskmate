@@ -92,6 +92,7 @@ export async function POST(
     const body = await request.json().catch(() => ({}))
     const rawPacketType = body.packetType
     const status = body.status || 'draft'
+    const skipPdfGeneration = body.skipPdfGeneration === true // If true, only create report run, don't generate PDF
 
     // STAGE: Validate packet type
     console.log(`[reports][${requestId}][stage] validate_packet_type_start`)
