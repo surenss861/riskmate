@@ -401,6 +401,7 @@ export function TeamSignatures({
     <>
       {toast && (
         <Toast
+          isOpen={true}
           message={toast.message}
           type={toast.type}
           onClose={() => setToast(null)}
@@ -559,7 +560,7 @@ export function TeamSignatures({
                     </div>
                     {!readOnly && reportRun && (
                       <Button
-                        variant="tertiary"
+                        variant="secondary"
                         size="sm"
                         onClick={() => setDetailsOpen(signature)}
                         className="w-full mt-2"
