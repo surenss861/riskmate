@@ -241,7 +241,7 @@ export function TeamSignatures({
     return { canSign: false, reason: 'Unknown role' }
   }
 
-  // Auto-create run and open sign modal
+  // Auto-create run and open sign modal (idempotent)
   const handleSignNowClick = async (role: 'prepared_by' | 'reviewed_by' | 'approved_by') => {
     const permission = canSignForRole(role)
     if (!permission.canSign) {
@@ -249,45 +249,33 @@ export function TeamSignatures({
       return
     }
 
-    // If no run exists, create one silently
+    // If no run exists, get or create one (idempotent)
     if (!reportRunId) {
       setCreatingReportRun(true)
       try {
-        const response = await fetch(`/api/reports/generate/${jobId}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            status: 'draft',
-            packetType: 'insurance',
-            skipPdfGeneration: true,
-          }),
+        // Use idempotent get-or-create endpoint
+        const response = await fetch(`/api/reports/runs/active?job_id=${jobId}&packet_type=insurance`, {
+          method: 'GET',
         })
 
         if (!response.ok) {
           const error = await response.json()
-          throw new Error(error.message || 'Failed to create report run')
+          throw new Error(error.message || 'Failed to get or create report run')
         }
 
-        const { data } = await response.json()
-        const newRunId = data.report_run_id || data.runId
+        const { data: runData } = await response.json()
         
-        if (newRunId) {
-          setReportRunId(newRunId)
+        if (runData?.id) {
+          setReportRunId(runData.id)
+          setReportRun(runData)
           if (onReportRunCreated) {
-            onReportRunCreated(newRunId)
+            onReportRunCreated(runData.id)
           }
-          
-          // Load run data
-          const runResponse = await fetch(`/api/reports/runs/${newRunId}`)
-          if (runResponse.ok) {
-            const { data: runData } = await runResponse.json()
-            setReportRun(runData)
-            // Open sign modal
-            setCaptureOpen({ role })
-          }
+          // Open sign modal
+          setCaptureOpen({ role })
         }
       } catch (error: any) {
-        setToast({ message: error.message || 'Failed to create report run', type: 'error' })
+        setToast({ message: error.message || 'Failed to get or create report run', type: 'error' })
       } finally {
         setCreatingReportRun(false)
       }
