@@ -330,11 +330,20 @@ export async function GET(
     }
 
     console.log(`[reports/runs/signatures] Successfully fetched ${signatures?.length || 0} signatures for run ${reportRunId}`)
+    console.log(`[reports/runs/signatures] Successfully fetched ${signatures?.length || 0} signatures for run ${reportRunId}`)
     return NextResponse.json({ data: signatures || [] })
   } catch (error: any) {
-    console.error('[reports/runs/signatures] Error:', error)
+    console.error('[reports/runs/signatures] Unexpected error:', {
+      message: error?.message,
+      stack: error?.stack,
+      name: error?.name,
+    })
     return NextResponse.json(
-      { message: 'Internal server error', detail: error?.message },
+      { 
+        message: 'Internal server error', 
+        detail: error?.message,
+        type: error?.name || 'UnknownError',
+      },
       { status: 500 }
     )
   }
