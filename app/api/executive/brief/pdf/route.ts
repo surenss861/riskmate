@@ -693,12 +693,16 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Get build SHA for tracking
+    const buildSha = process.env.VERCEL_GIT_COMMIT_SHA || process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA || undefined
+
     // Generate PDF
-    const { buffer, hash } = await buildExecutiveBriefPDF(
+    const { buffer, hash, reportId } = await buildExecutiveBriefPDF(
       riskPostureData,
       organizationName,
       user.email || `User ${user.id.substring(0, 8)}`,
-      timeRange
+      timeRange,
+      buildSha
     )
 
     // Convert Buffer to Uint8Array for NextResponse
