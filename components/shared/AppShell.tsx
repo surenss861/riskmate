@@ -14,7 +14,7 @@ type AppShellProps = {
  */
 export function AppShell({ children, className = '' }: AppShellProps) {
   return (
-    <div className={`relative mx-auto ${designTokens.spacing.pageContainer} ${designTokens.spacing.pagePaddingX} pt-12 pb-20 ${className}`}>
+    <div className={`relative mx-auto ${designTokens.spacing.pageContainer} ${designTokens.spacing.pagePaddingX} pt-24 pb-20 ${className}`}>
       {children}
     </div>
   )
