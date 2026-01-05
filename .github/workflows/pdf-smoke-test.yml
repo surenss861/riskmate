@@ -7,6 +7,17 @@ on:
         description: 'Optional token override (uses secrets if not provided)'
         required: false
         type: string
+  pull_request:
+    paths:
+      - 'app/reports/packet/print/**'
+      - 'app/reports/**/print/**'
+      - 'components/report/**'
+      - 'lib/utils/packets/**'
+      - 'lib/utils/pdfFormatUtils.ts'
+      - '.github/workflows/pdf-smoke-test.yml'
+  # Optional: Uncomment for nightly runs
+  # schedule:
+  #   - cron: '0 2 * * *' # 2 AM UTC daily
 
 permissions:
   contents: read
