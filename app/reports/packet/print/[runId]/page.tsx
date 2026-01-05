@@ -404,6 +404,7 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
     // Fetch signatures for signature proof section (non-fatal)
     let signatures: any[] = []
     try {
+      // Fetch signatures (using stored signer data for audit integrity)
       const { data: signaturesData } = await supabase
         .from('report_signatures')
         .select(`
@@ -413,14 +414,13 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
           signature_svg,
           signed_at,
           signature_hash,
-          signer_user:users!signer_user_id(email),
           attestation_text
         `)
         .eq('report_run_id', runId)
         .is('revoked_at', null)
         .order('signed_at', { ascending: true })
       
-      // Flatten nested signer_user data
+      // Map to signature format (note: signer_email is not stored in report_signatures table)
       signatures = (signaturesData || []).map((sig: any) => ({
         signer_name: sig.signer_name,
         signer_title: sig.signer_title,
@@ -428,7 +428,7 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
         signature_svg: sig.signature_svg,
         signed_at: sig.signed_at,
         signature_hash: sig.signature_hash || null,
-        signer_email: sig.signer_user?.email || null,
+        signer_email: null, // Email not stored in report_signatures (use signer_name/title for identity)
         attestation_text: sig.attestation_text || null,
       }))
     } catch (sigError: any) {

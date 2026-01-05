@@ -318,7 +318,7 @@ export async function GET(
       )
     }
 
-    return NextResponse.json({ data: signaturesWithEmail })
+    return NextResponse.json({ data: signatures || [] })
   } catch (error: any) {
     console.error('[reports/runs/signatures] Error:', error)
     return NextResponse.json(
