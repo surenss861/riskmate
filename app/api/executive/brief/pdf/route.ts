@@ -1,8 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
+import PDFDocument from 'pdfkit'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
+
+/**
+ * Build a valid PDF buffer using PDFKit
+ */
+function buildPdfBuffer(): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ size: 'LETTER', margin: 48 })
+    const chunks: Buffer[] = []
+
+    doc.on('data', (chunk) => chunks.push(chunk))
+    doc.on('end', () => resolve(Buffer.concat(chunks)))
+    doc.on('error', reject)
+
+    doc.fontSize(22).text('Executive Brief', { align: 'left' })
+    doc.moveDown(0.5)
+    doc.fontSize(12).text('Placeholder PDF (valid bytes) to unblock UI.')
+    doc.moveDown(0.5)
+    doc.text(`Generated: ${new Date().toISOString()}`)
+
+    doc.end()
+  })
+}
 
 /**
  * POST /api/executive/brief/pdf
@@ -43,14 +66,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // TODO: Generate actual PDF using PDFKit or similar
-    // For now, return a minimal placeholder PDF to unblock the UI
-    // This should be replaced with the actual PDF generation logic from the backend
-    
-    // Minimal valid PDF (single page with text)
-    const pdfBase64 = 'JVBERi0xLjQKJcfsj6IKNSAwIG9iago8PAovVHlwZSAvQ2F0YWxvZwovUGFnZXMgMiAwIFIKPj4KZW5kb2JqCjIgMCBvYmoKPDwKL1R5cGUgL1BhZ2VzCi9LaWRzIFszIDAgUl0KL0NvdW50IDEKL01lZGlhQm94IFswIDAgNjEyIDc5Ml0KPj4KZW5kb2JqCjMgMCBvYmoKPDwKL1R5cGUgL1BhZ2UKL1BhcmVudCAyIDAgUgovUmVzb3VyY2VzIDw8Ci9Gb250IDw8Ci9GMSA0IDAgUgo+Pgo+PgovQ29udGVudHMgNSAwIFIKPj4KZW5kb2JqCjQgMCBvYmoKPDwKL1R5cGUgL0ZvbnQKL1N1YnR5cGUgL1R5cGUxCi9CYXNlRm9udCAvSGVsdmV0aWNhCj4+CmVuZG9iago1IDAgb2JqCjw8Ci9MZW5ndGggNDQKPj4Kc3RyZWFtCkJUCi9GMSAxMiBUZgoxMDAgNzAwIFRkCihFeGVjdXRpdmUgQnJpZWYgLSBQbGFjZWhvbGRlcikgVGoKRVQKZW5kc3RyZWFtCmVuZG9iagp4cmVmCjAgNgowMDAwMDAwMDAwIDY1NTM1IGYgCjAwMDAwMDAwMDkgMDAwMDAgbiAKMDAwMDAwMDA1OCAwMDAwMCBuIAowMDAwMDAwMTE1IDAwMDAwIG4gCjAwMDAwMDAyNzQgMDAwMDAgbiAKMDAwMDAwMDMzMyAwMDAwMCBuIAp0cmFpbGVyCjw8Ci9TaXplIDYKL1Jvb3QgMSAwIFIKPj4Kc3RhcnR4cmVmCjQwNQolJUVPRg=='
-
-    const pdfBuffer = Buffer.from(pdfBase64, 'base64')
+    // Generate PDF using PDFKit (ensures valid PDF bytes)
+    const pdfBuffer = await buildPdfBuffer()
 
     return new NextResponse(pdfBuffer, {
       status: 200,
@@ -58,6 +75,7 @@ export async function POST(request: NextRequest) {
         'Content-Type': 'application/pdf',
         'Content-Disposition': 'attachment; filename="executive-brief.pdf"',
         'Cache-Control': 'no-store, no-cache, must-revalidate',
+        'Content-Length': String(pdfBuffer.length),
       },
     })
   } catch (error: any) {
