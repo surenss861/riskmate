@@ -14,6 +14,7 @@ interface Signature {
   signed_at: string
   signature_svg: string
   attestation_text?: string | null
+  signature_hash?: string | null
 }
 
 interface SignatureProofSectionProps {
@@ -205,17 +206,61 @@ export function SignatureProofSection({ data }: SignatureProofSectionProps) {
                   marginBottom: pdfTheme.spacing.textGap,
                 }}>
                   <div style={{ fontWeight: pdfTheme.typography.weights.semibold, color: pdfTheme.colors.ink }}>
-                    Hash at Sign Time:
+                    Run Hash at Sign Time:
                   </div>
                   <div style={{ 
                     fontFamily: 'monospace',
                     fontSize: pdfTheme.typography.sizes.caption,
                     color: pdfTheme.colors.ink,
                     wordBreak: 'break-all',
+                    backgroundColor: '#FAFAFA',
+                    padding: '8pt',
+                    borderRadius: pdfTheme.borders.radius,
+                    border: `${pdfTheme.borders.thin} solid ${pdfTheme.colors.borders}`,
                   }}>
-                    {reportRunHash.substring(0, 32)}...
+                    {reportRunHash}
+                    <div style={{ 
+                      fontSize: pdfTheme.typography.sizes.small,
+                      color: pdfTheme.colors.muted,
+                      marginTop: '4pt',
+                      fontStyle: 'italic'
+                    }}>
+                      (Should match Run Hash above)
+                    </div>
                   </div>
                 </div>
+                {sig.signature_hash && (
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: '200pt 1fr',
+                    gap: pdfTheme.spacing.textGap,
+                    marginBottom: pdfTheme.spacing.textGap,
+                  }}>
+                    <div style={{ fontWeight: pdfTheme.typography.weights.semibold, color: pdfTheme.colors.ink }}>
+                      Signature Hash:
+                    </div>
+                    <div style={{ 
+                      fontFamily: 'monospace',
+                      fontSize: pdfTheme.typography.sizes.caption,
+                      color: pdfTheme.colors.ink,
+                      wordBreak: 'break-all',
+                      backgroundColor: '#FAFAFA',
+                      padding: '8pt',
+                      borderRadius: pdfTheme.borders.radius,
+                      border: `${pdfTheme.borders.thin} solid ${pdfTheme.colors.borders}`,
+                    }}>
+                      {sig.signature_hash}
+                      <div style={{ 
+                        fontSize: pdfTheme.typography.sizes.small,
+                        color: pdfTheme.colors.muted,
+                        marginTop: '4pt',
+                        fontStyle: 'italic'
+                      }}>
+                        (SHA-256 of signature SVG + signer fields)
+                      </div>
+                    </div>
+                  </div>
+                )}
                 
                 <div style={{
                   border: `${pdfTheme.borders.thin} solid ${pdfTheme.colors.borders}`,

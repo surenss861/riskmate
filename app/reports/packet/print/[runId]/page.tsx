@@ -412,6 +412,7 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
           signature_role,
           signature_svg,
           signed_at,
+          signature_hash,
           signer_user:users!signer_user_id(email),
           attestation_text
         `)
@@ -426,6 +427,7 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
         signature_role: sig.signature_role,
         signature_svg: sig.signature_svg,
         signed_at: sig.signed_at,
+        signature_hash: sig.signature_hash || null,
         signer_email: sig.signer_user?.email || null,
         attestation_text: sig.attestation_text || null,
       }))
