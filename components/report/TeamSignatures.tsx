@@ -412,10 +412,10 @@ export function TeamSignatures({
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-3 flex-wrap">
             <h2 className="text-2xl font-bold text-white">✍️ Team Signatures</h2>
-            {!readOnly && allRequiredSignaturesComplete && reportRun?.status === 'complete' && (
+            {!readOnly && allRequiredSignaturesComplete && (reportRun?.status === 'complete' || reportRun?.status === 'final') && (
               <Badge variant="success">Complete • Sealed</Badge>
             )}
-            {!readOnly && allRequiredSignaturesComplete && reportRun?.status !== 'complete' && (
+            {!readOnly && allRequiredSignaturesComplete && reportRun?.status !== 'complete' && reportRun?.status !== 'final' && (
               <Badge variant="success">Complete</Badge>
             )}
             {!readOnly && !allRequiredSignaturesComplete && reportRunId && (

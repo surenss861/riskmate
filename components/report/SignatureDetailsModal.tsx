@@ -12,6 +12,7 @@ interface Signature {
   signature_svg: string
   signed_at: string
   signer_user_id?: string | null
+  signer_email?: string | null
   ip_address?: string | null
   user_agent?: string | null
 }
@@ -75,6 +76,9 @@ export function SignatureDetailsModal({
             <div>
               <div className="text-sm text-white/60 mb-1">Signer</div>
               <div className="text-lg text-white font-medium">{signature.signer_name}</div>
+              {signature.signer_email && (
+                <div className="text-sm text-white/60 mt-1">{signature.signer_email}</div>
+              )}
               <div className="text-sm text-white/60 mt-1">{signature.signer_title}</div>
             </div>
 

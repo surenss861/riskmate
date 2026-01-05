@@ -184,13 +184,25 @@ export async function POST(
     const ipAddress = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || null
     const userAgent = request.headers.get('user-agent') || null
 
+    // Get signer email if signer_user_id exists
+    let signerEmail: string | null = null
+    const finalSignerUserId = signer_user_id === user.id ? user.id : signer_user_id
+    if (finalSignerUserId) {
+      const { data: signerUser } = await supabase
+        .from('users')
+        .select('email')
+        .eq('id', finalSignerUserId)
+        .maybeSingle()
+      signerEmail = signerUser?.email || null
+    }
+
     // Create signature
     const { data: signature, error: createError } = await supabase
       .from('report_signatures')
       .insert({
         organization_id: reportRun.organization_id,
         report_run_id: reportRunId,
-        signer_user_id: signer_user_id === user.id ? user.id : signer_user_id,
+        signer_user_id: finalSignerUserId,
         signer_name,
         signer_title,
         signature_role,
@@ -210,12 +222,18 @@ export async function POST(
       )
     }
 
+    // Attach email to response
+    const signatureWithEmail = {
+      ...signature,
+      signer_email: signerEmail,
+    }
+
     // Log signature creation
     console.log(
       `[reports/runs/signatures] Signature created | run: ${reportRunId} | role: ${signature_role} | signer: ${signer_name} (${signer_user_id || 'external'})`
     )
 
-    return NextResponse.json({ data: signature })
+    return NextResponse.json({ data: signatureWithEmail })
   } catch (error: any) {
     console.error('[reports/runs/signatures] Error:', error)
     return NextResponse.json(
@@ -274,13 +292,23 @@ export async function GET(
       )
     }
 
-    // Get signatures (non-revoked only)
+    // Get signatures (non-revoked only) with signer emails
     const { data: signatures, error } = await supabase
       .from('report_signatures')
-      .select('*')
+      .select(`
+        *,
+        signer_user:users!signer_user_id(email)
+      `)
       .eq('report_run_id', reportRunId)
       .is('revoked_at', null)
       .order('signed_at', { ascending: true })
+    
+    // Flatten the nested signer_user data
+    const signaturesWithEmail = (signatures || []).map((sig: any) => ({
+      ...sig,
+      signer_email: sig.signer_user?.email || null,
+      signer_user: undefined, // Remove nested object
+    }))
 
     if (error) {
       console.error('[reports/runs/signatures] Failed to fetch signatures:', error)
@@ -290,7 +318,7 @@ export async function GET(
       )
     }
 
-    return NextResponse.json({ data: signatures || [] })
+    return NextResponse.json({ data: signaturesWithEmail })
   } catch (error: any) {
     console.error('[reports/runs/signatures] Error:', error)
     return NextResponse.json(

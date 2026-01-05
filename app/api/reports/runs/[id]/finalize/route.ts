@@ -27,7 +27,7 @@ export async function POST(
     // Get report run and verify access
     const { data: reportRun, error: runError } = await supabase
       .from('report_runs')
-      .select('organization_id, status, generated_by')
+      .select('organization_id, status, generated_by, data_hash')
       .eq('id', reportRunId)
       .single()
 
