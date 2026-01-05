@@ -286,7 +286,7 @@ export async function GET(
     }
 
     // Get signatures (non-revoked only)
-    // Note: We use stored signer data (name/email/title) for audit integrity
+    // Note: We use stored signer data (name/title) for audit integrity
     // This ensures signatures include the identity snapshot at sign-time
     const { data: signatures, error } = await supabase
       .from('report_signatures')
