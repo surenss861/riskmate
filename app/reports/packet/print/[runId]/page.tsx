@@ -401,6 +401,39 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
       safeSections = []
     }
 
+    // Fetch signatures for signature proof section (non-fatal)
+    let signatures: any[] = []
+    try {
+      const { data: signaturesData } = await supabase
+        .from('report_signatures')
+        .select(`
+          signer_name,
+          signer_title,
+          signature_role,
+          signature_svg,
+          signed_at,
+          signer_user:users!signer_user_id(email),
+          attestation_text
+        `)
+        .eq('report_run_id', runId)
+        .is('revoked_at', null)
+        .order('signed_at', { ascending: true })
+      
+      // Flatten nested signer_user data
+      signatures = (signaturesData || []).map((sig: any) => ({
+        signer_name: sig.signer_name,
+        signer_title: sig.signer_title,
+        signature_role: sig.signature_role,
+        signature_svg: sig.signature_svg,
+        signed_at: sig.signed_at,
+        signer_email: sig.signer_user?.email || null,
+        attestation_text: sig.attestation_text || null,
+      }))
+    } catch (sigError: any) {
+      console.warn('[PACKET-PRINT] Signatures fetch failed (non-fatal):', sigError?.message)
+      signatures = []
+    }
+
     // Step 2: Build sectionsWithIntegrity with safe operations
     let sectionsWithIntegrity: any[] = []
     try {
@@ -442,6 +475,22 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
           }
         }
       }).filter((s): s is NonNullable<typeof s> => s !== null)
+      
+      // Append signature proof section at the end (after integrity_verification)
+      sectionsWithIntegrity.push({
+        type: 'signature_proof',
+        data: {
+          reportRunId: safeRunId,
+          reportRunHash: reportRun.data_hash || documentHash,
+          reportRunCreatedAt: safeGeneratedAt,
+          signatures: signatures,
+          isDraft: isDraft,
+          requiredRoles: ['prepared_by', 'reviewed_by', 'approved_by'],
+        },
+        meta: {
+          title: 'Signature Proof & Attestation',
+        },
+      })
     } catch (e) {
       console.warn('[PACKET-PRINT] Sections processing failed (non-fatal):', e)
       sectionsWithIntegrity = []

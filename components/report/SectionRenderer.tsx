@@ -25,6 +25,7 @@ import {
   EscalationTrailSection,
   AccountabilityTimelineSection,
   ChecklistCompletionSection,
+  SignatureProofSection,
 } from './sections'
 import { EmptySection } from './sections/EmptySection'
 import { humanize } from '@/lib/utils/stringHelpers'

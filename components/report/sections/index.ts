@@ -23,6 +23,7 @@ import { FlaggedJobDetailsSection } from './FlaggedJobDetailsSection'
 import { EscalationTrailSection } from './EscalationTrailSection'
 import { AccountabilityTimelineSection } from './AccountabilityTimelineSection'
 import { ChecklistCompletionSection } from './ChecklistCompletionSection'
+import { SignatureProofSection } from './SignatureProofSection'
 
 export {
   JobSummarySection,
@@ -45,5 +46,6 @@ export {
   EscalationTrailSection,
   AccountabilityTimelineSection,
   ChecklistCompletionSection,
+  SignatureProofSection,
 }
 
