@@ -5,6 +5,7 @@ import crypto from 'crypto'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 // PDF styling constants
 const STYLES = {
@@ -507,8 +508,9 @@ async function buildExecutiveBriefPDF(
   data: RiskPostureData,
   organizationName: string,
   generatedBy: string,
-  timeRange: string
-): Promise<{ buffer: Buffer; hash: string }> {
+  timeRange: string,
+  buildSha?: string
+): Promise<{ buffer: Buffer; hash: string; reportId: string }> {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({
       size: 'LETTER',
@@ -530,11 +532,11 @@ async function buildExecutiveBriefPDF(
 
     const chunks: Buffer[] = []
     doc.on('data', (chunk) => chunks.push(chunk))
-    doc.on('end', () => {
-      const buffer = Buffer.concat(chunks)
-      const hash = crypto.createHash('sha256').update(buffer).digest('hex')
-      resolve({ buffer, hash })
-    })
+    doc      .on('end', () => {
+        const buffer = Buffer.concat(chunks)
+        const hash = crypto.createHash('sha256').update(buffer).digest('hex')
+        resolve({ buffer, hash, reportId })
+      })
     doc.on('error', reject)
 
     const pageWidth = doc.page.width
@@ -701,16 +703,25 @@ export async function POST(request: NextRequest) {
     // Convert Buffer to Uint8Array for NextResponse
     const pdfBytes = new Uint8Array(buffer)
 
+    const headers = new Headers({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="executive-brief-${timeRange}-${new Date().toISOString().split('T')[0]}.pdf"`,
+      'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0, private',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+      'Content-Length': String(buffer.length),
+      'X-PDF-Hash': hash,
+      'X-Executive-Brief-Mode': 'premium',
+      'X-Executive-Brief-ReportId': reportId.substring(0, 8),
+    })
+
+    if (buildSha) {
+      headers.set('X-Executive-Brief-Build', buildSha.substring(0, 8))
+    }
+
     return new NextResponse(pdfBytes, {
       status: 200,
-      headers: {
-        'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="executive-brief-${timeRange}-${new Date().toISOString().split('T')[0]}.pdf"`,
-        'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
-        'Pragma': 'no-cache',
-        'Content-Length': String(buffer.length),
-        'X-PDF-Hash': hash,
-      },
+      headers,
     })
   } catch (error: any) {
     console.error('[executive/brief/pdf] Unexpected error:', error)

@@ -752,7 +752,9 @@ export default function ExecutiveSnapshotPage() {
                         const supabase = createSupabaseBrowserClient()
                         const { data: { session } } = await supabase.auth.getSession()
                         
-                        const response = await fetch('/api/executive/brief/pdf', {
+                        // Add cache-buster query param to prevent service worker caching
+                        const cacheBuster = `?t=${Date.now()}`
+                        const response = await fetch(`/api/executive/brief/pdf${cacheBuster}`, {
                           method: 'POST',
                           cache: 'no-store',
                           headers: {
