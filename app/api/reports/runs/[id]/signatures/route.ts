@@ -311,13 +311,25 @@ export async function GET(
       .order('signed_at', { ascending: true })
 
     if (error) {
-      console.error('[reports/runs/signatures] Failed to fetch signatures:', error)
+      console.error('[reports/runs/signatures] Failed to fetch signatures:', {
+        error: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+        reportRunId,
+      })
       return NextResponse.json(
-        { message: 'Failed to fetch signatures', detail: error.message },
+        { 
+          message: 'Failed to fetch signatures', 
+          detail: error.message,
+          code: error.code,
+          hint: error.hint,
+        },
         { status: 500 }
       )
     }
 
+    console.log(`[reports/runs/signatures] Successfully fetched ${signatures?.length || 0} signatures for run ${reportRunId}`)
     return NextResponse.json({ data: signatures || [] })
   } catch (error: any) {
     console.error('[reports/runs/signatures] Error:', error)
