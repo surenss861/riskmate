@@ -209,6 +209,7 @@ function renderExecutiveSummary(
   margin: number
 ): void {
   // Section header
+  ensureSpace(doc, 80, margin)
   doc
     .fillColor(STYLES.colors.primaryText)
     .fontSize(STYLES.sizes.h2)
@@ -218,6 +219,7 @@ function renderExecutiveSummary(
   doc.moveDown(0.5)
 
   // Confidence statement (main narrative)
+  ensureSpace(doc, 60, margin)
   doc
     .fontSize(STYLES.sizes.body)
     .font(STYLES.fonts.body)
@@ -420,6 +422,7 @@ function renderRecommendedActions(
   if (!data.recommended_actions || data.recommended_actions.length === 0) return
 
   // Section header
+  ensureSpace(doc, 120, margin)
   doc
     .fillColor(STYLES.colors.primaryText)
     .fontSize(STYLES.sizes.h2)
@@ -429,6 +432,7 @@ function renderRecommendedActions(
   doc.moveDown(0.5)
 
   data.recommended_actions.slice(0, 5).forEach((action) => {
+    ensureSpace(doc, 40, margin)
     doc
       .fontSize(STYLES.sizes.body)
       .font(STYLES.fonts.header)
@@ -438,6 +442,7 @@ function renderRecommendedActions(
         width: pageWidth - margin * 2 - 20,
       })
 
+    ensureSpace(doc, 20, margin)
     doc
       .font(STYLES.fonts.body)
       .fontSize(STYLES.sizes.caption)
@@ -520,6 +525,7 @@ async function buildExecutiveBriefPDF(
         left: STYLES.spacing.margin,
         right: STYLES.spacing.margin,
       },
+      bufferPages: true, // Enable buffering for total page count
       info: {
         Title: `RiskMate Executive Brief - ${organizationName}`,
         Author: 'RiskMate',
