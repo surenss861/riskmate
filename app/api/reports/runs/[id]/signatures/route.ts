@@ -258,29 +258,29 @@ export async function GET(
     const { id: reportRunId } = await params
 
     // Get report run and verify access
-    const { data: reportRun } = await supabase
+    const { data: reportRun, error: runError } = await supabase
       .from('report_runs')
       .select('organization_id')
       .eq('id', reportRunId)
-      .single()
+      .maybeSingle()
 
-    if (!reportRun) {
+    if (runError || !reportRun) {
       return NextResponse.json(
-        { message: 'Report run not found' },
+        { message: 'Report run not found', detail: runError?.message },
         { status: 404 }
       )
     }
 
     // Verify user belongs to organization
-    const { data: userData } = await supabase
+    const { data: userData, error: userError } = await supabase
       .from('users')
       .select('organization_id')
       .eq('id', user.id)
-      .single()
+      .maybeSingle()
 
-    if (!userData || userData.organization_id !== reportRun.organization_id) {
+    if (userError || !userData || userData.organization_id !== reportRun.organization_id) {
       return NextResponse.json(
-        { message: 'Access denied' },
+        { message: 'Access denied', detail: userError?.message },
         { status: 403 }
       )
     }
