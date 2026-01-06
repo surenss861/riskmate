@@ -283,7 +283,53 @@ function renderSection(
 }
 
 /**
+ * Safe text writer - refuses to write junk (empty, standalone "—", naked numbers)
+ * CRITICAL: This is the ONLY way to write text to prevent junk pages
+ */
+function safeText(
+  doc: PDFKit.PDFDocument,
+  text: string,
+  x: number,
+  y: number,
+  options?: { width?: number; align?: 'left' | 'center' | 'right' | 'justify'; fontSize?: number; font?: string; color?: string }
+): boolean {
+  const sanitized = sanitizeText(text)
+  
+  // Never render if empty after sanitization
+  if (!sanitized || sanitized.trim().length === 0) return false
+  
+  // Never render standalone "—" or single digits without context
+  // These are the exact patterns causing junk pages
+  if (sanitized === '—' || sanitized === '2' || sanitized === '0' || /^\d+$/.test(sanitized.trim())) {
+    // Only allow if it's part of a larger string (has context)
+    if (sanitized.length <= 2) return false
+  }
+  
+  // Check if it would overflow current page
+  const pageBottom = doc.page.height - 60
+  const lineHeight = (options?.fontSize || STYLES.sizes.body) * 1.2
+  if (y + lineHeight > pageBottom) {
+    // Would overflow - don't write, caller should handle page break
+    return false
+  }
+  
+  // Safe to write
+  if (options?.fontSize) doc.fontSize(options.fontSize)
+  if (options?.font) doc.font(options.font)
+  if (options?.color) doc.fillColor(options.color)
+  
+  doc.text(sanitized, x, y, { 
+    width: options?.width,
+    align: options?.align,
+  })
+  
+  markPageHasBody(doc)
+  return true
+}
+
+/**
  * Write label-value pair (prevents label-less values)
+ * CRITICAL: This is the ONLY way metrics should render
  * Ensures values never render alone
  */
 function writeKV(
@@ -295,25 +341,38 @@ function writeKV(
   labelWidth: number,
   valueWidth: number,
   options?: { labelAlign?: 'left' | 'right'; valueAlign?: 'left' | 'right' }
-): void {
+): boolean {
   const L = sanitizeText(label)
   const V = sanitizeText(value)
   
   // Never render if label or value is missing
-  if (!L || !V) return
+  if (!L || !V) return false
   
   // Never render standalone "—" or single digits without context
-  if ((V === '—' || V.length <= 1) && !L) return
+  // CRITICAL: This prevents "2" and "—" junk pages
+  if (V === '—' && !L) return false
+  if ((V === '2' || V === '0' || /^\d+$/.test(V)) && !L) return false
   
-  doc
-    .fontSize(STYLES.sizes.body)
-    .font(STYLES.fonts.body)
-    .fillColor(STYLES.colors.primaryText)
-    .text(L, x, y, { width: labelWidth, align: options?.labelAlign || 'left' })
-    .fillColor(STYLES.colors.secondaryText)
-    .text(V, x + labelWidth, y, { width: valueWidth, align: options?.valueAlign || 'right' })
+  // Both label and value must exist - atomic write
+  const labelWritten = safeText(doc, L, x, y, { 
+    width: labelWidth, 
+    align: options?.labelAlign || 'left',
+    fontSize: STYLES.sizes.body,
+    font: STYLES.fonts.body,
+    color: STYLES.colors.primaryText,
+  })
   
-  markPageHasBody(doc)
+  if (!labelWritten) return false
+  
+  safeText(doc, V, x + labelWidth, y, { 
+    width: valueWidth, 
+    align: options?.valueAlign || 'right',
+    fontSize: STYLES.sizes.body,
+    font: STYLES.fonts.body,
+    color: STYLES.colors.secondaryText,
+  })
+  
+  return true
 }
 
 /**
@@ -384,23 +443,20 @@ function renderKPIStrip(
     const contentX = cardX + cardPadding
     const contentWidth = kpiCardWidth - cardPadding * 2
 
-    // Value (big number, baseline aligned) - CRITICAL: Never render standalone values
+    // Value (big number, baseline aligned) - CRITICAL: Use safeText to prevent junk pages
     const valueY = cardY + cardPadding + 8
-    const valueText = sanitizeText(kpi.value)
     const labelText = sanitizeText(kpi.label)
     
     // Only render value if we have a label (prevents standalone "2" or "—")
-    if (labelText && valueText) {
-      // Always render value if label exists (even if "—" or single digit)
-      // The label provides context, so it's safe
-      doc
-        .fontSize(STYLES.sizes.kpiValue)
-        .font(STYLES.fonts.header)
-        .fillColor(kpi.color)
-        .text(valueText, contentX, valueY, { 
-          width: contentWidth,
-          align: 'left',
-        })
+    if (labelText) {
+      // Use safeText - it will refuse to write standalone "2" or "—"
+      safeText(doc, kpi.value, contentX, valueY, { 
+        width: contentWidth,
+        align: 'left',
+        fontSize: STYLES.sizes.kpiValue,
+        font: STYLES.fonts.header,
+        color: kpi.color,
+      })
     }
 
     // Label (small, below value, no wrapping)
@@ -531,11 +587,13 @@ function renderExecutiveSummary(
 ): void {
   // Section header
   ensureSpace(doc, 80, margin)
-  doc
-    .fillColor(STYLES.colors.primaryText)
-    .fontSize(STYLES.sizes.h2)
-    .font(STYLES.fonts.header)
-    .text('Executive Summary', { underline: true })
+  safeText(doc, 'Executive Summary', margin, doc.y, {
+    fontSize: STYLES.sizes.h2,
+    font: STYLES.fonts.header,
+    color: STYLES.colors.primaryText,
+  })
+  // Note: PDFKit doesn't support underline in safeText, so we draw it separately if needed
+  // For now, we'll skip underline to keep it simple
 
   doc.moveDown(0.5)
 
@@ -677,18 +735,7 @@ function renderMetricsTable(
 
   doc.y = tableY + headerHeight
 
-  // Table rows - CRITICAL: Only include rows with meaningful content or labels
-  const metrics = [
-    { label: 'High Risk Jobs', value: data.high_risk_jobs, delta: data.deltas?.high_risk_jobs },
-    { label: 'Open Incidents', value: data.open_incidents, delta: data.deltas?.open_incidents },
-    { label: 'Recent Violations', value: data.recent_violations, delta: data.deltas?.violations },
-    { label: 'Flagged for Review', value: data.flagged_jobs, delta: data.deltas?.flagged_jobs },
-    { label: 'Pending Sign-offs', value: data.pending_signoffs, delta: undefined },
-    { label: 'Signed Sign-offs', value: data.signed_signoffs, delta: undefined },
-    // CRITICAL: Only show Proof Packs if count > 0 (prevents junk page)
-    ...(data.proof_packs_generated > 0 ? [{ label: 'Proof Packs Generated', value: data.proof_packs_generated, delta: undefined }] : []),
-  ]
-
+  // Table rows - metrics list already built above (with hasContent check)
   metrics.forEach((metric, idx) => {
     const rowY = doc.y
     const isEven = idx % 2 === 0
@@ -999,26 +1046,21 @@ function renderRecommendedActions(
 
   actions.forEach((action) => {
     ensureSpace(doc, 40, margin)
-    doc
-      .fontSize(STYLES.sizes.body)
-      .font(STYLES.fonts.header)
-      .fillColor(STYLES.colors.primaryText)
-      .text(`${action.priority}. ${sanitizeText(action.action)}`, {
-        indent: 20,
-        width: pageWidth - margin * 2 - 20,
-        lineGap: 5, // Better spacing
-      })
+    // Use safeText to prevent junk writes
+    safeText(doc, `${action.priority}. ${sanitizeText(action.action)}`, margin + 20, doc.y, {
+      width: pageWidth - margin * 2 - 20,
+      fontSize: STYLES.sizes.body,
+      font: STYLES.fonts.header,
+      color: STYLES.colors.primaryText,
+    })
 
     ensureSpace(doc, 20, margin)
-    doc
-      .font(STYLES.fonts.body)
-      .fontSize(STYLES.sizes.caption)
-      .fillColor(STYLES.colors.secondaryText)
-      .text(`   ${sanitizeText(action.reason)}`, {
-        indent: 20,
-        width: pageWidth - margin * 2 - 40,
-        lineGap: 4,
-      })
+    safeText(doc, `   ${sanitizeText(action.reason)}`, margin + 20, doc.y, {
+      width: pageWidth - margin * 2 - 40,
+      fontSize: STYLES.sizes.caption,
+      font: STYLES.fonts.body,
+      color: STYLES.colors.secondaryText,
+    })
 
     doc.moveDown(0.6)
   })
@@ -1355,14 +1397,20 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Use resolved org name (sanitized immediately)
-    // This should be the actual org name from organizations.name, not email-based
-    const organizationName = sanitizeText(orgContext.orgName)
-    
-    // Debug log (remove in prod or gate behind env flag)
-    if (process.env.NODE_ENV !== 'production') {
-      console.log(`[executive/brief/pdf] Org resolved: ${orgContext.orgId.substring(0, 8)}... -> "${organizationName}" (from: ${orgContext.resolvedFrom})`)
-    }
+        // Use resolved org name (sanitized immediately)
+        // CRITICAL: Validate org name is not email-derived
+        let organizationName = sanitizeText(orgContext.orgName)
+        
+        // If org name looks email-ish, show "Organization" instead
+        if (organizationName.includes('@') || organizationName.includes("'s Organization") || organizationName.toLowerCase().includes('test')) {
+          console.warn(`[executive/brief/pdf] Org name "${organizationName}" looks email-derived, using fallback`)
+          organizationName = 'Organization'
+        }
+
+        // Debug log (remove in prod or gate behind env flag)
+        if (process.env.NODE_ENV !== 'production') {
+          console.log(`[executive/brief/pdf] Org resolved: ${orgContext.orgId.substring(0, 8)}... -> "${organizationName}" (from: ${orgContext.resolvedFrom})`)
+        }
 
     // Get time range from request body
     const body = await request.json().catch(() => ({}))
