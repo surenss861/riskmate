@@ -478,45 +478,77 @@ function renderRecommendedActions(
 }
 
 /**
- * Add header and footer to all pages
+ * Add header and footer to all pages (post-pass after all content is rendered)
+ * Fixed: Proper Y positioning to prevent PDFKit from auto-creating pages
  */
 function addHeaderFooter(
   doc: PDFKit.PDFDocument,
   organizationName: string,
   timeRange: string,
   reportId: string,
-  generatedAt: Date
+  generatedAt: Date,
+  buildSha?: string
 ): void {
-  const pageCount = doc.bufferedPageRange().count
+  const range = doc.bufferedPageRange()
+  const pageCount = range.count
+  const buildInfo = buildSha ? `build: ${buildSha.substring(0, 8)}` : 'build: local'
+  const mode = 'premium'
 
-  for (let i = 0; i < pageCount; i++) {
+  // Calculate safe footer positioning to prevent PDFKit from auto-creating pages
+  const bottomMargin = 60 // matches PDFDocument bottom margin
+  const limitY = doc.page.height - bottomMargin
+  
+  // Set font size to calculate line height
+  doc.fontSize(8).font(STYLES.fonts.body)
+  const lineHeight = doc.currentLineHeight(true) || 10
+  
+  // We have 3 footer lines: main footer, build stamp, confidentiality
+  const footerLines = 3
+  const footerSpacing = 8 // spacing between lines
+  const totalFooterHeight = (lineHeight * footerLines) + (footerSpacing * (footerLines - 1))
+  
+  // Start footer above the bottom margin threshold (prevents auto-page creation)
+  const footerStartY = limitY - totalFooterHeight - 4
+
+  // Add footers to all pages (post-pass)
+  for (let i = range.start; i < range.start + range.count; i++) {
     doc.switchToPage(i)
 
     const page = doc.page
     const pageWidth = page.width
-    const pageHeight = page.height
+    const pageIndex = i - range.start
 
-    // Footer
+    // Main footer line
     doc
       .fontSize(STYLES.sizes.caption)
       .font(STYLES.fonts.body)
       .fillColor(STYLES.colors.secondaryText)
 
-    const footerText = `RiskMate Executive Brief | ${organizationName} | ${formatTimeRange(timeRange)} | Generated ${generatedAt.toLocaleDateString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric', year: 'numeric' })} | Report ID: ${reportId.substring(0, 8)} | Page ${i + 1} of ${pageCount}`
+    const footerText = `RiskMate Executive Brief | ${organizationName} | ${formatTimeRange(timeRange)} | Generated ${generatedAt.toLocaleDateString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric', year: 'numeric' })} | Report ID: ${reportId.substring(0, 8)} | Page ${pageIndex + 1} of ${pageCount}`
 
-    doc.text(footerText, STYLES.spacing.margin, pageHeight - 30, {
+    doc.text(footerText, STYLES.spacing.margin, footerStartY, {
       width: pageWidth - STYLES.spacing.margin * 2,
       align: 'center',
     })
 
-    // Confidentiality line
+    // Build stamp line
+    const buildStamp = `${buildInfo} | mode: ${mode} | reportId: ${reportId.substring(0, 8)}`
+    doc
+      .fontSize(8)
+      .fillColor(STYLES.colors.secondaryText)
+      .text(buildStamp, STYLES.spacing.margin, footerStartY + lineHeight + footerSpacing, {
+        width: pageWidth - STYLES.spacing.margin * 2,
+        align: 'center',
+      })
+
+    // Confidentiality line (combined with footer block)
     doc
       .fontSize(8)
       .fillColor(STYLES.colors.secondaryText)
       .text(
         'CONFIDENTIAL — This document contains sensitive information and is intended only for authorized recipients.',
         STYLES.spacing.margin,
-        pageHeight - 18,
+        footerStartY + (lineHeight * 2) + (footerSpacing * 2),
         {
           width: pageWidth - STYLES.spacing.margin * 2,
           align: 'center',
@@ -619,7 +651,7 @@ async function buildExecutiveBriefPDF(
     renderRecommendedActions(doc, data, pageWidth, margin)
 
     // Add headers/footers to all pages
-    addHeaderFooter(doc, organizationName, timeRange, reportId, generatedAt)
+    addHeaderFooter(doc, organizationName, timeRange, reportId, generatedAt, buildSha)
 
     doc.end()
   })
