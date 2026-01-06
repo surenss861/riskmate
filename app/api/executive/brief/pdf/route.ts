@@ -8,33 +8,45 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
-// PDF styling constants
+// PDF styling constants - Premium board-ready design
 const STYLES = {
   colors: {
-    primaryText: '#111111',
-    secondaryText: '#555555',
-    borderGray: '#E6E6E6',
-    lightGrayBg: '#FAFAFA',
-    riskLow: '#34C759',
-    riskMedium: '#FFCC00',
-    riskHigh: '#FF6B35',
-    accent: '#912F40',
+    primaryText: '#1A1A1A',
+    secondaryText: '#666666',
+    borderGray: '#E5E5E5',
+    lightGrayBg: '#F5F5F5',
+    cardBg: '#FAFAFA',
+    tableHeaderBg: '#F8F9FA',
+    white: '#FFFFFF',
+    riskLow: '#10B981',
+    riskMedium: '#F59E0B',
+    riskHigh: '#EF4444',
+    accent: '#2563EB',
+    accentLight: '#3B82F6',
   },
   fonts: {
     header: 'Helvetica-Bold',
     body: 'Helvetica',
   },
   sizes: {
-    h1: 28,
-    h2: 18,
-    h3: 14,
+    h1: 32, // Premium title size
+    h2: 22, // Section headers
+    h3: 16, // Org name
     body: 11,
     caption: 9,
+    kpiValue: 24, // Big numbers in KPI cards
+    kpiLabel: 9,
   },
   spacing: {
     margin: 48,
-    sectionGap: 24,
-    rowSpacing: 16,
+    sectionGap: 32, // More breathing room
+    rowSpacing: 20, // Better table row spacing
+    cardPadding: 16,
+    tableRowHeight: 26, // Taller rows for readability
+    tableCellPadding: 12,
+  },
+  borderRadius: {
+    card: 4, // Subtle rounded corners for cards
   },
 }
 
@@ -159,103 +171,113 @@ function ensureSpace(
 }
 
 /**
- * Render KPI strip (key metrics at top of page)
+ * Render premium KPI cards (rounded corners, proper styling, no wrapping issues)
  */
 function renderKPIStrip(
   doc: PDFKit.PDFDocument,
   data: RiskPostureData,
   pageWidth: number,
-  margin: number
+  startY: number
 ): void {
-  const kpiY = margin
-  const kpiHeight = 80
-  const kpiWidth = pageWidth - margin * 2
-  const numKPIs = 5
-  const kpiItemWidth = (kpiWidth - (numKPIs - 1) * 16) / numKPIs
+  const margin = STYLES.spacing.margin
+  const kpiCardHeight = 95
+  const kpiCardWidth = (pageWidth - margin * 2 - 20) / 5 // 5 cards with 20px total gap
+  const cardGap = 5
+  const cardY = startY
 
-  // Background box
-  doc.rect(margin, kpiY, kpiWidth, kpiHeight).fill(STYLES.colors.lightGrayBg)
-
-  // KPI items
+  // KPI definitions with proper formatting
   const kpis = [
     {
       label: 'Risk Posture',
-      value: data.posture_score !== undefined ? `${data.posture_score}` : 'N/A',
+      value: data.posture_score !== undefined ? `${data.posture_score}` : '—',
       delta: data.delta,
-      unit: '',
+      color: data.posture_score !== undefined && data.posture_score >= 75 ? STYLES.colors.riskLow : 
+             data.posture_score !== undefined && data.posture_score >= 50 ? STYLES.colors.riskMedium : STYLES.colors.riskHigh,
     },
     {
       label: 'High Risk Jobs',
       value: `${data.high_risk_jobs}`,
       delta: data.deltas?.high_risk_jobs,
-      unit: '',
+      color: STYLES.colors.primaryText,
     },
     {
       label: 'Open Incidents',
       value: `${data.open_incidents}`,
       delta: data.deltas?.open_incidents,
-      unit: '',
+      color: STYLES.colors.riskHigh,
     },
     {
-      label: 'Evidence Complete',
+      label: 'Evidence %',
       value: data.signed_signoffs + data.pending_signoffs > 0 
         ? `${Math.round((data.signed_signoffs / (data.signed_signoffs + data.pending_signoffs)) * 100)}%`
-        : '0%',
+        : '—',
       delta: undefined,
-      unit: '',
+      color: STYLES.colors.primaryText,
     },
     {
       label: 'Attestations',
-      value: `${data.signed_signoffs}`,
-      delta: data.deltas?.signed_signoffs,
-      unit: `/${data.signed_signoffs + data.pending_signoffs}`,
+      value: `${data.signed_signoffs}/${data.signed_signoffs + data.pending_signoffs}`, // One line, no split
+      delta: undefined,
+      color: STYLES.colors.primaryText,
     },
   ]
 
-  kpis.forEach((kpi, idx) => {
-    const x = margin + idx * (kpiItemWidth + 16)
-    const centerX = x + kpiItemWidth / 2
-
-    // Value
+  kpis.forEach((kpi, index) => {
+    const cardX = margin + index * (kpiCardWidth + cardGap)
+    
+    // Draw card with subtle border (rounded corners simulated)
     doc
-      .fillColor(STYLES.colors.primaryText)
-      .fontSize(STYLES.sizes.h2)
+      .rect(cardX, cardY, kpiCardWidth, kpiCardHeight)
+      .fill(STYLES.colors.cardBg)
+      .strokeColor(STYLES.colors.borderGray)
+      .lineWidth(0.5)
+      .stroke()
+
+    // Card padding
+    const cardPadding = STYLES.spacing.cardPadding
+    const contentX = cardX + cardPadding
+    const contentWidth = kpiCardWidth - cardPadding * 2
+
+    // Value (big number, baseline aligned)
+    const valueY = cardY + cardPadding + 8
+    doc
+      .fontSize(STYLES.sizes.kpiValue)
       .font(STYLES.fonts.header)
-      .text(kpi.value, centerX, kpiY + 16, { align: 'center', width: kpiItemWidth })
+      .fillColor(kpi.color)
+      .text(sanitizeText(kpi.value), contentX, valueY, { 
+        width: contentWidth,
+        align: 'left',
+      })
 
-    // Unit (if any)
-    if (kpi.unit) {
-      doc
-        .fontSize(STYLES.sizes.body)
-        .font(STYLES.fonts.body)
-        .text(kpi.unit, centerX, kpiY + 40, { align: 'center', width: kpiItemWidth })
-    }
+    // Label (small, below value, no wrapping)
+    const labelY = valueY + STYLES.sizes.kpiValue + 6
+    doc
+      .fontSize(STYLES.sizes.kpiLabel)
+      .font(STYLES.fonts.body)
+      .fillColor(STYLES.colors.secondaryText)
+      .text(sanitizeText(kpi.label), contentX, labelY, { 
+        width: contentWidth,
+        align: 'left',
+      })
 
-    // Label
-      // KPI label - prevent wrapping by breaking long labels
-      const labelText = sanitizeText(kpi.label || '')
-      doc
-        .fontSize(STYLES.sizes.caption)
-        .font(STYLES.fonts.body)
-        .fillColor(STYLES.colors.secondaryText)
-        .text(labelText, centerX, kpiY + (kpi.unit ? 56 : 48), { 
-          align: 'center', 
-          width: kpiItemWidth,
-          lineGap: 2,
-        })
-
-    // Delta (if available)
+    // Delta (if present, small chip-like)
     if (kpi.delta !== undefined && kpi.delta !== 0) {
-      const deltaText = formatDelta(kpi.delta)
+      const deltaText = kpi.delta > 0 ? `+${kpi.delta}` : `${kpi.delta}`
       const deltaColor = kpi.delta > 0 ? STYLES.colors.riskHigh : STYLES.colors.riskLow
+      const deltaY = labelY + 14
       doc
         .fontSize(STYLES.sizes.caption)
+        .font(STYLES.fonts.body)
         .fillColor(deltaColor)
-        .text(deltaText, centerX, kpiY + 68, { align: 'center', width: kpiItemWidth })
+        .text(sanitizeText(deltaText), contentX, deltaY, { 
+          width: contentWidth,
+          align: 'left',
+        })
     }
   })
 
-  doc.y = kpiY + kpiHeight + STYLES.spacing.sectionGap
+  // Update doc.y after cards
+  doc.y = cardY + kpiCardHeight + STYLES.spacing.sectionGap
 }
 
 /**
@@ -331,12 +353,13 @@ function renderExecutiveSummary(
         .text(`- ${insight}`, { // Use hyphen instead of bullet for compatibility
           indent: 20,
           width: pageWidth - margin * 2 - 20,
+          lineGap: 5, // Better line spacing for bullets
         })
-      doc.moveDown(0.3)
+      doc.moveDown(0.4)
     })
   }
 
-  doc.moveDown(1)
+  doc.moveDown(1.2)
 }
 
 /**
@@ -487,11 +510,12 @@ function renderTopDrivers(
 
   drivers.forEach((driver) => {
     ensureSpace(doc, 20, margin)
-    doc.text(`- ${driver.label} (${driver.count})`, { // Use hyphen instead of bullet
+    doc.text(`- ${sanitizeText(driver.label)} (${driver.count})`, { // Use hyphen instead of bullet
       indent: 20,
       width: pageWidth - margin * 2 - 20,
+      lineGap: 5, // Better spacing
     })
-    doc.moveDown(0.3)
+    doc.moveDown(0.4)
   })
 
   doc.moveDown(1)
@@ -506,15 +530,17 @@ function renderRecommendedActions(
   pageWidth: number,
   margin: number
 ): void {
-  // Section header
+  // Section header with divider
   ensureSpace(doc, 120, margin)
+  addSectionDivider(doc, pageWidth, margin)
+  
   doc
     .fillColor(STYLES.colors.primaryText)
     .fontSize(STYLES.sizes.h2)
     .font(STYLES.fonts.header)
     .text('Recommended Actions', { underline: true })
 
-  doc.moveDown(0.5)
+  doc.moveDown(0.8)
 
   const hasSufficientData = data.high_risk_jobs > 0 || data.open_incidents > 0 || data.signed_signoffs > 0
 
@@ -535,9 +561,10 @@ function renderRecommendedActions(
       .fontSize(STYLES.sizes.body)
       .font(STYLES.fonts.header)
       .fillColor(STYLES.colors.primaryText)
-      .text(`${action.priority}. ${action.action}`, {
+      .text(`${action.priority}. ${sanitizeText(action.action)}`, {
         indent: 20,
         width: pageWidth - margin * 2 - 20,
+        lineGap: 5, // Better spacing
       })
 
     ensureSpace(doc, 20, margin)
@@ -545,12 +572,13 @@ function renderRecommendedActions(
       .font(STYLES.fonts.body)
       .fontSize(STYLES.sizes.caption)
       .fillColor(STYLES.colors.secondaryText)
-      .text(`   ${action.reason}`, {
+      .text(`   ${sanitizeText(action.reason)}`, {
         indent: 20,
         width: pageWidth - margin * 2 - 40,
+        lineGap: 4,
       })
 
-    doc.moveDown(0.5)
+    doc.moveDown(0.6)
   })
 
   doc.moveDown(1)
