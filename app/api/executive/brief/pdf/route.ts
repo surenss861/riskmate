@@ -496,8 +496,8 @@ function renderMetricsTable(
   // Calculate required height: header + table header + at least 2 rows
   const sectionHeaderHeight = STYLES.sizes.h2 + 20
   const tableHeaderHeight = STYLES.spacing.tableRowHeight + 4
-  const rowHeight = STYLES.spacing.tableRowHeight
-  const requiredHeight = sectionHeaderHeight + tableHeaderHeight + (rowHeight * 2) + 40
+  const tableRowHeight = STYLES.spacing.tableRowHeight
+  const requiredHeight = sectionHeaderHeight + tableHeaderHeight + (tableRowHeight * 2) + 40
 
   ensureSpace(doc, requiredHeight, margin)
 
@@ -577,7 +577,7 @@ function renderMetricsTable(
     // Zebra striping (subtle)
     if (isEven) {
       doc
-        .rect(margin, rowY, tableWidth, rowHeight)
+        .rect(margin, rowY, tableWidth, tableRowHeight)
         .fill(STYLES.colors.lightGrayBg)
     }
 
@@ -622,8 +622,8 @@ function renderMetricsTable(
     doc
       .strokeColor(STYLES.colors.borderGray)
       .lineWidth(0.5)
-      .moveTo(margin, rowY + rowHeight)
-      .lineTo(margin + tableWidth, rowY + rowHeight)
+      .moveTo(margin, rowY + tableRowHeight)
+      .lineTo(margin + tableWidth, rowY + tableRowHeight)
       .stroke()
 
     // Subtle column dividers
@@ -631,13 +631,13 @@ function renderMetricsTable(
       .strokeColor(STYLES.colors.borderGray)
       .lineWidth(0.3)
       .moveTo(margin + col1Width, rowY)
-      .lineTo(margin + col1Width, rowY + rowHeight)
+      .lineTo(margin + col1Width, rowY + tableRowHeight)
       .moveTo(margin + col1Width + col2Width, rowY)
-      .lineTo(margin + col1Width + col2Width, rowY + rowHeight)
+      .lineTo(margin + col1Width + col2Width, rowY + tableRowHeight)
       .stroke()
 
     markPageHasBody(doc) // Mark body content written
-    doc.y = rowY + rowHeight
+    doc.y = rowY + tableRowHeight
   })
 
   doc.moveDown(1)
