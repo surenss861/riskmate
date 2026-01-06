@@ -1255,12 +1255,45 @@ async function buildExecutiveBriefPDF(
     const timeWindow = { start, end }
     
     doc.on('data', (chunk) => chunks.push(chunk))
-    doc.on('end', () => {
-      const buffer = Buffer.concat(chunks)
-      const hash = crypto.createHash('sha256').update(buffer).digest('hex')
-      const apiLatency = Date.now() - startTime
-      resolve({ buffer, hash, apiLatency, timeWindow })
-    })
+        doc.on('end', () => {
+          const buffer = Buffer.concat(chunks)
+          const hash = crypto.createHash('sha256').update(buffer).digest('hex')
+          const apiLatency = Date.now() - startTime
+
+          // CRITICAL: Runtime ship gate - check for junk pages and lonely content
+          for (let i = 2; i <= pageNumber; i++) { // Start from page 2 (cover page is exempt)
+            const pageIndex = i - 1
+            
+            // Check 1: Insufficient body content (< 60 chars)
+            if ((bodyCharCount[pageIndex] || 0) < 60) {
+              const error = new Error(
+                `PDF ship gate failed: Page ${i} has insufficient body content (${bodyCharCount[pageIndex] || 0} chars). ` +
+                `Likely a junk page. Section: ${currentSection}`
+              )
+              console.error('[PDF Ship Gate]', error.message, { page: i, chars: bodyCharCount[pageIndex], reportId, buildSha })
+              return reject(error)
+            }
+            
+            // Check 2: Lonely content (single tokens/headings without context)
+            const lonelyContent = bodyCharCount[`${pageIndex}_lonely`] as string[] | undefined
+            if (lonelyContent && lonelyContent.length > 0) {
+              // If page has mostly lonely content and < 100 chars total, it's suspicious
+              const totalChars = bodyCharCount[pageIndex] || 0
+              const lonelyChars = lonelyContent.join(' ').length
+              
+              if (lonelyChars > totalChars * 0.5 && totalChars < 100) {
+                const error = new Error(
+                  `PDF ship gate failed: Page ${i} contains lonely content without context: "${lonelyContent.join(', ')}". ` +
+                  `This indicates a heading or value rendered alone. Section: ${currentSection}`
+                )
+                console.error('[PDF Ship Gate]', error.message, { page: i, lonely: lonelyContent, totalChars, reportId, buildSha })
+                return reject(error)
+              }
+            }
+          }
+
+          resolve({ buffer, hash, apiLatency, timeWindow })
+        })
     doc.on('error', reject)
 
     const pageWidth = doc.page.width

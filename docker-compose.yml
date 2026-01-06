@@ -1,48 +1,58 @@
-# Docker Compose for local PDF testing
-# Usage: 
-#   docker-compose run --rm pdf-test                    # Run PDF tests
-#   docker-compose run --rm pdf-smoke                   # Generate PDF artifact
-#   docker-compose run --rm pdf-full                    # Run both tests and generate artifact
+# Docker Compose for local PDF testing (QA-grade setup)
+# 
+# Key principle: Don't bind-mount the whole repo for QA runs (defeats deterministic builds).
+# Only mount artifacts/ folder for outputs. All source code is baked into the image.
+#
+# Usage:
+#   docker-compose run --rm pdf-test     # Run PDF tests only
+#   docker-compose run --rm pdf-smoke    # Generate PDF artifact only
+#   docker-compose run --rm pdf-full     # Run both tests and generate artifact
+#
+# Environment variables (for Supabase connection):
+#   - SUPABASE_URL (required if tests hit database)
+#   - SUPABASE_ANON_KEY (required if tests hit database)
+#   - SUPABASE_SERVICE_ROLE_KEY (optional, for admin operations)
 
-version: '3.8'
+version: "3.8"
 
 services:
   pdf-test:
     build:
       context: .
       dockerfile: Dockerfile
-    volumes:
-      - .:/app
-      - ./artifacts:/app/artifacts
-      - /app/node_modules
-      - /app/.next
     environment:
-      - NODE_ENV=test
+      NODE_ENV: test
+      # Supabase env vars (pass from host .env file)
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
     command: pnpm test __tests__/pdf-executive-brief.test.ts
 
   pdf-smoke:
     build:
       context: .
       dockerfile: Dockerfile
-    volumes:
-      - .:/app
-      - ./artifacts:/app/artifacts
-      - /app/node_modules
-      - /app/.next
     environment:
-      - NODE_ENV=test
+      NODE_ENV: test
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+    volumes:
+      # Only mount artifacts folder for outputs (not the whole repo)
+      - ./artifacts:/app/artifacts
     command: pnpm run pdf:smoke
 
   pdf-full:
     build:
       context: .
       dockerfile: Dockerfile
-    volumes:
-      - .:/app
-      - ./artifacts:/app/artifacts
-      - /app/node_modules
-      - /app/.next
     environment:
-      - NODE_ENV=test
+      NODE_ENV: test
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+    volumes:
+      # Only mount artifacts folder for outputs (not the whole repo)
+      - ./artifacts:/app/artifacts
     command: sh -c "pnpm test __tests__/pdf-executive-brief.test.ts && pnpm run pdf:smoke"
 
