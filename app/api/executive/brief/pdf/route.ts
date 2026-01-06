@@ -630,6 +630,112 @@ function addSectionDivider(
 }
 
 /**
+ * Render data coverage section (compact, reassuring)
+ */
+function renderDataCoverage(
+  doc: PDFKit.PDFDocument,
+  data: RiskPostureData,
+  pageWidth: number,
+  margin: number
+): void {
+  // Only render if we have space (compact section)
+  if (!hasSpace(doc, 80)) {
+    return
+  }
+
+  ensureSpace(doc, 80, margin)
+
+  doc
+    .fillColor(STYLES.colors.primaryText)
+    .fontSize(STYLES.sizes.h3)
+    .font(STYLES.fonts.header)
+    .text('Data Coverage', { underline: true })
+
+  doc.moveDown(0.5)
+
+  // Data coverage items
+  const coverageItems: Array<{ label: string; value: string }> = []
+
+  // Jobs in window
+  const totalJobs = data.total_jobs || 0
+  coverageItems.push({
+    label: 'Jobs in window',
+    value: totalJobs > 0 ? formatNumber(totalJobs) : '—',
+  })
+
+  // Last job timestamp (if available)
+  const lastJobAt = data.last_job_at
+  if (lastJobAt) {
+    const lastJobDate = new Date(lastJobAt)
+    const lastJobStr = lastJobDate.toLocaleDateString('en-US', {
+      timeZone: 'America/New_York',
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    })
+    coverageItems.push({
+      label: 'Last job',
+      value: sanitizeText(lastJobStr),
+    })
+  } else {
+    coverageItems.push({
+      label: 'Last job',
+      value: '—',
+    })
+  }
+
+  // Incidents in window
+  coverageItems.push({
+    label: 'Incidents in window',
+    value: data.open_incidents > 0 ? formatNumber(data.open_incidents) : '—',
+  })
+
+  // Attestations coverage
+  const totalAttestations = data.signed_signoffs + data.pending_signoffs
+  const coveragePercent = totalAttestations > 0
+    ? `${Math.round((data.signed_signoffs / totalAttestations) * 100)}%`
+    : '—'
+  coverageItems.push({
+    label: 'Attestations coverage',
+    value: coveragePercent,
+  })
+
+  // Render as compact list
+  coverageItems.forEach((item) => {
+    ensureSpace(doc, 20, margin)
+    doc
+      .fontSize(STYLES.sizes.body)
+      .font(STYLES.fonts.body)
+      .fillColor(STYLES.colors.primaryText)
+      .text(sanitizeText(item.label + ':'), {
+        indent: 20,
+        width: 180,
+      })
+      .fillColor(STYLES.colors.secondaryText)
+      .text(sanitizeText(item.value), {
+        indent: 200,
+        width: pageWidth - margin * 2 - 200,
+      })
+    doc.moveDown(0.3)
+  })
+
+  // Show reason if data is missing
+  if (totalJobs === 0) {
+    doc.moveDown(0.3)
+    doc
+      .fontSize(STYLES.sizes.caption)
+      .font(STYLES.fonts.body)
+      .fillColor(STYLES.colors.secondaryText)
+      .text(sanitizeText('Reason: No jobs with risk assessments in selected window'), {
+        indent: 20,
+        width: pageWidth - margin * 2 - 20,
+      })
+  }
+
+  doc.moveDown(1)
+}
+
+/**
  * Render top drivers
  */
 function renderTopDrivers(
