@@ -1165,34 +1165,33 @@ function addHeaderFooter(
       `RiskMate Executive Brief | ${organizationName} | ${formatTimeRange(timeRange)} | Generated ${generatedAt.toLocaleDateString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric', year: 'numeric' })} | Report ID: ${reportId.substring(0, 8)} | Page ${pageIndex + 1} of ${pageCount}`
     )
 
-    doc.text(footerText, STYLES.spacing.margin, footerStartY, {
+    // CRITICAL: Footer writes don't count toward bodyCharCount (they're not body content)
+    safeText(doc, footerText, STYLES.spacing.margin, footerStartY, {
       width: pageWidth - STYLES.spacing.margin * 2,
       align: 'center',
+      fontSize: 8,
+      font: STYLES.fonts.body,
+      color: STYLES.colors.primaryText,
     })
 
     // Build stamp line
     const buildStamp = `${buildInfo} | mode: ${mode} | reportId: ${reportId.substring(0, 8)}`
-    doc
-      .fontSize(8)
-      .fillColor(STYLES.colors.secondaryText)
-      .text(buildStamp, STYLES.spacing.margin, footerStartY + lineHeight + footerSpacing, {
-        width: pageWidth - STYLES.spacing.margin * 2,
-        align: 'center',
-      })
+    safeText(doc, buildStamp, STYLES.spacing.margin, footerStartY + lineHeight + footerSpacing, {
+      width: pageWidth - STYLES.spacing.margin * 2,
+      align: 'center',
+      fontSize: 8,
+      font: STYLES.fonts.body,
+      color: STYLES.colors.secondaryText,
+    })
 
-    // Confidentiality line (combined with footer block)
-    doc
-      .fontSize(8)
-      .fillColor(STYLES.colors.secondaryText)
-      .text(
-        'CONFIDENTIAL — This document contains sensitive information and is intended only for authorized recipients.',
-        STYLES.spacing.margin,
-        footerStartY + (lineHeight * 2) + (footerSpacing * 2),
-        {
-          width: pageWidth - STYLES.spacing.margin * 2,
-          align: 'center',
-        }
-      )
+    // Confidentiality line (combined with footer block) - use safeText
+    safeText(doc, 'CONFIDENTIAL — This document contains sensitive information and is intended only for authorized recipients.', STYLES.spacing.margin, footerStartY + (lineHeight * 2) + (footerSpacing * 2), {
+      width: pageWidth - STYLES.spacing.margin * 2,
+      align: 'center',
+      fontSize: 8,
+      font: STYLES.fonts.body,
+      color: STYLES.colors.secondaryText,
+    })
   }
 }
 
@@ -1387,17 +1386,14 @@ async function buildExecutiveBriefPDF(
     if (hasEnoughDrivers && pageNumber <= 2 && hasSpace(doc, 100)) {
       renderTopDrivers(doc, data, pageWidth, margin)
     } else if (!hasEnoughDrivers && pageNumber === 1) {
-      // Show inline note on page 1 if threshold not met
+      // Show inline note on page 1 if threshold not met - use safeText
       if (hasSpace(doc, 20)) {
-        doc
-          .fontSize(STYLES.sizes.caption)
-          .font(STYLES.fonts.body)
-          .fillColor(STYLES.colors.secondaryText)
-          .text(sanitizeText('Appendix omitted (insufficient data in selected window)'), {
-            indent: 20,
-            width: pageWidth - margin * 2 - 20,
-          })
-        markPageHasBody(doc)
+        safeText(doc, 'Appendix omitted (insufficient data in selected window)', margin + 20, doc.y, {
+          width: pageWidth - margin * 2 - 20,
+          fontSize: STYLES.sizes.caption,
+          font: STYLES.fonts.body,
+          color: STYLES.colors.secondaryText,
+        })
       }
     }
 
