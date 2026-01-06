@@ -736,7 +736,18 @@ function renderMetricsTable(
   doc.y = tableY + headerHeight
 
   // Table rows - metrics list already built above (with hasContent check)
-  metrics.forEach((metric, idx) => {
+  const metricsRows = [
+    { label: 'High Risk Jobs', value: data.high_risk_jobs, delta: data.deltas?.high_risk_jobs },
+    { label: 'Open Incidents', value: data.open_incidents, delta: data.deltas?.open_incidents },
+    { label: 'Recent Violations', value: data.recent_violations, delta: data.deltas?.violations },
+    { label: 'Flagged for Review', value: data.flagged_jobs, delta: data.deltas?.flagged_jobs },
+    { label: 'Pending Sign-offs', value: data.pending_signoffs, delta: undefined },
+    { label: 'Signed Sign-offs', value: data.signed_signoffs, delta: undefined },
+    // CRITICAL: Only show Proof Packs if count > 0 (prevents junk page)
+    ...(data.proof_packs_generated > 0 ? [{ label: 'Proof Packs Generated', value: data.proof_packs_generated, delta: undefined }] : []),
+  ]
+  
+  metricsRows.forEach((metric, idx) => {
     const rowY = doc.y
     const isEven = idx % 2 === 0
 
