@@ -42,20 +42,9 @@ export async function resolveOrgContext(user: User): Promise<OrgContext | null> 
 
   const orgId = profile.organization_id
   const role = profile.role || 'member'
-  let resolvedFrom: 'profile' | 'membership' | 'fallback' = 'profile'
+  const resolvedFrom: 'profile' | 'membership' | 'fallback' = 'profile'
 
   // Verify organization exists and get name
-  const { data: org } = await supabase
-    .from('organizations')
-    .select('name')
-    .eq('id', orgId)
-    .maybeSingle()
-
-  if (!org) {
-    return null // Organization not found
-  }
-
-  // Get organization name
   const { data: org } = await supabase
     .from('organizations')
     .select('name')
@@ -70,7 +59,7 @@ export async function resolveOrgContext(user: User): Promise<OrgContext | null> 
     userId,
     orgId,
     orgName: org.name || 'Organization',
-    role: role || membershipCheck.role || 'member',
+    role,
     resolvedFrom,
   }
 }

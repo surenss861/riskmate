@@ -277,13 +277,14 @@ function renderExecutiveSummary(
 
   doc.moveDown(0.5)
 
-  // Confidence statement (main narrative)
+  // Confidence statement (main narrative) - sanitize at render time
   ensureSpace(doc, 60, margin)
+  const sanitizedConfidence = sanitizeText(String(data.confidence_statement || ''))
   doc
     .fontSize(STYLES.sizes.body)
     .font(STYLES.fonts.body)
     .fillColor(STYLES.colors.primaryText)
-    .text(data.confidence_statement, {
+    .text(sanitizedConfidence, {
       width: pageWidth - margin * 2,
       align: 'left',
       lineGap: 4,
@@ -705,12 +706,15 @@ async function buildExecutiveBriefPDF(
     const pageWidth = doc.page.width
     const margin = STYLES.spacing.margin
 
-    // Cover/Header Block
+    // Cover/Header Block - sanitize all text at render time
+    const sanitizedTitle = sanitizeText('RiskMate Executive Brief')
+    const sanitizedOrgName = sanitizeText(organizationName)
+    
     doc
       .fillColor(STYLES.colors.accent)
       .fontSize(STYLES.sizes.h1)
       .font(STYLES.fonts.header)
-      .text('RiskMate Executive Brief', { align: 'center' })
+      .text(sanitizedTitle, { align: 'center' })
 
     doc.moveDown(0.3)
 
@@ -718,7 +722,7 @@ async function buildExecutiveBriefPDF(
       .fillColor(STYLES.colors.primaryText)
       .fontSize(STYLES.sizes.h3)
       .font(STYLES.fonts.body)
-      .text(organizationName, { align: 'center' })
+      .text(sanitizedOrgName, { align: 'center' })
 
     doc.moveDown(0.2)
 
@@ -729,12 +733,22 @@ async function buildExecutiveBriefPDF(
 
     doc.moveDown(0.2)
 
+    // Sanitize generated timestamp at render time
+    const generatedTimestamp = generatedAt.toLocaleString('en-US', { 
+      timeZone: 'America/New_York', 
+      month: 'short', 
+      day: 'numeric', 
+      year: 'numeric', 
+      hour: 'numeric', 
+      minute: '2-digit', 
+      hour12: true, 
+      timeZoneName: 'short' 
+    })
+    const sanitizedTimestamp = sanitizeText(`Generated ${generatedTimestamp}`)
+    
     doc
       .fontSize(STYLES.sizes.caption)
-      .text(
-        `Generated ${generatedAt.toLocaleString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true, timeZoneName: 'short' })}`,
-        { align: 'center' }
-      )
+      .text(sanitizedTimestamp, { align: 'center' })
 
     doc.moveDown(1.5)
 
@@ -846,7 +860,7 @@ export async function POST(request: NextRequest) {
           pending_signoffs: 0,
           signed_signoffs: 0,
           proof_packs_generated: 0,
-          confidence_statement: '✅ No unresolved governance violations. All jobs within acceptable risk thresholds.',
+          confidence_statement: sanitizeText('No unresolved governance violations. All jobs within acceptable risk thresholds.'),
           ledger_integrity: 'not_verified',
           ledger_integrity_last_verified_at: null,
         }
@@ -856,14 +870,22 @@ export async function POST(request: NextRequest) {
     // Get build SHA for tracking
     const buildSha = process.env.VERCEL_GIT_COMMIT_SHA || process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA || undefined
 
+    // Sanitize confidence statement at the last moment (catches any control chars)
+    riskPostureData.confidence_statement = sanitizeText(riskPostureData.confidence_statement || '')
+
     // Generate PDF
-    const { buffer, hash, reportId } = await buildExecutiveBriefPDF(
+    const { buffer, hash, reportId, apiLatency, timeWindow } = await buildExecutiveBriefPDF(
       riskPostureData,
       organizationName,
-      user.email || `User ${user.id.substring(0, 8)}`,
+      sanitizeText(user.email || `User ${user.id.substring(0, 8)}`),
       timeRange,
       buildSha
     )
+    
+    // Add report integrity metadata
+    const dataFreshness = new Date().toISOString()
+    const windowStartStr = timeWindow.start.toISOString().split('T')[0]
+    const windowEndStr = timeWindow.end.toISOString().split('T')[0]
 
     // Convert Buffer to Uint8Array for NextResponse
     const pdfBytes = new Uint8Array(buffer)
@@ -878,6 +900,14 @@ export async function POST(request: NextRequest) {
       'X-PDF-Hash': hash,
       'X-Executive-Brief-Mode': 'premium',
       'X-Executive-Brief-ReportId': reportId.substring(0, 8),
+      'X-Data-Window-Start': windowStartStr,
+      'X-Data-Window-End': windowEndStr,
+      'X-Data-Freshness': dataFreshness,
+      'X-API-Latency-Ms': String(apiLatency),
+      'X-Source-Tables': 'jobs,incidents,attestations,audit_logs',
+      'X-Org-Id-Hash': hashId(orgContext.orgId),
+      'X-User-Id-Hash': hashId(orgContext.userId),
+      'X-Resolved-From': orgContext.resolvedFrom,
     })
 
     if (buildSha) {
