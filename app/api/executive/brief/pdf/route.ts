@@ -810,7 +810,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Use resolved org name (sanitized immediately)
+    // This should be the actual org name from organizations.name, not email-based
     const organizationName = sanitizeText(orgContext.orgName)
+    
+    // Debug log (remove in prod or gate behind env flag)
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`[executive/brief/pdf] Org resolved: ${orgContext.orgId.substring(0, 8)}... -> "${organizationName}" (from: ${orgContext.resolvedFrom})`)
+    }
 
     // Get time range from request body
     const body = await request.json().catch(() => ({}))

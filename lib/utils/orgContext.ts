@@ -37,6 +37,7 @@ export async function resolveOrgContext(user: User): Promise<OrgContext | null> 
     .maybeSingle()
 
   if (!profile?.organization_id) {
+    console.warn(`[resolveOrgContext] User ${userId} has no organization_id`)
     return null // No organization found
   }
 
@@ -44,21 +45,39 @@ export async function resolveOrgContext(user: User): Promise<OrgContext | null> 
   const role = profile.role || 'member'
   const resolvedFrom: 'profile' | 'membership' | 'fallback' = 'profile'
 
-  // Verify organization exists and get name
-  const { data: org } = await supabase
+  // Verify organization exists and get name (REQUIRED - no fallback to email)
+  const { data: org, error: orgError } = await supabase
     .from('organizations')
     .select('name')
     .eq('id', orgId)
     .maybeSingle()
 
+  if (orgError) {
+    console.error(`[resolveOrgContext] Error fetching org ${orgId}:`, orgError)
+    return null
+  }
+
   if (!org) {
+    console.warn(`[resolveOrgContext] Organization ${orgId} not found`)
     return null // Organization not found
+  }
+
+  // Explicitly check for empty/null name - return "Unknown Organization" instead of fallback
+  if (!org.name || org.name.trim() === '') {
+    console.warn(`[resolveOrgContext] Organization ${orgId} has empty name`)
+    return {
+      userId,
+      orgId,
+      orgName: 'Unknown Organization', // Explicit marker, not email-based
+      role,
+      resolvedFrom,
+    }
   }
 
   return {
     userId,
     orgId,
-    orgName: org.name || 'Organization',
+    orgName: org.name.trim(), // Use actual org name from database
     role,
     resolvedFrom,
   }
