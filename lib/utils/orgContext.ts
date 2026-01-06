@@ -29,69 +29,30 @@ export async function resolveOrgContext(user: User): Promise<OrgContext | null> 
   const supabase = await createSupabaseServerClient()
   const userId = user.id
 
-  // Step 1: Check user profile for active_org_id
+  // Step 1: Get user profile (contains organization_id)
   const { data: profile } = await supabase
     .from('users')
-    .select('organization_id, role, active_org_id')
+    .select('organization_id, role')
     .eq('id', userId)
     .maybeSingle()
 
-  let orgId: string | null = null
-  let role: string | null = null
-  let resolvedFrom: 'profile' | 'membership' | 'fallback' = 'fallback'
-
-  // Try active_org_id first (if profile has it)
-  if (profile?.active_org_id) {
-    const { data: membership } = await supabase
-      .from('org_members')
-      .select('org_id, role')
-      .eq('user_id', userId)
-      .eq('org_id', profile.active_org_id)
-      .maybeSingle()
-
-    if (membership) {
-      orgId = membership.org_id
-      role = membership.role || profile.role || 'member'
-      resolvedFrom = 'profile'
-    }
-  }
-
-  // Step 2: If no active_org_id, check org_members for most recent
-  if (!orgId) {
-    const { data: memberships } = await supabase
-      .from('org_members')
-      .select('org_id, role, created_at')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
-      .limit(1)
-
-    if (memberships && memberships.length > 0) {
-      orgId = memberships[0].org_id
-      role = memberships[0].role || profile?.role || 'member'
-      resolvedFrom = 'membership'
-    } else if (profile?.organization_id) {
-      // Step 3: Fallback to organization_id from profile
-      orgId = profile.organization_id
-      role = profile.role || 'member'
-      resolvedFrom = 'fallback'
-    }
-  }
-
-  if (!orgId) {
+  if (!profile?.organization_id) {
     return null // No organization found
   }
 
-  // Verify membership exists (security check)
-  const { data: membershipCheck } = await supabase
-    .from('org_members')
-    .select('org_id, role')
-    .eq('user_id', userId)
-    .eq('org_id', orgId)
+  const orgId = profile.organization_id
+  const role = profile.role || 'member'
+  let resolvedFrom: 'profile' | 'membership' | 'fallback' = 'profile'
+
+  // Verify organization exists and get name
+  const { data: org } = await supabase
+    .from('organizations')
+    .select('name')
+    .eq('id', orgId)
     .maybeSingle()
 
-  if (!membershipCheck) {
-    // User doesn't have membership - return null
-    return null
+  if (!org) {
+    return null // Organization not found
   }
 
   // Get organization name
