@@ -646,8 +646,9 @@ async function buildExecutiveBriefPDF(
   organizationName: string,
   generatedBy: string,
   timeRange: string,
-  buildSha?: string
-): Promise<{ buffer: Buffer; hash: string; reportId: string; apiLatency: number; timeWindow: { start: Date; end: Date } }> {
+  buildSha: string | undefined,
+  reportId: string
+): Promise<{ buffer: Buffer; hash: string; apiLatency: number; timeWindow: { start: Date; end: Date } }> {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({
       size: 'LETTER',
