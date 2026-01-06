@@ -40,8 +40,18 @@ export async function GET(request: NextRequest) {
         )
       }
 
-    // Return minimal valid response structure that matches backend API
-    // This is a placeholder - full implementation would need ledger integrity checks, material events, etc.
+    // TODO: Query actual metrics scoped to orgContext.orgId
+    // All queries must filter by: WHERE organization_id = orgContext.orgId
+    // Example:
+    //   const { data: jobs } = await supabase
+    //     .from('jobs')
+    //     .select('id, risk_score')
+    //     .eq('organization_id', orgContext.orgId)
+    //     .gte('risk_score', 70) // high risk threshold
+    //   const highRiskJobs = jobs?.length || 0
+    
+    // For now, return minimal valid response structure (placeholder)
+    // This will show "Insufficient job volume" until real queries are implemented
     const riskPostureData = {
       exposure_level: 'low' as const,
       unresolved_violations: 0,
