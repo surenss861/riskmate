@@ -476,6 +476,24 @@ function renderMetricsTable(
 }
 
 /**
+ * Add section divider (thin line for visual separation)
+ */
+function addSectionDivider(
+  doc: PDFKit.PDFDocument,
+  pageWidth: number,
+  margin: number
+): void {
+  ensureSpace(doc, 20, margin)
+  doc
+    .strokeColor(STYLES.colors.borderGray)
+    .lineWidth(0.5)
+    .moveTo(margin, doc.y)
+    .lineTo(pageWidth - margin, doc.y)
+    .stroke()
+  doc.moveDown(1)
+}
+
+/**
  * Render top drivers
  */
 function renderTopDrivers(
