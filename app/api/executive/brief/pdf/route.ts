@@ -134,6 +134,48 @@ function formatNumber(num: number | string): string {
 }
 
 /**
+ * Pluralize helper (1 incident vs 2 incidents)
+ */
+function pluralize(count: number, singular: string, plural?: string): string {
+  if (count === 1) return singular
+  return plural || `${singular}s`
+}
+
+/**
+ * Truncate text to fit width with ellipsis
+ */
+function truncateText(
+  doc: PDFKit.PDFDocument,
+  text: string,
+  maxWidth: number,
+  fontSize: number = STYLES.sizes.body
+): string {
+  doc.fontSize(fontSize)
+  const textWidth = doc.widthOfString(text)
+  if (textWidth <= maxWidth) return text
+  
+  // Binary search for truncation point
+  let low = 0
+  let high = text.length
+  let result = text
+  
+  while (low < high) {
+    const mid = Math.floor((low + high) / 2)
+    const candidate = text.substring(0, mid) + '...'
+    const candidateWidth = doc.widthOfString(candidate)
+    
+    if (candidateWidth <= maxWidth) {
+      result = candidate
+      low = mid + 1
+    } else {
+      high = mid
+    }
+  }
+  
+  return result
+}
+
+/**
  * Format time range label
  */
 function formatTimeRange(timeRange: string): string {
