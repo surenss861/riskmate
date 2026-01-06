@@ -46,6 +46,18 @@ export async function GET(request: NextRequest) {
       )
     }
 
+    // Verify org-scoped data access (quick sanity check)
+    const { count: jobsCount } = await supabase
+      .from('jobs')
+      .select('*', { count: 'exact', head: true })
+      .eq('organization_id', orgContext.orgId)
+      .is('deleted_at', null)
+
+    const { count: incidentsCount } = await supabase
+      .from('incidents')
+      .select('*', { count: 'exact', head: true })
+      .eq('organization_id', orgContext.orgId)
+
     // Return debug info (hashed IDs, no PII)
     return NextResponse.json({
       message: 'OK',
@@ -55,6 +67,13 @@ export async function GET(request: NextRequest) {
       role: orgContext.role,
       resolvedFrom: orgContext.resolvedFrom,
       hasOrg: true,
+      // Quick data access verification (counts, not actual data)
+      dataAccess: {
+        jobsCount: jobsCount || 0,
+        incidentsCount: incidentsCount || 0,
+        canReadJobs: jobsCount !== null,
+        canReadIncidents: incidentsCount !== null,
+      },
     })
   } catch (error: any) {
     console.error('[debug/whoami] Unexpected error:', error)
