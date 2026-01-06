@@ -448,15 +448,15 @@ function renderExecutiveSummary(
     insights.push('Requires at least 1 job with risk assessment in the selected time range')
   } else {
     if (data.high_risk_jobs > 0) {
-      insights.push(`${formatNumber(data.high_risk_jobs)} high-risk job${data.high_risk_jobs > 1 ? 's' : ''} requiring attention`)
+      insights.push(`${formatNumber(data.high_risk_jobs)} high-risk ${pluralize(data.high_risk_jobs, 'job', 'jobs')} requiring attention`)
     }
 
     if (data.open_incidents > 0) {
-      insights.push(`${formatNumber(data.open_incidents)} open incident${data.open_incidents > 1 ? 's' : ''} under investigation`)
+      insights.push(`${formatNumber(data.open_incidents)} open ${pluralize(data.open_incidents, 'incident', 'incidents')} under investigation`)
     }
 
     if (data.pending_signoffs > 0) {
-      insights.push(`${formatNumber(data.pending_signoffs)} pending attestation${data.pending_signoffs > 1 ? 's' : ''} awaiting signatures`)
+      insights.push(`${formatNumber(data.pending_signoffs)} pending ${pluralize(data.pending_signoffs, 'attestation', 'attestations')} awaiting signatures`)
     }
 
     if (data.ledger_integrity === 'verified') {
