@@ -799,8 +799,12 @@ function renderMetricsTable(
     // Validate row has required data before any writes
     if (!metric.label) return // Skip invalid rows
     
-    const hasAnyValue = metric.value != null || metric.delta != null
-    if (!hasAnyValue) return // Skip rows with no values
+    // CRITICAL: Always render if we have a label (value can be 0, which is valid)
+    // Only skip if value is explicitly null/undefined (not 0, which is falsy but valid)
+    if (metric.value === null || metric.value === undefined) {
+      // If no value, use "—" as placeholder (always show something)
+      metric.value = '—'
+    }
     
     // CRITICAL: ensureSpace ONCE per row, before writing anything
     ensureSpace(doc, tableRowHeight + 10, margin)
@@ -826,34 +830,33 @@ function renderMetricsTable(
       color: STYLES.colors.primaryText,
     })
 
-    // Value (right-aligned, fixed width) - only if label exists
-    if (metric.label) {
-      const valueText = typeof metric.value === 'string' 
-        ? metric.value 
-        : formatNumber(metric.value)
-      safeText(doc, valueText, margin + col1Width + cellPadding, rowY + cellPadding, {
-        width: col2Width - cellPadding * 2,
-        align: 'right',
-        fontSize: STYLES.sizes.body,
-        font: STYLES.fonts.body,
-        color: STYLES.colors.primaryText,
-      })
-    }
+    // CRITICAL: Always render value and delta (even if "—" or 0)
+    // This ensures every row has values in Current/Change columns
+    const valueText = typeof metric.value === 'string' 
+      ? metric.value 
+      : formatNumber(metric.value ?? 0)
+    
+    // Always render value (even if it's "—" or "0")
+    safeText(doc, valueText, margin + col1Width + cellPadding, rowY + cellPadding, {
+      width: col2Width - cellPadding * 2,
+      align: 'right',
+      fontSize: STYLES.sizes.body,
+      font: STYLES.fonts.body,
+      color: STYLES.colors.primaryText,
+    })
 
-    // Delta (right-aligned, fixed narrow column) - only if label exists
-    if (metric.label) {
-      const deltaText = formatDelta(metric.delta)
-      const deltaColor = deltaText === '—' 
-        ? STYLES.colors.secondaryText 
-        : ((metric.delta || 0) > 0 ? STYLES.colors.riskHigh : STYLES.colors.riskLow)
-      safeText(doc, deltaText, margin + col1Width + col2Width + cellPadding, rowY + cellPadding, {
-        width: col3Width - cellPadding * 2,
-        align: 'right',
-        fontSize: STYLES.sizes.body,
-        font: STYLES.fonts.body,
-        color: deltaColor,
-      })
-    }
+    // Always render delta (even if "—")
+    const deltaText = formatDelta(metric.delta)
+    const deltaColor = deltaText === '—' 
+      ? STYLES.colors.secondaryText 
+      : ((metric.delta || 0) > 0 ? STYLES.colors.riskHigh : STYLES.colors.riskLow)
+    safeText(doc, deltaText, margin + col1Width + col2Width + cellPadding, rowY + cellPadding, {
+      width: col3Width - cellPadding * 2,
+      align: 'right',
+      fontSize: STYLES.sizes.body,
+      font: STYLES.fonts.body,
+      color: deltaColor,
+    })
     
     markPageHasBody(doc) // Mark row as written
     doc.y = rowY + tableRowHeight
@@ -962,10 +965,10 @@ function renderDataCoverage(
     })
   }
 
-  // Incidents in window
+  // Incidents in window - always show a number (0 is valid, not "—")
   coverageItems.push({
     label: 'Incidents in window',
-    value: data.open_incidents > 0 ? formatNumber(data.open_incidents) : '—',
+    value: formatNumber(data.open_incidents ?? 0), // Always show number, even if 0
   })
 
   // Attestations coverage
