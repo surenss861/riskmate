@@ -1288,20 +1288,22 @@ async function buildExecutiveBriefPDF(
             const pageIndex = i - 1
             
             // Check 1: Insufficient body content (< 60 chars)
-            if ((bodyCharCount[pageIndex] || 0) < 60) {
+            const pageChars = typeof bodyCharCount[pageIndex] === 'number' ? bodyCharCount[pageIndex] as number : 0
+            if (pageChars < 60) {
               const error = new Error(
-                `PDF ship gate failed: Page ${i} has insufficient body content (${bodyCharCount[pageIndex] || 0} chars). ` +
+                `PDF ship gate failed: Page ${i} has insufficient body content (${pageChars} chars). ` +
                 `Likely a junk page. Section: ${currentSection}`
               )
-              console.error('[PDF Ship Gate]', error.message, { page: i, chars: bodyCharCount[pageIndex], reportId, buildSha })
+              console.error('[PDF Ship Gate]', error.message, { page: i, chars: pageChars, reportId, buildSha })
               return reject(error)
             }
             
             // Check 2: Lonely content (single tokens/headings without context)
-            const lonelyContent = bodyCharCount[`${pageIndex}_lonely`] as string[] | undefined
+            const lonelyKey = `${pageIndex}_lonely`
+            const lonelyContent = Array.isArray(bodyCharCount[lonelyKey]) ? bodyCharCount[lonelyKey] as string[] : undefined
             if (lonelyContent && lonelyContent.length > 0) {
               // If page has mostly lonely content and < 100 chars total, it's suspicious
-              const totalChars = bodyCharCount[pageIndex] || 0
+              const totalChars = pageChars
               const lonelyChars = lonelyContent.join(' ').length
               
               if (lonelyChars > totalChars * 0.5 && totalChars < 100) {
