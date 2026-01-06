@@ -869,14 +869,65 @@ export async function POST(request: NextRequest) {
     // Sanitize confidence statement at the last moment (catches any control chars)
     riskPostureData.confidence_statement = sanitizeText(riskPostureData.confidence_statement || '')
 
+    // Generate unique report ID for audit trail
+    const reportId = crypto.randomBytes(16).toString('hex')
+    const generatedAt = new Date()
+
+    // Create audit record BEFORE generating PDF (tracks the request)
+    const { data: reportRun, error: auditError } = await supabase
+      .from('report_runs')
+      .insert({
+        id: reportId,
+        organization_id: orgContext.orgId,
+        generated_by: user.id,
+        generated_at: generatedAt.toISOString(),
+        status: 'generating',
+        packet_type: 'executive_brief',
+        time_range: timeRange,
+        metrics_snapshot: riskPostureData as any, // Store exact metrics used
+        build_sha: buildSha || null,
+        metadata: {
+          api_latency_ms: null, // Will update after generation
+          time_window_start: null, // Will update after generation
+          time_window_end: null, // Will update after generation
+        },
+      })
+      .select()
+      .single()
+
+    if (auditError) {
+      console.error('[executive/brief/pdf] Failed to create audit record:', auditError)
+      // Continue anyway - don't fail the PDF generation
+    }
+
     // Generate PDF
-    const { buffer, hash, reportId, apiLatency, timeWindow } = await buildExecutiveBriefPDF(
+    const { buffer, hash, apiLatency, timeWindow } = await buildExecutiveBriefPDF(
       riskPostureData,
       organizationName,
       sanitizeText(user.email || `User ${user.id.substring(0, 8)}`),
       timeRange,
-      buildSha
+      buildSha,
+      reportId // Pass reportId for footer
     )
+    
+    // Update audit record with completion status and final metadata
+    if (reportRun) {
+      await supabase
+        .from('report_runs')
+        .update({
+          status: 'ready_for_signatures', // Executive briefs don't need signatures, but this indicates completion
+          completed_at: new Date().toISOString(),
+          completed_hash: hash,
+          metadata: {
+            api_latency_ms: apiLatency,
+            time_window_start: timeWindow.start.toISOString(),
+            time_window_end: timeWindow.end.toISOString(),
+            pdf_size_bytes: buffer.length,
+            pdf_hash: hash,
+          },
+        })
+        .eq('id', reportId)
+    }
     
     // Add report integrity metadata
     const dataFreshness = new Date().toISOString()
@@ -896,6 +947,7 @@ export async function POST(request: NextRequest) {
       'X-PDF-Hash': hash,
       'X-Executive-Brief-Mode': 'premium',
       'X-Executive-Brief-ReportId': reportId.substring(0, 8),
+      'X-Report-Run-Id': reportId, // Full report ID for verification endpoint
       'X-Data-Window-Start': windowStartStr,
       'X-Data-Window-End': windowEndStr,
       'X-Data-Freshness': dataFreshness,
