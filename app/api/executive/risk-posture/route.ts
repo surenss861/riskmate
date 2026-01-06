@@ -21,27 +21,23 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Get user's organization
-    const { data: userData } = await supabase
-      .from('users')
-      .select('organization_id, role')
-      .eq('id', user.id)
-      .maybeSingle()
+      // Resolve organization context (shared helper)
+      const orgContext = await resolveOrgContext(user)
 
-    if (!userData?.organization_id) {
-      return NextResponse.json(
-        { message: 'Organization not found' },
-        { status: 403 }
-      )
-    }
+      if (!orgContext) {
+        return NextResponse.json(
+          { message: 'Organization not found or access denied' },
+          { status: 403 }
+        )
+      }
 
-    // Verify executive role
-    if (userData.role !== 'executive' && userData.role !== 'owner' && userData.role !== 'admin') {
-      return NextResponse.json(
-        { message: 'Executive access required' },
-        { status: 403 }
-      )
-    }
+      // Verify executive role
+      if (orgContext.role !== 'executive' && orgContext.role !== 'owner' && orgContext.role !== 'admin') {
+        return NextResponse.json(
+          { message: 'Executive access required' },
+          { status: 403 }
+        )
+      }
 
     // Return minimal valid response structure that matches backend API
     // This is a placeholder - full implementation would need ledger integrity checks, material events, etc.
