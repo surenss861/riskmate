@@ -360,9 +360,10 @@ function renderMetricsTable(
       .font(STYLES.fonts.body)
       .text(metric.label, margin + 8, rowY, { width: col1Width - 16 })
 
-    // Value
+    // Value (right-aligned) - handle N/A vs numeric
+    const valueText = typeof metric.value === 'string' ? metric.value : String(metric.value)
     doc.text(
-      String(metric.value),
+      valueText,
       margin + col1Width + 8,
       rowY,
       { width: col2Width - 16, align: 'right' }
