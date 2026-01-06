@@ -1023,29 +1023,23 @@ function renderTopDrivers(
   // Section header with divider
   addSectionDivider(doc, pageWidth, margin)
   
-  doc
-    .fillColor(STYLES.colors.primaryText)
-    .fontSize(STYLES.sizes.h2)
-    .font(STYLES.fonts.header)
-    .text('Top Risk Drivers', { underline: true })
-
+  safeText(doc, 'Top Risk Drivers', margin, doc.y, {
+    fontSize: STYLES.sizes.h2,
+    font: STYLES.fonts.header,
+    color: STYLES.colors.primaryText,
+  })
   doc.moveDown(0.8)
-
-  doc
-    .fontSize(STYLES.sizes.body)
-    .font(STYLES.fonts.body)
-    .fillColor(STYLES.colors.primaryText)
 
   drivers.forEach((driver) => {
     ensureSpace(doc, 20, margin)
-    // CRITICAL: Always render label with value (prevents standalone values)
+    // CRITICAL: Always render label with value (prevents standalone values) - use safeText
     if (driver.label && driver.count !== undefined) {
-      doc.text(`- ${sanitizeText(driver.label)} (${driver.count})`, { // Use hyphen instead of bullet
-        indent: 20,
+      safeText(doc, `- ${sanitizeText(driver.label)} (${driver.count})`, margin + 20, doc.y, { // Use hyphen instead of bullet
         width: pageWidth - margin * 2 - 20,
-        lineGap: 5, // Better spacing
+        fontSize: STYLES.sizes.body,
+        font: STYLES.fonts.body,
+        color: STYLES.colors.primaryText,
       })
-      markPageHasBody(doc)
       doc.moveDown(0.4)
     }
   })
