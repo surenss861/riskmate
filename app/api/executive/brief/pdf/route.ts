@@ -288,24 +288,34 @@ function renderExecutiveSummary(
 
   // Key insights (bullet points)
   const insights: string[] = []
+  const hasData = data.high_risk_jobs > 0 || data.open_incidents > 0 || data.signed_signoffs > 0
 
-  if (data.high_risk_jobs > 0) {
-    insights.push(`${data.high_risk_jobs} high-risk job${data.high_risk_jobs > 1 ? 's' : ''} requiring attention`)
+  if (!hasData) {
+    insights.push('Insufficient job volume in selected window to compute posture score')
+    insights.push('Metrics will populate automatically as job data is recorded')
+    insights.push('Requires at least 1 job with risk assessment in the selected time range')
+  } else {
+    if (data.high_risk_jobs > 0) {
+      insights.push(`${formatNumber(data.high_risk_jobs)} high-risk job${data.high_risk_jobs > 1 ? 's' : ''} requiring attention`)
+    }
+
+    if (data.open_incidents > 0) {
+      insights.push(`${formatNumber(data.open_incidents)} open incident${data.open_incidents > 1 ? 's' : ''} under investigation`)
+    }
+
+    if (data.pending_signoffs > 0) {
+      insights.push(`${formatNumber(data.pending_signoffs)} pending attestation${data.pending_signoffs > 1 ? 's' : ''} awaiting signatures`)
+    }
+
+    if (data.ledger_integrity === 'verified') {
+      insights.push('Ledger integrity verified - all audit trails intact')
+    } else if (data.ledger_integrity === 'error') {
+      insights.push('Ledger integrity check failed - investigation required')
+    }
   }
 
-  if (data.open_incidents > 0) {
-    insights.push(`${data.open_incidents} open incident${data.open_incidents > 1 ? 's' : ''} under investigation`)
-  }
-
-  if (data.pending_signoffs > 0) {
-    insights.push(`${data.pending_signoffs} pending attestation${data.pending_signoffs > 1 ? 's' : ''} awaiting signatures`)
-  }
-
-  if (data.ledger_integrity === 'verified') {
-    insights.push('Ledger integrity verified - all audit trails intact')
-  } else if (data.ledger_integrity === 'error') {
-    insights.push('⚠️ Ledger integrity check failed - investigation required')
-  }
+  // Sanitize all insights
+  const sanitizedInsights = insights.map(sanitizeText)
 
   if (sanitizedInsights.length > 0) {
     sanitizedInsights.forEach((insight) => {
