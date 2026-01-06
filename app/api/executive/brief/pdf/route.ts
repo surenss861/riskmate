@@ -64,6 +64,9 @@ interface RiskPostureData {
   confidence_statement: string
   ledger_integrity: 'verified' | 'error' | 'not_verified'
   ledger_integrity_last_verified_at: string | null
+  // For data coverage
+  total_jobs?: number
+  last_job_at?: string | null
   drivers?: {
     highRiskJobs?: Array<{ label: string; count: number }>
     openIncidents?: Array<{ label: string; count: number }>
