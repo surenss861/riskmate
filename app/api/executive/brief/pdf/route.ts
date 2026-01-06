@@ -156,6 +156,7 @@ function getExposureColor(level: string): string {
 
 /**
  * Helper: Check if we need a new page and add one if needed
+ * Only adds a page if there's actually content to render
  */
 function ensureSpace(
   doc: PDFKit.PDFDocument,
@@ -168,6 +169,18 @@ function ensureSpace(
     // Reset to top of content area after page break
     doc.y = STYLES.spacing.margin
   }
+}
+
+/**
+ * Helper: Check if we have enough space, return false if we need a new page
+ * Use this to conditionally render sections (avoid empty pages)
+ */
+function hasSpace(
+  doc: PDFKit.PDFDocument,
+  needed: number
+): boolean {
+  const pageBottom = doc.page.height - 60
+  return doc.y + needed <= pageBottom
 }
 
 /**
@@ -484,7 +497,7 @@ function renderMetricsTable(
     .stroke()
 
   // Header text (centered vertically, proper alignment)
-  const headerTextY = tableY + (rowHeight / 2) - 5
+  const headerTextY = tableY + (headerHeight / 2) - 5
   doc
     .fontSize(STYLES.sizes.body)
     .font(STYLES.fonts.header)
@@ -502,7 +515,17 @@ function renderMetricsTable(
       align: 'right',
     })
 
-  doc.y = tableY + rowHeight
+  // Column dividers in header
+  doc
+    .strokeColor(STYLES.colors.borderGray)
+    .lineWidth(0.5)
+    .moveTo(margin + col1Width, tableY)
+    .lineTo(margin + col1Width, tableY + headerHeight)
+    .moveTo(margin + col1Width + col2Width, tableY)
+    .lineTo(margin + col1Width + col2Width, tableY + headerHeight)
+    .stroke()
+
+  doc.y = tableY + headerHeight
 
   // Table rows
   const metrics = [
@@ -563,12 +586,22 @@ function renderMetricsTable(
         align: 'right' 
       })
     
-    // Light divider between rows
+      // Light divider between rows
     doc
       .strokeColor(STYLES.colors.borderGray)
       .lineWidth(0.5)
       .moveTo(margin, rowY + rowHeight)
       .lineTo(margin + tableWidth, rowY + rowHeight)
+      .stroke()
+
+    // Subtle column dividers
+    doc
+      .strokeColor(STYLES.colors.borderGray)
+      .lineWidth(0.3)
+      .moveTo(margin + col1Width, rowY)
+      .lineTo(margin + col1Width, rowY + rowHeight)
+      .moveTo(margin + col1Width + col2Width, rowY)
+      .lineTo(margin + col1Width + col2Width, rowY + rowHeight)
       .stroke()
 
     doc.y = rowY + rowHeight
@@ -945,10 +978,13 @@ async function buildExecutiveBriefPDF(
     // Metrics Table
     renderMetricsTable(doc, data, pageWidth, margin)
 
-    // Top Drivers
+    // Data Coverage (compact, reassuring)
+    renderDataCoverage(doc, data, pageWidth, margin)
+
+    // Top Drivers (only if data exists and we have space)
     renderTopDrivers(doc, data, pageWidth, margin)
 
-    // Recommended Actions
+    // Recommended Actions (final section, always shows)
     renderRecommendedActions(doc, data, pageWidth, margin)
 
     // Add headers/footers to all pages

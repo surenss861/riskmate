@@ -164,6 +164,11 @@ export async function GET(request: NextRequest) {
       confidence_statement = `${highRiskJobs} high-risk job${highRiskJobs > 1 ? 's' : ''} and ${openIncidents} open incident${openIncidents > 1 ? 's' : ''} require attention.`
     }
 
+    // Get last job timestamp for data coverage
+    const lastJob = jobsList.length > 0
+      ? jobsList.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
+      : null
+
     const riskPostureData = {
       exposure_level,
       unresolved_violations: flaggedJobs,
@@ -186,6 +191,9 @@ export async function GET(request: NextRequest) {
       recent_violations: flaggedJobs,
       posture_score: totalJobs > 0 ? Math.round(postureScore) : undefined,
       delta: undefined, // TODO: Calculate delta vs previous period
+      // Data coverage fields
+      total_jobs: totalJobs,
+      last_job_at: lastJob?.created_at || null,
     }
 
     // Wrap in data property to match backend API response structure
