@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
       signed_signoffs: 0,
       proof_packs_generated: 0,
       last_material_event_at: null,
-      confidence_statement: '✅ No unresolved governance violations. All jobs within acceptable risk thresholds.',
+      confidence_statement: 'No unresolved governance violations. All jobs within acceptable risk thresholds.',
       ledger_integrity: 'not_verified' as const,
       ledger_integrity_last_verified_at: null,
       ledger_integrity_verified_through_event_id: null,
