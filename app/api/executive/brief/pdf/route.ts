@@ -662,6 +662,7 @@ function renderExecutiveSummary(
 
 /**
  * Render metrics table
+ * CRITICAL: Never render section header unless we have at least 1 row
  */
 function renderMetricsTable(
   doc: PDFKit.PDFDocument,
@@ -669,21 +670,36 @@ function renderMetricsTable(
   pageWidth: number,
   margin: number
 ): void {
+  // Build metrics list first to check hasContent BEFORE ensureSpace
+  const metricsRows = [
+    { label: 'High Risk Jobs', value: data.high_risk_jobs, delta: data.deltas?.high_risk_jobs },
+    { label: 'Open Incidents', value: data.open_incidents, delta: data.deltas?.open_incidents },
+    { label: 'Recent Violations', value: data.recent_violations, delta: data.deltas?.violations },
+    { label: 'Flagged for Review', value: data.flagged_jobs, delta: data.deltas?.flagged_jobs },
+    { label: 'Pending Sign-offs', value: data.pending_signoffs, delta: undefined },
+    { label: 'Signed Sign-offs', value: data.signed_signoffs, delta: undefined },
+    // CRITICAL: Only show Proof Packs if count > 0 (prevents junk page)
+    ...(data.proof_packs_generated > 0 ? [{ label: 'Proof Packs Generated', value: data.proof_packs_generated, delta: undefined }] : []),
+  ]
+  
+  // CRITICAL: Never render section header unless we have at least 1 row
+  if (metricsRows.length === 0) return
+  
   // Calculate required height: header + table header + at least 2 rows
   const sectionHeaderHeight = STYLES.sizes.h2 + 20
   const tableHeaderHeight = STYLES.spacing.tableRowHeight + 4
   const tableRowHeight = STYLES.spacing.tableRowHeight
   const requiredHeight = sectionHeaderHeight + tableHeaderHeight + (tableRowHeight * 2) + 40
 
+  // Only call ensureSpace AFTER confirming hasContent
   ensureSpace(doc, requiredHeight, margin)
 
   // Section header
-  doc
-    .fillColor(STYLES.colors.primaryText)
-    .fontSize(STYLES.sizes.h2)
-    .font(STYLES.fonts.header)
-    .text('Key Metrics', { underline: true })
-
+  safeText(doc, 'Key Metrics', margin, doc.y, {
+    fontSize: STYLES.sizes.h2,
+    font: STYLES.fonts.header,
+    color: STYLES.colors.primaryText,
+  })
   doc.moveDown(0.5)
 
   const tableY = doc.y
@@ -1030,18 +1046,6 @@ function renderRecommendedActions(
   pageWidth: number,
   margin: number
 ): void {
-  // Section header with divider
-  ensureSpace(doc, 120, margin)
-  addSectionDivider(doc, pageWidth, margin)
-  
-  doc
-    .fillColor(STYLES.colors.primaryText)
-    .fontSize(STYLES.sizes.h2)
-    .font(STYLES.fonts.header)
-    .text('Recommended Actions', { underline: true })
-
-  doc.moveDown(0.8)
-
   const hasSufficientData = data.high_risk_jobs > 0 || data.open_incidents > 0 || data.signed_signoffs > 0
 
   // If no data, show "Getting Started" actions
@@ -1054,6 +1058,27 @@ function renderRecommendedActions(
         { priority: 4, action: 'Review and sign off on pending attestations', reason: 'Complete governance requirements for job compliance' },
         { priority: 5, action: 'Monitor risk posture trends over time', reason: 'Track improvements in overall risk exposure and compliance' },
       ]
+
+  // CRITICAL: Compute hasContent and requiredHeight BEFORE ensureSpace
+  const hasContent = actions.length > 0
+  const sectionHeaderHeight = STYLES.sizes.h2 + 20
+  const actionHeight = 60 // Approx per action
+  const requiredHeight = sectionHeaderHeight + (actionHeight * actions.length) + 40
+
+  if (!hasContent) return // Don't render section if no content
+
+  // Only call ensureSpace AFTER confirming hasContent
+  ensureSpace(doc, requiredHeight, margin)
+
+  // Section header with divider
+  addSectionDivider(doc, pageWidth, margin)
+  
+  safeText(doc, 'Recommended Actions', margin, doc.y, {
+    fontSize: STYLES.sizes.h2,
+    font: STYLES.fonts.header,
+    color: STYLES.colors.primaryText,
+  })
+  doc.moveDown(0.8)
 
   actions.forEach((action) => {
     ensureSpace(doc, 40, margin)
