@@ -753,34 +753,46 @@ async function buildExecutiveBriefPDF(
     const pageWidth = doc.page.width
     const margin = STYLES.spacing.margin
 
-    // Cover/Header Block - sanitize all text at render time
+    // Premium Cover Header Band (full-width, branded, board-ready)
+    const headerBandHeight = doc.page.height * 0.14 // 14% of page height
+    const headerBandY = 0 // Start at top of page
+    
+    // Draw header band background (full-width)
+    doc
+      .rect(0, headerBandY, doc.page.width, headerBandHeight)
+      .fill(STYLES.colors.accentLight)
+    
+    // Content inside header band
+    const headerContentY = headerBandY + 50
     const sanitizedTitle = sanitizeText('RiskMate Executive Brief')
     const sanitizedOrgName = sanitizeText(organizationName)
+    const timeRangeText = formatTimeRange(timeRange)
     
+    // Title (large, white, left-aligned in band)
     doc
-      .fillColor(STYLES.colors.accent)
+      .fillColor(STYLES.colors.white)
       .fontSize(STYLES.sizes.h1)
       .font(STYLES.fonts.header)
-      .text(sanitizedTitle, { align: 'center' })
+      .text(sanitizedTitle, STYLES.spacing.margin, headerContentY, {
+        width: doc.page.width - STYLES.spacing.margin * 2,
+        align: 'left',
+      })
 
-    doc.moveDown(0.3)
+    doc.moveDown(0.25)
 
+    // Org name (medium, white)
     doc
-      .fillColor(STYLES.colors.primaryText)
+      .fillColor(STYLES.colors.white)
       .fontSize(STYLES.sizes.h3)
       .font(STYLES.fonts.body)
-      .text(sanitizedOrgName, { align: 'center' })
+      .text(sanitizedOrgName, STYLES.spacing.margin, doc.y, {
+        width: doc.page.width - STYLES.spacing.margin * 2,
+        align: 'left',
+      })
 
     doc.moveDown(0.2)
 
-    doc
-      .fontSize(STYLES.sizes.body)
-      .fillColor(STYLES.colors.secondaryText)
-      .text(formatTimeRange(timeRange), { align: 'center' })
-
-    doc.moveDown(0.2)
-
-    // Sanitize generated timestamp at render time
+    // Time range + generated timestamp (smaller, white with opacity)
     const generatedTimestamp = generatedAt.toLocaleString('en-US', { 
       timeZone: 'America/New_York', 
       month: 'short', 
@@ -791,13 +803,30 @@ async function buildExecutiveBriefPDF(
       hour12: true, 
       timeZoneName: 'short' 
     })
-    const sanitizedTimestamp = sanitizeText(`Generated ${generatedTimestamp}`)
+    const metaText = `${sanitizeText(timeRangeText)} • Generated ${sanitizeText(generatedTimestamp)}`
     
     doc
-      .fontSize(STYLES.sizes.caption)
-      .text(sanitizedTimestamp, { align: 'center' })
+      .fillColor(STYLES.colors.white)
+      .fontSize(STYLES.sizes.body)
+      .font(STYLES.fonts.body)
+      .opacity(0.9)
+      .text(metaText, STYLES.spacing.margin, doc.y, {
+        width: doc.page.width - STYLES.spacing.margin * 2,
+        align: 'left',
+      })
+      .opacity(1.0)
 
-    doc.moveDown(1.5)
+    // Subtle accent line under header band
+    const accentLineY = headerBandHeight - 3
+    doc
+      .strokeColor(STYLES.colors.accent)
+      .lineWidth(3)
+      .moveTo(0, accentLineY)
+      .lineTo(doc.page.width, accentLineY)
+      .stroke()
+
+    // Reset Y position after header band
+    doc.y = headerBandHeight + STYLES.spacing.sectionGap
 
     // Premium KPI Cards
     renderKPIStrip(doc, data, pageWidth, doc.y)
