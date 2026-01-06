@@ -255,6 +255,8 @@ function markPageHasBody(doc: PDFKit.PDFDocument): void {
 /**
  * Render section with content gating (prevents header-only pages)
  * Rule: Never call ensureSpace() and never write a section title unless the section has real content
+ * CRITICAL: This function is DEPRECATED - use direct safeText() calls instead
+ * This function is kept for backwards compatibility but should not be used for new sections
  */
 function renderSection(
   doc: PDFKit.PDFDocument,
@@ -270,12 +272,12 @@ function renderSection(
 
   ensureSpace(doc, opts.minHeight, opts.margin)
   
-  // Draw section title
-  doc
-    .fillColor(STYLES.colors.primaryText)
-    .fontSize(STYLES.sizes.h2)
-    .font(STYLES.fonts.header)
-    .text(sanitizeText(opts.title), { underline: true })
+  // Draw section title - use safeText instead of doc.text
+  safeText(doc, opts.title, opts.margin, doc.y, {
+    fontSize: STYLES.sizes.h2,
+    font: STYLES.fonts.header,
+    color: STYLES.colors.primaryText,
+  })
   
   markPageHasBody(doc) // Titles count as body
   doc.moveDown(0.8)
@@ -967,14 +969,12 @@ function renderDataCoverage(
     // Show reason if data is missing (only if we have space)
     if (totalJobs === 0 && hasSpace(doc, 20)) {
       doc.moveDown(0.3)
-      doc
-        .fontSize(STYLES.sizes.caption)
-        .font(STYLES.fonts.body)
-        .fillColor(STYLES.colors.secondaryText)
-        .text(sanitizeText('Reason: No jobs with risk assessments in selected window'), {
-          indent: 20,
-          width: pageWidth - margin * 2 - 20,
-        })
+      safeText(doc, 'Reason: No jobs with risk assessments in selected window', margin + 20, doc.y, {
+        width: pageWidth - margin * 2 - 20,
+        fontSize: STYLES.sizes.caption,
+        font: STYLES.fonts.body,
+        color: STYLES.colors.secondaryText,
+      })
       markPageHasBody(doc)
     }
   }

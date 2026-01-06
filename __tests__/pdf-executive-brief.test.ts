@@ -130,6 +130,47 @@ describe('PDF Executive Brief Validation', () => {
       // })
     })
     
+    it('should not contain pages with only a single token (— or single number)', () => {
+      // CRITICAL: This catches pages that are just "—" or "2" or similar single tokens
+      // Split PDF text by common page break patterns and check each "page"
+      const pageBreaks = pdfText.split(/(?:Page \d+ of \d+|build:|reportId:)/)
+      
+      pageBreaks.forEach((pageText, idx) => {
+        // Strip footer/header noise
+        const cleanText = pageText
+          .replace(/RiskMate Executive Brief.*/g, '')
+          .replace(/Confidential.*/g, '')
+          .replace(/build:.*/g, '')
+          .replace(/reportId:.*/g, '')
+          .replace(/Page \d+ of \d+/g, '')
+          .replace(/\s+/g, ' ')
+          .trim()
+        
+        // Skip empty pages (cover page might be mostly empty)
+        if (cleanText.length === 0) return
+        
+        // Check for single-token pages (just "—", "2", "0", etc.)
+        const tokens = cleanText.split(/\s+/).filter(t => t.length > 0)
+        
+        // If page has only 1-2 tokens and they're all single chars/numbers, it's junk
+        if (tokens.length <= 2) {
+          const allSingleTokens = tokens.every(t => 
+            /^[—\-2-9]$/.test(t) || // Single em dash, hyphen, or digit
+            /^[0-9]$/.test(t) // Single number
+          )
+          
+          if (allSingleTokens) {
+            throw new Error(`Page ${idx + 1} contains only single tokens: "${tokens.join(' ')}"`)
+          }
+        }
+        
+        // Also check for pages that are just "Proof Packs Generated" with nothing else
+        if (cleanText.trim() === 'Proof Packs Generated' || cleanText.trim().match(/^Proof Packs Generated\s*$/)) {
+          throw new Error(`Page ${idx + 1} contains only "Proof Packs Generated" header`)
+        }
+      })
+    })
+    
     it('should have page count <= 2 by default (or 3-4 only with appendix)', () => {
       // Count page objects in PDF
       const pageMatches = pdfText.match(/\/Type\s*\/Page[^s]/g)

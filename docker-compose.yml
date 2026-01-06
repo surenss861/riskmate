@@ -1,0 +1,18 @@
+# Docker Compose for local PDF testing
+# Usage: docker-compose run --rm pdf-test
+
+version: '3.8'
+
+services:
+  pdf-test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/.next
+    environment:
+      - NODE_ENV=test
+    command: pnpm test __tests__/pdf-executive-brief.test.ts
+
