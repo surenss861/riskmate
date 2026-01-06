@@ -285,6 +285,7 @@ function renderSection(
 /**
  * Safe text writer - refuses to write junk (empty, standalone "—", naked numbers)
  * CRITICAL: This is the ONLY way to write text to prevent junk pages
+ * Also tracks body char count per page for ship gate
  */
 function safeText(
   doc: PDFKit.PDFDocument,
@@ -302,7 +303,10 @@ function safeText(
   // These are the exact patterns causing junk pages
   if (sanitized === '—' || sanitized === '2' || sanitized === '0' || /^\d+$/.test(sanitized.trim())) {
     // Only allow if it's part of a larger string (has context)
-    if (sanitized.length <= 2) return false
+    if (sanitized.length <= 2) {
+      console.warn(`[PDF] safeText rejected standalone value: "${sanitized}" (section: ${currentSection})`)
+      return false
+    }
   }
   
   // Check if it would overflow current page
@@ -322,6 +326,15 @@ function safeText(
     width: options?.width,
     align: options?.align,
   })
+  
+  // CRITICAL: Track body char count per page for ship gate
+  // Only count body content (not footers/headers)
+  const currentPageIndex = pageNumber - 1
+  if (!bodyCharCount[currentPageIndex]) {
+    bodyCharCount[currentPageIndex] = 0
+  }
+  // Increment char count for body content (not footers)
+  bodyCharCount[currentPageIndex] += sanitized.length
   
   markPageHasBody(doc)
   return true
@@ -720,24 +733,29 @@ function renderMetricsTable(
     .lineWidth(1)
     .stroke()
 
-  // Header text (centered vertically, proper alignment)
+  // Header text (centered vertically, proper alignment) - use safeText
   const headerTextY = tableY + (headerHeight / 2) - 5
-  doc
-    .fontSize(STYLES.sizes.body)
-    .font(STYLES.fonts.header)
-    .fillColor(STYLES.colors.primaryText)
-    .text('Metric', margin + cellPadding, headerTextY, { 
-      width: col1Width - cellPadding * 2,
-      align: 'left',
-    })
-    .text('Current', margin + col1Width + cellPadding, headerTextY, { 
-      width: col2Width - cellPadding * 2,
-      align: 'right',
-    })
-    .text('Change', margin + col1Width + col2Width + cellPadding, headerTextY, { 
-      width: col3Width - cellPadding * 2,
-      align: 'right',
-    })
+  safeText(doc, 'Metric', margin + cellPadding, headerTextY, {
+    width: col1Width - cellPadding * 2,
+    align: 'left',
+    fontSize: STYLES.sizes.body,
+    font: STYLES.fonts.header,
+    color: STYLES.colors.primaryText,
+  })
+  safeText(doc, 'Current', margin + col1Width + cellPadding, headerTextY, {
+    width: col2Width - cellPadding * 2,
+    align: 'right',
+    fontSize: STYLES.sizes.body,
+    font: STYLES.fonts.header,
+    color: STYLES.colors.primaryText,
+  })
+  safeText(doc, 'Change', margin + col1Width + col2Width + cellPadding, headerTextY, {
+    width: col3Width - cellPadding * 2,
+    align: 'right',
+    fontSize: STYLES.sizes.body,
+    font: STYLES.fonts.header,
+    color: STYLES.colors.primaryText,
+  })
 
   // Column dividers in header
   doc
@@ -1519,15 +1537,36 @@ export async function POST(request: NextRequest) {
       // Continue anyway - don't fail the PDF generation
     }
 
-    // Generate PDF
-    const { buffer, hash, apiLatency, timeWindow } = await buildExecutiveBriefPDF(
-      riskPostureData,
-      organizationName,
-      sanitizeText(user.email || `User ${user.id.substring(0, 8)}`),
-      timeRange,
-      buildSha,
-      reportId
-    )
+        // Generate PDF
+        let pdfResult: { buffer: Buffer; hash: string; apiLatency: number; timeWindow: { start: Date; end: Date } }
+        try {
+          pdfResult = await buildExecutiveBriefPDF(
+            riskPostureData,
+            organizationName,
+            sanitizeText(user.email || `User ${user.id.substring(0, 8)}`),
+            timeRange,
+            buildSha,
+            reportId
+          )
+        } catch (pdfError: any) {
+          // CRITICAL: Catch ship gate rejections and return JSON error instead of broken PDF
+          if (pdfError?.message?.includes('PDF ship gate failed')) {
+            console.error('[executive/brief/pdf] Ship gate rejection:', pdfError.message)
+            return NextResponse.json(
+              {
+                message: 'PDF generation failed quality check',
+                error: pdfError.message,
+                reportId,
+                buildSha: buildSha?.substring(0, 8),
+                timestamp: new Date().toISOString(),
+              },
+              { status: 500 }
+            )
+          }
+          throw pdfError // Re-throw other errors
+        }
+        
+        const { buffer, hash, apiLatency, timeWindow } = pdfResult
     
     // Update audit record with completion status and final metadata
     if (reportRun) {
