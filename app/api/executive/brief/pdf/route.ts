@@ -773,8 +773,17 @@ function renderMetricsTable(
 
   doc.y = tableY + headerHeight
 
-  // Table rows - metricsRows already built above (with hasContent check)
+  // CRITICAL: Make table rows atomic - never write part of a row, always write the whole row or nothing
   metricsRows.forEach((metric, idx) => {
+    // Validate row has required data before any writes
+    if (!metric.label) return // Skip invalid rows
+    
+    const hasAnyValue = metric.value != null || metric.delta != null
+    if (!hasAnyValue) return // Skip rows with no values
+    
+    // CRITICAL: ensureSpace ONCE per row, before writing anything
+    ensureSpace(doc, tableRowHeight + 10, margin)
+    
     const rowY = doc.y
     const isEven = idx % 2 === 0
 
@@ -785,48 +794,48 @@ function renderMetricsTable(
         .fill(STYLES.colors.lightGrayBg)
     }
 
+    // CRITICAL: Write all cells atomically - label + value + delta in one go
     // Label (left-aligned, fixed width prevents wrapping)
     const labelText = sanitizeText(metric.label)
-    doc
-      .fontSize(STYLES.sizes.body)
-      .font(STYLES.fonts.body)
-      .fillColor(STYLES.colors.primaryText)
-      .text(labelText, margin + cellPadding, rowY + cellPadding, { 
-        width: col1Width - cellPadding * 2,
-        align: 'left',
-        lineGap: 4,
-      })
+    safeText(doc, labelText, margin + cellPadding, rowY + cellPadding, {
+      width: col1Width - cellPadding * 2,
+      align: 'left',
+      fontSize: STYLES.sizes.body,
+      font: STYLES.fonts.body,
+      color: STYLES.colors.primaryText,
+    })
 
-    // Value (right-aligned, fixed width) - CRITICAL: Never render standalone values
-    const valueText = typeof metric.value === 'string' 
-      ? metric.value 
-      : formatNumber(metric.value)
-    
-    // Only render value if we have a label (prevents standalone "2" or "—")
-    if (metric.label && valueText) {
-      doc
-        .fillColor(STYLES.colors.primaryText)
-        .text(
-          sanitizeText(valueText),
-          margin + col1Width + cellPadding,
-          rowY + cellPadding,
-          { width: col2Width - cellPadding * 2, align: 'right' }
-        )
+    // Value (right-aligned, fixed width) - only if label exists
+    if (metric.label) {
+      const valueText = typeof metric.value === 'string' 
+        ? metric.value 
+        : formatNumber(metric.value)
+      safeText(doc, valueText, margin + col1Width + cellPadding, rowY + cellPadding, {
+        width: col2Width - cellPadding * 2,
+        align: 'right',
+        fontSize: STYLES.sizes.body,
+        font: STYLES.fonts.body,
+        color: STYLES.colors.primaryText,
+      })
     }
 
-    // Delta (right-aligned, fixed narrow column) - Only render if we have a label
+    // Delta (right-aligned, fixed narrow column) - only if label exists
     if (metric.label) {
       const deltaText = formatDelta(metric.delta)
       const deltaColor = deltaText === '—' 
         ? STYLES.colors.secondaryText 
         : ((metric.delta || 0) > 0 ? STYLES.colors.riskHigh : STYLES.colors.riskLow)
-      doc
-        .fillColor(deltaColor)
-        .text(sanitizeText(deltaText), margin + col1Width + col2Width + cellPadding, rowY + cellPadding, { 
-          width: col3Width - cellPadding * 2, 
-          align: 'right' 
-        })
+      safeText(doc, deltaText, margin + col1Width + col2Width + cellPadding, rowY + cellPadding, {
+        width: col3Width - cellPadding * 2,
+        align: 'right',
+        fontSize: STYLES.sizes.body,
+        font: STYLES.fonts.body,
+        color: deltaColor,
+      })
     }
+    
+    markPageHasBody(doc) // Mark row as written
+    doc.y = rowY + tableRowHeight
     
       // Light divider between rows
     doc
