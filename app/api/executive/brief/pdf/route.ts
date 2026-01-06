@@ -251,6 +251,72 @@ function markPageHasBody(doc: PDFKit.PDFDocument): void {
 }
 
 /**
+ * Render section with content gating (prevents header-only pages)
+ * Rule: Never call ensureSpace() and never write a section title unless the section has real content
+ */
+function renderSection(
+  doc: PDFKit.PDFDocument,
+  opts: {
+    title: string
+    hasContent: boolean
+    minHeight: number
+    margin: number
+    render: () => void
+  }
+): void {
+  if (!opts.hasContent) return
+
+  ensureSpace(doc, opts.minHeight, opts.margin)
+  
+  // Draw section title
+  doc
+    .fillColor(STYLES.colors.primaryText)
+    .fontSize(STYLES.sizes.h2)
+    .font(STYLES.fonts.header)
+    .text(sanitizeText(opts.title), { underline: true })
+  
+  markPageHasBody(doc) // Titles count as body
+  doc.moveDown(0.8)
+  
+  // Render section content
+  opts.render()
+}
+
+/**
+ * Write label-value pair (prevents label-less values)
+ * Ensures values never render alone
+ */
+function writeKV(
+  doc: PDFKit.PDFDocument,
+  label: string,
+  value: string,
+  x: number,
+  y: number,
+  labelWidth: number,
+  valueWidth: number,
+  options?: { labelAlign?: 'left' | 'right'; valueAlign?: 'left' | 'right' }
+): void {
+  const L = sanitizeText(label)
+  const V = sanitizeText(value)
+  
+  // Never render if label or value is missing
+  if (!L || !V) return
+  
+  // Never render standalone "—" or single digits without context
+  if ((V === '—' || V.length <= 1) && !L) return
+  
+  doc
+    .fontSize(STYLES.sizes.body)
+    .font(STYLES.fonts.body)
+    .fillColor(STYLES.colors.primaryText)
+    .text(L, x, y, { width: labelWidth, align: options?.labelAlign || 'left' })
+    .fillColor(STYLES.colors.secondaryText)
+    .text(V, x + labelWidth, y, { width: valueWidth, align: options?.valueAlign || 'right' })
+  
+  markPageHasBody(doc)
+}
+
+/**
  * Render premium KPI cards (rounded corners, proper styling, no wrapping issues)
  */
 function renderKPIStrip(
@@ -603,7 +669,7 @@ function renderMetricsTable(
 
   doc.y = tableY + headerHeight
 
-  // Table rows
+  // Table rows - CRITICAL: Only include rows with meaningful content or labels
   const metrics = [
     { label: 'High Risk Jobs', value: data.high_risk_jobs, delta: data.deltas?.high_risk_jobs },
     { label: 'Open Incidents', value: data.open_incidents, delta: data.deltas?.open_incidents },
@@ -611,7 +677,8 @@ function renderMetricsTable(
     { label: 'Flagged for Review', value: data.flagged_jobs, delta: data.deltas?.flagged_jobs },
     { label: 'Pending Sign-offs', value: data.pending_signoffs, delta: undefined },
     { label: 'Signed Sign-offs', value: data.signed_signoffs, delta: undefined },
-    { label: 'Proof Packs Generated', value: data.proof_packs_generated, delta: undefined },
+    // CRITICAL: Only show Proof Packs if count > 0 (prevents junk page)
+    ...(data.proof_packs_generated > 0 ? [{ label: 'Proof Packs Generated', value: data.proof_packs_generated, delta: undefined }] : []),
   ]
 
   metrics.forEach((metric, idx) => {
