@@ -5,8 +5,11 @@
 **Source of Truth**: `users.organization_id` (single organization per user)
 
 - Each user has a direct `organization_id` foreign key in the `users` table
-- No separate `organization_members` or `org_members` table is currently used
+- **This is the primary source of truth** - no separate `organization_members` or `org_members` table is used for resolution
 - `resolveOrgContext()` reads from `users.organization_id` and verifies the organization exists
+- RLS policies use `get_user_organization_id()` function which reads from `users.organization_id`
+
+**Note**: There is an `organization_members` table in the schema (for future multi-org support), but it's not currently used for org resolution. The current implementation is single-org-per-user.
 
 ## Verification Endpoints
 

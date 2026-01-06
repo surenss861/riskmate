@@ -18,12 +18,15 @@ export interface OrgContext {
 /**
  * Resolve organization context for authenticated user
  * 
- * Resolution order:
- * 1. Check user profile for active_org_id
- * 2. Check org_members for most recent membership
- * 3. Fallback to first org if user has any membership
+ * Current Auth Model: Single organization per user via users.organization_id
  * 
- * Verifies membership and role before returning context.
+ * Resolution:
+ * 1. Read organization_id from users table
+ * 2. Verify organization exists in organizations table
+ * 3. Return org context with name, role, and resolution source
+ * 
+ * Note: Future multi-org support would use organization_members table,
+ * but currently each user has a direct organization_id foreign key.
  */
 export async function resolveOrgContext(user: User): Promise<OrgContext | null> {
   const supabase = await createSupabaseServerClient()
