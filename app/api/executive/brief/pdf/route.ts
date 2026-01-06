@@ -801,10 +801,7 @@ function renderMetricsTable(
     
     // CRITICAL: Always render if we have a label (value can be 0, which is valid)
     // Only skip if value is explicitly null/undefined (not 0, which is falsy but valid)
-    if (metric.value === null || metric.value === undefined) {
-      // If no value, use "—" as placeholder (always show something)
-      metric.value = '—'
-    }
+    // We'll handle "—" as a string in the value rendering logic below
     
     // CRITICAL: ensureSpace ONCE per row, before writing anything
     ensureSpace(doc, tableRowHeight + 10, margin)
