@@ -204,7 +204,9 @@ let pageHasBody = false
 let currentPageStartY = 0
 let pageNumber = 1
 let currentSection = 'none' // Track current section for page creation tracing
-const bodyCharCount: number[] = [] // Track body char count per page for ship gate
+// Track body char count per page for ship gate
+// Also tracks lonely content (string keys like "0_lonely" contain arrays of lonely strings)
+const bodyCharCount: { [key: number | string]: number | string[] } = {}
 
 /**
  * Helper: Check if we need a new page and add one if needed
@@ -332,13 +334,34 @@ function safeText(
   })
   
   // CRITICAL: Track body char count per page for ship gate
-  // Only count body content (not footers/headers)
-  const currentPageIndex = pageNumber - 1
-  if (!bodyCharCount[currentPageIndex]) {
-    bodyCharCount[currentPageIndex] = 0
+  // Also track "lonely" content (single tokens that appear alone on a page)
+  // Check if this is a footer by looking at Y position (footers are near bottom)
+  const pageBottom = doc.page.height - 60
+  const isFooter = y > pageBottom - 100 // Footers are in bottom 100px
+  
+  if (!isFooter) {
+    const currentPageIndex = pageNumber - 1
+    if (typeof bodyCharCount[currentPageIndex] !== 'number') {
+      bodyCharCount[currentPageIndex] = 0
+    }
+    
+    // Check for "lonely" content patterns (single token, single heading, etc.)
+    const trimmed = sanitized.trim()
+    const isLonelyToken = /^[—\-0-9]+$/.test(trimmed) // Just dashes or numbers
+    const isLonelyHeading = trimmed.length < 50 && /^[A-Z][a-z]+(\s+[A-Z][a-z]+)*$/.test(trimmed) // Short title-like text
+    
+    if (isLonelyToken || isLonelyHeading) {
+      // Track lonely content separately (will be checked in ship gate)
+      const lonelyKey = `${currentPageIndex}_lonely`
+      if (!Array.isArray(bodyCharCount[lonelyKey])) {
+        bodyCharCount[lonelyKey] = []
+      }
+      (bodyCharCount[lonelyKey] as string[]).push(trimmed)
+    }
+    
+    // Increment char count for body content (not footers)
+    bodyCharCount[currentPageIndex] = (bodyCharCount[currentPageIndex] as number) + sanitized.length
   }
-  // Increment char count for body content (not footers)
-  bodyCharCount[currentPageIndex] += sanitized.length
   
   markPageHasBody(doc)
   return true

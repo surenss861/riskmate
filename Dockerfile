@@ -6,29 +6,33 @@ FROM public.ecr.aws/amazonlinux/amazonlinux:2023
 
 WORKDIR /app
 
-# Install Node.js 20 (matching Vercel's build environment)
-RUN dnf install -y nodejs npm && \
-    npm install -g pnpm@latest
-
-# Install system dependencies for PDF generation
-# Fonts and fontconfig ensure consistent PDF rendering
+# Install system dependencies (needed for NodeSource installer + fonts)
 RUN dnf install -y \
+    curl ca-certificates tar gzip \
     fontconfig \
     dejavu-sans-fonts \
     dejavu-serif-fonts \
     liberation-fonts \
-    && fc-cache -f
+ && fc-cache -f \
+ && dnf clean all
 
-# Copy package files
+# Install Node.js 20 explicitly via NodeSource (matches Vercel's build environment)
+# Don't trust default repos - they may not have Node 20
+RUN curl -fsSL https://rpm.nodesource.com/setup_20.x | bash - \
+ && dnf install -y nodejs \
+ && corepack enable \
+ && corepack prepare pnpm@10.27.0 --activate
+
+# Copy only manifests first for better layer caching
 COPY package.json pnpm-lock.yaml* ./
 
 # Install dependencies
 RUN pnpm install --frozen-lockfile
 
-# Copy source code
+# Copy the rest of the source code
 COPY . .
 
-# Build the application
+# Build the application (so Next route code is compiled)
 RUN pnpm run build
 
 # Default command: run PDF tests
