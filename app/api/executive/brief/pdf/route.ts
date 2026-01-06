@@ -907,7 +907,7 @@ export async function POST(request: NextRequest) {
       sanitizeText(user.email || `User ${user.id.substring(0, 8)}`),
       timeRange,
       buildSha,
-      reportId // Pass reportId for footer
+      reportId
     )
     
     // Update audit record with completion status and final metadata
