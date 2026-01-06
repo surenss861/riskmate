@@ -901,9 +901,12 @@ export async function POST(request: NextRequest) {
       'X-Data-Freshness': dataFreshness,
       'X-API-Latency-Ms': String(apiLatency),
       'X-Source-Tables': 'jobs,incidents,attestations,audit_logs',
-      'X-Org-Id-Hash': hashId(orgContext?.orgId || ''),
-      'X-User-Id-Hash': hashId(orgContext?.userId || ''),
-      'X-Resolved-From': orgContext?.resolvedFrom || 'unknown',
+      // Debug headers (only in non-prod or when explicitly enabled)
+      ...(process.env.NODE_ENV !== 'production' || process.env.ENABLE_DEBUG_HEADERS === 'true' ? {
+        'X-Org-Id-Hash': hashId(orgContext.orgId),
+        'X-User-Id-Hash': hashId(orgContext.userId),
+        'X-Resolved-From': orgContext.resolvedFrom,
+      } : {}),
     })
 
     if (buildSha) {
