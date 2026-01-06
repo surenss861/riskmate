@@ -382,32 +382,41 @@ function renderMetricsTable(
 
   const tableY = doc.y
   const tableWidth = pageWidth - margin * 2
-  const col1Width = tableWidth * 0.5
-  const col2Width = tableWidth * 0.25
-  const col3Width = tableWidth * 0.25
+  // Fixed column widths to prevent wrapping
+  const col1Width = 280 // Metric name (fixed, wide enough)
+  const col2Width = 120 // Current value (fixed, right-aligned)
+  const col3Width = 80  // Change column (fixed, narrow)
+  const rowHeight = STYLES.spacing.tableRowHeight
+  const cellPadding = STYLES.spacing.tableCellPadding
 
-  // Table header
+  // Table header with solid background
   doc
-    .rect(margin, tableY, tableWidth, 24)
-    .fill(STYLES.colors.lightGrayBg)
-
-  doc
-    .fillColor(STYLES.colors.primaryText)
-    .fontSize(STYLES.sizes.caption)
-    .font(STYLES.fonts.header)
-    .text('Metric', margin + 8, tableY + 7, { width: col1Width - 16 })
-    .text('Current', margin + col1Width + 8, tableY + 7, { width: col2Width - 16, align: 'right' })
-    .text('Change', margin + col1Width + col2Width + 8, tableY + 7, { width: col3Width - 16, align: 'right' })
-
-  // Header underline
-  doc
+    .rect(margin, tableY, tableWidth, rowHeight)
+    .fill(STYLES.colors.tableHeaderBg)
     .strokeColor(STYLES.colors.borderGray)
     .lineWidth(1)
-    .moveTo(margin, tableY + 24)
-    .lineTo(pageWidth - margin, tableY + 24)
     .stroke()
 
-  doc.y = tableY + 32
+  // Header text (centered vertically, proper alignment)
+  const headerTextY = tableY + (rowHeight / 2) - 5
+  doc
+    .fontSize(STYLES.sizes.body)
+    .font(STYLES.fonts.header)
+    .fillColor(STYLES.colors.primaryText)
+    .text('Metric', margin + cellPadding, headerTextY, { 
+      width: col1Width - cellPadding * 2,
+      align: 'left',
+    })
+    .text('Current', margin + col1Width + cellPadding, headerTextY, { 
+      width: col2Width - cellPadding * 2,
+      align: 'right',
+    })
+    .text('Change', margin + col1Width + col2Width + cellPadding, headerTextY, { 
+      width: col3Width - cellPadding * 2,
+      align: 'right',
+    })
+
+  doc.y = tableY + rowHeight
 
   // Table rows
   const metrics = [
