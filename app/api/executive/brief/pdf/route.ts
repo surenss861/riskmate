@@ -281,6 +281,92 @@ function renderKPIStrip(
 }
 
 /**
+ * Render risk posture gauge (segmented bar for visual credibility)
+ */
+function renderRiskPostureGauge(
+  doc: PDFKit.PDFDocument,
+  data: RiskPostureData,
+  pageWidth: number,
+  margin: number
+): void {
+  const hasSufficientData = data.high_risk_jobs > 0 || data.open_incidents > 0 || data.signed_signoffs > 0
+  if (!hasSufficientData || data.posture_score === undefined) return
+
+  ensureSpace(doc, 100, margin)
+
+  const gaugeY = doc.y
+  const gaugeWidth = 280
+  const gaugeHeight = 40
+  const gaugeX = margin
+
+  // Background bar
+  doc
+    .rect(gaugeX, gaugeY, gaugeWidth, gaugeHeight)
+    .fill(STYLES.colors.lightGrayBg)
+    .strokeColor(STYLES.colors.borderGray)
+    .lineWidth(1)
+    .stroke()
+
+  // Segmented fill based on score (0-100) with three segments
+  const score = Math.max(0, Math.min(100, data.posture_score))
+  const segmentWidth = (gaugeWidth - 6) / 3
+  
+  // Low segment (0-33) - Green
+  if (score > 0) {
+    const lowFill = Math.min(score, 33) / 33
+    doc
+      .rect(gaugeX + 2, gaugeY + 2, segmentWidth * lowFill, gaugeHeight - 4)
+      .fill(STYLES.colors.riskLow)
+  }
+  
+  // Moderate segment (33-66) - Amber
+  if (score > 33) {
+    const modFill = Math.min((score - 33) / 33, 1)
+    doc
+      .rect(gaugeX + 2 + segmentWidth, gaugeY + 2, segmentWidth * modFill, gaugeHeight - 4)
+      .fill(STYLES.colors.riskMedium)
+  }
+  
+  // High segment (66-100) - Red
+  if (score > 66) {
+    const highFill = (score - 66) / 34
+    doc
+      .rect(gaugeX + 2 + segmentWidth * 2, gaugeY + 2, segmentWidth * highFill, gaugeHeight - 4)
+      .fill(STYLES.colors.riskHigh)
+  }
+
+  // Segment dividers
+  doc
+    .strokeColor(STYLES.colors.borderGray)
+    .lineWidth(1)
+    .moveTo(gaugeX + 2 + segmentWidth, gaugeY + 2)
+    .lineTo(gaugeX + 2 + segmentWidth, gaugeY + gaugeHeight - 2)
+    .moveTo(gaugeX + 2 + segmentWidth * 2, gaugeY + 2)
+    .lineTo(gaugeX + 2 + segmentWidth * 2, gaugeY + gaugeHeight - 2)
+    .stroke()
+
+  // Labels below segments
+  const labelY = gaugeY + gaugeHeight + 6
+  doc
+    .fontSize(STYLES.sizes.caption)
+    .font(STYLES.fonts.body)
+    .fillColor(STYLES.colors.secondaryText)
+    .text('Low', gaugeX + segmentWidth / 2 - 10, labelY, { width: 20, align: 'center' })
+    .text('Moderate', gaugeX + segmentWidth + segmentWidth / 2 - 20, labelY, { width: 40, align: 'center' })
+    .text('High', gaugeX + segmentWidth * 2 + segmentWidth / 2 - 10, labelY, { width: 20, align: 'center' })
+
+  // Score display next to gauge
+  const scoreX = gaugeX + gaugeWidth + 20
+  doc
+    .fontSize(STYLES.sizes.h3)
+    .font(STYLES.fonts.header)
+    .fillColor(STYLES.colors.primaryText)
+    .text(`${score}`, scoreX, gaugeY + 8, { align: 'left' })
+
+  doc.y = gaugeY + gaugeHeight + 25 + STYLES.spacing.sectionGap
+}
+
+/**
  * Render executive summary narrative
  */
 function renderExecutiveSummary(
