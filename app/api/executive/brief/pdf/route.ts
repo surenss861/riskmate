@@ -672,7 +672,25 @@ async function buildExecutiveBriefPDF(
     const reportId = crypto.randomBytes(16).toString('hex')
     
     // Calculate time window boundaries
-    const timeWindow = calculateTimeWindow(timeRange)
+    const end = new Date()
+    const start = new Date()
+    switch (timeRange) {
+      case '7d':
+        start.setDate(end.getDate() - 7)
+        break
+      case '30d':
+        start.setDate(end.getDate() - 30)
+        break
+      case '90d':
+        start.setDate(end.getDate() - 90)
+        break
+      case 'all':
+        start.setFullYear(2020, 0, 1)
+        break
+      default:
+        start.setDate(end.getDate() - 30)
+    }
+    const timeWindow = { start, end }
     
     doc.on('data', (chunk) => chunks.push(chunk))
     doc.on('end', () => {
