@@ -73,22 +73,26 @@ interface RiskPostureData {
 }
 
 /**
- * Sanitize text for PDF output - removes non-printable chars, normalizes quotes, fixes bullets
+ * Sanitize text for PDF output - removes ALL C0/C1 control chars, normalizes quotes, fixes bullets
+ * This fixes the '\x05' and other control character leaks
  */
 function sanitizeText(text: string): string {
   if (!text) return ''
   
   return String(text)
-    // Remove control characters (\u0000-\u001F) except newline, carriage return, tab
-    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '')
-    // Replace smart quotes with ASCII equivalents
+    // Remove ALL C0 control characters (\u0000-\u001F) and DEL (\u007F)
+    // Keep only newline (\n), carriage return (\r), tab (\t) for formatting
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '')
+    // Remove ALL C1 control characters (\u0080-\u009F)
+    .replace(/[\u0080-\u009F]/g, '')
+    // Replace smart quotes with ASCII equivalents (do this AFTER control char removal)
     .replace(/['']/g, "'")
     .replace(/[""]/g, '"')
     .replace(/[""]/g, '"')
     // Replace various bullet/arrow characters with hyphen
     .replace(/[•\u2022\u25CF\u25E6\u2043\u2219\u2023\u2024]/g, '-')
-    // Replace em dashes and en dashes with regular dashes
-    .replace(/[—–]/g, '-')
+    // Replace em dashes and en dashes with regular dashes (but preserve em dash for "—" placeholder)
+    .replace(/[–]/g, '-') // Only replace en dash, keep em dash for "—"
     // Remove zero-width characters
     .replace(/[\u200B-\u200D\uFEFF]/g, '')
     // Normalize whitespace (preserve intentional spaces)
@@ -288,9 +292,9 @@ function renderExecutiveSummary(
 
   // Key insights (bullet points)
   const insights: string[] = []
-  const hasData = data.high_risk_jobs > 0 || data.open_incidents > 0 || data.signed_signoffs > 0
+  const hasSufficientData = data.high_risk_jobs > 0 || data.open_incidents > 0 || data.signed_signoffs > 0
 
-  if (!hasData) {
+  if (!hasSufficientData) {
     insights.push('Insufficient job volume in selected window to compute posture score')
     insights.push('Metrics will populate automatically as job data is recorded')
     insights.push('Requires at least 1 job with risk assessment in the selected time range')
@@ -492,7 +496,7 @@ function renderTopDrivers(
 }
 
 /**
- * Render recommended actions
+ * Render recommended actions (always shows, switches to "Getting Started" when no data)
  */
 function renderRecommendedActions(
   doc: PDFKit.PDFDocument,
@@ -500,8 +504,6 @@ function renderRecommendedActions(
   pageWidth: number,
   margin: number
 ): void {
-  if (!data.recommended_actions || data.recommended_actions.length === 0) return
-
   // Section header
   ensureSpace(doc, 120, margin)
   doc
@@ -512,7 +514,20 @@ function renderRecommendedActions(
 
   doc.moveDown(0.5)
 
-  data.recommended_actions.slice(0, 5).forEach((action) => {
+  const hasSufficientData = data.high_risk_jobs > 0 || data.open_incidents > 0 || data.signed_signoffs > 0
+
+  // If no data, show "Getting Started" actions
+  const actions = hasSufficientData && data.recommended_actions && data.recommended_actions.length > 0
+    ? data.recommended_actions.slice(0, 5)
+    : [
+        { priority: 1, action: 'Require risk assessment on job creation', reason: 'Enable automatic risk scoring and mitigation checklists for every job' },
+        { priority: 2, action: 'Enable attestations on job closeout', reason: 'Ensure all jobs are reviewed and signed off before completion' },
+        { priority: 3, action: 'Upload evidence for high-risk jobs', reason: 'Document safety measures and compliance for audit trails' },
+        { priority: 4, action: 'Review and sign off on pending attestations', reason: 'Complete governance requirements for job compliance' },
+        { priority: 5, action: 'Monitor risk posture trends over time', reason: 'Track improvements in overall risk exposure and compliance' },
+      ]
+
+  actions.forEach((action) => {
     ensureSpace(doc, 40, margin)
     doc
       .fontSize(STYLES.sizes.body)
@@ -652,14 +667,19 @@ async function buildExecutiveBriefPDF(
     })
 
     const chunks: Buffer[] = []
+    const startTime = Date.now()
     const generatedAt = new Date()
     const reportId = crypto.randomBytes(16).toString('hex')
+    
+    // Calculate time window boundaries
+    const timeWindow = calculateTimeWindow(timeRange)
     
     doc.on('data', (chunk) => chunks.push(chunk))
     doc.on('end', () => {
       const buffer = Buffer.concat(chunks)
       const hash = crypto.createHash('sha256').update(buffer).digest('hex')
-      resolve({ buffer, hash, reportId })
+      const apiLatency = Date.now() - startTime
+      resolve({ buffer, hash, reportId, apiLatency, timeWindow })
     })
     doc.on('error', reject)
 
