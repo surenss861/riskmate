@@ -203,6 +203,8 @@ function getExposureColor(level: string): string {
 let pageHasBody = false
 let currentPageStartY = 0
 let pageNumber = 1
+let currentSection = 'none' // Track current section for page creation tracing
+const bodyCharCount: number[] = [] // Track body char count per page for ship gate
 
 /**
  * Helper: Check if we need a new page and add one if needed
