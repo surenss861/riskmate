@@ -700,7 +700,7 @@ async function buildExecutiveBriefPDF(
       const buffer = Buffer.concat(chunks)
       const hash = crypto.createHash('sha256').update(buffer).digest('hex')
       const apiLatency = Date.now() - startTime
-      resolve({ buffer, hash, reportId, apiLatency, timeWindow })
+      resolve({ buffer, hash, apiLatency, timeWindow })
     })
     doc.on('error', reject)
 
