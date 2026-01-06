@@ -384,16 +384,24 @@ function renderKPIStrip(
     const contentX = cardX + cardPadding
     const contentWidth = kpiCardWidth - cardPadding * 2
 
-    // Value (big number, baseline aligned)
+    // Value (big number, baseline aligned) - CRITICAL: Never render standalone values
     const valueY = cardY + cardPadding + 8
-    doc
-      .fontSize(STYLES.sizes.kpiValue)
-      .font(STYLES.fonts.header)
-      .fillColor(kpi.color)
-      .text(sanitizeText(kpi.value), contentX, valueY, { 
-        width: contentWidth,
-        align: 'left',
-      })
+    const valueText = sanitizeText(kpi.value)
+    const labelText = sanitizeText(kpi.label)
+    
+    // Only render value if we have a label (prevents standalone "2" or "—")
+    if (labelText && valueText) {
+      // Always render value if label exists (even if "—" or single digit)
+      // The label provides context, so it's safe
+      doc
+        .fontSize(STYLES.sizes.kpiValue)
+        .font(STYLES.fonts.header)
+        .fillColor(kpi.color)
+        .text(valueText, contentX, valueY, { 
+          width: contentWidth,
+          align: 'left',
+        })
+    }
 
     // Label (small, below value, no wrapping)
     const labelY = valueY + STYLES.sizes.kpiValue + 6
@@ -855,24 +863,21 @@ function renderDataCoverage(
     value: coveragePercent,
   })
 
-  // Render as compact list (only if we have items)
+  // Render as compact list (only if we have items) - CRITICAL: Use writeKV to prevent label-less values
   if (coverageItems.length > 0) {
     coverageItems.forEach((item) => {
       ensureSpace(doc, 20, margin)
-      doc
-        .fontSize(STYLES.sizes.body)
-        .font(STYLES.fonts.body)
-        .fillColor(STYLES.colors.primaryText)
-        .text(sanitizeText(item.label + ':'), {
-          indent: 20,
-          width: 180,
-        })
-        .fillColor(STYLES.colors.secondaryText)
-        .text(sanitizeText(item.value), {
-          indent: 200,
-          width: pageWidth - margin * 2 - 200,
-        })
-      markPageHasBody(doc) // Mark body content written
+      // Use writeKV to ensure label and value are always together
+      writeKV(
+        doc,
+        item.label + ':',
+        item.value,
+        margin + 20,
+        doc.y,
+        180,
+        pageWidth - margin * 2 - 200,
+        { labelAlign: 'left', valueAlign: 'left' }
+      )
       doc.moveDown(0.3)
     })
 
@@ -895,7 +900,8 @@ function renderDataCoverage(
 }
 
 /**
- * Render top drivers
+ * Render top drivers (only if ≥3 drivers - appendix gating)
+ * CRITICAL: Never render section header without content
  */
 function renderTopDrivers(
   doc: PDFKit.PDFDocument,
@@ -911,16 +917,29 @@ function renderTopDrivers(
     ...(data.drivers.violations || []).slice(0, 2),
   ].slice(0, 5)
 
-  if (drivers.length === 0) return
+  // CRITICAL: Appendix gating - only render if ≥3 drivers
+  if (drivers.length < 3) return
 
-  // Section header
+  // Calculate required height: header + spacing + at least one row
+  const headerHeight = STYLES.sizes.h2 + 20
+  const rowHeight = 20
+  const requiredHeight = headerHeight + rowHeight + 40
+
+  // Only render if we have space (avoid empty pages)
+  if (!hasSpace(doc, requiredHeight)) {
+    return // Skip if it would create a mostly-empty page
+  }
+
+  // Section header with divider
+  addSectionDivider(doc, pageWidth, margin)
+  
   doc
     .fillColor(STYLES.colors.primaryText)
     .fontSize(STYLES.sizes.h2)
     .font(STYLES.fonts.header)
     .text('Top Risk Drivers', { underline: true })
 
-  doc.moveDown(0.5)
+  doc.moveDown(0.8)
 
   doc
     .fontSize(STYLES.sizes.body)
@@ -929,12 +948,16 @@ function renderTopDrivers(
 
   drivers.forEach((driver) => {
     ensureSpace(doc, 20, margin)
-    doc.text(`- ${sanitizeText(driver.label)} (${driver.count})`, { // Use hyphen instead of bullet
-      indent: 20,
-      width: pageWidth - margin * 2 - 20,
-      lineGap: 5, // Better spacing
-    })
-    doc.moveDown(0.4)
+    // CRITICAL: Always render label with value (prevents standalone values)
+    if (driver.label && driver.count !== undefined) {
+      doc.text(`- ${sanitizeText(driver.label)} (${driver.count})`, { // Use hyphen instead of bullet
+        indent: 20,
+        width: pageWidth - margin * 2 - 20,
+        lineGap: 5, // Better spacing
+      })
+      markPageHasBody(doc)
+      doc.moveDown(0.4)
+    }
   })
 
   doc.moveDown(1)
@@ -1229,6 +1252,10 @@ async function buildExecutiveBriefPDF(
     // Reset Y position after header band
     doc.y = headerBandHeight + STYLES.spacing.sectionGap
 
+    // ============================================
+    // PAGE 1: Summary (header, KPIs, summary, metrics, data coverage)
+    // ============================================
+    
     // Premium KPI Cards
     renderKPIStrip(doc, data, pageWidth, doc.y)
 
@@ -1244,17 +1271,47 @@ async function buildExecutiveBriefPDF(
     // Executive Summary
     renderExecutiveSummary(doc, data, pageWidth, margin)
 
-    // Metrics Table
+    // Metrics Table (always has content - shows 0s or —)
     renderMetricsTable(doc, data, pageWidth, margin)
 
     // Data Coverage (compact, reassuring)
     renderDataCoverage(doc, data, pageWidth, margin)
 
-    // Top Drivers (only if data exists and we have space)
-    renderTopDrivers(doc, data, pageWidth, margin)
+    // ============================================
+    // PAGE 2: Actions, Methodology, Appendix (if gating passes)
+    // ============================================
+    
+    // Force page break for page 2
+    if (pageNumber === 1) {
+      ensureSpace(doc, 1000, margin) // Force new page
+    }
 
-    // Recommended Actions (final section, always shows)
+    // Recommended Actions (always shows on page 2)
     renderRecommendedActions(doc, data, pageWidth, margin)
+
+    // Top Drivers (only if ≥3 drivers AND we have space on page 2)
+    const hasEnoughDrivers = data.drivers && (
+      (data.drivers.highRiskJobs?.length || 0) >= 3 ||
+      (data.drivers.openIncidents?.length || 0) >= 3 ||
+      (data.drivers.violations?.length || 0) >= 3
+    )
+    
+    if (hasEnoughDrivers && pageNumber <= 2 && hasSpace(doc, 100)) {
+      renderTopDrivers(doc, data, pageWidth, margin)
+    } else if (!hasEnoughDrivers && pageNumber === 1) {
+      // Show inline note on page 1 if threshold not met
+      if (hasSpace(doc, 20)) {
+        doc
+          .fontSize(STYLES.sizes.caption)
+          .font(STYLES.fonts.body)
+          .fillColor(STYLES.colors.secondaryText)
+          .text(sanitizeText('Appendix omitted (insufficient data in selected window)'), {
+            indent: 20,
+            width: pageWidth - margin * 2 - 20,
+          })
+        markPageHasBody(doc)
+      }
+    }
 
     // Add headers/footers to all pages
     addHeaderFooter(doc, organizationName, timeRange, reportId, generatedAt, buildSha)
