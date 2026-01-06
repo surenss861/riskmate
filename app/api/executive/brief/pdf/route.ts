@@ -488,9 +488,10 @@ function renderMetricsTable(
   const rowHeight = STYLES.spacing.tableRowHeight
   const cellPadding = STYLES.spacing.tableCellPadding
 
-  // Table header with solid background
+  // Table header with solid background (slightly taller for premium feel)
+  const headerHeight = rowHeight + 4
   doc
-    .rect(margin, tableY, tableWidth, rowHeight)
+    .rect(margin, tableY, tableWidth, headerHeight)
     .fill(STYLES.colors.tableHeaderBg)
     .strokeColor(STYLES.colors.borderGray)
     .lineWidth(1)
