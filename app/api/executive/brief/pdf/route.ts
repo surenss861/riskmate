@@ -753,7 +753,7 @@ async function buildExecutiveBriefPDF(
 
     doc.moveDown(1.5)
 
-    // KPI Strip
+    // Premium KPI Cards
     renderKPIStrip(doc, data, pageWidth, doc.y)
 
     // Executive Summary
