@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "pdf:smoke": "tsx scripts/pdf-smoke-test.ts",
     "dev": "concurrently \"pnpm run dev:frontend\" \"pnpm run dev:backend\"",
     "dev:frontend": "next dev",
     "dev:backend": "pnpm --dir apps/backend dev",

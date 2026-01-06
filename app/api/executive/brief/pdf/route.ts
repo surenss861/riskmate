@@ -1197,8 +1197,9 @@ function addHeaderFooter(
 
 /**
  * Build comprehensive executive brief PDF
+ * EXPORTED for use in smoke tests and CI
  */
-async function buildExecutiveBriefPDF(
+export async function buildExecutiveBriefPDF(
   data: RiskPostureData,
   organizationName: string,
   generatedBy: string,

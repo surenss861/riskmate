@@ -1,21 +1,26 @@
 # Dockerfile for PDF generation testing and QA
-# This ensures consistent Node version and dependencies for PDF tests
+# Matches Vercel's build environment (Amazon Linux 2023) for consistent results
+# This ensures PDF generation is deterministic and catches regressions before deploy
 
-FROM node:20-alpine
+FROM public.ecr.aws/amazonlinux/amazonlinux:2023
 
 WORKDIR /app
 
-# Install system dependencies for PDF generation (if needed for fonts/chromium later)
-RUN apk add --no-cache \
+# Install Node.js 20 (matching Vercel's build environment)
+RUN dnf install -y nodejs npm && \
+    npm install -g pnpm@latest
+
+# Install system dependencies for PDF generation
+# Fonts and fontconfig ensure consistent PDF rendering
+RUN dnf install -y \
     fontconfig \
-    ttf-dejavu \
-    ttf-liberation
+    dejavu-sans-fonts \
+    dejavu-serif-fonts \
+    liberation-fonts \
+    && fc-cache -f
 
 # Copy package files
 COPY package.json pnpm-lock.yaml* ./
-
-# Install pnpm if not present
-RUN npm install -g pnpm@latest
 
 # Install dependencies
 RUN pnpm install --frozen-lockfile
