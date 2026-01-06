@@ -271,9 +271,10 @@ function renderExecutiveSummary(
 
   if (insights.length > 0) {
     insights.forEach((insight) => {
+      ensureSpace(doc, 20, margin)
       doc
         .fillColor(STYLES.colors.primaryText)
-        .text(`• ${insight}`, {
+        .text(`- ${insight}`, { // Use hyphen instead of bullet for compatibility
           indent: 20,
           width: pageWidth - margin * 2 - 20,
         })
@@ -417,7 +418,7 @@ function renderTopDrivers(
 
   drivers.forEach((driver) => {
     ensureSpace(doc, 20, margin)
-    doc.text(`• ${driver.label} (${driver.count})`, {
+    doc.text(`- ${driver.label} (${driver.count})`, { // Use hyphen instead of bullet
       indent: 20,
       width: pageWidth - margin * 2 - 20,
     })
