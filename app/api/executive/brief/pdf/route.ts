@@ -316,9 +316,9 @@ function safeText(
   }
   
   // Check if it would overflow current page
-  const pageBottom = doc.page.height - 60
+  const pageBottomCheck = doc.page.height - 60
   const lineHeight = (options?.fontSize || STYLES.sizes.body) * 1.2
-  if (y + lineHeight > pageBottom) {
+  if (y + lineHeight > pageBottomCheck) {
     // Would overflow - don't write, caller should handle page break
     return false
   }
