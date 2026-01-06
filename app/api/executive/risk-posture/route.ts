@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { resolveOrgContext, hashId } from '@/lib/utils/orgContext'
 
 /**
  * GET /api/executive/risk-posture
