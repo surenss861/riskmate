@@ -1197,9 +1197,10 @@ function addHeaderFooter(
 
 /**
  * Build comprehensive executive brief PDF
- * EXPORTED for use in smoke tests and CI
+ * NOTE: This function is used internally by the route handler.
+ * For external use (smoke tests, CI), import from lib/pdf/buildExecutiveBriefPDF.ts
  */
-export async function buildExecutiveBriefPDF(
+async function buildExecutiveBriefPDF(
   data: RiskPostureData,
   organizationName: string,
   generatedBy: string,
