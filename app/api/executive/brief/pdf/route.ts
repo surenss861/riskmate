@@ -73,12 +73,44 @@ interface RiskPostureData {
 }
 
 /**
+ * Sanitize text for PDF output - removes non-printable chars, normalizes quotes, fixes bullets
+ */
+function sanitizeText(text: string): string {
+  if (!text) return ''
+  
+  return String(text)
+    // Remove control characters (\u0000-\u001F) except newline, carriage return, tab
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '')
+    // Replace smart quotes with ASCII equivalents
+    .replace(/['']/g, "'")
+    .replace(/[""]/g, '"')
+    .replace(/[""]/g, '"')
+    // Replace various bullet/arrow characters with hyphen
+    .replace(/[•\u2022\u25CF\u25E6\u2043\u2219\u2023\u2024]/g, '-')
+    // Replace em dashes and en dashes with regular dashes
+    .replace(/[—–]/g, '-')
+    // Remove zero-width characters
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    // Normalize whitespace (preserve intentional spaces)
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+/**
  * Format delta with sign
  */
 function formatDelta(delta?: number): string {
-  if (delta === undefined || delta === 0) return ''
+  if (delta === undefined || delta === 0) return '—' // Use em dash for empty
   const sign = delta > 0 ? '+' : ''
   return `${sign}${delta}`
+}
+
+/**
+ * Format number with thousands separator
+ */
+function formatNumber(num: number | string): string {
+  if (typeof num === 'string') return num
+  return num.toLocaleString('en-US')
 }
 
 /**
@@ -91,7 +123,7 @@ function formatTimeRange(timeRange: string): string {
     '90d': 'Last 90 days',
     'all': 'All time',
   }
-  return labels[timeRange] || timeRange
+  return sanitizeText(labels[timeRange] || timeRange)
 }
 
 /**
@@ -195,11 +227,17 @@ function renderKPIStrip(
     }
 
     // Label
-    doc
-      .fontSize(STYLES.sizes.caption)
-      .font(STYLES.fonts.body)
-      .fillColor(STYLES.colors.secondaryText)
-      .text(kpi.label, centerX, kpiY + (kpi.unit ? 56 : 48), { align: 'center', width: kpiItemWidth })
+      // KPI label - prevent wrapping by breaking long labels
+      const labelText = sanitizeText(kpi.label || '')
+      doc
+        .fontSize(STYLES.sizes.caption)
+        .font(STYLES.fonts.body)
+        .fillColor(STYLES.colors.secondaryText)
+        .text(labelText, centerX, kpiY + (kpi.unit ? 56 : 48), { 
+          align: 'center', 
+          width: kpiItemWidth,
+          lineGap: 2,
+        })
 
     // Delta (if available)
     if (kpi.delta !== undefined && kpi.delta !== 0) {
@@ -269,8 +307,8 @@ function renderExecutiveSummary(
     insights.push('⚠️ Ledger integrity check failed - investigation required')
   }
 
-  if (insights.length > 0) {
-    insights.forEach((insight) => {
+  if (sanitizedInsights.length > 0) {
+    sanitizedInsights.forEach((insight) => {
       ensureSpace(doc, 20, margin)
       doc
         .fillColor(STYLES.colors.primaryText)
@@ -353,29 +391,43 @@ function renderMetricsTable(
         .fill(STYLES.colors.lightGrayBg)
     }
 
-    // Label
+    // Label (left-aligned)
     doc
       .fillColor(STYLES.colors.primaryText)
       .fontSize(STYLES.sizes.body)
       .font(STYLES.fonts.body)
-      .text(metric.label, margin + 8, rowY, { width: col1Width - 16 })
+      .text(sanitizeText(metric.label), margin + 8, rowY, { width: col1Width - 16 })
 
-    // Value (right-aligned) - handle N/A vs numeric
-    const valueText = typeof metric.value === 'string' ? metric.value : String(metric.value)
-    doc.text(
-      valueText,
-      margin + col1Width + 8,
-      rowY,
-      { width: col2Width - 16, align: 'right' }
-    )
+    // Value (right-aligned) - handle "—" vs numeric with thousands separator
+    const valueText = typeof metric.value === 'string' 
+      ? metric.value 
+      : (metric.isNumeric ? formatNumber(metric.value) : String(metric.value))
+    doc
+      .fillColor(STYLES.colors.primaryText)
+      .text(
+        valueText,
+        margin + col1Width + 8,
+        rowY,
+        { width: col2Width - 16, align: 'right' }
+      )
 
-    // Delta
+    // Delta (always show "—" if empty, right-aligned)
     const deltaText = formatDelta(metric.delta)
-    if (deltaText) {
-      const deltaColor = (metric.delta || 0) > 0 ? STYLES.colors.riskHigh : STYLES.colors.riskLow
+    const deltaColor = deltaText === '—' 
+      ? STYLES.colors.secondaryText 
+      : ((metric.delta || 0) > 0 ? STYLES.colors.riskHigh : STYLES.colors.riskLow)
+    doc
+      .fillColor(deltaColor)
+      .text(deltaText, margin + col1Width + col2Width + 8, rowY, { width: col3Width - 16, align: 'right' })
+    
+    // Subtle row divider
+    if (idx < metrics.length - 1) {
       doc
-        .fillColor(deltaColor)
-        .text(deltaText, margin + col1Width + col2Width + 8, rowY, { width: col3Width - 16, align: 'right' })
+        .strokeColor(STYLES.colors.borderGray)
+        .lineWidth(0.5)
+        .moveTo(margin, rowY + 20)
+        .lineTo(pageWidth - margin, rowY + 20)
+        .stroke()
     }
 
     doc.y = rowY + 20
@@ -524,7 +576,9 @@ function addHeaderFooter(
       .font(STYLES.fonts.body)
       .fillColor(STYLES.colors.secondaryText)
 
-    const footerText = `RiskMate Executive Brief | ${organizationName} | ${formatTimeRange(timeRange)} | Generated ${generatedAt.toLocaleDateString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric', year: 'numeric' })} | Report ID: ${reportId.substring(0, 8)} | Page ${pageIndex + 1} of ${pageCount}`
+    const footerText = sanitizeText(
+      `RiskMate Executive Brief | ${organizationName} | ${formatTimeRange(timeRange)} | Generated ${generatedAt.toLocaleDateString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric', year: 'numeric' })} | Report ID: ${reportId.substring(0, 8)} | Page ${pageIndex + 1} of ${pageCount}`
+    )
 
     doc.text(footerText, STYLES.spacing.margin, footerStartY, {
       width: pageWidth - STYLES.spacing.margin * 2,
