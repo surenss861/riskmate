@@ -411,7 +411,7 @@ function renderMetricsTable(
     // Value (right-aligned) - handle "—" vs numeric with thousands separator
     const valueText = typeof metric.value === 'string' 
       ? metric.value 
-      : (metric.isNumeric ? formatNumber(metric.value) : String(metric.value))
+      : formatNumber(metric.value)
     doc
       .fillColor(STYLES.colors.primaryText)
       .text(
