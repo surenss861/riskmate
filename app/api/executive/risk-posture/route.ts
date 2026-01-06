@@ -189,9 +189,23 @@ export async function GET(request: NextRequest) {
     }
 
     // Wrap in data property to match backend API response structure
-    return NextResponse.json({
+    const response = NextResponse.json({
       data: riskPostureData,
     })
+
+    // Debug headers (only in non-prod or when explicitly enabled)
+    // These help verify org resolution is consistent across endpoints
+    if (process.env.NODE_ENV !== 'production' || process.env.ENABLE_DEBUG_HEADERS === 'true') {
+      response.headers.set('X-Org-Id-Hash', hashId(orgContext.orgId))
+      response.headers.set('X-User-Id-Hash', hashId(orgContext.userId))
+      response.headers.set('X-Resolved-From', orgContext.resolvedFrom)
+      response.headers.set('X-Org-Name', orgContext.orgName.substring(0, 50)) // Truncated for safety
+      response.headers.set('X-Time-Range', time_range)
+      response.headers.set('X-Data-Window-Start', startDate.toISOString().split('T')[0])
+      response.headers.set('X-Data-Window-End', endDate.toISOString().split('T')[0])
+    }
+
+    return response
   } catch (error: any) {
     console.error('[executive/risk-posture] Unexpected error:', error)
     return NextResponse.json(
