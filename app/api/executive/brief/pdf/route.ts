@@ -791,36 +791,26 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Get user's organization and verify executive role
-    const { data: userData } = await supabase
-      .from('users')
-      .select('organization_id, role')
-      .eq('id', user.id)
-      .maybeSingle()
+    // Resolve organization context (shared helper)
+    const orgContext = await resolveOrgContext(user)
 
-    if (!userData?.organization_id) {
+    if (!orgContext) {
       return NextResponse.json(
-        { message: 'Organization not found' },
+        { message: 'Organization not found or access denied' },
         { status: 403 }
       )
     }
 
     // Verify executive role
-    if (userData.role !== 'executive' && userData.role !== 'owner' && userData.role !== 'admin') {
+    if (orgContext.role !== 'executive' && orgContext.role !== 'owner' && orgContext.role !== 'admin') {
       return NextResponse.json(
         { message: 'Executive access required' },
         { status: 403 }
       )
     }
 
-    // Get organization name
-    const { data: org } = await supabase
-      .from('organizations')
-      .select('name')
-      .eq('id', userData.organization_id)
-      .maybeSingle()
-
-    const organizationName = org?.name || 'Organization'
+    // Use resolved org name (sanitized immediately)
+    const organizationName = sanitizeText(orgContext.orgName)
 
     // Get time range from request body
     const body = await request.json().catch(() => ({}))
