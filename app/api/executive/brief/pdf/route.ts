@@ -160,6 +160,7 @@ function getExposureColor(level: string): string {
 // Per-page body content tracking (prevents blank pages)
 let pageHasBody = false
 let currentPageStartY = 0
+let pageNumber = 1
 
 /**
  * Helper: Check if we need a new page and add one if needed
@@ -174,11 +175,12 @@ function ensureSpace(
   const pageBottom = doc.page.height - 60 // bottom margin
   if (doc.y + requiredHeight > pageBottom) {
     // RED ALERT: If current page has no body content, we're about to create a blank page
-    if (!pageHasBody && doc.page.number > 1) {
-      console.warn(`[PDF] Warning: About to add page ${doc.page.number + 1} but page ${doc.page.number} has no body content`)
+    if (!pageHasBody && pageNumber > 1) {
+      console.warn(`[PDF] Warning: About to add page ${pageNumber + 1} but page ${pageNumber} has no body content`)
     }
     
     doc.addPage()
+    pageNumber++
     // Reset to top of content area after page break
     doc.y = STYLES.spacing.margin
     currentPageStartY = doc.y
