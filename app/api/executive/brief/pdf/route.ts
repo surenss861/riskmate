@@ -157,20 +157,32 @@ function getExposureColor(level: string): string {
   }
 }
 
+// Per-page body content tracking (prevents blank pages)
+let pageHasBody = false
+let currentPageStartY = 0
+
 /**
  * Helper: Check if we need a new page and add one if needed
- * Only adds a page if there's actually content to render
+ * CRITICAL: requiredHeight must include section title + spacing + at least one row/card
+ * Never add a page unless you're guaranteed to draw real body content
  */
 function ensureSpace(
   doc: PDFKit.PDFDocument,
-  needed: number,
+  requiredHeight: number,
   margin: number
 ): void {
   const pageBottom = doc.page.height - 60 // bottom margin
-  if (doc.y + needed > pageBottom) {
+  if (doc.y + requiredHeight > pageBottom) {
+    // RED ALERT: If current page has no body content, we're about to create a blank page
+    if (!pageHasBody && doc.page.number > 1) {
+      console.warn(`[PDF] Warning: About to add page ${doc.page.number + 1} but page ${doc.page.number} has no body content`)
+    }
+    
     doc.addPage()
     // Reset to top of content area after page break
     doc.y = STYLES.spacing.margin
+    currentPageStartY = doc.y
+    pageHasBody = false // Reset flag for new page
   }
 }
 
@@ -184,6 +196,14 @@ function hasSpace(
 ): boolean {
   const pageBottom = doc.page.height - 60
   return doc.y + needed <= pageBottom
+}
+
+/**
+ * Mark that body content has been written to current page
+ * Call this after drawing any non-header/footer content
+ */
+function markPageHasBody(doc: PDFKit.PDFDocument): void {
+  pageHasBody = true
 }
 
 /**
@@ -473,6 +493,14 @@ function renderMetricsTable(
   pageWidth: number,
   margin: number
 ): void {
+  // Calculate required height: header + table header + at least 2 rows
+  const sectionHeaderHeight = STYLES.sizes.h2 + 20
+  const tableHeaderHeight = STYLES.spacing.tableRowHeight + 4
+  const rowHeight = STYLES.spacing.tableRowHeight
+  const requiredHeight = sectionHeaderHeight + tableHeaderHeight + (rowHeight * 2) + 40
+
+  ensureSpace(doc, requiredHeight, margin)
+
   // Section header
   doc
     .fillColor(STYLES.colors.primaryText)
@@ -608,6 +636,7 @@ function renderMetricsTable(
       .lineTo(margin + col1Width + col2Width, rowY + rowHeight)
       .stroke()
 
+    markPageHasBody(doc) // Mark body content written
     doc.y = rowY + rowHeight
   })
 
@@ -634,6 +663,7 @@ function addSectionDivider(
 
 /**
  * Render data coverage section (compact, reassuring)
+ * Only renders if we have space and content
  */
 function renderDataCoverage(
   doc: PDFKit.PDFDocument,
@@ -641,12 +671,17 @@ function renderDataCoverage(
   pageWidth: number,
   margin: number
 ): void {
+  // Calculate required height: header + spacing + at least 2 items
+  const headerHeight = STYLES.sizes.h3 + 20
+  const itemHeight = 20
+  const requiredHeight = headerHeight + (itemHeight * 2) + 40
+
   // Only render if we have space (compact section)
-  if (!hasSpace(doc, 80)) {
+  if (!hasSpace(doc, requiredHeight)) {
     return
   }
 
-  ensureSpace(doc, 80, margin)
+  ensureSpace(doc, requiredHeight, margin)
 
   doc
     .fillColor(STYLES.colors.primaryText)
@@ -703,36 +738,40 @@ function renderDataCoverage(
     value: coveragePercent,
   })
 
-  // Render as compact list
-  coverageItems.forEach((item) => {
-    ensureSpace(doc, 20, margin)
-    doc
-      .fontSize(STYLES.sizes.body)
-      .font(STYLES.fonts.body)
-      .fillColor(STYLES.colors.primaryText)
-      .text(sanitizeText(item.label + ':'), {
-        indent: 20,
-        width: 180,
-      })
-      .fillColor(STYLES.colors.secondaryText)
-      .text(sanitizeText(item.value), {
-        indent: 200,
-        width: pageWidth - margin * 2 - 200,
-      })
-    doc.moveDown(0.3)
-  })
+  // Render as compact list (only if we have items)
+  if (coverageItems.length > 0) {
+    coverageItems.forEach((item) => {
+      ensureSpace(doc, 20, margin)
+      doc
+        .fontSize(STYLES.sizes.body)
+        .font(STYLES.fonts.body)
+        .fillColor(STYLES.colors.primaryText)
+        .text(sanitizeText(item.label + ':'), {
+          indent: 20,
+          width: 180,
+        })
+        .fillColor(STYLES.colors.secondaryText)
+        .text(sanitizeText(item.value), {
+          indent: 200,
+          width: pageWidth - margin * 2 - 200,
+        })
+      markPageHasBody(doc) // Mark body content written
+      doc.moveDown(0.3)
+    })
 
-  // Show reason if data is missing
-  if (totalJobs === 0) {
-    doc.moveDown(0.3)
-    doc
-      .fontSize(STYLES.sizes.caption)
-      .font(STYLES.fonts.body)
-      .fillColor(STYLES.colors.secondaryText)
-      .text(sanitizeText('Reason: No jobs with risk assessments in selected window'), {
-        indent: 20,
-        width: pageWidth - margin * 2 - 20,
-      })
+    // Show reason if data is missing (only if we have space)
+    if (totalJobs === 0 && hasSpace(doc, 20)) {
+      doc.moveDown(0.3)
+      doc
+        .fontSize(STYLES.sizes.caption)
+        .font(STYLES.fonts.body)
+        .fillColor(STYLES.colors.secondaryText)
+        .text(sanitizeText('Reason: No jobs with risk assessments in selected window'), {
+          indent: 20,
+          width: pageWidth - margin * 2 - 20,
+        })
+      markPageHasBody(doc)
+    }
   }
 
   doc.moveDown(1)
@@ -1078,6 +1117,9 @@ async function buildExecutiveBriefPDF(
 
     // Risk Posture Gauge (visual credibility element)
     renderRiskPostureGauge(doc, data, pageWidth, margin)
+    if (data.posture_score !== undefined) {
+      markPageHasBody(doc) // Mark if gauge was rendered
+    }
 
     // Section divider
     addSectionDivider(doc, pageWidth, margin)
