@@ -704,30 +704,36 @@ function renderMetricsTable(
         lineGap: 4,
       })
 
-    // Value (right-aligned, fixed width)
+    // Value (right-aligned, fixed width) - CRITICAL: Never render standalone values
     const valueText = typeof metric.value === 'string' 
       ? metric.value 
       : formatNumber(metric.value)
-    doc
-      .fillColor(STYLES.colors.primaryText)
-      .text(
-        sanitizeText(valueText),
-        margin + col1Width + cellPadding,
-        rowY + cellPadding,
-        { width: col2Width - cellPadding * 2, align: 'right' }
-      )
+    
+    // Only render value if we have a label (prevents standalone "2" or "—")
+    if (metric.label && valueText) {
+      doc
+        .fillColor(STYLES.colors.primaryText)
+        .text(
+          sanitizeText(valueText),
+          margin + col1Width + cellPadding,
+          rowY + cellPadding,
+          { width: col2Width - cellPadding * 2, align: 'right' }
+        )
+    }
 
-    // Delta (right-aligned, fixed narrow column)
-    const deltaText = formatDelta(metric.delta)
-    const deltaColor = deltaText === '—' 
-      ? STYLES.colors.secondaryText 
-      : ((metric.delta || 0) > 0 ? STYLES.colors.riskHigh : STYLES.colors.riskLow)
-    doc
-      .fillColor(deltaColor)
-      .text(sanitizeText(deltaText), margin + col1Width + col2Width + cellPadding, rowY + cellPadding, { 
-        width: col3Width - cellPadding * 2, 
-        align: 'right' 
-      })
+    // Delta (right-aligned, fixed narrow column) - Only render if we have a label
+    if (metric.label) {
+      const deltaText = formatDelta(metric.delta)
+      const deltaColor = deltaText === '—' 
+        ? STYLES.colors.secondaryText 
+        : ((metric.delta || 0) > 0 ? STYLES.colors.riskHigh : STYLES.colors.riskLow)
+      doc
+        .fillColor(deltaColor)
+        .text(sanitizeText(deltaText), margin + col1Width + col2Width + cellPadding, rowY + cellPadding, { 
+          width: col3Width - cellPadding * 2, 
+          align: 'right' 
+        })
+    }
     
       // Light divider between rows
     doc
