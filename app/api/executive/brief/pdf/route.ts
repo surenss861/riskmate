@@ -476,30 +476,28 @@ function renderKPIStrip(
       })
     }
 
-    // Label (small, below value, no wrapping)
+    // Label (small, below value, no wrapping) - use safeText
     const labelY = valueY + STYLES.sizes.kpiValue + 6
-    doc
-      .fontSize(STYLES.sizes.kpiLabel)
-      .font(STYLES.fonts.body)
-      .fillColor(STYLES.colors.secondaryText)
-      .text(sanitizeText(kpi.label), contentX, labelY, { 
-        width: contentWidth,
-        align: 'left',
-      })
+    safeText(doc, kpi.label, contentX, labelY, {
+      width: contentWidth,
+      align: 'left',
+      fontSize: STYLES.sizes.kpiLabel,
+      font: STYLES.fonts.body,
+      color: STYLES.colors.secondaryText,
+    })
 
-    // Delta (if present, small chip-like)
+    // Delta (if present, small chip-like) - use safeText
     if (kpi.delta !== undefined && kpi.delta !== 0) {
       const deltaText = kpi.delta > 0 ? `+${kpi.delta}` : `${kpi.delta}`
       const deltaColor = kpi.delta > 0 ? STYLES.colors.riskHigh : STYLES.colors.riskLow
       const deltaY = labelY + 14
-      doc
-        .fontSize(STYLES.sizes.caption)
-        .font(STYLES.fonts.body)
-        .fillColor(deltaColor)
-        .text(sanitizeText(deltaText), contentX, deltaY, { 
-          width: contentWidth,
-          align: 'left',
-        })
+      safeText(doc, deltaText, contentX, deltaY, {
+        width: contentWidth,
+        align: 'left',
+        fontSize: STYLES.sizes.caption,
+        font: STYLES.fonts.body,
+        color: deltaColor,
+      })
     }
   })
 
