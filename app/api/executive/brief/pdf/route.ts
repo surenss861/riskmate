@@ -422,54 +422,61 @@ function renderMetricsTable(
 
   metrics.forEach((metric, idx) => {
     const rowY = doc.y
+    const isEven = idx % 2 === 0
 
-    // Zebra striping
-    if (idx % 2 === 0) {
+    // Zebra striping (subtle)
+    if (isEven) {
       doc
-        .rect(margin, rowY - 4, tableWidth, 20)
+        .rect(margin, rowY, tableWidth, rowHeight)
         .fill(STYLES.colors.lightGrayBg)
     }
 
-    // Label (left-aligned)
+    // Label (left-aligned, fixed width prevents wrapping)
+    const labelText = sanitizeText(metric.label)
     doc
-      .fillColor(STYLES.colors.primaryText)
       .fontSize(STYLES.sizes.body)
       .font(STYLES.fonts.body)
-      .text(sanitizeText(metric.label), margin + 8, rowY, { width: col1Width - 16 })
+      .fillColor(STYLES.colors.primaryText)
+      .text(labelText, margin + cellPadding, rowY + cellPadding, { 
+        width: col1Width - cellPadding * 2,
+        align: 'left',
+        lineGap: 4,
+      })
 
-    // Value (right-aligned) - handle "—" vs numeric with thousands separator
+    // Value (right-aligned, fixed width)
     const valueText = typeof metric.value === 'string' 
       ? metric.value 
       : formatNumber(metric.value)
     doc
       .fillColor(STYLES.colors.primaryText)
       .text(
-        valueText,
-        margin + col1Width + 8,
-        rowY,
-        { width: col2Width - 16, align: 'right' }
+        sanitizeText(valueText),
+        margin + col1Width + cellPadding,
+        rowY + cellPadding,
+        { width: col2Width - cellPadding * 2, align: 'right' }
       )
 
-    // Delta (always show "—" if empty, right-aligned)
+    // Delta (right-aligned, fixed narrow column)
     const deltaText = formatDelta(metric.delta)
     const deltaColor = deltaText === '—' 
       ? STYLES.colors.secondaryText 
       : ((metric.delta || 0) > 0 ? STYLES.colors.riskHigh : STYLES.colors.riskLow)
     doc
       .fillColor(deltaColor)
-      .text(deltaText, margin + col1Width + col2Width + 8, rowY, { width: col3Width - 16, align: 'right' })
+      .text(sanitizeText(deltaText), margin + col1Width + col2Width + cellPadding, rowY + cellPadding, { 
+        width: col3Width - cellPadding * 2, 
+        align: 'right' 
+      })
     
-    // Subtle row divider
-    if (idx < metrics.length - 1) {
-      doc
-        .strokeColor(STYLES.colors.borderGray)
-        .lineWidth(0.5)
-        .moveTo(margin, rowY + 20)
-        .lineTo(pageWidth - margin, rowY + 20)
-        .stroke()
-    }
+    // Light divider between rows
+    doc
+      .strokeColor(STYLES.colors.borderGray)
+      .lineWidth(0.5)
+      .moveTo(margin, rowY + rowHeight)
+      .lineTo(margin + tableWidth, rowY + rowHeight)
+      .stroke()
 
-    doc.y = rowY + 20
+    doc.y = rowY + rowHeight
   })
 
   doc.moveDown(1)
@@ -830,6 +837,12 @@ async function buildExecutiveBriefPDF(
 
     // Premium KPI Cards
     renderKPIStrip(doc, data, pageWidth, doc.y)
+
+    // Risk Posture Gauge (visual credibility element)
+    renderRiskPostureGauge(doc, data, pageWidth, margin)
+
+    // Section divider
+    addSectionDivider(doc, pageWidth, margin)
 
     // Executive Summary
     renderExecutiveSummary(doc, data, pageWidth, margin)
