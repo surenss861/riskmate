@@ -251,18 +251,20 @@ function writeKpiCard(
       .lineWidth(0.3)
       .stroke()
     
-    // Pill text (white if colored, secondary if grey)
+    // Pill text (white if colored, secondary if grey) - CRITICAL: sanitize before rendering
     const pillTextColor = deltaText === 'No change' 
       ? STYLES.colors.secondaryText 
       : STYLES.colors.white
+    const sanitizedPillText = sanitizeText(pillText)
     doc
       .fontSize(STYLES.sizes.kpiDelta)
       .font(STYLES.fonts.body)
       .fillColor(pillTextColor)
-      .text(pillText, pillX + 4, pillY + 4, { width: pillWidth - 8 })
+      .text(sanitizedPillText, pillX + 4, pillY + 4, { width: pillWidth - 8 })
   }
   
   // Value (big number) - ALLOW numeric-only in KPI context (paired with label)
+  // CRITICAL: Always sanitize before rendering
   const valueY = opts.cardY + cardPadding + 8
   const sanitizedValue = sanitizeText(opts.value)
   if (sanitizedValue) {
@@ -277,25 +279,27 @@ function writeKpiCard(
       })
   }
   
-  // Label (small, below value)
+  // Label (small, below value) - CRITICAL: already sanitized above, but ensure it's used
   const labelY = valueY + STYLES.sizes.kpiValue + 6
+  const sanitizedLabel = sanitizeText(labelText) // Re-sanitize to be safe
   doc
     .fontSize(STYLES.sizes.kpiLabel)
     .font(STYLES.fonts.body)
     .fillColor(STYLES.colors.secondaryText)
-    .text(labelText, contentX, labelY, {
+    .text(sanitizedLabel, contentX, labelY, {
       width: contentWidth,
       align: 'left',
     })
   
-  // Subtitle - ALWAYS show "vs prior 30d" (or appropriate time range)
+  // Subtitle - ALWAYS show "vs prior 30d" (or appropriate time range) - CRITICAL: sanitize
   const subtitleY = labelY + 12
   const timeRangeLabel = opts.timeRange === '7d' ? 'vs prior 7d' : opts.timeRange === '30d' ? 'vs prior 30d' : opts.timeRange === '90d' ? 'vs prior 90d' : 'vs prior period'
+  const sanitizedTimeRange = sanitizeText(timeRangeLabel)
   doc
     .fontSize(STYLES.sizes.kpiDelta)
     .font(STYLES.fonts.body)
     .fillColor(STYLES.colors.secondaryText)
-    .text(timeRangeLabel, contentX, subtitleY, {
+    .text(sanitizedTimeRange, contentX, subtitleY, {
       width: contentWidth,
       align: 'left',
     })
@@ -459,13 +463,13 @@ function renderKPIStrip(
              data.posture_score !== undefined && data.posture_score >= 50 ? STYLES.colors.riskMedium : STYLES.colors.riskHigh,
     },
     {
-      label: 'High Risk Jobs',
+      label: METRIC_LABELS.highRiskJobs, // Use centralized label
       value: `${data.high_risk_jobs}`,
       delta: data.deltas?.high_risk_jobs,
       color: STYLES.colors.primaryText,
     },
     {
-      label: 'Open Incidents',
+      label: METRIC_LABELS.openIncidents, // Use centralized label
       value: `${data.open_incidents}`,
       delta: data.deltas?.open_incidents,
       color: STYLES.colors.riskHigh,
@@ -745,6 +749,8 @@ function renderExecutiveSummary(
   }
   
   // Auto-fit headline: prevent mid-sentence wrapping by measuring and adjusting
+  // CRITICAL: Sanitize headline immediately after creation to prevent character corruption
+  // The corruption (U+FFFE) can happen during string composition, so sanitize right away
   const headlineText = sanitizeText(headline)
   const maxHeadlineWidth = pageWidth - margin * 2
   let headlineFontSize = STYLES.sizes.h1
@@ -758,6 +764,7 @@ function renderExecutiveSummary(
     headlineFontSize = Math.max(26, Math.floor((maxHeadlineWidth / headlineWidth) * headlineFontSize))
   }
   
+  // CRITICAL: safeText() will sanitize again, but we've already sanitized to be safe
   safeText(doc, headlineText, margin, headlineY, {
     fontSize: headlineFontSize,
     font: STYLES.fonts.header,
@@ -800,7 +807,7 @@ function renderExecutiveSummary(
   // 2. High-risk jobs: Count (Delta)
   const jobsDelta = data.deltas?.high_risk_jobs !== undefined ? formatDelta(data.deltas.high_risk_jobs) : 'N/A'
   chips.push({
-    label: 'High-risk jobs',
+    label: METRIC_LABELS.highRiskJobs, // Use centralized label
     delta: `${data.high_risk_jobs} (${jobsDelta})`,
     color: data.deltas?.high_risk_jobs !== undefined && data.deltas.high_risk_jobs !== 0
       ? (data.deltas.high_risk_jobs > 0 ? STYLES.colors.riskHigh : STYLES.colors.riskLow)
@@ -810,7 +817,7 @@ function renderExecutiveSummary(
   // 3. Open incidents: Count (Delta)
   const incidentsDelta = data.deltas?.open_incidents !== undefined ? formatDelta(data.deltas.open_incidents) : 'N/A'
   chips.push({
-    label: 'Open incidents',
+    label: METRIC_LABELS.openIncidents, // Use centralized label
     delta: `${data.open_incidents} (${incidentsDelta})`,
     color: data.deltas?.open_incidents !== undefined && data.deltas.open_incidents !== 0
       ? (data.deltas.open_incidents > 0 ? STYLES.colors.riskHigh : STYLES.colors.riskLow)
@@ -1009,22 +1016,36 @@ function renderExecutiveSummary(
 /**
  * Build metrics rows with normalized values (0 -> "0", null -> "—")
  */
+// Centralized label constants for consistent terminology and casing
+const METRIC_LABELS = {
+  overallExposure: 'Overall exposure',
+  highRiskJobs: 'High-risk jobs',
+  openIncidents: 'Open incidents',
+  recentViolations: 'Recent violations',
+  flaggedForReview: 'Flagged for review',
+  signoffsPending: 'Sign-offs (Pending)',
+  signoffsSigned: 'Sign-offs (Signed)',
+  proofPacksGenerated: 'Proof Packs Generated (exportable audit packs)',
+} as const
+
 function buildMetricsRows(data: RiskPostureData): Array<{ label: string; value: string; delta: string }> {
   // Add "What changed" summary row at the top
   const exposureLevel = data.exposure_level === 'high' ? 'High' : data.exposure_level === 'moderate' ? 'Moderate' : 'Low'
-  const exposureDelta = data.delta !== undefined ? formatDelta(data.delta) : 'No change'
+  // CRITICAL: Only show "No change" when delta is actually computed (delta === 0)
+  // If delta is undefined, prior period unavailable → show "N/A"
+  const exposureDelta = data.delta !== undefined ? formatDelta(data.delta) : 'N/A'
   
   const rows = [
     // Summary row: Overall exposure
-    { label: 'Overall exposure', value: exposureLevel, delta: exposureDelta },
-    { label: 'High Risk Jobs', value: data.high_risk_jobs, delta: data.deltas?.high_risk_jobs },
-    { label: 'Open Incidents', value: data.open_incidents, delta: data.deltas?.open_incidents },
-    { label: 'Recent Violations', value: data.recent_violations, delta: data.deltas?.violations },
-    { label: 'Flagged for Review', value: data.flagged_jobs, delta: data.deltas?.flagged_jobs },
-    { label: 'Sign-offs (Pending)', value: data.pending_signoffs ?? 0, delta: data.deltas?.pending_signoffs },
-    { label: 'Sign-offs (Signed)', value: data.signed_signoffs ?? 0, delta: data.deltas?.signed_signoffs },
+    { label: METRIC_LABELS.overallExposure, value: exposureLevel, delta: exposureDelta },
+    { label: METRIC_LABELS.highRiskJobs, value: data.high_risk_jobs, delta: data.deltas?.high_risk_jobs },
+    { label: METRIC_LABELS.openIncidents, value: data.open_incidents, delta: data.deltas?.open_incidents },
+    { label: METRIC_LABELS.recentViolations, value: data.recent_violations, delta: data.deltas?.violations },
+    { label: METRIC_LABELS.flaggedForReview, value: data.flagged_jobs, delta: data.deltas?.flagged_jobs },
+    { label: METRIC_LABELS.signoffsPending, value: data.pending_signoffs ?? 0, delta: data.deltas?.pending_signoffs },
+    { label: METRIC_LABELS.signoffsSigned, value: data.signed_signoffs ?? 0, delta: data.deltas?.signed_signoffs },
     // CRITICAL: Only show Proof Packs if count > 0 (prevents junk page)
-    ...(data.proof_packs_generated > 0 ? [{ label: 'Proof Packs Generated (exportable audit packs)', value: data.proof_packs_generated, delta: data.deltas?.proof_packs }] : []),
+    ...(data.proof_packs_generated > 0 ? [{ label: METRIC_LABELS.proofPacksGenerated, value: data.proof_packs_generated, delta: data.deltas?.proof_packs }] : []),
   ]
   
   // Normalize values: convert numbers to strings, handle null/undefined with plain English
@@ -1041,14 +1062,15 @@ function buildMetricsRows(data: RiskPostureData): Array<{ label: string; value: 
         valueText = formatNumber(row.value)
       }
       
-      // Delta: use plain English instead of "—"
+      // Delta: CRITICAL - match chip logic: only "No change" when delta === 0 (computed)
+      // If delta is undefined, prior period unavailable → show "N/A"
       let deltaText: string
       if (row.delta === null || row.delta === undefined) {
-        deltaText = 'No change'
+        deltaText = 'N/A' // Prior period unavailable
       } else {
         // Ensure delta is a number for formatDelta
         const deltaNum = typeof row.delta === 'number' ? row.delta : undefined
-        deltaText = formatDelta(deltaNum)
+        deltaText = formatDelta(deltaNum) // Returns "No change" for 0, formatted delta otherwise
       }
       
       return {
@@ -1412,7 +1434,7 @@ function renderMicroTopDrivers(
   if (top3.length === 0) {
     // Intentional fallback: show clear message about signal requirements
     ensureSpace(doc, 25, margin)
-    safeText(doc, `Top drivers (${timeRangeLabel}): Not enough signal (need ≥3 events)`, margin, doc.y, {
+    safeText(doc, `Top drivers (${timeRangeLabel}): Not enough signal (need at least 3 events)`, margin, doc.y, {
       width: pageWidth - margin * 2,
       fontSize: STYLES.sizes.caption,
       font: STYLES.fonts.body,
@@ -1721,15 +1743,15 @@ function renderTinyAppendix(
   
   // Note: In a real implementation, you'd fetch actual high-risk job IDs and dates
   // For now, show a summary
+  // CRITICAL: Use safeText() to ensure sanitization (prevents character corruption)
   if (data.high_risk_jobs > 0) {
-    doc
-      .fontSize(STYLES.sizes.body)
-      .font(STYLES.fonts.body)
-      .fillColor(STYLES.colors.primaryText)
-      .text(`${data.high_risk_jobs} high-risk ${pluralize(data.high_risk_jobs, 'job', 'jobs')} require attention.`, {
-        width: pageWidth - margin * 2,
-        lineGap: 4,
-      })
+    const summaryText = `${data.high_risk_jobs} high-risk ${pluralize(data.high_risk_jobs, 'job', 'jobs')} require attention.`
+    safeText(doc, summaryText, margin, doc.y, {
+      width: pageWidth - margin * 2,
+      fontSize: STYLES.sizes.body,
+      font: STYLES.fonts.body,
+      color: STYLES.colors.primaryText,
+    })
     doc.moveDown(0.3)
     doc
       .fontSize(STYLES.sizes.caption)
@@ -2044,12 +2066,13 @@ function addHeaderFooter(
         .text(`Window: ${sanitizeText(windowStartStr)} - ${sanitizeText(windowEndStr)}`, capsuleContentX, currentY, { width: capsuleContentWidth })
       currentY += 11
       
-      // Source tables summary
+      // Source tables summary - CRITICAL: sanitize
+      const sourcesText = sanitizeText('Sources: jobs, incidents, attestations')
       doc
         .fontSize(8)
         .font(STYLES.fonts.body)
         .fillColor(STYLES.colors.secondaryText)
-        .text('Sources: jobs, incidents, attestations', capsuleContentX, currentY, { width: capsuleContentWidth })
+        .text(sourcesText, capsuleContentX, currentY, { width: capsuleContentWidth })
       currentY += 11
       
       // Report hash (SHA-256) - shortened format (monospace for verification)
@@ -2059,24 +2082,32 @@ function addHeaderFooter(
           .fontSize(8)
           .font('Courier') // Monospace font for hash
           .fillColor(STYLES.colors.secondaryText)
-          .text(`Hash (SHA-256): ${hashShort}`, capsuleContentX, currentY, { width: capsuleContentWidth })
+          // CRITICAL: Sanitize hash text to prevent character corruption
+        const hashText = sanitizeText(`Hash (SHA-256): ${hashShort}`)
+        doc
+          .fontSize(8)
+          .font('Courier') // Monospace font for hash
+          .fillColor(STYLES.colors.secondaryText)
+          .text(hashText, capsuleContentX, currentY, { width: capsuleContentWidth })
         currentY += 11
       }
       
-      // Generated by (system name, not user email)
+      // Generated by (system name, not user email) - CRITICAL: sanitize
+      const generatedByText = sanitizeText('Generated by: RiskMate Platform')
       doc
         .fontSize(8)
         .font(STYLES.fonts.body)
         .fillColor(STYLES.colors.secondaryText)
-        .text('Generated by: RiskMate Platform', capsuleContentX, currentY, { width: capsuleContentWidth })
+        .text(generatedByText, capsuleContentX, currentY, { width: capsuleContentWidth })
       currentY += 11
       
-      // RLS/Org-scoped trust signal
+      // RLS/Org-scoped trust signal - CRITICAL: sanitize
+      const orgScopedText = sanitizeText('Org-scoped: enforced')
       doc
         .fontSize(8)
         .font(STYLES.fonts.body)
         .fillColor(STYLES.colors.secondaryText)
-        .text('Org-scoped: enforced', capsuleContentX, currentY, { width: capsuleContentWidth })
+        .text(orgScopedText, capsuleContentX, currentY, { width: capsuleContentWidth })
       currentY += 11
       
       // QR Code (real PNG buffer, passed from pre-generation)
@@ -2106,30 +2137,39 @@ function addHeaderFooter(
       
       // Measure and ensure link fits on one line
       doc.fontSize(8).font(STYLES.fonts.body)
-      const linkPrefix = 'Verify: '
-      const linkText = linkPrefix + prettyLink
+      const linkLabel = 'Verification endpoint: '
+      const linkText = linkLabel + prettyLink
       const linkTextWidth = doc.widthOfString(linkText)
       const linkTextHeight = 10
       const maxLinkWidth = capsuleContentWidth
       
-      // If link is too long, show just the short ID
+      // If link is too long, show just the short ID with label
       let displayText = linkText
       if (linkTextWidth > maxLinkWidth) {
-        displayText = `${linkPrefix}RM-${reportIdShort}`
+        // Try without domain
+        const shortLink = `RM-${reportIdShort}`
+        const shortText = linkLabel + shortLink
+        if (doc.widthOfString(shortText) <= maxLinkWidth) {
+          displayText = shortText
+        } else {
+          // Last resort: just the ID
+          displayText = `Verify: ${shortLink}`
+        }
       }
       
-      // Draw clickable link text (one line, no wrapping)
+      // Draw clickable link text (one line, no wrapping) - CRITICAL: sanitize
+      const sanitizedDisplayText = sanitizeText(displayText)
       doc
         .fontSize(8)
         .font(STYLES.fonts.body)
         .fillColor(STYLES.colors.accent)
-        .text(displayText, capsuleContentX, currentY, { 
+        .text(sanitizedDisplayText, capsuleContentX, currentY, { 
           width: capsuleContentWidth,
           lineBreak: false, // Prevent wrapping
         })
       
-      // Add clickable link annotation (PDFKit supports links) - full URL in annotation
-      const displayTextWidth = doc.widthOfString(displayText)
+      // Add clickable link annotation (PDFKit supports links) - full URL in annotation (not display text)
+      const displayTextWidth = doc.widthOfString(sanitizedDisplayText)
       doc.link(capsuleContentX, currentY, displayTextWidth, linkTextHeight, verifyUrl)
     }
   }
