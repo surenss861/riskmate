@@ -1140,8 +1140,10 @@ function addHeaderFooter(
  * For external use (smoke tests, CI), import from lib/pdf/executiveBrief/build.ts
  * 
  * TODO: This will be moved to lib/pdf/executiveBrief/build.ts incrementally
+ * 
+ * NOTE: This is exported as a regular function, not a route handler
  */
-export async function buildExecutiveBriefPDF(
+async function buildExecutiveBriefPDF(
   data: RiskPostureData,
   organizationName: string,
   generatedBy: string,

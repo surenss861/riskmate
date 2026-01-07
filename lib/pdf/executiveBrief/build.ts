@@ -24,22 +24,21 @@ import type { ExecutiveBriefInput, ExecutiveBriefOutput } from './types'
  * 
  * @param input - All data needed to generate the PDF
  * @returns PDF buffer, hash, latency metrics, and time window
+ * 
+ * NOTE: This is a temporary bridge implementation.
+ * The actual function lives in the route file and will be moved here incrementally.
  */
 export async function buildExecutiveBriefPDF(
   input: ExecutiveBriefInput
 ): Promise<ExecutiveBriefOutput> {
-  // Temporary bridge: Import the existing implementation from route file
-  // As we extract code incrementally, this will be replaced with local implementation
-  const { buildExecutiveBriefPDF: buildInternal } = await import('../../../app/api/executive/brief/pdf/route')
+  // TODO: This is a temporary workaround - Next.js doesn't allow exporting non-route functions from route files
+  // We'll move the implementation here incrementally in the next steps
+  // For now, this function will be implemented directly in the route handler
+  // and we'll extract it piece by piece
   
-  // Call with the old signature (will be updated as we refactor)
-  return buildInternal(
-    input.data,
-    input.organizationName,
-    input.generatedBy,
-    input.timeRange,
-    input.buildSha,
-    input.reportId
+  throw new Error(
+    'buildExecutiveBriefPDF from lib/pdf/executiveBrief/build.ts is not yet implemented. ' +
+    'The implementation is still in app/api/executive/brief/pdf/route.ts and will be moved incrementally.'
   )
 }
 
