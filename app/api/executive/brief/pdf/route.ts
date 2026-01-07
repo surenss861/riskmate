@@ -223,7 +223,8 @@ function writeKpiCard(
   const contentWidth = opts.cardWidth - cardPadding * 2
   
   // Validate label exists (required for KPI context)
-  const labelText = sanitizeText(opts.label)
+  // CRITICAL: Use sanitizeAscii() for KPI labels (strict ASCII for executive-facing content)
+  const labelText = sanitizeAscii(opts.label)
   if (!labelText) return // Skip if no label
   
   // Delta pill (top-right corner of card) - show if delta exists
@@ -279,9 +280,9 @@ function writeKpiCard(
       })
   }
   
-  // Label (small, below value) - CRITICAL: already sanitized above, but ensure it's used
+  // Label (small, below value) - CRITICAL: Use sanitizeAscii() for KPI labels
   const labelY = valueY + STYLES.sizes.kpiValue + 6
-  const sanitizedLabel = sanitizeText(labelText) // Re-sanitize to be safe
+  const sanitizedLabel = sanitizeAscii(labelText) // Already sanitized with sanitizeAscii above
   doc
     .fontSize(STYLES.sizes.kpiLabel)
     .font(STYLES.fonts.body)
@@ -743,44 +744,39 @@ function renderExecutiveSummary(
                              data.deltas?.pending_signoffs !== undefined ||
                              data.deltas?.proof_packs !== undefined
   
-  // CRITICAL: Sanitize all parts BEFORE composing headline to prevent character corruption
-  // The corruption (U+FFFE) can happen during string composition, so sanitize each part first
-  // ULTRA-STRICT: Build headline using only sanitized strings, no raw template literals
+  // CRITICAL: Use sanitizeAscii() for headline (strict ASCII only for executive-facing content)
+  // This prevents character corruption (high￾risk) and ensures clean text extraction
   let headline: string
   if (!hasSufficientData) {
-    headline = sanitizeText('Insufficient job volume to compute risk posture')
+    headline = sanitizeAscii('Insufficient job volume to compute risk posture')
   } else {
     // Executive wording: more action-forward
-    // CRITICAL: Sanitize EVERY part before composition
+    // CRITICAL: Use sanitizeAscii() for ALL parts to ensure strict ASCII
     const exposureLevel = data.exposure_level === 'high' ? 'High' : data.exposure_level === 'moderate' ? 'Moderate' : 'Low'
-    const sanitizedExposure = sanitizeText(exposureLevel.toLowerCase())
-    const sanitizedHighRisk = sanitizeText('high-risk') // Sanitize hyphen-containing string
-    const sanitizedMitigate = sanitizeText('mitigate')
-    const sanitizedJob = sanitizeText('job')
-    const sanitizedJobs = sanitizeText('jobs')
-    const sanitizedReduce = sanitizeText('reduce audit risk')
-    const sanitizedRequire = sanitizeText('require immediate attention')
+    const sanitizedExposure = sanitizeAscii(exposureLevel.toLowerCase())
+    const sanitizedHighRisk = sanitizeAscii('high-risk') // Sanitize hyphen-containing string
+    const sanitizedMitigate = sanitizeAscii('mitigate')
+    const sanitizedJob = sanitizeAscii('job')
+    const sanitizedJobs = sanitizeAscii('jobs')
+    const sanitizedReduce = sanitizeAscii('reduce audit risk')
+    const sanitizedRequire = sanitizeAscii('require immediate attention')
     
-    // CRITICAL: Compose using only sanitized strings, then sanitize the result
+    // CRITICAL: Compose using only sanitized strings, then sanitize the result with sanitizeAscii()
     if (data.high_risk_jobs === 1) {
       const composed = `Exposure is ${sanitizedExposure}; ${sanitizedMitigate} 1 ${sanitizedHighRisk} ${sanitizedJob} to ${sanitizedReduce}.`
-      headline = sanitizeText(composed)
+      headline = sanitizeAscii(composed)
     } else if (data.high_risk_jobs > 1) {
       const composed = `Exposure is ${sanitizedExposure}; ${sanitizedMitigate} ${data.high_risk_jobs} ${sanitizedHighRisk} ${sanitizedJobs} to ${sanitizedReduce}.`
-      headline = sanitizeText(composed)
+      headline = sanitizeAscii(composed)
     } else {
       const composed = `Exposure is ${sanitizedExposure}; no ${sanitizedHighRisk} ${sanitizedJobs} ${sanitizedRequire}.`
-      headline = sanitizeText(composed)
+      headline = sanitizeAscii(composed)
     }
   }
   
-  // CRITICAL: Final sanitization pass (defense in depth) - ensure no corruption slipped through
+  // CRITICAL: Final sanitization pass with sanitizeAscii() (defense in depth)
   // MUST sanitize BEFORE any measurement or width calculations
-  let headlineText = sanitizeText(headline)
-  // Double-check: if headlineText still contains problematic characters, sanitize again
-  if (headlineText.includes('\uFFFE') || headlineText.includes('\uFFFF') || headlineText.includes('\uFFFD')) {
-    headlineText = sanitizeText(headlineText) // Force re-sanitization
-  }
+  const headlineText = sanitizeAscii(headline)
   
   // Auto-fit headline: prevent mid-sentence wrapping by measuring and adjusting
   // CRITICAL: Measurement happens AFTER sanitization
@@ -828,8 +824,8 @@ function renderExecutiveSummary(
   // 2. High-risk jobs: Count (Delta)
   const jobsDelta = data.deltas?.high_risk_jobs !== undefined ? formatDelta(data.deltas.high_risk_jobs) : 'N/A'
   chips.push({
-    label: METRIC_LABELS.highRiskJobs, // Use centralized label
-    delta: `${data.high_risk_jobs} (${jobsDelta})`,
+    label: sanitizeAscii(METRIC_LABELS.highRiskJobs), // Use centralized label, sanitize with ASCII
+    delta: sanitizeAscii(`${data.high_risk_jobs} (${jobsDelta})`),
     color: data.deltas?.high_risk_jobs !== undefined && data.deltas.high_risk_jobs !== 0
       ? (data.deltas.high_risk_jobs > 0 ? STYLES.colors.riskHigh : STYLES.colors.riskLow)
       : STYLES.colors.primaryText,
@@ -838,8 +834,8 @@ function renderExecutiveSummary(
   // 3. Open incidents: Count (Delta)
   const incidentsDelta = data.deltas?.open_incidents !== undefined ? formatDelta(data.deltas.open_incidents) : 'N/A'
   chips.push({
-    label: METRIC_LABELS.openIncidents, // Use centralized label
-    delta: `${data.open_incidents} (${incidentsDelta})`,
+    label: sanitizeAscii(METRIC_LABELS.openIncidents), // Use centralized label, sanitize with ASCII
+    delta: sanitizeAscii(`${data.open_incidents} (${incidentsDelta})`),
     color: data.deltas?.open_incidents !== undefined && data.deltas.open_incidents !== 0
       ? (data.deltas.open_incidents > 0 ? STYLES.colors.riskHigh : STYLES.colors.riskLow)
       : STYLES.colors.primaryText,
@@ -851,15 +847,15 @@ function renderExecutiveSummary(
     ? Math.round((data.signed_signoffs / totalSignoffs) * 100)
     : 0
   chips.push({
-    label: 'Attestation coverage',
-    delta: `${attestationPct}% (N/A)`, // Always N/A since attestation deltas not tracked
+    label: sanitizeAscii('Attestation coverage'),
+    delta: sanitizeAscii(`${attestationPct}% (N/A)`), // Always N/A since attestation deltas not tracked
     color: STYLES.colors.primaryText,
   })
   
   // 5. Sign-offs: Signed/Total (sign-off deltas not tracked yet - always show N/A)
   chips.push({
-    label: 'Sign-offs',
-    delta: `${data.signed_signoffs ?? 0}/${totalSignoffs} (N/A)`, // Always N/A since sign-off deltas not tracked
+    label: sanitizeAscii('Sign-offs'),
+    delta: sanitizeAscii(`${data.signed_signoffs ?? 0}/${totalSignoffs} (N/A)`), // Always N/A since sign-off deltas not tracked
     color: STYLES.colors.primaryText,
   })
   
@@ -2149,84 +2145,63 @@ function addHeaderFooter(
         currentY += qrSize + 8
       }
       
-      // CRITICAL: Verification endpoint must always show a human-readable path
-      // Display: "riskmate.app/verify/RM-xxxx" (always show full path, never just ID)
-      // Target: Full URL for clickable annotation
+      // CRITICAL: Build verify display from constant domain + constant path
+      // Never allow display to degrade to ID-only - always include /verify/ path
       const reportIdShort = reportId.substring(0, 8)
-      const domain = baseUrl 
-        ? baseUrl.replace(/^https?:\/\//, '').split('/')[0]
-        : 'riskmate.app'
+      const DISPLAY_DOMAIN = 'riskmate.app' // Constant domain for display
+      const verifyPath = `verify/RM-${reportIdShort}` // Constant path (always includes verify/)
       
-      // Preferred: Full pretty link "riskmate.app/verify/RM-abc12345"
-      const prettyLink = `${domain}/verify/RM-${reportIdShort}`
+      // Build display string: always includes verify/ path
+      // Preferred: "riskmate.app/verify/RM-xxxx"
+      // Fallback: "verify/RM-xxxx" (still contains verify/)
+      // NEVER: just "RM-xxxx" or just the ID
+      const fullDisplay = `${DISPLAY_DOMAIN}/${verifyPath}`
       
-      // Verify URL (for clickable annotation) - construct to match display
+      // Verify URL (for clickable annotation) - separate from display, uses actual baseUrl
       const verifyUrl = baseUrl 
         ? `${baseUrl}/verify/RM-${reportIdShort}`
         : `/verify/RM-${reportIdShort}`
       
-      // Measure and ensure link fits on one line
+      // Measure and determine display text
       doc.fontSize(8).font(STYLES.fonts.body)
       const linkLabel = 'Verification endpoint: '
-      const preferredText = linkLabel + prettyLink
+      const preferredText = linkLabel + fullDisplay
       const preferredWidth = doc.widthOfString(preferredText)
       const linkTextHeight = 10
       const maxLinkWidth = capsuleContentWidth
       
-      // CRITICAL: Strict fallback ladder that ALWAYS includes the path
-      // Never allow ID-only display - always show at least "verify/RM-xxxx"
-      // Fallback order:
-      // 1. riskmate.app/verify/RM-xxxx (preferred)
-      // 2. verify/RM-xxxx (if space is tight)
-      // 3. Verify: verify/RM-xxxx (if label is too long)
-      // NEVER: just "RM-xxxx" or just the ID
-      
+      // Determine display: prefer full, fallback to path-only (but ALWAYS includes verify/)
       let displayText: string
-      const fallbackLink = `verify/RM-${reportIdShort}` // Always include path
-      
-      // Try preferred: "riskmate.app/verify/RM-xxxx"
       if (preferredWidth <= maxLinkWidth) {
-        displayText = preferredText
+        displayText = preferredText // "Verification endpoint: riskmate.app/verify/RM-xxxx"
       } else {
-        // Try fallback: "verify/RM-xxxx" with label
-        const fallbackText = linkLabel + fallbackLink
+        // Fallback: "Verification endpoint: verify/RM-xxxx" (path only, but still includes verify/)
+        const fallbackText = linkLabel + verifyPath
         const fallbackWidth = doc.widthOfString(fallbackText)
         if (fallbackWidth <= maxLinkWidth) {
           displayText = fallbackText
         } else {
-          // Try minimal: "Verify: verify/RM-xxxx"
-          const minimalText = `Verify: ${fallbackLink}`
+          // Last resort: "Verify: verify/RM-xxxx" (shortened label, but path always included)
+          const minimalText = `Verify: ${verifyPath}`
           const minimalWidth = doc.widthOfString(minimalText)
           if (minimalWidth <= maxLinkWidth) {
             displayText = minimalText
           } else {
-            // Last resort: just the path "verify/RM-xxxx" (no label)
+            // Absolute minimum: just the path "verify/RM-xxxx" (no label, but path always included)
             // CRITICAL: This is the minimum - NEVER drop the path
-            displayText = fallbackLink
+            displayText = verifyPath
           }
         }
       }
       
-      // CRITICAL: Hard assert - if displayText doesn't contain "verify/", force it
-      // This should never happen, but if it does, we fix it here
+      // CRITICAL: Hard assert - displayText MUST always contain "verify/"
+      // This should never fail, but if it does, we force it
       if (!displayText.includes('verify/')) {
-        // Emergency fix: prepend "verify/" to whatever we have
-        if (displayText.includes(`RM-${reportIdShort}`)) {
-          displayText = displayText.replace(`RM-${reportIdShort}`, `verify/RM-${reportIdShort}`)
-        } else {
-          displayText = fallbackLink // Force to minimum safe display
-        }
+        displayText = verifyPath // Force to minimum safe display (always includes verify/)
       }
       
-      // CRITICAL: Final validation - ensure we never show just the ID
-      // Check if displayText ends with just the ID (no path)
-      const idOnlyPattern = new RegExp(`(^|\\s)RM-${reportIdShort}(\\s|$)`)
-      if (idOnlyPattern.test(displayText) && !displayText.includes('verify/')) {
-        displayText = fallbackLink // Force to minimum safe display
-      }
-      
-      // Draw clickable link text (one line, no wrapping) - CRITICAL: sanitize
-      const sanitizedDisplayText = sanitizeText(displayText)
+      // CRITICAL: Use sanitizeAscii() for verify display (strict ASCII for executive-facing content)
+      const sanitizedDisplayText = sanitizeAscii(displayText)
       doc
         .fontSize(8)
         .font(STYLES.fonts.body)

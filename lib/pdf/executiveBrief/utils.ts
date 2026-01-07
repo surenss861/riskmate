@@ -16,51 +16,43 @@ import { PDF_TOKENS } from './tokens'
  * Sanitize text for PDF output - removes ALL C0/C1 control chars, normalizes quotes, fixes bullets
  * This fixes the '\x05' and other control character leaks
  */
-export function sanitizeText(text: string): string {
-  if (!text) return ''
-  
-  let result = String(text)
-    // Remove ALL C0 control characters (\u0000-\u001F) and DEL (\u007F)
-    // Keep only newline (\n), carriage return (\r), tab (\t) for formatting
-    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '')
-    // Remove ALL C1 control characters (\u0080-\u009F)
-    .replace(/[\u0080-\u009F]/g, '')
-    // CRITICAL: Comprehensive hyphen/dash/replacement character normalizer
-    // Replace ALL problematic characters with standard hyphen BEFORE any other processing
-    // This MUST catch: \uFFFE (replacement character that causes "high￾risk")
-    // Also catches: \uFFFF, \uFFFD, \u00AD (soft hyphen), \u2010-\u2015 (various dashes), \u2212 (minus), etc.
-    .replace(/[\uFFFE\uFFFF\uFFFD\u00AD\u2010\u2011\u2012\u2013\u2014\u2015\u2212\uFE58\uFE63\uFF0D]/g, '-')
-    // Also catch any remaining dash-like characters using explicit ranges
-    // Note: JavaScript regex doesn't support \p{Pd} directly, so we use explicit ranges
-    .replace(/[\u002D\u058A\u05BE\u1400\u1806\u2E17\u2E1A\u2E3A\u2E3B\u301C\u3030\u30A0\uFE31\uFE32]/g, '-')
-    // Replace smart quotes with ASCII equivalents (do this AFTER control char removal)
-    .replace(/['']/g, "'")
-    .replace(/[""]/g, '"')
-    .replace(/[""]/g, '"')
-    // Replace various bullet/arrow characters with hyphen
-    .replace(/[•\u2022\u25CF\u25E6\u2043\u2219\u2023\u2024]/g, '-')
-    // Remove zero-width characters and format characters (\p{Cf} category)
-    // This includes: \u200B-\u200D (zero-width spaces), \uFEFF (BOM), and other format chars
-    .replace(/[\u200B-\u200D\uFEFF\u200C\u200D\u2060\uFEFF]/g, '')
-    // CRITICAL: Collapse weird hyphen spacing (but preserve negative numbers)
-    // Pattern: whitespace-hyphen-whitespace or whitespace-hyphen or hyphen-whitespace
-    // But NOT: number-hyphen-number (negative numbers) or hyphen-number (negative numbers)
-    .replace(/(\S)\s+-\s+(\S)/g, '$1-$2') // space-hyphen-space between words
-    .replace(/(\S)\s+-(\S)/g, '$1-$2') // space-hyphen-word
-    .replace(/(\S)-\s+(\S)/g, '$1-$2') // word-hyphen-space
-    // Normalize whitespace (preserve intentional spaces)
-    .replace(/\s+/g, ' ')
-    .trim()
-  
-  // CRITICAL: Final "nuke pass" - replace any remaining problematic characters
-  // This is defense in depth - if anything slipped through, catch it here
-  result = result
-    .replace(/[\uFFFE\uFFFF\uFFFD]/g, '-') // Replacement characters
-    .replace(/[\u00AD\u2010-\u2015\u2212]/g, '-') // All dash variants
-    .replace(/[\uFE58\uFE63\uFF0D]/g, '-') // More dash variants
-    .replace(/[\u200B-\u200D\uFEFF]/g, '') // Zero-width and format chars
-  
-  return result
+/**
+ * Sanitize text for normal content (names, descriptions, etc.)
+ * Preserves international characters but normalizes problematic ones
+ */
+export function sanitizeText(input: unknown): string {
+  let s = String(input ?? '')
+
+  // Canonicalize Unicode (NFKC normalization)
+  s = s.normalize('NFKC')
+
+  // Remove format/zero-width + BOM
+  s = s.replace(/[\u200B-\u200D\uFEFF]/g, '')
+
+  // Remove soft hyphen entirely (this is usually the "￾" leak)
+  s = s.replace(/\u00AD/g, '')
+
+  // Normalize dash variants + noncharacters/replacements -> "-"
+  s = s.replace(/[\u2010-\u2015\u2212\uFE58\uFE63\uFF0D\uFFFE\uFFFF\uFFFD]/g, '-')
+
+  // Cleanup spacing around hyphens like "high - risk" -> "high-risk"
+  // (keeps negative numbers intact)
+  s = s.replace(/(\D)\s*-\s*(\D)/g, '$1-$2')
+
+  // Collapse whitespace
+  s = s.replace(/[ \t]+/g, ' ').trim()
+
+  return s
+}
+
+/**
+ * Sanitize text to strict ASCII only (for headline, chips, KPI labels, verify display)
+ * This ensures clean text extraction and prevents character corruption in executive-facing content
+ */
+export function sanitizeAscii(input: unknown): string {
+  const s = sanitizeText(input)
+  // Keep ASCII printable + newlines/tabs (0x09, 0x0A, 0x0D, 0x20-0x7E)
+  return s.replace(/[^\x09\x0A\x0D\x20-\x7E]/g, '')
 }
 
 /**
