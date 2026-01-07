@@ -744,22 +744,28 @@ function renderExecutiveSummary(
                              data.deltas?.pending_signoffs !== undefined ||
                              data.deltas?.proof_packs !== undefined
   
+  // CRITICAL: Sanitize all parts BEFORE composing headline to prevent character corruption
+  // The corruption (U+FFFE) can happen during string composition, so sanitize each part first
+  let headline: string
   if (!hasSufficientData) {
-    headline = 'Insufficient job volume to compute risk posture'
+    headline = sanitizeText('Insufficient job volume to compute risk posture')
   } else {
     // Executive wording: more action-forward
+    // CRITICAL: Sanitize exposure level and compose with sanitized strings
     const exposureLevel = data.exposure_level === 'high' ? 'High' : data.exposure_level === 'moderate' ? 'Moderate' : 'Low'
+    const sanitizedExposure = sanitizeText(exposureLevel.toLowerCase())
+    const sanitizedHighRisk = sanitizeText('high-risk') // Sanitize hyphen-containing string
+    
     if (data.high_risk_jobs === 1) {
-      headline = `Exposure is ${exposureLevel.toLowerCase()}; mitigate 1 high-risk job to reduce audit risk.`
+      headline = sanitizeText(`Exposure is ${sanitizedExposure}; mitigate 1 ${sanitizedHighRisk} job to reduce audit risk.`)
     } else if (data.high_risk_jobs > 1) {
-      headline = `Exposure is ${exposureLevel.toLowerCase()}; mitigate ${data.high_risk_jobs} high-risk jobs to reduce audit risk.`
+      headline = sanitizeText(`Exposure is ${sanitizedExposure}; mitigate ${data.high_risk_jobs} ${sanitizedHighRisk} jobs to reduce audit risk.`)
     } else {
-      headline = `Exposure is ${exposureLevel.toLowerCase()}; no high-risk jobs require immediate attention.`
+      headline = sanitizeText(`Exposure is ${sanitizedExposure}; no ${sanitizedHighRisk} jobs require immediate attention.`)
     }
   }
   
-  // CRITICAL: Sanitize headline IMMEDIATELY after creation (before any measurements/width-fitting)
-  // This prevents character corruption (U+FFFE) from slipping into composed strings
+  // CRITICAL: Final sanitization pass (defense in depth)
   const headlineText = sanitizeText(headline)
   
   // Auto-fit headline: prevent mid-sentence wrapping by measuring and adjusting
@@ -906,23 +912,10 @@ function renderExecutiveSummary(
   const linesUsed = Math.min(Math.ceil(chips.length / maxChipsPerLine), maxLines)
   doc.y = chipsY + (chipHeight * linesUsed) + (8 * (linesUsed - 1)) + 20
   
-  // Show note ONLY if prior period data is actually unavailable (all tracked deltas are null/undefined)
-  // CRITICAL: If we're showing "No change" anywhere (even as default), we DO have prior period data
-  // Check if any chips show "No change" - if so, don't show the note
-  const anyChipShowsNoChange = chips.some(chip => chip.delta.includes('No change'))
-  
-  // Only show note if NO prior period data AND no chips show "No change"
-  if (!hasPriorPeriodData && !anyChipShowsNoChange && hasSpace(doc, 15)) {
-    const timeRangeLabel = timeRange === '7d' ? 'prior 7d' : timeRange === '30d' ? 'prior 30d' : timeRange === '90d' ? 'prior 90d' : 'prior period'
-    doc
-      .fontSize(7)
-      .font(STYLES.fonts.body)
-      .fillColor(STYLES.colors.secondaryText)
-      .text(`Prior period unavailable (${timeRangeLabel})`, margin, doc.y, {
-        width: pageWidth - margin * 2,
-      })
-    doc.moveDown(0.3)
-  }
+  // CRITICAL: Remove "Prior period unavailable" note entirely
+  // Chips already communicate the truth with (N/A) next to each metric
+  // Keeping the extra line is redundant and makes execs think you're covering something up
+  // Rule: if chips show N/A, don't also print a global "prior unavailable" note
   
   doc.moveDown(0.8)
 
@@ -2128,12 +2121,9 @@ function addHeaderFooter(
         currentY += qrSize + 8
       }
       
-      // Verify link (full URL) - one-line, unbreakable, clickable
-      const verifyUrl = baseUrl 
-        ? `${baseUrl}/api/executive/brief/${reportId.substring(0, 8)}`
-        : `/api/executive/brief/${reportId.substring(0, 8)}`
-      
-      // Create pretty short link (show domain + short ID, embed full URL in annotation)
+      // CRITICAL: Verification endpoint must always show a human-readable path
+      // Display: "riskmate.app/verify/RM-xxxx" (always show full path, never just ID)
+      // Target: Full URL for clickable annotation
       const reportIdShort = reportId.substring(0, 8)
       const domain = baseUrl 
         ? baseUrl.replace(/^https?:\/\//, '').split('/')[0]
@@ -2141,6 +2131,11 @@ function addHeaderFooter(
       
       // Preferred: Full pretty link "riskmate.app/verify/RM-abc12345"
       const prettyLink = `${domain}/verify/RM-${reportIdShort}`
+      
+      // Verify URL (for clickable annotation) - construct to match display
+      const verifyUrl = baseUrl 
+        ? `${baseUrl}/verify/RM-${reportIdShort}`
+        : `/verify/RM-${reportIdShort}`
       
       // Measure and ensure link fits on one line
       doc.fontSize(8).font(STYLES.fonts.body)
@@ -2154,16 +2149,16 @@ function addHeaderFooter(
       // CRITICAL: Never show just "RM-xxx" - always show at least "verify/RM-xxx"
       let displayText: string
       if (preferredWidth <= maxLinkWidth) {
-        displayText = preferredText // Full pretty link fits
+        displayText = preferredText // Full pretty link fits: "riskmate.app/verify/RM-xxxx"
       } else {
         // Fallback: "verify/RM-xxxx" (NOT just "RM-xxxx")
         const fallbackLink = `verify/RM-${reportIdShort}`
         const fallbackText = linkLabel + fallbackLink
         if (doc.widthOfString(fallbackText) <= maxLinkWidth) {
-          displayText = fallbackText
+          displayText = fallbackText // "Verification endpoint: verify/RM-xxxx"
         } else {
-          // Last resort: just the endpoint path (still better than just ID)
-          displayText = `Verify: ${fallbackLink}`
+          // Last resort: shorten label but keep full path
+          displayText = `Verify: ${fallbackLink}` // "Verify: verify/RM-xxxx"
         }
       }
       
