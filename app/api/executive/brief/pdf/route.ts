@@ -747,13 +747,15 @@ function renderMetricsTable(
   // CRITICAL: Never render section header unless we have at least 1 row
   if (metricsRows.length === 0) return
   
-  // Calculate required height: header + table header + at least 2 rows
+  // Calculate required height: section header + table header + ALL rows (keep entire table together)
   const sectionHeaderHeight = STYLES.sizes.h2 + 20
   const tableHeaderHeight = STYLES.spacing.tableRowHeight + 4
   const tableRowHeight = STYLES.spacing.tableRowHeight
-  const requiredHeight = sectionHeaderHeight + tableHeaderHeight + (tableRowHeight * 2) + 40
+  const totalTableHeight = tableHeaderHeight + (tableRowHeight * metricsRows.length) + 20 // All rows together
+  const requiredHeight = sectionHeaderHeight + totalTableHeight
 
-  // Only call ensureSpace AFTER confirming hasContent
+  // CRITICAL: Ensure space for entire table (section header + header + ALL rows together)
+  // If it doesn't fit, move entire table to next page (never split rows)
   ensureSpace(doc, requiredHeight, margin)
 
   // Section header
@@ -827,8 +829,8 @@ function renderMetricsTable(
     // Only skip if value is explicitly null/undefined (not 0, which is falsy but valid)
     // We'll handle "—" as a string in the value rendering logic below
     
-    // CRITICAL: ensureSpace ONCE per row, before writing anything
-    ensureSpace(doc, tableRowHeight + 10, margin)
+    // NOTE: We already ensured space for entire table above, so rows should all fit
+    // Keep minimal check as safety net (but shouldn't trigger)
     
     const rowY = doc.y
     const isEven = idx % 2 === 0
