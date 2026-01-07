@@ -50,7 +50,10 @@ export function sanitizeText(text: string): string {
  * Returns "No change" for 0 or undefined, otherwise formatted with sign
  */
 export function formatDelta(delta?: number): string {
-  if (delta === undefined || delta === 0) return 'No change'
+  // CRITICAL: Only return "No change" when delta is explicitly 0 (computed comparison)
+  // If delta is undefined, caller should handle as "N/A" (prior unavailable)
+  if (delta === undefined) return 'N/A' // Prior period unavailable
+  if (delta === 0) return 'No change' // Actual comparison resulted in no change
   const sign = delta > 0 ? '+' : ''
   return `${sign}${delta}`
 }

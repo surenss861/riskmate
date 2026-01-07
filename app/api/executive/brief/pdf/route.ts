@@ -746,26 +746,36 @@ function renderExecutiveSummary(
   
   // CRITICAL: Sanitize all parts BEFORE composing headline to prevent character corruption
   // The corruption (U+FFFE) can happen during string composition, so sanitize each part first
+  // ULTRA-STRICT: Build headline using only sanitized strings, no raw template literals
   let headline: string
   if (!hasSufficientData) {
     headline = sanitizeText('Insufficient job volume to compute risk posture')
   } else {
     // Executive wording: more action-forward
-    // CRITICAL: Sanitize exposure level and compose with sanitized strings
+    // CRITICAL: Sanitize EVERY part before composition
     const exposureLevel = data.exposure_level === 'high' ? 'High' : data.exposure_level === 'moderate' ? 'Moderate' : 'Low'
     const sanitizedExposure = sanitizeText(exposureLevel.toLowerCase())
     const sanitizedHighRisk = sanitizeText('high-risk') // Sanitize hyphen-containing string
+    const sanitizedMitigate = sanitizeText('mitigate')
+    const sanitizedJob = sanitizeText('job')
+    const sanitizedJobs = sanitizeText('jobs')
+    const sanitizedReduce = sanitizeText('reduce audit risk')
+    const sanitizedRequire = sanitizeText('require immediate attention')
     
+    // CRITICAL: Compose using only sanitized strings, then sanitize the result
     if (data.high_risk_jobs === 1) {
-      headline = sanitizeText(`Exposure is ${sanitizedExposure}; mitigate 1 ${sanitizedHighRisk} job to reduce audit risk.`)
+      const composed = `Exposure is ${sanitizedExposure}; ${sanitizedMitigate} 1 ${sanitizedHighRisk} ${sanitizedJob} to ${sanitizedReduce}.`
+      headline = sanitizeText(composed)
     } else if (data.high_risk_jobs > 1) {
-      headline = sanitizeText(`Exposure is ${sanitizedExposure}; mitigate ${data.high_risk_jobs} ${sanitizedHighRisk} jobs to reduce audit risk.`)
+      const composed = `Exposure is ${sanitizedExposure}; ${sanitizedMitigate} ${data.high_risk_jobs} ${sanitizedHighRisk} ${sanitizedJobs} to ${sanitizedReduce}.`
+      headline = sanitizeText(composed)
     } else {
-      headline = sanitizeText(`Exposure is ${sanitizedExposure}; no ${sanitizedHighRisk} jobs require immediate attention.`)
+      const composed = `Exposure is ${sanitizedExposure}; no ${sanitizedHighRisk} ${sanitizedJobs} ${sanitizedRequire}.`
+      headline = sanitizeText(composed)
     }
   }
   
-  // CRITICAL: Final sanitization pass (defense in depth)
+  // CRITICAL: Final sanitization pass (defense in depth) - ensure no corruption slipped through
   const headlineText = sanitizeText(headline)
   
   // Auto-fit headline: prevent mid-sentence wrapping by measuring and adjusting
@@ -1029,7 +1039,9 @@ function buildMetricsRows(data: RiskPostureData, hasPriorPeriodData: boolean): A
   // Add "What changed" summary row at the top
   const exposureLevel = data.exposure_level === 'high' ? 'High' : data.exposure_level === 'moderate' ? 'Moderate' : 'Low'
   // CRITICAL: If no prior period data, show "N/A" (never "No change")
-  const exposureDelta = hasPriorPeriodData && data.delta !== undefined ? formatDelta(data.delta) : 'N/A'
+  // CRITICAL: formatDelta now returns "N/A" for undefined, but we still check hasPriorPeriodData for consistency
+  // If hasPriorPeriodData is false, always return "N/A" (never "No change")
+  const exposureDelta = hasPriorPeriodData ? formatDelta(data.delta) : 'N/A'
   
   const rows = [
     // Summary row: Overall exposure
@@ -2147,6 +2159,7 @@ function addHeaderFooter(
       
       // Determine display text: prefer full link, fallback to verify/RM-xxx if needed
       // CRITICAL: Never show just "RM-xxx" - always show at least "verify/RM-xxx"
+      // ULTRA-STRICT: Build display string explicitly to ensure path is always included
       let displayText: string
       if (preferredWidth <= maxLinkWidth) {
         displayText = preferredText // Full pretty link fits: "riskmate.app/verify/RM-xxxx"
@@ -2154,11 +2167,21 @@ function addHeaderFooter(
         // Fallback: "verify/RM-xxxx" (NOT just "RM-xxxx")
         const fallbackLink = `verify/RM-${reportIdShort}`
         const fallbackText = linkLabel + fallbackLink
-        if (doc.widthOfString(fallbackText) <= maxLinkWidth) {
+        const fallbackWidth = doc.widthOfString(fallbackText)
+        if (fallbackWidth <= maxLinkWidth) {
           displayText = fallbackText // "Verification endpoint: verify/RM-xxxx"
         } else {
-          // Last resort: shorten label but keep full path
-          displayText = `Verify: ${fallbackLink}` // "Verify: verify/RM-xxxx"
+          // Last resort: shorten label but ALWAYS keep full path "verify/RM-xxxx"
+          // CRITICAL: Never fall back to just "RM-xxxx" - always include "/verify/" path
+          const minimalText = `Verify: ${fallbackLink}` // "Verify: verify/RM-xxxx"
+          const minimalWidth = doc.widthOfString(minimalText)
+          if (minimalWidth <= maxLinkWidth) {
+            displayText = minimalText
+          } else {
+            // Absolute last resort: use smaller font or truncate label, but NEVER drop the path
+            // If even this doesn't fit, we have a layout problem, but we still show the path
+            displayText = fallbackLink // At minimum, show "verify/RM-xxxx" without label
+          }
         }
       }
       
