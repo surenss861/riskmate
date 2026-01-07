@@ -489,12 +489,12 @@ function renderKPIStrip(
   kpis.forEach((kpi, index) => {
     const cardX = margin + index * (kpiCardWidth + cardGap)
     
-    // Draw card with subtle border (rounded corners simulated)
+    // Draw card with subtle border + consistent padding (premium look)
     doc
       .rect(cardX, cardY, kpiCardWidth, kpiCardHeight)
       .fill(STYLES.colors.cardBg)
       .strokeColor(STYLES.colors.borderGray)
-      .lineWidth(0.5)
+      .lineWidth(0.8) // Slightly stronger border for premium feel
       .stroke()
 
     // Card padding
@@ -1051,8 +1051,8 @@ function renderMetricsTable(
   const rowHeight = STYLES.spacing.tableRowHeight
   const cellPadding = STYLES.spacing.tableCellPadding
 
-  // Table header with solid background (slightly taller for premium feel)
-  const headerHeight = rowHeight + 4
+  // Table header with solid background (tighter typography)
+  const headerHeight = rowHeight + 2
   doc
     .rect(margin, tableY, tableWidth, headerHeight)
     .fill(STYLES.colors.tableHeaderBg)
@@ -1060,26 +1060,26 @@ function renderMetricsTable(
     .lineWidth(1)
     .stroke()
 
-  // Header text (centered vertically, proper alignment) - use safeText
-  const headerTextY = tableY + (headerHeight / 2) - 5
+  // Header text (tighter typography - smaller font for premium feel)
+  const headerTextY = tableY + (headerHeight / 2) - 4
   safeText(doc, 'Metric', margin + cellPadding, headerTextY, {
     width: col1Width - cellPadding * 2,
     align: 'left',
-    fontSize: STYLES.sizes.body,
+    fontSize: STYLES.sizes.caption,
     font: STYLES.fonts.header,
     color: STYLES.colors.primaryText,
   })
   safeText(doc, 'Current', margin + col1Width + cellPadding, headerTextY, {
     width: col2Width - cellPadding * 2,
     align: 'right',
-    fontSize: STYLES.sizes.body,
+    fontSize: STYLES.sizes.caption,
     font: STYLES.fonts.header,
     color: STYLES.colors.primaryText,
   })
   safeText(doc, 'Change', margin + col1Width + col2Width + cellPadding, headerTextY, {
     width: col3Width - cellPadding * 2,
     align: 'right',
-    fontSize: STYLES.sizes.body,
+    fontSize: STYLES.sizes.caption,
     font: STYLES.fonts.header,
     color: STYLES.colors.primaryText,
   })
@@ -1110,33 +1110,39 @@ function renderMetricsTable(
     
     const rowY = doc.y
     const isEven = idx % 2 === 0
+    const isExposureRow = metric.label.toLowerCase().includes('overall exposure') || metric.label.toLowerCase().includes('exposure level')
 
-    // Zebra striping (subtle)
-    if (isEven) {
+    // Highlight exposure row with light tint background
+    if (isExposureRow) {
       doc
         .rect(margin, rowY, tableWidth, tableRowHeight)
-        .fill(STYLES.colors.lightGrayBg)
+        .fill('#F0F4FF') // Light blue tint for exposure row
+    } else if (isEven) {
+      // Zebra striping (stronger contrast for premium feel)
+      doc
+        .rect(margin, rowY, tableWidth, tableRowHeight)
+        .fill('#FAFAFA') // Slightly darker than before
     }
 
     // CRITICAL: Write all cells atomically - label + value + delta in one go
     // Values are already normalized strings from buildMetricsRows()
     
-    // Label (left-aligned, fixed width prevents wrapping)
+    // Label (left-aligned, fixed width prevents wrapping) - bold if exposure row
     const labelText = sanitizeText(metric.label)
     safeText(doc, labelText, margin + cellPadding, rowY + cellPadding, {
       width: col1Width - cellPadding * 2,
       align: 'left',
       fontSize: STYLES.sizes.body,
-      font: STYLES.fonts.body,
+      font: isExposureRow ? STYLES.fonts.header : STYLES.fonts.body, // Bold for exposure row
       color: STYLES.colors.primaryText,
     })
 
-    // Value (already normalized: "0", number string, or "—")
+    // Value (already normalized: "0", number string, or "—") - bold if exposure row
     safeText(doc, metric.value, margin + col1Width + cellPadding, rowY + cellPadding, {
       width: col2Width - cellPadding * 2,
       align: 'right',
       fontSize: STYLES.sizes.body,
-      font: STYLES.fonts.body,
+      font: isExposureRow ? STYLES.fonts.header : STYLES.fonts.body, // Bold for exposure row
       color: STYLES.colors.primaryText,
     })
 
@@ -1428,17 +1434,26 @@ function renderTopDrivers(
  */
 function renderMethodologyShort(
   doc: PDFKit.PDFDocument,
-  pageWidth: number,
-  margin: number
+  columnWidth: number,
+  columnX: number
 ): void {
   if (!hasSpace(doc, 70)) return
   
-  addSectionDivider(doc, pageWidth, margin)
+  // Section divider (constrained to column)
+  const dividerY = doc.y
+  doc
+    .moveTo(columnX, dividerY)
+    .lineTo(columnX + columnWidth, dividerY)
+    .strokeColor(STYLES.colors.borderGray)
+    .lineWidth(0.5)
+    .stroke()
+  doc.y = dividerY + 12
   
-  safeText(doc, 'Methodology & Definitions', margin, doc.y, {
+  safeText(doc, 'Methodology & Definitions', columnX, doc.y, {
     fontSize: STYLES.sizes.h2,
     font: STYLES.fonts.header,
     color: STYLES.colors.primaryText,
+    width: columnWidth,
   })
   doc.moveDown(0.4)
   
@@ -1451,10 +1466,10 @@ function renderMethodologyShort(
   
   methodologyPoints.forEach((point) => {
     if (hasSpace(doc, 18)) {
-      // Use hanging indent for better wrapping (bullet at margin, text indented)
-      const bulletX = margin
-      const textX = margin + 12
-      const textWidth = pageWidth - margin * 2 - 12
+      // Proper hanging indent: bullet at columnX, text indented
+      const bulletX = columnX
+      const textX = columnX + 12
+      const textWidth = columnWidth - 12 // Constrain to column width
       
       // Bullet
       doc
@@ -1463,7 +1478,7 @@ function renderMethodologyShort(
         .fillColor(STYLES.colors.primaryText)
         .text('•', bulletX, doc.y, { width: 10 })
       
-      // Text with proper wrapping
+      // Text with proper wrapping (respects column width)
       const pointText = sanitizeText(point)
       const lines = doc.heightOfString(pointText, {
         width: textWidth,
@@ -1492,21 +1507,30 @@ function renderMethodologyShort(
 function renderDataFreshnessCompact(
   doc: PDFKit.PDFDocument,
   data: RiskPostureData,
-  pageWidth: number,
-  margin: number
+  columnWidth: number,
+  columnX: number
 ): void {
   if (!hasSpace(doc, 40)) return
   
-  addSectionDivider(doc, pageWidth, margin)
+  // Section divider (constrained to column)
+  const dividerY = doc.y
+  doc
+    .moveTo(columnX, dividerY)
+    .lineTo(columnX + columnWidth, dividerY)
+    .strokeColor(STYLES.colors.borderGray)
+    .lineWidth(0.5)
+    .stroke()
+  doc.y = dividerY + 12
   
-  safeText(doc, 'Data Freshness', margin, doc.y, {
+  safeText(doc, 'Data Freshness', columnX, doc.y, {
     fontSize: STYLES.sizes.h2,
     font: STYLES.fonts.header,
     color: STYLES.colors.primaryText,
+    width: columnWidth,
   })
   doc.moveDown(0.3)
   
-  // Compact inline format
+  // Compact inline format - constrained to column width
   const lastJobStr = data.last_job_at
     ? new Date(data.last_job_at).toLocaleDateString('en-US', {
         timeZone: 'America/New_York',
@@ -1525,8 +1549,8 @@ function renderDataFreshnessCompact(
     .fontSize(STYLES.sizes.body)
     .font(STYLES.fonts.body)
     .fillColor(STYLES.colors.primaryText)
-    .text(`Last job: ${sanitizeText(lastJobStr)} | Attestation coverage: ${coveragePercent}`, {
-      width: pageWidth - margin * 2,
+    .text(`Last job: ${sanitizeText(lastJobStr)} | Attestation coverage: ${coveragePercent}`, columnX, doc.y, {
+      width: columnWidth,
       lineGap: 3,
     })
   
@@ -1583,8 +1607,9 @@ function renderTinyAppendix(
 function renderRecommendedActionsShort(
   doc: PDFKit.PDFDocument,
   data: RiskPostureData,
-  pageWidth: number,
-  margin: number
+  columnWidth: number,
+  columnX: number,
+  startY: number
 ): void {
   const hasSufficientData = data.high_risk_jobs > 0 || data.open_incidents > 0 || data.signed_signoffs > 0
 
@@ -1604,31 +1629,40 @@ function renderRecommendedActionsShort(
   const actionHeight = 50 // Compact per action
   const requiredHeight = sectionHeaderHeight + (actionHeight * actions.length) + 30
 
-  ensureSpace(doc, requiredHeight, margin)
+  ensureSpace(doc, requiredHeight, columnX)
 
-  addSectionDivider(doc, pageWidth, margin)
+  // Section divider (constrained to column)
+  const dividerY = doc.y
+  doc
+    .moveTo(columnX, dividerY)
+    .lineTo(columnX + columnWidth, dividerY)
+    .strokeColor(STYLES.colors.borderGray)
+    .lineWidth(0.5)
+    .stroke()
+  doc.y = dividerY + 12
   
-  safeText(doc, 'Recommended Actions', margin, doc.y, {
+  safeText(doc, 'Recommended Actions', columnX, doc.y, {
     fontSize: STYLES.sizes.h2,
     font: STYLES.fonts.header,
     color: STYLES.colors.primaryText,
+    width: columnWidth,
   })
   doc.moveDown(0.6)
 
   actions.forEach((action) => {
-    ensureSpace(doc, 45, margin)
-    // Outcomes-first format: Action (short imperative)
-    safeText(doc, `${action.priority}. ${sanitizeText(action.action)}`, margin + 20, doc.y, {
-      width: pageWidth - margin * 2 - 20,
+    ensureSpace(doc, 45, columnX)
+    // Outcomes-first format: Action (short imperative) - constrained to column
+    safeText(doc, `${action.priority}. ${sanitizeText(action.action)}`, columnX + 20, doc.y, {
+      width: columnWidth - 20,
       fontSize: STYLES.sizes.body,
       font: STYLES.fonts.header,
       color: STYLES.colors.primaryText,
     })
 
-    // Why now (risk/defensibility reason) - compact
-    ensureSpace(doc, 18, margin)
-    safeText(doc, `   Why: ${sanitizeText(action.reason)}`, margin + 20, doc.y, {
-      width: pageWidth - margin * 2 - 40,
+    // Why now (risk/defensibility reason) - compact, constrained to column
+    ensureSpace(doc, 18, columnX)
+    safeText(doc, `   Why: ${sanitizeText(action.reason)}`, columnX + 20, doc.y, {
+      width: columnWidth - 40,
       fontSize: STYLES.sizes.caption,
       font: STYLES.fonts.body,
       color: STYLES.colors.secondaryText,
@@ -1711,7 +1745,7 @@ function renderRecommendedActions(
  * Add header and footer to all pages (post-pass after all content is rendered)
  * Fixed: Proper Y positioning to prevent PDFKit from auto-creating pages
  */
-function addHeaderFooter(
+async function addHeaderFooter(
   doc: PDFKit.PDFDocument,
   organizationName: string,
   timeRange: string,
@@ -1721,7 +1755,7 @@ function addHeaderFooter(
   timeWindow: { start: Date; end: Date },
   baseUrl: string | undefined,
   pdfHash?: string
-): void {
+): Promise<void> {
   const range = doc.bufferedPageRange()
   const pageCount = range.count
   const buildInfo = buildSha ? `build: ${buildSha.substring(0, 8)}` : 'build: local'
@@ -1789,11 +1823,14 @@ function addHeaderFooter(
       color: STYLES.colors.secondaryText,
     })
     
-    // Report Integrity capsule on page 2 (bottom-right) - upgraded to audit artifact
+    // Report Integrity capsule on page 2 (right column, bottom-right) - upgraded to audit artifact
     if (pageIndex === 1) { // Page 2 (0-indexed, so page 2 is index 1)
-      const capsuleWidth = 220
-      const capsuleHeight = 150 // Taller for hash + trust signals
-      const capsuleX = pageWidth - STYLES.spacing.margin - capsuleWidth
+      // Right column position (30-35% of page width)
+      const rightColumnWidth = Math.floor((pageWidth - STYLES.spacing.margin * 2) * 0.32)
+      const rightColumnX = pageWidth - STYLES.spacing.margin - rightColumnWidth
+      const capsuleWidth = rightColumnWidth
+      const capsuleHeight = 180 // Taller for QR code + hash + trust signals
+      const capsuleX = rightColumnX
       const capsuleY = footerStartY - capsuleHeight - 20 // Above footer
       
       // Capsule background (more prominent)
@@ -1900,12 +1937,34 @@ function addHeaderFooter(
         .text('Org-scoped: enforced', capsuleContentX, currentY, { width: capsuleContentWidth })
       currentY += 11
       
-      // Verify link (full URL) - human-friendly short form + clickable
+      // QR Code (real PNG buffer, not data URL)
       const verifyUrl = baseUrl 
         ? `${baseUrl}/api/executive/brief/${reportId.substring(0, 8)}`
         : `/api/executive/brief/${reportId.substring(0, 8)}`
       
-      // Human-friendly short form
+      try {
+        const qrCodeBuffer = await QRCode.toBuffer(verifyUrl, {
+          width: 80,
+          margin: 1,
+          color: {
+            dark: STYLES.colors.primaryText,
+            light: STYLES.colors.white,
+          },
+        })
+        
+        // Position QR code (80x80) in capsule
+        const qrSize = 60
+        const qrX = capsuleContentX + (capsuleContentWidth - qrSize) / 2
+        const qrY = currentY + 5
+        
+        doc.image(qrCodeBuffer, qrX, qrY, { width: qrSize, height: qrSize })
+        currentY += qrSize + 8
+      } catch (qrError) {
+        console.warn('[PDF] Failed to generate QR code:', qrError)
+        // Continue without QR code
+      }
+      
+      // Verify link (full URL) - human-friendly short form + clickable
       const shortUrl = baseUrl 
         ? `${baseUrl.replace(/^https?:\/\//, '').split('/')[0]}/verify/RM-${reportId.substring(0, 8)}`
         : `riskmate.app/verify/RM-${reportId.substring(0, 8)}`
@@ -2182,7 +2241,7 @@ async function buildExecutiveBriefPDF(
     }
 
     // ============================================
-    // PAGE 2: Structured closing page (HARD LOCK - never create page 3)
+    // PAGE 2: Two-column layout (HARD LOCK - never create page 3)
     // ============================================
     
     // Force page break for page 2
@@ -2190,49 +2249,39 @@ async function buildExecutiveBriefPDF(
       ensureSpace(doc, 1000, margin) // Force new page
     }
 
-    // Page 2 structure (in order, compact):
-    // 1. Metrics Table (if not on Page 1)
-    // 2. Recommended Actions (short)
-    // 3. Methodology (short)
-    // 4. Data Freshness (compact)
-    // 5. Report Integrity capsule (bottom-right, always fits)
+    // Page 2 two-column grid layout:
+    // Left column (65-70%): Metrics Table (if needed) → Recommended Actions → Methodology → Data Freshness
+    // Right column (30-35%): Report Integrity capsule (fixed position, bottom-right)
+    
+    const leftColumnWidth = Math.floor((pageWidth - margin * 2) * 0.68) // 68% for left
+    const rightColumnWidth = (pageWidth - margin * 2) - leftColumnWidth - 20 // 32% for right, 20px gap
+    const leftColumnX = margin
+    const rightColumnX = margin + leftColumnWidth + 20
+    const page2StartY = doc.y
 
-    // Metrics Table on Page 2 if it didn't fit on Page 1
+    // Metrics Table on Page 2 if it didn't fit on Page 1 (full width, then switch to columns)
     if (!metricsTableFitsOnPage1) {
       renderMetricsTable(doc, data, pageWidth, margin)
       addSectionDivider(doc, pageWidth, margin)
     }
 
-    // Recommended Actions (short version - max 3 actions to save space)
-    renderRecommendedActionsShort(doc, data, pageWidth, margin)
+    // LEFT COLUMN: Recommended Actions → Methodology → Data Freshness
+    // Save current position and switch to left column
+    const leftColumnStartY = doc.y
+    doc.x = leftColumnX // Set X position for left column
+
+    // Recommended Actions (short version - max 3 actions, constrained to left column)
+    renderRecommendedActionsShort(doc, data, leftColumnWidth, leftColumnX, leftColumnStartY)
+    doc.y = Math.max(doc.y, leftColumnStartY + 80) // Ensure minimum spacing
     
-    // Methodology (short - 3 bullets max)
+    // Methodology (short - 3 bullets max, constrained to left column)
     if (hasSpace(doc, 70)) {
-      renderMethodologyShort(doc, pageWidth, margin)
+      renderMethodologyShort(doc, leftColumnWidth, leftColumnX)
     }
     
-    // Data Freshness (compact - 2 lines)
+    // Data Freshness (compact - 2 lines, constrained to left column)
     if (hasSpace(doc, 40)) {
-      renderDataFreshnessCompact(doc, data, pageWidth, margin)
-    }
-    
-    // Appendix: Only if it fits AND has ≥3 items, otherwise show note
-    const hasEnoughDrivers = data.drivers && (
-      (data.drivers.highRiskJobs?.length || 0) >= 3 ||
-      (data.drivers.openIncidents?.length || 0) >= 3 ||
-      (data.drivers.violations?.length || 0) >= 3
-    )
-    
-    if (hasEnoughDrivers && hasSpace(doc, 80)) {
-      renderTopDrivers(doc, data, pageWidth, margin)
-    } else if (hasSpace(doc, 20)) {
-      // Show note instead of creating page 3
-      safeText(doc, 'Appendix available in full audit trail', margin, doc.y, {
-        width: pageWidth - margin * 2,
-        fontSize: STYLES.sizes.caption,
-        font: STYLES.fonts.body,
-        color: STYLES.colors.secondaryText,
-      })
+      renderDataFreshnessCompact(doc, data, leftColumnWidth, leftColumnX)
     }
     
     // CRITICAL: Never create page 3 - if we're past page 2, stop rendering
@@ -2244,7 +2293,7 @@ async function buildExecutiveBriefPDF(
     // Note: hash will be available after PDF generation, but we need to pass it
     // For now, we'll calculate it in the callback and pass undefined here
     // The hash will be added in a post-pass if needed
-    addHeaderFooter(doc, organizationName, timeRange, reportId, generatedAt, buildSha, timeWindow, baseUrl)
+    await addHeaderFooter(doc, organizationName, timeRange, reportId, generatedAt, buildSha, timeWindow, baseUrl)
 
     doc.end()
   })
