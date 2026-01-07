@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { resolveOrgContext, hashId } from '@/lib/utils/orgContext'
 import PDFDocument from 'pdfkit'
 import crypto from 'crypto'
+import QRCode from 'qrcode'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
