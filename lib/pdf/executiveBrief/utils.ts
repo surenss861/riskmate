@@ -25,8 +25,11 @@ export function sanitizeText(text: string): string {
     .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '')
     // Remove ALL C1 control characters (\u0080-\u009F)
     .replace(/[\u0080-\u009F]/g, '')
-    // Fix weird hyphen character (￾ = \uFFFE) - normalize to standard hyphen
-    .replace(/\uFFFE/g, '-')
+    // Fix weird hyphen characters - normalize to standard hyphen
+    .replace(/\uFFFE/g, '-') // Replacement character (￾)
+    .replace(/\u00AD/g, '-') // Soft hyphen
+    .replace(/\u2011/g, '-') // Non-breaking hyphen
+    .replace(/\uFFFD/g, '-') // Replacement character ()
     // Replace smart quotes with ASCII equivalents (do this AFTER control char removal)
     .replace(/['']/g, "'")
     .replace(/[""]/g, '"')

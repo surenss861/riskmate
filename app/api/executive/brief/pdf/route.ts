@@ -782,10 +782,13 @@ function renderExecutiveSummary(
                              data.deltas?.flagged_jobs !== undefined ||
                              data.deltas?.pending_signoffs !== undefined
   
+  // Delta pills: Always show, use "N/A" when prior unavailable (never default to "No change" when data is missing)
+  // Rule: Only show "No change" when delta === 0 (actual comparison happened)
+  // If delta is undefined, prior period can't be computed → show "N/A"
+  
   // 1. Risk posture: Score (Delta)
   const postureScore = data.posture_score !== undefined ? `${data.posture_score}` : 'N/A'
-  // If delta is undefined, we don't have prior period data - show "N/A" not "No change"
-  const postureDelta = data.delta !== undefined ? formatDelta(data.delta) : (hasPriorPeriodData ? 'No change' : 'N/A')
+  const postureDelta = data.delta !== undefined ? formatDelta(data.delta) : 'N/A'
   chips.push({
     label: 'Risk posture',
     delta: `${postureScore} (${postureDelta})`,
@@ -795,8 +798,7 @@ function renderExecutiveSummary(
   })
   
   // 2. High-risk jobs: Count (Delta)
-  // Only show "No change" if we have prior period data, otherwise show "N/A"
-  const jobsDelta = data.deltas?.high_risk_jobs !== undefined ? formatDelta(data.deltas.high_risk_jobs) : (hasPriorPeriodData ? 'No change' : 'N/A')
+  const jobsDelta = data.deltas?.high_risk_jobs !== undefined ? formatDelta(data.deltas.high_risk_jobs) : 'N/A'
   chips.push({
     label: 'High-risk jobs',
     delta: `${data.high_risk_jobs} (${jobsDelta})`,
@@ -806,7 +808,7 @@ function renderExecutiveSummary(
   })
   
   // 3. Open incidents: Count (Delta)
-  const incidentsDelta = data.deltas?.open_incidents !== undefined ? formatDelta(data.deltas.open_incidents) : (hasPriorPeriodData ? 'No change' : 'N/A')
+  const incidentsDelta = data.deltas?.open_incidents !== undefined ? formatDelta(data.deltas.open_incidents) : 'N/A'
   chips.push({
     label: 'Open incidents',
     delta: `${data.open_incidents} (${incidentsDelta})`,
@@ -815,23 +817,21 @@ function renderExecutiveSummary(
       : STYLES.colors.primaryText,
   })
   
-  // 4. Attestation: Percentage (attestation deltas not tracked yet - show N/A if no prior period)
+  // 4. Attestation: Percentage (attestation deltas not tracked yet - always show N/A)
   const totalSignoffs = (data.signed_signoffs ?? 0) + (data.pending_signoffs ?? 0)
   const attestationPct = totalSignoffs > 0 
     ? Math.round((data.signed_signoffs / totalSignoffs) * 100)
     : 0
-  const attestationDelta = hasPriorPeriodData ? 'No change' : 'N/A'
   chips.push({
     label: 'Attestation coverage',
-    delta: `${attestationPct}% (${attestationDelta})`,
+    delta: `${attestationPct}% (N/A)`, // Always N/A since attestation deltas not tracked
     color: STYLES.colors.primaryText,
   })
   
-  // 5. Sign-offs: Signed/Total (sign-off deltas not tracked yet - show N/A if no prior period)
-  const signoffsDelta = hasPriorPeriodData ? 'No change' : 'N/A'
+  // 5. Sign-offs: Signed/Total (sign-off deltas not tracked yet - always show N/A)
   chips.push({
     label: 'Sign-offs',
-    delta: `${data.signed_signoffs ?? 0}/${totalSignoffs} (${signoffsDelta})`,
+    delta: `${data.signed_signoffs ?? 0}/${totalSignoffs} (N/A)`, // Always N/A since sign-off deltas not tracked
     color: STYLES.colors.primaryText,
   })
   
@@ -975,6 +975,28 @@ function renderExecutiveSummary(
       })
       doc.moveDown(0.6)
     }
+  }
+
+  // Decision requested line (single sentence, no fluff) - makes it feel "designed, not assembled"
+  if (hasSufficientData && hasSpace(doc, 20)) {
+    let decisionText = ''
+    if (data.high_risk_jobs > 0) {
+      decisionText = `Decision requested: Approve mitigation for ${data.high_risk_jobs} ${pluralize(data.high_risk_jobs, 'high-risk job', 'high-risk jobs')} and require sign-off completion this week.`
+    } else if (data.open_incidents > 0) {
+      decisionText = `Decision requested: Authorize resolution plan for ${data.open_incidents} open ${pluralize(data.open_incidents, 'incident', 'incidents')} and document closure.`
+    } else if (data.pending_signoffs > 0) {
+      decisionText = `Decision requested: Complete ${data.pending_signoffs} pending ${pluralize(data.pending_signoffs, 'sign-off', 'sign-offs')} to ensure compliance this week.`
+    } else {
+      decisionText = `Decision requested: Continue monitoring risk posture and maintain current control effectiveness.`
+    }
+    
+    safeText(doc, sanitizeText(decisionText), margin, doc.y, {
+      fontSize: STYLES.sizes.body,
+      font: STYLES.fonts.header, // Bold for emphasis
+      color: STYLES.colors.primaryText,
+      width: pageWidth - margin * 2,
+    })
+    doc.moveDown(0.8)
   }
 
   doc.moveDown(1)
@@ -1156,11 +1178,24 @@ function renderMetricsTable(
     // Values are already normalized strings from buildMetricsRows()
     
     // Label (left-aligned, fixed width prevents wrapping) - bold if exposure row
+    // CRITICAL: Ensure long labels like "Proof Packs Generated (exportable audit packs)" don't wrap
     const labelText = sanitizeText(metric.label)
+    const labelWidth = col1Width - cellPadding * 2
+    
+    // Check if label would wrap - if so, use smaller font or truncate
+    doc.fontSize(STYLES.sizes.body).font(isExposureRow ? STYLES.fonts.header : STYLES.fonts.body)
+    const labelTextWidth = doc.widthOfString(labelText)
+    
+    // If label is too wide, use slightly smaller font to prevent wrapping
+    let labelFontSize = STYLES.sizes.body
+    if (labelTextWidth > labelWidth) {
+      labelFontSize = Math.max(9, Math.floor((labelWidth / labelTextWidth) * STYLES.sizes.body))
+    }
+    
     safeText(doc, labelText, margin + cellPadding, rowY + cellPadding, {
-      width: col1Width - cellPadding * 2,
+      width: labelWidth,
       align: 'left',
-      fontSize: STYLES.sizes.body,
+      fontSize: labelFontSize,
       font: isExposureRow ? STYLES.fonts.header : STYLES.fonts.body, // Bold for exposure row
       color: STYLES.colors.primaryText,
     })
