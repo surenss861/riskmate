@@ -704,23 +704,45 @@ function renderExecutiveSummary(
  * Render metrics table
  * CRITICAL: Never render section header unless we have at least 1 row
  */
+/**
+ * Build metrics rows with normalized values (0 -> "0", null -> "—")
+ */
+function buildMetricsRows(data: RiskPostureData): Array<{ label: string; value: string; delta: string }> {
+  const rows = [
+    { label: 'High Risk Jobs', value: data.high_risk_jobs, delta: data.deltas?.high_risk_jobs },
+    { label: 'Open Incidents', value: data.open_incidents, delta: data.deltas?.open_incidents },
+    { label: 'Recent Violations', value: data.recent_violations, delta: data.deltas?.violations },
+    { label: 'Flagged for Review', value: data.flagged_jobs, delta: data.deltas?.flagged_jobs },
+    { label: 'Pending Sign-offs', value: data.pending_signoffs ?? 0, delta: data.deltas?.pending_signoffs },
+    { label: 'Signed Sign-offs', value: data.signed_signoffs ?? 0, delta: data.deltas?.signed_signoffs },
+    // CRITICAL: Only show Proof Packs if count > 0 (prevents junk page)
+    ...(data.proof_packs_generated > 0 ? [{ label: 'Proof Packs Generated', value: data.proof_packs_generated, delta: data.deltas?.proof_packs }] : []),
+  ]
+  
+  // Normalize values: convert numbers to strings, handle null/undefined
+  return rows
+    .filter(row => row.label && row.label.trim() !== '') // Filter out invalid rows
+    .map(row => ({
+      label: row.label,
+      value: row.value === null || row.value === undefined 
+        ? '—' 
+        : (typeof row.value === 'string' ? row.value : formatNumber(row.value)),
+      delta: row.delta === null || row.delta === undefined 
+        ? '—' 
+        : formatDelta(row.delta ?? 0), // formatDelta expects number
+    }))
+}
+
 function renderMetricsTable(
   doc: PDFKit.PDFDocument,
   data: RiskPostureData,
   pageWidth: number,
   margin: number
 ): void {
-  // Build metrics list first to check hasContent BEFORE ensureSpace
-  const metricsRows = [
-    { label: 'High Risk Jobs', value: data.high_risk_jobs, delta: data.deltas?.high_risk_jobs },
-    { label: 'Open Incidents', value: data.open_incidents, delta: data.deltas?.open_incidents },
-    { label: 'Recent Violations', value: data.recent_violations, delta: data.deltas?.violations },
-    { label: 'Flagged for Review', value: data.flagged_jobs, delta: data.deltas?.flagged_jobs },
-    { label: 'Pending Sign-offs', value: data.pending_signoffs, delta: undefined },
-    { label: 'Signed Sign-offs', value: data.signed_signoffs, delta: undefined },
-    // CRITICAL: Only show Proof Packs if count > 0 (prevents junk page)
-    ...(data.proof_packs_generated > 0 ? [{ label: 'Proof Packs Generated', value: data.proof_packs_generated, delta: undefined }] : []),
-  ]
+  currentSection = 'Metrics Table' // Set section for safeText context
+  
+  // Build normalized rows first
+  const metricsRows = buildMetricsRows(data)
   
   // CRITICAL: Never render section header unless we have at least 1 row
   if (metricsRows.length === 0) return
