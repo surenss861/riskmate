@@ -105,17 +105,32 @@ let currentSection = 'none' // Track current section for page creation tracing
 const bodyCharCount: { [key: number | string]: number | string[] } = {}
 
 /**
+ * Calculate content limit Y (hard stop before footer)
+ * Footer consists of: main footer + build stamp + confidentiality (3 lines)
+ */
+function getContentLimitY(doc: PDFKit.PDFDocument): number {
+  const bottomMargin = 60 // matches PDFDocument bottom margin
+  doc.fontSize(8).font(STYLES.fonts.body)
+  const lineHeight = doc.currentLineHeight(true) || 10
+  const footerLines = 3
+  const footerSpacing = 8
+  const footerTotalHeight = (lineHeight * footerLines) + (footerSpacing * (footerLines - 1))
+  return doc.page.height - bottomMargin - footerTotalHeight - 8 // 8px safety margin
+}
+
+/**
  * Helper: Check if we need a new page and add one if needed
  * CRITICAL: requiredHeight must include section title + spacing + at least one row/card
  * Never add a page unless you're guaranteed to draw real body content
+ * Uses contentLimitY to prevent footer overlap
  */
 function ensureSpace(
   doc: PDFKit.PDFDocument,
   requiredHeight: number,
   margin: number
 ): void {
-  const pageBottom = doc.page.height - 60 // bottom margin
-  if (doc.y + requiredHeight > pageBottom) {
+  const contentLimitY = getContentLimitY(doc)
+  if (doc.y + requiredHeight > contentLimitY) {
     // RED ALERT: If current page has no body content, we're about to create a blank page
     if (!pageHasBody && pageNumber > 1) {
       console.warn(`[PDF] Warning: About to add page ${pageNumber + 1} but page ${pageNumber} has no body content`)
@@ -133,13 +148,14 @@ function ensureSpace(
 /**
  * Helper: Check if we have enough space, return false if we need a new page
  * Use this to conditionally render sections (avoid empty pages)
+ * Uses contentLimitY to prevent footer overlap
  */
 function hasSpace(
   doc: PDFKit.PDFDocument,
   needed: number
 ): boolean {
-  const pageBottom = doc.page.height - 60
-  return doc.y + needed <= pageBottom
+  const contentLimitY = getContentLimitY(doc)
+  return doc.y + needed <= contentLimitY
 }
 
 /**
@@ -185,6 +201,91 @@ function renderSection(
 }
 
 /**
+ * Atomic KPI card writer - renders entire card as single unit
+ * Allows numeric-only values when paired with label (KPI context exception)
+ */
+function writeKpiCard(
+  doc: PDFKit.PDFDocument,
+  opts: {
+    cardX: number
+    cardY: number
+    cardWidth: number
+    cardHeight: number
+    label: string
+    value: string
+    delta?: number
+    timeRange: string
+    color: string
+  }
+): void {
+  const cardPadding = STYLES.spacing.cardPadding
+  const contentX = opts.cardX + cardPadding
+  const contentWidth = opts.cardWidth - cardPadding * 2
+  
+  // Validate label exists (required for KPI context)
+  const labelText = sanitizeText(opts.label)
+  if (!labelText) return // Skip if no label
+  
+  // Value (big number) - ALLOW numeric-only in KPI context (paired with label)
+  const valueY = opts.cardY + cardPadding + 8
+  const sanitizedValue = sanitizeText(opts.value)
+  if (sanitizedValue) {
+    // KPI exception: allow numeric-only values when label exists
+    doc
+      .fontSize(STYLES.sizes.kpiValue)
+      .font(STYLES.fonts.header)
+      .fillColor(opts.color)
+      .text(sanitizedValue, contentX, valueY, {
+        width: contentWidth,
+        align: 'left',
+      })
+  }
+  
+  // Label (small, below value)
+  const labelY = valueY + STYLES.sizes.kpiValue + 6
+  doc
+    .fontSize(STYLES.sizes.kpiLabel)
+    .font(STYLES.fonts.body)
+    .fillColor(STYLES.colors.secondaryText)
+    .text(labelText, contentX, labelY, {
+      width: contentWidth,
+      align: 'left',
+    })
+  
+  // Delta sublabel - ALWAYS show
+  const deltaY = labelY + 12
+  const timeRangeLabel = opts.timeRange === '7d' ? 'vs prior 7d' : opts.timeRange === '30d' ? 'vs prior 30d' : opts.timeRange === '90d' ? 'vs prior 90d' : 'vs prior period'
+  
+  if (opts.delta !== undefined) {
+    const deltaText = formatDelta(opts.delta)
+    const deltaColor = opts.delta === 0 
+      ? STYLES.colors.secondaryText 
+      : (opts.delta > 0 ? STYLES.colors.riskHigh : STYLES.colors.riskLow)
+    const deltaSubtext = `${deltaText} ${timeRangeLabel}`
+    doc
+      .fontSize(STYLES.sizes.kpiDelta)
+      .font(STYLES.fonts.body)
+      .fillColor(deltaColor)
+      .text(deltaSubtext, contentX, deltaY, {
+        width: contentWidth,
+        align: 'left',
+      })
+  } else {
+    doc
+      .fontSize(STYLES.sizes.kpiDelta)
+      .font(STYLES.fonts.body)
+      .fillColor(STYLES.colors.secondaryText)
+      .text(`Not measured ${timeRangeLabel}`, contentX, deltaY, {
+        width: contentWidth,
+        align: 'left',
+      })
+  }
+  
+  // Track body content (entire card counts as one unit)
+  markPageHasBody(doc)
+}
+
+/**
  * Safe text writer - refuses to write junk (empty, standalone "—", naked numbers)
  * CRITICAL: This is the ONLY way to write text to prevent junk pages
  * Also tracks body char count per page for ship gate
@@ -213,10 +314,10 @@ function safeText(
     return false
   }
   
-  // Check if it would overflow current page
-  const pageBottomCheck = doc.page.height - 60
+  // Check if it would overflow current page (use contentLimitY)
+  const contentLimitY = getContentLimitY(doc)
   const lineHeight = (options?.fontSize || STYLES.sizes.body) * 1.2
-  if (y + lineHeight > pageBottomCheck) {
+  if (y + lineHeight > contentLimitY) {
     // Would overflow - don't write, caller should handle page break
     return false
   }
@@ -382,60 +483,19 @@ function renderKPIStrip(
     const contentX = cardX + cardPadding
     const contentWidth = kpiCardWidth - cardPadding * 2
 
-    // Value (big number, baseline aligned) - CRITICAL: Use safeText to prevent junk pages
-    const valueY = cardY + cardPadding + 8
-    const labelText = sanitizeText(kpi.label)
-    
-    // Only render value if we have a label (prevents standalone "2" or "—")
-    if (labelText) {
-      // Use safeText - it will refuse to write standalone "2" or "—"
-      safeText(doc, kpi.value, contentX, valueY, { 
-        width: contentWidth,
-        align: 'left',
-        fontSize: STYLES.sizes.kpiValue,
-        font: STYLES.fonts.header,
-        color: kpi.color,
-      })
-    }
-
-    // Label (small, below value, no wrapping) - use safeText
-    const labelY = valueY + STYLES.sizes.kpiValue + 6
-    safeText(doc, kpi.label, contentX, labelY, {
-      width: contentWidth,
-      align: 'left',
-      fontSize: STYLES.sizes.kpiLabel,
-      font: STYLES.fonts.body,
-      color: STYLES.colors.secondaryText,
+    // Atomic KPI card writer - renders label + value + delta + subtitle as single unit
+    // This allows numeric-only values in KPI context (paired with label)
+    writeKpiCard(doc, {
+      cardX,
+      cardY,
+      cardWidth: kpiCardWidth,
+      cardHeight: kpiCardHeight,
+      label: kpi.label,
+      value: kpi.value,
+      delta: kpi.delta,
+      timeRange,
+      color: kpi.color,
     })
-
-    // Delta sublabel ("vs prior 30d") - ALWAYS show (label/value/delta/subtitle always present)
-    const deltaY = labelY + 12
-    const timeRangeLabel = timeRange === '7d' ? 'vs prior 7d' : timeRange === '30d' ? 'vs prior 30d' : timeRange === '90d' ? 'vs prior 90d' : 'vs prior period'
-    
-    if (kpi.delta !== undefined) {
-      // Delta exists (could be 0, positive, or negative)
-      const deltaText = formatDelta(kpi.delta)
-      const deltaColor = kpi.delta === 0 
-        ? STYLES.colors.secondaryText 
-        : (kpi.delta > 0 ? STYLES.colors.riskHigh : STYLES.colors.riskLow)
-      const deltaSubtext = `${deltaText} ${timeRangeLabel}`
-      safeText(doc, deltaSubtext, contentX, deltaY, {
-        width: contentWidth,
-        align: 'left',
-        fontSize: STYLES.sizes.kpiDelta,
-        font: STYLES.fonts.body,
-        color: deltaColor,
-      })
-    } else {
-      // No delta available - show "Not measured"
-      safeText(doc, `Not measured ${timeRangeLabel}`, contentX, deltaY, {
-        width: contentWidth,
-        align: 'left',
-        fontSize: STYLES.sizes.kpiDelta,
-        font: STYLES.fonts.body,
-        color: STYLES.colors.secondaryText,
-      })
-    }
   })
 
   // Update doc.y after cards
@@ -678,20 +738,52 @@ function renderExecutiveSummary(
     color: STYLES.colors.primaryText,
   })
   
-  // Render all 5 chips (always 5)
+  // Render all 5 chips with wrapping (2 lines max, then collapse remaining)
   const chipHeight = 24
   const chipGap = 12
+  const rightLimit = pageWidth - margin
   let chipX = margin
-  const maxChips = 5
+  let chipY = chipsY
+  let chipsOnCurrentLine = 0
+  const maxChipsPerLine = 3 // Allow 3 chips per line, then wrap
+  const maxLines = 2
   
-  for (let i = 0; i < maxChips; i++) {
+  doc.fontSize(STYLES.sizes.caption).font(STYLES.fonts.body)
+  
+  for (let i = 0; i < chips.length; i++) {
     const chip = chips[i]
     const chipText = `${chip.label} ${chip.delta}`
     const chipWidth = doc.widthOfString(chipText) + 16 // Padding
     
+    // Check if we need to wrap to next line
+    if (chipX + chipWidth > rightLimit || chipsOnCurrentLine >= maxChipsPerLine) {
+      // Move to next line if we haven't exceeded max lines
+      const currentLine = Math.floor(i / maxChipsPerLine)
+      if (currentLine < maxLines) {
+        chipY += chipHeight + 8 // Next line with spacing
+        chipX = margin
+        chipsOnCurrentLine = 0
+      } else {
+        // Max lines reached - collapse remaining chips into "+n more"
+        const remaining = chips.length - i
+        const collapseText = `+${remaining} more`
+        const collapseWidth = doc.widthOfString(collapseText) + 16
+        doc
+          .rect(chipX, chipY, collapseWidth, chipHeight)
+          .fill(STYLES.colors.cardBg)
+          .strokeColor(STYLES.colors.borderGray)
+          .lineWidth(0.5)
+          .stroke()
+        doc
+          .fillColor(STYLES.colors.secondaryText)
+          .text(collapseText, chipX + 8, chipY + 6, { width: collapseWidth - 16 })
+        break
+      }
+    }
+    
     // Chip background
     doc
-      .rect(chipX, chipsY, chipWidth, chipHeight)
+      .rect(chipX, chipY, chipWidth, chipHeight)
       .fill(STYLES.colors.cardBg)
       .strokeColor(STYLES.colors.borderGray)
       .lineWidth(0.5)
@@ -699,15 +791,16 @@ function renderExecutiveSummary(
     
     // Chip text
     doc
-      .fontSize(STYLES.sizes.caption)
-      .font(STYLES.fonts.body)
       .fillColor(chip.color)
-      .text(chipText, chipX + 8, chipsY + 6, { width: chipWidth - 16 })
+      .text(chipText, chipX + 8, chipY + 6, { width: chipWidth - 16 })
     
     chipX += chipWidth + chipGap
+    chipsOnCurrentLine++
   }
   
-  doc.y = chipsY + chipHeight + 20
+  // Calculate final Y position (account for wrapped lines)
+  const linesUsed = Math.min(Math.ceil(chips.length / maxChipsPerLine), maxLines)
+  doc.y = chipsY + (chipHeight * linesUsed) + (8 * (linesUsed - 1)) + 20
   doc.moveDown(0.8)
 
   // "SO WHAT" BULLETS: Max 3 bullets
@@ -1225,6 +1318,158 @@ function renderTopDrivers(
 }
 
 /**
+ * Render Methodology & Definitions (trust-building content)
+ */
+function renderMethodology(
+  doc: PDFKit.PDFDocument,
+  pageWidth: number,
+  margin: number
+): void {
+  if (!hasSpace(doc, 100)) return
+  
+  addSectionDivider(doc, pageWidth, margin)
+  
+  safeText(doc, 'Methodology & Definitions', margin, doc.y, {
+    fontSize: STYLES.sizes.h2,
+    font: STYLES.fonts.header,
+    color: STYLES.colors.primaryText,
+  })
+  doc.moveDown(0.5)
+  
+  const methodologyPoints = [
+    'Risk posture score: 0-100 scale based on high-risk jobs, incidents, and violations',
+    'High-risk jobs: Jobs requiring immediate attention due to safety or compliance issues',
+    'Evidence coverage: Percentage of jobs with signed attestations',
+    'Data window: All metrics calculated from jobs and incidents within the selected time range',
+    'Report integrity: Each report includes a unique ID and verification link for audit trails',
+  ]
+  
+  methodologyPoints.forEach((point) => {
+    if (hasSpace(doc, 20)) {
+      doc
+        .fontSize(STYLES.sizes.body)
+        .font(STYLES.fonts.body)
+        .fillColor(STYLES.colors.primaryText)
+        .text(`• ${sanitizeText(point)}`, {
+          indent: 20,
+          width: pageWidth - margin * 2 - 20,
+          lineGap: 4,
+        })
+      doc.moveDown(0.3)
+    }
+  })
+  
+  doc.moveDown(0.5)
+}
+
+/**
+ * Render Data Freshness (last job/incident timestamps, coverage %)
+ */
+function renderDataFreshness(
+  doc: PDFKit.PDFDocument,
+  data: RiskPostureData,
+  pageWidth: number,
+  margin: number
+): void {
+  if (!hasSpace(doc, 60)) return
+  
+  addSectionDivider(doc, pageWidth, margin)
+  
+  safeText(doc, 'Data Freshness', margin, doc.y, {
+    fontSize: STYLES.sizes.h2,
+    font: STYLES.fonts.header,
+    color: STYLES.colors.primaryText,
+  })
+  doc.moveDown(0.5)
+  
+  const freshnessItems: Array<{ label: string; value: string }> = []
+  
+  // Last job timestamp
+  if (data.last_job_at) {
+    const lastJobDate = new Date(data.last_job_at)
+    const lastJobStr = lastJobDate.toLocaleDateString('en-US', {
+      timeZone: 'America/New_York',
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    })
+    freshnessItems.push({
+      label: 'Last job',
+      value: sanitizeText(lastJobStr),
+    })
+  } else {
+    freshnessItems.push({
+      label: 'Last job',
+      value: 'No jobs yet',
+    })
+  }
+  
+  // Coverage percentage
+  const totalSignoffs = (data.signed_signoffs ?? 0) + (data.pending_signoffs ?? 0)
+  const coveragePercent = totalSignoffs > 0
+    ? `${Math.round((data.signed_signoffs / totalSignoffs) * 100)}%`
+    : '0%'
+  freshnessItems.push({
+    label: 'Attestation coverage',
+    value: coveragePercent,
+  })
+  
+  // Render items
+  freshnessItems.forEach((item) => {
+    if (hasSpace(doc, 18)) {
+      writeKV(doc, item.label, item.value, margin + 20, doc.y, 200, 150)
+      doc.moveDown(0.4)
+    }
+  })
+  
+  doc.moveDown(0.5)
+}
+
+/**
+ * Render Tiny Appendix: Top 3 high-risk jobs (IDs + dates) if present
+ */
+function renderTinyAppendix(
+  doc: PDFKit.PDFDocument,
+  data: RiskPostureData,
+  pageWidth: number,
+  margin: number
+): void {
+  if (!hasSpace(doc, 80)) return
+  
+  addSectionDivider(doc, pageWidth, margin)
+  
+  safeText(doc, 'Appendix: High-Risk Jobs', margin, doc.y, {
+    fontSize: STYLES.sizes.h2,
+    font: STYLES.fonts.header,
+    color: STYLES.colors.primaryText,
+  })
+  doc.moveDown(0.5)
+  
+  // Note: In a real implementation, you'd fetch actual high-risk job IDs and dates
+  // For now, show a summary
+  if (data.high_risk_jobs > 0) {
+    doc
+      .fontSize(STYLES.sizes.body)
+      .font(STYLES.fonts.body)
+      .fillColor(STYLES.colors.primaryText)
+      .text(`${data.high_risk_jobs} high-risk ${pluralize(data.high_risk_jobs, 'job', 'jobs')} require attention.`, {
+        width: pageWidth - margin * 2,
+        lineGap: 4,
+      })
+    doc.moveDown(0.3)
+    doc
+      .fontSize(STYLES.sizes.caption)
+      .font(STYLES.fonts.body)
+      .fillColor(STYLES.colors.secondaryText)
+      .text('Job IDs and timestamps available in full audit trail.', {
+        width: pageWidth - margin * 2,
+      })
+  }
+  
+  doc.moveDown(0.5)
+}
+
+/**
  * Render recommended actions (always shows, switches to "Getting Started" when no data)
  */
 function renderRecommendedActions(
@@ -1457,15 +1702,31 @@ function addHeaderFooter(
         .text('Sources: jobs, incidents, attestations', capsuleContentX, currentY, { width: capsuleContentWidth })
       currentY += 11
       
-      // Verify link (full URL)
+      // Verify link (full URL) - human-friendly short form + full URL
       const verifyUrl = baseUrl 
         ? `${baseUrl}/api/executive/brief/${reportId.substring(0, 8)}`
         : `/api/executive/brief/${reportId.substring(0, 8)}`
+      
+      // Human-friendly short form
+      const shortUrl = baseUrl 
+        ? `${baseUrl.replace(/^https?:\/\//, '').split('/')[0]}/verify/RM-${reportId.substring(0, 8)}`
+        : `riskmate.app/verify/RM-${reportId.substring(0, 8)}`
+      
       doc
         .fontSize(8)
         .font(STYLES.fonts.body)
         .fillColor(STYLES.colors.accent)
-        .text(`Verify: ${sanitizeText(verifyUrl)}`, capsuleContentX, currentY, { width: capsuleContentWidth })
+        .text(`Verify: ${sanitizeText(shortUrl)}`, capsuleContentX, currentY, { width: capsuleContentWidth })
+      currentY += 11
+      
+      // Full URL (for audit trail)
+      if (baseUrl) {
+        doc
+          .fontSize(7)
+          .font(STYLES.fonts.body)
+          .fillColor(STYLES.colors.secondaryText)
+          .text(`Full: ${sanitizeText(verifyUrl)}`, capsuleContentX, currentY, { width: capsuleContentWidth })
+      }
     }
   }
 }
@@ -1485,7 +1746,8 @@ async function buildExecutiveBriefPDF(
   generatedBy: string,
   timeRange: string,
   buildSha: string | undefined,
-  reportId: string
+  reportId: string,
+  baseUrl?: string
 ): Promise<{ buffer: Buffer; hash: string; apiLatency: number; timeWindow: { start: Date; end: Date } }> {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({
@@ -1733,6 +1995,21 @@ async function buildExecutiveBriefPDF(
 
     // Recommended Actions (always shows on page 2)
     renderRecommendedActions(doc, data, pageWidth, margin)
+    
+    // Methodology & Definitions (trust-building content)
+    if (hasSpace(doc, 100)) {
+      renderMethodology(doc, pageWidth, margin)
+    }
+    
+    // Data Freshness (last job/incident timestamps, coverage %)
+    if (hasSpace(doc, 60)) {
+      renderDataFreshness(doc, data, pageWidth, margin)
+    }
+    
+    // Tiny Appendix: Top 3 high-risk jobs (IDs + dates) if present
+    if (hasSpace(doc, 80) && data.high_risk_jobs > 0) {
+      renderTinyAppendix(doc, data, pageWidth, margin)
+    }
 
     // Top Drivers (only if ≥3 drivers AND we're still on page 2 AND have space)
     // CRITICAL: No page 3 unless absolutely necessary - default is 2 pages
@@ -1757,8 +2034,7 @@ async function buildExecutiveBriefPDF(
     }
 
     // Add headers/footers to all pages
-    // Note: baseUrl would need to be passed from route handler - for now using relative path
-    addHeaderFooter(doc, organizationName, timeRange, reportId, generatedAt, buildSha, timeWindow)
+    addHeaderFooter(doc, organizationName, timeRange, reportId, generatedAt, buildSha, timeWindow, baseUrl)
 
     doc.end()
   })
