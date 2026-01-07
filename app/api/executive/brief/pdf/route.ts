@@ -1745,7 +1745,7 @@ function renderRecommendedActions(
  * Add header and footer to all pages (post-pass after all content is rendered)
  * Fixed: Proper Y positioning to prevent PDFKit from auto-creating pages
  */
-async function addHeaderFooter(
+function addHeaderFooter(
   doc: PDFKit.PDFDocument,
   organizationName: string,
   timeRange: string,
@@ -1754,8 +1754,9 @@ async function addHeaderFooter(
   buildSha: string | undefined,
   timeWindow: { start: Date; end: Date },
   baseUrl: string | undefined,
-  pdfHash?: string
-): Promise<void> {
+  pdfHash?: string,
+  qrCodeBuffer?: Buffer | null
+): void {
   const range = doc.bufferedPageRange()
   const pageCount = range.count
   const buildInfo = buildSha ? `build: ${buildSha.substring(0, 8)}` : 'build: local'
@@ -1937,31 +1938,15 @@ async function addHeaderFooter(
         .text('Org-scoped: enforced', capsuleContentX, currentY, { width: capsuleContentWidth })
       currentY += 11
       
-      // QR Code (real PNG buffer, not data URL)
-      const verifyUrl = baseUrl 
-        ? `${baseUrl}/api/executive/brief/${reportId.substring(0, 8)}`
-        : `/api/executive/brief/${reportId.substring(0, 8)}`
-      
-      try {
-        const qrCodeBuffer = await QRCode.toBuffer(verifyUrl, {
-          width: 80,
-          margin: 1,
-          color: {
-            dark: STYLES.colors.primaryText,
-            light: STYLES.colors.white,
-          },
-        })
-        
-        // Position QR code (80x80) in capsule
+      // QR Code (real PNG buffer, passed from pre-generation)
+      if (qrCodeBuffer) {
+        // Position QR code (60x60) in capsule
         const qrSize = 60
         const qrX = capsuleContentX + (capsuleContentWidth - qrSize) / 2
         const qrY = currentY + 5
         
         doc.image(qrCodeBuffer, qrX, qrY, { width: qrSize, height: qrSize })
         currentY += qrSize + 8
-      } catch (qrError) {
-        console.warn('[PDF] Failed to generate QR code:', qrError)
-        // Continue without QR code
       }
       
       // Verify link (full URL) - human-friendly short form + clickable
@@ -2006,6 +1991,26 @@ async function buildExecutiveBriefPDF(
   reportId: string,
   baseUrl?: string
 ): Promise<{ buffer: Buffer; hash: string; apiLatency: number; timeWindow: { start: Date; end: Date } }> {
+  // Generate QR code before PDF generation (async operation)
+  const verifyUrl = baseUrl 
+    ? `${baseUrl}/api/executive/brief/${reportId.substring(0, 8)}`
+    : `/api/executive/brief/${reportId.substring(0, 8)}`
+  
+  let qrCodeBuffer: Buffer | null = null
+  try {
+    qrCodeBuffer = await QRCode.toBuffer(verifyUrl, {
+      width: 80,
+      margin: 1,
+      color: {
+        dark: STYLES.colors.primaryText,
+        light: STYLES.colors.white,
+      },
+    })
+  } catch (qrError) {
+    console.warn('[PDF] Failed to generate QR code:', qrError)
+    // Continue without QR code
+  }
+
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({
       size: 'LETTER',
@@ -2053,7 +2058,7 @@ async function buildExecutiveBriefPDF(
     const timeWindow = { start, end }
     
     doc.on('data', (chunk) => chunks.push(chunk))
-        doc.on('end', () => {
+        doc.on('end', async () => {
           const buffer = Buffer.concat(chunks)
           const hash = crypto.createHash('sha256').update(buffer).digest('hex')
           const apiLatency = Date.now() - startTime
@@ -2293,7 +2298,8 @@ async function buildExecutiveBriefPDF(
     // Note: hash will be available after PDF generation, but we need to pass it
     // For now, we'll calculate it in the callback and pass undefined here
     // The hash will be added in a post-pass if needed
-    await addHeaderFooter(doc, organizationName, timeRange, reportId, generatedAt, buildSha, timeWindow, baseUrl)
+    // QR code is pre-generated and passed in
+    addHeaderFooter(doc, organizationName, timeRange, reportId, generatedAt, buildSha, timeWindow, baseUrl, undefined, qrCodeBuffer)
 
     doc.end()
   })
