@@ -5,7 +5,7 @@ import PDFDocument from 'pdfkit'
 import crypto from 'crypto'
 import QRCode from 'qrcode'
 // Import pure helpers from shared module
-import { sanitizeText, formatDelta, formatNumber, pluralize, formatTimeRange, getExposureColor, truncateText } from '@/lib/pdf/executiveBrief/utils'
+import { sanitizeText, sanitizeAscii, formatDelta, formatNumber, pluralize, formatTimeRange, getExposureColor, truncateText } from '@/lib/pdf/executiveBrief/utils'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
