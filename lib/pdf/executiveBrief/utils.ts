@@ -19,7 +19,7 @@ import { PDF_TOKENS } from './tokens'
 export function sanitizeText(text: string): string {
   if (!text) return ''
   
-  return String(text)
+  let result = String(text)
     // Remove ALL C0 control characters (\u0000-\u001F) and DEL (\u007F)
     // Keep only newline (\n), carriage return (\r), tab (\t) for formatting
     .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '')
@@ -39,8 +39,9 @@ export function sanitizeText(text: string): string {
     .replace(/[""]/g, '"')
     // Replace various bullet/arrow characters with hyphen
     .replace(/[•\u2022\u25CF\u25E6\u2043\u2219\u2023\u2024]/g, '-')
-    // Remove zero-width characters
-    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    // Remove zero-width characters and format characters (\p{Cf} category)
+    // This includes: \u200B-\u200D (zero-width spaces), \uFEFF (BOM), and other format chars
+    .replace(/[\u200B-\u200D\uFEFF\u200C\u200D\u2060\uFEFF]/g, '')
     // CRITICAL: Collapse weird hyphen spacing (but preserve negative numbers)
     // Pattern: whitespace-hyphen-whitespace or whitespace-hyphen or hyphen-whitespace
     // But NOT: number-hyphen-number (negative numbers) or hyphen-number (negative numbers)
@@ -50,6 +51,16 @@ export function sanitizeText(text: string): string {
     // Normalize whitespace (preserve intentional spaces)
     .replace(/\s+/g, ' ')
     .trim()
+  
+  // CRITICAL: Final "nuke pass" - replace any remaining problematic characters
+  // This is defense in depth - if anything slipped through, catch it here
+  result = result
+    .replace(/[\uFFFE\uFFFF\uFFFD]/g, '-') // Replacement characters
+    .replace(/[\u00AD\u2010-\u2015\u2212]/g, '-') // All dash variants
+    .replace(/[\uFE58\uFE63\uFF0D]/g, '-') // More dash variants
+    .replace(/[\u200B-\u200D\uFEFF]/g, '') // Zero-width and format chars
+  
+  return result
 }
 
 /**

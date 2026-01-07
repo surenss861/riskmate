@@ -1044,10 +1044,21 @@ function buildMetricsRows(data: RiskPostureData, hasPriorPeriodData: boolean): A
   
   // Add "What changed" summary row at the top
   const exposureLevel = data.exposure_level === 'high' ? 'High' : data.exposure_level === 'moderate' ? 'Moderate' : 'Low'
-  // CRITICAL: If no prior period data, show "N/A" (never "No change")
-  // CRITICAL: formatDelta now returns "N/A" for undefined, but we still check hasPriorPeriodData for consistency
-  // If hasPriorPeriodData is false, always return "N/A" (never "No change")
-  const exposureDelta = hasPriorPeriodData ? formatDelta(data.delta) : 'N/A'
+  // CRITICAL: Hard-fix Overall exposure delta to show N/A when prior is unavailable
+  // Rule: If hasPriorPeriodData === false → Change = N/A (never "No change")
+  // Only show "No change" when prior exists AND delta === 0
+  let exposureDelta: string
+  if (!hasPriorPeriodData) {
+    exposureDelta = 'N/A' // Hard rule: no prior data = N/A
+  } else if (data.delta === undefined || data.delta === null) {
+    exposureDelta = 'N/A' // Delta unavailable = N/A
+  } else if (data.delta === 0) {
+    exposureDelta = 'No change' // Actual comparison resulted in no change
+  } else {
+    // Format with sign
+    const sign = data.delta > 0 ? '+' : ''
+    exposureDelta = `${sign}${data.delta}`
+  }
   
   const rows = [
     // Summary row: Overall exposure
@@ -2193,10 +2204,18 @@ function addHeaderFooter(
         }
       }
       
-      // CRITICAL: Final validation - ensure displayText always contains "/verify/"
+      // CRITICAL: Final validation - ensure displayText always contains "/verify/" or "verify/"
       // If it doesn't, something went wrong - force it to include the path
+      // This is a hard assert - never allow ID-only display
       if (!displayText.includes('/verify/') && !displayText.includes('verify/')) {
-        // Emergency fallback: always include the path
+        // Emergency fallback: ALWAYS include the path, even if it means reducing font size
+        // Never show just "RM-xxxx" - always show at least "verify/RM-xxxx"
+        displayText = `verify/RM-${reportIdShort}`
+        // If even this doesn't fit, we'll reduce font size in the render step
+      }
+      
+      // CRITICAL: Double-check - if displayText is just the ID, force prepend "verify/"
+      if (displayText.trim() === `RM-${reportIdShort}` || displayText.trim() === reportIdShort) {
         displayText = `verify/RM-${reportIdShort}`
       }
       
