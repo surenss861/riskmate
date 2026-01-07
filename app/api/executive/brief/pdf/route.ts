@@ -734,6 +734,16 @@ function renderExecutiveSummary(
   let headline = ''
   const hasSufficientData = data.high_risk_jobs > 0 || data.open_incidents > 0 || data.signed_signoffs > 0
   
+  // CRITICAL: Determine hasPriorPeriodData ONCE at the start - this drives ALL delta logic
+  // hasPrior = true if ANY tracked delta exists (even if it's 0, that means comparison happened)
+  const hasPriorPeriodData = data.delta !== undefined || 
+                             data.deltas?.high_risk_jobs !== undefined || 
+                             data.deltas?.open_incidents !== undefined ||
+                             data.deltas?.violations !== undefined ||
+                             data.deltas?.flagged_jobs !== undefined ||
+                             data.deltas?.pending_signoffs !== undefined ||
+                             data.deltas?.proof_packs !== undefined
+  
   if (!hasSufficientData) {
     headline = 'Insufficient job volume to compute risk posture'
   } else {
@@ -748,10 +758,11 @@ function renderExecutiveSummary(
     }
   }
   
-  // Auto-fit headline: prevent mid-sentence wrapping by measuring and adjusting
-  // CRITICAL: Sanitize headline immediately after creation to prevent character corruption
-  // The corruption (U+FFFE) can happen during string composition, so sanitize right away
+  // CRITICAL: Sanitize headline IMMEDIATELY after creation (before any measurements/width-fitting)
+  // This prevents character corruption (U+FFFE) from slipping into composed strings
   const headlineText = sanitizeText(headline)
+  
+  // Auto-fit headline: prevent mid-sentence wrapping by measuring and adjusting
   const maxHeadlineWidth = pageWidth - margin * 2
   let headlineFontSize = STYLES.sizes.h1
   
@@ -776,22 +787,11 @@ function renderExecutiveSummary(
   doc.moveDown(0.5)
 
   // "WHAT CHANGED" CHIPS: Insightful format "Label: Value (Delta)" - always show all 5 chips
+  // CRITICAL: hasPriorPeriodData is already computed above - use it consistently
+  // Rule: If hasPriorPeriodData === false, ALL deltas must be "N/A" (never "No change")
+  // Only show "No change" when delta === 0 AND hasPriorPeriodData === true
   const chipsY = doc.y
   const chips: Array<{ label: string; delta: string; color: string }> = []
-  
-  // Check if we have ANY prior period data (deltas exist = prior period available)
-  // CRITICAL: Only show "Prior period unavailable" if ALL deltas are null/undefined
-  // If we can compute "No change" (delta === 0 or default), we DO have prior period data
-  const hasPriorPeriodData = data.delta !== undefined || 
-                             data.deltas?.high_risk_jobs !== undefined || 
-                             data.deltas?.open_incidents !== undefined ||
-                             data.deltas?.violations !== undefined ||
-                             data.deltas?.flagged_jobs !== undefined ||
-                             data.deltas?.pending_signoffs !== undefined
-  
-  // Delta pills: Always show, use "N/A" when prior unavailable (never default to "No change" when data is missing)
-  // Rule: Only show "No change" when delta === 0 (actual comparison happened)
-  // If delta is undefined, prior period can't be computed → show "N/A"
   
   // 1. Risk posture: Score (Delta)
   const postureScore = data.posture_score !== undefined ? `${data.posture_score}` : 'N/A'
@@ -1028,12 +1028,15 @@ const METRIC_LABELS = {
   proofPacksGenerated: 'Proof Packs Generated (exportable audit packs)',
 } as const
 
-function buildMetricsRows(data: RiskPostureData): Array<{ label: string; value: string; delta: string }> {
+function buildMetricsRows(data: RiskPostureData, hasPriorPeriodData: boolean): Array<{ label: string; value: string; delta: string }> {
+  // CRITICAL: hasPriorPeriodData is passed in to ensure consistency with chips/KPIs
+  // Rule: If hasPriorPeriodData === false, ALL deltas must be "N/A" (never "No change")
+  // Only show "No change" when delta === 0 AND hasPriorPeriodData === true
+  
   // Add "What changed" summary row at the top
   const exposureLevel = data.exposure_level === 'high' ? 'High' : data.exposure_level === 'moderate' ? 'Moderate' : 'Low'
-  // CRITICAL: Only show "No change" when delta is actually computed (delta === 0)
-  // If delta is undefined, prior period unavailable → show "N/A"
-  const exposureDelta = data.delta !== undefined ? formatDelta(data.delta) : 'N/A'
+  // CRITICAL: If no prior period data, show "N/A" (never "No change")
+  const exposureDelta = hasPriorPeriodData && data.delta !== undefined ? formatDelta(data.delta) : 'N/A'
   
   const rows = [
     // Summary row: Overall exposure
@@ -1062,11 +1065,14 @@ function buildMetricsRows(data: RiskPostureData): Array<{ label: string; value: 
         valueText = formatNumber(row.value)
       }
       
-      // Delta: CRITICAL - match chip logic: only "No change" when delta === 0 (computed)
-      // If delta is undefined, prior period unavailable → show "N/A"
+      // Delta: CRITICAL - match chip logic exactly
+      // Rule: If hasPriorPeriodData === false, ALL deltas must be "N/A"
+      // Only show "No change" when delta === 0 AND hasPriorPeriodData === true
       let deltaText: string
-      if (row.delta === null || row.delta === undefined) {
-        deltaText = 'N/A' // Prior period unavailable
+      if (!hasPriorPeriodData) {
+        deltaText = 'N/A' // No prior period data available
+      } else if (row.delta === null || row.delta === undefined) {
+        deltaText = 'N/A' // This specific delta unavailable (but others exist)
       } else {
         // Ensure delta is a number for formatDelta
         const deltaNum = typeof row.delta === 'number' ? row.delta : undefined
@@ -1085,12 +1091,13 @@ function renderMetricsTable(
   doc: PDFKit.PDFDocument,
   data: RiskPostureData,
   pageWidth: number,
-  margin: number
+  margin: number,
+  hasPriorPeriodData: boolean
 ): void {
   currentSection = 'Metrics Table' // Set section for safeText context
   
-  // Build normalized rows first
-  const metricsRows = buildMetricsRows(data)
+  // Build normalized rows first - CRITICAL: pass hasPriorPeriodData for consistent delta logic
+  const metricsRows = buildMetricsRows(data, hasPriorPeriodData)
   
   // CRITICAL: Never render section header unless we have at least 1 row
   if (metricsRows.length === 0) return
@@ -2132,28 +2139,31 @@ function addHeaderFooter(
         ? baseUrl.replace(/^https?:\/\//, '').split('/')[0]
         : 'riskmate.app'
       
-      // Pretty short link: "riskmate.app/verify/RM-abc12345"
+      // Preferred: Full pretty link "riskmate.app/verify/RM-abc12345"
       const prettyLink = `${domain}/verify/RM-${reportIdShort}`
       
       // Measure and ensure link fits on one line
       doc.fontSize(8).font(STYLES.fonts.body)
       const linkLabel = 'Verification endpoint: '
-      const linkText = linkLabel + prettyLink
-      const linkTextWidth = doc.widthOfString(linkText)
+      const preferredText = linkLabel + prettyLink
+      const preferredWidth = doc.widthOfString(preferredText)
       const linkTextHeight = 10
       const maxLinkWidth = capsuleContentWidth
       
-      // If link is too long, show just the short ID with label
-      let displayText = linkText
-      if (linkTextWidth > maxLinkWidth) {
-        // Try without domain
-        const shortLink = `RM-${reportIdShort}`
-        const shortText = linkLabel + shortLink
-        if (doc.widthOfString(shortText) <= maxLinkWidth) {
-          displayText = shortText
+      // Determine display text: prefer full link, fallback to verify/RM-xxx if needed
+      // CRITICAL: Never show just "RM-xxx" - always show at least "verify/RM-xxx"
+      let displayText: string
+      if (preferredWidth <= maxLinkWidth) {
+        displayText = preferredText // Full pretty link fits
+      } else {
+        // Fallback: "verify/RM-xxxx" (NOT just "RM-xxxx")
+        const fallbackLink = `verify/RM-${reportIdShort}`
+        const fallbackText = linkLabel + fallbackLink
+        if (doc.widthOfString(fallbackText) <= maxLinkWidth) {
+          displayText = fallbackText
         } else {
-          // Last resort: just the ID
-          displayText = `Verify: ${shortLink}`
+          // Last resort: just the endpoint path (still better than just ID)
+          displayText = `Verify: ${fallbackLink}`
         }
       }
       
@@ -2426,7 +2436,17 @@ async function buildExecutiveBriefPDF(
     const remainingSpacePage1 = page1Bottom - doc.y
 
     // Region E: Metrics Table (only if it fits) OR move to Page 2
-    const metricsRows = buildMetricsRows(data)
+    // CRITICAL: hasPriorPeriodData is computed in renderExecutiveSummary - need to compute it here too
+    // OR pass it as a parameter - for now, compute it here to match chip logic
+    const hasPriorPeriodData = data.delta !== undefined || 
+                               data.deltas?.high_risk_jobs !== undefined || 
+                               data.deltas?.open_incidents !== undefined ||
+                               data.deltas?.violations !== undefined ||
+                               data.deltas?.flagged_jobs !== undefined ||
+                               data.deltas?.pending_signoffs !== undefined ||
+                               data.deltas?.proof_packs !== undefined
+    
+    const metricsRows = buildMetricsRows(data, hasPriorPeriodData)
     const sectionHeaderHeight = STYLES.sizes.h2 + 20
     const tableHeaderHeight = STYLES.spacing.tableRowHeight + 4
     const tableRowHeight = STYLES.spacing.tableRowHeight
@@ -2437,7 +2457,7 @@ async function buildExecutiveBriefPDF(
 
     if (metricsTableFitsOnPage1) {
       // Render Metrics Table on Page 1
-      renderMetricsTable(doc, data, pageWidth, margin)
+      renderMetricsTable(doc, data, pageWidth, margin, hasPriorPeriodData)
       
       // Region F: Data Coverage (compact, always on Page 1 if table fits)
       renderDataCoverage(doc, data, pageWidth, margin)
@@ -2478,8 +2498,9 @@ async function buildExecutiveBriefPDF(
     const page2StartY = doc.y
 
     // Metrics Table on Page 2 if it didn't fit on Page 1 (full width, then switch to columns)
+    // CRITICAL: Use same hasPriorPeriodData computed above for consistency
     if (!metricsTableFitsOnPage1) {
-      renderMetricsTable(doc, data, pageWidth, margin)
+      renderMetricsTable(doc, data, pageWidth, margin, hasPriorPeriodData)
       addSectionDivider(doc, pageWidth, margin)
     }
 

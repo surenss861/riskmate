@@ -25,19 +25,19 @@ export function sanitizeText(text: string): string {
     .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '')
     // Remove ALL C1 control characters (\u0080-\u009F)
     .replace(/[\u0080-\u009F]/g, '')
-    // Fix weird hyphen characters - normalize to standard hyphen
-    .replace(/\uFFFE/g, '-') // Replacement character (￾)
-    .replace(/\u00AD/g, '-') // Soft hyphen
-    .replace(/\u2011/g, '-') // Non-breaking hyphen
-    .replace(/\uFFFD/g, '-') // Replacement character ()
+    // CRITICAL: Comprehensive hyphen/dash/replacement character normalizer
+    // Replace ALL Unicode dash punctuation (Pd category) + replacement chars with standard hyphen
+    // This catches: \uFFFE, \uFFFF, \uFFFD, \u00AD, \u2011, \u2212, \u2013, \u2014, etc.
+    .replace(/[\u00AD\u2011\u2013\u2014\u2015\u2212\uFFFE\uFFFF\uFFFD\uFE58\uFE63\uFF0D]/g, '-')
+    // Also catch any remaining dash-like characters using Unicode property
+    // Note: JavaScript regex doesn't support \p{Pd} directly, so we use explicit ranges
+    .replace(/[\u002D\u058A\u05BE\u1400\u1806\u2010-\u2015\u2E17\u2E1A\u2E3A\u2E3B\u301C\u3030\u30A0\uFE31\uFE32\uFE58\uFE63\uFF0D]/g, '-')
     // Replace smart quotes with ASCII equivalents (do this AFTER control char removal)
     .replace(/['']/g, "'")
     .replace(/[""]/g, '"')
     .replace(/[""]/g, '"')
     // Replace various bullet/arrow characters with hyphen
     .replace(/[•\u2022\u25CF\u25E6\u2043\u2219\u2023\u2024]/g, '-')
-    // Replace em dashes and en dashes with regular dashes (but preserve em dash for "—" placeholder)
-    .replace(/[–]/g, '-') // Only replace en dash, keep em dash for "—"
     // Remove zero-width characters
     .replace(/[\u200B-\u200D\uFEFF]/g, '')
     // Normalize whitespace (preserve intentional spaces)
