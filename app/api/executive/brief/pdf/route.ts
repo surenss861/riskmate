@@ -731,7 +731,6 @@ function renderExecutiveSummary(
   
   // HEADLINE: One-sentence finding (big, bold)
   const headlineY = doc.y
-  let headline = ''
   const hasSufficientData = data.high_risk_jobs > 0 || data.open_incidents > 0 || data.signed_signoffs > 0
   
   // CRITICAL: Determine hasPriorPeriodData ONCE at the start - this drives ALL delta logic
