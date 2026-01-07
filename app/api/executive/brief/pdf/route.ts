@@ -226,6 +226,42 @@ function writeKpiCard(
   const labelText = sanitizeText(opts.label)
   if (!labelText) return // Skip if no label
   
+  // Delta pill (top-right corner of card) - show if delta exists
+  if (opts.delta !== undefined) {
+    const deltaText = formatDelta(opts.delta)
+    const deltaColor = opts.delta === 0 
+      ? STYLES.colors.secondaryText 
+      : (opts.delta > 0 ? STYLES.colors.riskHigh : STYLES.colors.riskLow)
+    
+    // Calculate pill position (top-right)
+    doc.fontSize(STYLES.sizes.kpiDelta)
+    const pillText = deltaText === 'No change' ? 'No change' : deltaText
+    const pillWidth = doc.widthOfString(pillText) + 8
+    const pillX = opts.cardX + opts.cardWidth - cardPadding - pillWidth
+    const pillY = opts.cardY + cardPadding + 4
+    
+    // Draw pill background
+    const pillBgColor = deltaText === 'No change' 
+      ? STYLES.colors.lightGrayBg 
+      : (opts.delta > 0 ? STYLES.colors.riskHigh : STYLES.colors.riskLow)
+    doc
+      .rect(pillX, pillY, pillWidth, 16)
+      .fill(pillBgColor)
+      .strokeColor(STYLES.colors.borderGray)
+      .lineWidth(0.3)
+      .stroke()
+    
+    // Pill text (white if colored, secondary if grey)
+    const pillTextColor = deltaText === 'No change' 
+      ? STYLES.colors.secondaryText 
+      : STYLES.colors.white
+    doc
+      .fontSize(STYLES.sizes.kpiDelta)
+      .font(STYLES.fonts.body)
+      .fillColor(pillTextColor)
+      .text(pillText, pillX + 4, pillY + 4, { width: pillWidth - 8 })
+  }
+  
   // Value (big number) - ALLOW numeric-only in KPI context (paired with label)
   const valueY = opts.cardY + cardPadding + 8
   const sanitizedValue = sanitizeText(opts.value)
@@ -252,26 +288,17 @@ function writeKpiCard(
       align: 'left',
     })
   
-  // Delta sublabel - Only show if delta exists (no "Not measured" spam)
-  // If no prior period data, show nothing (cleanest)
-  if (opts.delta !== undefined) {
-    const deltaY = labelY + 12
-    const timeRangeLabel = opts.timeRange === '7d' ? 'vs prior 7d' : opts.timeRange === '30d' ? 'vs prior 30d' : opts.timeRange === '90d' ? 'vs prior 90d' : 'vs prior period'
-    const deltaText = formatDelta(opts.delta)
-    const deltaColor = opts.delta === 0 
-      ? STYLES.colors.secondaryText 
-      : (opts.delta > 0 ? STYLES.colors.riskHigh : STYLES.colors.riskLow)
-    const deltaSubtext = `${deltaText} ${timeRangeLabel}`
-    doc
-      .fontSize(STYLES.sizes.kpiDelta)
-      .font(STYLES.fonts.body)
-      .fillColor(deltaColor)
-      .text(deltaSubtext, contentX, deltaY, {
-        width: contentWidth,
-        align: 'left',
-      })
-  }
-  // If delta is undefined, don't show anything (cleaner than "Not measured")
+  // Subtitle - ALWAYS show "vs prior 30d" (or appropriate time range)
+  const subtitleY = labelY + 12
+  const timeRangeLabel = opts.timeRange === '7d' ? 'vs prior 7d' : opts.timeRange === '30d' ? 'vs prior 30d' : opts.timeRange === '90d' ? 'vs prior 90d' : 'vs prior period'
+  doc
+    .fontSize(STYLES.sizes.kpiDelta)
+    .font(STYLES.fonts.body)
+    .fillColor(STYLES.colors.secondaryText)
+    .text(timeRangeLabel, contentX, subtitleY, {
+      width: contentWidth,
+      align: 'left',
+    })
   
   // Track body content (entire card counts as one unit)
   markPageHasBody(doc)
@@ -501,7 +528,8 @@ function renderRiskPostureGauge(
   doc: PDFKit.PDFDocument,
   data: RiskPostureData,
   pageWidth: number,
-  margin: number
+  margin: number,
+  timeRange: string
 ): void {
   const hasSufficientData = data.high_risk_jobs > 0 || data.open_incidents > 0 || data.signed_signoffs > 0
   if (!hasSufficientData || data.posture_score === undefined) return
@@ -579,9 +607,21 @@ function renderRiskPostureGauge(
 
   doc.y = gaugeY + gaugeHeight + 25
   
-  // Add tiny trend sparkline below gauge (simple 4-bucket bar chart)
+  // Add confidence grade next to posture score
+  const confidenceGrade = calculateConfidenceGrade(data)
+  if (confidenceGrade) {
+    const gradeX = gaugeX + gaugeWidth + 20
+    const gradeY = gaugeY + 8
+    doc
+      .fontSize(STYLES.sizes.caption)
+      .font(STYLES.fonts.body)
+      .fillColor(STYLES.colors.secondaryText)
+      .text(`Confidence: ${confidenceGrade}`, gradeX, gradeY, { width: 150 })
+  }
+  
+  // Add tiny trend sparkline below gauge (only if real data available)
   if (hasSpace(doc, 30)) {
-    renderTrendSparkline(doc, data, gaugeX, doc.y, gaugeWidth)
+    renderTrendSparkline(doc, data, gaugeX, doc.y, gaugeWidth, timeRange)
     doc.y += 25
   }
   
@@ -589,55 +629,87 @@ function renderRiskPostureGauge(
 }
 
 /**
+ * Calculate confidence grade (High/Medium/Low) based on data quality
+ */
+function calculateConfidenceGrade(data: RiskPostureData): string | null {
+  if (!data.posture_score) return null
+  
+  let score = 0
+  
+  // Job volume in window
+  const totalJobs = data.total_jobs ?? 0
+  if (totalJobs >= 10) score += 1
+  else if (totalJobs >= 3) score += 0.5
+  
+  // Recency (last job date)
+  if (data.last_job_at) {
+    const daysSinceLastJob = (Date.now() - new Date(data.last_job_at).getTime()) / (1000 * 60 * 60 * 24)
+    if (daysSinceLastJob <= 7) score += 1
+    else if (daysSinceLastJob <= 30) score += 0.5
+  }
+  
+  // Coverage %
+  const totalSignoffs = (data.signed_signoffs ?? 0) + (data.pending_signoffs ?? 0)
+  if (totalSignoffs > 0) {
+    const coverage = (data.signed_signoffs / totalSignoffs) * 100
+    if (coverage >= 80) score += 1
+    else if (coverage >= 50) score += 0.5
+  }
+  
+  // Determine grade
+  if (score >= 2.5) return 'High'
+  if (score >= 1.5) return 'Medium'
+  return 'Low'
+}
+
+/**
  * Render tiny trend sparkline (4-bucket bar chart for visual credibility)
+ * Only shows if we have real historical data, otherwise shows "unavailable"
  */
 function renderTrendSparkline(
   doc: PDFKit.PDFDocument,
   data: RiskPostureData,
   x: number,
   y: number,
-  width: number
+  width: number,
+  timeRange: string
 ): void {
-  // Simple 4-bucket visualization (simulated trend)
-  // In a real implementation, you'd fetch historical data
-  // For now, create a simple visual based on current posture
-  
   const sparklineHeight = 20
   const bucketWidth = (width - 12) / 4
   const bucketGap = 3
   
-  // Simulate 4 buckets (last 4 periods) - in production, use real historical data
-  const buckets = [
-    data.posture_score ? Math.max(0, Math.min(100, data.posture_score - (data.delta || 0) * 3)) : 50,
-    data.posture_score ? Math.max(0, Math.min(100, data.posture_score - (data.delta || 0) * 2)) : 50,
-    data.posture_score ? Math.max(0, Math.min(100, data.posture_score - (data.delta || 0))) : 50,
-    data.posture_score || 50,
-  ]
+  // Check if we have real historical data (for now, we don't - show unavailable)
+  // In production, you'd check if historical buckets exist
+  const hasRealTrendData = false // TODO: Check for actual historical data
   
-  // Draw sparkline bars
-  buckets.forEach((value, index) => {
-    const barHeight = (value / 100) * sparklineHeight
-    const barX = x + index * (bucketWidth + bucketGap)
-    const barY = y + sparklineHeight - barHeight
+  if (!hasRealTrendData) {
+    // Show "unavailable" state with grey bars
+    const greyBars = [20, 20, 20, 20] // Equal grey bars
     
-    // Bar color based on value
-    const barColor = value >= 75 ? STYLES.colors.riskLow : 
-                     value >= 50 ? STYLES.colors.riskMedium : STYLES.colors.riskHigh
+    greyBars.forEach((value, index) => {
+      const barHeight = (value / 100) * sparklineHeight
+      const barX = x + index * (bucketWidth + bucketGap)
+      const barY = y + sparklineHeight - barHeight
+      
+      doc
+        .rect(barX, barY, bucketWidth, barHeight)
+        .fill(STYLES.colors.lightGrayBg)
+        .strokeColor(STYLES.colors.borderGray)
+        .lineWidth(0.3)
+        .stroke()
+    })
     
+    // Label with "unavailable" note
     doc
-      .rect(barX, barY, bucketWidth, barHeight)
-      .fill(barColor)
-      .strokeColor(STYLES.colors.borderGray)
-      .lineWidth(0.3)
-      .stroke()
-  })
+      .fontSize(7)
+      .font(STYLES.fonts.body)
+      .fillColor(STYLES.colors.secondaryText)
+      .text(`Trend unavailable (need 4 periods of data)`, x, y + sparklineHeight + 4, { width: width })
+    return
+  }
   
-  // Label
-  doc
-    .fontSize(7)
-    .font(STYLES.fonts.body)
-    .fillColor(STYLES.colors.secondaryText)
-    .text('Trend (4 periods)', x, y + sparklineHeight + 4, { width: width })
+  // Real trend data would go here
+  // For now, this path is not reached
 }
 
 /**
@@ -693,30 +765,30 @@ function renderExecutiveSummary(
   
   // 1. Risk posture (score + delta if available)
   const postureScore = data.posture_score !== undefined ? `${data.posture_score}` : 'N/A'
-  const postureDeltaText = data.delta !== undefined ? formatDelta(data.delta) : ''
+  const postureDeltaText = data.delta !== undefined ? `(${formatDelta(data.delta)})` : ''
   chips.push({
     label: 'Risk posture',
-    delta: postureDeltaText ? `${postureScore} ${postureDeltaText}` : postureScore,
+    delta: `${postureScore} ${postureDeltaText}`.trim(),
     color: data.delta !== undefined && data.delta !== 0 
       ? (data.delta > 0 ? STYLES.colors.riskHigh : STYLES.colors.riskLow)
       : STYLES.colors.primaryText,
   })
   
   // 2. High-risk jobs (count + delta if available)
-  const jobsDeltaText = data.deltas?.high_risk_jobs !== undefined ? formatDelta(data.deltas.high_risk_jobs) : ''
+  const jobsDeltaText = data.deltas?.high_risk_jobs !== undefined ? `(${formatDelta(data.deltas.high_risk_jobs)})` : '(No change)'
   chips.push({
-    label: 'High-risk jobs',
-    delta: jobsDeltaText ? `${data.high_risk_jobs} ${jobsDeltaText}` : `${data.high_risk_jobs}`,
+    label: 'High-risk',
+    delta: `${data.high_risk_jobs} ${jobsDeltaText}`,
     color: data.deltas?.high_risk_jobs !== undefined && data.deltas.high_risk_jobs !== 0
       ? (data.deltas.high_risk_jobs > 0 ? STYLES.colors.riskHigh : STYLES.colors.riskLow)
       : STYLES.colors.primaryText,
   })
   
   // 3. Open incidents (count + delta if available)
-  const incidentsDeltaText = data.deltas?.open_incidents !== undefined ? formatDelta(data.deltas.open_incidents) : ''
+  const incidentsDeltaText = data.deltas?.open_incidents !== undefined ? `(${formatDelta(data.deltas.open_incidents)})` : '(No change)'
   chips.push({
-    label: 'Open incidents',
-    delta: incidentsDeltaText ? `${data.open_incidents} ${incidentsDeltaText}` : `${data.open_incidents}`,
+    label: 'Incidents',
+    delta: `${data.open_incidents} ${incidentsDeltaText}`,
     color: data.deltas?.open_incidents !== undefined && data.deltas.open_incidents !== 0
       ? (data.deltas.open_incidents > 0 ? STYLES.colors.riskHigh : STYLES.colors.riskLow)
       : STYLES.colors.primaryText,
@@ -729,14 +801,14 @@ function renderExecutiveSummary(
     : 0
   chips.push({
     label: 'Attestation',
-    delta: `${attestationPct}%`,
+    delta: `${attestationPct}% (No change)`,
     color: STYLES.colors.primaryText,
   })
   
   // 5. Sign-offs (signed/required)
   chips.push({
     label: 'Sign-offs',
-    delta: `${data.signed_signoffs ?? 0}/${totalSignoffs}`,
+    delta: `${data.signed_signoffs ?? 0}/${totalSignoffs} (No change)`,
     color: STYLES.colors.primaryText,
   })
   
@@ -819,44 +891,62 @@ function renderExecutiveSummary(
   
   doc.moveDown(0.8)
 
-  // "SO WHAT" BULLETS: Max 3 bullets
-  const bullets: string[] = []
-  
-  if (!hasSufficientData) {
-    bullets.push('Metrics will populate automatically as job data is recorded')
-    bullets.push('Requires at least 1 job with risk assessment in the selected time range')
-  } else {
-    // Prioritize: high-risk jobs, incidents, then signoffs
+  // EXECUTIVE SUMMARY STRUCTURE: Finding + Why + Next action
+  if (hasSufficientData) {
+    // Why it matters (1 sentence)
+    let whyItMatters = ''
     if (data.high_risk_jobs > 0) {
-      bullets.push(`${formatNumber(data.high_risk_jobs)} high-risk ${pluralize(data.high_risk_jobs, 'job', 'jobs')} requiring attention`)
+      whyItMatters = `Unmitigated high-risk jobs increase audit exposure and potential compliance findings.`
+    } else if (data.open_incidents > 0) {
+      whyItMatters = `Open incidents indicate active safety gaps that require immediate attention.`
+    } else if (data.posture_score !== undefined && data.posture_score < 50) {
+      whyItMatters = `Current risk posture requires strengthening to meet compliance standards.`
+    } else {
+      whyItMatters = `Maintaining strong risk controls protects against audit findings and safety incidents.`
     }
     
-    if (data.open_incidents > 0 && bullets.length < 3) {
-      bullets.push(`${formatNumber(data.open_incidents)} open ${pluralize(data.open_incidents, 'incident', 'incidents')} under investigation`)
+    if (hasSpace(doc, 20)) {
+      safeText(doc, sanitizeText(whyItMatters), margin, doc.y, {
+        fontSize: STYLES.sizes.body,
+        font: STYLES.fonts.body,
+        color: STYLES.colors.primaryText,
+        width: pageWidth - margin * 2,
+      })
+      doc.moveDown(0.6)
     }
     
-    if (data.pending_signoffs > 0 && bullets.length < 3) {
-      bullets.push(`${formatNumber(data.pending_signoffs)} pending ${pluralize(data.pending_signoffs, 'attestation', 'attestations')} awaiting signatures`)
+    // Next action (1 sentence)
+    let nextAction = ''
+    if (data.high_risk_jobs > 0) {
+      nextAction = `Mitigate ${data.high_risk_jobs} high-risk ${pluralize(data.high_risk_jobs, 'job', 'jobs')} within 7 days to reduce exposure.`
+    } else if (data.open_incidents > 0) {
+      nextAction = `Close ${data.open_incidents} open ${pluralize(data.open_incidents, 'incident', 'incidents')} and document resolution.`
+    } else if (data.pending_signoffs > 0) {
+      nextAction = `Complete ${data.pending_signoffs} pending ${pluralize(data.pending_signoffs, 'sign-off', 'sign-offs')} to ensure full compliance.`
+    } else {
+      nextAction = `Continue monitoring risk posture and maintain current control effectiveness.`
     }
-  }
-  
-  // Limit to 3 bullets
-  const displayBullets = bullets.slice(0, 3).map(sanitizeText)
-  
-  if (displayBullets.length > 0) {
-    displayBullets.forEach((bullet) => {
-      ensureSpace(doc, 20, margin)
-      doc
-        .fontSize(STYLES.sizes.body)
-        .font(STYLES.fonts.body)
-        .fillColor(STYLES.colors.primaryText)
-        .text(`• ${bullet}`, {
-          indent: 20,
-          width: pageWidth - margin * 2 - 20,
-          lineGap: 4,
-        })
-      doc.moveDown(0.3)
-    })
+    
+    if (hasSpace(doc, 20)) {
+      safeText(doc, sanitizeText(nextAction), margin, doc.y, {
+        fontSize: STYLES.sizes.body,
+        font: STYLES.fonts.body,
+        color: STYLES.colors.primaryText,
+        width: pageWidth - margin * 2,
+      })
+      doc.moveDown(0.6)
+    }
+  } else {
+    // Insufficient data case
+    if (hasSpace(doc, 20)) {
+      safeText(doc, 'Metrics will populate automatically as job data is recorded. Requires at least 1 job with risk assessment in the selected time range.', margin, doc.y, {
+        fontSize: STYLES.sizes.body,
+        font: STYLES.fonts.body,
+        color: STYLES.colors.secondaryText,
+        width: pageWidth - margin * 2,
+      })
+      doc.moveDown(0.6)
+    }
   }
 
   doc.moveDown(1)
@@ -1361,16 +1451,35 @@ function renderMethodologyShort(
   
   methodologyPoints.forEach((point) => {
     if (hasSpace(doc, 18)) {
+      // Use hanging indent for better wrapping (bullet at margin, text indented)
+      const bulletX = margin
+      const textX = margin + 12
+      const textWidth = pageWidth - margin * 2 - 12
+      
+      // Bullet
       doc
         .fontSize(STYLES.sizes.body)
         .font(STYLES.fonts.body)
         .fillColor(STYLES.colors.primaryText)
-        .text(`• ${sanitizeText(point)}`, {
-          indent: 20,
-          width: pageWidth - margin * 2 - 20,
+        .text('•', bulletX, doc.y, { width: 10 })
+      
+      // Text with proper wrapping
+      const pointText = sanitizeText(point)
+      const lines = doc.heightOfString(pointText, {
+        width: textWidth,
+        lineGap: 3,
+      })
+      
+      doc
+        .fontSize(STYLES.sizes.body)
+        .font(STYLES.fonts.body)
+        .fillColor(STYLES.colors.primaryText)
+        .text(pointText, textX, doc.y, {
+          width: textWidth,
           lineGap: 3,
         })
-      doc.moveDown(0.2)
+      
+      doc.y += lines + 4
     }
   })
   
@@ -1791,7 +1900,7 @@ function addHeaderFooter(
         .text('Org-scoped: enforced', capsuleContentX, currentY, { width: capsuleContentWidth })
       currentY += 11
       
-      // Verify link (full URL) - human-friendly short form
+      // Verify link (full URL) - human-friendly short form + clickable
       const verifyUrl = baseUrl 
         ? `${baseUrl}/api/executive/brief/${reportId.substring(0, 8)}`
         : `/api/executive/brief/${reportId.substring(0, 8)}`
@@ -1801,11 +1910,21 @@ function addHeaderFooter(
         ? `${baseUrl.replace(/^https?:\/\//, '').split('/')[0]}/verify/RM-${reportId.substring(0, 8)}`
         : `riskmate.app/verify/RM-${reportId.substring(0, 8)}`
       
+      // Measure text to get link bounds
+      doc.fontSize(8)
+      const linkText = `Verify: ${shortUrl}`
+      const linkTextWidth = doc.widthOfString(linkText)
+      const linkTextHeight = 10
+      
+      // Draw clickable link text
       doc
         .fontSize(8)
         .font(STYLES.fonts.body)
         .fillColor(STYLES.colors.accent)
-        .text(`Verify: ${sanitizeText(shortUrl)}`, capsuleContentX, currentY, { width: capsuleContentWidth })
+        .text(linkText, capsuleContentX, currentY, { width: capsuleContentWidth })
+      
+      // Add clickable link annotation (PDFKit supports links)
+      doc.link(capsuleContentX, currentY, linkTextWidth, linkTextHeight, verifyUrl)
     }
   }
 }
@@ -2017,7 +2136,7 @@ async function buildExecutiveBriefPDF(
     const afterKPIsY = doc.y
 
     // Region C: Risk Posture Gauge (fixed height ~100px)
-    renderRiskPostureGauge(doc, data, pageWidth, margin)
+    renderRiskPostureGauge(doc, data, pageWidth, margin, timeRange)
     if (data.posture_score !== undefined) {
       markPageHasBody(doc)
     }
@@ -2170,10 +2289,15 @@ export async function POST(request: NextRequest) {
         // CRITICAL: Validate org name is not email-derived
         let organizationName = sanitizeText(orgContext.orgName)
         
-        // If org name looks email-ish, show "Organization" instead
+        // If org name looks email-ish or generic, show warning in non-prod
         if (organizationName.includes('@') || organizationName.includes("'s Organization") || organizationName.toLowerCase().includes('test')) {
-          console.warn(`[executive/brief/pdf] Org name "${organizationName}" looks email-derived, using fallback`)
+          if (process.env.NODE_ENV !== 'production') {
+            console.warn(`[executive/brief/pdf] Org name "${organizationName}" looks email-derived or test data. In prod, this would show "Organization". Fix in Organizations table.`)
+          }
           organizationName = 'Organization'
+        } else if (organizationName === 'Organization' && process.env.NODE_ENV !== 'production') {
+          // Non-prod warning if org name is still generic
+          console.warn(`[executive/brief/pdf] Org name is generic "Organization". Fix in Organizations table to avoid looking generic during demos.`)
         }
 
         // Debug log (remove in prod or gate behind env flag)
@@ -2229,6 +2353,10 @@ export async function POST(request: NextRequest) {
     // Get build SHA for tracking
     const buildSha = process.env.VERCEL_GIT_COMMIT_SHA || process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA || undefined
 
+    // Derive baseUrl from request for verification links
+    const requestUrl = new URL(request.url)
+    const baseUrl = `${requestUrl.protocol}//${requestUrl.host}`
+
     // Sanitize confidence statement at the last moment (catches any control chars)
     riskPostureData.confidence_statement = sanitizeText(riskPostureData.confidence_statement || '')
 
@@ -2272,7 +2400,8 @@ export async function POST(request: NextRequest) {
             sanitizeText(user.email || `User ${user.id.substring(0, 8)}`),
             timeRange,
             buildSha,
-            reportId
+            reportId,
+            baseUrl
           )
         } catch (pdfError: any) {
           // CRITICAL: Catch ship gate rejections and return JSON error instead of broken PDF
