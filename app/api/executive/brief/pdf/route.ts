@@ -2173,49 +2173,56 @@ function addHeaderFooter(
       const linkTextHeight = 10
       const maxLinkWidth = capsuleContentWidth
       
-      // Determine display text: prefer full link, fallback to verify/RM-xxx if needed
-      // CRITICAL: Never show just "RM-xxx" - always show at least "verify/RM-xxx"
-      // ULTRA-STRICT: Build display string explicitly to ensure path is always included
-      // The path "/verify/" MUST always be present in the display string
+      // CRITICAL: Strict fallback ladder that ALWAYS includes the path
+      // Never allow ID-only display - always show at least "verify/RM-xxxx"
+      // Fallback order:
+      // 1. riskmate.app/verify/RM-xxxx (preferred)
+      // 2. verify/RM-xxxx (if space is tight)
+      // 3. Verify: verify/RM-xxxx (if label is too long)
+      // NEVER: just "RM-xxxx" or just the ID
+      
       let displayText: string
+      const fallbackLink = `verify/RM-${reportIdShort}` // Always include path
+      
+      // Try preferred: "riskmate.app/verify/RM-xxxx"
       if (preferredWidth <= maxLinkWidth) {
-        displayText = preferredText // Full pretty link fits: "riskmate.app/verify/RM-xxxx"
+        displayText = preferredText
       } else {
-        // Fallback: "verify/RM-xxxx" (NOT just "RM-xxxx")
-        const fallbackLink = `verify/RM-${reportIdShort}`
+        // Try fallback: "verify/RM-xxxx" with label
         const fallbackText = linkLabel + fallbackLink
         const fallbackWidth = doc.widthOfString(fallbackText)
         if (fallbackWidth <= maxLinkWidth) {
-          displayText = fallbackText // "Verification endpoint: verify/RM-xxxx"
+          displayText = fallbackText
         } else {
-          // Last resort: shorten label but ALWAYS keep full path "verify/RM-xxxx"
-          // CRITICAL: Never fall back to just "RM-xxxx" - always include "/verify/" path
-          const minimalText = `Verify: ${fallbackLink}` // "Verify: verify/RM-xxxx"
+          // Try minimal: "Verify: verify/RM-xxxx"
+          const minimalText = `Verify: ${fallbackLink}`
           const minimalWidth = doc.widthOfString(minimalText)
           if (minimalWidth <= maxLinkWidth) {
             displayText = minimalText
           } else {
-            // Absolute last resort: show just the path without any label
-            // CRITICAL: This MUST be "verify/RM-xxxx", NEVER just "RM-xxxx"
-            // If this doesn't fit, we have a serious layout problem, but we still show the path
-            displayText = fallbackLink // "verify/RM-xxxx" - path is always included
+            // Last resort: just the path "verify/RM-xxxx" (no label)
+            // CRITICAL: This is the minimum - NEVER drop the path
+            displayText = fallbackLink
           }
         }
       }
       
-      // CRITICAL: Final validation - ensure displayText always contains "/verify/" or "verify/"
-      // If it doesn't, something went wrong - force it to include the path
-      // This is a hard assert - never allow ID-only display
-      if (!displayText.includes('/verify/') && !displayText.includes('verify/')) {
-        // Emergency fallback: ALWAYS include the path, even if it means reducing font size
-        // Never show just "RM-xxxx" - always show at least "verify/RM-xxxx"
-        displayText = `verify/RM-${reportIdShort}`
-        // If even this doesn't fit, we'll reduce font size in the render step
+      // CRITICAL: Hard assert - if displayText doesn't contain "verify/", force it
+      // This should never happen, but if it does, we fix it here
+      if (!displayText.includes('verify/')) {
+        // Emergency fix: prepend "verify/" to whatever we have
+        if (displayText.includes(`RM-${reportIdShort}`)) {
+          displayText = displayText.replace(`RM-${reportIdShort}`, `verify/RM-${reportIdShort}`)
+        } else {
+          displayText = fallbackLink // Force to minimum safe display
+        }
       }
       
-      // CRITICAL: Double-check - if displayText is just the ID, force prepend "verify/"
-      if (displayText.trim() === `RM-${reportIdShort}` || displayText.trim() === reportIdShort) {
-        displayText = `verify/RM-${reportIdShort}`
+      // CRITICAL: Final validation - ensure we never show just the ID
+      // Check if displayText ends with just the ID (no path)
+      const idOnlyPattern = new RegExp(`(^|\\s)RM-${reportIdShort}(\\s|$)`)
+      if (idOnlyPattern.test(displayText) && !displayText.includes('verify/')) {
+        displayText = fallbackLink // Force to minimum safe display
       }
       
       // Draw clickable link text (one line, no wrapping) - CRITICAL: sanitize
