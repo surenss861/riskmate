@@ -1950,6 +1950,10 @@ function addHeaderFooter(
       }
       
       // Verify link (full URL) - human-friendly short form + clickable
+      const verifyUrl = baseUrl 
+        ? `${baseUrl}/api/executive/brief/${reportId.substring(0, 8)}`
+        : `/api/executive/brief/${reportId.substring(0, 8)}`
+      
       const shortUrl = baseUrl 
         ? `${baseUrl.replace(/^https?:\/\//, '').split('/')[0]}/verify/RM-${reportId.substring(0, 8)}`
         : `riskmate.app/verify/RM-${reportId.substring(0, 8)}`
