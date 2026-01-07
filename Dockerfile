@@ -6,13 +6,14 @@ FROM public.ecr.aws/amazonlinux/amazonlinux:2023
 
 WORKDIR /app
 
-# Install system dependencies (needed for NodeSource installer + fonts)
+# Install system dependencies (NodeSource installer + fonts + poppler for PNG conversion)
 RUN dnf install -y \
     curl ca-certificates tar gzip \
     fontconfig \
     dejavu-sans-fonts \
     dejavu-serif-fonts \
     liberation-fonts \
+    poppler-utils \
  && fc-cache -f \
  && dnf clean all
 
@@ -23,11 +24,17 @@ RUN curl -fsSL https://rpm.nodesource.com/setup_20.x | bash - \
  && corepack enable \
  && corepack prepare pnpm@10.27.0 --activate
 
+# Set up pnpm store for better caching
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+RUN corepack prepare pnpm@10.27.0 --activate
+
 # Copy only manifests first for better layer caching
 COPY package.json pnpm-lock.yaml* ./
 
-# Install dependencies
-RUN pnpm install --frozen-lockfile
+# Install dependencies (with store caching)
+RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
+    pnpm install --frozen-lockfile
 
 # Copy the rest of the source code
 COPY . .
