@@ -471,7 +471,7 @@ function renderKPIStrip(
       color: STYLES.colors.riskHigh,
     },
     {
-      label: 'Attestation %',
+      label: 'Attestation coverage',
       value: data.signed_signoffs + data.pending_signoffs > 0 
         ? `${Math.round((data.signed_signoffs / (data.signed_signoffs + data.pending_signoffs)) * 100)}%`
         : 'No data',
@@ -479,7 +479,7 @@ function renderKPIStrip(
       color: STYLES.colors.primaryText,
     },
     {
-      label: 'Attestations',
+      label: 'Sign-offs',
       value: `${data.signed_signoffs}/${data.signed_signoffs + data.pending_signoffs}`, // One line, no split
       delta: undefined,
       color: STYLES.colors.primaryText,
@@ -744,11 +744,25 @@ function renderExecutiveSummary(
     }
   }
   
-  safeText(doc, sanitizeText(headline), margin, headlineY, {
-    fontSize: STYLES.sizes.h1,
+  // Auto-fit headline: prevent mid-sentence wrapping by measuring and adjusting
+  const headlineText = sanitizeText(headline)
+  const maxHeadlineWidth = pageWidth - margin * 2
+  let headlineFontSize = STYLES.sizes.h1
+  
+  // Measure headline width - if it's too wide, reduce font size slightly
+  doc.fontSize(headlineFontSize).font(STYLES.fonts.header)
+  const headlineWidth = doc.widthOfString(headlineText)
+  
+  // If headline is too wide, reduce font size to fit (min 26px)
+  if (headlineWidth > maxHeadlineWidth * 0.95) {
+    headlineFontSize = Math.max(26, Math.floor((maxHeadlineWidth / headlineWidth) * headlineFontSize))
+  }
+  
+  safeText(doc, headlineText, margin, headlineY, {
+    fontSize: headlineFontSize,
     font: STYLES.fonts.header,
     color: STYLES.colors.primaryText,
-    width: pageWidth - margin * 2,
+    width: maxHeadlineWidth,
   })
   
   doc.y = headlineY + STYLES.sizes.h1 * 1.25 + 16
@@ -759,7 +773,8 @@ function renderExecutiveSummary(
   const chips: Array<{ label: string; delta: string; color: string }> = []
   
   // Check if we have ANY prior period data (deltas exist = prior period available)
-  // Only show "Prior period unavailable" if ALL deltas are null/undefined
+  // CRITICAL: Only show "Prior period unavailable" if ALL deltas are null/undefined
+  // If we can compute "No change" (delta === 0 or default), we DO have prior period data
   const hasPriorPeriodData = data.delta !== undefined || 
                              data.deltas?.high_risk_jobs !== undefined || 
                              data.deltas?.open_incidents !== undefined ||
@@ -769,7 +784,8 @@ function renderExecutiveSummary(
   
   // 1. Risk posture: Score (Delta)
   const postureScore = data.posture_score !== undefined ? `${data.posture_score}` : 'N/A'
-  const postureDelta = data.delta !== undefined ? formatDelta(data.delta) : 'No change'
+  // If delta is undefined, we don't have prior period data - show "N/A" not "No change"
+  const postureDelta = data.delta !== undefined ? formatDelta(data.delta) : (hasPriorPeriodData ? 'No change' : 'N/A')
   chips.push({
     label: 'Risk posture',
     delta: `${postureScore} (${postureDelta})`,
@@ -779,7 +795,8 @@ function renderExecutiveSummary(
   })
   
   // 2. High-risk jobs: Count (Delta)
-  const jobsDelta = data.deltas?.high_risk_jobs !== undefined ? formatDelta(data.deltas.high_risk_jobs) : 'No change'
+  // Only show "No change" if we have prior period data, otherwise show "N/A"
+  const jobsDelta = data.deltas?.high_risk_jobs !== undefined ? formatDelta(data.deltas.high_risk_jobs) : (hasPriorPeriodData ? 'No change' : 'N/A')
   chips.push({
     label: 'High-risk jobs',
     delta: `${data.high_risk_jobs} (${jobsDelta})`,
@@ -789,7 +806,7 @@ function renderExecutiveSummary(
   })
   
   // 3. Open incidents: Count (Delta)
-  const incidentsDelta = data.deltas?.open_incidents !== undefined ? formatDelta(data.deltas.open_incidents) : 'No change'
+  const incidentsDelta = data.deltas?.open_incidents !== undefined ? formatDelta(data.deltas.open_incidents) : (hasPriorPeriodData ? 'No change' : 'N/A')
   chips.push({
     label: 'Open incidents',
     delta: `${data.open_incidents} (${incidentsDelta})`,
@@ -2028,29 +2045,49 @@ function addHeaderFooter(
         currentY += qrSize + 8
       }
       
-      // Verify link (full URL) - human-friendly short form + clickable
+      // Verify link (full URL) - one-line, unbreakable, clickable
       const verifyUrl = baseUrl 
         ? `${baseUrl}/api/executive/brief/${reportId.substring(0, 8)}`
         : `/api/executive/brief/${reportId.substring(0, 8)}`
       
+      // Create short, unbreakable link (truncate if needed, but keep on one line)
+      const reportIdShort = reportId.substring(0, 8)
       const shortUrl = baseUrl 
-        ? `${baseUrl.replace(/^https?:\/\//, '').split('/')[0]}/verify/RM-${reportId.substring(0, 8)}`
-        : `riskmate.app/verify/RM-${reportId.substring(0, 8)}`
+        ? `${baseUrl.replace(/^https?:\/\//, '').split('/')[0]}/verify/RM-${reportIdShort}`
+        : `riskmate.app/verify/RM-${reportIdShort}`
       
-      // Measure text to get link bounds
-      doc.fontSize(8)
-      const linkText = `Verify: ${shortUrl}`
+      // Measure and ensure link fits on one line (truncate with ellipsis if needed)
+      doc.fontSize(8).font(STYLES.fonts.body)
+      const linkPrefix = 'Verify: '
+      let displayUrl = shortUrl
+      const maxLinkWidth = capsuleContentWidth - doc.widthOfString(linkPrefix)
+      
+      // If URL is too long, truncate with ellipsis
+      if (doc.widthOfString(displayUrl) > maxLinkWidth) {
+        const ellipsis = '...'
+        const ellipsisWidth = doc.widthOfString(ellipsis)
+        let truncated = displayUrl
+        while (doc.widthOfString(truncated) > maxLinkWidth - ellipsisWidth && truncated.length > 10) {
+          truncated = truncated.slice(0, -1)
+        }
+        displayUrl = truncated + ellipsis
+      }
+      
+      const linkText = linkPrefix + displayUrl
       const linkTextWidth = doc.widthOfString(linkText)
       const linkTextHeight = 10
       
-      // Draw clickable link text
+      // Draw clickable link text (one line, no wrapping)
       doc
         .fontSize(8)
         .font(STYLES.fonts.body)
         .fillColor(STYLES.colors.accent)
-        .text(linkText, capsuleContentX, currentY, { width: capsuleContentWidth })
+        .text(linkText, capsuleContentX, currentY, { 
+          width: capsuleContentWidth,
+          lineBreak: false, // Prevent wrapping
+        })
       
-      // Add clickable link annotation (PDFKit supports links)
+      // Add clickable link annotation (PDFKit supports links) - full URL
       doc.link(capsuleContentX, currentY, linkTextWidth, linkTextHeight, verifyUrl)
     }
   }
@@ -2439,15 +2476,20 @@ export async function POST(request: NextRequest) {
         // CRITICAL: Validate org name is not email-derived
         let organizationName = sanitizeText(orgContext.orgName)
         
-        // If org name looks email-ish or generic, show warning in non-prod
+        // If org name looks email-ish or generic, fix it
+        // In prod, never show generic "Organization" - use org ID or fallback
         if (organizationName.includes('@') || organizationName.includes("'s Organization") || organizationName.toLowerCase().includes('test')) {
           if (process.env.NODE_ENV !== 'production') {
-            console.warn(`[executive/brief/pdf] Org name "${organizationName}" looks email-derived or test data. In prod, this would show "Organization". Fix in Organizations table.`)
+            console.warn(`[executive/brief/pdf] Org name "${organizationName}" looks email-derived or test data. Fix in Organizations table.`)
           }
-          organizationName = 'Organization'
-        } else if (organizationName === 'Organization' && process.env.NODE_ENV !== 'production') {
-          // Non-prod warning if org name is still generic
-          console.warn(`[executive/brief/pdf] Org name is generic "Organization". Fix in Organizations table to avoid looking generic during demos.`)
+          // Use org ID short form instead of generic "Organization"
+          organizationName = `Org ${orgContext.orgId.substring(0, 8)}`
+        } else if (organizationName === 'Organization' || organizationName.trim() === '') {
+          // Never show generic "Organization" - use org ID
+          if (process.env.NODE_ENV !== 'production') {
+            console.warn(`[executive/brief/pdf] Org name is generic "Organization". Using org ID instead. Fix in Organizations table.`)
+          }
+          organizationName = `Org ${orgContext.orgId.substring(0, 8)}`
         }
 
         // Debug log (remove in prod or gate behind env flag)
