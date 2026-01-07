@@ -32,13 +32,14 @@ const STYLES = {
     body: 'Helvetica',
   },
   sizes: {
-    h1: 32, // Premium title size
-    h2: 22, // Section headers
+    h1: 30, // Premium title size (28-32 range)
+    h2: 17, // Section headers (16-18 range)
     h3: 16, // Org name
-    body: 11,
-    caption: 9,
+    body: 10.5, // Body text (10.5-11 range)
+    caption: 9, // Small text
     kpiValue: 24, // Big numbers in KPI cards
-    kpiLabel: 9,
+    kpiLabel: 9, // KPI label
+    kpiDelta: 8, // KPI delta sublabel
   },
   spacing: {
     margin: 48,
@@ -319,7 +320,8 @@ function renderKPIStrip(
   doc: PDFKit.PDFDocument,
   data: RiskPostureData,
   pageWidth: number,
-  startY: number
+  startY: number,
+  timeRange: string
 ): void {
   const margin = STYLES.spacing.margin
   const kpiCardHeight = 95
@@ -331,7 +333,7 @@ function renderKPIStrip(
   const kpis = [
     {
       label: 'Risk Posture',
-      value: data.posture_score !== undefined ? `${data.posture_score}` : '—',
+      value: data.posture_score !== undefined ? `${data.posture_score}` : 'Insufficient data',
       delta: data.delta,
       color: data.posture_score !== undefined && data.posture_score >= 75 ? STYLES.colors.riskLow : 
              data.posture_score !== undefined && data.posture_score >= 50 ? STYLES.colors.riskMedium : STYLES.colors.riskHigh,
@@ -352,7 +354,7 @@ function renderKPIStrip(
       label: 'Evidence %',
       value: data.signed_signoffs + data.pending_signoffs > 0 
         ? `${Math.round((data.signed_signoffs / (data.signed_signoffs + data.pending_signoffs)) * 100)}%`
-        : '—',
+        : 'No data',
       delta: undefined,
       color: STYLES.colors.primaryText,
     },
@@ -406,17 +408,30 @@ function renderKPIStrip(
       color: STYLES.colors.secondaryText,
     })
 
-    // Delta (if present, small chip-like) - use safeText
+    // Delta sublabel ("vs prior 30d") - always show if delta exists
     if (kpi.delta !== undefined && kpi.delta !== 0) {
-      const deltaText = kpi.delta > 0 ? `+${kpi.delta}` : `${kpi.delta}`
+      const deltaText = formatDelta(kpi.delta)
       const deltaColor = kpi.delta > 0 ? STYLES.colors.riskHigh : STYLES.colors.riskLow
-      const deltaY = labelY + 14
-      safeText(doc, deltaText, contentX, deltaY, {
+      const deltaY = labelY + 12
+      const timeRangeLabel = timeRange === '7d' ? 'vs prior 7d' : timeRange === '30d' ? 'vs prior 30d' : timeRange === '90d' ? 'vs prior 90d' : 'vs prior period'
+      const deltaSubtext = `${deltaText} ${timeRangeLabel}`
+      safeText(doc, deltaSubtext, contentX, deltaY, {
         width: contentWidth,
         align: 'left',
-        fontSize: STYLES.sizes.caption,
+        fontSize: STYLES.sizes.kpiDelta,
         font: STYLES.fonts.body,
         color: deltaColor,
+      })
+    } else if (kpi.delta === 0) {
+      // Show "No change" if delta is 0
+      const deltaY = labelY + 12
+      const timeRangeLabel = timeRange === '7d' ? 'vs prior 7d' : timeRange === '30d' ? 'vs prior 30d' : timeRange === '90d' ? 'vs prior 90d' : 'vs prior period'
+      safeText(doc, `No change ${timeRangeLabel}`, contentX, deltaY, {
+        width: contentWidth,
+        align: 'left',
+        fontSize: STYLES.sizes.kpiDelta,
+        font: STYLES.fonts.body,
+        color: STYLES.colors.secondaryText,
       })
     }
   })
@@ -513,86 +528,165 @@ function renderRiskPostureGauge(
 
 /**
  * Render executive summary narrative
+ * Premium format: Headline + "What changed" chips + "So what" bullets (max 3)
  */
 function renderExecutiveSummary(
   doc: PDFKit.PDFDocument,
   data: RiskPostureData,
   pageWidth: number,
-  margin: number
+  margin: number,
+  timeRange: string
 ): void {
-  // Section header
-  ensureSpace(doc, 80, margin)
-  safeText(doc, 'Executive Summary', margin, doc.y, {
-    fontSize: STYLES.sizes.h2,
+  ensureSpace(doc, 120, margin)
+  
+  // HEADLINE: One-sentence finding (big, bold)
+  const headlineY = doc.y
+  let headline = ''
+  const hasSufficientData = data.high_risk_jobs > 0 || data.open_incidents > 0 || data.signed_signoffs > 0
+  
+  if (!hasSufficientData) {
+    headline = 'Insufficient job volume to compute risk posture'
+  } else {
+    const riskLevel = data.exposure_level === 'high' ? 'elevated' : data.exposure_level === 'moderate' ? 'moderate' : 'stable'
+    const jobsText = data.high_risk_jobs === 1 ? '1 high-risk job' : `${data.high_risk_jobs} high-risk jobs`
+    const needsText = data.high_risk_jobs === 1 ? 'needs' : 'need'
+    headline = `Risk is ${riskLevel}; ${jobsText} ${needsText} mitigation.`
+  }
+  
+  safeText(doc, sanitizeText(headline), margin, headlineY, {
+    fontSize: STYLES.sizes.h1,
     font: STYLES.fonts.header,
     color: STYLES.colors.primaryText,
+    width: pageWidth - margin * 2,
   })
-  // Note: PDFKit doesn't support underline in safeText, so we draw it separately if needed
-  // For now, we'll skip underline to keep it simple
-
+  
+  doc.y = headlineY + STYLES.sizes.h1 * 1.25 + 16
   doc.moveDown(0.5)
 
-  // Confidence statement (main narrative) - sanitize at render time
-  ensureSpace(doc, 60, margin)
-  const sanitizedConfidence = sanitizeText(String(data.confidence_statement || ''))
-  doc
-    .fontSize(STYLES.sizes.body)
-    .font(STYLES.fonts.body)
-    .fillColor(STYLES.colors.primaryText)
-    .text(sanitizedConfidence, {
-      width: pageWidth - margin * 2,
-      align: 'left',
-      lineGap: 4,
+  // "WHAT CHANGED" CHIPS: 3-5 chips with deltas
+  const chipsY = doc.y
+  const chips: Array<{ label: string; delta: string; color: string }> = []
+  
+  // Risk posture delta
+  if (data.delta !== undefined && data.delta !== 0) {
+    chips.push({
+      label: 'Risk posture',
+      delta: formatDelta(data.delta),
+      color: data.delta > 0 ? STYLES.colors.riskHigh : STYLES.colors.riskLow,
     })
+  }
+  
+  // High-risk jobs delta
+  if (data.deltas?.high_risk_jobs !== undefined && data.deltas.high_risk_jobs !== 0) {
+    chips.push({
+      label: 'High-risk jobs',
+      delta: formatDelta(data.deltas.high_risk_jobs),
+      color: data.deltas.high_risk_jobs > 0 ? STYLES.colors.riskHigh : STYLES.colors.riskLow,
+    })
+  }
+  
+  // Open incidents delta
+  if (data.deltas?.open_incidents !== undefined && data.deltas.open_incidents !== 0) {
+    chips.push({
+      label: 'Open incidents',
+      delta: formatDelta(data.deltas.open_incidents),
+      color: data.deltas.open_incidents > 0 ? STYLES.colors.riskHigh : STYLES.colors.riskLow,
+    })
+  }
+  
+  // Evidence percentage (if we have signoffs)
+  const totalSignoffs = (data.signed_signoffs ?? 0) + (data.pending_signoffs ?? 0)
+  if (totalSignoffs > 0) {
+    const evidencePct = Math.round((data.signed_signoffs / totalSignoffs) * 100)
+    chips.push({
+      label: 'Evidence',
+      delta: `${evidencePct}%`,
+      color: STYLES.colors.primaryText,
+    })
+  }
+  
+  // Sign-offs status
+  if (totalSignoffs > 0) {
+    chips.push({
+      label: 'Sign-offs',
+      delta: `${data.signed_signoffs}/${totalSignoffs}`,
+      color: STYLES.colors.primaryText,
+    })
+  }
+  
+  // Render chips (max 5, horizontal layout)
+  const chipHeight = 24
+  const chipGap = 12
+  let chipX = margin
+  const maxChips = Math.min(chips.length, 5)
+  
+  for (let i = 0; i < maxChips; i++) {
+    const chip = chips[i]
+    const chipText = `${chip.label} ${chip.delta}`
+    const chipWidth = doc.widthOfString(chipText) + 16 // Padding
+    
+    // Chip background
+    doc
+      .rect(chipX, chipsY, chipWidth, chipHeight)
+      .fill(STYLES.colors.cardBg)
+      .strokeColor(STYLES.colors.borderGray)
+      .lineWidth(0.5)
+      .stroke()
+    
+    // Chip text
+    doc
+      .fontSize(STYLES.sizes.caption)
+      .font(STYLES.fonts.body)
+      .fillColor(chip.color)
+      .text(chipText, chipX + 8, chipsY + 6, { width: chipWidth - 16 })
+    
+    chipX += chipWidth + chipGap
+  }
+  
+  doc.y = chipsY + chipHeight + 20
+  doc.moveDown(0.8)
 
-  doc.moveDown(1)
-
-  // Key insights (bullet points)
-  const insights: string[] = []
-  const hasSufficientData = data.high_risk_jobs > 0 || data.open_incidents > 0 || data.signed_signoffs > 0
-
+  // "SO WHAT" BULLETS: Max 3 bullets
+  const bullets: string[] = []
+  
   if (!hasSufficientData) {
-    insights.push('Insufficient job volume in selected window to compute posture score')
-    insights.push('Metrics will populate automatically as job data is recorded')
-    insights.push('Requires at least 1 job with risk assessment in the selected time range')
+    bullets.push('Metrics will populate automatically as job data is recorded')
+    bullets.push('Requires at least 1 job with risk assessment in the selected time range')
   } else {
+    // Prioritize: high-risk jobs, incidents, then signoffs
     if (data.high_risk_jobs > 0) {
-      insights.push(`${formatNumber(data.high_risk_jobs)} high-risk ${pluralize(data.high_risk_jobs, 'job', 'jobs')} requiring attention`)
+      bullets.push(`${formatNumber(data.high_risk_jobs)} high-risk ${pluralize(data.high_risk_jobs, 'job', 'jobs')} requiring attention`)
     }
-
-    if (data.open_incidents > 0) {
-      insights.push(`${formatNumber(data.open_incidents)} open ${pluralize(data.open_incidents, 'incident', 'incidents')} under investigation`)
+    
+    if (data.open_incidents > 0 && bullets.length < 3) {
+      bullets.push(`${formatNumber(data.open_incidents)} open ${pluralize(data.open_incidents, 'incident', 'incidents')} under investigation`)
     }
-
-    if (data.pending_signoffs > 0) {
-      insights.push(`${formatNumber(data.pending_signoffs)} pending ${pluralize(data.pending_signoffs, 'attestation', 'attestations')} awaiting signatures`)
-    }
-
-    if (data.ledger_integrity === 'verified') {
-      insights.push('Ledger integrity verified - all audit trails intact')
-    } else if (data.ledger_integrity === 'error') {
-      insights.push('Ledger integrity check failed - investigation required')
+    
+    if (data.pending_signoffs > 0 && bullets.length < 3) {
+      bullets.push(`${formatNumber(data.pending_signoffs)} pending ${pluralize(data.pending_signoffs, 'attestation', 'attestations')} awaiting signatures`)
     }
   }
-
-  // Sanitize all insights
-  const sanitizedInsights = insights.map(sanitizeText)
-
-  if (sanitizedInsights.length > 0) {
-    sanitizedInsights.forEach((insight) => {
+  
+  // Limit to 3 bullets
+  const displayBullets = bullets.slice(0, 3).map(sanitizeText)
+  
+  if (displayBullets.length > 0) {
+    displayBullets.forEach((bullet) => {
       ensureSpace(doc, 20, margin)
       doc
+        .fontSize(STYLES.sizes.body)
+        .font(STYLES.fonts.body)
         .fillColor(STYLES.colors.primaryText)
-        .text(`- ${insight}`, { // Use hyphen instead of bullet for compatibility
+        .text(`• ${bullet}`, {
           indent: 20,
           width: pageWidth - margin * 2 - 20,
-          lineGap: 5, // Better line spacing for bullets
+          lineGap: 4,
         })
-      doc.moveDown(0.4)
+      doc.moveDown(0.3)
     })
   }
 
-  doc.moveDown(1.2)
+  doc.moveDown(1)
 }
 
 /**
@@ -608,24 +702,40 @@ function buildMetricsRows(data: RiskPostureData): Array<{ label: string; value: 
     { label: 'Open Incidents', value: data.open_incidents, delta: data.deltas?.open_incidents },
     { label: 'Recent Violations', value: data.recent_violations, delta: data.deltas?.violations },
     { label: 'Flagged for Review', value: data.flagged_jobs, delta: data.deltas?.flagged_jobs },
-    { label: 'Pending Sign-offs', value: data.pending_signoffs ?? 0, delta: data.deltas?.pending_signoffs },
-    { label: 'Signed Sign-offs', value: data.signed_signoffs ?? 0, delta: data.deltas?.signed_signoffs },
+    { label: 'Sign-offs (Pending)', value: data.pending_signoffs ?? 0, delta: data.deltas?.pending_signoffs },
+    { label: 'Sign-offs (Signed)', value: data.signed_signoffs ?? 0, delta: data.deltas?.signed_signoffs },
     // CRITICAL: Only show Proof Packs if count > 0 (prevents junk page)
     ...(data.proof_packs_generated > 0 ? [{ label: 'Proof Packs Generated', value: data.proof_packs_generated, delta: data.deltas?.proof_packs }] : []),
   ]
   
-  // Normalize values: convert numbers to strings, handle null/undefined
+  // Normalize values: convert numbers to strings, handle null/undefined with plain English
   return rows
     .filter(row => row.label && row.label.trim() !== '') // Filter out invalid rows
-    .map(row => ({
-      label: row.label,
-      value: row.value === null || row.value === undefined 
-        ? '—' 
-        : (typeof row.value === 'string' ? row.value : formatNumber(row.value)),
-      delta: row.delta === null || row.delta === undefined 
-        ? '—' 
-        : formatDelta(row.delta ?? 0), // formatDelta expects number
-    }))
+    .map(row => {
+      // Value: use plain English instead of "—"
+      let valueText: string
+      if (row.value === null || row.value === undefined) {
+        valueText = 'Not measured'
+      } else if (typeof row.value === 'string') {
+        valueText = row.value
+      } else {
+        valueText = formatNumber(row.value)
+      }
+      
+      // Delta: use plain English instead of "—"
+      let deltaText: string
+      if (row.delta === null || row.delta === undefined) {
+        deltaText = 'No change'
+      } else {
+        deltaText = formatDelta(row.delta)
+      }
+      
+      return {
+        label: row.label,
+        value: valueText,
+        delta: deltaText,
+      }
+    })
 }
 
 function renderMetricsTable(
@@ -759,8 +869,8 @@ function renderMetricsTable(
       color: STYLES.colors.primaryText,
     })
 
-    // Delta (already normalized: "—" or formatted delta string)
-    const deltaColor = metric.delta === '—' 
+    // Delta (already normalized: "No change" or formatted delta string)
+    const deltaColor = metric.delta === 'No change' || metric.delta === '—'
       ? STYLES.colors.secondaryText 
       : (metric.delta.startsWith('+') ? STYLES.colors.riskHigh : STYLES.colors.riskLow)
     safeText(doc, metric.delta, margin + col1Width + col2Width + cellPadding, rowY + cellPadding, {
@@ -1131,6 +1241,78 @@ function addHeaderFooter(
       font: STYLES.fonts.body,
       color: STYLES.colors.secondaryText,
     })
+    
+    // Report Integrity capsule on page 2 (bottom-right)
+    if (pageIndex === 1) { // Page 2 (0-indexed, so page 2 is index 1)
+      const capsuleWidth = 200
+      const capsuleHeight = 80
+      const capsuleX = pageWidth - STYLES.spacing.margin - capsuleWidth
+      const capsuleY = footerStartY - capsuleHeight - 20 // Above footer
+      
+      // Capsule background
+      doc
+        .rect(capsuleX, capsuleY, capsuleWidth, capsuleHeight)
+        .fill(STYLES.colors.cardBg)
+        .strokeColor(STYLES.colors.borderGray)
+        .lineWidth(0.5)
+        .stroke()
+      
+      // Capsule content
+      const capsulePadding = 10
+      const capsuleContentX = capsuleX + capsulePadding
+      const capsuleContentY = capsuleY + capsulePadding
+      const capsuleContentWidth = capsuleWidth - capsulePadding * 2
+      
+      // Title
+      doc
+        .fontSize(STYLES.sizes.caption)
+        .font(STYLES.fonts.header)
+        .fillColor(STYLES.colors.primaryText)
+        .text('Report Integrity', capsuleContentX, capsuleContentY, { width: capsuleContentWidth })
+      
+      // Report ID
+      const reportIdY = capsuleContentY + 14
+      doc
+        .fontSize(8)
+        .font(STYLES.fonts.body)
+        .fillColor(STYLES.colors.secondaryText)
+        .text(`Report ID: RM-${reportId.substring(0, 8)}`, capsuleContentX, reportIdY, { width: capsuleContentWidth })
+      
+      // Generated timestamp
+      const generatedY = reportIdY + 12
+      const generatedText = generatedAt.toLocaleString('en-US', {
+        timeZone: 'America/New_York',
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+        timeZoneName: 'short'
+      })
+      doc
+        .fontSize(8)
+        .font(STYLES.fonts.body)
+        .fillColor(STYLES.colors.secondaryText)
+        .text(`Generated: ${sanitizeText(generatedText)}`, capsuleContentX, generatedY, { width: capsuleContentWidth })
+      
+      // Time window
+      const windowY = generatedY + 12
+      doc
+        .fontSize(8)
+        .font(STYLES.fonts.body)
+        .fillColor(STYLES.colors.secondaryText)
+        .text(`Window: ${formatTimeRange(timeRange)}`, capsuleContentX, windowY, { width: capsuleContentWidth })
+      
+      // Verify link (if baseUrl is available, would need to pass it)
+      // For now, just show the endpoint
+      const verifyY = windowY + 12
+      doc
+        .fontSize(8)
+        .font(STYLES.fonts.body)
+        .fillColor(STYLES.colors.accent)
+        .text(`Verify: /api/executive/brief/${reportId.substring(0, 8)}`, capsuleContentX, verifyY, { width: capsuleContentWidth })
+    }
   }
 }
 
@@ -1331,7 +1513,7 @@ async function buildExecutiveBriefPDF(
     
     // Region B: Premium KPI Cards (fixed height ~95px)
     const kpiCardsY = doc.y
-    renderKPIStrip(doc, data, pageWidth, kpiCardsY)
+    renderKPIStrip(doc, data, pageWidth, kpiCardsY, timeRange)
     const afterKPIsY = doc.y
 
     // Region C: Risk Posture Gauge (fixed height ~100px)
@@ -1346,7 +1528,7 @@ async function buildExecutiveBriefPDF(
 
     // Region D: Executive Summary (compact, max 3 bullets)
     const summaryStartY = doc.y
-    renderExecutiveSummary(doc, data, pageWidth, margin)
+    renderExecutiveSummary(doc, data, pageWidth, margin, timeRange)
     const afterSummaryY = doc.y
 
     // Calculate remaining space on Page 1

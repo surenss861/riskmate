@@ -25,13 +25,14 @@ export const PDF_TOKENS = {
     body: 'Helvetica',
   },
   sizes: {
-    h1: 32, // Premium title size
-    h2: 22, // Section headers
+    h1: 30, // Premium title size (28-32 range)
+    h2: 17, // Section headers (16-18 range)
     h3: 16, // Org name
-    body: 11,
-    caption: 9,
+    body: 10.5, // Body text (10.5-11 range)
+    caption: 9, // Small text
     kpiValue: 24, // Big numbers in KPI cards
-    kpiLabel: 9,
+    kpiLabel: 9, // KPI label
+    kpiDelta: 8, // KPI delta sublabel
   },
   spacing: {
     margin: 48, // 6 * 8pt

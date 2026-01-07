@@ -42,9 +42,10 @@ export function sanitizeText(text: string): string {
 
 /**
  * Format delta with sign
+ * Returns "No change" for 0 or undefined, otherwise formatted with sign
  */
 export function formatDelta(delta?: number): string {
-  if (delta === undefined || delta === 0) return '—' // Use em dash for empty
+  if (delta === undefined || delta === 0) return 'No change'
   const sign = delta > 0 ? '+' : ''
   return `${sign}${delta}`
 }
