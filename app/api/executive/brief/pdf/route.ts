@@ -754,47 +754,51 @@ function renderExecutiveSummary(
   doc.y = headlineY + STYLES.sizes.h1 * 1.25 + 16
   doc.moveDown(0.5)
 
-  // "WHAT CHANGED" CHIPS: Always show all 5 chips (completeness requirement)
+  // "WHAT CHANGED" CHIPS: Insightful format "Label: Value (Delta)" - always show all 5 chips
   const chipsY = doc.y
   const chips: Array<{ label: string; delta: string; color: string }> = []
   
-  // Check if we have any deltas (to show note once instead of repeating)
-  const hasAnyDeltas = data.delta !== undefined || 
-                       data.deltas?.high_risk_jobs !== undefined || 
-                       data.deltas?.open_incidents !== undefined
+  // Check if we have ANY prior period data (deltas exist = prior period available)
+  // Only show "Prior period unavailable" if ALL deltas are null/undefined
+  const hasPriorPeriodData = data.delta !== undefined || 
+                             data.deltas?.high_risk_jobs !== undefined || 
+                             data.deltas?.open_incidents !== undefined ||
+                             data.deltas?.violations !== undefined ||
+                             data.deltas?.flagged_jobs !== undefined ||
+                             data.deltas?.pending_signoffs !== undefined
   
-  // 1. Risk posture (score + delta if available)
+  // 1. Risk posture: Score (Delta)
   const postureScore = data.posture_score !== undefined ? `${data.posture_score}` : 'N/A'
-  const postureDeltaText = data.delta !== undefined ? `(${formatDelta(data.delta)})` : ''
+  const postureDelta = data.delta !== undefined ? formatDelta(data.delta) : 'No change'
   chips.push({
     label: 'Risk posture',
-    delta: `${postureScore} ${postureDeltaText}`.trim(),
+    delta: `${postureScore} (${postureDelta})`,
     color: data.delta !== undefined && data.delta !== 0 
       ? (data.delta > 0 ? STYLES.colors.riskHigh : STYLES.colors.riskLow)
       : STYLES.colors.primaryText,
   })
   
-  // 2. High-risk jobs (count + delta if available)
-  const jobsDeltaText = data.deltas?.high_risk_jobs !== undefined ? `(${formatDelta(data.deltas.high_risk_jobs)})` : '(No change)'
+  // 2. High-risk jobs: Count (Delta)
+  const jobsDelta = data.deltas?.high_risk_jobs !== undefined ? formatDelta(data.deltas.high_risk_jobs) : 'No change'
   chips.push({
-    label: 'High-risk',
-    delta: `${data.high_risk_jobs} ${jobsDeltaText}`,
+    label: 'High-risk jobs',
+    delta: `${data.high_risk_jobs} (${jobsDelta})`,
     color: data.deltas?.high_risk_jobs !== undefined && data.deltas.high_risk_jobs !== 0
       ? (data.deltas.high_risk_jobs > 0 ? STYLES.colors.riskHigh : STYLES.colors.riskLow)
       : STYLES.colors.primaryText,
   })
   
-  // 3. Open incidents (count + delta if available)
-  const incidentsDeltaText = data.deltas?.open_incidents !== undefined ? `(${formatDelta(data.deltas.open_incidents)})` : '(No change)'
+  // 3. Open incidents: Count (Delta)
+  const incidentsDelta = data.deltas?.open_incidents !== undefined ? formatDelta(data.deltas.open_incidents) : 'No change'
   chips.push({
-    label: 'Incidents',
-    delta: `${data.open_incidents} ${incidentsDeltaText}`,
+    label: 'Open incidents',
+    delta: `${data.open_incidents} (${incidentsDelta})`,
     color: data.deltas?.open_incidents !== undefined && data.deltas.open_incidents !== 0
       ? (data.deltas.open_incidents > 0 ? STYLES.colors.riskHigh : STYLES.colors.riskLow)
       : STYLES.colors.primaryText,
   })
   
-  // 4. Attestation % (value - fixed label to match actual calculation)
+  // 4. Attestation: Percentage (No change - attestation deltas not tracked yet)
   const totalSignoffs = (data.signed_signoffs ?? 0) + (data.pending_signoffs ?? 0)
   const attestationPct = totalSignoffs > 0 
     ? Math.round((data.signed_signoffs / totalSignoffs) * 100)
@@ -805,7 +809,7 @@ function renderExecutiveSummary(
     color: STYLES.colors.primaryText,
   })
   
-  // 5. Sign-offs (signed/required)
+  // 5. Sign-offs: Signed/Total (No change - sign-off deltas not tracked yet)
   chips.push({
     label: 'Sign-offs',
     delta: `${data.signed_signoffs ?? 0}/${totalSignoffs} (No change)`,
@@ -876,8 +880,9 @@ function renderExecutiveSummary(
   const linesUsed = Math.min(Math.ceil(chips.length / maxChipsPerLine), maxLines)
   doc.y = chipsY + (chipHeight * linesUsed) + (8 * (linesUsed - 1)) + 20
   
-  // Show single note about prior period if no deltas available (instead of repeating "Not measured")
-  if (!hasAnyDeltas && hasSpace(doc, 15)) {
+  // Show note ONLY if prior period data is actually unavailable (all deltas are null/undefined)
+  // If any deltas exist, prior period is available and note should not appear
+  if (!hasPriorPeriodData && hasSpace(doc, 15)) {
     const timeRangeLabel = timeRange === '7d' ? 'prior 7d' : timeRange === '30d' ? 'prior 30d' : timeRange === '90d' ? 'prior 90d' : 'prior period'
     doc
       .fontSize(7)
@@ -1466,35 +1471,41 @@ function renderMethodologyShort(
   
   methodologyPoints.forEach((point) => {
     if (hasSpace(doc, 18)) {
-      // Proper hanging indent: bullet at columnX, text indented
+      // Proper hanging indent with measured layout: bullet at columnX, text indented
       const bulletX = columnX
-      const textX = columnX + 12
-      const textWidth = columnWidth - 12 // Constrain to column width
+      const indent = 12
+      const textX = columnX + indent
+      const textWidth = columnWidth - indent // Constrain to column width (no overflow)
       
-      // Bullet
+      const startY = doc.y
+      
+      // Bullet (fixed position, never wraps)
       doc
         .fontSize(STYLES.sizes.body)
         .font(STYLES.fonts.body)
         .fillColor(STYLES.colors.primaryText)
-        .text('•', bulletX, doc.y, { width: 10 })
+        .text('•', bulletX, startY, { width: 10, continued: false })
       
-      // Text with proper wrapping (respects column width)
+      // Text with proper wrapping (measured layout - respects column width exactly)
       const pointText = sanitizeText(point)
-      const lines = doc.heightOfString(pointText, {
+      const textHeight = doc.heightOfString(pointText, {
         width: textWidth,
         lineGap: 3,
       })
       
+      // Render text with continued: false to prevent bullet from wrapping
       doc
         .fontSize(STYLES.sizes.body)
         .font(STYLES.fonts.body)
         .fillColor(STYLES.colors.primaryText)
-        .text(pointText, textX, doc.y, {
+        .text(pointText, textX, startY, {
           width: textWidth,
           lineGap: 3,
+          continued: false, // Critical: prevents bullet from ending up alone
         })
       
-      doc.y += lines + 4
+      // Manual Y advancement (bullet never ends up alone)
+      doc.y = startY + textHeight + 4
     }
   })
   
@@ -1555,6 +1566,75 @@ function renderDataFreshnessCompact(
     })
   
   doc.moveDown(0.3)
+}
+
+/**
+ * Render Top 3 items needing attention (Page 1 artifact to fill whitespace)
+ */
+function renderTopItemsNeedingAttention(
+  doc: PDFKit.PDFDocument,
+  data: RiskPostureData,
+  pageWidth: number,
+  margin: number
+): void {
+  if (!hasSpace(doc, 60)) return
+  
+  addSectionDivider(doc, pageWidth, margin)
+  
+  safeText(doc, 'Items Needing Attention', margin, doc.y, {
+    fontSize: STYLES.sizes.h2,
+    font: STYLES.fonts.header,
+    color: STYLES.colors.primaryText,
+  })
+  doc.moveDown(0.5)
+  
+  const items: Array<{ label: string; count: number; priority: 'high' | 'medium' | 'low' }> = []
+  
+  // High-risk jobs (highest priority)
+  if (data.high_risk_jobs > 0) {
+    items.push({ label: 'High-risk jobs', count: data.high_risk_jobs, priority: 'high' })
+  }
+  
+  // Open incidents
+  if (data.open_incidents > 0) {
+    items.push({ label: 'Open incidents', count: data.open_incidents, priority: 'high' })
+  }
+  
+  // Pending sign-offs
+  if (data.pending_signoffs > 0) {
+    items.push({ label: 'Pending sign-offs', count: data.pending_signoffs, priority: 'medium' })
+  }
+  
+  // Show top 3 items
+  const displayItems = items.slice(0, 3)
+  
+  if (displayItems.length === 0) {
+    safeText(doc, 'No items require immediate attention', margin + 20, doc.y, {
+      width: pageWidth - margin * 2 - 20,
+      fontSize: STYLES.sizes.body,
+      font: STYLES.fonts.body,
+      color: STYLES.colors.secondaryText,
+    })
+    doc.moveDown(0.5)
+    return
+  }
+  
+  displayItems.forEach((item) => {
+    if (!hasSpace(doc, 20)) return
+    
+    const itemColor = item.priority === 'high' ? STYLES.colors.riskHigh : STYLES.colors.riskMedium
+    const itemText = `${item.count} ${item.label}`
+    
+    safeText(doc, `• ${itemText}`, margin + 20, doc.y, {
+      width: pageWidth - margin * 2 - 20,
+      fontSize: STYLES.sizes.body,
+      font: STYLES.fonts.body,
+      color: itemColor,
+    })
+    doc.moveDown(0.4)
+  })
+  
+  doc.moveDown(0.5)
 }
 
 /**
@@ -1755,7 +1835,8 @@ function addHeaderFooter(
   timeWindow: { start: Date; end: Date },
   baseUrl: string | undefined,
   pdfHash?: string,
-  qrCodeBuffer?: Buffer | null
+  qrCodeBuffer?: Buffer | null,
+  page2ColumnLayout?: { leftX: number; leftW: number; rightX: number; rightW: number; gutter: number }
 ): void {
   const range = doc.bufferedPageRange()
   const pageCount = range.count
@@ -1825,13 +1906,11 @@ function addHeaderFooter(
     })
     
     // Report Integrity capsule on page 2 (right column, bottom-right) - upgraded to audit artifact
-    if (pageIndex === 1) { // Page 2 (0-indexed, so page 2 is index 1)
-      // Right column position (30-35% of page width)
-      const rightColumnWidth = Math.floor((pageWidth - STYLES.spacing.margin * 2) * 0.32)
-      const rightColumnX = pageWidth - STYLES.spacing.margin - rightColumnWidth
-      const capsuleWidth = rightColumnWidth
-      const capsuleHeight = 180 // Taller for QR code + hash + trust signals
-      const capsuleX = rightColumnX
+    if (pageIndex === 1 && page2ColumnLayout) { // Page 2 (0-indexed, so page 2 is index 1)
+      // Use the exact column layout passed from Page 2 rendering
+      const capsuleWidth = page2ColumnLayout.rightW - 4 // Slight padding inside right column
+      const capsuleHeight = 200 // Taller for QR code + hash + trust signals
+      const capsuleX = page2ColumnLayout.rightX + 2 // Slight padding from column edge
       const capsuleY = footerStartY - capsuleHeight - 20 // Above footer
       
       // Capsule background (more prominent)
@@ -1857,10 +1936,10 @@ function addHeaderFooter(
         .text('Report Integrity', capsuleContentX, currentY, { width: capsuleContentWidth })
       currentY += 14
       
-      // Report ID
+      // Report ID (monospace for verification stamp feel)
       doc
         .fontSize(8)
-        .font(STYLES.fonts.body)
+        .font('Courier') // Monospace font for IDs/hashes
         .fillColor(STYLES.colors.secondaryText)
         .text(`Report ID: RM-${reportId.substring(0, 8)}`, capsuleContentX, currentY, { width: capsuleContentWidth })
       currentY += 11
@@ -1911,12 +1990,12 @@ function addHeaderFooter(
         .text('Sources: jobs, incidents, attestations', capsuleContentX, currentY, { width: capsuleContentWidth })
       currentY += 11
       
-      // Report hash (SHA-256) - shortened format
+      // Report hash (SHA-256) - shortened format (monospace for verification)
       if (pdfHash) {
         const hashShort = `${pdfHash.substring(0, 4)}...${pdfHash.substring(pdfHash.length - 4)}`
         doc
           .fontSize(8)
-          .font(STYLES.fonts.body)
+          .font('Courier') // Monospace font for hash
           .fillColor(STYLES.colors.secondaryText)
           .text(`Hash (SHA-256): ${hashShort}`, capsuleContentX, currentY, { width: capsuleContentWidth })
         currentY += 11
@@ -2247,6 +2326,11 @@ async function buildExecutiveBriefPDF(
       // Metrics Table doesn't fit - skip it on Page 1, will render on Page 2
       // Render compact Data Coverage on Page 1 only
       renderDataCoverage(doc, data, pageWidth, margin)
+      
+      // Page 1 artifact: Top 3 items needing attention (fills whitespace, kills template vibe)
+      if (hasSpace(doc, 60)) {
+        renderTopItemsNeedingAttention(doc, data, pageWidth, margin)
+      }
     }
 
     // ============================================
@@ -2258,14 +2342,20 @@ async function buildExecutiveBriefPDF(
       ensureSpace(doc, 1000, margin) // Force new page
     }
 
-    // Page 2 two-column grid layout:
+    // Page 2 two-column grid layout with strict boundaries:
     // Left column (65-70%): Metrics Table (if needed) → Recommended Actions → Methodology → Data Freshness
     // Right column (30-35%): Report Integrity capsule (fixed position, bottom-right)
+    // Gutter: 24px between columns (hard rule - no overlap ever)
     
-    const leftColumnWidth = Math.floor((pageWidth - margin * 2) * 0.68) // 68% for left
-    const rightColumnWidth = (pageWidth - margin * 2) - leftColumnWidth - 20 // 32% for right, 20px gap
+    const gutter = 24 // Hard gutter between columns
+    const availableWidth = pageWidth - margin * 2 - gutter
+    const leftColumnWidth = Math.floor(availableWidth * 0.68) // 68% of available (after gutter)
+    const rightColumnWidth = availableWidth - leftColumnWidth // 32% of available
     const leftColumnX = margin
-    const rightColumnX = margin + leftColumnWidth + 20
+    const rightColumnX = margin + leftColumnWidth + gutter
+    
+    // Store for Integrity capsule positioning
+    const page2ColumnLayout = { leftX: leftColumnX, leftW: leftColumnWidth, rightX: rightColumnX, rightW: rightColumnWidth, gutter }
     const page2StartY = doc.y
 
     // Metrics Table on Page 2 if it didn't fit on Page 1 (full width, then switch to columns)
@@ -2303,7 +2393,8 @@ async function buildExecutiveBriefPDF(
     // For now, we'll calculate it in the callback and pass undefined here
     // The hash will be added in a post-pass if needed
     // QR code is pre-generated and passed in
-    addHeaderFooter(doc, organizationName, timeRange, reportId, generatedAt, buildSha, timeWindow, baseUrl, undefined, qrCodeBuffer)
+    // Pass Page 2 column layout for Integrity capsule positioning
+    addHeaderFooter(doc, organizationName, timeRange, reportId, generatedAt, buildSha, timeWindow, baseUrl, undefined, qrCodeBuffer, page2ColumnLayout)
 
     doc.end()
   })
