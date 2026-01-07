@@ -815,21 +815,23 @@ function renderExecutiveSummary(
       : STYLES.colors.primaryText,
   })
   
-  // 4. Attestation: Percentage (No change - attestation deltas not tracked yet)
+  // 4. Attestation: Percentage (attestation deltas not tracked yet - show N/A if no prior period)
   const totalSignoffs = (data.signed_signoffs ?? 0) + (data.pending_signoffs ?? 0)
   const attestationPct = totalSignoffs > 0 
     ? Math.round((data.signed_signoffs / totalSignoffs) * 100)
     : 0
+  const attestationDelta = hasPriorPeriodData ? 'No change' : 'N/A'
   chips.push({
-    label: 'Attestation',
-    delta: `${attestationPct}% (No change)`,
+    label: 'Attestation coverage',
+    delta: `${attestationPct}% (${attestationDelta})`,
     color: STYLES.colors.primaryText,
   })
   
-  // 5. Sign-offs: Signed/Total (No change - sign-off deltas not tracked yet)
+  // 5. Sign-offs: Signed/Total (sign-off deltas not tracked yet - show N/A if no prior period)
+  const signoffsDelta = hasPriorPeriodData ? 'No change' : 'N/A'
   chips.push({
     label: 'Sign-offs',
-    delta: `${data.signed_signoffs ?? 0}/${totalSignoffs} (No change)`,
+    delta: `${data.signed_signoffs ?? 0}/${totalSignoffs} (${signoffsDelta})`,
     color: STYLES.colors.primaryText,
   })
   
@@ -897,9 +899,13 @@ function renderExecutiveSummary(
   const linesUsed = Math.min(Math.ceil(chips.length / maxChipsPerLine), maxLines)
   doc.y = chipsY + (chipHeight * linesUsed) + (8 * (linesUsed - 1)) + 20
   
-  // Show note ONLY if prior period data is actually unavailable (all deltas are null/undefined)
-  // If any deltas exist, prior period is available and note should not appear
-  if (!hasPriorPeriodData && hasSpace(doc, 15)) {
+  // Show note ONLY if prior period data is actually unavailable (all tracked deltas are null/undefined)
+  // CRITICAL: If we're showing "No change" anywhere (even as default), we DO have prior period data
+  // Check if any chips show "No change" - if so, don't show the note
+  const anyChipShowsNoChange = chips.some(chip => chip.delta.includes('No change'))
+  
+  // Only show note if NO prior period data AND no chips show "No change"
+  if (!hasPriorPeriodData && !anyChipShowsNoChange && hasSpace(doc, 15)) {
     const timeRangeLabel = timeRange === '7d' ? 'prior 7d' : timeRange === '30d' ? 'prior 30d' : timeRange === '90d' ? 'prior 90d' : 'prior period'
     doc
       .fontSize(7)
@@ -996,7 +1002,7 @@ function buildMetricsRows(data: RiskPostureData): Array<{ label: string; value: 
     { label: 'Sign-offs (Pending)', value: data.pending_signoffs ?? 0, delta: data.deltas?.pending_signoffs },
     { label: 'Sign-offs (Signed)', value: data.signed_signoffs ?? 0, delta: data.deltas?.signed_signoffs },
     // CRITICAL: Only show Proof Packs if count > 0 (prevents junk page)
-    ...(data.proof_packs_generated > 0 ? [{ label: 'Proof Packs Generated', value: data.proof_packs_generated, delta: data.deltas?.proof_packs }] : []),
+    ...(data.proof_packs_generated > 0 ? [{ label: 'Proof Packs Generated (exportable audit packs)', value: data.proof_packs_generated, delta: data.deltas?.proof_packs }] : []),
   ]
   
   // Normalize values: convert numbers to strings, handle null/undefined with plain English
@@ -1369,9 +1375,9 @@ function renderMicroTopDrivers(
   const timeRangeLabel = timeRange === '7d' ? 'last 7d' : timeRange === '30d' ? 'last 30d' : timeRange === '90d' ? 'last 90d' : 'selected period'
   
   if (top3.length === 0) {
-    // Show "Not enough signal yet" instead of hiding
+    // Intentional fallback: show clear message about signal requirements
     ensureSpace(doc, 25, margin)
-    safeText(doc, `Top drivers (${timeRangeLabel}): Not enough signal yet`, margin, doc.y, {
+    safeText(doc, `Top drivers (${timeRangeLabel}): Not enough signal (need ≥3 events)`, margin, doc.y, {
       width: pageWidth - margin * 2,
       fontSize: STYLES.sizes.caption,
       font: STYLES.fonts.body,
@@ -1496,12 +1502,12 @@ function renderMethodologyShort(
       
       const startY = doc.y
       
-      // Bullet (fixed position, never wraps)
+      // Bullet (use hyphen for consistency and font safety)
       doc
         .fontSize(STYLES.sizes.body)
         .font(STYLES.fonts.body)
         .fillColor(STYLES.colors.primaryText)
-        .text('•', bulletX, startY, { width: 10, continued: false })
+        .text('-', bulletX, startY, { width: 10, continued: false })
       
       // Text with proper wrapping (measured layout - respects column width exactly)
       const pointText = sanitizeText(point)
@@ -1640,9 +1646,13 @@ function renderTopItemsNeedingAttention(
     if (!hasSpace(doc, 20)) return
     
     const itemColor = item.priority === 'high' ? STYLES.colors.riskHigh : STYLES.colors.riskMedium
-    const itemText = `${item.count} ${item.label}`
+    // Fix grammar: use singular/plural correctly
+    const itemLabel = item.count === 1 
+      ? item.label.replace(/s$/, '') // Remove 's' for singular
+      : item.label
+    const itemText = `${item.count} ${itemLabel.toLowerCase()}` // Lowercase for consistency
     
-    safeText(doc, `• ${itemText}`, margin + 20, doc.y, {
+    safeText(doc, `- ${itemText}`, margin + 20, doc.y, {
       width: pageWidth - margin * 2 - 20,
       fontSize: STYLES.sizes.body,
       font: STYLES.fonts.body,
@@ -2050,45 +2060,42 @@ function addHeaderFooter(
         ? `${baseUrl}/api/executive/brief/${reportId.substring(0, 8)}`
         : `/api/executive/brief/${reportId.substring(0, 8)}`
       
-      // Create short, unbreakable link (truncate if needed, but keep on one line)
+      // Create pretty short link (show domain + short ID, embed full URL in annotation)
       const reportIdShort = reportId.substring(0, 8)
-      const shortUrl = baseUrl 
-        ? `${baseUrl.replace(/^https?:\/\//, '').split('/')[0]}/verify/RM-${reportIdShort}`
-        : `riskmate.app/verify/RM-${reportIdShort}`
+      const domain = baseUrl 
+        ? baseUrl.replace(/^https?:\/\//, '').split('/')[0]
+        : 'riskmate.app'
       
-      // Measure and ensure link fits on one line (truncate with ellipsis if needed)
+      // Pretty short link: "riskmate.app/verify/RM-abc12345"
+      const prettyLink = `${domain}/verify/RM-${reportIdShort}`
+      
+      // Measure and ensure link fits on one line
       doc.fontSize(8).font(STYLES.fonts.body)
       const linkPrefix = 'Verify: '
-      let displayUrl = shortUrl
-      const maxLinkWidth = capsuleContentWidth - doc.widthOfString(linkPrefix)
-      
-      // If URL is too long, truncate with ellipsis
-      if (doc.widthOfString(displayUrl) > maxLinkWidth) {
-        const ellipsis = '...'
-        const ellipsisWidth = doc.widthOfString(ellipsis)
-        let truncated = displayUrl
-        while (doc.widthOfString(truncated) > maxLinkWidth - ellipsisWidth && truncated.length > 10) {
-          truncated = truncated.slice(0, -1)
-        }
-        displayUrl = truncated + ellipsis
-      }
-      
-      const linkText = linkPrefix + displayUrl
+      const linkText = linkPrefix + prettyLink
       const linkTextWidth = doc.widthOfString(linkText)
       const linkTextHeight = 10
+      const maxLinkWidth = capsuleContentWidth
+      
+      // If link is too long, show just the short ID
+      let displayText = linkText
+      if (linkTextWidth > maxLinkWidth) {
+        displayText = `${linkPrefix}RM-${reportIdShort}`
+      }
       
       // Draw clickable link text (one line, no wrapping)
       doc
         .fontSize(8)
         .font(STYLES.fonts.body)
         .fillColor(STYLES.colors.accent)
-        .text(linkText, capsuleContentX, currentY, { 
+        .text(displayText, capsuleContentX, currentY, { 
           width: capsuleContentWidth,
           lineBreak: false, // Prevent wrapping
         })
       
-      // Add clickable link annotation (PDFKit supports links) - full URL
-      doc.link(capsuleContentX, currentY, linkTextWidth, linkTextHeight, verifyUrl)
+      // Add clickable link annotation (PDFKit supports links) - full URL in annotation
+      const displayTextWidth = doc.widthOfString(displayText)
+      doc.link(capsuleContentX, currentY, displayTextWidth, linkTextHeight, verifyUrl)
     }
   }
 }
