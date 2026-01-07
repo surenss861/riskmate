@@ -2147,12 +2147,13 @@ function addHeaderFooter(
       }
       
       // CRITICAL: Build verify display from constant domain + constant path
-      // Never allow display to degrade to ID-only - always include /verify/ path
+      // NEVER allow display to degrade to ID-only - always include /verify/ path
+      // This is a hard requirement for board-grade credibility
       const reportIdShort = reportId.substring(0, 8)
       const DISPLAY_DOMAIN = 'riskmate.app' // Constant domain for display
-      const verifyPath = `verify/RM-${reportIdShort}` // Constant path (always includes verify/)
+      const verifyPath = `verify/RM-${reportIdShort}` // Constant path (ALWAYS includes verify/)
       
-      // Build display string: always includes verify/ path
+      // Build display string: ALWAYS includes verify/ path from the start
       // Preferred: "riskmate.app/verify/RM-xxxx"
       // Fallback: "verify/RM-xxxx" (still contains verify/)
       // NEVER: just "RM-xxxx" or just the ID
@@ -2171,45 +2172,43 @@ function addHeaderFooter(
       const linkTextHeight = 10
       const maxLinkWidth = capsuleContentWidth
       
-      // Determine display: prefer full, fallback to path-only (but ALWAYS includes verify/)
+      // CRITICAL: Build display text with strict fallback ladder
+      // Every fallback MUST include verify/ path - never allow ID-only
       let displayText: string
       if (preferredWidth <= maxLinkWidth) {
         displayText = preferredText // "Verification endpoint: riskmate.app/verify/RM-xxxx"
       } else {
-        // Fallback: "Verification endpoint: verify/RM-xxxx" (path only, but still includes verify/)
+        // Fallback 1: "Verification endpoint: verify/RM-xxxx" (path only, but still includes verify/)
         const fallbackText = linkLabel + verifyPath
         const fallbackWidth = doc.widthOfString(fallbackText)
         if (fallbackWidth <= maxLinkWidth) {
           displayText = fallbackText
         } else {
-          // Last resort: "Verify: verify/RM-xxxx" (shortened label, but path always included)
+          // Fallback 2: "Verify: verify/RM-xxxx" (shortened label, but path always included)
           const minimalText = `Verify: ${verifyPath}`
           const minimalWidth = doc.widthOfString(minimalText)
           if (minimalWidth <= maxLinkWidth) {
             displayText = minimalText
           } else {
-            // Absolute minimum: just the path "verify/RM-xxxx" (no label, but path always included)
-            // CRITICAL: This is the minimum - NEVER drop the path
+            // Fallback 3: just the path "verify/RM-xxxx" (no label, but path ALWAYS included)
+            // CRITICAL: This is the absolute minimum - NEVER drop the path
             displayText = verifyPath
           }
         }
       }
       
       // CRITICAL: Hard assert - displayText MUST always contain "verify/"
-      // Check for ID-only patterns and force the path
+      // This should never fail, but if it does, we force it immediately
       if (!displayText.includes('verify/')) {
-        // Emergency fix: if displayText is just the ID or doesn't have verify/, force prepend
-        if (displayText.includes(`RM-${reportIdShort}`) && !displayText.includes('verify/')) {
-          displayText = displayText.replace(`RM-${reportIdShort}`, verifyPath)
-        } else {
-          displayText = verifyPath // Force to minimum safe display (always includes verify/)
-        }
+        console.error(`[PDF] CRITICAL: Verify display missing path! displayText="${displayText}", forcing verifyPath="${verifyPath}"`)
+        displayText = verifyPath // Force to minimum safe display (always includes verify/)
       }
       
-      // CRITICAL: Final validation - check for ID-only patterns before sanitization
-      // If displayText matches just "RM-xxxx" or just the ID, force prepend verify/
+      // CRITICAL: Additional validation - check for ID-only patterns
+      // If displayText matches just "RM-xxxx" or just the ID (without verify/), force prepend verify/
       const idOnlyPattern = new RegExp(`(^|\\s|:)RM-${reportIdShort}(\\s|$|:)`)
       if (idOnlyPattern.test(displayText) && !displayText.includes('verify/')) {
+        console.error(`[PDF] CRITICAL: Verify display is ID-only! displayText="${displayText}", forcing verifyPath="${verifyPath}"`)
         displayText = verifyPath // Force to minimum safe display
       }
       
@@ -2217,14 +2216,21 @@ function addHeaderFooter(
       let sanitizedDisplayText = sanitizeAscii(displayText)
       
       // CRITICAL: Final check after sanitization - ensure verify/ is still present
-      // If sanitization somehow removed verify/, force it back
+      // If sanitization somehow removed verify/, force it back immediately
       if (!sanitizedDisplayText.includes('verify/')) {
+        console.error(`[PDF] CRITICAL: Sanitization removed verify/ path! sanitized="${sanitizedDisplayText}", original="${displayText}", forcing verifyPath="${verifyPath}"`)
         // If sanitization removed verify/, force it back
         if (sanitizedDisplayText.includes(`RM-${reportIdShort}`)) {
           sanitizedDisplayText = sanitizedDisplayText.replace(`RM-${reportIdShort}`, verifyPath)
         } else {
           sanitizedDisplayText = verifyPath // Force to minimum safe display
         }
+      }
+      
+      // CRITICAL: Final validation before rendering - one last check
+      if (!sanitizedDisplayText.includes('verify/')) {
+        console.error(`[PDF] CRITICAL: Final validation failed! sanitizedDisplayText="${sanitizedDisplayText}", forcing verifyPath="${verifyPath}"`)
+        sanitizedDisplayText = verifyPath // Force to minimum safe display
       }
       
       doc
