@@ -754,7 +754,8 @@ function renderExecutiveSummary(
     // CRITICAL: Use sanitizeAscii() for ALL parts to ensure strict ASCII
     const exposureLevel = data.exposure_level === 'high' ? 'High' : data.exposure_level === 'moderate' ? 'Moderate' : 'Low'
     const sanitizedExposure = sanitizeAscii(exposureLevel.toLowerCase())
-    const sanitizedHighRisk = sanitizeAscii('high-risk') // Sanitize hyphen-containing string
+    // CRITICAL: Use "high risk" (space) instead of "high-risk" to prevent hyphen line-break issues
+    const sanitizedHighRisk = sanitizeAscii('high risk') // Use space instead of hyphen
     const sanitizedMitigate = sanitizeAscii('mitigate')
     const sanitizedJob = sanitizeAscii('job')
     const sanitizedJobs = sanitizeAscii('jobs')
@@ -935,7 +936,7 @@ function renderExecutiveSummary(
     // Why it matters (1 sentence)
     let whyItMatters = ''
     if (data.high_risk_jobs > 0) {
-      whyItMatters = `Unmitigated high-risk jobs increase audit exposure and potential compliance findings.`
+      whyItMatters = `Unmitigated high risk jobs increase audit exposure and potential compliance findings.`
     } else if (data.open_incidents > 0) {
       whyItMatters = `Open incidents indicate active safety gaps that require immediate attention.`
     } else if (data.posture_score !== undefined && data.posture_score < 50) {
@@ -957,7 +958,7 @@ function renderExecutiveSummary(
     // Next action (1 sentence)
     let nextAction = ''
     if (data.high_risk_jobs > 0) {
-      nextAction = `Mitigate ${data.high_risk_jobs} high-risk ${pluralize(data.high_risk_jobs, 'job', 'jobs')} within 7 days to reduce exposure.`
+      nextAction = `Mitigate ${data.high_risk_jobs} high risk ${pluralize(data.high_risk_jobs, 'job', 'jobs')} within 7 days to reduce exposure.`
     } else if (data.open_incidents > 0) {
       nextAction = `Close ${data.open_incidents} open ${pluralize(data.open_incidents, 'incident', 'incidents')} and document resolution.`
     } else if (data.pending_signoffs > 0) {
@@ -992,7 +993,7 @@ function renderExecutiveSummary(
   if (hasSufficientData && hasSpace(doc, 20)) {
     let decisionText = ''
     if (data.high_risk_jobs > 0) {
-      decisionText = `Decision requested: Approve mitigation for ${data.high_risk_jobs} ${pluralize(data.high_risk_jobs, 'high-risk job', 'high-risk jobs')} and require sign-off completion this week.`
+      decisionText = `Decision requested: Approve mitigation for ${data.high_risk_jobs} ${pluralize(data.high_risk_jobs, 'high risk job', 'high risk jobs')} and require sign-off completion this week.`
     } else if (data.open_incidents > 0) {
       decisionText = `Decision requested: Authorize resolution plan for ${data.open_incidents} open ${pluralize(data.open_incidents, 'incident', 'incidents')} and document closure.`
     } else if (data.pending_signoffs > 0) {
@@ -1023,7 +1024,7 @@ function renderExecutiveSummary(
 // Centralized label constants for consistent terminology and casing
 const METRIC_LABELS = {
   overallExposure: 'Overall exposure',
-  highRiskJobs: 'High-risk jobs',
+  highRiskJobs: 'High risk jobs', // Use space instead of hyphen to prevent line-break issues
   openIncidents: 'Open incidents',
   recentViolations: 'Recent violations',
   flaggedForReview: 'Flagged for review',
@@ -1769,7 +1770,7 @@ function renderTinyAppendix(
   // For now, show a summary
   // CRITICAL: Use safeText() to ensure sanitization (prevents character corruption)
   if (data.high_risk_jobs > 0) {
-    const summaryText = `${data.high_risk_jobs} high-risk ${pluralize(data.high_risk_jobs, 'job', 'jobs')} require attention.`
+    const summaryText = `${data.high_risk_jobs} high risk ${pluralize(data.high_risk_jobs, 'job', 'jobs')} require attention.`
     safeText(doc, summaryText, margin, doc.y, {
       width: pageWidth - margin * 2,
       fontSize: STYLES.sizes.body,
@@ -2195,13 +2196,37 @@ function addHeaderFooter(
       }
       
       // CRITICAL: Hard assert - displayText MUST always contain "verify/"
-      // This should never fail, but if it does, we force it
+      // Check for ID-only patterns and force the path
       if (!displayText.includes('verify/')) {
-        displayText = verifyPath // Force to minimum safe display (always includes verify/)
+        // Emergency fix: if displayText is just the ID or doesn't have verify/, force prepend
+        if (displayText.includes(`RM-${reportIdShort}`) && !displayText.includes('verify/')) {
+          displayText = displayText.replace(`RM-${reportIdShort}`, verifyPath)
+        } else {
+          displayText = verifyPath // Force to minimum safe display (always includes verify/)
+        }
+      }
+      
+      // CRITICAL: Final validation - check for ID-only patterns before sanitization
+      // If displayText matches just "RM-xxxx" or just the ID, force prepend verify/
+      const idOnlyPattern = new RegExp(`(^|\\s|:)RM-${reportIdShort}(\\s|$|:)`)
+      if (idOnlyPattern.test(displayText) && !displayText.includes('verify/')) {
+        displayText = verifyPath // Force to minimum safe display
       }
       
       // CRITICAL: Use sanitizeAscii() for verify display (strict ASCII for executive-facing content)
-      const sanitizedDisplayText = sanitizeAscii(displayText)
+      let sanitizedDisplayText = sanitizeAscii(displayText)
+      
+      // CRITICAL: Final check after sanitization - ensure verify/ is still present
+      // If sanitization somehow removed verify/, force it back
+      if (!sanitizedDisplayText.includes('verify/')) {
+        // If sanitization removed verify/, force it back
+        if (sanitizedDisplayText.includes(`RM-${reportIdShort}`)) {
+          sanitizedDisplayText = sanitizedDisplayText.replace(`RM-${reportIdShort}`, verifyPath)
+        } else {
+          sanitizedDisplayText = verifyPath // Force to minimum safe display
+        }
+      }
+      
       doc
         .fontSize(8)
         .font(STYLES.fonts.body)
