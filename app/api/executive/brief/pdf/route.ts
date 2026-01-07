@@ -1495,7 +1495,8 @@ async function buildExecutiveBriefPDF(
     // Recommended Actions (always shows on page 2)
     renderRecommendedActions(doc, data, pageWidth, margin)
 
-    // Top Drivers (only if ≥3 drivers AND we have space on page 2)
+    // Top Drivers (only if ≥3 drivers AND we're still on page 2 AND have space)
+    // CRITICAL: No page 3 unless absolutely necessary - default is 2 pages
     const hasEnoughDrivers = data.drivers && (
       (data.drivers.highRiskJobs?.length || 0) >= 3 ||
       (data.drivers.openIncidents?.length || 0) >= 3 ||
