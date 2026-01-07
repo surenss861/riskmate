@@ -931,22 +931,26 @@ function renderExecutiveSummary(
   
   doc.moveDown(0.8)
 
-  // EXECUTIVE SUMMARY STRUCTURE: Finding + Why + Next action
+  // EXECUTIVE SUMMARY STRUCTURE: 3-line memo layout (Finding + Why + Decision)
+  // This makes it feel like a decision memo, not a dashboard export
   if (hasSufficientData) {
-    // Why it matters (1 sentence)
+    // Line 1: Finding (already shown in headline above, but we can add context here)
+    // The headline already serves as the finding, so we move to "Why it matters"
+    
+    // Line 2: Why it matters (1 sentence, tie to audit/claims/contract exposure)
     let whyItMatters = ''
     if (data.high_risk_jobs > 0) {
-      whyItMatters = `Unmitigated high risk jobs increase audit exposure and potential compliance findings.`
+      whyItMatters = `Unmitigated high risk jobs increase audit exposure, potential compliance findings, and claims liability.`
     } else if (data.open_incidents > 0) {
-      whyItMatters = `Open incidents indicate active safety gaps that require immediate attention.`
+      whyItMatters = `Open incidents indicate active safety gaps that increase audit risk and potential contract violations.`
     } else if (data.posture_score !== undefined && data.posture_score < 50) {
-      whyItMatters = `Current risk posture requires strengthening to meet compliance standards.`
+      whyItMatters = `Current risk posture below threshold increases audit exposure and potential compliance findings.`
     } else {
-      whyItMatters = `Maintaining strong risk controls protects against audit findings and safety incidents.`
+      whyItMatters = `Maintaining strong risk controls protects against audit findings, safety incidents, and contract compliance issues.`
     }
     
     if (hasSpace(doc, 20)) {
-      safeText(doc, sanitizeText(whyItMatters), margin, doc.y, {
+      safeText(doc, sanitizeAscii(whyItMatters), margin, doc.y, {
         fontSize: STYLES.sizes.body,
         font: STYLES.fonts.body,
         color: STYLES.colors.primaryText,
@@ -955,26 +959,26 @@ function renderExecutiveSummary(
       doc.moveDown(0.6)
     }
     
-    // Next action (1 sentence)
-    let nextAction = ''
-    if (data.high_risk_jobs > 0) {
-      nextAction = `Mitigate ${data.high_risk_jobs} high risk ${pluralize(data.high_risk_jobs, 'job', 'jobs')} within 7 days to reduce exposure.`
-    } else if (data.open_incidents > 0) {
-      nextAction = `Close ${data.open_incidents} open ${pluralize(data.open_incidents, 'incident', 'incidents')} and document resolution.`
-    } else if (data.pending_signoffs > 0) {
-      nextAction = `Complete ${data.pending_signoffs} pending ${pluralize(data.pending_signoffs, 'sign-off', 'sign-offs')} to ensure full compliance.`
-    } else {
-      nextAction = `Continue monitoring risk posture and maintain current control effectiveness.`
-    }
-    
+    // Line 3: What you want approved (Decision requested - make it more specific when possible)
     if (hasSpace(doc, 20)) {
-      safeText(doc, sanitizeText(nextAction), margin, doc.y, {
+      let decisionText = ''
+      if (data.high_risk_jobs > 0) {
+        decisionText = `Decision requested: Approve mitigation plan for ${data.high_risk_jobs} ${pluralize(data.high_risk_jobs, 'high risk job', 'high risk jobs')} and require sign-off completion within 7 days.`
+      } else if (data.open_incidents > 0) {
+        decisionText = `Decision requested: Authorize resolution plan for ${data.open_incidents} open ${pluralize(data.open_incidents, 'incident', 'incidents')} and document closure within 7 days.`
+      } else if (data.pending_signoffs > 0) {
+        decisionText = `Decision requested: Complete ${data.pending_signoffs} pending ${pluralize(data.pending_signoffs, 'sign-off', 'sign-offs')} to ensure full compliance this week.`
+      } else {
+        decisionText = `Decision requested: Continue monitoring risk posture and maintain current control effectiveness.`
+      }
+      
+      safeText(doc, sanitizeAscii(decisionText), margin, doc.y, {
         fontSize: STYLES.sizes.body,
-        font: STYLES.fonts.body,
+        font: STYLES.fonts.header, // Bold for emphasis
         color: STYLES.colors.primaryText,
         width: pageWidth - margin * 2,
       })
-      doc.moveDown(0.6)
+      doc.moveDown(0.8)
     }
   } else {
     // Insufficient data case
@@ -987,28 +991,6 @@ function renderExecutiveSummary(
       })
       doc.moveDown(0.6)
     }
-  }
-
-  // Decision requested line (single sentence, no fluff) - makes it feel "designed, not assembled"
-  if (hasSufficientData && hasSpace(doc, 20)) {
-    let decisionText = ''
-    if (data.high_risk_jobs > 0) {
-      decisionText = `Decision requested: Approve mitigation for ${data.high_risk_jobs} ${pluralize(data.high_risk_jobs, 'high risk job', 'high risk jobs')} and require sign-off completion this week.`
-    } else if (data.open_incidents > 0) {
-      decisionText = `Decision requested: Authorize resolution plan for ${data.open_incidents} open ${pluralize(data.open_incidents, 'incident', 'incidents')} and document closure.`
-    } else if (data.pending_signoffs > 0) {
-      decisionText = `Decision requested: Complete ${data.pending_signoffs} pending ${pluralize(data.pending_signoffs, 'sign-off', 'sign-offs')} to ensure compliance this week.`
-    } else {
-      decisionText = `Decision requested: Continue monitoring risk posture and maintain current control effectiveness.`
-    }
-    
-    safeText(doc, sanitizeText(decisionText), margin, doc.y, {
-      fontSize: STYLES.sizes.body,
-      font: STYLES.fonts.header, // Bold for emphasis
-      color: STYLES.colors.primaryText,
-      width: pageWidth - margin * 2,
-    })
-    doc.moveDown(0.8)
   }
 
   doc.moveDown(1)
@@ -1456,29 +1438,64 @@ function renderMicroTopDrivers(
   
   const timeRangeLabel = timeRange === '7d' ? 'last 7d' : timeRange === '30d' ? 'last 30d' : timeRange === '90d' ? 'last 90d' : 'selected period'
   
-  if (top3.length === 0) {
-    // Intentional fallback: show clear message about signal requirements
-    ensureSpace(doc, 25, margin)
-    safeText(doc, `Top drivers (${timeRangeLabel}): Not enough signal (need at least 3 events)`, margin, doc.y, {
+  // CRITICAL: Replace "Not enough signal" with a fallback driver summary table
+  // This ensures the section never feels empty - always shows exposure drivers
+  ensureSpace(doc, 50, margin) // Need space for mini table
+  
+  if (top3.length >= 3) {
+    // Render compact list if we have ≥3 event-based drivers
+    const driversText = top3.map(d => sanitizeAscii(d.label)).join(', ')
+    safeText(doc, sanitizeAscii(`Exposure drivers (${timeRangeLabel}): ${driversText}`), margin, doc.y, {
       width: pageWidth - margin * 2,
       fontSize: STYLES.sizes.caption,
       font: STYLES.fonts.body,
       color: STYLES.colors.secondaryText,
     })
     doc.moveDown(0.3)
-    return
+  } else {
+    // Fallback: Show a 3-row driver summary table (never feels empty)
+    // This is still valuable even without event taxonomy
+    safeText(doc, sanitizeAscii(`Exposure drivers (${timeRangeLabel}):`), margin, doc.y, {
+      width: pageWidth - margin * 2,
+      fontSize: STYLES.sizes.caption,
+      font: STYLES.fonts.body,
+      color: STYLES.colors.secondaryText,
+    })
+    doc.moveDown(0.2)
+    
+    // Mini table: High risk jobs, Open incidents, Pending sign-offs
+    const driverRows = [
+      { label: 'High risk jobs', value: data.high_risk_jobs },
+      { label: 'Open incidents', value: data.open_incidents },
+      { label: 'Pending sign-offs', value: data.pending_signoffs ?? 0 },
+    ]
+    
+    driverRows.forEach((row) => {
+      if (!hasSpace(doc, 12)) return
+      const rowY = doc.y
+      const labelX = margin + 20
+      const valueX = margin + 200
+      
+      // Label
+      safeText(doc, sanitizeAscii(row.label + ':'), labelX, rowY, {
+        fontSize: STYLES.sizes.caption,
+        font: STYLES.fonts.body,
+        color: STYLES.colors.secondaryText,
+        width: 180,
+      })
+      
+      // Value
+      safeText(doc, sanitizeAscii(String(row.value)), valueX, rowY, {
+        fontSize: STYLES.sizes.caption,
+        font: STYLES.fonts.header, // Bold for values
+        color: STYLES.colors.primaryText,
+        width: 60,
+      })
+      
+      doc.y = rowY + 10
+    })
+    doc.moveDown(0.3)
   }
-  
-  // Render compact list
-  ensureSpace(doc, 25, margin)
-  const driversText = top3.map(d => sanitizeText(d.label)).join(', ')
-  safeText(doc, `Top drivers (${timeRangeLabel}): ${driversText}`, margin, doc.y, {
-    width: pageWidth - margin * 2,
-    fontSize: STYLES.sizes.caption,
-    font: STYLES.fonts.body,
-    color: STYLES.colors.secondaryText,
-  })
-  doc.moveDown(0.3)
 }
 
 /**
@@ -1570,7 +1587,6 @@ function renderMethodologyShort(
   // Fixed definitions (3 bullets max, corrected Evidence vs Attestation)
   const methodologyPoints = [
     'Risk posture: 0-100 scale based on high-risk jobs, incidents, and violations',
-    'Evidence coverage: Percentage of jobs with evidence artifacts (photos/docs/proof packs)',
     'Attestation coverage: Percentage of jobs with signed attestations',
   ]
   
@@ -2100,15 +2116,10 @@ function addHeaderFooter(
         .text(sourcesText, capsuleContentX, currentY, { width: capsuleContentWidth })
       currentY += 11
       
-      // Report hash (SHA-256) - shortened format (monospace for verification)
+      // Report hash (SHA-256) - show full hash for board/auditor credibility
       if (pdfHash) {
-        const hashShort = `${pdfHash.substring(0, 4)}...${pdfHash.substring(pdfHash.length - 4)}`
-        doc
-          .fontSize(8)
-          .font('Courier') // Monospace font for hash
-          .fillColor(STYLES.colors.secondaryText)
-          // CRITICAL: Sanitize hash text to prevent character corruption
-        const hashText = sanitizeText(`Hash (SHA-256): ${hashShort}`)
+        // Show full hash (not shortened) for maximum credibility
+        const hashText = sanitizeAscii(`Report hash (SHA-256): ${pdfHash}`)
         doc
           .fontSize(8)
           .font('Courier') // Monospace font for hash
@@ -2164,7 +2175,8 @@ function addHeaderFooter(
         ? `${baseUrl}/verify/RM-${reportIdShort}`
         : `/verify/RM-${reportIdShort}`
       
-      // Measure and determine display text
+      // CRITICAL: For board/auditor credibility, always show full domain path
+      // Never degrade to path-only - use smaller font if needed, but always show full domain
       doc.fontSize(8).font(STYLES.fonts.body)
       const linkLabel = 'Verification endpoint: '
       const preferredText = linkLabel + fullDisplay
@@ -2172,27 +2184,33 @@ function addHeaderFooter(
       const linkTextHeight = 10
       const maxLinkWidth = capsuleContentWidth
       
-      // CRITICAL: Build display text with strict fallback ladder
-      // Every fallback MUST include verify/ path - never allow ID-only
       let displayText: string
+      let fontSizeToUse = 8
+      
       if (preferredWidth <= maxLinkWidth) {
         displayText = preferredText // "Verification endpoint: riskmate.app/verify/RM-xxxx"
       } else {
-        // Fallback 1: "Verification endpoint: verify/RM-xxxx" (path only, but still includes verify/)
-        const fallbackText = linkLabel + verifyPath
-        const fallbackWidth = doc.widthOfString(fallbackText)
-        if (fallbackWidth <= maxLinkWidth) {
-          displayText = fallbackText
+        // If full display doesn't fit, try with smaller font instead of degrading path
+        // This maintains credibility for boards/auditors
+        doc.fontSize(7).font(STYLES.fonts.body)
+        const smallerPreferredWidth = doc.widthOfString(preferredText)
+        if (smallerPreferredWidth <= maxLinkWidth) {
+          displayText = preferredText // Use smaller font but keep full domain
+          fontSizeToUse = 7
         } else {
-          // Fallback 2: "Verify: verify/RM-xxxx" (shortened label, but path always included)
-          const minimalText = `Verify: ${verifyPath}`
+          // Last resort: shorten label but ALWAYS keep full domain path
+          const minimalLabel = 'Verify: '
+          const minimalText = minimalLabel + fullDisplay
+          doc.fontSize(7).font(STYLES.fonts.body)
           const minimalWidth = doc.widthOfString(minimalText)
           if (minimalWidth <= maxLinkWidth) {
             displayText = minimalText
+            fontSizeToUse = 7
           } else {
-            // Fallback 3: just the path "verify/RM-xxxx" (no label, but path ALWAYS included)
-            // CRITICAL: This is the absolute minimum - NEVER drop the path
-            displayText = verifyPath
+            // Absolute last resort: just the full domain path (no label, but full domain ALWAYS included)
+            // CRITICAL: This is the absolute minimum - NEVER drop the domain or path
+            displayText = fullDisplay
+            fontSizeToUse = 7
           }
         }
       }
@@ -2234,7 +2252,7 @@ function addHeaderFooter(
       }
       
       doc
-        .fontSize(8)
+        .fontSize(fontSizeToUse)
         .font(STYLES.fonts.body)
         .fillColor(STYLES.colors.accent)
         .text(sanitizedDisplayText, capsuleContentX, currentY, { 
