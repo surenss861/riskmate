@@ -776,9 +776,15 @@ function renderExecutiveSummary(
   }
   
   // CRITICAL: Final sanitization pass (defense in depth) - ensure no corruption slipped through
-  const headlineText = sanitizeText(headline)
+  // MUST sanitize BEFORE any measurement or width calculations
+  let headlineText = sanitizeText(headline)
+  // Double-check: if headlineText still contains problematic characters, sanitize again
+  if (headlineText.includes('\uFFFE') || headlineText.includes('\uFFFF') || headlineText.includes('\uFFFD')) {
+    headlineText = sanitizeText(headlineText) // Force re-sanitization
+  }
   
   // Auto-fit headline: prevent mid-sentence wrapping by measuring and adjusting
+  // CRITICAL: Measurement happens AFTER sanitization
   const maxHeadlineWidth = pageWidth - margin * 2
   let headlineFontSize = STYLES.sizes.h1
   
@@ -2160,6 +2166,7 @@ function addHeaderFooter(
       // Determine display text: prefer full link, fallback to verify/RM-xxx if needed
       // CRITICAL: Never show just "RM-xxx" - always show at least "verify/RM-xxx"
       // ULTRA-STRICT: Build display string explicitly to ensure path is always included
+      // The path "/verify/" MUST always be present in the display string
       let displayText: string
       if (preferredWidth <= maxLinkWidth) {
         displayText = preferredText // Full pretty link fits: "riskmate.app/verify/RM-xxxx"
@@ -2178,11 +2185,19 @@ function addHeaderFooter(
           if (minimalWidth <= maxLinkWidth) {
             displayText = minimalText
           } else {
-            // Absolute last resort: use smaller font or truncate label, but NEVER drop the path
-            // If even this doesn't fit, we have a layout problem, but we still show the path
-            displayText = fallbackLink // At minimum, show "verify/RM-xxxx" without label
+            // Absolute last resort: show just the path without any label
+            // CRITICAL: This MUST be "verify/RM-xxxx", NEVER just "RM-xxxx"
+            // If this doesn't fit, we have a serious layout problem, but we still show the path
+            displayText = fallbackLink // "verify/RM-xxxx" - path is always included
           }
         }
+      }
+      
+      // CRITICAL: Final validation - ensure displayText always contains "/verify/"
+      // If it doesn't, something went wrong - force it to include the path
+      if (!displayText.includes('/verify/') && !displayText.includes('verify/')) {
+        // Emergency fallback: always include the path
+        displayText = `verify/RM-${reportIdShort}`
       }
       
       // Draw clickable link text (one line, no wrapping) - CRITICAL: sanitize
