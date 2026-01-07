@@ -306,13 +306,15 @@ function safeText(
   if (!sanitized || sanitized.trim().length === 0) return false
   
   // Never render standalone "—" or single digits without context
-  // These are the exact patterns causing junk pages
-  if (sanitized === '—' || sanitized === '2' || sanitized === '0' || /^\d+$/.test(sanitized.trim())) {
-    // Only allow if it's part of a larger string (has context)
-    if (sanitized.length <= 2) {
-      console.warn(`[PDF] safeText rejected standalone value: "${sanitized}" (section: ${currentSection})`)
-      return false
-    }
+  // EXCEPTION: Allow in table cells (they have context from row label)
+  // Check if this is a table cell by looking at currentSection
+  const isTableCell = currentSection === 'Metrics Table' || currentSection.includes('Table')
+  const isStandaloneValue = sanitized === '—' || sanitized === '2' || sanitized === '0' || /^\d+$/.test(sanitized.trim())
+  
+  if (isStandaloneValue && sanitized.length <= 2 && !isTableCell) {
+    // Reject only if it's truly standalone (not in a table cell)
+    console.warn(`[PDF] safeText rejected standalone value: "${sanitized}" (section: ${currentSection})`)
+    return false
   }
   
   // Check if it would overflow current page
@@ -817,6 +819,8 @@ function renderMetricsTable(
     }
 
     // CRITICAL: Write all cells atomically - label + value + delta in one go
+    // Values are already normalized strings from buildMetricsRows()
+    
     // Label (left-aligned, fixed width prevents wrapping)
     const labelText = sanitizeText(metric.label)
     safeText(doc, labelText, margin + cellPadding, rowY + cellPadding, {
@@ -827,14 +831,8 @@ function renderMetricsTable(
       color: STYLES.colors.primaryText,
     })
 
-    // CRITICAL: Always render value and delta (even if "—" or 0)
-    // This ensures every row has values in Current/Change columns
-    const valueText = typeof metric.value === 'string' 
-      ? metric.value 
-      : formatNumber(metric.value ?? 0)
-    
-    // Always render value (even if it's "—" or "0")
-    safeText(doc, valueText, margin + col1Width + cellPadding, rowY + cellPadding, {
+    // Value (already normalized: "0", number string, or "—")
+    safeText(doc, metric.value, margin + col1Width + cellPadding, rowY + cellPadding, {
       width: col2Width - cellPadding * 2,
       align: 'right',
       fontSize: STYLES.sizes.body,
@@ -842,12 +840,11 @@ function renderMetricsTable(
       color: STYLES.colors.primaryText,
     })
 
-    // Always render delta (even if "—")
-    const deltaText = formatDelta(metric.delta)
-    const deltaColor = deltaText === '—' 
+    // Delta (already normalized: "—" or formatted delta string)
+    const deltaColor = metric.delta === '—' 
       ? STYLES.colors.secondaryText 
-      : ((metric.delta || 0) > 0 ? STYLES.colors.riskHigh : STYLES.colors.riskLow)
-    safeText(doc, deltaText, margin + col1Width + col2Width + cellPadding, rowY + cellPadding, {
+      : (metric.delta.startsWith('+') ? STYLES.colors.riskHigh : STYLES.colors.riskLow)
+    safeText(doc, metric.delta, margin + col1Width + col2Width + cellPadding, rowY + cellPadding, {
       width: col3Width - cellPadding * 2,
       align: 'right',
       fontSize: STYLES.sizes.body,
