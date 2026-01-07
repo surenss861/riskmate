@@ -1422,37 +1422,74 @@ async function buildExecutiveBriefPDF(
     doc.y = headerBandHeight + STYLES.spacing.sectionGap
 
     // ============================================
-    // PAGE 1: Summary (header, KPIs, summary, metrics, data coverage)
+    // PAGE 1: Fixed regions layout (board-ready, dense)
+    // Region A: Header band (already rendered)
+    // Region B: KPI cards
+    // Region C: Gauge + Headline finding
+    // Region D: Executive Summary
+    // Region E: Metrics Table OR Compact metrics (if table doesn't fit)
+    // Region F: Data Coverage
     // ============================================
     
-    // Premium KPI Cards
-    renderKPIStrip(doc, data, pageWidth, doc.y)
+    // Region B: Premium KPI Cards (fixed height ~95px)
+    const kpiCardsY = doc.y
+    renderKPIStrip(doc, data, pageWidth, kpiCardsY)
+    const afterKPIsY = doc.y
 
-    // Risk Posture Gauge (visual credibility element)
+    // Region C: Risk Posture Gauge (fixed height ~100px)
     renderRiskPostureGauge(doc, data, pageWidth, margin)
     if (data.posture_score !== undefined) {
-      markPageHasBody(doc) // Mark if gauge was rendered
+      markPageHasBody(doc)
     }
+    const afterGaugeY = doc.y
 
     // Section divider
     addSectionDivider(doc, pageWidth, margin)
 
-    // Executive Summary
+    // Region D: Executive Summary (compact, max 3 bullets)
+    const summaryStartY = doc.y
     renderExecutiveSummary(doc, data, pageWidth, margin)
+    const afterSummaryY = doc.y
 
-    // Metrics Table (always has content - shows 0s or —)
-    renderMetricsTable(doc, data, pageWidth, margin)
+    // Calculate remaining space on Page 1
+    const page1Bottom = doc.page.height - 80 // Footer space
+    const remainingSpacePage1 = page1Bottom - doc.y
 
-    // Data Coverage (compact, reassuring)
-    renderDataCoverage(doc, data, pageWidth, margin)
+    // Region E: Metrics Table (only if it fits) OR move to Page 2
+    const metricsRows = buildMetricsRows(data)
+    const sectionHeaderHeight = STYLES.sizes.h2 + 20
+    const tableHeaderHeight = STYLES.spacing.tableRowHeight + 4
+    const tableRowHeight = STYLES.spacing.tableRowHeight
+    const totalTableHeight = sectionHeaderHeight + tableHeaderHeight + (tableRowHeight * metricsRows.length) + 40
+    const dataCoverageHeight = 80 // Approx height for Data Coverage
+
+    const metricsTableFitsOnPage1 = remainingSpacePage1 >= (totalTableHeight + dataCoverageHeight + 32) // 32 = spacing
+
+    if (metricsTableFitsOnPage1) {
+      // Render Metrics Table on Page 1
+      renderMetricsTable(doc, data, pageWidth, margin)
+      
+      // Region F: Data Coverage (compact, always on Page 1 if table fits)
+      renderDataCoverage(doc, data, pageWidth, margin)
+    } else {
+      // Metrics Table doesn't fit - skip it on Page 1, will render on Page 2
+      // Render compact Data Coverage on Page 1 only
+      renderDataCoverage(doc, data, pageWidth, margin)
+    }
 
     // ============================================
-    // PAGE 2: Actions, Methodology, Appendix (if gating passes)
+    // PAGE 2: Actions, Methodology, Metrics Table (if not on Page 1), Appendix (if gating passes)
     // ============================================
     
     // Force page break for page 2
     if (pageNumber === 1) {
       ensureSpace(doc, 1000, margin) // Force new page
+    }
+
+    // Metrics Table on Page 2 if it didn't fit on Page 1
+    if (!metricsTableFitsOnPage1) {
+      renderMetricsTable(doc, data, pageWidth, margin)
+      addSectionDivider(doc, pageWidth, margin)
     }
 
     // Recommended Actions (always shows on page 2)
