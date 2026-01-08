@@ -2326,37 +2326,50 @@ function addHeaderFooter(
       // Report hash (SHA-256) - show full hash for board/auditor credibility
       // CRITICAL: Always show hash if available (metadata hash during generation, actual PDF hash after)
       // This is one of the strongest "this is defensible" signals
+      // CRITICAL: Treat capsule as its own tiny layout engine - every line must advance y = writeLine(...)
+      // Never manual y guessing - use writeLine helper for all hash rendering
       if (pdfHash) {
         // Show full hash formatted in 4-char groups for readability
         // CRITICAL: Keep "SHA-256:" on the same line as the first chunk if possible (looks more intentional)
         const hashFormatted = pdfHash.match(/.{1,4}/g)?.join(' ') || pdfHash
-        const hashText = sanitizeAscii(`SHA-256: ${hashFormatted}`)
+        const sha256Label = 'SHA-256: '
         
         // Check if "SHA-256: XXXX" fits on one line
         doc.fontSize(8).font('Courier')
-        const sha256Label = 'SHA-256: '
         const firstChunk = hashFormatted.split(' ')[0] || ''
         const sha256WithFirstChunk = `${sha256Label}${firstChunk}`
         const sha256WithFirstChunkWidth = doc.widthOfString(sha256WithFirstChunk)
         
         if (sha256WithFirstChunkWidth <= capsuleContentWidth * 0.8) {
-          // "SHA-256: XXXX" fits on one line - render as single line, let rest wrap naturally
-          doc
-            .fillColor(STYLES.colors.secondaryText)
-            .text(hashText, capsuleContentX, currentY, { width: capsuleContentWidth })
+          // "SHA-256: XXXX" fits on one line - render as single line using writeLine, let rest wrap naturally
+          const hashText = sanitizeAscii(`SHA-256: ${hashFormatted}`)
+          currentY = writeLine(hashText, 8, 'Courier', 11) // Use writeLine for consistent spacing
         } else {
-          // "SHA-256: XXXX" doesn't fit - render label on first line, hash on second
-          doc
-            .fillColor(STYLES.colors.secondaryText)
-            .text(sanitizeAscii(sha256Label), capsuleContentX, currentY, { width: capsuleContentWidth })
-          currentY += 9
-          doc
-            .fontSize(8)
-            .font('Courier')
-            .fillColor(STYLES.colors.secondaryText)
-            .text(sanitizeAscii(hashFormatted), capsuleContentX, currentY, { width: capsuleContentWidth })
+          // "SHA-256: XXXX" doesn't fit - render label on first line, hash on second (both use writeLine)
+          currentY = writeLine(sanitizeAscii(sha256Label), 8, 'Courier', 9) // Label line
+          // Render hash as grouped chunks with controlled wrapping
+          // Split hash into chunks and render each chunk on its own line if needed
+          const hashChunks = hashFormatted.split(' ')
+          let hashLine = ''
+          for (const chunk of hashChunks) {
+            const testLine = hashLine ? `${hashLine} ${chunk}` : chunk
+            doc.fontSize(8).font('Courier')
+            const testWidth = doc.widthOfString(testLine)
+            if (testWidth <= capsuleContentWidth && hashLine) {
+              hashLine = testLine // Add chunk to current line
+            } else {
+              // Current line is full or starting new line - render previous line if exists
+              if (hashLine) {
+                currentY = writeLine(sanitizeAscii(hashLine), 8, 'Courier', 9)
+              }
+              hashLine = chunk // Start new line with this chunk
+            }
+          }
+          // Render remaining hash line
+          if (hashLine) {
+            currentY = writeLine(sanitizeAscii(hashLine), 8, 'Courier', 11)
+          }
         }
-        currentY += 11
       } else {
         // If hash is not available, show a placeholder (should not happen in production)
         const placeholderText = sanitizeAscii('SHA-256: calculating...')
