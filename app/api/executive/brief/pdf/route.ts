@@ -807,16 +807,16 @@ function renderExecutiveSummary(
     const sanitizedRequire = sanitizeAscii('require immediate attention')
     
     // CRITICAL: Compose using only sanitized strings, then sanitize the result with sanitizeAscii()
-    // Use non-breaking space (\u00A0) for "high risk" to prevent awkward line breaks like "high / risk"
-    const highRiskNonBreaking = sanitizedHighRisk.replace(' ', '\u00A0') // Non-breaking space
+    // Force a designed wrap so "high risk job" never splits awkwardly
+    // Since sanitizeAscii() strips non-breaking spaces, we'll force a line break earlier in rendering
     if (data.high_risk_jobs === 1) {
-      const composed = `Exposure is ${sanitizedExposure}; ${sanitizedMitigate} 1 ${highRiskNonBreaking} ${sanitizedJob} to ${sanitizedReduce}.`
+      const composed = `Exposure is ${sanitizedExposure}; ${sanitizedMitigate} 1 ${sanitizedHighRisk} ${sanitizedJob} to ${sanitizedReduce}.`
       headline = sanitizeAscii(composed)
     } else if (data.high_risk_jobs > 1) {
-      const composed = `Exposure is ${sanitizedExposure}; ${sanitizedMitigate} ${data.high_risk_jobs} ${highRiskNonBreaking} ${sanitizedJobs} to ${sanitizedReduce}.`
+      const composed = `Exposure is ${sanitizedExposure}; ${sanitizedMitigate} ${data.high_risk_jobs} ${sanitizedHighRisk} ${sanitizedJobs} to ${sanitizedReduce}.`
       headline = sanitizeAscii(composed)
     } else {
-      const composed = `Exposure is ${sanitizedExposure}; no ${highRiskNonBreaking} ${sanitizedJobs} ${sanitizedRequire}.`
+      const composed = `Exposure is ${sanitizedExposure}; no ${sanitizedHighRisk} ${sanitizedJobs} ${sanitizedRequire}.`
       headline = sanitizeAscii(composed)
     }
   }
