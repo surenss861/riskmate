@@ -7,6 +7,35 @@
 import PDFKit from 'pdfkit'
 
 /**
+ * Page tracking state
+ * PDFKit doesn't expose page.number directly, so we track it manually
+ */
+let currentPageNumber = 1
+let pageHasBodyMap = new Map<number, boolean>()
+
+/**
+ * Initialize page tracking (call at start of PDF generation)
+ */
+export function initPageTracking(): void {
+  currentPageNumber = 1
+  pageHasBodyMap.clear()
+}
+
+/**
+ * Track page addition (call when doc.addPage() is called)
+ */
+export function trackPageAdd(): void {
+  currentPageNumber++
+}
+
+/**
+ * Get current page number
+ */
+export function getCurrentPageNumber(): number {
+  return currentPageNumber
+}
+
+/**
  * Check if page has sufficient body content
  */
 export function hasMinimumContent(doc: PDFKit.PDFDocument, minChars: number = 100): boolean {
@@ -27,18 +56,22 @@ export function checkLonelyPages(doc: PDFKit.PDFDocument): boolean {
 /**
  * Mark page as having body content
  */
-let pageHasBodyMap = new Map<number, boolean>()
-
 export function markPageHasBody(doc: PDFKit.PDFDocument): void {
-  const pageNumber = doc.page?.number || 1
-  pageHasBodyMap.set(pageNumber, true)
+  pageHasBodyMap.set(currentPageNumber, true)
 }
 
+/**
+ * Get whether a page has body content
+ */
 export function getPageHasBody(pageNumber: number): boolean {
   return pageHasBodyMap.get(pageNumber) || false
 }
 
+/**
+ * Reset page tracking (call at start of new PDF generation)
+ */
 export function resetPageTracking(): void {
+  currentPageNumber = 1
   pageHasBodyMap.clear()
 }
 
