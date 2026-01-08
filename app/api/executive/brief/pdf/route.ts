@@ -1414,9 +1414,12 @@ function renderMetricsTable(
       .lineWidth(0.3)
       .moveTo(margin + col1Width, rowY)
       .lineTo(margin + col1Width, rowY + tableRowHeight)
-      .moveTo(margin + col1Width + col2Width, rowY)
-      .lineTo(margin + col1Width + col2Width, rowY + tableRowHeight)
-      .stroke()
+    if (showChangeColumn) {
+      doc
+        .moveTo(margin + col1Width + col2Width, rowY)
+        .lineTo(margin + col1Width + col2Width, rowY + tableRowHeight)
+    }
+    doc.stroke()
 
     markPageHasBody(doc) // Mark body content written
     doc.y = rowY + tableRowHeight
