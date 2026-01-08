@@ -1080,11 +1080,11 @@ function renderExecutiveSummary(
     if (data.high_risk_jobs > 0) {
       whyItMatters = `Why it matters: Unmitigated high risk jobs increase audit exposure, potential compliance findings, and claims liability.`
     } else if (data.open_incidents > 0) {
-      whyItMatters = `Open incidents indicate active safety gaps that increase audit risk and potential contract violations.`
+      whyItMatters = `Why it matters: Open incidents indicate active safety gaps that increase audit risk and potential contract violations.`
     } else if (data.posture_score !== undefined && data.posture_score < 50) {
-      whyItMatters = `Current risk posture below threshold increases audit exposure and potential compliance findings.`
+      whyItMatters = `Why it matters: Current risk posture below threshold increases audit exposure and potential compliance findings.`
     } else {
-      whyItMatters = `Maintaining strong risk controls protects against audit findings, safety incidents, and contract compliance issues.`
+      whyItMatters = `Why it matters: Maintaining strong risk controls protects against audit findings, safety incidents, and contract compliance issues.`
     }
     
     if (hasSpace(doc, 20)) {
