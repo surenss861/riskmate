@@ -1385,17 +1385,20 @@ function renderMetricsTable(
     })
 
     // Delta (already normalized: "No change", "N/A", or formatted delta string)
-    // CRITICAL: Make N/A visually neutral (no "good/bad" color vibes) - this is an exec-trust detail
-    const deltaColor = metric.delta === 'No change' || metric.delta === 'N/A' || metric.delta === '—'
-      ? STYLES.colors.secondaryText // Neutral gray for N/A, No change, and missing data
-      : (metric.delta.startsWith('+') ? STYLES.colors.riskHigh : STYLES.colors.riskLow)
-    safeText(doc, metric.delta, margin + col1Width + col2Width + cellPadding, rowY + cellPadding, {
-      width: col3Width - cellPadding * 2,
-      align: 'right',
-      fontSize: STYLES.sizes.body,
-      font: STYLES.fonts.body,
-      color: deltaColor,
-    })
+    // CRITICAL: Only render Change column if prior period is available (hide column to kill N/A spam)
+    if (showChangeColumn) {
+      const deltaColor = metric.delta === 'No change' || metric.delta === 'N/A' || metric.delta === '—'
+        ? STYLES.colors.secondaryText // Neutral gray for N/A, No change, and missing data
+        : (metric.delta.startsWith('+') ? STYLES.colors.riskHigh : STYLES.colors.riskLow)
+      safeText(doc, metric.delta, margin + col1Width + col2Width + cellPadding, rowY + cellPadding, {
+        width: col3Width - cellPadding * 2,
+        align: 'right',
+        fontSize: STYLES.sizes.body,
+        font: isExposureRow ? STYLES.fonts.header : STYLES.fonts.body,
+        color: deltaColor,
+      })
+    }
+    // If Change column is hidden, no delta rendering needed
     
     markPageHasBody(doc) // Mark row as written
     doc.y = rowY + tableRowHeight
