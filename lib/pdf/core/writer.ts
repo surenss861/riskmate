@@ -198,7 +198,9 @@ export function renderFittedLabel(
     
     // If still doesn't fit, truncate (should be rare with shrinking)
     if (!lineFits) {
-      line = truncateText(doc, line, maxWidth, currentFontSize, options.font)
+      // Set font before truncating so width calculation is correct
+      doc.fontSize(currentFontSize).font(options.font)
+      line = truncateText(doc, line, maxWidth, currentFontSize)
     }
     
     doc
