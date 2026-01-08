@@ -2118,14 +2118,25 @@ function addHeaderFooter(
       currentY += 11
       
       // Report hash (SHA-256) - show full hash for board/auditor credibility
+      // CRITICAL: Always show hash if available (metadata hash during generation, actual PDF hash after)
+      // This is one of the strongest "this is defensible" signals
       if (pdfHash) {
-        // Show full hash (not shortened) for maximum credibility
-        const hashText = sanitizeAscii(`Report hash (SHA-256): ${pdfHash}`)
+        // Show full hash (not shortened) for maximum credibility - format: "SHA-256: <full hash>"
+        const hashText = sanitizeAscii(`SHA-256: ${pdfHash}`)
         doc
           .fontSize(8)
           .font('Courier') // Monospace font for hash
           .fillColor(STYLES.colors.secondaryText)
           .text(hashText, capsuleContentX, currentY, { width: capsuleContentWidth })
+        currentY += 11
+      } else {
+        // If hash is not available, show a placeholder (should not happen in production)
+        const placeholderText = sanitizeAscii('SHA-256: calculating...')
+        doc
+          .fontSize(8)
+          .font('Courier')
+          .fillColor(STYLES.colors.secondaryText)
+          .text(placeholderText, capsuleContentX, currentY, { width: capsuleContentWidth })
         currentY += 11
       }
       
