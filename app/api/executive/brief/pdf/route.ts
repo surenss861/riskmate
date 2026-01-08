@@ -286,7 +286,8 @@ function writeKpiCard(
   
   // CRITICAL: Use renderFittedLabel to guarantee no mid-word breaks
   // This measures each line and shrinks font if needed to prevent character-level wraps
-  renderFittedLabel(doc, sanitizedLabel, contentX, labelY, contentWidth, {
+  // Returns height used so we can position subtitle correctly
+  const labelHeight = renderFittedLabel(doc, sanitizedLabel, contentX, labelY, contentWidth, {
     fontSize: STYLES.sizes.kpiLabel,
     minFontSize: 7,
     font: STYLES.fonts.body,
@@ -294,13 +295,7 @@ function writeKpiCard(
   })
   
   // Subtitle - ALWAYS show "vs prior 30d" (or appropriate time range) - CRITICAL: sanitize
-  // Adjust subtitle Y position based on label height (renderFittedLabel returns height)
-  const labelHeight = renderFittedLabel(doc, sanitizedLabel, contentX, labelY, contentWidth, {
-    fontSize: STYLES.sizes.kpiLabel,
-    minFontSize: 7,
-    font: STYLES.fonts.body,
-    color: STYLES.colors.secondaryText,
-  })
+  // Position subtitle below label with proper spacing
   const subtitleY = labelY + labelHeight + 4
   const timeRangeLabel = opts.timeRange === '7d' ? 'vs prior 7d' : opts.timeRange === '30d' ? 'vs prior 30d' : opts.timeRange === '90d' ? 'vs prior 90d' : 'vs prior period'
   const sanitizedTimeRange = sanitizeText(timeRangeLabel)
