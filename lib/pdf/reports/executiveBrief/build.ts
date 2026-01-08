@@ -18,11 +18,27 @@ import { PDF_CORE_TOKENS } from '@/lib/pdf/core/tokens'
  * Build Executive Brief PDF
  * 
  * Pure function that takes input data and returns PDF buffer + metadata
+ * 
+ * NOTE: This is a bridge function that temporarily calls the old implementation
+ * in the route file. It will be fully implemented incrementally.
  */
 export async function buildExecutiveBriefPDF(
   input: ExecutiveBriefInput
 ): Promise<ExecutiveBriefOutput> {
-  const { data, organizationName, generatedBy, timeRange, buildSha, reportId, baseUrl } = input
+  // TODO: Remove this import once full implementation is complete
+  // For now, dynamically import the old implementation to avoid circular dependencies
+  const { buildExecutiveBriefPDF: oldBuild } = await import('@/app/api/executive/brief/pdf/route')
+  
+  // Call old implementation with same signature
+  return oldBuild(
+    input.data,
+    input.organizationName,
+    input.generatedBy,
+    input.timeRange,
+    input.buildSha,
+    input.reportId,
+    input.baseUrl
+  )
   
   // Generate QR code before PDF generation (async operation)
   const verifyUrl = baseUrl 

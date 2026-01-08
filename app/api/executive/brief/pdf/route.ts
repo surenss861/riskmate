@@ -2528,8 +2528,11 @@ function addHeaderFooter(
  * TODO: This will be moved to lib/pdf/executiveBrief/build.ts incrementally
  * 
  * NOTE: This is exported as a regular function, not a route handler
+ * 
+ * @deprecated This will be replaced by lib/pdf/reports/executiveBrief/build.ts
+ * For now, it's kept for backward compatibility during incremental migration
  */
-async function buildExecutiveBriefPDF(
+export async function buildExecutiveBriefPDF(
   data: RiskPostureData,
   organizationName: string,
   generatedBy: string,
