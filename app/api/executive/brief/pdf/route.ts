@@ -2645,9 +2645,18 @@ async function buildExecutiveBriefPDF(
     // Region F: Data Coverage
     // ============================================
     
+    // CRITICAL: Compute hasPriorPeriodData early (needed for KPI subtitles and table Change column)
+    const hasPriorPeriodData = data.delta !== undefined || 
+                               data.deltas?.high_risk_jobs !== undefined || 
+                               data.deltas?.open_incidents !== undefined ||
+                               data.deltas?.violations !== undefined ||
+                               data.deltas?.flagged_jobs !== undefined ||
+                               data.deltas?.pending_signoffs !== undefined ||
+                               false // Explicit false fallback
+    
     // Region B: Premium KPI Cards (fixed height ~95px)
     const kpiCardsY = doc.y
-    renderKPIStrip(doc, data, pageWidth, kpiCardsY, timeRange)
+    renderKPIStrip(doc, data, pageWidth, kpiCardsY, timeRange, hasPriorPeriodData)
     const afterKPIsY = doc.y
 
     // Region C: Risk Posture Gauge (fixed height ~100px)
