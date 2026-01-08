@@ -2303,15 +2303,35 @@ function addHeaderFooter(
       // CRITICAL: Always show hash if available (metadata hash during generation, actual PDF hash after)
       // This is one of the strongest "this is defensible" signals
       if (pdfHash) {
-        // Show full hash formatted in 4-char groups for readability: "SHA-256: XXXX XXXX ..."
-      // This makes line wraps look intentional, not like rendering accidents
-      const hashFormatted = pdfHash.match(/.{1,4}/g)?.join(' ') || pdfHash
-      const hashText = sanitizeAscii(`SHA-256: ${hashFormatted}`)
-        doc
-          .fontSize(8)
-          .font('Courier') // Monospace font for hash
-          .fillColor(STYLES.colors.secondaryText)
-          .text(hashText, capsuleContentX, currentY, { width: capsuleContentWidth })
+        // Show full hash formatted in 4-char groups for readability
+        // CRITICAL: Keep "SHA-256:" on the same line as the first chunk if possible (looks more intentional)
+        const hashFormatted = pdfHash.match(/.{1,4}/g)?.join(' ') || pdfHash
+        const hashText = sanitizeAscii(`SHA-256: ${hashFormatted}`)
+        
+        // Check if "SHA-256: XXXX" fits on one line
+        doc.fontSize(8).font('Courier')
+        const sha256Label = 'SHA-256: '
+        const firstChunk = hashFormatted.split(' ')[0] || ''
+        const sha256WithFirstChunk = `${sha256Label}${firstChunk}`
+        const sha256WithFirstChunkWidth = doc.widthOfString(sha256WithFirstChunk)
+        
+        if (sha256WithFirstChunkWidth <= capsuleContentWidth * 0.8) {
+          // "SHA-256: XXXX" fits on one line - render as single line, let rest wrap naturally
+          doc
+            .fillColor(STYLES.colors.secondaryText)
+            .text(hashText, capsuleContentX, currentY, { width: capsuleContentWidth })
+        } else {
+          // "SHA-256: XXXX" doesn't fit - render label on first line, hash on second
+          doc
+            .fillColor(STYLES.colors.secondaryText)
+            .text(sanitizeAscii(sha256Label), capsuleContentX, currentY, { width: capsuleContentWidth })
+          currentY += 9
+          doc
+            .fontSize(8)
+            .font('Courier')
+            .fillColor(STYLES.colors.secondaryText)
+            .text(sanitizeAscii(hashFormatted), capsuleContentX, currentY, { width: capsuleContentWidth })
+        }
         currentY += 11
       } else {
         // If hash is not available, show a placeholder (should not happen in production)
