@@ -281,13 +281,18 @@ function writeKpiCard(
   }
   
   // Label (small, below value) - CRITICAL: Use sanitizeAscii() for KPI labels
+  // CRITICAL: Split label and subtitle to prevent awkward breaks like "Attestation / coverage vs prior 30d"
   const labelY = valueY + STYLES.sizes.kpiValue + 6
   const sanitizedLabel = sanitizeAscii(labelText) // Already sanitized with sanitizeAscii above
+  
+    // For "Attestation coverage", ensure it's on one line - use non-breaking space to prevent line break
+    const labelWithNonBreaking = sanitizedLabel.replace('Attestation coverage', 'Attestation\u00A0coverage')
+  
   doc
     .fontSize(STYLES.sizes.kpiLabel)
     .font(STYLES.fonts.body)
     .fillColor(STYLES.colors.secondaryText)
-    .text(sanitizedLabel, contentX, labelY, {
+    .text(labelWithNonBreaking, contentX, labelY, {
       width: contentWidth,
       align: 'left',
     })
@@ -763,14 +768,16 @@ function renderExecutiveSummary(
     const sanitizedRequire = sanitizeAscii('require immediate attention')
     
     // CRITICAL: Compose using only sanitized strings, then sanitize the result with sanitizeAscii()
+    // Use non-breaking space (\u00A0) for "high risk" to prevent awkward line breaks like "high / risk"
+    const highRiskNonBreaking = sanitizedHighRisk.replace(' ', '\u00A0') // Non-breaking space
     if (data.high_risk_jobs === 1) {
-      const composed = `Exposure is ${sanitizedExposure}; ${sanitizedMitigate} 1 ${sanitizedHighRisk} ${sanitizedJob} to ${sanitizedReduce}.`
+      const composed = `Exposure is ${sanitizedExposure}; ${sanitizedMitigate} 1 ${highRiskNonBreaking} ${sanitizedJob} to ${sanitizedReduce}.`
       headline = sanitizeAscii(composed)
     } else if (data.high_risk_jobs > 1) {
-      const composed = `Exposure is ${sanitizedExposure}; ${sanitizedMitigate} ${data.high_risk_jobs} ${sanitizedHighRisk} ${sanitizedJobs} to ${sanitizedReduce}.`
+      const composed = `Exposure is ${sanitizedExposure}; ${sanitizedMitigate} ${data.high_risk_jobs} ${highRiskNonBreaking} ${sanitizedJobs} to ${sanitizedReduce}.`
       headline = sanitizeAscii(composed)
     } else {
-      const composed = `Exposure is ${sanitizedExposure}; no ${sanitizedHighRisk} ${sanitizedJobs} ${sanitizedRequire}.`
+      const composed = `Exposure is ${sanitizedExposure}; no ${highRiskNonBreaking} ${sanitizedJobs} ${sanitizedRequire}.`
       headline = sanitizeAscii(composed)
     }
   }
@@ -1473,25 +1480,19 @@ function renderMicroTopDrivers(
     driverRows.forEach((row) => {
       if (!hasSpace(doc, 12)) return
       const rowY = doc.y
-      const labelX = margin + 20
-      const valueX = margin + 200
-      
-      // Label
-      safeText(doc, sanitizeAscii(row.label + ':'), labelX, rowY, {
-        fontSize: STYLES.sizes.caption,
-        font: STYLES.fonts.body,
-        color: STYLES.colors.secondaryText,
-        width: 180,
-      })
-      
-      // Value
-      safeText(doc, sanitizeAscii(String(row.value)), valueX, rowY, {
-        fontSize: STYLES.sizes.caption,
-        font: STYLES.fonts.header, // Bold for values
-        color: STYLES.colors.primaryText,
-        width: 60,
-      })
-      
+      // CRITICAL: Use writeKV for atomic rendering - ensures label + value always print together
+      // This prevents blank values and ensures 0 is shown explicitly
+      const valueText = String(row.value ?? 0) // Always show 0 explicitly, never blank
+      writeKV(
+        doc,
+        row.label + ':',
+        valueText,
+        margin + 20,
+        rowY,
+        180,
+        pageWidth - margin * 2 - 200,
+        { labelAlign: 'left', valueAlign: 'left' }
+      )
       doc.y = rowY + 10
     })
     doc.moveDown(0.3)
@@ -2330,6 +2331,12 @@ async function buildExecutiveBriefPDF(
     const generatedAt = new Date()
     // reportId is already a parameter, don't redeclare it
     
+    // CRITICAL: Compute deterministic hash from report metadata for Integrity capsule
+    // This hash will be shown in the PDF, and the actual PDF hash will be computed later
+    // Both hashes are verifiable - metadata hash is deterministic, PDF hash is from final buffer
+    const metadataHashInput = `${reportId}-${generatedAt.toISOString()}-${organizationName}-${timeRange}`
+    const metadataHash = crypto.createHash('sha256').update(metadataHashInput).digest('hex')
+    
     // Calculate time window boundaries
     const end = new Date()
     const start = new Date()
@@ -2611,12 +2618,12 @@ async function buildExecutiveBriefPDF(
     }
 
     // Add headers/footers to all pages
-    // Note: hash will be available after PDF generation, but we need to pass it
-    // For now, we'll calculate it in the callback and pass undefined here
-    // The hash will be added in a post-pass if needed
+    // CRITICAL: Pass metadata hash for Integrity capsule display
+    // The actual PDF hash will be computed after generation and stored in headers/database
+    // Both hashes are verifiable - metadata hash is deterministic, PDF hash is from final buffer
     // QR code is pre-generated and passed in
     // Pass Page 2 column layout for Integrity capsule positioning
-    addHeaderFooter(doc, organizationName, timeRange, reportId, generatedAt, buildSha, timeWindow, baseUrl, undefined, qrCodeBuffer, page2ColumnLayout)
+    addHeaderFooter(doc, organizationName, timeRange, reportId, generatedAt, buildSha, timeWindow, baseUrl, metadataHash, qrCodeBuffer, page2ColumnLayout)
 
     doc.end()
   })
