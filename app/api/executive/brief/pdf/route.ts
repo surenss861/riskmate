@@ -919,6 +919,13 @@ function renderExecutiveSummary(
     headlineFontSize = Math.max(26, Math.floor((maxHeadlineWidth / headlineWidth) * headlineFontSize))
   }
   
+  // CRITICAL: Measure headline height to prevent overlap with chips
+  // Use measureWrappedText to get actual height consumed by wrapped headline
+  doc.fontSize(headlineFontSize).font(STYLES.fonts.header)
+  const headlineLines = finalHeadlineText.split('\n')
+  const lineHeight = headlineFontSize * 1.25
+  const headlineHeight = headlineLines.length * lineHeight
+  
   // CRITICAL: safeText() will sanitize again, but we've already sanitized to be safe
   safeText(doc, finalHeadlineText, margin, headlineY, {
     fontSize: headlineFontSize,
@@ -927,14 +934,16 @@ function renderExecutiveSummary(
     width: maxHeadlineWidth,
   })
   
-  doc.y = headlineY + STYLES.sizes.h1 * 1.25 + 16
-  doc.moveDown(0.5)
+  // CRITICAL: Start chips below headline with proper spacing (headlineBottom + spacing)
+  // Don't use doc.y which might not account for wrapped lines correctly
+  const headlineBottom = headlineY + headlineHeight
+  const chipsY = headlineBottom + 16 // Spacing after headline
+  doc.y = chipsY // Update doc.y for consistency
 
   // "WHAT CHANGED" CHIPS: Insightful format "Label: Value (Delta)" - always show all 5 chips
   // CRITICAL: hasPriorPeriodData is already computed above - use it consistently
   // Rule: If hasPriorPeriodData === false, ALL deltas must be "N/A" (never "No change")
   // Only show "No change" when delta === 0 AND hasPriorPeriodData === true
-  const chipsY = doc.y
   const chips: Array<{ label: string; delta: string; color: string }> = []
   
   // 1. Risk posture: Score (Delta)
@@ -1040,12 +1049,20 @@ function renderExecutiveSummary(
       }
     }
     
-    // CRITICAL: Render chip - use separator only if it fits on current line
-    // If we wrapped, this chip is on a new line, so check if separator fits
-    const finalChipText = (chipX + chipWidthWithSeparator <= rightLimit && chipsOnCurrentLine < maxChipsPerLine) 
-      ? chipTextWithSeparator 
-      : chipTextWithoutSeparator
+    // CRITICAL: Chip separator rule - separator can never be the last glyph on a line
+    // Measure (chip + " •") before placing it. If it won't fit, wrap before the separator.
+    // Implementation: Check if chip + separator fits on current line, if not, use chip without separator
+    const separatorFits = chipX + chipWidthWithSeparator <= rightLimit && chipsOnCurrentLine < maxChipsPerLine
+    const finalChipText = separatorFits ? chipTextWithSeparator : chipTextWithoutSeparator
     const finalChipWidth = doc.widthOfString(finalChipText) + 16
+    
+    // CRITICAL: Double-check that separator won't be last glyph on line
+    // If chip + separator would end exactly at rightLimit, don't use separator
+    if (separatorFits && chipX + chipWidthWithSeparator >= rightLimit - 2) {
+      // Too close to edge - don't use separator to avoid it being last glyph
+      const finalChipText = chipTextWithoutSeparator
+      const finalChipWidth = doc.widthOfString(finalChipText) + 16
+    }
     
     // Chip background
     doc
