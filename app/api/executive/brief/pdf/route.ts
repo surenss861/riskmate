@@ -1246,7 +1246,21 @@ function renderMetricsTable(
     font: STYLES.fonts.header,
     color: STYLES.colors.primaryText,
   })
-  doc.moveDown(0.5)
+  
+  // CRITICAL: Move "prior period unavailable" note OUT of table header to prevent wrapping
+  // Put it as a caption line under "Key Metrics" (full-width) instead of inside header columns
+  if (!hasPriorPeriodData) {
+    doc.moveDown(0.3)
+    safeText(doc, 'Note: prior period unavailable (deltas hidden)', margin, doc.y, {
+      fontSize: STYLES.sizes.caption - 1,
+      font: STYLES.fonts.body,
+      color: STYLES.colors.secondaryText,
+      width: pageWidth - margin * 2, // Full width for caption
+    })
+    doc.moveDown(0.3)
+  } else {
+    doc.moveDown(0.5)
+  }
 
   const tableY = doc.y
   const tableWidth = pageWidth - margin * 2
@@ -1287,6 +1301,7 @@ function renderMetricsTable(
   })
   
   // CRITICAL: Only show Change column header if prior period is available
+  // Note: "prior period unavailable" note is now shown as caption under section title (not in header)
   if (showChangeColumn) {
     safeText(doc, 'Change', margin + col1Width + col2Width + cellPadding, headerTextY, {
       width: col3Width - cellPadding * 2,
@@ -1295,16 +1310,8 @@ function renderMetricsTable(
       font: STYLES.fonts.header,
       color: STYLES.colors.primaryText,
     })
-  } else {
-    // If no prior period, show a single header note instead of per-row N/A
-    safeText(doc, 'Note: prior period unavailable', margin + col1Width + col2Width + cellPadding, headerTextY, {
-      width: tableWidth - col1Width - col2Width - cellPadding * 2,
-      align: 'left',
-      fontSize: STYLES.sizes.caption - 1,
-      font: STYLES.fonts.body,
-      color: STYLES.colors.secondaryText,
-    })
   }
+  // If no prior period, header is clean: Metric | Current (no Change column, no note in header)
 
   // Column dividers in header
   doc
