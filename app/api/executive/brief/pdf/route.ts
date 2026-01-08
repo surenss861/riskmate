@@ -1000,14 +1000,22 @@ function renderExecutiveSummary(
   
   for (let i = 0; i < chips.length; i++) {
     const chip = chips[i]
-    // CRITICAL: Add separator (•) between chips for structure, not one long sentence
-    // Format: "Label Value (Delta) •" to make it scan better
+    // CRITICAL: Chip separator wrap rule - separator never ends a line
+    // If the next chip won't fit, wrap before printing the separator
+    const chipTextWithoutSeparator = `${chip.label} ${chip.delta}`
     const separator = i < chips.length - 1 ? ' •' : '' // Add separator except for last chip
-    const chipText = `${chip.label} ${chip.delta}${separator}`
-    const chipWidth = doc.widthOfString(chipText) + 16 // Padding
+    const chipTextWithSeparator = `${chipTextWithoutSeparator}${separator}`
+    
+    // Check if chip + separator fits on current line
+    const chipWidthWithoutSeparator = doc.widthOfString(chipTextWithoutSeparator) + 16
+    const chipWidthWithSeparator = doc.widthOfString(chipTextWithSeparator) + 16
     
     // Check if we need to wrap to next line
-    if (chipX + chipWidth > rightLimit || chipsOnCurrentLine >= maxChipsPerLine) {
+    // CRITICAL: If chip + separator doesn't fit, wrap before the separator (don't let "•" end a line)
+    const willFitWithSeparator = chipX + chipWidthWithSeparator <= rightLimit && chipsOnCurrentLine < maxChipsPerLine
+    const needsWrap = !willFitWithSeparator || chipsOnCurrentLine >= maxChipsPerLine
+    
+    if (needsWrap) {
       // Move to next line if we haven't exceeded max lines
       const currentLine = Math.floor(i / maxChipsPerLine)
       if (currentLine < maxLines) {
@@ -1067,9 +1075,10 @@ function renderExecutiveSummary(
     // The headline already serves as the finding, so we move to "Why it matters"
     
     // Line 2: Why it matters (1 sentence, tie to audit/claims/contract exposure)
+    // CRITICAL: Add explicit label "Why it matters:" (same style weight as "Decision requested:")
     let whyItMatters = ''
     if (data.high_risk_jobs > 0) {
-      whyItMatters = `Unmitigated high risk jobs increase audit exposure, potential compliance findings, and claims liability.`
+      whyItMatters = `Why it matters: Unmitigated high risk jobs increase audit exposure, potential compliance findings, and claims liability.`
     } else if (data.open_incidents > 0) {
       whyItMatters = `Open incidents indicate active safety gaps that increase audit risk and potential contract violations.`
     } else if (data.posture_score !== undefined && data.posture_score < 50) {
@@ -2200,12 +2209,35 @@ function addHeaderFooter(
       let currentY = capsuleContentY
       
       // CRITICAL: Use writeLine helper to prevent overlap - returns next Y position
-      const writeLine = (text: string, fontSize: number, font: string, lineGap: number = 11): number => {
-        doc
-          .fontSize(fontSize)
-          .font(font)
-          .fillColor(STYLES.colors.secondaryText)
-          .text(text, capsuleContentX, currentY, { width: capsuleContentWidth })
+      // Hard rule: every line is exactly one doc.text(), no multi-part composition, no continued, no second writes on the same Y
+      // This eliminates copy/paste weirdness forever
+      const writeLine = (text: string, fontSize: number, font: string, lineGap: number = 11, options?: { noWrap?: boolean }): number => {
+        doc.fontSize(fontSize).font(font).fillColor(STYLES.colors.secondaryText)
+        
+        // CRITICAL: For atomic lines (like Generated/Window), prevent wrapping by shrinking font if needed
+        if (options?.noWrap) {
+          let atomicText = text
+          let atomicFontSize = fontSize
+          doc.fontSize(atomicFontSize).font(font)
+          let textWidth = doc.widthOfString(atomicText)
+          
+          // If text doesn't fit, shrink font size until it fits (min 6pt)
+          while (textWidth > capsuleContentWidth && atomicFontSize > 6) {
+            atomicFontSize -= 0.5
+            doc.fontSize(atomicFontSize).font(font)
+            textWidth = doc.widthOfString(atomicText)
+          }
+          
+          // Render as single atomic line (no wrapping)
+          doc.text(atomicText, capsuleContentX, currentY, { 
+            width: capsuleContentWidth,
+            lineBreak: false, // CRITICAL: Prevent any wrapping
+          })
+        } else {
+          // Normal line with wrapping allowed
+          doc.text(text, capsuleContentX, currentY, { width: capsuleContentWidth })
+        }
+        
         currentY += lineGap
         return currentY
       }
@@ -2233,14 +2265,14 @@ function addHeaderFooter(
         hour12: true,
         timeZoneName: 'short'
       })
-      // CRITICAL: Force hard newline before Window: so extraction never merges lines
-      // Render as two explicit lines: "Generated: ..." and "Window: ..." (never "EST Window:")
-      // Use writeLine helper which ensures proper line separation
-      currentY = writeLine(`Generated: ${sanitizeText(generatedText)}`, 8, STYLES.fonts.body, 14) // Increased lineGap to ensure separation
+      // CRITICAL: Atomic writes - "Generated:" and "Window:" must be completely separate lines
+      // Make Generated one atomic write: "Generated: Jan 8, 2026, 5:36 AM EST" (no wrapping, shrink font if needed)
+      // Make Window a separate atomic write: "Window: Dec 9, 2025 - Jan 8, 2026" (no wrapping)
+      // Don't let timezone ("EST") be written as its own doc.text() or be auto-wrapped mid-line
+      const generatedLine = `Generated: ${sanitizeText(generatedText)}`
+      currentY = writeLine(generatedLine, 8, STYLES.fonts.body, 14, { noWrap: true }) // Atomic: no wrapping, shrink font if needed
       
-      // Data window start/end (not just "Last 30 days") - separate line, no collision
-      // CRITICAL: Hard newline ensures "Generated: ... AM EST" and "Window: ..." never merge in extraction
-      // This must be a completely separate writeLine() call to guarantee line break
+      // Data window start/end (not just "Last 30 days") - separate atomic line, no collision
       const windowStartStr = timeWindow.start.toLocaleDateString('en-US', {
         timeZone: 'America/New_York',
         month: 'short',
@@ -2253,9 +2285,10 @@ function addHeaderFooter(
         day: 'numeric',
         year: 'numeric',
       })
-      // CRITICAL: This is a separate writeLine call - ensures "Window:" starts on new line
-      // The writeLine helper advances currentY, so this will be on a new line
-      currentY = writeLine(`Window: ${sanitizeText(windowStartStr)} - ${sanitizeText(windowEndStr)}`, 8, STYLES.fonts.body, 11)
+      // CRITICAL: This is a separate atomic writeLine call - ensures "Window:" starts on new line
+      // Atomic: no wrapping, shrink font if needed to prevent "EST Window:" merge
+      const windowLine = `Window: ${sanitizeText(windowStartStr)} - ${sanitizeText(windowEndStr)}`
+      currentY = writeLine(windowLine, 8, STYLES.fonts.body, 11, { noWrap: true })
       
       // Source tables summary - CRITICAL: sanitize
       const sourcesText = sanitizeText('Sources: jobs, incidents, attestations')
