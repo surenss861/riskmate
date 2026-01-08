@@ -1040,9 +1040,16 @@ function renderExecutiveSummary(
       }
     }
     
+    // CRITICAL: Render chip - use separator only if it fits on current line
+    // If we wrapped, this chip is on a new line, so check if separator fits
+    const finalChipText = (chipX + chipWidthWithSeparator <= rightLimit && chipsOnCurrentLine < maxChipsPerLine) 
+      ? chipTextWithSeparator 
+      : chipTextWithoutSeparator
+    const finalChipWidth = doc.widthOfString(finalChipText) + 16
+    
     // Chip background
     doc
-      .rect(chipX, chipY, chipWidth, chipHeight)
+      .rect(chipX, chipY, finalChipWidth, chipHeight)
       .fill(STYLES.colors.cardBg)
       .strokeColor(STYLES.colors.borderGray)
       .lineWidth(0.5)
@@ -1051,9 +1058,9 @@ function renderExecutiveSummary(
     // Chip text
     doc
       .fillColor(chip.color)
-      .text(chipText, chipX + 8, chipY + 6, { width: chipWidth - 16 })
+      .text(finalChipText, chipX + 8, chipY + 6, { width: finalChipWidth - 16 })
     
-    chipX += chipWidth + chipGap
+    chipX += finalChipWidth + chipGap
     chipsOnCurrentLine++
   }
   
