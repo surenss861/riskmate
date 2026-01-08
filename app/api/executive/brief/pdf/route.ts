@@ -2523,16 +2523,14 @@ function addHeaderFooter(
 /**
  * Build comprehensive executive brief PDF
  * NOTE: This function is used internally by the route handler.
- * For external use (smoke tests, CI), import from lib/pdf/executiveBrief/build.ts
+ * For external use (smoke tests, CI), import from lib/pdf/reports/executiveBrief/build.ts
  * 
- * TODO: This will be moved to lib/pdf/executiveBrief/build.ts incrementally
+ * TODO: This will be moved to lib/pdf/reports/executiveBrief/build.ts incrementally
  * 
- * NOTE: This is exported as a regular function, not a route handler
- * 
- * @deprecated This will be replaced by lib/pdf/reports/executiveBrief/build.ts
- * For now, it's kept for backward compatibility during incremental migration
+ * NOTE: This is NOT exported (Next.js routes can only export route handlers)
+ * The new build.ts will be implemented incrementally and replace this
  */
-export async function buildExecutiveBriefPDF(
+async function buildExecutiveBriefPDF(
   data: RiskPostureData,
   organizationName: string,
   generatedBy: string,
