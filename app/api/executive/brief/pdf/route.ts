@@ -1312,12 +1312,12 @@ function renderMetricsTable(
     .lineWidth(0.5)
     .moveTo(margin + col1Width, tableY)
     .lineTo(margin + col1Width, tableY + headerHeight)
-    if (showChangeColumn) {
-      doc
-        .moveTo(margin + col1Width + col2Width, tableY)
-        .lineTo(margin + col1Width + col2Width, tableY + headerHeight)
-    }
-    .stroke()
+  if (showChangeColumn) {
+    doc
+      .moveTo(margin + col1Width + col2Width, tableY)
+      .lineTo(margin + col1Width + col2Width, tableY + headerHeight)
+  }
+  doc.stroke()
 
   doc.y = tableY + headerHeight
 
