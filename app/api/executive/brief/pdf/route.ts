@@ -583,6 +583,7 @@ function renderKPIStrip(
 
     // Atomic KPI card writer - renders label + value + delta + subtitle as single unit
     // This allows numeric-only values in KPI context (paired with label)
+    // CRITICAL: hasPriorPeriodData must drive subtitle - if false, show "prior unavailable" not "vs prior 30d"
     writeKpiCard(doc, {
       cardX,
       cardY,
@@ -593,6 +594,7 @@ function renderKPIStrip(
       delta: kpi.delta,
       timeRange,
       color: kpi.color,
+      hasPriorPeriodData: hasPriorPeriodData, // CRITICAL: Use the function parameter, not kpi property
     })
   })
 
@@ -2232,11 +2234,13 @@ function addHeaderFooter(
         timeZoneName: 'short'
       })
       // CRITICAL: Force hard newline before Window: so extraction never merges lines
-      // Don't rely on Y spacing alone - treat Generated: and Window: as separate writeLine() calls
-      currentY = writeLine(`Generated: ${sanitizeText(generatedText)}`, 8, STYLES.fonts.body, 12) // Extra spacing
+      // Render as two explicit lines: "Generated: ..." and "Window: ..." (never "EST Window:")
+      // Use writeLine helper which ensures proper line separation
+      currentY = writeLine(`Generated: ${sanitizeText(generatedText)}`, 8, STYLES.fonts.body, 14) // Increased lineGap to ensure separation
       
       // Data window start/end (not just "Last 30 days") - separate line, no collision
       // CRITICAL: Hard newline ensures "Generated: ... AM EST" and "Window: ..." never merge in extraction
+      // This must be a completely separate writeLine() call to guarantee line break
       const windowStartStr = timeWindow.start.toLocaleDateString('en-US', {
         timeZone: 'America/New_York',
         month: 'short',
@@ -2249,7 +2253,8 @@ function addHeaderFooter(
         day: 'numeric',
         year: 'numeric',
       })
-      // Force new line by ensuring currentY is advanced and text is on separate line
+      // CRITICAL: This is a separate writeLine call - ensures "Window:" starts on new line
+      // The writeLine helper advances currentY, so this will be on a new line
       currentY = writeLine(`Window: ${sanitizeText(windowStartStr)} - ${sanitizeText(windowEndStr)}`, 8, STYLES.fonts.body, 11)
       
       // Source tables summary - CRITICAL: sanitize
