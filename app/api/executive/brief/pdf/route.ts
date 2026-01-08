@@ -2684,15 +2684,7 @@ async function buildExecutiveBriefPDF(
     const remainingSpacePage1 = page1Bottom - doc.y
 
     // Region E: Metrics Table (only if it fits) OR move to Page 2
-    // CRITICAL: hasPriorPeriodData is computed in renderExecutiveSummary - need to compute it here too
-    // OR pass it as a parameter - for now, compute it here to match chip logic
-    const hasPriorPeriodData = data.delta !== undefined || 
-                               data.deltas?.high_risk_jobs !== undefined || 
-                               data.deltas?.open_incidents !== undefined ||
-                               data.deltas?.violations !== undefined ||
-                               data.deltas?.flagged_jobs !== undefined ||
-                               data.deltas?.pending_signoffs !== undefined ||
-                               data.deltas?.proof_packs !== undefined
+    // CRITICAL: hasPriorPeriodData is already computed above (before KPI cards)
     
     const metricsRows = buildMetricsRows(data, hasPriorPeriodData)
     const sectionHeaderHeight = STYLES.sizes.h2 + 20
