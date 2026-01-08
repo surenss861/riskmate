@@ -60,12 +60,15 @@ export function writeLine(
   fontSize: number,
   font: string,
   lineGap: number = 11,
-  options?: { noWrap?: boolean; minFont?: number }
+  options?: { noWrap?: boolean; minFont?: number; x?: number; width?: number; color?: string }
 ): number {
   const minFont = options?.minFont || 6
-  let currentY = doc.y || 0
+  const currentY = doc.y || 0
+  const x = options?.x ?? 0
+  const width = options?.width ?? (doc.page.width - 96)
+  const color = options?.color || '#666666'
   
-  doc.fontSize(fontSize).font(font).fillColor('#666666')
+  doc.fontSize(fontSize).font(font).fillColor(color)
   
   // CRITICAL: For atomic lines (like Generated/Window), prevent wrapping by shrinking font if needed
   if (options?.noWrap) {
@@ -75,27 +78,27 @@ export function writeLine(
     let textWidth = doc.widthOfString(atomicText)
     
     // If text doesn't fit, shrink font size until it fits (min 6pt)
-    while (textWidth > (options.width || doc.page.width - 96) && atomicFontSize > minFont) {
+    while (textWidth > width && atomicFontSize > minFont) {
       atomicFontSize -= 0.5
       doc.fontSize(atomicFontSize).font(font)
       textWidth = doc.widthOfString(atomicText)
     }
     
     // Render as single atomic line (no wrapping)
-    doc.text(atomicText, options.x || 0, currentY, {
-      width: options.width || doc.page.width - 96,
+    doc.text(atomicText, x, currentY, {
+      width: width,
       lineBreak: false, // CRITICAL: Prevent any wrapping
     })
   } else {
     // Normal line with wrapping allowed
-    doc.text(sanitizeText(text), options.x || 0, currentY, {
-      width: options.width || doc.page.width - 96,
+    doc.text(sanitizeText(text), x, currentY, {
+      width: width,
     })
   }
   
-  currentY += lineGap
-  doc.y = currentY
-  return currentY
+  const nextY = currentY + lineGap
+  doc.y = nextY
+  return nextY
 }
 
 /**
