@@ -216,6 +216,7 @@ function writeKpiCard(
     delta?: number
     timeRange: string
     color: string
+    hasPriorPeriodData?: boolean // CRITICAL: Pass prior period availability for subtitle
   }
 ): void {
   const cardPadding = STYLES.spacing.cardPadding
@@ -294,16 +295,22 @@ function writeKpiCard(
     color: STYLES.colors.secondaryText,
   })
   
-  // Subtitle - ALWAYS show "vs prior 30d" (or appropriate time range) - CRITICAL: sanitize
-  // Position subtitle below label with proper spacing
+  // Subtitle - CRITICAL: Conditional based on prior period availability
+  // If prior unavailable, show "prior unavailable" instead of "vs prior 30d" to avoid contradiction
   const subtitleY = labelY + labelHeight + 4
-  const timeRangeLabel = opts.timeRange === '7d' ? 'vs prior 7d' : opts.timeRange === '30d' ? 'vs prior 30d' : opts.timeRange === '90d' ? 'vs prior 90d' : 'vs prior period'
-  const sanitizedTimeRange = sanitizeText(timeRangeLabel)
+  let subtitleText: string
+  if (opts.hasPriorPeriodData === false) {
+    subtitleText = 'prior unavailable' // Don't say "vs prior 30d" when prior is unavailable
+  } else {
+    const timeRangeLabel = opts.timeRange === '7d' ? 'vs prior 7d' : opts.timeRange === '30d' ? 'vs prior 30d' : opts.timeRange === '90d' ? 'vs prior 90d' : 'vs prior period'
+    subtitleText = timeRangeLabel
+  }
+  const sanitizedSubtitle = sanitizeText(subtitleText)
   doc
     .fontSize(STYLES.sizes.kpiDelta)
     .font(STYLES.fonts.body)
     .fillColor(STYLES.colors.secondaryText)
-    .text(sanitizedTimeRange, contentX, subtitleY, {
+    .text(sanitizedSubtitle, contentX, subtitleY, {
       width: contentWidth,
       align: 'left',
     })
@@ -507,7 +514,8 @@ function renderKPIStrip(
   data: RiskPostureData,
   pageWidth: number,
   startY: number,
-  timeRange: string
+  timeRange: string,
+  hasPriorPeriodData: boolean // CRITICAL: Pass prior period availability for conditional subtitle
 ): void {
   const margin = STYLES.spacing.margin
   const kpiCardHeight = 95
@@ -523,18 +531,21 @@ function renderKPIStrip(
       delta: data.delta,
       color: data.posture_score !== undefined && data.posture_score >= 75 ? STYLES.colors.riskLow : 
              data.posture_score !== undefined && data.posture_score >= 50 ? STYLES.colors.riskMedium : STYLES.colors.riskHigh,
+      hasPriorPeriodData,
     },
     {
       label: METRIC_LABELS.highRiskJobs, // Use centralized label
       value: `${data.high_risk_jobs}`,
       delta: data.deltas?.high_risk_jobs,
       color: STYLES.colors.primaryText,
+      hasPriorPeriodData,
     },
     {
       label: METRIC_LABELS.openIncidents, // Use centralized label
       value: `${data.open_incidents}`,
       delta: data.deltas?.open_incidents,
       color: STYLES.colors.riskHigh,
+      hasPriorPeriodData,
     },
     {
       label: 'Attestation coverage',
@@ -543,12 +554,14 @@ function renderKPIStrip(
         : 'No data',
       delta: undefined,
       color: STYLES.colors.primaryText,
+      hasPriorPeriodData,
     },
     {
       label: 'Sign-offs',
       value: `${data.signed_signoffs}/${data.signed_signoffs + data.pending_signoffs}`, // One line, no split
       delta: undefined,
       color: STYLES.colors.primaryText,
+      hasPriorPeriodData,
     },
   ]
 
@@ -790,7 +803,7 @@ function renderTrendSparkline(
       .fontSize(7)
       .font(STYLES.fonts.body)
       .fillColor(STYLES.colors.secondaryText)
-      .text(`Trend unavailable (need 4 periods of data)`, x, y + sparklineHeight + 4, { width: width })
+      .text(`Trend unavailable (need 4 completed periods)`, x, y + sparklineHeight + 4, { width: width })
     return
   }
   
@@ -985,7 +998,10 @@ function renderExecutiveSummary(
   
   for (let i = 0; i < chips.length; i++) {
     const chip = chips[i]
-    const chipText = `${chip.label} ${chip.delta}`
+    // CRITICAL: Add separator (•) between chips for structure, not one long sentence
+    // Format: "Label Value (Delta) •" to make it scan better
+    const separator = i < chips.length - 1 ? ' •' : '' // Add separator except for last chip
+    const chipText = `${chip.label} ${chip.delta}${separator}`
     const chipWidth = doc.widthOfString(chipText) + 16 // Padding
     
     // Check if we need to wrap to next line
@@ -1234,10 +1250,13 @@ function renderMetricsTable(
 
   const tableY = doc.y
   const tableWidth = pageWidth - margin * 2
+  // CRITICAL: Hide Change column when prior period is unavailable to kill "N/A spam"
+  // Option: Hide column entirely when no prior period (cleaner than showing N/A everywhere)
+  const showChangeColumn = hasPriorPeriodData
   // Fixed column widths to prevent wrapping
   const col1Width = 280 // Metric name (fixed, wide enough)
-  const col2Width = 120 // Current value (fixed, right-aligned)
-  const col3Width = 80  // Change column (fixed, narrow)
+  const col2Width = showChangeColumn ? 120 : 200 // Current value (wider if no Change column)
+  const col3Width = showChangeColumn ? 80 : 0  // Change column (hidden if no prior period)
   const rowHeight = STYLES.spacing.tableRowHeight
   const cellPadding = STYLES.spacing.tableCellPadding
 
@@ -1266,13 +1285,26 @@ function renderMetricsTable(
     font: STYLES.fonts.header,
     color: STYLES.colors.primaryText,
   })
-  safeText(doc, 'Change', margin + col1Width + col2Width + cellPadding, headerTextY, {
-    width: col3Width - cellPadding * 2,
-    align: 'right',
-    fontSize: STYLES.sizes.caption,
-    font: STYLES.fonts.header,
-    color: STYLES.colors.primaryText,
-  })
+  
+  // CRITICAL: Only show Change column header if prior period is available
+  if (showChangeColumn) {
+    safeText(doc, 'Change', margin + col1Width + col2Width + cellPadding, headerTextY, {
+      width: col3Width - cellPadding * 2,
+      align: 'right',
+      fontSize: STYLES.sizes.caption,
+      font: STYLES.fonts.header,
+      color: STYLES.colors.primaryText,
+    })
+  } else {
+    // If no prior period, show a single header note instead of per-row N/A
+    safeText(doc, 'Note: prior period unavailable', margin + col1Width + col2Width + cellPadding, headerTextY, {
+      width: tableWidth - col1Width - col2Width - cellPadding * 2,
+      align: 'left',
+      fontSize: STYLES.sizes.caption - 1,
+      font: STYLES.fonts.body,
+      color: STYLES.colors.secondaryText,
+    })
+  }
 
   // Column dividers in header
   doc
@@ -1280,8 +1312,11 @@ function renderMetricsTable(
     .lineWidth(0.5)
     .moveTo(margin + col1Width, tableY)
     .lineTo(margin + col1Width, tableY + headerHeight)
-    .moveTo(margin + col1Width + col2Width, tableY)
-    .lineTo(margin + col1Width + col2Width, tableY + headerHeight)
+    if (showChangeColumn) {
+      doc
+        .moveTo(margin + col1Width + col2Width, tableY)
+        .lineTo(margin + col1Width + col2Width, tableY + headerHeight)
+    }
     .stroke()
 
   doc.y = tableY + headerHeight
@@ -2183,9 +2218,12 @@ function addHeaderFooter(
         hour12: true,
         timeZoneName: 'short'
       })
+      // CRITICAL: Force hard newline before Window: so extraction never merges lines
+      // Don't rely on Y spacing alone - treat Generated: and Window: as separate writeLine() calls
       currentY = writeLine(`Generated: ${sanitizeText(generatedText)}`, 8, STYLES.fonts.body, 12) // Extra spacing
       
       // Data window start/end (not just "Last 30 days") - separate line, no collision
+      // CRITICAL: Hard newline ensures "Generated: ... AM EST" and "Window: ..." never merge in extraction
       const windowStartStr = timeWindow.start.toLocaleDateString('en-US', {
         timeZone: 'America/New_York',
         month: 'short',
@@ -2198,6 +2236,7 @@ function addHeaderFooter(
         day: 'numeric',
         year: 'numeric',
       })
+      // Force new line by ensuring currentY is advanced and text is on separate line
       currentY = writeLine(`Window: ${sanitizeText(windowStartStr)} - ${sanitizeText(windowEndStr)}`, 8, STYLES.fonts.body, 11)
       
       // Source tables summary - CRITICAL: sanitize
