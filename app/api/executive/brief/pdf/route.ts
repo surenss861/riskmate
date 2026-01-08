@@ -871,20 +871,31 @@ function renderExecutiveSummary(
   doc.fontSize(headlineFontSize).font(STYLES.fonts.header)
   let headlineWidth = doc.widthOfString(headlineText)
   
-  // CRITICAL: Force designed wrap before "high risk" if headline is too long
-  // This prevents awkward splits like "high / risk"
+  // CRITICAL: Force designed wrap to keep "1 high risk job" together
+  // Prevent ugly breaks like "mitigate 1 / high risk job"
+  // Strategy: If headline contains "mitigate 1", force wrap before "mitigate" so "1 high risk job" stays together
   let finalHeadlineText = headlineText
-  if (headlineWidth > maxHeadlineWidth * 0.95 && headlineText.includes('high risk')) {
-    // Find position of "high risk" and insert line break before it
-    const highRiskIndex = headlineText.indexOf('high risk')
-    if (highRiskIndex > 0) {
-      // Insert line break before "high risk" - this creates a designed wrap
-      finalHeadlineText = headlineText.substring(0, highRiskIndex).trim() + '\n' + headlineText.substring(highRiskIndex)
+  if (headlineWidth > maxHeadlineWidth * 0.95 && headlineText.includes('mitigate 1')) {
+    // Find position of "mitigate 1" and insert line break before it
+    const mitigateIndex = headlineText.indexOf('mitigate 1')
+    if (mitigateIndex > 0) {
+      // Insert line break before "mitigate 1" - this keeps "1 high risk job" together on next line
+      finalHeadlineText = headlineText.substring(0, mitigateIndex).trim() + '\n' + headlineText.substring(mitigateIndex)
       // Re-measure with line break (measure both lines)
       const lines = finalHeadlineText.split('\n')
       const firstLineWidth = doc.widthOfString(lines[0])
       const secondLineWidth = doc.widthOfString(lines[1])
       headlineWidth = Math.max(firstLineWidth, secondLineWidth) // Use max width
+    }
+  } else if (headlineWidth > maxHeadlineWidth * 0.95 && headlineText.includes('high risk')) {
+    // Fallback: If no "mitigate 1", force wrap before "high risk" to prevent "high / risk" split
+    const highRiskIndex = headlineText.indexOf('high risk')
+    if (highRiskIndex > 0) {
+      finalHeadlineText = headlineText.substring(0, highRiskIndex).trim() + '\n' + headlineText.substring(highRiskIndex)
+      const lines = finalHeadlineText.split('\n')
+      const firstLineWidth = doc.widthOfString(lines[0])
+      const secondLineWidth = doc.widthOfString(lines[1])
+      headlineWidth = Math.max(firstLineWidth, secondLineWidth)
     }
   }
   
@@ -1338,9 +1349,10 @@ function renderMetricsTable(
       color: STYLES.colors.primaryText,
     })
 
-    // Delta (already normalized: "No change" or formatted delta string)
-    const deltaColor = metric.delta === 'No change' || metric.delta === '—'
-      ? STYLES.colors.secondaryText 
+    // Delta (already normalized: "No change", "N/A", or formatted delta string)
+    // CRITICAL: Make N/A visually neutral (no "good/bad" color vibes) - this is an exec-trust detail
+    const deltaColor = metric.delta === 'No change' || metric.delta === 'N/A' || metric.delta === '—'
+      ? STYLES.colors.secondaryText // Neutral gray for N/A, No change, and missing data
       : (metric.delta.startsWith('+') ? STYLES.colors.riskHigh : STYLES.colors.riskLow)
     safeText(doc, metric.delta, margin + col1Width + col2Width + cellPadding, rowY + cellPadding, {
       width: col3Width - cellPadding * 2,
@@ -1538,59 +1550,48 @@ function renderMicroTopDrivers(
   
   const timeRangeLabel = timeRange === '7d' ? 'last 7d' : timeRange === '30d' ? 'last 30d' : timeRange === '90d' ? 'last 90d' : 'selected period'
   
-  // CRITICAL: Replace "Not enough signal" with a fallback driver summary table
-  // This ensures the section never feels empty - always shows exposure drivers
+  // CRITICAL: Always show Exposure drivers as a 3-row mini table (Option A - cleanest)
+  // This matches memo vibe and prevents "empty section" energy
+  // Rule: Always render, always show values (even 0) - no blank state allowed
   ensureSpace(doc, 50, margin) // Need space for mini table
   
-  if (top3.length >= 3) {
-    // Render compact list if we have ≥3 event-based drivers
-    const driversText = top3.map(d => sanitizeAscii(d.label)).join(', ')
-    safeText(doc, sanitizeAscii(`Exposure drivers (${timeRangeLabel}): ${driversText}`), margin, doc.y, {
-      width: pageWidth - margin * 2,
-      fontSize: STYLES.sizes.caption,
-      font: STYLES.fonts.body,
-      color: STYLES.colors.secondaryText,
-    })
-    doc.moveDown(0.3)
-  } else {
-    // Fallback: Show a 3-row driver summary table (never feels empty)
-    // This is still valuable even without event taxonomy
-    safeText(doc, sanitizeAscii(`Exposure drivers (${timeRangeLabel}):`), margin, doc.y, {
-      width: pageWidth - margin * 2,
-      fontSize: STYLES.sizes.caption,
-      font: STYLES.fonts.body,
-      color: STYLES.colors.secondaryText,
-    })
-    doc.moveDown(0.2)
+  // Always render as mini table for consistency
+  safeText(doc, sanitizeAscii(`Exposure drivers (${timeRangeLabel}):`), margin, doc.y, {
+    width: pageWidth - margin * 2,
+    fontSize: STYLES.sizes.caption,
+    font: STYLES.fonts.body,
+    color: STYLES.colors.secondaryText,
+  })
+  doc.moveDown(0.2)
+  
+  // Mini table: High risk jobs, Open incidents, Pending sign-offs
+  // CRITICAL: Always render all 3 rows, always show values (even 0)
+  const driverRows = [
+    { label: 'High risk jobs', value: data.high_risk_jobs ?? 0 },
+    { label: 'Open incidents', value: data.open_incidents ?? 0 },
+    { label: 'Pending sign-offs', value: data.pending_signoffs ?? 0 },
+  ]
+  
+  driverRows.forEach((row) => {
+    if (!hasSpace(doc, 12)) return
+    const rowY = doc.y
+    // CRITICAL: Render as one atomic string (Label: ${value}) so values always print
+    // Enforce value before string building - no undefined/null can slip through
+    const value = row.value ?? 0 // Always have a value, never undefined/null
+    const valueText = String(value) // Convert to string explicitly
+    const atomicRowText = `${row.label}: ${valueText}`
     
-    // Mini table: High risk jobs, Open incidents, Pending sign-offs
-    const driverRows = [
-      { label: 'High risk jobs', value: data.high_risk_jobs },
-      { label: 'Open incidents', value: data.open_incidents },
-      { label: 'Pending sign-offs', value: data.pending_signoffs ?? 0 },
-    ]
-    
-    driverRows.forEach((row) => {
-      if (!hasSpace(doc, 12)) return
-      const rowY = doc.y
-      // CRITICAL: Render as one atomic string (Label: ${value}) so values always print
-      // Enforce value before string building - no undefined/null can slip through
-      const value = row.value ?? 0 // Always have a value, never undefined/null
-      const valueText = String(value) // Convert to string explicitly
-      const atomicRowText = `${row.label}: ${valueText}`
-      
-      // Use direct doc.text() for atomic rendering - no safeText filtering that might block values
-      doc
-        .fontSize(STYLES.sizes.caption)
-        .font(STYLES.fonts.body)
-        .fillColor(STYLES.colors.secondaryText)
-        .text(sanitizeAscii(atomicRowText), margin + 20, rowY, {
-          width: pageWidth - margin * 2 - 20,
-        })
-      doc.y = rowY + 10
-    })
-    doc.moveDown(0.3)
-  }
+    // Use direct doc.text() for atomic rendering - no safeText filtering that might block values
+    doc
+      .fontSize(STYLES.sizes.caption)
+      .font(STYLES.fonts.body)
+      .fillColor(STYLES.colors.secondaryText)
+      .text(sanitizeAscii(atomicRowText), margin + 20, rowY, {
+        width: pageWidth - margin * 2 - 20,
+      })
+    doc.y = rowY + 10
+  })
+  doc.moveDown(0.3)
 }
 
 /**
@@ -2170,7 +2171,8 @@ function addHeaderFooter(
       // Report ID (monospace for verification stamp feel)
       currentY = writeLine(`Report ID: RM-${reportId.substring(0, 8)}`, 8, 'Courier', 11)
       
-      // Generated timestamp
+      // Generated timestamp - CRITICAL: Make "Generated:" its own line including timezone
+      // Then "Window:" on the next line - prevents "EST Window:" collision
       const generatedText = generatedAt.toLocaleString('en-US', {
         timeZone: 'America/New_York',
         month: 'short',
@@ -2181,9 +2183,9 @@ function addHeaderFooter(
         hour12: true,
         timeZoneName: 'short'
       })
-      currentY = writeLine(`Generated: ${sanitizeText(generatedText)}`, 8, STYLES.fonts.body, 11)
+      currentY = writeLine(`Generated: ${sanitizeText(generatedText)}`, 8, STYLES.fonts.body, 12) // Extra spacing
       
-      // Data window start/end (not just "Last 30 days")
+      // Data window start/end (not just "Last 30 days") - separate line, no collision
       const windowStartStr = timeWindow.start.toLocaleDateString('en-US', {
         timeZone: 'America/New_York',
         month: 'short',
