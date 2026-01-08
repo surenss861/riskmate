@@ -280,64 +280,28 @@ function writeKpiCard(
       })
   }
   
-  // Label (small, below value) - CRITICAL: Use sanitizeAscii() for KPI labels
-  // CRITICAL: Prevent "Attestation coverage" from breaking mid-word (cover / age)
-  // Best approach: render on two intentional lines if it's "Attestation coverage"
+  // Label (small, below value) - CRITICAL: Use renderFittedLabel to prevent mid-word breaks
   const labelY = valueY + STYLES.sizes.kpiValue + 6
   const sanitizedLabel = sanitizeAscii(labelText) // Already sanitized with sanitizeAscii above
   
-  // Check if label is "Attestation coverage" and measure if it fits
-  if (sanitizedLabel === 'Attestation coverage') {
-    // Measure width to see if it fits
-    doc.fontSize(STYLES.sizes.kpiLabel).font(STYLES.fonts.body)
-    const labelWidth = doc.widthOfString(sanitizedLabel)
-    
-    if (labelWidth > contentWidth) {
-      // Doesn't fit - render on two intentional lines
-      doc
-        .fontSize(STYLES.sizes.kpiLabel)
-        .font(STYLES.fonts.body)
-        .fillColor(STYLES.colors.secondaryText)
-        .text('Attestation', contentX, labelY, {
-          width: contentWidth,
-          align: 'left',
-        })
-      doc
-        .fontSize(STYLES.sizes.kpiLabel)
-        .font(STYLES.fonts.body)
-        .fillColor(STYLES.colors.secondaryText)
-        .text('coverage', contentX, labelY + 10, {
-          width: contentWidth,
-          align: 'left',
-        })
-    } else {
-      // Fits - render normally
-      doc
-        .fontSize(STYLES.sizes.kpiLabel)
-        .font(STYLES.fonts.body)
-        .fillColor(STYLES.colors.secondaryText)
-        .text(sanitizedLabel, contentX, labelY, {
-          width: contentWidth,
-          align: 'left',
-        })
-    }
-  } else {
-    // Not "Attestation coverage" - render normally
-    doc
-      .fontSize(STYLES.sizes.kpiLabel)
-      .font(STYLES.fonts.body)
-      .fillColor(STYLES.colors.secondaryText)
-      .text(sanitizedLabel, contentX, labelY, {
-        width: contentWidth,
-        align: 'left',
-      })
-  }
+  // CRITICAL: Use renderFittedLabel to guarantee no mid-word breaks
+  // This measures each line and shrinks font if needed to prevent character-level wraps
+  renderFittedLabel(doc, sanitizedLabel, contentX, labelY, contentWidth, {
+    fontSize: STYLES.sizes.kpiLabel,
+    minFontSize: 7,
+    font: STYLES.fonts.body,
+    color: STYLES.colors.secondaryText,
+  })
   
   // Subtitle - ALWAYS show "vs prior 30d" (or appropriate time range) - CRITICAL: sanitize
-  // Adjust subtitle Y position if label was split into two lines
-  const subtitleY = (sanitizedLabel === 'Attestation coverage' && doc.widthOfString(sanitizedLabel) > contentWidth) 
-    ? labelY + 20  // Extra space if label was split
-    : labelY + 12   // Normal spacing
+  // Adjust subtitle Y position based on label height (renderFittedLabel returns height)
+  const labelHeight = renderFittedLabel(doc, sanitizedLabel, contentX, labelY, contentWidth, {
+    fontSize: STYLES.sizes.kpiLabel,
+    minFontSize: 7,
+    font: STYLES.fonts.body,
+    color: STYLES.colors.secondaryText,
+  })
+  const subtitleY = labelY + labelHeight + 4
   const timeRangeLabel = opts.timeRange === '7d' ? 'vs prior 7d' : opts.timeRange === '30d' ? 'vs prior 30d' : opts.timeRange === '90d' ? 'vs prior 90d' : 'vs prior period'
   const sanitizedTimeRange = sanitizeText(timeRangeLabel)
   doc
@@ -1537,15 +1501,19 @@ function renderMicroTopDrivers(
       if (!hasSpace(doc, 12)) return
       const rowY = doc.y
       // CRITICAL: Render as one atomic string (Label: ${value}) so values always print
-      // This is the safest approach - single text call ensures label + value always render together
-      const valueText = String(row.value ?? 0) // Always show 0 explicitly, never blank
+      // Enforce value before string building - no undefined/null can slip through
+      const value = row.value ?? 0 // Always have a value, never undefined/null
+      const valueText = String(value) // Convert to string explicitly
       const atomicRowText = `${row.label}: ${valueText}`
-      safeText(doc, sanitizeAscii(atomicRowText), margin + 20, rowY, {
-        fontSize: STYLES.sizes.caption,
-        font: STYLES.fonts.body,
-        color: STYLES.colors.secondaryText,
-        width: pageWidth - margin * 2 - 20,
-      })
+      
+      // Use direct doc.text() for atomic rendering - no safeText filtering that might block values
+      doc
+        .fontSize(STYLES.sizes.caption)
+        .font(STYLES.fonts.body)
+        .fillColor(STYLES.colors.secondaryText)
+        .text(sanitizeAscii(atomicRowText), margin + 20, rowY, {
+          width: pageWidth - margin * 2 - 20,
+        })
       doc.y = rowY + 10
     })
     doc.moveDown(0.3)
@@ -2107,21 +2075,27 @@ function addHeaderFooter(
       const capsuleContentWidth = capsuleWidth - capsulePadding * 2
       let currentY = capsuleContentY
       
+      // CRITICAL: Use writeLine helper to prevent overlap - returns next Y position
+      const writeLine = (text: string, fontSize: number, font: string, lineGap: number = 11): number => {
+        doc
+          .fontSize(fontSize)
+          .font(font)
+          .fillColor(STYLES.colors.secondaryText)
+          .text(text, capsuleContentX, currentY, { width: capsuleContentWidth })
+        currentY += lineGap
+        return currentY
+      }
+      
       // Title (bold)
       doc
         .fontSize(STYLES.sizes.caption)
         .font(STYLES.fonts.header)
         .fillColor(STYLES.colors.primaryText)
         .text('Report Integrity', capsuleContentX, currentY, { width: capsuleContentWidth })
-      currentY += 14
+      currentY = writeLine('', 0, STYLES.fonts.body, 14) // Spacing after title
       
       // Report ID (monospace for verification stamp feel)
-      doc
-        .fontSize(8)
-        .font('Courier') // Monospace font for IDs/hashes
-        .fillColor(STYLES.colors.secondaryText)
-        .text(`Report ID: RM-${reportId.substring(0, 8)}`, capsuleContentX, currentY, { width: capsuleContentWidth })
-      currentY += 11
+      currentY = writeLine(`Report ID: RM-${reportId.substring(0, 8)}`, 8, 'Courier', 11)
       
       // Generated timestamp
       const generatedText = generatedAt.toLocaleString('en-US', {
@@ -2134,12 +2108,7 @@ function addHeaderFooter(
         hour12: true,
         timeZoneName: 'short'
       })
-      doc
-        .fontSize(8)
-        .font(STYLES.fonts.body)
-        .fillColor(STYLES.colors.secondaryText)
-        .text(`Generated: ${sanitizeText(generatedText)}`, capsuleContentX, currentY, { width: capsuleContentWidth })
-      currentY += 11
+      currentY = writeLine(`Generated: ${sanitizeText(generatedText)}`, 8, STYLES.fonts.body, 11)
       
       // Data window start/end (not just "Last 30 days")
       const windowStartStr = timeWindow.start.toLocaleDateString('en-US', {
@@ -2154,12 +2123,7 @@ function addHeaderFooter(
         day: 'numeric',
         year: 'numeric',
       })
-      doc
-        .fontSize(8)
-        .font(STYLES.fonts.body)
-        .fillColor(STYLES.colors.secondaryText)
-        .text(`Window: ${sanitizeText(windowStartStr)} - ${sanitizeText(windowEndStr)}`, capsuleContentX, currentY, { width: capsuleContentWidth })
-      currentY += 11
+      currentY = writeLine(`Window: ${sanitizeText(windowStartStr)} - ${sanitizeText(windowEndStr)}`, 8, STYLES.fonts.body, 11)
       
       // Source tables summary - CRITICAL: sanitize
       const sourcesText = sanitizeText('Sources: jobs, incidents, attestations')
