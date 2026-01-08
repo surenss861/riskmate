@@ -600,37 +600,57 @@ function renderRiskPostureGauge(
     .lineTo(gaugeX + 2 + segmentWidth * 2, gaugeY + gaugeHeight - 2)
     .stroke()
 
-  // Labels below segments
-  const labelY = gaugeY + gaugeHeight + 6
+  // CRITICAL: Lock gauge block to strict vertical stack to prevent overlap
+  // Define gauge box boundaries
+  const gaugeBox = {
+    x: gaugeX,
+    y: gaugeY,
+    w: gaugeWidth,
+    h: gaugeHeight,
+  }
+  
+  // Labels below segments (part of gauge box)
+  const labelY = gaugeBox.y + gaugeBox.h + 6
   doc
     .fontSize(STYLES.sizes.caption)
     .font(STYLES.fonts.body)
     .fillColor(STYLES.colors.secondaryText)
-    .text('Low', gaugeX + segmentWidth / 2 - 10, labelY, { width: 20, align: 'center' })
-    .text('Moderate', gaugeX + segmentWidth + segmentWidth / 2 - 20, labelY, { width: 40, align: 'center' })
-    .text('High', gaugeX + segmentWidth * 2 + segmentWidth / 2 - 10, labelY, { width: 20, align: 'center' })
+    .text('Low', gaugeBox.x + segmentWidth / 2 - 10, labelY, { width: 20, align: 'center' })
+    .text('Moderate', gaugeBox.x + segmentWidth + segmentWidth / 2 - 20, labelY, { width: 40, align: 'center' })
+    .text('High', gaugeBox.x + segmentWidth * 2 + segmentWidth / 2 - 10, labelY, { width: 20, align: 'center' })
 
-  // Score display next to gauge
-  const scoreX = gaugeX + gaugeWidth + 20
+  // Strict vertical stack below gauge bar - no shared baselines
+  let stackY = labelY + 12 // Start below segment labels
+  const lineHeight = 12
+  const spacing = 4
+  
+  // Score label (centered, below segment labels)
+  const scoreText = `${score}`
   doc
-    .fontSize(STYLES.sizes.h3)
+    .fontSize(18)
     .font(STYLES.fonts.header)
     .fillColor(STYLES.colors.primaryText)
-    .text(`${score}`, scoreX, gaugeY + 8, { align: 'left' })
-
-  doc.y = gaugeY + gaugeHeight + 25
+    .text(scoreText, gaugeBox.x, stackY, {
+      align: 'center',
+      width: gaugeBox.w,
+    })
+  stackY += 18 + spacing // Score height + spacing
   
-  // Add confidence grade next to posture score
+  // Confidence grade (below score, no overlap)
   const confidenceGrade = calculateConfidenceGrade(data)
   if (confidenceGrade) {
-    const gradeX = gaugeX + gaugeWidth + 20
-    const gradeY = gaugeY + 8
     doc
-      .fontSize(STYLES.sizes.caption)
+      .fontSize(9)
       .font(STYLES.fonts.body)
       .fillColor(STYLES.colors.secondaryText)
-      .text(`Confidence: ${confidenceGrade}`, gradeX, gradeY, { width: 150 })
+      .text(`Confidence: ${confidenceGrade}`, gaugeBox.x, stackY, {
+        width: gaugeBox.w,
+        align: 'center',
+      })
+    stackY += lineHeight + spacing
   }
+  
+  doc.y = stackY
   
   // Add tiny trend sparkline below gauge (only if real data available)
   if (hasSpace(doc, 30)) {
