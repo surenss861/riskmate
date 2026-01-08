@@ -399,6 +399,64 @@ function safeText(
 }
 
 /**
+ * Render label with guaranteed fit - prevents mid-word breaks
+ * Measures each line and shrinks font if needed
+ */
+function renderFittedLabel(
+  doc: PDFKit.PDFDocument,
+  label: string,
+  x: number,
+  y: number,
+  maxWidth: number,
+  options: {
+    fontSize: number
+    minFontSize: number
+    font: string
+    color: string
+  }
+): number {
+  // Split label into intentional lines (e.g., "Attestation coverage" -> ["Attestation", "coverage"])
+  const lines: string[] = []
+  if (label === 'Attestation coverage') {
+    lines.push('Attestation', 'coverage')
+  } else {
+    lines.push(label)
+  }
+  
+  // Measure each line and find the font size that fits
+  let fontSize = options.fontSize
+  let allLinesFit = false
+  
+  while (!allLinesFit && fontSize >= options.minFontSize) {
+    doc.fontSize(fontSize).font(options.font)
+    allLinesFit = true
+    
+    for (const line of lines) {
+      const lineWidth = doc.widthOfString(line)
+      if (lineWidth > maxWidth) {
+        allLinesFit = false
+        fontSize = Math.max(options.minFontSize, fontSize - 0.5)
+        break
+      }
+    }
+  }
+  
+  // Render each line with proper spacing
+  let currentY = y
+  doc.fontSize(fontSize).font(options.font).fillColor(options.color)
+  
+  for (const line of lines) {
+    doc.text(line, x, currentY, {
+      width: maxWidth,
+      align: 'left',
+    })
+    currentY += fontSize * 1.2 // Line height with spacing
+  }
+  
+  return currentY - y // Return total height used
+}
+
+/**
  * Write label-value pair (prevents label-less values)
  * CRITICAL: This is the ONLY way metrics should render
  * Ensures values never render alone
