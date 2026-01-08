@@ -281,24 +281,63 @@ function writeKpiCard(
   }
   
   // Label (small, below value) - CRITICAL: Use sanitizeAscii() for KPI labels
-  // CRITICAL: Split label and subtitle to prevent awkward breaks like "Attestation / coverage vs prior 30d"
+  // CRITICAL: Prevent "Attestation coverage" from breaking mid-word (cover / age)
+  // Best approach: render on two intentional lines if it's "Attestation coverage"
   const labelY = valueY + STYLES.sizes.kpiValue + 6
   const sanitizedLabel = sanitizeAscii(labelText) // Already sanitized with sanitizeAscii above
   
-    // For "Attestation coverage", ensure it's on one line - use non-breaking space to prevent line break
-    const labelWithNonBreaking = sanitizedLabel.replace('Attestation coverage', 'Attestation\u00A0coverage')
-  
-  doc
-    .fontSize(STYLES.sizes.kpiLabel)
-    .font(STYLES.fonts.body)
-    .fillColor(STYLES.colors.secondaryText)
-    .text(labelWithNonBreaking, contentX, labelY, {
-      width: contentWidth,
-      align: 'left',
-    })
+  // Check if label is "Attestation coverage" and measure if it fits
+  if (sanitizedLabel === 'Attestation coverage') {
+    // Measure width to see if it fits
+    doc.fontSize(STYLES.sizes.kpiLabel).font(STYLES.fonts.body)
+    const labelWidth = doc.widthOfString(sanitizedLabel)
+    
+    if (labelWidth > contentWidth) {
+      // Doesn't fit - render on two intentional lines
+      doc
+        .fontSize(STYLES.sizes.kpiLabel)
+        .font(STYLES.fonts.body)
+        .fillColor(STYLES.colors.secondaryText)
+        .text('Attestation', contentX, labelY, {
+          width: contentWidth,
+          align: 'left',
+        })
+      doc
+        .fontSize(STYLES.sizes.kpiLabel)
+        .font(STYLES.fonts.body)
+        .fillColor(STYLES.colors.secondaryText)
+        .text('coverage', contentX, labelY + 10, {
+          width: contentWidth,
+          align: 'left',
+        })
+    } else {
+      // Fits - render normally
+      doc
+        .fontSize(STYLES.sizes.kpiLabel)
+        .font(STYLES.fonts.body)
+        .fillColor(STYLES.colors.secondaryText)
+        .text(sanitizedLabel, contentX, labelY, {
+          width: contentWidth,
+          align: 'left',
+        })
+    }
+  } else {
+    // Not "Attestation coverage" - render normally
+    doc
+      .fontSize(STYLES.sizes.kpiLabel)
+      .font(STYLES.fonts.body)
+      .fillColor(STYLES.colors.secondaryText)
+      .text(sanitizedLabel, contentX, labelY, {
+        width: contentWidth,
+        align: 'left',
+      })
+  }
   
   // Subtitle - ALWAYS show "vs prior 30d" (or appropriate time range) - CRITICAL: sanitize
-  const subtitleY = labelY + 12
+  // Adjust subtitle Y position if label was split into two lines
+  const subtitleY = (sanitizedLabel === 'Attestation coverage' && doc.widthOfString(sanitizedLabel) > contentWidth) 
+    ? labelY + 20  // Extra space if label was split
+    : labelY + 12   // Normal spacing
   const timeRangeLabel = opts.timeRange === '7d' ? 'vs prior 7d' : opts.timeRange === '30d' ? 'vs prior 30d' : opts.timeRange === '90d' ? 'vs prior 90d' : 'vs prior period'
   const sanitizedTimeRange = sanitizeText(timeRangeLabel)
   doc
@@ -791,17 +830,34 @@ function renderExecutiveSummary(
   const maxHeadlineWidth = pageWidth - margin * 2
   let headlineFontSize = STYLES.sizes.h1
   
-  // Measure headline width - if it's too wide, reduce font size slightly
+  // Measure headline width - if it's too wide, reduce font size or force designed wrap
   doc.fontSize(headlineFontSize).font(STYLES.fonts.header)
-  const headlineWidth = doc.widthOfString(headlineText)
+  let headlineWidth = doc.widthOfString(headlineText)
   
-  // If headline is too wide, reduce font size to fit (min 26px)
+  // CRITICAL: Force designed wrap before "high risk" if headline is too long
+  // This prevents awkward splits like "high / risk"
+  let finalHeadlineText = headlineText
+  if (headlineWidth > maxHeadlineWidth * 0.95 && headlineText.includes('high risk')) {
+    // Find position of "high risk" and insert line break before it
+    const highRiskIndex = headlineText.indexOf('high risk')
+    if (highRiskIndex > 0) {
+      // Insert line break before "high risk" - this creates a designed wrap
+      finalHeadlineText = headlineText.substring(0, highRiskIndex).trim() + '\n' + headlineText.substring(highRiskIndex)
+      // Re-measure with line break (measure both lines)
+      const lines = finalHeadlineText.split('\n')
+      const firstLineWidth = doc.widthOfString(lines[0])
+      const secondLineWidth = doc.widthOfString(lines[1])
+      headlineWidth = Math.max(firstLineWidth, secondLineWidth) // Use max width
+    }
+  }
+  
+  // If headline is still too wide after designed wrap, reduce font size to fit (min 26px)
   if (headlineWidth > maxHeadlineWidth * 0.95) {
     headlineFontSize = Math.max(26, Math.floor((maxHeadlineWidth / headlineWidth) * headlineFontSize))
   }
   
   // CRITICAL: safeText() will sanitize again, but we've already sanitized to be safe
-  safeText(doc, headlineText, margin, headlineY, {
+  safeText(doc, finalHeadlineText, margin, headlineY, {
     fontSize: headlineFontSize,
     font: STYLES.fonts.header,
     color: STYLES.colors.primaryText,
@@ -1480,19 +1536,16 @@ function renderMicroTopDrivers(
     driverRows.forEach((row) => {
       if (!hasSpace(doc, 12)) return
       const rowY = doc.y
-      // CRITICAL: Use writeKV for atomic rendering - ensures label + value always print together
-      // This prevents blank values and ensures 0 is shown explicitly
+      // CRITICAL: Render as one atomic string (Label: ${value}) so values always print
+      // This is the safest approach - single text call ensures label + value always render together
       const valueText = String(row.value ?? 0) // Always show 0 explicitly, never blank
-      writeKV(
-        doc,
-        row.label + ':',
-        valueText,
-        margin + 20,
-        rowY,
-        180,
-        pageWidth - margin * 2 - 200,
-        { labelAlign: 'left', valueAlign: 'left' }
-      )
+      const atomicRowText = `${row.label}: ${valueText}`
+      safeText(doc, sanitizeAscii(atomicRowText), margin + 20, rowY, {
+        fontSize: STYLES.sizes.caption,
+        font: STYLES.fonts.body,
+        color: STYLES.colors.secondaryText,
+        width: pageWidth - margin * 2 - 20,
+      })
       doc.y = rowY + 10
     })
     doc.moveDown(0.3)
@@ -2121,8 +2174,10 @@ function addHeaderFooter(
       // CRITICAL: Always show hash if available (metadata hash during generation, actual PDF hash after)
       // This is one of the strongest "this is defensible" signals
       if (pdfHash) {
-        // Show full hash (not shortened) for maximum credibility - format: "SHA-256: <full hash>"
-        const hashText = sanitizeAscii(`SHA-256: ${pdfHash}`)
+        // Show full hash formatted in 4-char groups for readability: "SHA-256: XXXX XXXX ..."
+      // This makes line wraps look intentional, not like rendering accidents
+      const hashFormatted = pdfHash.match(/.{1,4}/g)?.join(' ') || pdfHash
+      const hashText = sanitizeAscii(`SHA-256: ${hashFormatted}`)
         doc
           .fontSize(8)
           .font('Courier') // Monospace font for hash
