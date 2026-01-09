@@ -1,0 +1,51 @@
+name: Golden Tests - Executive Brief PDF
+
+on:
+  pull_request:
+    paths:
+      - 'app/api/executive/brief/pdf/**'
+      - 'lib/pdf/**'
+      - 'lib/pdf/reports/executiveBrief/**'
+  push:
+    branches:
+      - main
+    paths:
+      - 'app/api/executive/brief/pdf/**'
+      - 'lib/pdf/**'
+      - 'lib/pdf/reports/executiveBrief/**'
+
+jobs:
+  golden-tests:
+    name: Executive Brief PDF Golden Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Run golden tests
+        run: |
+          # Run golden assertions - these are blocking
+          # If these fail, the PR should not be merged
+          npm run test:golden -- --bail
+        env:
+          CI: true
+      
+      - name: Upload test results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: golden-test-failures
+          path: |
+            test-results/
+            coverage/
+

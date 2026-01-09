@@ -12,7 +12,9 @@
     "lint": "next lint",
     "type-check": "tsc --noEmit",
     "check:error-codes": "ts-node scripts/check-error-codes.ts",
-    "test:pdf-smoke": "ts-node scripts/pdf-smoke-test.ts"
+    "test:pdf-smoke": "ts-node scripts/pdf-smoke-test.ts",
+    "test:golden": "jest lib/pdf/reports/executiveBrief/__tests__/golden-assertions.test.ts",
+    "test:golden:watch": "jest lib/pdf/reports/executiveBrief/__tests__/golden-assertions.test.ts --watch"
   },
   "dependencies": {
     "@gsap/react": "^2.1.2",
@@ -69,6 +71,10 @@
     "concurrently": "^9.2.1",
     "eslint": "^8.56.0",
     "eslint-config-next": "^15.0.0",
+    "jest": "^29.7.0",
+    "jest-environment-node": "^29.7.0",
+    "@types/jest": "^29.5.12",
+    "ts-jest": "^29.1.2",
     "jszip": "^3.10.1",
     "postcss": "^8.4.32",
     "tailwindcss": "^3.4.0",
