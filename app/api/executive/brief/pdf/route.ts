@@ -1013,18 +1013,10 @@ function renderExecutiveSummary(
   // Only show deltas when hasPriorPeriodData === true
   // Rule: If hasPriorPeriodData === false, show values only (no delta, no (N/A))
   
-  // 1. Risk posture: Exposure level only (score is hero in gauge, avoid duplicate)
-  const exposureLevel = data.exposure_level === 'high' ? 'High' : data.exposure_level === 'moderate' ? 'Moderate' : data.exposure_level === 'low' ? 'Low' : 'N/A'
-  const postureDelta = hasPriorPeriodData && data.delta !== undefined ? formatDelta(data.delta) : null
-  chips.push({
-    label: 'Risk posture',
-    delta: postureDelta !== null ? `${exposureLevel} (${postureDelta})` : exposureLevel, // Show level, not score
-    color: hasPriorPeriodData && data.delta !== undefined && data.delta !== 0 
-      ? (data.delta > 0 ? STYLES.colors.riskHigh : STYLES.colors.riskLow)
-      : STYLES.colors.primaryText,
-  })
+  // REMOVED: Risk posture chip - exposure already shown in KPI card + Key Metrics table
+  // Chips now focus on operational facts only (no duplicate exposure signals)
   
-  // 2. High-risk jobs: Count (Delta only if prior available)
+  // 1. High-risk jobs: Count (Delta only if prior available)
   const jobsDelta = hasPriorPeriodData && data.deltas?.high_risk_jobs !== undefined ? formatDelta(data.deltas.high_risk_jobs) : null
   chips.push({
     label: sanitizeAscii(METRIC_LABELS.highRiskJobs), // Use centralized label, sanitize with ASCII
@@ -1063,8 +1055,8 @@ function renderExecutiveSummary(
     color: STYLES.colors.primaryText,
   })
   
-  // Render all 5 chips with intentional 2-row layout (3 chips + 2 chips)
-  // This makes it read as "one thought" instead of "whatever wraps"
+  // Render all 4 chips (removed Risk posture - exposure shown in KPI + Key Metrics)
+  // Intentional 2-row layout (2 chips + 2 chips) for clean visual grouping
   const chipHeight = 24
   const chipGap = 12
   const rightLimit = pageWidth - margin
@@ -1203,24 +1195,32 @@ function renderExecutiveSummary(
     // CRITICAL: Align deadline with earliest action deadline (Priority 1 = 48h, Priority 2 = 7d, etc.)
     // This prevents credibility leaks like "within 7 days" when Priority 1 is "by Jan 11" (48h)
     
-    // Compute earliest deadline from actions (same logic as renderRecommendedActionsShort)
-    const actions = data.recommended_actions
+    // Compute earliest deadline from actions (EXACT same logic as renderRecommendedActionsShort)
+    // Must use same fallback actions logic to ensure consistency
+    const hasSufficientData = data.high_risk_jobs > 0 || data.open_incidents > 0 || data.signed_signoffs > 0
+    const actions = hasSufficientData && data.recommended_actions && data.recommended_actions.length > 0
+      ? data.recommended_actions
+      : [
+          { priority: 1, action: 'Require risk assessment on job creation', reason: 'Enable automatic risk scoring and mitigation checklists for every job' },
+          { priority: 2, action: 'Enable attestations on job closeout', reason: 'Ensure all jobs are reviewed and signed off before completion' },
+          { priority: 3, action: 'Upload evidence for high-risk jobs', reason: 'Document safety measures and compliance for audit trails' },
+        ]
+    
+    // Find earliest deadline (Priority 1 = 48h, Priority 2 = 7d, etc.)
     let earliestDeadlineText = 'within 7 days' // Default fallback
-    if (actions && actions.length > 0) {
-      const priority1Action = actions.find(a => a.priority === 1)
-      if (priority1Action) {
-        // Priority 1 = 48 hours (same as action deadline computation)
+    const priority1Action = actions.find(a => a.priority === 1)
+    if (priority1Action) {
+      // Priority 1 = 48 hours (same as action deadline computation in renderRecommendedActionsShort)
+      const deadlineDate = new Date()
+      deadlineDate.setDate(deadlineDate.getDate() + 2)
+      earliestDeadlineText = `by ${deadlineDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+    } else {
+      // No Priority 1, check Priority 2 (7 days)
+      const priority2Action = actions.find(a => a.priority === 2)
+      if (priority2Action) {
         const deadlineDate = new Date()
-        deadlineDate.setDate(deadlineDate.getDate() + 2)
+        deadlineDate.setDate(deadlineDate.getDate() + 7)
         earliestDeadlineText = `by ${deadlineDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
-      } else {
-        // No Priority 1, check Priority 2 (7 days)
-        const priority2Action = actions.find(a => a.priority === 2)
-        if (priority2Action) {
-          const deadlineDate = new Date()
-          deadlineDate.setDate(deadlineDate.getDate() + 7)
-          earliestDeadlineText = `by ${deadlineDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
-        }
       }
     }
     
@@ -2583,13 +2583,14 @@ function addHeaderFooter(
       // Report hash (SHA-256) - show full hash for board/auditor credibility
       // CRITICAL: Always show hash if available (metadata hash during generation, actual PDF hash after)
       // This is one of the strongest "this is defensible" signals
+      // CRITICAL: Clarify hash type to prevent auditor confusion (metadata vs file hash)
       // CRITICAL: Treat capsule as its own tiny layout engine - every line must advance y = writeLine(...)
       // Never manual y guessing - use writeLine helper for all hash rendering
       if (metadataHash) {
         // Show full hash formatted in 4-char groups for readability
-        // CRITICAL: Keep "SHA-256:" on the same line as the first chunk if possible (looks more intentional)
+        // CRITICAL: Label as "Metadata hash (deterministic)" to clarify this is NOT the PDF file hash
         const hashFormatted = metadataHash.match(/.{1,4}/g)?.join(' ') || metadataHash
-        const sha256Label = 'SHA-256: '
+        const sha256Label = 'Metadata hash (deterministic): '
         
         // Check if "SHA-256: XXXX" fits on one line
         doc.fontSize(8).font('Courier')
@@ -2632,8 +2633,13 @@ function addHeaderFooter(
         // CRITICAL: Split into deterministic lines to prevent wrapping collisions
         // Option A: Split hash into fixed lines (still copy/pasteable, deterministic)
         doc.moveDown(0.2)
-        const rawHashLabel = sanitizeAscii('Hash (raw):')
+        const rawHashLabel = sanitizeAscii('Metadata hash (raw):')
         currentY = writeLine(rawHashLabel, 7, 'Courier', 9) // Label on its own line
+        
+        // Add note that PDF file hash is available in verification endpoint
+        doc.moveDown(0.2)
+        const pdfHashNote = sanitizeText('PDF file hash: available in verification endpoint')
+        currentY = writeLine(pdfHashNote, 7, STYLES.fonts.body, 9) // Smaller font for note
         
         // Split raw hash into 2-3 fixed lines (deterministic, copy/pasteable)
         // Each line is ~21-22 chars (64 char hash / 3 lines ≈ 21 chars per line)
