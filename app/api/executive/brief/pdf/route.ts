@@ -1273,18 +1273,9 @@ function renderMetricsTable(
     color: STYLES.colors.primaryText,
   })
   
-  // CRITICAL: Move "prior period unavailable" note OUT of table header to prevent wrapping
-  // Put it as a caption line under "Key Metrics" (full-width) instead of inside header columns
-  if (!hasPriorPeriodData) {
-    doc.moveDown(0.3)
-    safeText(doc, 'Note: prior period unavailable (deltas hidden)', margin, doc.y, {
-      fontSize: STYLES.sizes.caption - 1,
-      font: STYLES.fonts.body,
-      color: STYLES.colors.secondaryText,
-      width: pageWidth - margin * 2, // Full width for caption
-    })
-    doc.moveDown(0.3)
-  } else {
+  // CRITICAL: Prior-period note is now only on Page 1 (under KPI strip)
+  // Page 2 table already communicates this by hiding the Change column
+  // No need to repeat the note here - it's redundant and clutters the layout else {
     doc.moveDown(0.5)
   }
 
