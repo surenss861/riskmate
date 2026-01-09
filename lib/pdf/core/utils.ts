@@ -88,6 +88,8 @@ export function pluralize(count: number, singular: string, plural?: string): str
 
 /**
  * Format time range label
+ * NOTE: This returns a generic label. For precise labels that match actual window dates,
+ * use formatTimeRangeFromWindow() which computes from actual start/end dates.
  */
 export function formatTimeRange(timeRange: string): string {
   const labels: Record<string, string> = {
@@ -97,6 +99,39 @@ export function formatTimeRange(timeRange: string): string {
     'all': 'All time',
   }
   return sanitizeText(labels[timeRange] || timeRange)
+}
+
+/**
+ * Format time range label from actual window dates
+ * Computes the actual number of days and formats accordingly
+ * This ensures the label matches the window (e.g., "Last 31 days" if window is 31 days)
+ */
+export function formatTimeRangeFromWindow(
+  timeRange: string,
+  windowStart: Date,
+  windowEnd: Date
+): string {
+  // For "all", always use "All time"
+  if (timeRange === 'all') {
+    return 'All time'
+  }
+  
+  // Calculate actual days in window (inclusive)
+  const msPerDay = 24 * 60 * 60 * 1000
+  const daysDiff = Math.round((windowEnd.getTime() - windowStart.getTime()) / msPerDay) + 1 // +1 for inclusive
+  
+  // Format based on actual days
+  if (daysDiff === 1) {
+    return 'Last 1 day'
+  } else if (daysDiff <= 7) {
+    return `Last ${daysDiff} days`
+  } else if (daysDiff <= 30) {
+    return `Last ${daysDiff} days`
+  } else if (daysDiff <= 90) {
+    return `Last ${daysDiff} days`
+  } else {
+    return `Last ${daysDiff} days`
+  }
 }
 
 /**

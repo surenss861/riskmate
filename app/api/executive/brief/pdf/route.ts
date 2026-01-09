@@ -5,7 +5,7 @@ import PDFDocument from 'pdfkit'
 import crypto from 'crypto'
 import QRCode from 'qrcode'
 // Import pure helpers from core module
-import { sanitizeText, sanitizeAscii, formatDelta, formatNumber, pluralize, formatTimeRange, getExposureColor, truncateText } from '@/lib/pdf/core/utils'
+import { sanitizeText, sanitizeAscii, formatDelta, formatNumber, pluralize, formatTimeRange, formatTimeRangeFromWindow, getExposureColor, truncateText } from '@/lib/pdf/core/utils'
 // Import layout helpers from core
 import { getContentLimitY as coreGetContentLimitY, ensureSpace as coreEnsureSpace, hasSpace as coreHasSpace } from '@/lib/pdf/core/layout'
 // Import writer helpers from core

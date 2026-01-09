@@ -93,8 +93,9 @@ export function renderPage1(
   const headerContentY = headerBandY + 50
   const sanitizedTitle = renderFunctions.sanitizeText('RiskMate Executive Brief')
   
-  // CRITICAL: Format org name nicely - never show "(name missing)" in production
+  // CRITICAL: Format org name consistently - always "Org: <Name>" or "Org: <short-id>"
   // Route should always pass a valid org name or org ID short form (e.g., "Org c111f4ed")
+  // Canonical format: "Org: <value>" (with colon, consistent everywhere)
   let displayOrgName = organizationName
   if (!displayOrgName || displayOrgName.trim().length === 0) {
     // This should never happen if route logic is correct, but safety fallback
@@ -105,10 +106,10 @@ export function renderPage1(
     
     // Check if it's a raw ID (short hex string like "c111f4ed")
     if (displayOrgName.length <= 12 && /^[a-f0-9]+$/i.test(displayOrgName)) {
-      // Looks like a raw ID - format as "Org: <short-id>" (acceptable fallback)
+      // Looks like a raw ID - format as "Org: <short-id>" (canonical fallback format)
       displayOrgName = `Org: ${displayOrgName}`
     } else if (displayOrgName.length > 0) {
-      // Valid name - add "Org: " prefix
+      // Valid name - add "Org: " prefix (canonical format)
       displayOrgName = `Org: ${displayOrgName}`
     } else {
       // Empty after normalization - should never happen, but safety fallback
@@ -116,7 +117,10 @@ export function renderPage1(
     }
   }
   const sanitizedOrgName = renderFunctions.sanitizeText(displayOrgName)
-  const timeRangeText = renderFunctions.formatTimeRange(timeRange)
+  // Use actual window dates to compute precise time range label (e.g., "Last 31 days" if window is 31 days)
+  const timeRangeText = renderFunctions.formatTimeRangeFromWindow 
+    ? renderFunctions.formatTimeRangeFromWindow(timeRange, timeWindow.start, timeWindow.end)
+    : renderFunctions.formatTimeRange(timeRange)
   
   // Title (large, white, left-aligned in band)
   doc
