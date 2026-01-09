@@ -2097,25 +2097,41 @@ function renderRecommendedActionsShort(
     // Board-decision-friendly format: Action → Outcome → Deadline
     // Match "Decision requested" tone: clear, actionable, with timeline
     // CRITICAL: Make Action #1 specific to THIS org's situation (reference actual jobs/sign-offs)
+    // Makes it feel like a decision memo, not a playbook excerpt
     let actionText = sanitizeText(action.action)
     
     // Anchor Action #1 to actual situation for specificity
-    if (index === 0 && data.high_risk_jobs > 0) {
-      // Try to extract job ID from top_drivers if available
-      const topJobInfo = data.top_drivers?.find(d => d.label.toLowerCase().includes('high risk') || d.label.toLowerCase().includes('job'))
-      const jobIdMatch = topJobInfo?.label?.match(/JOB-[\w-]+/i)
-      
-      if (jobIdMatch) {
-        // Specific action: reference actual job ID
-        actionText = sanitizeText(`Mitigate ${jobIdMatch[0]} controls and attach evidence`)
-      } else if (action.action.toLowerCase().includes('high risk')) {
-        // Generic but specific: reference the count
-        actionText = sanitizeText(`Require supervisor sign-off for ${data.high_risk_jobs} ${pluralize(data.high_risk_jobs, 'high risk job', 'high risk jobs')} within 48h`)
+    if (index === 0) {
+      // Try to extract job ID from top_drivers labels (they may contain job references)
+      let jobIdMatch: RegExpMatchArray | null = null
+      if (data.top_drivers) {
+        for (const driver of data.top_drivers) {
+          const match = driver.label?.match(/JOB-[\w-]+/i) || driver.label?.match(/job[\s-]?(\d+)/i)
+          if (match) {
+            jobIdMatch = match
+            break
+          }
+        }
       }
-    } else if (index === 0 && data.pending_signoffs > 0 && data.signed_signoffs + data.pending_signoffs === data.signed_signoffs + data.pending_signoffs) {
-      // If sign-offs are the focus, make it specific
-      if (action.action.toLowerCase().includes('sign-off') || action.action.toLowerCase().includes('attestation')) {
-        actionText = sanitizeText(`Complete ${data.pending_signoffs} pending ${pluralize(data.pending_signoffs, 'sign-off', 'sign-offs')} to ensure full compliance`)
+      
+      if (data.high_risk_jobs > 0) {
+        if (jobIdMatch) {
+          // Most specific: reference actual job ID
+          const jobRef = jobIdMatch[0].toUpperCase()
+          if (action.action.toLowerCase().includes('mitigate') || action.action.toLowerCase().includes('high risk')) {
+            actionText = sanitizeText(`Mitigate ${jobRef} controls and attach evidence`)
+          } else if (action.action.toLowerCase().includes('sign-off') || action.action.toLowerCase().includes('attestation')) {
+            actionText = sanitizeText(`Require supervisor sign-off for ${jobRef} within 48h`)
+          }
+        } else if (action.action.toLowerCase().includes('high risk')) {
+          // Specific count: reference the actual number
+          actionText = sanitizeText(`Require supervisor sign-off for ${data.high_risk_jobs} ${pluralize(data.high_risk_jobs, 'high risk job', 'high risk jobs')} within 48h`)
+        }
+      } else if (data.pending_signoffs > 0) {
+        // If sign-offs are the focus, make it specific
+        if (action.action.toLowerCase().includes('sign-off') || action.action.toLowerCase().includes('attestation')) {
+          actionText = sanitizeText(`Complete ${data.pending_signoffs} pending ${pluralize(data.pending_signoffs, 'sign-off', 'sign-offs')} to ensure full compliance`)
+        }
       }
     }
     
@@ -2397,6 +2413,17 @@ function addHeaderFooter(
       
       // Report ID (monospace for verification stamp feel)
       currentY = writeLine(`Report ID: RM-${reportId.substring(0, 8)}`, 8, 'Courier', 11)
+      
+      // Organization name - show parenthetical only in Integrity block (not in header)
+      // If org name looks like an ID (short hex), add parenthetical "(org name not set)"
+      let orgDisplayName = organizationName
+      // Remove any existing "Org " or "Org: " prefix to normalize
+      orgDisplayName = orgDisplayName.replace(/^Org:?\s*/i, '').trim()
+      const isOrgId = orgDisplayName.length <= 12 && /^[a-f0-9]+$/i.test(orgDisplayName)
+      const orgLine = isOrgId 
+        ? `Organization: ${orgDisplayName} (org name not set)`
+        : `Organization: ${orgDisplayName}`
+      currentY = writeLine(sanitizeText(orgLine), 8, STYLES.fonts.body, 11)
       
       // Generated timestamp - CRITICAL: Make "Generated:" its own line including timezone
       // Then "Window:" on the next line - prevents "EST Window:" collision
