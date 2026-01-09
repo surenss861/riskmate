@@ -8,7 +8,7 @@
 import PDFKit from 'pdfkit'
 import type { ExecutiveBriefDeps } from '../build'
 import type { RiskPostureData } from '../types'
-import { sanitizeText, formatTimeRange } from '@/lib/pdf/executiveBrief/utils'
+import { sanitizeText, formatTimeRange } from '@/lib/pdf/core/utils'
 
 // Mock state tracking (simplified for tests)
 let mockPageNumber = 1

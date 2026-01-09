@@ -14,7 +14,7 @@ import QRCode from 'qrcode'
 import type { ExecutiveBriefInput, ExecutiveBriefOutput, RiskPostureData } from './types'
 import { renderPage1 } from './render/page1'
 import { renderPage2 } from './render/page2'
-import { sanitizeText, formatTimeRange } from '@/lib/pdf/executiveBrief/utils'
+import { sanitizeText, formatTimeRange } from '@/lib/pdf/core/utils'
 
 // STYLES - matches route.ts for consistency
 const STYLES = {
