@@ -347,7 +347,8 @@ export async function buildExecutiveBriefPDF(
         renderMethodologyShort: helpers.renderMethodologyShort,
         renderDataFreshnessCompact: helpers.renderDataFreshnessCompact,
         hasSpace: helpers.hasSpace,
-        addHeaderFooter: helpers.addHeaderFooter,
+        addHeaderFooter: (doc, orgName, tr, rId, genAt, sha, tw, base, mHash, qr, layout) => 
+          helpers.addHeaderFooter(doc, orgName, tr, rId, genAt, sha, tw, base, mHash, qr, layout, helpers.formatTimeRangeFromWindow),
       },
       STYLES
     )

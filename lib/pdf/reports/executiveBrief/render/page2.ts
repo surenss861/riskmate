@@ -149,6 +149,7 @@ export function renderPage2(
     baseUrl,
     metadataHash,
     qrCodeBuffer,
-    page2ColumnLayout
+    page2ColumnLayout,
+    renderFunctions.formatTimeRangeFromWindow
   )
 }
