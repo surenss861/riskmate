@@ -38,25 +38,25 @@ export function createTestDeps(): ExecutiveBriefDeps {
     renderDataCoverage: () => {}, // No-op for tests
     renderTopItemsNeedingAttention: () => {}, // No-op for tests
     ensureSpace: (doc: PDFKit.PDFDocument, requiredHeight: number, margin: number) => {
-      // For tests, allow page 2 but prevent page 3
+      // CRITICAL: ensureSpace() never adds pages - only checks space and returns boolean
+      // Only build.ts can add pages (exactly once, between Page 1 and Page 2)
+      const contentLimitY = doc.page.height - 60 // Bottom margin
+      
+      // HARD LOCK: Never create page 3 - Executive Brief is exactly 2 pages
       if (mockPageNumber >= 2) {
-        return false // Can't fit, and we're already on page 2
+        // On page 2, check if content fits
+        return doc.y + requiredHeight <= contentLimitY
       }
-      if (doc.page.number >= 2) {
-        return false // Already on page 2, no page 3 allowed
-      }
-      // Allow adding page 2
-      if (doc.page.number === 1) {
-        doc.addPage()
-        mockPageNumber = 2
-        doc.y = 48 // Reset to top margin
-      }
-      return true
+      
+      // On page 1, check if content fits
+      // NOTE: We don't add pages here - build.ts handles the single page break
+      return doc.y + requiredHeight <= contentLimitY
     },
     renderRecommendedActionsShort: () => {}, // No-op for tests
     renderMethodologyShort: () => {}, // No-op for tests
     renderDataFreshnessCompact: () => {}, // No-op for tests
     addHeaderFooter: () => {}, // No-op for tests
+    setPageNumber: (val: number) => { mockPageNumber = val },
   }
 }
 
