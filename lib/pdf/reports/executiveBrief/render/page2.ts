@@ -55,6 +55,7 @@ export function renderPage2(
     renderMethodologyShort: (doc: PDFKit.PDFDocument, columnWidth: number, columnX: number) => void
     renderDataFreshnessCompact: (doc: PDFKit.PDFDocument, data: RiskPostureData, columnWidth: number, columnX: number) => void
     hasSpace: (doc: PDFKit.PDFDocument, needed: number) => boolean
+    formatTimeRangeFromWindow?: (range: string, windowStart: Date, windowEnd: Date) => string
     addHeaderFooter: (
       doc: PDFKit.PDFDocument,
       organizationName: string,
