@@ -31,7 +31,7 @@ export async function GET(
         .from('report_runs')
         .select('id, organization_id, generated_at, metadata, completed_hash')
         .like('id', `${shortId}%`)
-        .eq('report_type', 'executive_brief')
+        .eq('packet_type', 'executive_brief')
         .order('generated_at', { ascending: false })
         .limit(1)
         .maybeSingle()
