@@ -1204,10 +1204,10 @@ function renderExecutiveSummary(
     // This prevents credibility leaks like "within 7 days" when Priority 1 is "by Jan 11" (48h)
     
     // Compute earliest deadline from actions (same logic as renderRecommendedActionsShort)
-    const hasActions = data.recommended_actions && data.recommended_actions.length > 0
+    const actions = data.recommended_actions
     let earliestDeadlineText = 'within 7 days' // Default fallback
-    if (hasActions && data.recommended_actions.length > 0) {
-      const priority1Action = data.recommended_actions.find(a => a.priority === 1)
+    if (actions && actions.length > 0) {
+      const priority1Action = actions.find(a => a.priority === 1)
       if (priority1Action) {
         // Priority 1 = 48 hours (same as action deadline computation)
         const deadlineDate = new Date()
@@ -1215,7 +1215,7 @@ function renderExecutiveSummary(
         earliestDeadlineText = `by ${deadlineDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
       } else {
         // No Priority 1, check Priority 2 (7 days)
-        const priority2Action = data.recommended_actions.find(a => a.priority === 2)
+        const priority2Action = actions.find(a => a.priority === 2)
         if (priority2Action) {
           const deadlineDate = new Date()
           deadlineDate.setDate(deadlineDate.getDate() + 7)
