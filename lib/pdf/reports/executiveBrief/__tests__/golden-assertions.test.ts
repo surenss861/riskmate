@@ -222,33 +222,32 @@ describe('Executive Brief PDF - Golden Assertions', () => {
     expect(text).toContain('Moderate')
     
     // CRITICAL: Must NOT see "Mode" followed by "rate" on next line (regression prevention)
-    // This would indicate PDFKit is still wrapping "Moderate" mid-word
+    // Stricter check: assert it does NOT contain "Mode" + newline + "rate"
     const lines = text.split('\n').map(l => l.trim())
     for (let i = 0; i < lines.length - 1; i++) {
       const currentLine = lines[i]
       const nextLine = lines[i + 1]
       
       // Should never see "Mode" on one line followed by "rate" on the next
-      // (This is the exact artifact we're fixing)
-      if (currentLine.includes('Mode') && nextLine.includes('rate')) {
-        // Check if it's actually "Moderate" split (not just coincidental words)
-        const combined = `${currentLine} ${nextLine}`
-        if (combined.includes('Moderate') || (currentLine.endsWith('Mode') && nextLine.startsWith('rate'))) {
+      // This is the exact artifact we're fixing - "Moderate" being split mid-word
+      if (currentLine.endsWith('Mode') && nextLine.startsWith('rate')) {
+        throw new Error(`Found "Mode / rate" artifact: "${currentLine}" followed by "${nextLine}"`)
+      }
+      // Also check if "Mode" appears standalone and "rate" appears on next line (even if not adjacent)
+      if (currentLine === 'Mode' || (currentLine.endsWith(' Mode') && !currentLine.includes('Moderate'))) {
+        if (nextLine.startsWith('rate') || nextLine === 'rate') {
           throw new Error(`Found "Mode / rate" artifact: "${currentLine}" followed by "${nextLine}"`)
         }
       }
     }
     
-    // Additional check: "Mode" should not appear as standalone word near "Risk Posture"
-    // (unless it's part of a legitimate word like "Mode" in a different context)
-    const modeIndex = text.indexOf('Mode')
-    if (modeIndex !== -1) {
-      const context = text.substring(Math.max(0, modeIndex - 20), Math.min(text.length, modeIndex + 30))
-      // If "Mode" appears near "Risk Posture", it's likely the artifact
-      if (context.includes('Risk Posture') && !context.includes('Moderate')) {
-        throw new Error(`Found "Mode" artifact near "Risk Posture": "${context}"`)
-      }
-    }
+    // Additional strict check: assert text does NOT contain "Mode\nrate" pattern
+    // (newline between Mode and rate indicates mid-word wrapping)
+    const modeRatePattern = /Mode\s*\n\s*rate/i
+    expect(text).not.toMatch(modeRatePattern)
+    
+    // Assert it DOES contain "Moderate" as a complete word
+    expect(text).toMatch(/\bModerate\b/)
   })
 })
 

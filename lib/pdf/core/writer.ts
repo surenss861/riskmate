@@ -147,13 +147,17 @@ export function writeKV(
  * Write fitted single line - prevents mid-word wrapping by shrinking font
  * CRITICAL: Never allows single-word values to wrap mid-word
  * Use this for KPI values like "Moderate", "Low", "High" that must stay on one line
+ * 
+ * KEY: Does NOT pass width to doc.text() - instead measures string width,
+ * shrinks font until it fits, computes exact x position for alignment, and renders
+ * with lineBreak: false and NO width parameter (prevents PDFKit from treating it as wrapped paragraph)
  */
 export function writeFittedSingleLine(
   doc: PDFKit.PDFDocument,
   text: string,
-  x: number,
+  boxX: number,
   y: number,
-  maxWidth: number,
+  boxW: number,
   opts: {
     font?: string
     color?: string
@@ -165,25 +169,40 @@ export function writeFittedSingleLine(
   const min = opts.minFontSize ?? 8
   const font = opts.font || 'Helvetica'
   const color = opts.color || '#1A1A1A'
+  const align = opts.align ?? 'left'
   
-  if (opts.font) doc.font(opts.font)
-  if (opts.color) doc.fillColor(opts.color)
+  // Set font (needed for width measurement)
+  doc.font(font)
 
+  // Shrink font size until text fits in box width
   let size = opts.fontSize
-  doc.fontSize(size)
-
-  // Shrink until it fits (or we hit the min)
-  while (size > min && doc.widthOfString(text) > maxWidth) {
-    size -= 1
+  while (size > min) {
     doc.fontSize(size)
+    const textWidth = doc.widthOfString(text)
+    if (textWidth <= boxW) break
+    size -= 1
   }
 
-  // CRITICAL: lineBreak false prevents PDFKit from doing character wraps
-  doc.text(text, x, y, {
-    width: maxWidth,
-    align: opts.align ?? 'left',
-    lineBreak: false, // CRITICAL: Never allow mid-word wrapping
-  })
+  // Final font size and width measurement
+  doc.fontSize(size)
+  const textWidth = doc.widthOfString(text)
+
+  // Compute exact x position based on alignment
+  let x = boxX
+  if (align === 'center') {
+    x = boxX + (boxW - textWidth) / 2
+  } else if (align === 'right') {
+    x = boxX + (boxW - textWidth)
+  }
+  // else 'left': x = boxX (already set)
+
+  // Set color if provided
+  if (opts.color) doc.fillColor(color)
+
+  // CRITICAL: Render with NO width parameter - this prevents PDFKit from treating
+  // it as a wrapped paragraph and breaking at characters
+  // lineBreak: false ensures it never wraps even if somehow width is inferred
+  doc.text(text, x, y, { lineBreak: false })
 
   return { usedFontSize: size }
 }
