@@ -540,7 +540,7 @@ function renderKPIStrip(
       hasPriorPeriodData,
     },
     {
-      label: 'Attestation coverage',
+      label: 'Attestation %', // Shortened to avoid awkward wrapping (full definition in Methodology)
       value: data.signed_signoffs + data.pending_signoffs > 0 
         ? `${Math.round((data.signed_signoffs / (data.signed_signoffs + data.pending_signoffs)) * 100)}%`
         : 'No data',
@@ -1167,6 +1167,16 @@ function renderExecutiveSummary(
       })
       doc.moveDown(0.6)
     }
+    
+    // CRITICAL: Always render "Decision requested" even in insufficient data case
+    const decisionText = `Decision requested: Continue monitoring risk posture and maintain current control effectiveness.`
+    safeText(doc, sanitizeAscii(decisionText), margin, doc.y, {
+      fontSize: STYLES.sizes.body,
+      font: STYLES.fonts.header, // Bold for emphasis
+      color: STYLES.colors.primaryText,
+      width: pageWidth - margin * 2,
+    })
+    doc.moveDown(0.8)
   }
 
   doc.moveDown(1)
