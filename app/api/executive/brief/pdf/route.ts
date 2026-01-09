@@ -939,13 +939,33 @@ function renderExecutiveSummary(
   const lineHeight = headlineFontSize * 1.25
   const headlineHeight = headlineLines.length * lineHeight
   
-  // CRITICAL: safeText() will sanitize again, but we've already sanitized to be safe
-  safeText(doc, finalHeadlineText, margin, headlineY, {
-    fontSize: headlineFontSize,
-    font: STYLES.fonts.header,
-    color: STYLES.colors.primaryText,
-    width: maxHeadlineWidth,
-  })
+  // CRITICAL: Render headline lines individually to prevent further wrapping
+  // If headline was intentionally split at semicolon, render each line as atomic (no further wrapping)
+  // This prevents mid-sentence wraps like "to reduce audit / risk."
+  if (headlineLines.length > 1) {
+    // Intentional 2-line headline - render each line as atomic to prevent further wrapping
+    let currentY = headlineY
+    for (const line of headlineLines) {
+      doc
+        .fontSize(headlineFontSize)
+        .font(STYLES.fonts.header)
+        .fillColor(STYLES.colors.primaryText)
+        .text(line.trim(), margin, currentY, {
+          width: maxHeadlineWidth,
+          align: 'left',
+          lineBreak: false, // CRITICAL: Prevent further wrapping on each line
+        })
+      currentY += lineHeight
+    }
+  } else {
+    // Single line - use safeText as before
+    safeText(doc, finalHeadlineText, margin, headlineY, {
+      fontSize: headlineFontSize,
+      font: STYLES.fonts.header,
+      color: STYLES.colors.primaryText,
+      width: maxHeadlineWidth,
+    })
+  }
   
   // CRITICAL: Start chips below headline with proper spacing (headlineBottom + spacing)
   // Don't use doc.y which might not account for wrapped lines correctly
@@ -2446,13 +2466,20 @@ function addHeaderFooter(
       // Report ID (monospace for verification stamp feel)
       currentY = writeLine(`Report ID: RM-${reportId.substring(0, 8)}`, 8, 'Courier', 11)
       
-      // Organization name - show parenthetical only in Integrity block (not in header)
-      // If org name looks like an ID (short hex), add parenthetical "(org name not set)"
+      // Organization name - show parenthetical only when org name is missing or in non-prod
+      // Ultra-clean rule: Only show "(org name not set)" when:
+      // 1. Org name is actually an ID (not a real name), AND
+      // 2. We're in non-production OR org name is truly missing
       let orgDisplayName = organizationName
       // Remove any existing "Org " or "Org: " prefix to normalize
       orgDisplayName = orgDisplayName.replace(/^Org:?\s*/i, '').trim()
       const isOrgId = orgDisplayName.length <= 12 && /^[a-f0-9]+$/i.test(orgDisplayName)
-      const orgLine = isOrgId 
+      const isProduction = process.env.NODE_ENV === 'production'
+      const orgNameMissing = !orgDisplayName || orgDisplayName.length === 0
+      
+      // Only show parenthetical in non-prod or when org name is truly missing
+      const shouldShowParenthetical = isOrgId && (!isProduction || orgNameMissing)
+      const orgLine = shouldShowParenthetical
         ? `Organization: ${orgDisplayName} (org name not set)`
         : `Organization: ${orgDisplayName}`
       // CRITICAL: Use noWrap to ensure Organization line is atomic and doesn't merge with Generated

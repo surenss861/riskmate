@@ -249,5 +249,28 @@ describe('Executive Brief PDF - Golden Assertions', () => {
     // Assert it DOES contain "Moderate" as a complete word
     expect(text).toMatch(/\bModerate\b/)
   })
+  
+  it('should render headline as exactly 2 lines when semicolon is present', async () => {
+    const result = await buildExecutiveBriefPDFForTests(input)
+    const text = await extractTextFromPDF(result.buffer)
+    
+    // CRITICAL: Headline should be intentionally 2-line at semicolon
+    // Check for semicolon line break pattern: "Exposure is moderate;" followed by newline then action
+    // This ensures the headline is split at the semicolon (not mid-phrase)
+    const headlinePattern = /Exposure is (low|moderate|high);\s*\n\s*mitigate/i
+    expect(text).toMatch(headlinePattern)
+    
+    // Additional check: Ensure semicolon is on first line, action on second line
+    const lines = text.split('\n').map(l => l.trim())
+    const semicolonLineIndex = lines.findIndex(l => l.includes('Exposure is') && l.includes(';'))
+    const actionLineIndex = lines.findIndex(l => l.includes('mitigate') || l.includes('no high risk'))
+    
+    // Semicolon line and action line should be consecutive (or very close)
+    if (semicolonLineIndex !== -1 && actionLineIndex !== -1) {
+      const lineGap = Math.abs(actionLineIndex - semicolonLineIndex)
+      // Should be on consecutive lines (gap of 0 or 1)
+      expect(lineGap).toBeLessThanOrEqual(1)
+    }
+  })
 })
 
