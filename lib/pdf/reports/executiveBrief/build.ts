@@ -185,6 +185,12 @@ export async function buildExecutiveBriefPDF(
     const startTime = Date.now()
     const generatedAt = new Date()
     
+    // Track page number manually (PDFKit doesn't expose it directly)
+    let currentPageNumber = 1
+    doc.on('pageAdded', () => {
+      currentPageNumber++
+    })
+    
     // CRITICAL: Compute deterministic hash from report metadata for Integrity capsule
     const metadataHashInput = `${reportId}-${generatedAt.toISOString()}-${organizationName}-${timeRange}`
     const metadataHash = crypto.createHash('sha256').update(metadataHashInput).digest('hex')
@@ -300,10 +306,17 @@ export async function buildExecutiveBriefPDF(
     )
 
     // Force page break for page 2
-    // ensureSpace returns false if we're already on page 2, but we need to force page 2
-    // So we check page number directly and add page if needed
-    if (doc.page.number === 1) {
+    // We need to explicitly add page 2 - ensureSpace won't do it if we're already on page 2
+    // Track page number manually since PDFKit doesn't expose it directly
+    let currentPageNumber = 1
+    doc.on('pageAdded', () => {
+      currentPageNumber++
+    })
+    
+    // Force page 2 if we're still on page 1
+    if (currentPageNumber === 1) {
       doc.addPage()
+      currentPageNumber = 2
     }
 
     // ============================================
