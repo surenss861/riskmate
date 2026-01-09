@@ -2190,9 +2190,10 @@ function addHeaderFooter(
   buildSha: string | undefined,
   timeWindow: { start: Date; end: Date },
   baseUrl: string | undefined,
-  pdfHash?: string,
-  qrCodeBuffer?: Buffer | null,
-  page2ColumnLayout?: { leftX: number; leftW: number; rightX: number; rightW: number; gutter: number }
+  metadataHash: string,
+  qrCodeBuffer: Buffer | null,
+  page2ColumnLayout: { leftX: number; leftW: number; rightX: number; rightW: number; gutter: number },
+  formatTimeRangeFromWindow?: (range: string, windowStart: Date, windowEnd: Date) => string
 ): void {
   const range = doc.bufferedPageRange()
   const pageCount = range.count
@@ -2385,10 +2386,10 @@ function addHeaderFooter(
       // This is one of the strongest "this is defensible" signals
       // CRITICAL: Treat capsule as its own tiny layout engine - every line must advance y = writeLine(...)
       // Never manual y guessing - use writeLine helper for all hash rendering
-      if (pdfHash) {
+      if (metadataHash) {
         // Show full hash formatted in 4-char groups for readability
         // CRITICAL: Keep "SHA-256:" on the same line as the first chunk if possible (looks more intentional)
-        const hashFormatted = pdfHash.match(/.{1,4}/g)?.join(' ') || pdfHash
+        const hashFormatted = metadataHash.match(/.{1,4}/g)?.join(' ') || metadataHash
         const sha256Label = 'SHA-256: '
         
         // Check if "SHA-256: XXXX" fits on one line

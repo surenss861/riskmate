@@ -105,7 +105,8 @@ export interface ExecutiveBriefDeps {
     baseUrl: string | undefined,
     metadataHash: string,
     qrCodeBuffer: Buffer | null,
-    page2ColumnLayout: { leftX: number; leftW: number; rightX: number; rightW: number; gutter: number }
+    page2ColumnLayout: { leftX: number; leftW: number; rightX: number; rightW: number; gutter: number },
+    formatTimeRangeFromWindow?: (range: string, windowStart: Date, windowEnd: Date) => string
   ) => void
   // State setter for page number (needed when build.ts adds page 2)
   setPageNumber: (val: number) => void
