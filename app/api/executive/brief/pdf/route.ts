@@ -2781,17 +2781,37 @@ function addHeaderFooter(
         sanitizedDisplayText = verifyPath // Force to minimum safe display
       }
       
-      // CRITICAL: Use writeLine for atomic separation, but preserve link annotation
-      // Render text using writeLine pattern for atomic line, then add link annotation
-      doc.fontSize(fontSizeToUse).font(STYLES.fonts.body).fillColor(STYLES.colors.accent)
-      doc.text(sanitizedDisplayText, capsuleContentX, currentY, { 
-        width: capsuleContentWidth,
-        lineBreak: false, // Prevent wrapping
-      })
+      // CRITICAL: Render Verify line as atomic, non-flowing (no width parameter)
+      // This prevents PDFKit from creating Page 3 when the line doesn't fit
+      // Use shrink-to-fit approach (like writeFittedSingleLine) to ensure it fits in capsule
+      
+      // Shrink font if needed to fit in capsule width (min 6pt)
+      let finalFontSize = fontSizeToUse
+      doc.fontSize(finalFontSize).font(STYLES.fonts.body)
+      let textWidth = doc.widthOfString(sanitizedDisplayText)
+      const minFontSize = 6
+      
+      while (textWidth > capsuleContentWidth && finalFontSize > minFontSize) {
+        finalFontSize -= 0.5
+        doc.fontSize(finalFontSize).font(STYLES.fonts.body)
+        textWidth = doc.widthOfString(sanitizedDisplayText)
+      }
+      
+      // Compute exact x position (left-aligned within capsule)
+      const verifyX = capsuleContentX
+      
+      // Render as atomic line: NO width parameter, lineBreak: false
+      // This prevents PDFKit from treating it as flowing text and creating Page 3
+      doc
+        .fontSize(finalFontSize)
+        .font(STYLES.fonts.body)
+        .fillColor(STYLES.colors.accent)
+        .text(sanitizedDisplayText, verifyX, currentY, {
+          lineBreak: false, // CRITICAL: Never allow wrapping or flowing
+        })
       
       // Add clickable link annotation (PDFKit supports links) - full URL in annotation (not display text)
-      const displayTextWidth = doc.widthOfString(sanitizedDisplayText)
-      doc.link(capsuleContentX, currentY, displayTextWidth, linkTextHeight, verifyUrl)
+      doc.link(verifyX, currentY, textWidth, linkTextHeight, verifyUrl)
       
       // CRITICAL: Advance Y position to match writeLine pattern (atomic line separation)
       currentY += 11

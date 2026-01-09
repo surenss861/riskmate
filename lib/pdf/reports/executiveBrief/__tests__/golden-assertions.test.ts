@@ -48,6 +48,28 @@ describe('Executive Brief PDF - Golden Assertions', () => {
     // Additional assertion: verify the buffer we test is the same one we'd deploy
     expect(result.buffer).toBeDefined()
     expect(result.buffer.length).toBeGreaterThan(0)
+    
+    // CRITICAL: Guard against lonely "Verify:" on its own page (regression prevention)
+    // Extract text from each page and check that no page contains only "Verify:" with minimal content
+    const text = await extractTextFromPDF(result.buffer)
+    const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0)
+    
+    // Check for lonely Verify line pattern (Verify: on a line with almost no other content nearby)
+    // This would indicate Page 3 with just the Verify line
+    const verifyLineIndex = lines.findIndex(l => l.includes('Verify:') || l.includes('Verification endpoint:'))
+    if (verifyLineIndex !== -1) {
+      // Check surrounding lines - if Verify is isolated with very little content, it's likely Page 3
+      const contextStart = Math.max(0, verifyLineIndex - 3)
+      const contextEnd = Math.min(lines.length, verifyLineIndex + 3)
+      const context = lines.slice(contextStart, contextEnd)
+      const contextText = context.join(' ')
+      
+      // If Verify line appears with very little other content, it's likely on its own page
+      // (This is a heuristic - the page count check above is the hard guard)
+      if (context.length < 5 && contextText.length < 100) {
+        throw new Error(`Found lonely Verify line with minimal context - likely on Page 3. Context: "${contextText}"`)
+      }
+    }
   })
   
   it('should have "RiskMate Executive Brief" header', async () => {
