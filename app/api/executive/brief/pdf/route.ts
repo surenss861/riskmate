@@ -1925,6 +1925,18 @@ function renderMethodologyShort(
   })
   doc.moveDown(0.4)
   
+  // Scope limits sentence (P2 credibility - legally calming, prevents over-interpretation)
+  if (hasSpace(doc, 20)) {
+    const scopeText = sanitizeText('This brief summarizes activity recorded in RiskMate for the window above; missing inputs reduce confidence.')
+    safeText(doc, scopeText, columnX, doc.y, {
+      width: columnWidth,
+      fontSize: STYLES.sizes.caption,
+      font: STYLES.fonts.body,
+      color: STYLES.colors.secondaryText,
+    })
+    doc.moveDown(0.5)
+  }
+  
   // Fixed definitions - add missing definitions for Sign-offs, Proof Packs, Overall exposure
   const methodologyPoints = [
     'Risk posture: 0-100 scale based on high-risk jobs, incidents, and violations',
