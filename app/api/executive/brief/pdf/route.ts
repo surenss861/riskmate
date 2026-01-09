@@ -2229,8 +2229,13 @@ function addHeaderFooter(
       .font(STYLES.fonts.body)
       .fillColor(STYLES.colors.secondaryText)
 
+    // Use precise time range label from actual window dates (matches window display)
+    const timeRangeLabel = formatTimeRangeFromWindow 
+      ? formatTimeRangeFromWindow(timeRange, timeWindow.start, timeWindow.end)
+      : formatTimeRange(timeRange)
+    
     const footerText = sanitizeText(
-      `RiskMate Executive Brief | ${organizationName} | ${formatTimeRange(timeRange)} | Generated ${generatedAt.toLocaleDateString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric', year: 'numeric' })} | Report ID: ${reportId.substring(0, 8)} | Page ${pageIndex + 1} of ${pageCount}`
+      `RiskMate Executive Brief | ${organizationName} | ${timeRangeLabel} | Generated ${generatedAt.toLocaleDateString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric', year: 'numeric' })} | Report ID: ${reportId.substring(0, 8)} | Page ${pageIndex + 1} of ${pageCount}`
     )
 
     // CRITICAL: Footer writes don't count toward bodyCharCount (they're not body content)
