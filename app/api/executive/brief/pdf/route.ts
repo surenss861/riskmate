@@ -2661,18 +2661,43 @@ export async function POST(request: NextRequest) {
       // Continue anyway - don't fail the PDF generation
     }
 
-        // Generate PDF
+        // Generate PDF using extracted build function
         let pdfResult: { buffer: Buffer; hash: string; apiLatency: number; timeWindow: { start: Date; end: Date } }
         try {
-          pdfResult = await buildExecutiveBriefPDF(
-            riskPostureData,
+          // Prepare input for build function
+          const input: ExecutiveBriefInput = {
+            data: riskPostureData as any, // Type compatibility - route's RiskPostureData extends shared type
             organizationName,
-            sanitizeText(user.email || `User ${user.id.substring(0, 8)}`),
+            generatedBy: sanitizeText(user.email || `User ${user.id.substring(0, 8)}`),
             timeRange,
             buildSha,
             reportId,
-            baseUrl
-          )
+            baseUrl,
+          }
+          
+          // Prepare helper functions (these use route state, so we pass them from route)
+          const helpers = {
+            sanitizeText,
+            formatTimeRange,
+            renderKPIStrip,
+            renderRiskPostureGauge,
+            markPageHasBody,
+            addSectionDivider,
+            renderExecutiveSummary,
+            hasSpace,
+            renderMicroTopDrivers,
+            buildMetricsRows,
+            renderMetricsTable,
+            renderDataCoverage,
+            renderTopItemsNeedingAttention,
+            ensureSpace,
+            renderRecommendedActionsShort,
+            renderMethodologyShort,
+            renderDataFreshnessCompact,
+            addHeaderFooter,
+          }
+          
+          pdfResult = await buildPDF(input, helpers)
         } catch (pdfError: any) {
           // CRITICAL: Catch ship gate rejections and return JSON error instead of broken PDF
           if (pdfError?.message?.includes('PDF ship gate failed')) {
