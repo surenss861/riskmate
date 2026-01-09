@@ -107,10 +107,10 @@ export function renderPage1(
     
     // Check if it's a raw ID (short hex string like "c111f4ed")
     if (displayOrgName.length <= 12 && /^[a-f0-9]+$/i.test(displayOrgName)) {
-      // Looks like a raw ID - format as "Org: <short-id>" (canonical fallback format)
-      displayOrgName = `Org: ${displayOrgName}`
+      // Looks like a raw ID - format as "Org: <short-id> (org name not set)" (board-safe fallback)
+      displayOrgName = `Org: ${displayOrgName} (org name not set)`
     } else if (displayOrgName.length > 0) {
-      // Valid name - add "Org: " prefix (canonical format)
+      // Valid name - show as "Org: <Real Name>" (best format for board credibility)
       displayOrgName = `Org: ${displayOrgName}`
     } else {
       // Empty after normalization - should never happen, but safety fallback

@@ -926,53 +926,57 @@ function renderExecutiveSummary(
   // Only show "No change" when delta === 0 AND hasPriorPeriodData === true
   const chips: Array<{ label: string; delta: string; color: string }> = []
   
-  // 1. Risk posture: Score (Delta)
+  // CRITICAL: If prior unavailable, don't show deltas at all (no (N/A) spam)
+  // Only show deltas when hasPriorPeriodData === true
+  // Rule: If hasPriorPeriodData === false, show values only (no delta, no (N/A))
+  
+  // 1. Risk posture: Score (Delta only if prior available)
   const postureScore = data.posture_score !== undefined ? `${data.posture_score}` : 'N/A'
-  const postureDelta = data.delta !== undefined ? formatDelta(data.delta) : 'N/A'
+  const postureDelta = hasPriorPeriodData && data.delta !== undefined ? formatDelta(data.delta) : null
   chips.push({
     label: 'Risk posture',
-    delta: `${postureScore} (${postureDelta})`,
-    color: data.delta !== undefined && data.delta !== 0 
+    delta: postureDelta !== null ? `${postureScore} (${postureDelta})` : postureScore,
+    color: hasPriorPeriodData && data.delta !== undefined && data.delta !== 0 
       ? (data.delta > 0 ? STYLES.colors.riskHigh : STYLES.colors.riskLow)
       : STYLES.colors.primaryText,
   })
   
-  // 2. High-risk jobs: Count (Delta)
-  const jobsDelta = data.deltas?.high_risk_jobs !== undefined ? formatDelta(data.deltas.high_risk_jobs) : 'N/A'
+  // 2. High-risk jobs: Count (Delta only if prior available)
+  const jobsDelta = hasPriorPeriodData && data.deltas?.high_risk_jobs !== undefined ? formatDelta(data.deltas.high_risk_jobs) : null
   chips.push({
     label: sanitizeAscii(METRIC_LABELS.highRiskJobs), // Use centralized label, sanitize with ASCII
-    delta: sanitizeAscii(`${data.high_risk_jobs} (${jobsDelta})`),
-    color: data.deltas?.high_risk_jobs !== undefined && data.deltas.high_risk_jobs !== 0
+    delta: sanitizeAscii(jobsDelta !== null ? `${data.high_risk_jobs} (${jobsDelta})` : `${data.high_risk_jobs}`),
+    color: hasPriorPeriodData && data.deltas?.high_risk_jobs !== undefined && data.deltas.high_risk_jobs !== 0
       ? (data.deltas.high_risk_jobs > 0 ? STYLES.colors.riskHigh : STYLES.colors.riskLow)
       : STYLES.colors.primaryText,
   })
   
-  // 3. Open incidents: Count (Delta)
-  const incidentsDelta = data.deltas?.open_incidents !== undefined ? formatDelta(data.deltas.open_incidents) : 'N/A'
+  // 3. Open incidents: Count (Delta only if prior available)
+  const incidentsDelta = hasPriorPeriodData && data.deltas?.open_incidents !== undefined ? formatDelta(data.deltas.open_incidents) : null
   chips.push({
     label: sanitizeAscii(METRIC_LABELS.openIncidents), // Use centralized label, sanitize with ASCII
-    delta: sanitizeAscii(`${data.open_incidents} (${incidentsDelta})`),
-    color: data.deltas?.open_incidents !== undefined && data.deltas.open_incidents !== 0
+    delta: sanitizeAscii(incidentsDelta !== null ? `${data.open_incidents} (${incidentsDelta})` : `${data.open_incidents}`),
+    color: hasPriorPeriodData && data.deltas?.open_incidents !== undefined && data.deltas.open_incidents !== 0
       ? (data.deltas.open_incidents > 0 ? STYLES.colors.riskHigh : STYLES.colors.riskLow)
       : STYLES.colors.primaryText,
   })
   
-  // 4. Attestation: Percentage (attestation deltas not tracked yet - always show N/A)
+  // 4. Attestation: Percentage (no delta tracking yet - show value only)
   const totalSignoffs = (data.signed_signoffs ?? 0) + (data.pending_signoffs ?? 0)
   const attestationPct = totalSignoffs > 0 
     ? Math.round((data.signed_signoffs / totalSignoffs) * 100)
     : 0
   chips.push({
     label: sanitizeAscii('Attestation %'), // Consistent with KPI label (full definition in Methodology)
-    delta: sanitizeAscii(`${attestationPct}% (N/A)`), // Always N/A since attestation deltas not tracked
+    delta: sanitizeAscii(`${attestationPct}%`), // No delta - attestation deltas not tracked
     color: STYLES.colors.primaryText,
   })
   
-  // 5. Sign-offs: Signed/Required (sign-off deltas not tracked yet - always show N/A)
+  // 5. Sign-offs: Signed/Required (no delta tracking yet - show value only)
   // Clarify denominator: "Signed/Required" so execs know what the fraction means
   chips.push({
     label: sanitizeAscii('Sign-offs (Signed/Required)'),
-    delta: sanitizeAscii(`${data.signed_signoffs ?? 0}/${totalSignoffs} (N/A)`), // Always N/A since sign-off deltas not tracked
+    delta: sanitizeAscii(`${data.signed_signoffs ?? 0}/${totalSignoffs}`), // No delta - sign-off deltas not tracked
     color: STYLES.colors.primaryText,
   })
   
@@ -1282,13 +1286,28 @@ function renderMetricsTable(
     color: STYLES.colors.primaryText,
   })
   
-  // Owner view: dynamic one-liner based on actual data (never call out metrics that are 0)
+  // Owner view: dynamic one-liner with specific identifiers (1-click actionable)
+  // Include top item identifier(s) when available to make it feel real, not template-y
   doc.moveDown(0.2)
   let ownerViewText = 'Owner view: '
   const concerns: string[] = []
   
+  // Try to get top high risk job info if available (from top_drivers or similar)
+  // For now, show generic but specific count - in future could fetch actual job IDs
   if (data.high_risk_jobs > 0) {
-    concerns.push(`${data.high_risk_jobs} ${pluralize(data.high_risk_jobs, 'high risk job', 'high risk jobs')}`)
+    // If we have top_drivers with job info, use it; otherwise show count
+    const topJobInfo = data.top_drivers?.find(d => d.label.toLowerCase().includes('high risk') || d.label.toLowerCase().includes('job'))
+    if (topJobInfo && topJobInfo.label) {
+      // Extract job ID if present in label (format: "JOB-1042" or similar)
+      const jobIdMatch = topJobInfo.label.match(/JOB-[\w-]+/i)
+      if (jobIdMatch) {
+        concerns.push(`high risk job: ${jobIdMatch[0]} — mitigation pending`)
+      } else {
+        concerns.push(`${data.high_risk_jobs} ${pluralize(data.high_risk_jobs, 'high risk job', 'high risk jobs')}`)
+      }
+    } else {
+      concerns.push(`${data.high_risk_jobs} ${pluralize(data.high_risk_jobs, 'high risk job', 'high risk jobs')}`)
+    }
   }
   if (data.pending_signoffs > 0) {
     concerns.push(`${data.pending_signoffs} ${pluralize(data.pending_signoffs, 'pending sign-off', 'pending sign-offs')}`)
@@ -1781,10 +1800,13 @@ function renderMethodologyShort(
   })
   doc.moveDown(0.4)
   
-  // Fixed definitions (3 bullets max, corrected Evidence vs Attestation)
+  // Fixed definitions - add missing definitions for Sign-offs, Proof Packs, Overall exposure
   const methodologyPoints = [
     'Risk posture: 0-100 scale based on high-risk jobs, incidents, and violations',
     'Attestation %: Percentage of jobs in window with signed attestations',
+    'Sign-offs (Signed/Required): Signed closeout attestations / required attestations in window',
+    'Proof Packs: Exportable audit bundles generated from jobs in window',
+    'Overall exposure: Risk level (Low/Moderate/High) based on posture score thresholds',
   ]
   
   methodologyPoints.forEach((point) => {
@@ -2428,6 +2450,11 @@ function addHeaderFooter(
             currentY = writeLine(sanitizeAscii(hashLine), 8, 'Courier', 11)
           }
         }
+        
+        // Add raw hash line for copy/paste and system verification (smaller font, no spaces)
+        doc.moveDown(0.2)
+        const rawHashText = sanitizeAscii(`Hash (raw): ${metadataHash}`)
+        currentY = writeLine(rawHashText, 7, 'Courier', 9) // Smaller font for raw hash
       } else {
         // If hash is not available, show a placeholder (should not happen in production)
         const placeholderText = sanitizeAscii('SHA-256: calculating...')
