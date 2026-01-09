@@ -293,6 +293,7 @@ export async function buildExecutiveBriefPDF(
       {
         sanitizeText: helpers.sanitizeText,
         formatTimeRange: helpers.formatTimeRange,
+        formatTimeRangeFromWindow: helpers.formatTimeRangeFromWindow,
         renderKPIStrip: helpers.renderKPIStrip,
         renderRiskPostureGauge: helpers.renderRiskPostureGauge,
         markPageHasBody: helpers.markPageHasBody,
