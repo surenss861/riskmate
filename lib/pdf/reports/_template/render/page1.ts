@@ -6,15 +6,16 @@
  */
 
 import PDFDocument from 'pdfkit'
+import type PDFKit from 'pdfkit'
 import type { ReportInput } from '../types'
 import { safeText } from '@/lib/pdf/core/writer'
 import { getContentLimitY } from '@/lib/pdf/core/layout'
 
 export function renderPage1(
-  doc: PDFDocument,
+  doc: PDFKit.PDFDocument,
   input: ReportInput,
   helpers: {
-    ensureSpace: (doc: PDFDocument, requiredHeight: number, margin: number) => boolean
+    ensureSpace: (doc: PDFKit.PDFDocument, requiredHeight: number, margin: number) => boolean
     // ... other helpers
   },
   styles: typeof import('@/lib/pdf/core/tokens').PDF_CORE_TOKENS
