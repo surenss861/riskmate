@@ -3,11 +3,13 @@
  * 
  * These tests ensure the "board-grade" output never regresses.
  * Freeze today's output as the reference.
+ * 
+ * Based on stable output: executive-brief-30d-2026-01-09
  */
 
 import { buildExecutiveBriefPDF } from '../build'
 import type { RiskPostureData } from '../types'
-import { extractTextFromPDF } from '@/lib/utils/pdf-test-helpers' // Assuming this exists, or we'll create it
+import { extractTextFromPDF, getPDFPageCount } from '@/lib/utils/pdf-test-helpers'
 
 describe('Executive Brief PDF - Golden Assertions', () => {
   const mockData: RiskPostureData = {
@@ -38,9 +40,21 @@ describe('Executive Brief PDF - Golden Assertions', () => {
 
   it('should generate exactly 2 pages (hard lock)', async () => {
     const result = await buildExecutiveBriefPDF(input)
-    // TODO: Extract page count from PDF buffer
-    // For now, this is a placeholder assertion
-    expect(result.buffer).toBeDefined()
+    const pageCount = await getPDFPageCount(result.buffer)
+    expect(pageCount).toBe(2)
+  })
+  
+  it('should have "RiskMate Executive Brief" header', async () => {
+    const result = await buildExecutiveBriefPDF(input)
+    const text = await extractTextFromPDF(result.buffer)
+    expect(text).toContain('RiskMate Executive Brief')
+  })
+  
+  it('should have "Trend unavailable (need 4 completed periods)" when no historical data', async () => {
+    const result = await buildExecutiveBriefPDF(input)
+    const text = await extractTextFromPDF(result.buffer)
+    // Should show intentional "unavailable" message, not placeholder
+    expect(text).toMatch(/Trend unavailable.*need 4 completed periods/i)
   })
 
   it('should show "prior unavailable" in KPI subtitles when prior period is unavailable', async () => {
@@ -71,12 +85,27 @@ describe('Executive Brief PDF - Golden Assertions', () => {
     expect(text).not.toContain('Prior period unavailable')
   })
 
-  it('should show SHA-256 hash in Integrity capsule', async () => {
+  it('should have complete Integrity block (Report ID, Window, Sources, SHA-256, Verify)', async () => {
     const result = await buildExecutiveBriefPDF(input)
     const text = await extractTextFromPDF(result.buffer)
     
-    // Hash should be present in Integrity capsule
+    // Integrity capsule must include all required elements
+    expect(text).toContain('Report Integrity')
+    expect(text).toMatch(/Report ID:.*RM-/i)
+    expect(text).toMatch(/Window:.*-.*/i) // Date range format
+    expect(text).toMatch(/Sources:.*jobs.*incidents.*attestations/i)
     expect(text).toContain('SHA-256:')
+    expect(text).toMatch(/verify\/RM-/i) // Verify path must include /verify/
+  })
+  
+  it('should show verify path as "riskmate.app/verify/RM-xxxx" or "verify/RM-xxxx"', async () => {
+    const result = await buildExecutiveBriefPDF(input)
+    const text = await extractTextFromPDF(result.buffer)
+    
+    // Verify display must always include /verify/ path
+    expect(text).toMatch(/verify\/RM-/i)
+    // Should never show just the ID without verify path
+    expect(text).not.toMatch(/Verification endpoint: RM-[a-z0-9]+$/i)
   })
 
   it('should have "Generated:" and "Window:" on separate lines (no "EST Window:" merge)', async () => {
@@ -103,6 +132,21 @@ describe('Executive Brief PDF - Golden Assertions', () => {
     
     // Should have explicit label
     expect(text).toContain('Decision requested:')
+  })
+  
+  it('should NOT contain junk tokens (single "—", lone numbers, etc.)', async () => {
+    const result = await buildExecutiveBriefPDF(input)
+    const text = await extractTextFromPDF(result.buffer)
+    
+    // Should not have standalone dashes or single numbers without context
+    // (This is already enforced by safeText, but verify in output)
+    const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0)
+    
+    for (const line of lines) {
+      // Should not be just a dash or number
+      expect(line).not.toBe('—')
+      expect(line).not.toMatch(/^\d+$/) // Not just a number
+    }
   })
 })
 
