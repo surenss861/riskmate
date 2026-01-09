@@ -106,13 +106,14 @@ function getContentLimitY(doc: PDFKit.PDFDocument): number {
 }
 
 /**
- * Helper: Check if we need a new page and add one if needed
- * CRITICAL: requiredHeight must include section title + spacing + at least one row/card
- * Never add a page unless you're guaranteed to draw real body content
- * Uses contentLimitY to prevent footer overlap
+ * Helper: Check if we have enough space (NEVER adds pages)
+ * CRITICAL: This function NEVER calls doc.addPage() - only build.ts can add pages
  * 
  * HARD LOCK: Returns false if we're on page 2 and can't fit (prevents page 3)
- * Returns true if space is available or page was added successfully
+ * Returns true if space is available on current page
+ * 
+ * Rule: Only build.ts can add pages (exactly once, between Page 1 and Page 2)
+ * All renderers must check ensureSpace() and skip/truncate if it returns false
  */
 function ensureSpace(
   doc: PDFKit.PDFDocument,
@@ -120,25 +121,16 @@ function ensureSpace(
   margin: number
 ): boolean {
   const contentLimitY = getContentLimitY(doc)
-  if (doc.y + requiredHeight > contentLimitY) {
-    // HARD LOCK: Never create page 3 - Executive Brief is exactly 2 pages
-    if (pageNumber >= 2) {
-      return false // Can't fit, and we're already on page 2 - no page 3 allowed
-    }
-    
-    // RED ALERT: If current page has no body content, we're about to create a blank page
-    if (!pageHasBody && pageNumber > 1) {
-      console.warn(`[PDF] Warning: About to add page ${pageNumber + 1} but page ${pageNumber} has no body content`)
-    }
-    
-    doc.addPage()
-    pageNumber++
-    // Reset to top of content area after page break
-    doc.y = STYLES.spacing.margin
-    currentPageStartY = doc.y
-    pageHasBody = false // Reset flag for new page
+  
+  // HARD LOCK: Never create page 3 - Executive Brief is exactly 2 pages
+  if (pageNumber >= 2) {
+    // On page 2, check if content fits
+    return doc.y + requiredHeight <= contentLimitY
   }
-  return true // Space is available
+  
+  // On page 1, check if content fits
+  // NOTE: We don't add pages here - build.ts handles the single page break
+  return doc.y + requiredHeight <= contentLimitY
 }
 
 /**
@@ -180,7 +172,11 @@ function renderSection(
 ): void {
   if (!opts.hasContent) return
 
-  ensureSpace(doc, opts.minHeight, opts.margin)
+  // CRITICAL: ensureSpace() no longer adds pages - only checks space
+  // This function is DEPRECATED and should not be used for new sections
+  if (!ensureSpace(doc, opts.minHeight, opts.margin)) {
+    return // Not enough space, skip section
+  }
   
   // Draw section title - use safeText instead of doc.text
   safeText(doc, opts.title, opts.margin, doc.y, {

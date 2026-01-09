@@ -81,14 +81,11 @@ export function renderPage2(
   // ============================================
   // PAGE 2: Two-column layout (HARD LOCK - never create page 3)
   // ============================================
+  // NOTE: Page break is handled by build.ts - we're already on Page 2 here
   
-  // Force page break for page 2
-  // Note: pageNumber is tracked in route.ts, we rely on ensureSpace to handle page breaks
-  renderFunctions.ensureSpace(doc, 1000, margin) // Force new page
-
   // Page 2 two-column grid layout with strict boundaries:
   // Left column (65-70%): Metrics Table (if needed) → Recommended Actions → Methodology → Data Freshness
-  // Right column (30-35%): Report Integrity capsule (fixed position, bottom-right)
+  // Right column (30-35%): Report Integrity capsule (ABSOLUTE POSITIONED, bottom-right, drawn last)
   // Gutter: 24px between columns (hard rule - no overlap ever)
   
   const gutter = 24 // Hard gutter between columns
@@ -98,15 +95,18 @@ export function renderPage2(
   const leftColumnX = margin
   const rightColumnX = margin + leftColumnWidth + gutter
   
-  // Store for Integrity capsule positioning
+  // Store for Integrity capsule positioning (absolute positioned, drawn last)
   const page2ColumnLayout = { leftX: leftColumnX, leftW: leftColumnWidth, rightX: rightColumnX, rightW: rightColumnWidth, gutter }
   const page2StartY = doc.y
 
   // Metrics Table on Page 2 if it didn't fit on Page 1 (full width, then switch to columns)
   // CRITICAL: Use same hasPriorPeriodData computed above for consistency
   if (!metricsTableFitsOnPage1) {
-    renderFunctions.renderMetricsTable(doc, data, pageWidth, margin, hasPriorPeriodData)
-    renderFunctions.addSectionDivider(doc, pageWidth, margin)
+    // Check if we have space before rendering (no page 3 allowed)
+    if (renderFunctions.ensureSpace(doc, 200, margin)) {
+      renderFunctions.renderMetricsTable(doc, data, pageWidth, margin, hasPriorPeriodData)
+      renderFunctions.addSectionDivider(doc, pageWidth, margin)
+    }
   }
 
   // LEFT COLUMN: Recommended Actions → Methodology → Data Freshness
@@ -133,15 +133,10 @@ export function renderPage2(
     renderFunctions.renderDataFreshnessCompact(doc, data, leftColumnWidth, leftColumnX)
   }
   
-  // CRITICAL: Never create page 3 - this is checked in route.ts via pageNumber tracking
-  // If we're past page 2, stop rendering (handled by route.ts)
-
-  // Add headers/footers to all pages
-  // CRITICAL: Pass metadata hash for Integrity capsule display
-  // The actual PDF hash will be computed after generation and stored in headers/database
-  // Both hashes are verifiable - metadata hash is deterministic, PDF hash is from final buffer
-  // QR code is pre-generated and passed in
-  // Pass Page 2 column layout for Integrity capsule positioning
+  // CRITICAL: Integrity capsule is ABSOLUTE POSITIONED (not flow content)
+  // It's drawn last, in the right column, bottom-right position
+  // This prevents it from affecting layout or causing page breaks
+  // Headers/footers are added, and Integrity is drawn as absolute positioned element
   renderFunctions.addHeaderFooter(
     doc,
     organizationName,

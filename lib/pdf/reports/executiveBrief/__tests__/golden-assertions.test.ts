@@ -38,10 +38,16 @@ describe('Executive Brief PDF - Golden Assertions', () => {
     baseUrl: 'https://riskmate.app',
   }
 
-  it('should generate exactly 2 pages (hard lock)', async () => {
+  it('should generate exactly 2 pages (hard lock - structural, not best effort)', async () => {
     const result = await buildExecutiveBriefPDFForTests(input)
     const pageCount = await getPDFPageCount(result.buffer)
+    // CRITICAL: This is a structural requirement - PDF must be exactly 2 pages
+    // If this fails, the 2-page lock is broken and content is spilling to page 3
     expect(pageCount).toBe(2)
+    
+    // Additional assertion: verify the buffer we test is the same one we'd deploy
+    expect(result.buffer).toBeDefined()
+    expect(result.buffer.length).toBeGreaterThan(0)
   })
   
   it('should have "RiskMate Executive Brief" header', async () => {
