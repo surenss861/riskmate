@@ -2827,14 +2827,8 @@ async function buildExecutiveBriefPDF(
       const remainingSpacePage1 = page1Bottom - doc.y
 
       // Region E: Metrics Table (only if it fits) OR move to Page 2
-      const metricsRows = buildMetricsRows(data, hasPriorPeriodData)
-      const sectionHeaderHeight = STYLES.sizes.h2 + 20
-      const tableHeaderHeight = STYLES.spacing.tableRowHeight + 4
-      const tableRowHeight = STYLES.spacing.tableRowHeight
-      const totalTableHeight = sectionHeaderHeight + tableHeaderHeight + (tableRowHeight * metricsRows.length) + 40
-      const dataCoverageHeight = 80 // Approx height for Data Coverage
-
-      const metricsTableFitsOnPage1 = remainingSpacePage1 >= (totalTableHeight + dataCoverageHeight + 32) // 32 = spacing
+      // Recalculate with actual remaining space (update the variable declared outside try-catch)
+      metricsTableFitsOnPage1 = remainingSpacePage1 >= (totalTableHeight + dataCoverageHeight + 32) // 32 = spacing
 
       if (metricsTableFitsOnPage1) {
         // Render Metrics Table on Page 1
