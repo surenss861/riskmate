@@ -5,7 +5,7 @@
  * This allows tests to call buildReportPDF without passing helpers from route
  */
 
-import PDFKit from 'pdfkit'
+import PDFDocument from 'pdfkit'
 import type { ReportInput, ReportOutput } from '../types'
 import { buildReportPDF } from '../build'
 import { ensureSpace } from '@/lib/pdf/core/layout'

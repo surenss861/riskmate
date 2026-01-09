@@ -9,7 +9,7 @@
  * - Renderers must skip/truncate when ensureSpace() returns false
  */
 
-import PDFKit from 'pdfkit'
+import PDFDocument from 'pdfkit'
 import crypto from 'crypto'
 import type { ReportInput, ReportOutput } from './types'
 import { renderPage1 } from './render/page1'
@@ -39,7 +39,7 @@ export async function buildReportPDF(
   let pageNumber = 1 // State variable for ensureSpace()
   
   return new Promise((resolve, reject) => {
-    const doc = new PDFKit.PDFDocument({
+    const doc = new PDFDocument({
       size: 'LETTER',
       margins: {
         top: STYLES.spacing.margin,
