@@ -144,6 +144,51 @@ export function writeKV(
 }
 
 /**
+ * Write fitted single line - prevents mid-word wrapping by shrinking font
+ * CRITICAL: Never allows single-word values to wrap mid-word
+ * Use this for KPI values like "Moderate", "Low", "High" that must stay on one line
+ */
+export function writeFittedSingleLine(
+  doc: PDFKit.PDFDocument,
+  text: string,
+  x: number,
+  y: number,
+  maxWidth: number,
+  opts: {
+    font?: string
+    color?: string
+    fontSize: number
+    minFontSize?: number
+    align?: 'left' | 'center' | 'right'
+  }
+): { usedFontSize: number } {
+  const min = opts.minFontSize ?? 8
+  const font = opts.font || 'Helvetica'
+  const color = opts.color || '#1A1A1A'
+  
+  if (opts.font) doc.font(opts.font)
+  if (opts.color) doc.fillColor(opts.color)
+
+  let size = opts.fontSize
+  doc.fontSize(size)
+
+  // Shrink until it fits (or we hit the min)
+  while (size > min && doc.widthOfString(text) > maxWidth) {
+    size -= 1
+    doc.fontSize(size)
+  }
+
+  // CRITICAL: lineBreak false prevents PDFKit from doing character wraps
+  doc.text(text, x, y, {
+    width: maxWidth,
+    align: opts.align ?? 'left',
+    lineBreak: false, // CRITICAL: Never allow mid-word wrapping
+  })
+
+  return { usedFontSize: size }
+}
+
+/**
  * Fitted label renderer - prevents mid-word breaks
  * Splits into multiple lines or shrinks font to fit
  */

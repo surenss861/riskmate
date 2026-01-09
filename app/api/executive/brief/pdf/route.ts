@@ -9,7 +9,7 @@ import { sanitizeText, sanitizeAscii, formatDelta, formatNumber, pluralize, form
 // Import layout helpers from core
 import { getContentLimitY as coreGetContentLimitY, ensureSpace as coreEnsureSpace, hasSpace as coreHasSpace } from '@/lib/pdf/core/layout'
 // Import writer helpers from core
-import { safeText as coreSafeText, writeKV as coreWriteKV, renderFittedLabel as coreRenderFittedLabel } from '@/lib/pdf/core/writer'
+import { safeText as coreSafeText, writeKV as coreWriteKV, renderFittedLabel as coreRenderFittedLabel, writeFittedSingleLine } from '@/lib/pdf/core/writer'
 // Import shared types
 import type { RiskPostureData as SharedRiskPostureData } from '@/lib/pdf/reports/executiveBrief/types'
 // Import the new build function
@@ -256,18 +256,35 @@ function writeKpiCard(
   
   // Value (big number) - ALLOW numeric-only in KPI context (paired with label)
   // CRITICAL: Always sanitize before rendering
+  // CRITICAL: Never allow single-word exposure values (Low/Moderate/High) to wrap mid-word
   const valueY = opts.cardY + cardPadding + 8
   const sanitizedValue = sanitizeText(opts.value)
   if (sanitizedValue) {
-    // KPI exception: allow numeric-only values when label exists
-    doc
-      .fontSize(STYLES.sizes.kpiValue)
-      .font(STYLES.fonts.header)
-      .fillColor(opts.color)
-      .text(sanitizedValue, contentX, valueY, {
-        width: contentWidth,
+    // Check if this is a single-word exposure value that must not wrap
+    const isSingleWord = typeof sanitizedValue === 'string' && !sanitizedValue.includes(' ')
+    const isExposureWord = sanitizedValue === 'Low' || sanitizedValue === 'Moderate' || sanitizedValue === 'High'
+    
+    if (isSingleWord && isExposureWord) {
+      // Use shrink-to-fit to prevent mid-word wrapping (board-grade move)
+      // This fixes the "Mode / rate" artifact where "Moderate" was being character-wrapped
+      writeFittedSingleLine(doc, sanitizedValue, contentX, valueY, contentWidth, {
+        font: STYLES.fonts.header,
+        color: opts.color,
+        fontSize: STYLES.sizes.kpiValue, // Start at 24pt
+        minFontSize: 16, // Never let it get tiny (maintains visual hierarchy)
         align: 'left',
       })
+    } else {
+      // Existing rendering for numeric values like 1, 0, 100%, 2/2
+      doc
+        .fontSize(STYLES.sizes.kpiValue)
+        .font(STYLES.fonts.header)
+        .fillColor(opts.color)
+        .text(sanitizedValue, contentX, valueY, {
+          width: contentWidth,
+          align: 'left',
+        })
+    }
   }
   
   // Label (small, below value) - CRITICAL: Use renderFittedLabel to prevent mid-word breaks
