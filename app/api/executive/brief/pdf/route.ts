@@ -2851,68 +2851,109 @@ async function buildExecutiveBriefPDF(
     }
 
     // ============================================
-    // PAGE 2: Two-column layout (HARD LOCK - never create page 3)
+    // PAGE 2: Use extracted renderer (with fallback to inline rendering)
     // ============================================
+    // NOTE: During migration, we use renderPage2 but pass all helper functions from route
+    // This allows us to test parity while keeping old code as fallback
+    // Once parity is verified, we can move helper functions to core and simplify
     
-    // Force page break for page 2
-    if (pageNumber === 1) {
-      ensureSpace(doc, 1000, margin) // Force new page
-    }
+    try {
+      renderPage2(
+        doc,
+        mappedData,
+        organizationName,
+        generatedBy,
+        timeRange,
+        timeWindow,
+        metadataHash,
+        '', // pdfHash will be computed after generation, pass empty string for now
+        reportId,
+        baseUrl,
+        qrCodeBuffer,
+        hasPriorPeriodData,
+        metricsTableFitsOnPage1,
+        buildSha,
+        generatedAt,
+        {
+          ensureSpace,
+          renderMetricsTable,
+          addSectionDivider,
+          renderRecommendedActionsShort,
+          renderMethodologyShort,
+          renderDataFreshnessCompact,
+          hasSpace,
+          addHeaderFooter,
+        },
+        STYLES
+      )
+    } catch (error) {
+      // Fallback: If renderPage2 fails, use inline rendering (old code)
+      console.warn('[PDF] renderPage2 failed, falling back to inline rendering:', error)
+      
+      // ============================================
+      // PAGE 2: Two-column layout (HARD LOCK - never create page 3)
+      // ============================================
+      
+      // Force page break for page 2
+      if (pageNumber === 1) {
+        ensureSpace(doc, 1000, margin) // Force new page
+      }
 
-    // Page 2 two-column grid layout with strict boundaries:
-    // Left column (65-70%): Metrics Table (if needed) → Recommended Actions → Methodology → Data Freshness
-    // Right column (30-35%): Report Integrity capsule (fixed position, bottom-right)
-    // Gutter: 24px between columns (hard rule - no overlap ever)
-    
-    const gutter = 24 // Hard gutter between columns
-    const availableWidth = pageWidth - margin * 2 - gutter
-    const leftColumnWidth = Math.floor(availableWidth * 0.68) // 68% of available (after gutter)
-    const rightColumnWidth = availableWidth - leftColumnWidth // 32% of available
-    const leftColumnX = margin
-    const rightColumnX = margin + leftColumnWidth + gutter
-    
-    // Store for Integrity capsule positioning
-    const page2ColumnLayout = { leftX: leftColumnX, leftW: leftColumnWidth, rightX: rightColumnX, rightW: rightColumnWidth, gutter }
-    const page2StartY = doc.y
+      // Page 2 two-column grid layout with strict boundaries:
+      // Left column (65-70%): Metrics Table (if needed) → Recommended Actions → Methodology → Data Freshness
+      // Right column (30-35%): Report Integrity capsule (fixed position, bottom-right)
+      // Gutter: 24px between columns (hard rule - no overlap ever)
+      
+      const gutter = 24 // Hard gutter between columns
+      const availableWidth = pageWidth - margin * 2 - gutter
+      const leftColumnWidth = Math.floor(availableWidth * 0.68) // 68% of available (after gutter)
+      const rightColumnWidth = availableWidth - leftColumnWidth // 32% of available
+      const leftColumnX = margin
+      const rightColumnX = margin + leftColumnWidth + gutter
+      
+      // Store for Integrity capsule positioning
+      const page2ColumnLayout = { leftX: leftColumnX, leftW: leftColumnWidth, rightX: rightColumnX, rightW: rightColumnWidth, gutter }
+      const page2StartY = doc.y
 
-    // Metrics Table on Page 2 if it didn't fit on Page 1 (full width, then switch to columns)
-    // CRITICAL: Use same hasPriorPeriodData computed above for consistency
-    if (!metricsTableFitsOnPage1) {
-      renderMetricsTable(doc, data, pageWidth, margin, hasPriorPeriodData)
-      addSectionDivider(doc, pageWidth, margin)
-    }
+      // Metrics Table on Page 2 if it didn't fit on Page 1 (full width, then switch to columns)
+      // CRITICAL: Use same hasPriorPeriodData computed above for consistency
+      if (!metricsTableFitsOnPage1) {
+        renderMetricsTable(doc, data, pageWidth, margin, hasPriorPeriodData)
+        addSectionDivider(doc, pageWidth, margin)
+      }
 
-    // LEFT COLUMN: Recommended Actions → Methodology → Data Freshness
-    // Save current position and switch to left column
-    const leftColumnStartY = doc.y
-    doc.x = leftColumnX // Set X position for left column
+      // LEFT COLUMN: Recommended Actions → Methodology → Data Freshness
+      // Save current position and switch to left column
+      const leftColumnStartY = doc.y
+      doc.x = leftColumnX // Set X position for left column
 
-    // Recommended Actions (short version - max 3 actions, constrained to left column)
-    renderRecommendedActionsShort(doc, data, leftColumnWidth, leftColumnX, leftColumnStartY)
-    doc.y = Math.max(doc.y, leftColumnStartY + 80) // Ensure minimum spacing
-    
-    // Methodology (short - 3 bullets max, constrained to left column)
-    if (hasSpace(doc, 70)) {
-      renderMethodologyShort(doc, leftColumnWidth, leftColumnX)
-    }
-    
-    // Data Freshness (compact - 2 lines, constrained to left column)
-    if (hasSpace(doc, 40)) {
-      renderDataFreshnessCompact(doc, data, leftColumnWidth, leftColumnX)
-    }
-    
-    // CRITICAL: Never create page 3 - if we're past page 2, stop rendering
-    if (pageNumber > 2) {
-      console.warn('[PDF] Page 3 detected - this should never happen. Stopping render.')
-    }
+      // Recommended Actions (short version - max 3 actions, constrained to left column)
+      renderRecommendedActionsShort(doc, data, leftColumnWidth, leftColumnX, leftColumnStartY)
+      doc.y = Math.max(doc.y, leftColumnStartY + 80) // Ensure minimum spacing
+      
+      // Methodology (short - 3 bullets max, constrained to left column)
+      if (hasSpace(doc, 70)) {
+        renderMethodologyShort(doc, leftColumnWidth, leftColumnX)
+      }
+      
+      // Data Freshness (compact - 2 lines, constrained to left column)
+      if (hasSpace(doc, 40)) {
+        renderDataFreshnessCompact(doc, data, leftColumnWidth, leftColumnX)
+      }
+      
+      // CRITICAL: Never create page 3 - if we're past page 2, stop rendering
+      if (pageNumber > 2) {
+        console.warn('[PDF] Page 3 detected - this should never happen. Stopping render.')
+      }
 
-    // Add headers/footers to all pages
-    // CRITICAL: Pass metadata hash for Integrity capsule display
-    // The actual PDF hash will be computed after generation and stored in headers/database
-    // Both hashes are verifiable - metadata hash is deterministic, PDF hash is from final buffer
-    // QR code is pre-generated and passed in
-    // Pass Page 2 column layout for Integrity capsule positioning
-    addHeaderFooter(doc, organizationName, timeRange, reportId, generatedAt, buildSha, timeWindow, baseUrl, metadataHash, qrCodeBuffer, page2ColumnLayout)
+      // Add headers/footers to all pages
+      // CRITICAL: Pass metadata hash for Integrity capsule display
+      // The actual PDF hash will be computed after generation and stored in headers/database
+      // Both hashes are verifiable - metadata hash is deterministic, PDF hash is from final buffer
+      // QR code is pre-generated and passed in
+      // Pass Page 2 column layout for Integrity capsule positioning
+      addHeaderFooter(doc, organizationName, timeRange, reportId, generatedAt, buildSha, timeWindow, baseUrl, metadataHash, qrCodeBuffer, page2ColumnLayout)
+    }
 
     doc.end()
   })
