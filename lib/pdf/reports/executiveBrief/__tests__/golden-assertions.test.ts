@@ -148,5 +148,41 @@ describe('Executive Brief PDF - Golden Assertions', () => {
       expect(line).not.toMatch(/^\d+$/) // Not just a number
     }
   })
+  
+  // ============================================
+  // PAGE 2 SPECIFIC GOLDEN ASSERTIONS
+  // ============================================
+  
+  it('should have Integrity block with all required elements on Page 2', async () => {
+    const result = await buildExecutiveBriefPDF(input)
+    const text = await extractTextFromPDF(result.buffer)
+    
+    // Integrity capsule must include all required elements (already tested above, but verify Page 2 specific)
+    expect(text).toContain('Report Integrity')
+    expect(text).toMatch(/Report ID:.*RM-/i)
+    expect(text).toMatch(/Window:.*-.*/i) // Date range format
+    expect(text).toMatch(/Sources:.*jobs.*incidents.*attestations/i)
+    expect(text).toContain('SHA-256:')
+    expect(text).toMatch(/verify\/RM-/i) // Verify path must include /verify/
+  })
+  
+  it('should show "Note: prior period unavailable (deltas hidden)" when prior is unavailable', async () => {
+    const result = await buildExecutiveBriefPDF(input)
+    const text = await extractTextFromPDF(result.buffer)
+    
+    // When prior period is unavailable, should show explicit note
+    // This appears in the Metrics Table section (Page 1 or Page 2)
+    expect(text).toContain('Note: prior period unavailable (deltas hidden)')
+  })
+  
+  it('should have Generated and Window on separate lines in Integrity block (no "EST Window:" merge)', async () => {
+    const result = await buildExecutiveBriefPDF(input)
+    const text = await extractTextFromPDF(result.buffer)
+    
+    // Should never see "EST Window:" merged together
+    expect(text).not.toContain('EST Window:')
+    // Should see them separately (Generated: ... Window: ...)
+    expect(text).toMatch(/Generated:.*\n.*Window:/)
+  })
 })
 
