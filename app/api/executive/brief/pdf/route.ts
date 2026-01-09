@@ -951,7 +951,7 @@ function renderExecutiveSummary(
     ? Math.round((data.signed_signoffs / totalSignoffs) * 100)
     : 0
   chips.push({
-    label: sanitizeAscii('Attestation coverage'),
+    label: sanitizeAscii('Attestation %'), // Consistent with KPI label (full definition in Methodology)
     delta: sanitizeAscii(`${attestationPct}% (N/A)`), // Always N/A since attestation deltas not tracked
     color: STYLES.colors.primaryText,
   })
@@ -1550,7 +1550,7 @@ function renderDataCoverage(
     ? `${Math.round((data.signed_signoffs / totalAttestations) * 100)}%`
     : '0%'
   coverageItems.push({
-    label: 'Attestations coverage',
+    label: 'Attestation %', // Consistent terminology (full definition in Methodology)
     value: coveragePercent,
   })
 
@@ -1752,7 +1752,7 @@ function renderMethodologyShort(
   // Fixed definitions (3 bullets max, corrected Evidence vs Attestation)
   const methodologyPoints = [
     'Risk posture: 0-100 scale based on high-risk jobs, incidents, and violations',
-    'Attestation coverage: Percentage of jobs with signed attestations',
+    'Attestation %: Percentage of jobs with signed attestations',
   ]
   
   methodologyPoints.forEach((point) => {
@@ -1846,7 +1846,7 @@ function renderDataFreshnessCompact(
     .fontSize(STYLES.sizes.body)
     .font(STYLES.fonts.body)
     .fillColor(STYLES.colors.primaryText)
-    .text(`Last job: ${sanitizeText(lastJobStr)} | Attestation coverage: ${coveragePercent}`, columnX, doc.y, {
+    .text(`Last job: ${sanitizeText(lastJobStr)} | Attestation %: ${coveragePercent}`, columnX, doc.y, {
       width: columnWidth,
       lineGap: 3,
     })

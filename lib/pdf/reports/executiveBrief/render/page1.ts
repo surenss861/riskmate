@@ -94,16 +94,25 @@ export function renderPage1(
   const sanitizedTitle = renderFunctions.sanitizeText('RiskMate Executive Brief')
   
   // CRITICAL: Format org name nicely - replace raw IDs with "Org: <Name>" or "Org: (name missing)"
-  // Don't show raw org IDs like "c111f4ed" - that's a credibility ding
+  // Don't show raw org IDs like "c111f4ed" or "Org c111f4ed" - that's a credibility ding
   let displayOrgName = organizationName
   if (!displayOrgName || displayOrgName.trim().length === 0) {
     displayOrgName = 'Org: (name missing)'
-  } else if (displayOrgName.length <= 12 && /^[a-f0-9]+$/i.test(displayOrgName)) {
-    // Looks like a raw ID (short hex string) - use fallback
-    displayOrgName = 'Org: (name missing)'
-  } else if (!displayOrgName.startsWith('Org: ')) {
-    // Add "Org: " prefix if not already present
-    displayOrgName = `Org: ${displayOrgName}`
+  } else {
+    // Remove any existing "Org " or "Org: " prefix to normalize
+    displayOrgName = displayOrgName.replace(/^Org:?\s*/i, '').trim()
+    
+    // Check if it's a raw ID (short hex string like "c111f4ed")
+    if (displayOrgName.length <= 12 && /^[a-f0-9]+$/i.test(displayOrgName)) {
+      // Looks like a raw ID - use fallback
+      displayOrgName = 'Org: (name missing)'
+    } else if (displayOrgName.length > 0) {
+      // Valid name - add "Org: " prefix
+      displayOrgName = `Org: ${displayOrgName}`
+    } else {
+      // Empty after normalization
+      displayOrgName = 'Org: (name missing)'
+    }
   }
   const sanitizedOrgName = renderFunctions.sanitizeText(displayOrgName)
   const timeRangeText = renderFunctions.formatTimeRange(timeRange)
