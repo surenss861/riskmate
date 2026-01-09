@@ -8,8 +8,6 @@ import QRCode from 'qrcode'
 import { sanitizeText, sanitizeAscii, formatDelta, formatNumber, pluralize, formatTimeRange, getExposureColor, truncateText } from '@/lib/pdf/executiveBrief/utils'
 // Import Page 1 renderer (optional - route can use it or fall back to inline rendering)
 import { renderPage1 } from '@/lib/pdf/reports/executiveBrief/render/page1'
-// Import Page 1 renderer (optional - route can use it or fall back to inline rendering)
-import { renderPage1 } from '@/lib/pdf/reports/executiveBrief/render/page1'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
