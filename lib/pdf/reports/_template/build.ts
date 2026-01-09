@@ -14,7 +14,7 @@ import crypto from 'crypto'
 import type { ReportInput, ReportOutput } from './types'
 import { renderPage1 } from './render/page1'
 import { renderPage2 } from './render/page2'
-import { getContentLimitY, ensureSpace } from '@/lib/pdf/core/layout'
+import { ensureSpace } from '@/lib/pdf/core/layout'
 import { PDF_CORE_TOKENS as STYLES } from '@/lib/pdf/core/tokens'
 
 /**
@@ -39,7 +39,7 @@ export async function buildReportPDF(
   let pageNumber = 1 // State variable for ensureSpace()
   
   return new Promise((resolve, reject) => {
-    const doc = new PDFDocument({
+    const doc = new PDFKit.PDFDocument({
       size: 'LETTER',
       margins: {
         top: STYLES.spacing.margin,
