@@ -1194,7 +1194,7 @@ function buildMetricsRows(data: RiskPostureData, hasPriorPeriodData: boolean): A
     { label: METRIC_LABELS.recentViolations, value: data.recent_violations, delta: data.deltas?.violations },
     { label: METRIC_LABELS.flaggedForReview, value: data.flagged_jobs, delta: data.deltas?.flagged_jobs },
     { label: METRIC_LABELS.signoffsPending, value: data.pending_signoffs ?? 0, delta: data.deltas?.pending_signoffs },
-    { label: METRIC_LABELS.signoffsSigned, value: data.signed_signoffs ?? 0, delta: data.deltas?.signed_signoffs },
+    { label: METRIC_LABELS.signoffsSigned, value: data.signed_signoffs ?? 0, delta: undefined }, // signed_signoffs delta not in deltas type
     // CRITICAL: Only show Proof Packs if count > 0 (prevents junk page)
     ...(data.proof_packs_generated > 0 ? [{ label: METRIC_LABELS.proofPacksGenerated, value: data.proof_packs_generated, delta: data.deltas?.proof_packs }] : []),
   ]
