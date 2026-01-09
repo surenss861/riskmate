@@ -482,10 +482,13 @@ function renderKPIStrip(
   const cardY = startY
 
   // KPI definitions with proper formatting
+  // CRITICAL: Risk Posture KPI shows exposure level (Low/Moderate/High) instead of score
+  // Score is shown as hero in gauge - avoid duplicate signals
+  const exposureLevel = data.exposure_level === 'high' ? 'High' : data.exposure_level === 'moderate' ? 'Moderate' : data.exposure_level === 'low' ? 'Low' : 'N/A'
   const kpis = [
     {
       label: 'Risk Posture',
-      value: data.posture_score !== undefined ? `${data.posture_score}` : 'Insufficient data',
+      value: exposureLevel, // Show exposure level, not score (score is hero in gauge)
       delta: data.delta,
       color: data.posture_score !== undefined && data.posture_score >= 75 ? STYLES.colors.riskLow : 
              data.posture_score !== undefined && data.posture_score >= 50 ? STYLES.colors.riskMedium : STYLES.colors.riskHigh,
@@ -928,12 +931,12 @@ function renderExecutiveSummary(
   // Only show deltas when hasPriorPeriodData === true
   // Rule: If hasPriorPeriodData === false, show values only (no delta, no (N/A))
   
-  // 1. Risk posture: Score (Delta only if prior available)
-  const postureScore = data.posture_score !== undefined ? `${data.posture_score}` : 'N/A'
+  // 1. Risk posture: Exposure level only (score is hero in gauge, avoid duplicate)
+  const exposureLevel = data.exposure_level === 'high' ? 'High' : data.exposure_level === 'moderate' ? 'Moderate' : data.exposure_level === 'low' ? 'Low' : 'N/A'
   const postureDelta = hasPriorPeriodData && data.delta !== undefined ? formatDelta(data.delta) : null
   chips.push({
     label: 'Risk posture',
-    delta: postureDelta !== null ? `${postureScore} (${postureDelta})` : postureScore,
+    delta: postureDelta !== null ? `${exposureLevel} (${postureDelta})` : exposureLevel, // Show level, not score
     color: hasPriorPeriodData && data.delta !== undefined && data.delta !== 0 
       ? (data.delta > 0 ? STYLES.colors.riskHigh : STYLES.colors.riskLow)
       : STYLES.colors.primaryText,
