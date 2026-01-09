@@ -884,12 +884,27 @@ function renderExecutiveSummary(
   doc.fontSize(headlineFontSize).font(STYLES.fonts.header)
   let headlineWidth = doc.widthOfString(headlineText)
   
-  // CRITICAL: Force designed wrap to keep "1 high risk job" together
-  // Prevent ugly breaks like "mitigate 1 / high risk job"
-  // Strategy: If headline contains "mitigate 1", force wrap before "mitigate" so "1 high risk job" stays together
+  // CRITICAL: Intentionally render as 2-line headline to prevent mid-phrase breaks in text extraction
+  // Strategy: If headline contains semicolon, split there for clean 2-line rendering
+  // This prevents PDFKit from breaking mid-phrase (e.g., "Exposure is moderate;" then next line)
+  // and ensures text extraction is clean and intentional
   let finalHeadlineText = headlineText
-  if (headlineWidth > maxHeadlineWidth * 0.95 && headlineText.includes('mitigate 1')) {
-    // Find position of "mitigate 1" and insert line break before it
+  if (headlineText.includes(';')) {
+    // Intentional 2-line split at semicolon (clean break, not mid-phrase)
+    // Example: "Exposure is moderate; mitigate 1 high risk job" becomes:
+    // Line 1: "Exposure is moderate;"
+    // Line 2: "mitigate 1 high risk job"
+    const semicolonIndex = headlineText.indexOf(';')
+    if (semicolonIndex > 0 && semicolonIndex < headlineText.length - 1) {
+      finalHeadlineText = headlineText.substring(0, semicolonIndex + 1).trim() + '\n' + headlineText.substring(semicolonIndex + 1).trim()
+      // Re-measure with line break (measure both lines)
+      const lines = finalHeadlineText.split('\n')
+      const firstLineWidth = doc.widthOfString(lines[0])
+      const secondLineWidth = doc.widthOfString(lines[1])
+      headlineWidth = Math.max(firstLineWidth, secondLineWidth) // Use max width
+    }
+  } else if (headlineWidth > maxHeadlineWidth * 0.95 && headlineText.includes('mitigate 1')) {
+    // Fallback: If no semicolon but contains "mitigate 1", force wrap before "mitigate" so "1 high risk job" stays together
     const mitigateIndex = headlineText.indexOf('mitigate 1')
     if (mitigateIndex > 0) {
       // Insert line break before "mitigate 1" - this keeps "1 high risk job" together on next line
@@ -901,7 +916,7 @@ function renderExecutiveSummary(
       headlineWidth = Math.max(firstLineWidth, secondLineWidth) // Use max width
     }
   } else if (headlineWidth > maxHeadlineWidth * 0.95 && headlineText.includes('high risk')) {
-    // Fallback: If no "mitigate 1", force wrap before "high risk" to prevent "high / risk" split
+    // Fallback: If no semicolon and no "mitigate 1", force wrap before "high risk" to prevent "high / risk" split
     const highRiskIndex = headlineText.indexOf('high risk')
     if (highRiskIndex > 0) {
       finalHeadlineText = headlineText.substring(0, highRiskIndex).trim() + '\n' + headlineText.substring(highRiskIndex)
