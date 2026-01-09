@@ -12,7 +12,8 @@
  */
 export async function extractTextFromPDF(buffer: Buffer): Promise<string> {
   try {
-    // Try to use pdf-parse if available
+    // Try to use pdf-parse if available (dynamic import to avoid build-time dependency)
+    // @ts-ignore - pdf-parse may not be installed, that's OK
     const pdfParse = await import('pdf-parse').catch(() => null)
     if (pdfParse?.default) {
       const data = await pdfParse.default(buffer)
@@ -54,6 +55,7 @@ export async function extractTextFromPDF(buffer: Buffer): Promise<string> {
  */
 export async function getPDFPageCount(buffer: Buffer): Promise<number> {
   try {
+    // @ts-ignore - pdf-parse may not be installed, that's OK
     const pdfParse = await import('pdf-parse').catch(() => null)
     if (pdfParse?.default) {
       const data = await pdfParse.default(buffer)
