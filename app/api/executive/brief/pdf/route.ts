@@ -2679,6 +2679,14 @@ async function buildExecutiveBriefPDF(
     const estimatedRemainingSpacePage1 = page1Bottom - estimatedPage1Used
     let metricsTableFitsOnPage1 = estimatedRemainingSpacePage1 >= (totalTableHeight + dataCoverageHeight + 32)
 
+    // Map route's RiskPostureData to shared type (recent_violations -> violations, ensure total_incidents exists)
+    // Do this once outside try blocks so it's accessible to both Page 1 and Page 2
+    const mappedData: SharedRiskPostureData = {
+      ...data,
+      violations: data.recent_violations ?? data.violations ?? 0,
+      total_incidents: data.total_incidents ?? data.open_incidents ?? 0,
+    }
+
     // ============================================
     // PAGE 1: Use extracted renderer (with fallback to inline rendering)
     // ============================================
@@ -2687,13 +2695,6 @@ async function buildExecutiveBriefPDF(
     // Once parity is verified, we can move helper functions to core and simplify
     
     try {
-      // Map route's RiskPostureData to shared type (recent_violations -> violations, ensure total_incidents exists)
-      const mappedData: SharedRiskPostureData = {
-        ...data,
-        violations: data.recent_violations ?? data.violations ?? 0,
-        total_incidents: data.total_incidents ?? data.open_incidents ?? 0,
-      }
-      
       renderPage1(
         doc,
         mappedData,
