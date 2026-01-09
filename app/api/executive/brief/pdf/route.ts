@@ -1275,9 +1275,8 @@ function renderMetricsTable(
   
   // CRITICAL: Prior-period note is now only on Page 1 (under KPI strip)
   // Page 2 table already communicates this by hiding the Change column
-  // No need to repeat the note here - it's redundant and clutters the layout else {
-    doc.moveDown(0.5)
-  }
+  // No need to repeat the note here - it's redundant and clutters the layout
+  doc.moveDown(0.5)
 
   const tableY = doc.y
   const tableWidth = pageWidth - margin * 2
