@@ -4,8 +4,12 @@ import { resolveOrgContext, hashId } from '@/lib/utils/orgContext'
 import PDFDocument from 'pdfkit'
 import crypto from 'crypto'
 import QRCode from 'qrcode'
-// Import pure helpers from shared module
-import { sanitizeText, sanitizeAscii, formatDelta, formatNumber, pluralize, formatTimeRange, getExposureColor, truncateText } from '@/lib/pdf/executiveBrief/utils'
+// Import pure helpers from core module
+import { sanitizeText, sanitizeAscii, formatDelta, formatNumber, pluralize, formatTimeRange, getExposureColor, truncateText } from '@/lib/pdf/core/utils'
+// Import layout helpers from core
+import { getContentLimitY as coreGetContentLimitY, ensureSpace as coreEnsureSpace, hasSpace as coreHasSpace } from '@/lib/pdf/core/layout'
+// Import writer helpers from core
+import { safeText as coreSafeText, writeKV as coreWriteKV, renderFittedLabel as coreRenderFittedLabel } from '@/lib/pdf/core/writer'
 // Import shared types
 import type { RiskPostureData as SharedRiskPostureData } from '@/lib/pdf/reports/executiveBrief/types'
 // Import the new build function
@@ -114,36 +118,29 @@ function getContentLimitY(doc: PDFKit.PDFDocument): number {
  * 
  * Rule: Only build.ts can add pages (exactly once, between Page 1 and Page 2)
  * All renderers must check ensureSpace() and skip/truncate if it returns false
+ * 
+ * NOTE: This is now a wrapper around core function that passes pageNumber state
  */
 function ensureSpace(
   doc: PDFKit.PDFDocument,
   requiredHeight: number,
   margin: number
 ): boolean {
-  const contentLimitY = getContentLimitY(doc)
-  
-  // HARD LOCK: Never create page 3 - Executive Brief is exactly 2 pages
-  if (pageNumber >= 2) {
-    // On page 2, check if content fits
-    return doc.y + requiredHeight <= contentLimitY
-  }
-  
-  // On page 1, check if content fits
-  // NOTE: We don't add pages here - build.ts handles the single page break
-  return doc.y + requiredHeight <= contentLimitY
+  return coreEnsureSpace(doc, requiredHeight, margin, pageNumber)
 }
 
 /**
  * Helper: Check if we have enough space, return false if we need a new page
  * Use this to conditionally render sections (avoid empty pages)
  * Uses contentLimitY to prevent footer overlap
+ * 
+ * NOTE: This is now a wrapper around core function
  */
 function hasSpace(
   doc: PDFKit.PDFDocument,
   needed: number
 ): boolean {
-  const contentLimitY = getContentLimitY(doc)
-  return doc.y + needed <= contentLimitY
+  return coreHasSpace(doc, needed)
 }
 
 /**
@@ -315,6 +312,8 @@ function writeKpiCard(
  * Safe text writer - refuses to write junk (empty, standalone "—", naked numbers)
  * CRITICAL: This is the ONLY way to write text to prevent junk pages
  * Also tracks body char count per page for ship gate
+ * 
+ * NOTE: Uses core safeText for basic rendering, but adds route-specific state tracking
  */
 function safeText(
   doc: PDFKit.PDFDocument,
@@ -348,17 +347,10 @@ function safeText(
     return false
   }
   
-  // Safe to write
-  if (options?.fontSize) doc.fontSize(options.fontSize)
-  if (options?.font) doc.font(options.font)
-  if (options?.color) doc.fillColor(options.color)
+  // Use core safeText for basic rendering
+  coreSafeText(doc, sanitized, x, y, options || {})
   
-  doc.text(sanitized, x, y, { 
-    width: options?.width,
-    align: options?.align,
-  })
-  
-  // CRITICAL: Track body char count per page for ship gate
+  // CRITICAL: Track body char count per page for ship gate (route-specific)
   // Also track "lonely" content (single tokens that appear alone on a page)
   // Check if this is a footer by looking at Y position (footers are near bottom)
   const pageBottom = doc.page.height - 60
@@ -395,6 +387,8 @@ function safeText(
 /**
  * Render label with guaranteed fit - prevents mid-word breaks
  * Measures each line and shrinks font if needed
+ * 
+ * NOTE: Uses core renderFittedLabel but handles "Attestation coverage" special case
  */
 function renderFittedLabel(
   doc: PDFKit.PDFDocument,
@@ -409,51 +403,18 @@ function renderFittedLabel(
     color: string
   }
 ): number {
-  // Split label into intentional lines (e.g., "Attestation coverage" -> ["Attestation", "coverage"])
-  const lines: string[] = []
-  if (label === 'Attestation coverage') {
-    lines.push('Attestation', 'coverage')
-  } else {
-    lines.push(label)
-  }
-  
-  // Measure each line and find the font size that fits
-  let fontSize = options.fontSize
-  let allLinesFit = false
-  
-  while (!allLinesFit && fontSize >= options.minFontSize) {
-    doc.fontSize(fontSize).font(options.font)
-    allLinesFit = true
-    
-    for (const line of lines) {
-      const lineWidth = doc.widthOfString(line)
-      if (lineWidth > maxWidth) {
-        allLinesFit = false
-        fontSize = Math.max(options.minFontSize, fontSize - 0.5)
-        break
-      }
-    }
-  }
-  
-  // Render each line with proper spacing
-  let currentY = y
-  doc.fontSize(fontSize).font(options.font).fillColor(options.color)
-  
-  for (const line of lines) {
-    doc.text(line, x, currentY, {
-      width: maxWidth,
-      align: 'left',
-    })
-    currentY += fontSize * 1.2 // Line height with spacing
-  }
-  
-  return currentY - y // Return total height used
+  // Use core renderFittedLabel (handles most cases)
+  // Special case: "Attestation coverage" is now shortened to "Attestation %" in KPI cards
+  // So this special handling may not be needed anymore, but keeping for backwards compatibility
+  return coreRenderFittedLabel(doc, label, x, y, maxWidth, options)
 }
 
 /**
  * Write label-value pair (prevents label-less values)
  * CRITICAL: This is the ONLY way metrics should render
  * Ensures values never render alone
+ * 
+ * NOTE: Uses core writeKV but with route-specific signature for backwards compatibility
  */
 function writeKV(
   doc: PDFKit.PDFDocument,
@@ -477,6 +438,7 @@ function writeKV(
   if ((V === '2' || V === '0' || /^\d+$/.test(V)) && !L) return false
   
   // Both label and value must exist - atomic write
+  // Use route's safeText to maintain state tracking
   const labelWritten = safeText(doc, L, x, y, { 
     width: labelWidth, 
     align: options?.labelAlign || 'left',

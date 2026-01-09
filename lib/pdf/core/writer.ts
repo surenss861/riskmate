@@ -6,7 +6,7 @@
  */
 
 import PDFKit from 'pdfkit'
-import { sanitizeText, sanitizeAscii, truncateText } from '@/lib/pdf/executiveBrief/utils'
+import { sanitizeText, sanitizeAscii, truncateText } from './utils'
 
 /**
  * Safe text renderer - always sanitizes before rendering
