@@ -106,6 +106,8 @@ export interface ExecutiveBriefDeps {
     qrCodeBuffer: Buffer | null,
     page2ColumnLayout: { leftX: number; leftW: number; rightX: number; rightW: number; gutter: number }
   ) => void
+  // State setter for page number (needed when build.ts adds page 2)
+  setPageNumber: (val: number) => void
 }
 
 // Default dependencies - will be populated from route helpers
