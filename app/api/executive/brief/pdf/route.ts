@@ -560,6 +560,7 @@ function renderKPIStrip(
   // Place it right after KPI strip, before gauge
   if (!hasPriorPeriodData) {
     const noteY = cardY + kpiCardHeight + 12
+    // Normalized prior-period note (only on Page 1 where KPIs/chips live)
     const noteText = 'Note: Prior period unavailable (deltas hidden)'
     safeText(doc, sanitizeAscii(noteText), margin, noteY, {
       fontSize: STYLES.sizes.caption,
@@ -777,7 +778,7 @@ function renderTrendSparkline(
       .fontSize(7)
       .font(STYLES.fonts.body)
       .fillColor(STYLES.colors.secondaryText)
-      .text(`Trend unavailable (need 4 completed periods)`, x, y + sparklineHeight + 4, { width: width })
+      .text(`Trend: unavailable (need 4 completed periods)`, x, y + sparklineHeight + 4, { width: width })
     return
   }
   
@@ -1756,7 +1757,7 @@ function renderMethodologyShort(
   // Fixed definitions (3 bullets max, corrected Evidence vs Attestation)
   const methodologyPoints = [
     'Risk posture: 0-100 scale based on high-risk jobs, incidents, and violations',
-    'Attestation %: Percentage of jobs with signed attestations',
+    'Attestation %: Percentage of jobs in window with signed attestations',
   ]
   
   methodologyPoints.forEach((point) => {
