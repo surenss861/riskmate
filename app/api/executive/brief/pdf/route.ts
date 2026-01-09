@@ -2025,9 +2025,15 @@ function renderRecommendedActionsShort(
   doc.moveDown(0.6)
 
   actions.forEach((action) => {
-    ensureSpace(doc, 45, columnX)
-    // Outcomes-first format: Action (short imperative) - constrained to column
-    safeText(doc, `${action.priority}. ${sanitizeText(action.action)}`, columnX + 20, doc.y, {
+    ensureSpace(doc, 50, columnX)
+    // Board-decision-friendly format: Action → Outcome → Deadline
+    // Match "Decision requested" tone: clear, actionable, with timeline
+    const actionText = sanitizeText(action.action)
+    const outcomeText = sanitizeText(action.reason)
+    const deadlineText = 'this week' // Standard deadline for exec actions
+    
+    // Action line (bold, imperative)
+    safeText(doc, `${action.priority}. ${actionText}`, columnX + 20, doc.y, {
       width: columnWidth - 20,
       fontSize: STYLES.sizes.body,
       font: STYLES.fonts.header,
