@@ -49,7 +49,7 @@ export async function buildReportPDF(
       },
       bufferPages: true,
       info: {
-        Title: `Report - ${input.organizationName || 'Unknown'}`,
+        Title: 'Report', // TODO: Update with your report title
         Author: 'RiskMate',
         Subject: 'Report',
         Creator: 'RiskMate Platform',
