@@ -184,5 +184,20 @@ describe('Executive Brief PDF - Golden Assertions', () => {
     // Should see them separately (Generated: ... Window: ...)
     expect(text).toMatch(/Generated:.*\n.*Window:/)
   })
+  
+  it('should NOT have trailing separators (•) at end of lines in chips', async () => {
+    const result = await buildExecutiveBriefPDF(input)
+    const text = await extractTextFromPDF(result.buffer)
+    
+    // Extract lines and check for trailing separators
+    const lines = text.split('\n').map(l => l.trim())
+    
+    for (const line of lines) {
+      // Should not end with just a separator (like "Open incidents 0 •")
+      // Separators should always be between items, not at the end
+      expect(line).not.toMatch(/•\s*$/) // No trailing bullet
+      expect(line).not.toMatch(/[•|]\s*$/) // No trailing separator of any kind
+    }
+  })
 })
 
