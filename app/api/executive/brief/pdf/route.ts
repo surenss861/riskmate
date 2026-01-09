@@ -961,9 +961,10 @@ function renderExecutiveSummary(
     color: STYLES.colors.primaryText,
   })
   
-  // 5. Sign-offs: Signed/Total (sign-off deltas not tracked yet - always show N/A)
+  // 5. Sign-offs: Signed/Required (sign-off deltas not tracked yet - always show N/A)
+  // Clarify denominator: "Signed/Required" so execs know what the fraction means
   chips.push({
-    label: sanitizeAscii('Sign-offs'),
+    label: sanitizeAscii('Sign-offs (Signed/Required)'),
     delta: sanitizeAscii(`${data.signed_signoffs ?? 0}/${totalSignoffs} (N/A)`), // Always N/A since sign-off deltas not tracked
     color: STYLES.colors.primaryText,
   })
@@ -2703,6 +2704,7 @@ export async function POST(request: NextRequest) {
           const helpers = {
             sanitizeText,
             formatTimeRange,
+            formatTimeRangeFromWindow,
             renderKPIStrip,
             renderRiskPostureGauge,
             markPageHasBody,
