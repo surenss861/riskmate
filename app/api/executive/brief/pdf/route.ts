@@ -284,25 +284,29 @@ function writeKpiCard(
     color: STYLES.colors.secondaryText,
   })
   
-  // Subtitle - CRITICAL: Conditional based on prior period availability
-  // If prior unavailable, show "prior unavailable" instead of "vs prior 30d" to avoid contradiction
+  // Subtitle - CRITICAL: Only show time range when prior period data is available
+  // If prior unavailable, render NOTHING (empty string) - global note handles this
   const subtitleY = labelY + labelHeight + 4
   let subtitleText: string
   if (opts.hasPriorPeriodData === false) {
-    subtitleText = 'prior unavailable' // Don't say "vs prior 30d" when prior is unavailable
+    subtitleText = '' // Don't render anything - global note handles "prior unavailable"
   } else {
     const timeRangeLabel = opts.timeRange === '7d' ? 'vs prior 7d' : opts.timeRange === '30d' ? 'vs prior 30d' : opts.timeRange === '90d' ? 'vs prior 90d' : 'vs prior period'
     subtitleText = timeRangeLabel
   }
-  const sanitizedSubtitle = sanitizeText(subtitleText)
-  doc
-    .fontSize(STYLES.sizes.kpiDelta)
-    .font(STYLES.fonts.body)
-    .fillColor(STYLES.colors.secondaryText)
-    .text(sanitizedSubtitle, contentX, subtitleY, {
-      width: contentWidth,
-      align: 'left',
-    })
+  
+  // Only render subtitle if it exists (when prior period data is available)
+  if (subtitleText) {
+    const sanitizedSubtitle = sanitizeText(subtitleText)
+    doc
+      .fontSize(STYLES.sizes.kpiDelta)
+      .font(STYLES.fonts.body)
+      .fillColor(STYLES.colors.secondaryText)
+      .text(sanitizedSubtitle, contentX, subtitleY, {
+        width: contentWidth,
+        align: 'left',
+      })
+  }
   
   // Track body content (entire card counts as one unit)
   markPageHasBody(doc)
