@@ -2637,7 +2637,8 @@ function addHeaderFooter(
         currentY = writeLine(rawHashLabel, 7, 'Courier', 9) // Label on its own line
         
         // Add note that PDF file hash is available in verification endpoint
-        doc.moveDown(0.2)
+        // Add extra blank line for readability (P2 polish - less cramped in extraction)
+        doc.moveDown(0.4)
         const pdfHashNote = sanitizeText('PDF file hash: available in verification endpoint')
         currentY = writeLine(pdfHashNote, 7, STYLES.fonts.body, 9) // Smaller font for note
         
