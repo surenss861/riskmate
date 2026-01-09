@@ -272,5 +272,33 @@ describe('Executive Brief PDF - Golden Assertions', () => {
       expect(lineGap).toBeLessThanOrEqual(1)
     }
   })
+  
+  it('should align Decision requested deadline with Priority 1 action deadline', async () => {
+    const result = await buildExecutiveBriefPDFForTests(input)
+    const text = await extractTextFromPDF(result.buffer)
+    
+    // CRITICAL: Decision requested deadline must match Priority 1 action deadline
+    // This prevents credibility leaks like "within 7 days" when Priority 1 is "by Jan 11" (48h)
+    
+    // Extract Priority 1 deadline from actions section
+    const priority1DeadlineMatch = text.match(/1\.\s+.*?Deadline:\s+(by\s+\w+\s+\d+)/i)
+    const decisionDeadlineMatch = text.match(/Decision requested:.*?(by\s+\w+\s+\d+|within\s+\d+\s+days)/i)
+    
+    if (priority1DeadlineMatch && decisionDeadlineMatch) {
+      const priority1Deadline = priority1DeadlineMatch[1].toLowerCase()
+      const decisionDeadline = decisionDeadlineMatch[1].toLowerCase()
+      
+      // If Priority 1 has a specific date (e.g., "by Jan 11"), Decision requested should match it
+      if (priority1Deadline.startsWith('by ')) {
+        expect(decisionDeadline).toContain(priority1Deadline.replace('by ', ''))
+      }
+    }
+    
+    // Additional check: If Priority 1 exists, Decision requested should not say "within 7 days"
+    // when Priority 1 is "by [date]" (48h deadline)
+    if (priority1DeadlineMatch && priority1DeadlineMatch[1].startsWith('by ')) {
+      expect(text).not.toMatch(/Decision requested:.*within 7 days/i)
+    }
+  })
 })
 

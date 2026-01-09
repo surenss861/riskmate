@@ -1200,13 +1200,37 @@ function renderExecutiveSummary(
     
     // Line 3: What you want approved (Decision requested - ALWAYS render, even if ultra-short)
     // CRITICAL: This is non-negotiable for board credibility - always show decision requested
+    // CRITICAL: Align deadline with earliest action deadline (Priority 1 = 48h, Priority 2 = 7d, etc.)
+    // This prevents credibility leaks like "within 7 days" when Priority 1 is "by Jan 11" (48h)
+    
+    // Compute earliest deadline from actions (same logic as renderRecommendedActionsShort)
+    const hasActions = data.recommended_actions && data.recommended_actions.length > 0
+    let earliestDeadlineText = 'within 7 days' // Default fallback
+    if (hasActions && data.recommended_actions.length > 0) {
+      const priority1Action = data.recommended_actions.find(a => a.priority === 1)
+      if (priority1Action) {
+        // Priority 1 = 48 hours (same as action deadline computation)
+        const deadlineDate = new Date()
+        deadlineDate.setDate(deadlineDate.getDate() + 2)
+        earliestDeadlineText = `by ${deadlineDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+      } else {
+        // No Priority 1, check Priority 2 (7 days)
+        const priority2Action = data.recommended_actions.find(a => a.priority === 2)
+        if (priority2Action) {
+          const deadlineDate = new Date()
+          deadlineDate.setDate(deadlineDate.getDate() + 7)
+          earliestDeadlineText = `by ${deadlineDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+        }
+      }
+    }
+    
     let decisionText = ''
     if (data.high_risk_jobs > 0) {
-      decisionText = `Decision requested: Approve mitigation plan for ${data.high_risk_jobs} ${pluralize(data.high_risk_jobs, 'high risk job', 'high risk jobs')} and require sign-off completion within 7 days.`
+      decisionText = `Decision requested: Approve mitigation plan for ${data.high_risk_jobs} ${pluralize(data.high_risk_jobs, 'high risk job', 'high risk jobs')} ${earliestDeadlineText}.`
     } else if (data.open_incidents > 0) {
-      decisionText = `Decision requested: Authorize resolution plan for ${data.open_incidents} open ${pluralize(data.open_incidents, 'incident', 'incidents')} and document closure within 7 days.`
+      decisionText = `Decision requested: Authorize resolution plan for ${data.open_incidents} open ${pluralize(data.open_incidents, 'incident', 'incidents')} ${earliestDeadlineText}.`
     } else if (data.pending_signoffs > 0) {
-      decisionText = `Decision requested: Complete ${data.pending_signoffs} pending ${pluralize(data.pending_signoffs, 'sign-off', 'sign-offs')} to ensure full compliance this week.`
+      decisionText = `Decision requested: Complete ${data.pending_signoffs} pending ${pluralize(data.pending_signoffs, 'sign-off', 'sign-offs')} ${earliestDeadlineText}.`
     } else {
       decisionText = `Decision requested: Continue monitoring risk posture and maintain current control effectiveness.`
     }
