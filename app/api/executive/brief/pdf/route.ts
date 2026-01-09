@@ -590,8 +590,22 @@ function renderKPIStrip(
     })
   })
 
-  // Update doc.y after cards
-  doc.y = cardY + kpiCardHeight + STYLES.spacing.sectionGap
+  // CRITICAL: Add global "Prior unavailable" note if needed (replaces spam on each KPI)
+  // Place it right after KPI strip, before gauge
+  if (!hasPriorPeriodData) {
+    const noteY = cardY + kpiCardHeight + 12
+    const noteText = 'Note: Prior period unavailable (deltas hidden)'
+    safeText(doc, sanitizeAscii(noteText), margin, noteY, {
+      fontSize: STYLES.sizes.caption,
+      font: STYLES.fonts.body,
+      color: STYLES.colors.secondaryText,
+      width: pageWidth - margin * 2,
+    })
+    doc.y = noteY + 16 // Add spacing after note
+  } else {
+    // Update doc.y after cards (normal spacing)
+    doc.y = cardY + kpiCardHeight + STYLES.spacing.sectionGap
+  }
 }
 
 /**
@@ -1121,27 +1135,27 @@ function renderExecutiveSummary(
       doc.moveDown(0.6)
     }
     
-    // Line 3: What you want approved (Decision requested - make it more specific when possible)
-    if (hasSpace(doc, 20)) {
-      let decisionText = ''
-      if (data.high_risk_jobs > 0) {
-        decisionText = `Decision requested: Approve mitigation plan for ${data.high_risk_jobs} ${pluralize(data.high_risk_jobs, 'high risk job', 'high risk jobs')} and require sign-off completion within 7 days.`
-      } else if (data.open_incidents > 0) {
-        decisionText = `Decision requested: Authorize resolution plan for ${data.open_incidents} open ${pluralize(data.open_incidents, 'incident', 'incidents')} and document closure within 7 days.`
-      } else if (data.pending_signoffs > 0) {
-        decisionText = `Decision requested: Complete ${data.pending_signoffs} pending ${pluralize(data.pending_signoffs, 'sign-off', 'sign-offs')} to ensure full compliance this week.`
-      } else {
-        decisionText = `Decision requested: Continue monitoring risk posture and maintain current control effectiveness.`
-      }
-      
-      safeText(doc, sanitizeAscii(decisionText), margin, doc.y, {
-        fontSize: STYLES.sizes.body,
-        font: STYLES.fonts.header, // Bold for emphasis
-        color: STYLES.colors.primaryText,
-        width: pageWidth - margin * 2,
-      })
-      doc.moveDown(0.8)
+    // Line 3: What you want approved (Decision requested - ALWAYS render, even if ultra-short)
+    // CRITICAL: This is non-negotiable for board credibility - always show decision requested
+    let decisionText = ''
+    if (data.high_risk_jobs > 0) {
+      decisionText = `Decision requested: Approve mitigation plan for ${data.high_risk_jobs} ${pluralize(data.high_risk_jobs, 'high risk job', 'high risk jobs')} and require sign-off completion within 7 days.`
+    } else if (data.open_incidents > 0) {
+      decisionText = `Decision requested: Authorize resolution plan for ${data.open_incidents} open ${pluralize(data.open_incidents, 'incident', 'incidents')} and document closure within 7 days.`
+    } else if (data.pending_signoffs > 0) {
+      decisionText = `Decision requested: Complete ${data.pending_signoffs} pending ${pluralize(data.pending_signoffs, 'sign-off', 'sign-offs')} to ensure full compliance this week.`
+    } else {
+      decisionText = `Decision requested: Continue monitoring risk posture and maintain current control effectiveness.`
     }
+    
+    // Always render decision requested (non-negotiable for board credibility)
+    safeText(doc, sanitizeAscii(decisionText), margin, doc.y, {
+      fontSize: STYLES.sizes.body,
+      font: STYLES.fonts.header, // Bold for emphasis
+      color: STYLES.colors.primaryText,
+      width: pageWidth - margin * 2,
+    })
+    doc.moveDown(0.8)
   } else {
     // Insufficient data case
     if (hasSpace(doc, 20)) {

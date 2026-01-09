@@ -55,6 +55,13 @@ describe('Executive Brief PDF - Golden Assertions', () => {
     const text = await extractTextFromPDF(result.buffer)
     expect(text).toContain('RiskMate Executive Brief')
   })
+
+  it('should always include "Decision requested:" on Page 1 (non-negotiable for board credibility)', async () => {
+    const result = await buildExecutiveBriefPDFForTests(input)
+    const text = await extractTextFromPDF(result.buffer)
+    // CRITICAL: Decision requested must always appear - this is non-negotiable
+    expect(text).toContain('Decision requested:')
+  })
   
   it('should have "Trend unavailable (need 4 completed periods)" when no historical data', async () => {
     const result = await buildExecutiveBriefPDFForTests(input)

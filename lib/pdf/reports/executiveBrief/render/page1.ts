@@ -92,7 +92,20 @@ export function renderPage1(
   // Content inside header band
   const headerContentY = headerBandY + 50
   const sanitizedTitle = renderFunctions.sanitizeText('RiskMate Executive Brief')
-  const sanitizedOrgName = renderFunctions.sanitizeText(organizationName)
+  
+  // CRITICAL: Format org name nicely - replace raw IDs with "Org: <Name>" or "Org: (name missing)"
+  // Don't show raw org IDs like "c111f4ed" - that's a credibility ding
+  let displayOrgName = organizationName
+  if (!displayOrgName || displayOrgName.trim().length === 0) {
+    displayOrgName = 'Org: (name missing)'
+  } else if (displayOrgName.length <= 12 && /^[a-f0-9]+$/i.test(displayOrgName)) {
+    // Looks like a raw ID (short hex string) - use fallback
+    displayOrgName = 'Org: (name missing)'
+  } else if (!displayOrgName.startsWith('Org: ')) {
+    // Add "Org: " prefix if not already present
+    displayOrgName = `Org: ${displayOrgName}`
+  }
+  const sanitizedOrgName = renderFunctions.sanitizeText(displayOrgName)
   const timeRangeText = renderFunctions.formatTimeRange(timeRange)
   
   // Title (large, white, left-aligned in band)
@@ -107,7 +120,7 @@ export function renderPage1(
 
   doc.moveDown(0.25)
 
-  // Org name (medium, white)
+  // Org name (medium, white) - now formatted nicely
   doc
     .fillColor(styles.colors.white)
     .fontSize(styles.sizes.h3)
