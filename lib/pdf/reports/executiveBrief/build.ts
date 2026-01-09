@@ -307,16 +307,10 @@ export async function buildExecutiveBriefPDF(
 
     // Force page break for page 2
     // We need to explicitly add page 2 - ensureSpace won't do it if we're already on page 2
-    // Track page number manually since PDFKit doesn't expose it directly
-    let currentPageNumber = 1
-    doc.on('pageAdded', () => {
-      currentPageNumber++
-    })
-    
-    // Force page 2 if we're still on page 1
+    // Force page 2 if we're still on page 1 (currentPageNumber is tracked at top of Promise)
     if (currentPageNumber === 1) {
       doc.addPage()
-      currentPageNumber = 2
+      // currentPageNumber will be incremented by the 'pageAdded' event handler
     }
 
     // ============================================
