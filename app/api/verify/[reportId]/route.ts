@@ -19,12 +19,13 @@ export async function GET(
   try {
     const { reportId: reportIdParam } = await params
     
+    const supabase = await createSupabaseServerClient()
+    
     // Extract report ID (handle both "RM-xxxx" and full UUID formats)
     let reportId: string
     if (reportIdParam.startsWith('RM-')) {
       // Short format: need to look up full UUID from report_runs
       const shortId = reportIdParam.substring(3) // Remove "RM-" prefix
-      const supabase = await createSupabaseServerClient()
       
       // Find report run by matching the short ID (first 8 chars of UUID)
       const { data: reportRun, error: lookupError } = await supabase
@@ -48,8 +49,6 @@ export async function GET(
       // Full UUID format
       reportId = reportIdParam
     }
-    
-    const supabase = await createSupabaseServerClient()
     
     // Get report run metadata (look for packet_type = 'executive_brief')
     const { data: reportRun, error: runError } = await supabase
