@@ -2708,6 +2708,7 @@ export async function POST(request: NextRequest) {
             renderMethodologyShort,
             renderDataFreshnessCompact,
             addHeaderFooter,
+            setPageNumber: (val: number) => { pageNumber = val },
           }
           
           pdfResult = await buildPDF(input, helpers)

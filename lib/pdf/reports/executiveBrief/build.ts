@@ -312,7 +312,7 @@ export async function buildExecutiveBriefPDF(
     if (currentPageNumber === 1) {
       doc.addPage()
       // currentPageNumber will be incremented by the 'pageAdded' event handler
-      // Also update the state variable in helpers so ensureSpace() knows we're on page 2
+      // Also update the pageNumber state in route.ts so ensureSpace() knows we're on page 2
       helpers.setPageNumber(2)
     }
 
