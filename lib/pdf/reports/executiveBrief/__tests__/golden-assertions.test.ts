@@ -7,7 +7,7 @@
  * Based on stable output: executive-brief-30d-2026-01-09
  */
 
-import { buildExecutiveBriefPDF } from '../build'
+import { buildExecutiveBriefPDFForTests } from './test-helpers'
 import type { RiskPostureData } from '../types'
 import { extractTextFromPDF, getPDFPageCount } from '@/lib/utils/pdf-test-helpers'
 
@@ -39,26 +39,26 @@ describe('Executive Brief PDF - Golden Assertions', () => {
   }
 
   it('should generate exactly 2 pages (hard lock)', async () => {
-    const result = await buildExecutiveBriefPDF(input)
+    const result = await buildExecutiveBriefPDFForTests(input)
     const pageCount = await getPDFPageCount(result.buffer)
     expect(pageCount).toBe(2)
   })
   
   it('should have "RiskMate Executive Brief" header', async () => {
-    const result = await buildExecutiveBriefPDF(input)
+    const result = await buildExecutiveBriefPDFForTests(input)
     const text = await extractTextFromPDF(result.buffer)
     expect(text).toContain('RiskMate Executive Brief')
   })
   
   it('should have "Trend unavailable (need 4 completed periods)" when no historical data', async () => {
-    const result = await buildExecutiveBriefPDF(input)
+    const result = await buildExecutiveBriefPDFForTests(input)
     const text = await extractTextFromPDF(result.buffer)
     // Should show intentional "unavailable" message, not placeholder
     expect(text).toMatch(/Trend unavailable.*need 4 completed periods/i)
   })
 
   it('should show "prior unavailable" in KPI subtitles when prior period is unavailable', async () => {
-    const result = await buildExecutiveBriefPDF(input)
+    const result = await buildExecutiveBriefPDFForTests(input)
     const text = await extractTextFromPDF(result.buffer)
     
     // When delta is undefined, KPI subtitles should say "prior unavailable", not "vs prior 30d"
@@ -67,7 +67,7 @@ describe('Executive Brief PDF - Golden Assertions', () => {
   })
 
   it('should show verify path with /verify/ in Integrity capsule', async () => {
-    const result = await buildExecutiveBriefPDF(input)
+    const result = await buildExecutiveBriefPDFForTests(input)
     const text = await extractTextFromPDF(result.buffer)
     
     // Verify display must always include /verify/ path
@@ -77,7 +77,7 @@ describe('Executive Brief PDF - Golden Assertions', () => {
   })
 
   it('should NOT show "Prior period unavailable" line when chips show N/A', async () => {
-    const result = await buildExecutiveBriefPDF(input)
+    const result = await buildExecutiveBriefPDFForTests(input)
     const text = await extractTextFromPDF(result.buffer)
     
     // The global "Prior period unavailable" note should never appear
@@ -86,7 +86,7 @@ describe('Executive Brief PDF - Golden Assertions', () => {
   })
 
   it('should have complete Integrity block (Report ID, Window, Sources, SHA-256, Verify)', async () => {
-    const result = await buildExecutiveBriefPDF(input)
+    const result = await buildExecutiveBriefPDFForTests(input)
     const text = await extractTextFromPDF(result.buffer)
     
     // Integrity capsule must include all required elements
@@ -99,7 +99,7 @@ describe('Executive Brief PDF - Golden Assertions', () => {
   })
   
   it('should show verify path as "riskmate.app/verify/RM-xxxx" or "verify/RM-xxxx"', async () => {
-    const result = await buildExecutiveBriefPDF(input)
+    const result = await buildExecutiveBriefPDFForTests(input)
     const text = await extractTextFromPDF(result.buffer)
     
     // Verify display must always include /verify/ path
@@ -109,7 +109,7 @@ describe('Executive Brief PDF - Golden Assertions', () => {
   })
 
   it('should have "Generated:" and "Window:" on separate lines (no "EST Window:" merge)', async () => {
-    const result = await buildExecutiveBriefPDF(input)
+    const result = await buildExecutiveBriefPDFForTests(input)
     const text = await extractTextFromPDF(result.buffer)
     
     // Should never see "EST Window:" merged together
@@ -119,7 +119,7 @@ describe('Executive Brief PDF - Golden Assertions', () => {
   })
 
   it('should have "Why it matters:" label (not just sentence)', async () => {
-    const result = await buildExecutiveBriefPDF(input)
+    const result = await buildExecutiveBriefPDFForTests(input)
     const text = await extractTextFromPDF(result.buffer)
     
     // Should have explicit label
@@ -127,7 +127,7 @@ describe('Executive Brief PDF - Golden Assertions', () => {
   })
 
   it('should have "Decision requested:" label', async () => {
-    const result = await buildExecutiveBriefPDF(input)
+    const result = await buildExecutiveBriefPDFForTests(input)
     const text = await extractTextFromPDF(result.buffer)
     
     // Should have explicit label
@@ -135,7 +135,7 @@ describe('Executive Brief PDF - Golden Assertions', () => {
   })
   
   it('should NOT contain junk tokens (single "—", lone numbers, etc.)', async () => {
-    const result = await buildExecutiveBriefPDF(input)
+    const result = await buildExecutiveBriefPDFForTests(input)
     const text = await extractTextFromPDF(result.buffer)
     
     // Should not have standalone dashes or single numbers without context
@@ -154,7 +154,7 @@ describe('Executive Brief PDF - Golden Assertions', () => {
   // ============================================
   
   it('should have Integrity block with all required elements on Page 2', async () => {
-    const result = await buildExecutiveBriefPDF(input)
+    const result = await buildExecutiveBriefPDFForTests(input)
     const text = await extractTextFromPDF(result.buffer)
     
     // Integrity capsule must include all required elements (already tested above, but verify Page 2 specific)
@@ -167,7 +167,7 @@ describe('Executive Brief PDF - Golden Assertions', () => {
   })
   
   it('should show "Note: prior period unavailable (deltas hidden)" when prior is unavailable', async () => {
-    const result = await buildExecutiveBriefPDF(input)
+    const result = await buildExecutiveBriefPDFForTests(input)
     const text = await extractTextFromPDF(result.buffer)
     
     // When prior period is unavailable, should show explicit note
@@ -176,7 +176,7 @@ describe('Executive Brief PDF - Golden Assertions', () => {
   })
   
   it('should have Generated and Window on separate lines in Integrity block (no "EST Window:" merge)', async () => {
-    const result = await buildExecutiveBriefPDF(input)
+    const result = await buildExecutiveBriefPDFForTests(input)
     const text = await extractTextFromPDF(result.buffer)
     
     // Should never see "EST Window:" merged together
@@ -186,7 +186,7 @@ describe('Executive Brief PDF - Golden Assertions', () => {
   })
   
   it('should NOT have trailing separators (•) at end of lines in chips', async () => {
-    const result = await buildExecutiveBriefPDF(input)
+    const result = await buildExecutiveBriefPDFForTests(input)
     const text = await extractTextFromPDF(result.buffer)
     
     // Extract lines and check for trailing separators

@@ -75,7 +75,7 @@ interface PDFContext {
  * Helper Functions Type
  * All helper functions needed by renderers
  */
-interface HelperFunctions {
+export interface ExecutiveBriefDeps {
   sanitizeText: (text: string) => string
   formatTimeRange: (range: string) => string
   renderKPIStrip: (doc: PDFKit.PDFDocument, data: RiskPostureData, pageWidth: number, y: number, timeRange: string, hasPriorPeriodData: boolean) => void
@@ -89,7 +89,7 @@ interface HelperFunctions {
   renderMetricsTable: (doc: PDFKit.PDFDocument, data: RiskPostureData, pageWidth: number, margin: number, hasPriorPeriodData: boolean) => void
   renderDataCoverage: (doc: PDFKit.PDFDocument, data: RiskPostureData, pageWidth: number, margin: number) => void
   renderTopItemsNeedingAttention: (doc: PDFKit.PDFDocument, data: RiskPostureData, pageWidth: number, margin: number) => void
-  ensureSpace: (doc: PDFKit.PDFDocument, requiredHeight: number, margin: number) => void
+  ensureSpace: (doc: PDFKit.PDFDocument, requiredHeight: number, margin: number) => boolean // Returns false if can't fit (no page 3 allowed)
   renderRecommendedActionsShort: (doc: PDFKit.PDFDocument, data: RiskPostureData, columnWidth: number, columnX: number, startY: number) => void
   renderMethodologyShort: (doc: PDFKit.PDFDocument, columnWidth: number, columnX: number) => void
   renderDataFreshnessCompact: (doc: PDFKit.PDFDocument, data: RiskPostureData, columnWidth: number, columnX: number) => void
@@ -108,6 +108,11 @@ interface HelperFunctions {
   ) => void
 }
 
+// Default dependencies - will be populated from route helpers
+// For now, this is a placeholder that will throw if called without deps
+// TODO: Move helpers to /lib/pdf/core/ and import them here
+const defaultDeps: ExecutiveBriefDeps | null = null
+
 /**
  * Build Executive Brief PDF
  * 
@@ -117,20 +122,23 @@ interface HelperFunctions {
  * All rendering logic is now in the extracted render modules.
  * 
  * @param input - Executive Brief input data
- * @param helpers - Helper functions from route (required for production, optional for tests)
+ * @param deps - Helper functions (defaults to null, must be provided by route or test helper)
  */
 export async function buildExecutiveBriefPDF(
   input: ExecutiveBriefInput,
-  helpers?: HelperFunctions
+  deps?: ExecutiveBriefDeps
 ): Promise<ExecutiveBriefOutput> {
-  // For tests, helpers are optional - we'll throw a clear error if they're missing
-  if (!helpers) {
+  // For now, deps must be provided (route passes them, tests need to provide them)
+  // TODO: Once helpers are moved to /lib/pdf/core/, we can import them here as defaults
+  if (!deps) {
     throw new Error(
-      'buildExecutiveBriefPDF requires helper functions. ' +
-      'In production, pass helpers from route. ' +
-      'For tests, create a test helper that provides all required functions.'
+      'buildExecutiveBriefPDF requires dependencies. ' +
+      'In production, route passes deps. ' +
+      'For tests, use buildExecutiveBriefPDFFromRoute() or provide test deps.'
     )
   }
+  
+  const helpers = deps
   const { data, organizationName, generatedBy, timeRange, buildSha, reportId, baseUrl } = input
   
   // Generate QR code before PDF generation (async operation)
@@ -292,7 +300,11 @@ export async function buildExecutiveBriefPDF(
     )
 
     // Force page break for page 2
-    helpers.ensureSpace(doc, 1000, margin)
+    // ensureSpace returns false if we're already on page 2, but we need to force page 2
+    // So we check page number directly and add page if needed
+    if (doc.page.number === 1) {
+      doc.addPage()
+    }
 
     // ============================================
     // PAGE 2: Render using extracted renderer

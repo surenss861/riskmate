@@ -110,14 +110,22 @@ function getContentLimitY(doc: PDFKit.PDFDocument): number {
  * CRITICAL: requiredHeight must include section title + spacing + at least one row/card
  * Never add a page unless you're guaranteed to draw real body content
  * Uses contentLimitY to prevent footer overlap
+ * 
+ * HARD LOCK: Returns false if we're on page 2 and can't fit (prevents page 3)
+ * Returns true if space is available or page was added successfully
  */
 function ensureSpace(
   doc: PDFKit.PDFDocument,
   requiredHeight: number,
   margin: number
-): void {
+): boolean {
   const contentLimitY = getContentLimitY(doc)
   if (doc.y + requiredHeight > contentLimitY) {
+    // HARD LOCK: Never create page 3 - Executive Brief is exactly 2 pages
+    if (pageNumber >= 2) {
+      return false // Can't fit, and we're already on page 2 - no page 3 allowed
+    }
+    
     // RED ALERT: If current page has no body content, we're about to create a blank page
     if (!pageHasBody && pageNumber > 1) {
       console.warn(`[PDF] Warning: About to add page ${pageNumber + 1} but page ${pageNumber} has no body content`)
@@ -130,6 +138,7 @@ function ensureSpace(
     currentPageStartY = doc.y
     pageHasBody = false // Reset flag for new page
   }
+  return true // Space is available
 }
 
 /**
@@ -996,20 +1005,19 @@ function renderExecutiveSummary(
   
   for (let i = 0; i < chips.length; i++) {
     const chip = chips[i]
-    // CRITICAL: Chip separator wrap rule - separator never ends a line
-    // If the next chip won't fit, wrap before printing the separator
-    const chipTextWithoutSeparator = `${chip.label} ${chip.delta}`
-    const separator = i < chips.length - 1 ? ' •' : '' // Add separator except for last chip
-    const chipTextWithSeparator = `${chipTextWithoutSeparator}${separator}`
+    // CRITICAL: Render separator as PREFIX (not suffix) to prevent trailing bullets
+    // For chip index > 0: render "• " before the chip (and measure it as part of the chip block)
+    // This guarantees you never end a line with a separator
+    const separatorPrefix = i > 0 ? '• ' : '' // Prefix separator for all chips except first
+    const chipText = `${chip.label} ${chip.delta}`
+    const chipTextWithPrefix = separatorPrefix + chipText // Full block: separator + chip
     
-    // Check if chip + separator fits on current line
-    const chipWidthWithoutSeparator = doc.widthOfString(chipTextWithoutSeparator) + 16
-    const chipWidthWithSeparator = doc.widthOfString(chipTextWithSeparator) + 16
+    // Measure the entire block (separator + chip) as one unit
+    const chipBlockWidth = doc.widthOfString(chipTextWithPrefix) + 16
     
     // Check if we need to wrap to next line
-    // CRITICAL: If chip + separator doesn't fit, wrap before the separator (don't let "•" end a line)
-    const willFitWithSeparator = chipX + chipWidthWithSeparator <= rightLimit && chipsOnCurrentLine < maxChipsPerLine
-    const needsWrap = !willFitWithSeparator || chipsOnCurrentLine >= maxChipsPerLine
+    const willFit = chipX + chipBlockWidth <= rightLimit && chipsOnCurrentLine < maxChipsPerLine
+    const needsWrap = !willFit || chipsOnCurrentLine >= maxChipsPerLine
     
     if (needsWrap) {
       // Move to next line if we haven't exceeded max lines
@@ -1018,6 +1026,26 @@ function renderExecutiveSummary(
         chipY += chipHeight + 8 // Next line with spacing
         chipX = margin
         chipsOnCurrentLine = 0
+        // When wrapping, don't add separator prefix (chip starts new line)
+        const chipTextOnNewLine = chipText // No separator when starting new line
+        const chipWidthOnNewLine = doc.widthOfString(chipTextOnNewLine) + 16
+        
+        // Chip background
+        doc
+          .rect(chipX, chipY, chipWidthOnNewLine, chipHeight)
+          .fill(STYLES.colors.cardBg)
+          .strokeColor(STYLES.colors.borderGray)
+          .lineWidth(0.5)
+          .stroke()
+        
+        // Chip text
+        doc
+          .fillColor(chip.color)
+          .text(chipTextOnNewLine, chipX + 8, chipY + 6, { width: chipWidthOnNewLine - 16 })
+        
+        chipX += chipWidthOnNewLine + chipGap
+        chipsOnCurrentLine++
+        continue
       } else {
         // Max lines reached - collapse remaining chips into "+n more"
         const remaining = chips.length - i
@@ -1036,20 +1064,9 @@ function renderExecutiveSummary(
       }
     }
     
-    // CRITICAL: Chip separator rule - separator can never be the last glyph on a line
-    // Measure (chip + " •") before placing it. If it won't fit, wrap before the separator.
-    // Implementation: Check if chip + separator fits on current line, if not, use chip without separator
-    const separatorFits = chipX + chipWidthWithSeparator <= rightLimit && chipsOnCurrentLine < maxChipsPerLine
-    const finalChipText = separatorFits ? chipTextWithSeparator : chipTextWithoutSeparator
-    const finalChipWidth = doc.widthOfString(finalChipText) + 16
-    
-    // CRITICAL: Double-check that separator won't be last glyph on line
-    // If chip + separator would end exactly at rightLimit, don't use separator
-    if (separatorFits && chipX + chipWidthWithSeparator >= rightLimit - 2) {
-      // Too close to edge - don't use separator to avoid it being last glyph
-      const finalChipText = chipTextWithoutSeparator
-      const finalChipWidth = doc.widthOfString(finalChipText) + 16
-    }
+    // Render chip with prefix separator (if not first chip)
+    // The entire block (separator + chip) is measured and rendered as one unit
+    // This prevents the separator from ever being the last glyph on a line
     
     // Chip background
     doc

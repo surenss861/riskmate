@@ -48,7 +48,7 @@ export function renderPage2(
   buildSha: string | undefined,
   generatedAt: Date,
   renderFunctions: {
-    ensureSpace: (doc: PDFKit.PDFDocument, requiredHeight: number, margin: number) => void
+    ensureSpace: (doc: PDFKit.PDFDocument, requiredHeight: number, margin: number) => boolean
     renderMetricsTable: (doc: PDFKit.PDFDocument, data: RiskPostureData, pageWidth: number, margin: number, hasPriorPeriodData: boolean) => void
     addSectionDivider: (doc: PDFKit.PDFDocument, pageWidth: number, margin: number) => void
     renderRecommendedActionsShort: (doc: PDFKit.PDFDocument, data: RiskPostureData, columnWidth: number, columnX: number, startY: number) => void
@@ -115,16 +115,21 @@ export function renderPage2(
   doc.x = leftColumnX // Set X position for left column
 
   // Recommended Actions (short version - max 3 actions, constrained to left column)
-  renderFunctions.renderRecommendedActionsShort(doc, data, leftColumnWidth, leftColumnX, leftColumnStartY)
-  doc.y = Math.max(doc.y, leftColumnStartY + 80) // Ensure minimum spacing
+  // CRITICAL: Check if we can fit before rendering (no page 3 allowed)
+  if (renderFunctions.ensureSpace(doc, 100, margin)) {
+    renderFunctions.renderRecommendedActionsShort(doc, data, leftColumnWidth, leftColumnX, leftColumnStartY)
+    doc.y = Math.max(doc.y, leftColumnStartY + 80) // Ensure minimum spacing
+  }
   
   // Methodology (short - 3 bullets max, constrained to left column)
-  if (renderFunctions.hasSpace(doc, 70)) {
+  // CRITICAL: Only render if we have space (no page 3 allowed)
+  if (renderFunctions.ensureSpace(doc, 70, margin)) {
     renderFunctions.renderMethodologyShort(doc, leftColumnWidth, leftColumnX)
   }
   
   // Data Freshness (compact - 2 lines, constrained to left column)
-  if (renderFunctions.hasSpace(doc, 40)) {
+  // CRITICAL: Only render if we have space (no page 3 allowed)
+  if (renderFunctions.ensureSpace(doc, 40, margin)) {
     renderFunctions.renderDataFreshnessCompact(doc, data, leftColumnWidth, leftColumnX)
   }
   
