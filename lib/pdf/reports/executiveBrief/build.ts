@@ -306,11 +306,14 @@ export async function buildExecutiveBriefPDF(
     )
 
     // Force page break for page 2
-    // We need to explicitly add page 2 - ensureSpace won't do it if we're already on page 2
+    // CRITICAL: Only build.ts can add pages - this is the ONLY place doc.addPage() is called
+    // ensureSpace() never adds pages, it only checks space and returns boolean
     // Force page 2 if we're still on page 1 (currentPageNumber is tracked at top of Promise)
     if (currentPageNumber === 1) {
       doc.addPage()
       // currentPageNumber will be incremented by the 'pageAdded' event handler
+      // Also update the state variable in helpers so ensureSpace() knows we're on page 2
+      helpers.setPageNumber(2)
     }
 
     // ============================================
