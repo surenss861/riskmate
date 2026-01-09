@@ -778,14 +778,12 @@ function renderTrendSparkline(
       .fontSize(7)
       .font(STYLES.fonts.body)
       .fillColor(STYLES.colors.secondaryText)
-      .text(`Trend: unavailable (need 4 completed periods)`, x, y + sparklineHeight + 4, { width: width })
-      // Add explanation line to make it feel engineered, not placeholder
-      doc.moveDown(0.15)
+      // Single status sentence (executive-friendly)
       doc
-        .fontSize(6)
+        .fontSize(7)
         .font(STYLES.fonts.body)
         .fillColor(STYLES.colors.secondaryText)
-        .text('No historical report runs found for this org/time range.', x, doc.y, { width: width })
+        .text(`Trend: unavailable — no prior report runs for this org/time range.`, x, y + sparklineHeight + 4, { width: width })
     return
   }
   
@@ -2091,11 +2089,33 @@ function renderRecommendedActionsShort(
   })
   doc.moveDown(0.6)
 
-  actions.forEach((action) => {
+  actions.forEach((action, index) => {
     ensureSpace(doc, 50, columnX)
     // Board-decision-friendly format: Action → Outcome → Deadline
     // Match "Decision requested" tone: clear, actionable, with timeline
-    const actionText = sanitizeText(action.action)
+    // CRITICAL: Make Action #1 specific to THIS org's situation (reference actual jobs/sign-offs)
+    let actionText = sanitizeText(action.action)
+    
+    // Anchor Action #1 to actual situation for specificity
+    if (index === 0 && data.high_risk_jobs > 0) {
+      // Try to extract job ID from top_drivers if available
+      const topJobInfo = data.top_drivers?.find(d => d.label.toLowerCase().includes('high risk') || d.label.toLowerCase().includes('job'))
+      const jobIdMatch = topJobInfo?.label?.match(/JOB-[\w-]+/i)
+      
+      if (jobIdMatch) {
+        // Specific action: reference actual job ID
+        actionText = sanitizeText(`Mitigate ${jobIdMatch[0]} controls and attach evidence`)
+      } else if (action.action.toLowerCase().includes('high risk')) {
+        // Generic but specific: reference the count
+        actionText = sanitizeText(`Require supervisor sign-off for ${data.high_risk_jobs} ${pluralize(data.high_risk_jobs, 'high risk job', 'high risk jobs')} within 48h`)
+      }
+    } else if (index === 0 && data.pending_signoffs > 0 && data.signed_signoffs + data.pending_signoffs === data.signed_signoffs + data.pending_signoffs) {
+      // If sign-offs are the focus, make it specific
+      if (action.action.toLowerCase().includes('sign-off') || action.action.toLowerCase().includes('attestation')) {
+        actionText = sanitizeText(`Complete ${data.pending_signoffs} pending ${pluralize(data.pending_signoffs, 'sign-off', 'sign-offs')} to ensure full compliance`)
+      }
+    }
+    
     const outcomeText = sanitizeText(action.reason)
     
     // Dynamic deadline based on urgency/risk level (removes repetition)
@@ -2469,10 +2489,12 @@ function addHeaderFooter(
           }
         }
         
-        // Add raw hash line for copy/paste and system verification (smaller font, no spaces)
+        // Add raw hash line for copy/paste and system verification (noWrap + shrink-to-fit)
+        // CRITICAL: Render as single atomic line that never breaks (shrink font if needed)
         doc.moveDown(0.2)
         const rawHashText = sanitizeAscii(`Hash (raw): ${metadataHash}`)
-        currentY = writeLine(rawHashText, 7, 'Courier', 9) // Smaller font for raw hash
+        // Use noWrap option to prevent line breaks, shrink font if needed
+        currentY = writeLine(rawHashText, 7, 'Courier', 9, { noWrap: true }) // Single line, shrink if needed
       } else {
         // If hash is not available, show a placeholder (should not happen in production)
         const placeholderText = sanitizeAscii('SHA-256: calculating...')
