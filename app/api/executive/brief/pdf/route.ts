@@ -1070,18 +1070,18 @@ function renderExecutiveSummary(
     
     // Chip background
     doc
-      .rect(chipX, chipY, finalChipWidth, chipHeight)
+      .rect(chipX, chipY, chipBlockWidth, chipHeight)
       .fill(STYLES.colors.cardBg)
       .strokeColor(STYLES.colors.borderGray)
       .lineWidth(0.5)
       .stroke()
     
-    // Chip text
+    // Chip text (includes separator prefix if not first chip)
     doc
       .fillColor(chip.color)
-      .text(finalChipText, chipX + 8, chipY + 6, { width: finalChipWidth - 16 })
+      .text(chipTextWithPrefix, chipX + 8, chipY + 6, { width: chipBlockWidth - 16 })
     
-    chipX += finalChipWidth + chipGap
+    chipX += chipBlockWidth + chipGap
     chipsOnCurrentLine++
   }
   
