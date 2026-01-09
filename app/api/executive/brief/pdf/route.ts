@@ -2658,6 +2658,25 @@ async function buildExecutiveBriefPDF(
                                data.deltas?.pending_signoffs !== undefined ||
                                false // Explicit false fallback
 
+    // Calculate metricsTableFitsOnPage1 (needed for both renderPage1 and fallback/Page 2 logic)
+    const metricsRows = buildMetricsRows(data, hasPriorPeriodData)
+    const sectionHeaderHeight = STYLES.sizes.h2 + 20
+    const tableHeaderHeight = STYLES.spacing.tableRowHeight + 4
+    const tableRowHeight = STYLES.spacing.tableRowHeight
+    const totalTableHeight = sectionHeaderHeight + tableHeaderHeight + (tableRowHeight * metricsRows.length) + 40
+    const dataCoverageHeight = 80
+    // Estimate remaining space on Page 1 (will be recalculated more accurately in renderPage1/fallback)
+    const headerBandHeight = doc.page.height * 0.14
+    const estimatedPage1StartY = headerBandHeight + STYLES.spacing.sectionGap
+    const estimatedKPIsHeight = 95
+    const estimatedGaugeHeight = 100
+    const estimatedSummaryHeight = 120
+    const estimatedDriversHeight = 40
+    const estimatedPage1Used = estimatedPage1StartY + estimatedKPIsHeight + estimatedGaugeHeight + estimatedSummaryHeight + estimatedDriversHeight
+    const page1Bottom = doc.page.height - 80
+    const estimatedRemainingSpacePage1 = page1Bottom - estimatedPage1Used
+    let metricsTableFitsOnPage1 = estimatedRemainingSpacePage1 >= (totalTableHeight + dataCoverageHeight + 32)
+
     // ============================================
     // PAGE 1: Use extracted renderer (with fallback to inline rendering)
     // ============================================
