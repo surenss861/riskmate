@@ -944,17 +944,47 @@ function renderExecutiveSummary(
   // This prevents mid-sentence wraps like "to reduce audit / risk."
   if (headlineLines.length > 1) {
     // Intentional 2-line headline - render each line as atomic to prevent further wrapping
+    // Use the same atomic writer approach as "Generated:" lines (noWrap + shrink-to-fit)
     let currentY = headlineY
-    for (const line of headlineLines) {
-      doc
-        .fontSize(headlineFontSize)
-        .font(STYLES.fonts.header)
-        .fillColor(STYLES.colors.primaryText)
-        .text(line.trim(), margin, currentY, {
-          width: maxHeadlineWidth,
-          align: 'left',
-          lineBreak: false, // CRITICAL: Prevent further wrapping on each line
-        })
+    for (let i = 0; i < headlineLines.length; i++) {
+      const line = headlineLines[i].trim()
+      
+      // For the second line (action line), use atomic rendering with shrink-to-fit
+      // This prevents "audit risk" from breaking mid-phrase
+      if (i === 1) {
+        // Second line: use atomic writer with shrink-to-fit (like Integrity block lines)
+        doc.fontSize(headlineFontSize).font(STYLES.fonts.header)
+        let atomicFontSize = headlineFontSize
+        let textWidth = doc.widthOfString(line)
+        
+        // Shrink font if needed to fit (min 20pt to maintain visual hierarchy)
+        const minFontSize = 20
+        while (textWidth > maxHeadlineWidth && atomicFontSize > minFontSize) {
+          atomicFontSize -= 0.5
+          doc.fontSize(atomicFontSize)
+          textWidth = doc.widthOfString(line)
+        }
+        
+        // Render as atomic line (no width parameter, prevents PDFKit from treating as wrapped paragraph)
+        doc
+          .fontSize(atomicFontSize)
+          .font(STYLES.fonts.header)
+          .fillColor(STYLES.colors.primaryText)
+          .text(line, margin, currentY, {
+            lineBreak: false, // CRITICAL: Never allow mid-phrase breaks
+          })
+      } else {
+        // First line (semicolon line) - render normally with lineBreak: false
+        doc
+          .fontSize(headlineFontSize)
+          .font(STYLES.fonts.header)
+          .fillColor(STYLES.colors.primaryText)
+          .text(line, margin, currentY, {
+            width: maxHeadlineWidth,
+            align: 'left',
+            lineBreak: false, // CRITICAL: Prevent further wrapping on each line
+          })
+      }
       currentY += lineHeight
     }
   } else {
