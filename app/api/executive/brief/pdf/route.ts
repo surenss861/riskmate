@@ -2040,10 +2040,19 @@ function renderRecommendedActionsShort(
       color: STYLES.colors.primaryText,
     })
 
-    // Why now (risk/defensibility reason) - compact, constrained to column
-    ensureSpace(doc, 18, columnX)
-    safeText(doc, `   Why: ${sanitizeText(action.reason)}`, columnX + 20, doc.y, {
-      width: columnWidth - 40,
+    // Outcome line (what this achieves)
+    doc.moveDown(0.25)
+    safeText(doc, `   Outcome: ${outcomeText}`, columnX + 20, doc.y, {
+      width: columnWidth - 20,
+      fontSize: STYLES.sizes.caption,
+      font: STYLES.fonts.body,
+      color: STYLES.colors.secondaryText,
+    })
+    
+    // Deadline line (when it's needed)
+    doc.moveDown(0.25)
+    safeText(doc, `   Deadline: ${deadlineText}`, columnX + 20, doc.y, {
+      width: columnWidth - 20,
       fontSize: STYLES.sizes.caption,
       font: STYLES.fonts.body,
       color: STYLES.colors.secondaryText,
