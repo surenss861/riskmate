@@ -2,32 +2,57 @@
  * Core PDF Layout Helpers
  * 
  * Reusable layout primitives for consistent spacing and page management
+ * 
+ * CRITICAL: These functions NEVER call doc.addPage() - only build.ts can add pages
+ * This enforces the structural 2-page lock pattern for board-grade reports
  */
 
 import PDFKit from 'pdfkit'
 
 /**
  * Get content limit Y (safe area above footer)
+ * Footer consists of: main footer + build stamp + confidentiality (3 lines)
  */
 export function getContentLimitY(doc: PDFKit.PDFDocument): number {
-  return doc.page.height - 80 // Footer space
+  const bottomMargin = 60 // matches PDFDocument bottom margin
+  doc.fontSize(8).font('Helvetica')
+  const lineHeight = doc.currentLineHeight(true) || 10
+  const footerLines = 3
+  const footerSpacing = 8
+  const footerTotalHeight = (lineHeight * footerLines) + (footerSpacing * (footerLines - 1))
+  return doc.page.height - bottomMargin - footerTotalHeight - 8 // 8px safety margin
 }
 
 /**
- * Ensure space for content - move to next page if needed
+ * Ensure space for content (NEVER adds pages)
+ * 
+ * CRITICAL: This function NEVER calls doc.addPage() - only build.ts can add pages
+ * 
+ * Structural Rule:
+ * - Only build.ts may call doc.addPage() (max once, between Page 1 and Page 2)
+ * - ensureSpace() only checks space and returns boolean
+ * - Renderers must skip/truncate when ensureSpace() returns false
+ * 
+ * @param pageNumber - Current page number (1 or 2)
+ * @returns true if space is available, false if content doesn't fit (hard stop on page 2)
  */
 export function ensureSpace(
   doc: PDFKit.PDFDocument,
   requiredHeight: number,
-  margin: number
-): void {
+  margin: number,
+  pageNumber: number
+): boolean {
   const contentLimitY = getContentLimitY(doc)
-  const currentY = doc.y || margin
   
-  if (currentY + requiredHeight > contentLimitY) {
-    doc.addPage()
-    doc.y = margin
+  // HARD LOCK: Never create page 3 - Executive Brief is exactly 2 pages
+  if (pageNumber >= 2) {
+    // On page 2, check if content fits
+    return doc.y + requiredHeight <= contentLimitY
   }
+  
+  // On page 1, check if content fits
+  // NOTE: We don't add pages here - build.ts handles the single page break
+  return doc.y + requiredHeight <= contentLimitY
 }
 
 /**
