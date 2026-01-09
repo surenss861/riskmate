@@ -779,6 +779,13 @@ function renderTrendSparkline(
       .font(STYLES.fonts.body)
       .fillColor(STYLES.colors.secondaryText)
       .text(`Trend: unavailable (need 4 completed periods)`, x, y + sparklineHeight + 4, { width: width })
+      // Add explanation line to make it feel engineered, not placeholder
+      doc.moveDown(0.15)
+      doc
+        .fontSize(6)
+        .font(STYLES.fonts.body)
+        .fillColor(STYLES.colors.secondaryText)
+        .text('No historical report runs found for this org/time range.', x, doc.y, { width: width })
     return
   }
   
@@ -1275,9 +1282,28 @@ function renderMetricsTable(
     color: STYLES.colors.primaryText,
   })
   
-  // Owner view: one-liner to help execs focus on what matters
+  // Owner view: dynamic one-liner based on actual data (never call out metrics that are 0)
   doc.moveDown(0.2)
-  safeText(doc, 'Owner view: focus on high risk jobs + pending sign-offs', margin, doc.y, {
+  let ownerViewText = 'Owner view: '
+  const concerns: string[] = []
+  
+  if (data.high_risk_jobs > 0) {
+    concerns.push(`${data.high_risk_jobs} ${pluralize(data.high_risk_jobs, 'high risk job', 'high risk jobs')}`)
+  }
+  if (data.pending_signoffs > 0) {
+    concerns.push(`${data.pending_signoffs} ${pluralize(data.pending_signoffs, 'pending sign-off', 'pending sign-offs')}`)
+  }
+  if (data.open_incidents > 0 && concerns.length < 2) {
+    concerns.push(`${data.open_incidents} ${pluralize(data.open_incidents, 'open incident', 'open incidents')}`)
+  }
+  
+  if (concerns.length > 0) {
+    ownerViewText += `focus on ${concerns.join(' + ')}`
+  } else {
+    ownerViewText += 'no immediate concerns detected'
+  }
+  
+  safeText(doc, ownerViewText, margin, doc.y, {
     fontSize: STYLES.sizes.caption,
     font: STYLES.fonts.body,
     color: STYLES.colors.secondaryText,
@@ -2031,7 +2057,26 @@ function renderRecommendedActionsShort(
     // Match "Decision requested" tone: clear, actionable, with timeline
     const actionText = sanitizeText(action.action)
     const outcomeText = sanitizeText(action.reason)
-    const deadlineText = 'this week' // Standard deadline for exec actions
+    
+    // Dynamic deadline based on urgency/risk level (removes repetition)
+    // High priority (1) = 48 hours, Medium (2) = 7 days, Low (3+) = 14 days
+    let deadlineText: string
+    if (action.priority === 1) {
+      // High priority: urgent (48 hours)
+      const deadlineDate = new Date()
+      deadlineDate.setDate(deadlineDate.getDate() + 2)
+      deadlineText = `by ${deadlineDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+    } else if (action.priority === 2) {
+      // Medium priority: this week (7 days)
+      const deadlineDate = new Date()
+      deadlineDate.setDate(deadlineDate.getDate() + 7)
+      deadlineText = `by ${deadlineDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+    } else {
+      // Low priority: next 2 weeks (14 days)
+      const deadlineDate = new Date()
+      deadlineDate.setDate(deadlineDate.getDate() + 14)
+      deadlineText = `by ${deadlineDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+    }
     
     // Action line (bold, imperative)
     safeText(doc, `${action.priority}. ${actionText}`, columnX + 20, doc.y, {
@@ -2568,27 +2613,30 @@ export async function POST(request: NextRequest) {
     }
 
         // Use resolved org name (sanitized immediately)
-        // CRITICAL: Never show "(name missing)" in production - always provide a valid display name
+        // CRITICAL: Show actual org name if available; only fall back to ID when name is missing
         let organizationName = sanitizeText(orgContext.orgName)
         
-        // If org name looks email-ish or generic, fix it
-        // In prod, never show generic "Organization" or "(name missing)" - use org ID short form
-        if (organizationName.includes('@') || organizationName.includes("'s Organization") || organizationName.toLowerCase().includes('test')) {
+        // Check if org name is actually a real name (not an ID, not generic, not email-derived)
+        const isRealName = organizationName && 
+          organizationName.trim() !== '' && 
+          !organizationName.includes('@') && 
+          !organizationName.includes("'s Organization") && 
+          !organizationName.toLowerCase().includes('test') &&
+          organizationName !== 'Organization' &&
+          !organizationName.includes('(name missing)') &&
+          // Check if it's NOT just a hex ID (short hex strings are IDs)
+          !(organizationName.length <= 12 && /^[a-f0-9]+$/i.test(organizationName))
+        
+        if (!isRealName) {
+          // No real name available - use org ID short form as fallback
           if (process.env.NODE_ENV !== 'production') {
-            console.warn(`[executive/brief/pdf] Org name "${organizationName}" looks email-derived or test data. Fix in Organizations table.`)
-          }
-          // Use org ID short form instead of generic "Organization"
-          organizationName = `Org ${orgContext.orgId.substring(0, 8)}`
-        } else if (organizationName === 'Organization' || organizationName.trim() === '' || organizationName.includes('(name missing)')) {
-          // Never show generic "Organization" or "(name missing)" - use org ID short form
-          if (process.env.NODE_ENV !== 'production') {
-            console.warn(`[executive/brief/pdf] Org name is generic or missing. Using org ID short form. Fix in Organizations table.`)
+            console.warn(`[executive/brief/pdf] Org name "${organizationName}" is not a real name. Using org ID short form. Fix in Organizations table.`)
           }
           organizationName = `Org ${orgContext.orgId.substring(0, 8)}`
         }
         
-        // Final safety check: ensure we never pass "(name missing)" to PDF builder
-        if (!organizationName || organizationName.trim() === '' || organizationName.includes('(name missing)')) {
+        // Final safety check: ensure we never pass empty or invalid name to PDF builder
+        if (!organizationName || organizationName.trim() === '') {
           organizationName = `Org ${orgContext.orgId.substring(0, 8)}`
         }
 
