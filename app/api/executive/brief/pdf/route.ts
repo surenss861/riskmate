@@ -684,7 +684,7 @@ function renderRiskPostureGauge(
       .fontSize(9)
       .font(STYLES.fonts.body)
       .fillColor(STYLES.colors.secondaryText)
-      .text(`Confidence: ${confidenceGrade}`, gaugeBox.x, stackY, {
+      .text(`Confidence (data quality): ${confidenceGrade}`, gaugeBox.x, stackY, {
         width: gaugeBox.w,
         align: 'center',
       })
@@ -968,14 +968,15 @@ function renderExecutiveSummary(
     color: STYLES.colors.primaryText,
   })
   
-  // Render all 5 chips with wrapping (2 lines max, then collapse remaining)
+  // Render all 5 chips with intentional 2-row layout (3 chips + 2 chips)
+  // This makes it read as "one thought" instead of "whatever wraps"
   const chipHeight = 24
   const chipGap = 12
   const rightLimit = pageWidth - margin
   let chipX = margin
   let chipY = chipsY
   let chipsOnCurrentLine = 0
-  const maxChipsPerLine = 3 // Allow 3 chips per line, then wrap
+  const maxChipsPerLine = 3 // First row: 3 chips, second row: 2 chips
   const maxLines = 2
   
   doc.fontSize(STYLES.sizes.caption).font(STYLES.fonts.body)
@@ -1271,6 +1272,15 @@ function renderMetricsTable(
     fontSize: STYLES.sizes.h2,
     font: STYLES.fonts.header,
     color: STYLES.colors.primaryText,
+  })
+  
+  // Owner view: one-liner to help execs focus on what matters
+  doc.moveDown(0.2)
+  safeText(doc, 'Owner view: focus on high risk jobs + pending sign-offs', margin, doc.y, {
+    fontSize: STYLES.sizes.caption,
+    font: STYLES.fonts.body,
+    color: STYLES.colors.secondaryText,
+    width: pageWidth - margin * 2,
   })
   
   // CRITICAL: Prior-period note is now only on Page 1 (under KPI strip)
@@ -2542,22 +2552,27 @@ export async function POST(request: NextRequest) {
     }
 
         // Use resolved org name (sanitized immediately)
-        // CRITICAL: Validate org name is not email-derived
+        // CRITICAL: Never show "(name missing)" in production - always provide a valid display name
         let organizationName = sanitizeText(orgContext.orgName)
         
         // If org name looks email-ish or generic, fix it
-        // In prod, never show generic "Organization" - use org ID or fallback
+        // In prod, never show generic "Organization" or "(name missing)" - use org ID short form
         if (organizationName.includes('@') || organizationName.includes("'s Organization") || organizationName.toLowerCase().includes('test')) {
           if (process.env.NODE_ENV !== 'production') {
             console.warn(`[executive/brief/pdf] Org name "${organizationName}" looks email-derived or test data. Fix in Organizations table.`)
           }
           // Use org ID short form instead of generic "Organization"
           organizationName = `Org ${orgContext.orgId.substring(0, 8)}`
-        } else if (organizationName === 'Organization' || organizationName.trim() === '') {
-          // Never show generic "Organization" - use org ID
+        } else if (organizationName === 'Organization' || organizationName.trim() === '' || organizationName.includes('(name missing)')) {
+          // Never show generic "Organization" or "(name missing)" - use org ID short form
           if (process.env.NODE_ENV !== 'production') {
-            console.warn(`[executive/brief/pdf] Org name is generic "Organization". Using org ID instead. Fix in Organizations table.`)
+            console.warn(`[executive/brief/pdf] Org name is generic or missing. Using org ID short form. Fix in Organizations table.`)
           }
+          organizationName = `Org ${orgContext.orgId.substring(0, 8)}`
+        }
+        
+        // Final safety check: ensure we never pass "(name missing)" to PDF builder
+        if (!organizationName || organizationName.trim() === '' || organizationName.includes('(name missing)')) {
           organizationName = `Org ${orgContext.orgId.substring(0, 8)}`
         }
 
