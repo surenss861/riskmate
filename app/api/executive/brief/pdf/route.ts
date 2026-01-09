@@ -8,6 +8,8 @@ import QRCode from 'qrcode'
 import { sanitizeText, sanitizeAscii, formatDelta, formatNumber, pluralize, formatTimeRange, getExposureColor, truncateText } from '@/lib/pdf/executiveBrief/utils'
 // Import Page 1 renderer (optional - route can use it or fall back to inline rendering)
 import { renderPage1 } from '@/lib/pdf/reports/executiveBrief/render/page1'
+// Import Page 1 renderer (optional - route can use it or fall back to inline rendering)
+import { renderPage1 } from '@/lib/pdf/reports/executiveBrief/render/page1'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -2665,91 +2667,6 @@ async function buildExecutiveBriefPDF(
     const pageWidth = doc.page.width
     const margin = STYLES.spacing.margin
 
-    // Premium Cover Header Band (full-width, branded, board-ready)
-    const headerBandHeight = doc.page.height * 0.14 // 14% of page height
-    const headerBandY = 0 // Start at top of page
-    
-    // Draw header band background (full-width)
-    doc
-      .rect(0, headerBandY, doc.page.width, headerBandHeight)
-      .fill(STYLES.colors.accentLight)
-    
-    // Content inside header band
-    const headerContentY = headerBandY + 50
-    const sanitizedTitle = sanitizeText('RiskMate Executive Brief')
-    const sanitizedOrgName = sanitizeText(organizationName)
-    const timeRangeText = formatTimeRange(timeRange)
-    
-    // Title (large, white, left-aligned in band)
-    doc
-      .fillColor(STYLES.colors.white)
-      .fontSize(STYLES.sizes.h1)
-      .font(STYLES.fonts.header)
-      .text(sanitizedTitle, STYLES.spacing.margin, headerContentY, {
-        width: doc.page.width - STYLES.spacing.margin * 2,
-        align: 'left',
-      })
-
-    doc.moveDown(0.25)
-
-    // Org name (medium, white)
-    doc
-      .fillColor(STYLES.colors.white)
-      .fontSize(STYLES.sizes.h3)
-      .font(STYLES.fonts.body)
-      .text(sanitizedOrgName, STYLES.spacing.margin, doc.y, {
-        width: doc.page.width - STYLES.spacing.margin * 2,
-        align: 'left',
-      })
-
-    doc.moveDown(0.2)
-
-    // Time range + generated timestamp (smaller, white with opacity)
-    const generatedTimestamp = generatedAt.toLocaleString('en-US', { 
-      timeZone: 'America/New_York', 
-      month: 'short', 
-      day: 'numeric', 
-      year: 'numeric', 
-      hour: 'numeric', 
-      minute: '2-digit', 
-      hour12: true, 
-      timeZoneName: 'short' 
-    })
-    const metaText = `${sanitizeText(timeRangeText)} • Generated ${sanitizeText(generatedTimestamp)}`
-    
-    doc
-      .fillColor(STYLES.colors.white)
-      .fontSize(STYLES.sizes.body)
-      .font(STYLES.fonts.body)
-      .opacity(0.9)
-      .text(metaText, STYLES.spacing.margin, doc.y, {
-        width: doc.page.width - STYLES.spacing.margin * 2,
-        align: 'left',
-      })
-      .opacity(1.0)
-
-    // Subtle accent line under header band
-    const accentLineY = headerBandHeight - 3
-    doc
-      .strokeColor(STYLES.colors.accent)
-      .lineWidth(3)
-      .moveTo(0, accentLineY)
-      .lineTo(doc.page.width, accentLineY)
-      .stroke()
-
-    // Reset Y position after header band
-    doc.y = headerBandHeight + STYLES.spacing.sectionGap
-
-    // ============================================
-    // PAGE 1: Fixed regions layout (board-ready, dense)
-    // Region A: Header band (already rendered)
-    // Region B: KPI cards
-    // Region C: Gauge + Headline finding
-    // Region D: Executive Summary
-    // Region E: Metrics Table OR Compact metrics (if table doesn't fit)
-    // Region F: Data Coverage
-    // ============================================
-    
     // CRITICAL: Compute hasPriorPeriodData early (needed for KPI subtitles and table Change column)
     const hasPriorPeriodData = data.delta !== undefined || 
                                data.deltas?.high_risk_jobs !== undefined || 
@@ -2758,62 +2675,174 @@ async function buildExecutiveBriefPDF(
                                data.deltas?.flagged_jobs !== undefined ||
                                data.deltas?.pending_signoffs !== undefined ||
                                false // Explicit false fallback
+
+    // ============================================
+    // PAGE 1: Use extracted renderer (with fallback to inline rendering)
+    // ============================================
+    // NOTE: During migration, we use renderPage1 but pass all helper functions from route
+    // This allows us to test parity while keeping old code as fallback
+    // Once parity is verified, we can move helper functions to core and simplify
     
-    // Region B: Premium KPI Cards (fixed height ~95px)
-    const kpiCardsY = doc.y
-    renderKPIStrip(doc, data, pageWidth, kpiCardsY, timeRange, hasPriorPeriodData)
-    const afterKPIsY = doc.y
-
-    // Region C: Risk Posture Gauge (fixed height ~100px)
-    renderRiskPostureGauge(doc, data, pageWidth, margin, timeRange)
-    if (data.posture_score !== undefined) {
-      markPageHasBody(doc)
-    }
-    const afterGaugeY = doc.y
-
-    // Section divider
-    addSectionDivider(doc, pageWidth, margin)
-
-    // Region D: Executive Summary (compact, max 3 bullets)
-    const summaryStartY = doc.y
-    renderExecutiveSummary(doc, data, pageWidth, margin, timeRange)
-    const afterSummaryY = doc.y
-    
-    // Micro Top 3 Drivers on page 1 (compact, always show)
-    if (hasSpace(doc, 40)) {
-      renderMicroTopDrivers(doc, data, pageWidth, margin, timeRange)
-    }
-
-    // Calculate remaining space on Page 1
-    const page1Bottom = doc.page.height - 80 // Footer space
-    const remainingSpacePage1 = page1Bottom - doc.y
-
-    // Region E: Metrics Table (only if it fits) OR move to Page 2
-    // CRITICAL: hasPriorPeriodData is already computed above (before KPI cards)
-    
-    const metricsRows = buildMetricsRows(data, hasPriorPeriodData)
-    const sectionHeaderHeight = STYLES.sizes.h2 + 20
-    const tableHeaderHeight = STYLES.spacing.tableRowHeight + 4
-    const tableRowHeight = STYLES.spacing.tableRowHeight
-    const totalTableHeight = sectionHeaderHeight + tableHeaderHeight + (tableRowHeight * metricsRows.length) + 40
-    const dataCoverageHeight = 80 // Approx height for Data Coverage
-
-    const metricsTableFitsOnPage1 = remainingSpacePage1 >= (totalTableHeight + dataCoverageHeight + 32) // 32 = spacing
-
-    if (metricsTableFitsOnPage1) {
-      // Render Metrics Table on Page 1
-      renderMetricsTable(doc, data, pageWidth, margin, hasPriorPeriodData)
+    try {
+      renderPage1(
+        doc,
+        data,
+        organizationName,
+        generatedBy,
+        timeRange,
+        timeWindow,
+        hasPriorPeriodData,
+        generatedAt,
+        {
+          sanitizeText,
+          formatTimeRange,
+          renderKPIStrip,
+          renderRiskPostureGauge,
+          markPageHasBody,
+          addSectionDivider,
+          renderExecutiveSummary,
+          hasSpace,
+          renderMicroTopDrivers,
+          buildMetricsRows,
+          renderMetricsTable,
+          renderDataCoverage,
+          renderTopItemsNeedingAttention,
+        },
+        STYLES
+      )
+    } catch (error) {
+      // Fallback: If renderPage1 fails, use inline rendering (old code)
+      console.warn('[PDF] renderPage1 failed, falling back to inline rendering:', error)
       
-      // Region F: Data Coverage (compact, always on Page 1 if table fits)
-      renderDataCoverage(doc, data, pageWidth, margin)
-    } else {
-      // Metrics Table doesn't fit - skip it on Page 1, will render on Page 2
-      // Render compact Data Coverage on Page 1 only
-      renderDataCoverage(doc, data, pageWidth, margin)
+      // Premium Cover Header Band (full-width, branded, board-ready)
+      const headerBandHeight = doc.page.height * 0.14 // 14% of page height
+      const headerBandY = 0 // Start at top of page
       
-      // Page 1 artifact: Top 3 items needing attention (fills whitespace, kills template vibe)
-      if (hasSpace(doc, 60)) {
-        renderTopItemsNeedingAttention(doc, data, pageWidth, margin)
+      // Draw header band background (full-width)
+      doc
+        .rect(0, headerBandY, doc.page.width, headerBandHeight)
+        .fill(STYLES.colors.accentLight)
+      
+      // Content inside header band
+      const headerContentY = headerBandY + 50
+      const sanitizedTitle = sanitizeText('RiskMate Executive Brief')
+      const sanitizedOrgName = sanitizeText(organizationName)
+      const timeRangeText = formatTimeRange(timeRange)
+      
+      // Title (large, white, left-aligned in band)
+      doc
+        .fillColor(STYLES.colors.white)
+        .fontSize(STYLES.sizes.h1)
+        .font(STYLES.fonts.header)
+        .text(sanitizedTitle, STYLES.spacing.margin, headerContentY, {
+          width: doc.page.width - STYLES.spacing.margin * 2,
+          align: 'left',
+        })
+
+      doc.moveDown(0.25)
+
+      // Org name (medium, white)
+      doc
+        .fillColor(STYLES.colors.white)
+        .fontSize(STYLES.sizes.h3)
+        .font(STYLES.fonts.body)
+        .text(sanitizedOrgName, STYLES.spacing.margin, doc.y, {
+          width: doc.page.width - STYLES.spacing.margin * 2,
+          align: 'left',
+        })
+
+      doc.moveDown(0.2)
+
+      // Time range + generated timestamp (smaller, white with opacity)
+      const generatedTimestamp = generatedAt.toLocaleString('en-US', { 
+        timeZone: 'America/New_York', 
+        month: 'short', 
+        day: 'numeric', 
+        year: 'numeric', 
+        hour: 'numeric', 
+        minute: '2-digit', 
+        hour12: true, 
+        timeZoneName: 'short' 
+      })
+      const metaText = `${sanitizeText(timeRangeText)} • Generated ${sanitizeText(generatedTimestamp)}`
+      
+      doc
+        .fillColor(STYLES.colors.white)
+        .fontSize(STYLES.sizes.body)
+        .font(STYLES.fonts.body)
+        .opacity(0.9)
+        .text(metaText, STYLES.spacing.margin, doc.y, {
+          width: doc.page.width - STYLES.spacing.margin * 2,
+          align: 'left',
+        })
+        .opacity(1.0)
+
+      // Subtle accent line under header band
+      const accentLineY = headerBandHeight - 3
+      doc
+        .strokeColor(STYLES.colors.accent)
+        .lineWidth(3)
+        .moveTo(0, accentLineY)
+        .lineTo(doc.page.width, accentLineY)
+        .stroke()
+
+      // Reset Y position after header band
+      doc.y = headerBandHeight + STYLES.spacing.sectionGap
+
+      // Region B: Premium KPI Cards (fixed height ~95px)
+      const kpiCardsY = doc.y
+      renderKPIStrip(doc, data, pageWidth, kpiCardsY, timeRange, hasPriorPeriodData)
+      const afterKPIsY = doc.y
+
+      // Region C: Risk Posture Gauge (fixed height ~100px)
+      renderRiskPostureGauge(doc, data, pageWidth, margin, timeRange)
+      if (data.posture_score !== undefined) {
+        markPageHasBody(doc)
+      }
+      const afterGaugeY = doc.y
+
+      // Section divider
+      addSectionDivider(doc, pageWidth, margin)
+
+      // Region D: Executive Summary (compact, max 3 bullets)
+      const summaryStartY = doc.y
+      renderExecutiveSummary(doc, data, pageWidth, margin, timeRange)
+      const afterSummaryY = doc.y
+      
+      // Micro Top 3 Drivers on page 1 (compact, always show)
+      if (hasSpace(doc, 40)) {
+        renderMicroTopDrivers(doc, data, pageWidth, margin, timeRange)
+      }
+
+      // Calculate remaining space on Page 1
+      const page1Bottom = doc.page.height - 80 // Footer space
+      const remainingSpacePage1 = page1Bottom - doc.y
+
+      // Region E: Metrics Table (only if it fits) OR move to Page 2
+      const metricsRows = buildMetricsRows(data, hasPriorPeriodData)
+      const sectionHeaderHeight = STYLES.sizes.h2 + 20
+      const tableHeaderHeight = STYLES.spacing.tableRowHeight + 4
+      const tableRowHeight = STYLES.spacing.tableRowHeight
+      const totalTableHeight = sectionHeaderHeight + tableHeaderHeight + (tableRowHeight * metricsRows.length) + 40
+      const dataCoverageHeight = 80 // Approx height for Data Coverage
+
+      const metricsTableFitsOnPage1 = remainingSpacePage1 >= (totalTableHeight + dataCoverageHeight + 32) // 32 = spacing
+
+      if (metricsTableFitsOnPage1) {
+        // Render Metrics Table on Page 1
+        renderMetricsTable(doc, data, pageWidth, margin, hasPriorPeriodData)
+        
+        // Region F: Data Coverage (compact, always on Page 1 if table fits)
+        renderDataCoverage(doc, data, pageWidth, margin)
+      } else {
+        // Metrics Table doesn't fit - skip it on Page 1, will render on Page 2
+        // Render compact Data Coverage on Page 1 only
+        renderDataCoverage(doc, data, pageWidth, margin)
+        
+        // Page 1 artifact: Top 3 items needing attention (fills whitespace, kills template vibe)
+        if (hasSpace(doc, 60)) {
+          renderTopItemsNeedingAttention(doc, data, pageWidth, margin)
+        }
       }
     }
 
