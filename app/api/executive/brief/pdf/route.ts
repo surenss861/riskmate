@@ -3010,10 +3010,13 @@ export async function POST(request: NextRequest) {
           high_risk_jobs: 0,
           open_incidents: 0,
           recent_violations: 0,
+          violations: 0, // Required by shared type
           flagged_jobs: 0,
           pending_signoffs: 0,
           signed_signoffs: 0,
           proof_packs_generated: 0,
+          total_jobs: 0, // Required by shared type
+          total_incidents: 0, // Required by shared type
           confidence_statement: sanitizeText('No unresolved governance violations. All jobs within acceptable risk thresholds.'),
           ledger_integrity: 'not_verified',
           ledger_integrity_last_verified_at: null,
