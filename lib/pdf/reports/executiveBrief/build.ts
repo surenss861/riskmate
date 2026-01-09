@@ -78,6 +78,7 @@ interface PDFContext {
 export interface ExecutiveBriefDeps {
   sanitizeText: (text: string) => string
   formatTimeRange: (range: string) => string
+  formatTimeRangeFromWindow?: (range: string, windowStart: Date, windowEnd: Date) => string
   renderKPIStrip: (doc: PDFKit.PDFDocument, data: RiskPostureData, pageWidth: number, y: number, timeRange: string, hasPriorPeriodData: boolean) => void
   renderRiskPostureGauge: (doc: PDFKit.PDFDocument, data: RiskPostureData, pageWidth: number, margin: number, timeRange: string) => void
   markPageHasBody: (doc: PDFKit.PDFDocument) => void
