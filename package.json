@@ -13,6 +13,7 @@
     "type-check": "tsc --noEmit",
     "check:error-codes": "ts-node scripts/check-error-codes.ts",
     "test:pdf-smoke": "ts-node scripts/pdf-smoke-test.ts",
+    "test:executive-closeout": "tsx scripts/test-executive-brief-closeout.ts",
     "test:golden": "jest lib/pdf/reports/executiveBrief/__tests__/golden-assertions.test.ts",
     "test:golden:watch": "jest lib/pdf/reports/executiveBrief/__tests__/golden-assertions.test.ts --watch"
   },
