@@ -1286,6 +1286,24 @@ function renderMetricsTable(
     color: STYLES.colors.primaryText,
   })
   
+  // Status line: single-row summary even when Change column is hidden
+  doc.moveDown(0.2)
+  const exposureLevel = data.exposure_level === 'high' ? 'High' : data.exposure_level === 'moderate' ? 'Moderate' : 'Low'
+  const statusParts: string[] = []
+  if (!hasPriorPeriodData) {
+    statusParts.push('Prior unavailable')
+  }
+  statusParts.push(`Current exposure: ${exposureLevel}`)
+  statusParts.push(`High risk jobs: ${data.high_risk_jobs}`)
+  statusParts.push(`Open incidents: ${data.open_incidents}`)
+  const statusText = `Status: ${statusParts.join(' • ')}`
+  safeText(doc, statusText, margin, doc.y, {
+    fontSize: STYLES.sizes.caption,
+    font: STYLES.fonts.body,
+    color: STYLES.colors.secondaryText,
+    width: pageWidth - margin * 2,
+  })
+  
   // Owner view: dynamic one-liner with specific identifiers (1-click actionable)
   // Include top item identifier(s) when available to make it feel real, not template-y
   doc.moveDown(0.2)
