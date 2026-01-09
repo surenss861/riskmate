@@ -8,6 +8,8 @@ import QRCode from 'qrcode'
 import { sanitizeText, sanitizeAscii, formatDelta, formatNumber, pluralize, formatTimeRange, getExposureColor, truncateText } from '@/lib/pdf/executiveBrief/utils'
 // Import Page 1 renderer (optional - route can use it or fall back to inline rendering)
 import { renderPage1 } from '@/lib/pdf/reports/executiveBrief/render/page1'
+// Import shared types
+import type { RiskPostureData as SharedRiskPostureData } from '@/lib/pdf/reports/executiveBrief/types'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -56,36 +58,18 @@ const STYLES = {
   },
 }
 
-interface RiskPostureData {
-  exposure_level: 'low' | 'moderate' | 'high'
-  posture_score?: number
-  delta?: number
-  high_risk_jobs: number
-  open_incidents: number
-  recent_violations: number
-  flagged_jobs: number
-  pending_signoffs: number
-  signed_signoffs: number
-  proof_packs_generated: number
-  confidence_statement: string
-  ledger_integrity: 'verified' | 'error' | 'not_verified'
-  ledger_integrity_last_verified_at: string | null
-  // For data coverage
-  total_jobs?: number
+// Use shared type from types.ts (with compatibility layer for route-specific fields)
+type RiskPostureData = SharedRiskPostureData & {
+  // Route-specific fields that may not be in shared type
+  recent_violations?: number // Legacy field, map to violations
+  confidence_statement?: string
+  ledger_integrity?: 'verified' | 'error' | 'not_verified'
+  ledger_integrity_last_verified_at?: string | null
   last_job_at?: string | null
   drivers?: {
     highRiskJobs?: Array<{ label: string; count: number }>
     openIncidents?: Array<{ label: string; count: number }>
     violations?: Array<{ label: string; count: number }>
-  }
-  deltas?: {
-    high_risk_jobs?: number
-    open_incidents?: number
-    violations?: number
-    flagged_jobs?: number
-    pending_signoffs?: number
-    signed_signoffs?: number
-    proof_packs?: number
   }
   recommended_actions?: Array<{
     priority: number
@@ -2682,9 +2666,16 @@ async function buildExecutiveBriefPDF(
     // Once parity is verified, we can move helper functions to core and simplify
     
     try {
+      // Map route's RiskPostureData to shared type (recent_violations -> violations, ensure total_incidents exists)
+      const mappedData: SharedRiskPostureData = {
+        ...data,
+        violations: data.recent_violations ?? data.violations ?? 0,
+        total_incidents: data.total_incidents ?? data.open_incidents ?? 0,
+      }
+      
       renderPage1(
         doc,
-        data,
+        mappedData,
         organizationName,
         generatedBy,
         timeRange,
