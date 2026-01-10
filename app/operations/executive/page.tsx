@@ -8,6 +8,7 @@ import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { executiveApi } from '@/lib/api'
 import { typography } from '@/lib/styles/design-system'
 import { AppBackground, AppShell, PageSection, GlassCard, Button, Select, PageHeader, IntegrityBadge, PackCard, EnforcementBanner, Badge } from '@/components/shared'
+import { PostureTilesSkeleton } from '@/components/executive/PostureTilesSkeleton'
 import { terms } from '@/lib/terms'
 import { defensibilityTerms } from '@/lib/copy/terms'
 
@@ -229,12 +230,25 @@ export default function ExecutiveSnapshotPage() {
   if (loading || !riskPosture) {
     return (
       <ProtectedRoute>
-        <div className="min-h-screen bg-[#0A0A0A] text-white flex items-center justify-center">
-          <div className="text-center">
-            <div className="w-8 h-8 border-2 border-[#F97316] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-            <p className="text-white/60">Loading risk posture...</p>
-          </div>
-        </div>
+        <AppBackground>
+          <AppShell>
+            <PageSection>
+              <PageHeader
+                title="Defensibility Posture"
+                subtitle="Audit-ready proof from everyday field work. Immutable compliance ledger + evidence chain-of-custody."
+              />
+              <div className="flex items-center gap-2 mb-6">
+                <Badge variant="neutral">Ledger Contract v1.0 (Frozen)</Badge>
+              </div>
+            </PageSection>
+            <PageSection>
+              <h2 className="text-sm font-semibold text-white/80 mb-4">
+                Defensibility Posture
+              </h2>
+              <PostureTilesSkeleton />
+            </PageSection>
+          </AppShell>
+        </AppBackground>
       </ProtectedRoute>
     )
   }

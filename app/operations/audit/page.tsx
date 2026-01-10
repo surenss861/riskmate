@@ -13,6 +13,8 @@ import { useAction } from '@/lib/hooks/useAction'
 import { getEventMapping, categorizeEvent, type EventCategory, type EventSeverity, type EventOutcome } from '@/lib/audit/eventMapper'
 import { getIndustryLanguage } from '@/lib/audit/industryLanguage'
 import { SavedViewCards } from '@/components/audit/SavedViewCards'
+import { SavedViewCardsSkeleton } from '@/components/audit/SavedViewCardsSkeleton'
+import { LedgerEventListSkeleton } from '@/components/audit/LedgerEventListSkeleton'
 import { EvidenceDrawer } from '@/components/audit/EvidenceDrawer'
 import { AssignModal } from '@/components/audit/AssignModal'
 import { ResolveModal } from '@/components/audit/ResolveModal'
@@ -1431,64 +1433,70 @@ export default function AuditViewPage() {
           </PageSection>
 
           {/* Saved View Cards */}
-          <SavedViewCards
-            activeView={filters.savedView}
-            selectedCount={selectedCount}
-            onSelectView={(view) => {
-              // Map empty string to 'custom' for type safety
-              const savedView: SavedView = view === '' ? 'custom' : view
-              setFilters({ ...filters, savedView })
-              if (savedView === 'governance-enforcement') setActiveTab('governance')
-              if (savedView === 'access-review') setActiveTab('access')
-            }}
-            onExportCSV={handleExportCSV}
-            onExportCSVLoading={exportAction.loading}
-            onAssign={(view) => {
-              // Check for selection first
-              if (selectionHook.selectedIds.length === 0) {
-                setToast({
-                  message: 'Please select at least one item from the list below to assign',
-                  type: 'error',
-                })
-                return
-              }
-              // Open assign modal with first selected item
-              const firstEvent = events.find(e => selectionHook.selectedIds.includes(e.id))
-              if (firstEvent) {
-                handleAssignClick(firstEvent)
-              } else {
-                setToast({
-                  message: 'Selected item not found in current view',
-                  type: 'error',
-                })
-              }
-            }}
-            onResolve={(view) => {
-              // Check for selection first
-              if (selectionHook.selectedIds.length === 0) {
-                setToast({
-                  message: 'Please select at least one item from the list below to resolve',
-                  type: 'error',
-                })
-                return
-              }
-              // Open resolve modal with first selected item
-              const firstEvent = events.find(e => selectionHook.selectedIds.includes(e.id))
-              if (firstEvent) {
-                handleResolveClick(firstEvent)
-              } else {
-                setToast({
-                  message: 'Selected item not found in current view',
-                  type: 'error',
-                })
-              }
-            }}
-            onExportEnforcement={handleExportEnforcement}
-            onCreateCorrectiveAction={handleCreateCorrectiveActionClick}
-            onCloseIncident={handleCloseIncidentClick}
-            onRevokeAccess={handleRevokeAccessClick}
-            onFlagSuspicious={handleFlagSuspiciousClick}
-          />
+          {loading ? (
+            <PageSection>
+              <SavedViewCardsSkeleton />
+            </PageSection>
+          ) : (
+            <SavedViewCards
+                activeView={filters.savedView}
+                selectedCount={selectedCount}
+                onSelectView={(view) => {
+                  // Map empty string to 'custom' for type safety
+                  const savedView: SavedView = view === '' ? 'custom' : view
+                  setFilters({ ...filters, savedView })
+                  if (savedView === 'governance-enforcement') setActiveTab('governance')
+                  if (savedView === 'access-review') setActiveTab('access')
+                }}
+                onExportCSV={handleExportCSV}
+                onExportCSVLoading={exportAction.loading}
+                onAssign={(view) => {
+                  // Check for selection first
+                  if (selectionHook.selectedIds.length === 0) {
+                    setToast({
+                      message: 'Please select at least one item from the list below to assign',
+                      type: 'error',
+                    })
+                    return
+                  }
+                  // Open assign modal with first selected item
+                  const firstEvent = events.find(e => selectionHook.selectedIds.includes(e.id))
+                  if (firstEvent) {
+                    handleAssignClick(firstEvent)
+                  } else {
+                    setToast({
+                      message: 'Selected item not found in current view',
+                      type: 'error',
+                    })
+                  }
+                }}
+                onResolve={(view) => {
+                  // Check for selection first
+                  if (selectionHook.selectedIds.length === 0) {
+                    setToast({
+                      message: 'Please select at least one item from the list below to resolve',
+                      type: 'error',
+                    })
+                    return
+                  }
+                  // Open resolve modal with first selected item
+                  const firstEvent = events.find(e => selectionHook.selectedIds.includes(e.id))
+                  if (firstEvent) {
+                    handleResolveClick(firstEvent)
+                  } else {
+                    setToast({
+                      message: 'Selected item not found in current view',
+                      type: 'error',
+                    })
+                  }
+                }}
+                onExportEnforcement={handleExportEnforcement}
+                onCreateCorrectiveAction={handleCreateCorrectiveActionClick}
+                onCloseIncident={handleCloseIncidentClick}
+                onRevokeAccess={handleRevokeAccessClick}
+                onFlagSuspicious={handleFlagSuspiciousClick}
+              />
+          )}
 
           {/* Event Selection Table - Show when a saved view is active */}
           {filters.savedView !== 'custom' && (
