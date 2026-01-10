@@ -827,9 +827,10 @@ export default function ExecutiveSnapshotPage() {
                       document.body.removeChild(a)
                       URL.revokeObjectURL(url)
                     }}
+                    title="API payload: For integrations and verification. Humans should use PDF/CSV."
                     className="inline-flex items-center gap-2"
                   >
-                    Export JSON
+                    API payload
                   </Button>
                 </div>
               </div>
