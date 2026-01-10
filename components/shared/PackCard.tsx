@@ -135,26 +135,27 @@ export function PackCard({
   if (variant === 'compact') {
     return (
       <div 
-        className={`rounded-lg border border-white/10 bg-white/[0.03] p-3 cursor-pointer hover:bg-white/[0.05] transition-colors ${className}`}
+        className={`rounded-lg border border-white/10 bg-white/[0.03] p-3 cursor-pointer hover:bg-white/[0.05] transition-colors ${onClick ? '' : 'cursor-default'} ${className}`}
         onClick={onClick}
       >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <div className="text-xs text-white/60 mb-1">Proof Pack</div>
-            <div className="truncate font-mono text-sm text-white mb-1">{packId.slice(0, 16)}...</div>
-            <div className="text-xs text-white/60">
+            <div className="truncate font-mono text-sm text-white mb-1" title={packId}>
+              {packId.slice(0, 16)}...
+            </div>
+            <div className="text-xs text-white/60 mb-1">
               {formatRelativeTime(generatedDate)}
             </div>
             {packContents && summarizeContents(packContents) !== 'Contents not available' && (
-              <div className="text-xs text-white/50 truncate">
+              <div className="text-xs text-white/50 truncate mt-1">
                 {summarizeContents(packContents)}
               </div>
             )}
           </div>
-          <div className="flex-shrink-0">
+          <div className="flex-shrink-0 mt-0.5">
             <IntegrityBadge 
               status={integrityStatus}
-              className="ml-2"
             />
           </div>
         </div>
