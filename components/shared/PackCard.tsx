@@ -106,13 +106,14 @@ export function PackCard({
     }
   }
 
-  const contentsList = [
+  type ContentsItem = { name: string; icon: React.ReactElement }
+  const contentsList: ContentsItem[] = [
     contents.ledger_pdf ? { name: 'Ledger PDF', icon: <FileText className="w-3 h-3" /> } : null,
     contents.controls_csv ? { name: 'Controls CSV', icon: <FileText className="w-3 h-3" /> } : null,
     contents.attestations_csv ? { name: 'Attestations CSV', icon: <FileText className="w-3 h-3" /> } : null,
     contents.evidence_manifest ? { name: 'Evidence Manifest', icon: <FileText className="w-3 h-3" /> } : null,
     contents.attachments ? { name: `${contents.attachments} attachments`, icon: <Package className="w-3 h-3" /> } : null,
-  ].filter((item): item is { name: string; icon: React.ReactNode } => item !== null)
+  ].filter((item): item is ContentsItem => item !== null)
 
   return (
     <div className={`p-4 bg-white/5 border border-white/10 rounded-lg space-y-4 ${className}`}>
