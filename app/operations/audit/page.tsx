@@ -558,8 +558,6 @@ export default function AuditViewPage() {
         ...(filters.user && { actor_id: filters.user }),
         ...(filters.severity && { severity: filters.severity }),
         ...(filters.outcome && { outcome: filters.outcome }),
-        ...(filters.startDate && { start_date: filters.startDate }),
-        ...(filters.endDate && { end_date: filters.endDate }),
         // Use provided view or current saved view
         ...(view && view !== 'custom' ? { view } : filters.savedView && filters.savedView !== 'custom' ? { view: filters.savedView } : {}),
         // If no view, use category
