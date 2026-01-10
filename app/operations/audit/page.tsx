@@ -1620,9 +1620,10 @@ export default function AuditViewPage() {
                         alert('Export failed. Please try again.')
                       }
                     }}
+                    title="API payload: For integrations and verification. Humans should use PDF/CSV."
                   >
                     <Download className="w-4 h-4" />
-                    Export JSON
+                    API payload
                   </Button>
                 </div>
               </div>

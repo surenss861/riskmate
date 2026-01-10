@@ -208,10 +208,11 @@ export function SavedViewCards({
                   e.stopPropagation()
                   onExport('json', view.id)
                 }}
+                title="API payload: For integrations and verification. Humans should use PDF/CSV."
                 className={`${buttonStyles.secondary} flex-1 text-xs py-1.5 flex items-center justify-center gap-1`}
               >
                 <Download className="w-3 h-3" />
-                JSON
+                API
               </button>
             </div>
           </div>
