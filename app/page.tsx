@@ -7,6 +7,13 @@ import { motion } from 'framer-motion'
 import ScrollToTop from '@/components/ScrollToTop'
 import RiskMateLogo from '@/components/RiskMateLogo'
 import { SampleReportModal } from '@/components/marketing'
+import { 
+  EventChip, 
+  TrustReceiptStrip, 
+  IntegrityBadge, 
+  EnforcementBanner, 
+  PackCard 
+} from '@/components/shared'
 
 export default function HomePage() {
   const router = useRouter()
@@ -244,16 +251,26 @@ export default function HomePage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6 }}
             >
-              Protect Every Job Before It Starts
+              Audit-ready proof packs from everyday field work
             </motion.h1>
             <motion.p
-              className="text-xl text-[#A1A1A1] mb-8 max-w-2xl mx-auto"
+              className="text-xl text-[#A1A1A1] mb-6 max-w-2xl mx-auto"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.2 }}
             >
-              Instant risk scoring, auto-mitigation checklists, and shareable PDF reports for service contractors.
+              Immutable compliance ledger + evidence chain-of-custody for high-liability ops
             </motion.p>
+            <motion.div
+              className="flex justify-center mb-8"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.3 }}
+            >
+              <span className="px-4 py-2 text-xs bg-[#121212] text-white/70 border border-white/10 rounded-lg font-mono">
+                Ledger Contract v1.0 (Frozen)
+              </span>
+            </motion.div>
             <motion.div
               className="flex flex-col sm:flex-row gap-4 justify-center mb-8"
               initial={{ opacity: 0, y: 20 }}
@@ -332,6 +349,212 @@ export default function HomePage() {
               </div>
             </div>
           </motion.div>
+        </section>
+
+        {/* Proof Moments Section */}
+        <section className="max-w-6xl mx-auto px-6 py-20">
+          <motion.h2
+            className="text-4xl font-bold text-center mb-4 font-display"
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+          >
+            Proof Moments: Defensibility in Action
+          </motion.h2>
+          <motion.p
+            className="text-[#A1A1A1] text-center mb-12 max-w-2xl mx-auto"
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6, delay: 0.1 }}
+          >
+            Every action creates an immutable ledger event. Every evidence file is fingerprinted. Every pack is verifiable.
+          </motion.p>
+          <div className="grid md:grid-cols-3 gap-6">
+            {/* Proof Moment 1: Incident Closed */}
+            <motion.div
+              className="p-6 bg-[#121212] rounded-xl border border-white/5 space-y-4"
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6, delay: 0.2 }}
+            >
+              <div className="text-2xl font-semibold text-white mb-4">Incident Closed</div>
+              <EventChip 
+                eventType="incident.closed"
+                severity="material"
+                outcome="success"
+                showOutcome
+              />
+              <TrustReceiptStrip
+                actorName="Safety Lead"
+                actorRole="safety_lead"
+                occurredAt={new Date(Date.now() - 3600000).toISOString()}
+                eventType="incident.closed"
+                category="operations"
+                summary="Incident #INC-2025-001 closed with corrective actions"
+                reason="All hazards mitigated, attestation created"
+                compact
+              />
+              <IntegrityBadge
+                status="verified"
+                verifiedThrough="ledger_hash"
+                lastVerified={new Date().toISOString()}
+              />
+            </motion.div>
+
+            {/* Proof Moment 2: Access Revoked */}
+            <motion.div
+              className="p-6 bg-[#121212] rounded-xl border border-white/5 space-y-4"
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6, delay: 0.3 }}
+            >
+              <div className="text-2xl font-semibold text-white mb-4">Access Revoked</div>
+              <EventChip
+                eventType="access.revoked"
+                severity="material"
+                outcome="allowed"
+                showOutcome
+              />
+              <TrustReceiptStrip
+                actorName="Admin"
+                actorRole="admin"
+                occurredAt={new Date(Date.now() - 7200000).toISOString()}
+                eventType="access.revoked"
+                category="access"
+                summary="Access revoked for former employee"
+                reason="Termination policy enforcement"
+                compact
+              />
+              <EnforcementBanner
+                action="Revoke access"
+                blocked={false}
+                eventId="evt_access_revoked_001"
+                policyStatement="Access revoked per HR termination policy"
+                actorRole="admin"
+                severity="material"
+              />
+            </motion.div>
+
+            {/* Proof Moment 3: Proof Pack Generated */}
+            <motion.div
+              className="p-6 bg-[#121212] rounded-xl border border-white/5 space-y-4"
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6, delay: 0.4 }}
+            >
+              <div className="text-2xl font-semibold text-white mb-4">Proof Pack Generated</div>
+              <PackCard
+                packId="pack_abc123"
+                packType="proof"
+                generatedAt={new Date(Date.now() - 86400000).toISOString()}
+                generatedBy="Admin"
+                filters={{ job_id: 'job_xyz789', time_range: '30d' }}
+                contents={{
+                  ledger_pdf: true,
+                  controls_csv: true,
+                  attestations_csv: true,
+                  evidence_manifest: true,
+                }}
+                dataHash="sha256:abc123def456..."
+                fileSize={2048000}
+                eventCount={42}
+                integrityStatus="verified"
+                className="bg-black/20 border-white/10"
+              />
+            </motion.div>
+          </div>
+        </section>
+
+        {/* Why We Win Section */}
+        <section className="max-w-6xl mx-auto px-6 py-20 bg-gradient-to-b from-[#121212] to-transparent rounded-3xl border border-white/5">
+          <motion.h2
+            className="text-4xl font-bold text-center mb-4 font-display"
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+          >
+            Why We Win
+          </motion.h2>
+          <motion.p
+            className="text-[#A1A1A1] text-center mb-12 max-w-2xl mx-auto"
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6, delay: 0.1 }}
+          >
+            One simple comparison that shows why RiskMate is different
+          </motion.p>
+          <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+            <motion.div
+              className="p-8 bg-red-500/10 border border-red-500/30 rounded-xl"
+              initial={{ opacity: 0, x: -30 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6, delay: 0.2 }}
+            >
+              <h3 className="text-2xl font-semibold text-red-400 mb-4">Checklists</h3>
+              <div className="space-y-3 text-white/70">
+                <div className="flex items-start gap-2">
+                  <span className="text-red-400 text-xl">→</span>
+                  <p>Capture data</p>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="text-red-400 text-xl">→</span>
+                  <p>Export reports</p>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="text-red-400 text-xl">→</span>
+                  <p>Activity logs</p>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="text-red-400 text-xl">→</span>
+                  <p>No proof chain</p>
+                </div>
+              </div>
+            </motion.div>
+            <motion.div
+              className="p-8 bg-green-500/10 border border-green-500/30 rounded-xl"
+              initial={{ opacity: 0, x: 30 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6, delay: 0.3 }}
+            >
+              <h3 className="text-2xl font-semibold text-green-400 mb-4">RiskMate</h3>
+              <div className="space-y-3 text-white/70">
+                <div className="flex items-start gap-2">
+                  <span className="text-green-400 text-xl">→</span>
+                  <p>Enforcement logged</p>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="text-green-400 text-xl">→</span>
+                  <p>Ledger immutable</p>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="text-green-400 text-xl">→</span>
+                  <p>Proof pack generated</p>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="text-green-400 text-xl">→</span>
+                  <p>Verification badge</p>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+          <motion.p
+            className="text-center mt-12 text-white/80 font-semibold max-w-2xl mx-auto"
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6, delay: 0.4 }}
+          >
+            Checklists capture data. RiskMate produces defensible proof.
+          </motion.p>
         </section>
 
         {/* What RiskMate Is (and Is Not) Section */}
