@@ -502,7 +502,7 @@ export default function ExecutiveSnapshotPage() {
               </GlassCard>
               </div>
 
-              {/* Pending Sign-offs */}
+              {/* Pending Attestations */}
               <div
                 onMouseEnter={() => setHoveredCard('pending-signoffs')}
                 onMouseLeave={() => setHoveredCard(null)}
@@ -550,7 +550,7 @@ export default function ExecutiveSnapshotPage() {
               </GlassCard>
               </div>
 
-              {/* Completed Sign-offs */}
+              {/* Completed Attestations */}
               <div
                 onMouseEnter={() => setHoveredCard('signed')}
                 onMouseLeave={() => setHoveredCard(null)}

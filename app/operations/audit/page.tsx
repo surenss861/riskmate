@@ -237,7 +237,7 @@ export default function AuditViewPage() {
         // for consistency with UI
       }
     } catch (err: any) {
-      console.error('Failed to load audit events:', err)
+      console.error('Failed to load ledger events:', err)
       
       // Log request ID if available for easier debugging
       if (err.requestId) {
@@ -246,7 +246,7 @@ export default function AuditViewPage() {
 
       // Show user-friendly error toast
       setToast({
-        message: err.message || 'Failed to load audit events. Please try again.',
+        message: err.message || 'Failed to load ledger events. Please try again.',
         type: 'error',
       })
 
@@ -583,7 +583,7 @@ export default function AuditViewPage() {
 
       if (!response.ok) {
         const error = await response.json().catch(() => ({}))
-        const errorMessage = error.message || error.error || 'Failed to export API payload'
+        const errorMessage = error.message || error.error || 'Failed to export API payload. Use this for automation/integration.'
         if (error.code === 'BACKEND_CONFIG_ERROR' || error.code === 'BACKEND_CONNECTION_ERROR') {
           throw new Error(error.hint || 'Backend server configuration error. Please check Vercel environment variables.')
         }
@@ -656,9 +656,9 @@ export default function AuditViewPage() {
 
       if (!response.ok) {
         const error = await response.json().catch(() => ({}))
-        const errorMessage = error.message || error.error || 'Failed to generate pack'
+        const errorMessage = error.message || error.error || 'Failed to generate proof pack'
         if (error.code === 'BACKEND_CONNECTION_ERROR') {
-          throw new Error('Backend server is not accessible. Please check that the backend is running.')
+          throw new Error('Backend server is not accessible. Please check that the backend is running. Proof pack generation requires backend services.')
         }
         throw new Error(errorMessage)
       }

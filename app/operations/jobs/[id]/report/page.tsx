@@ -288,12 +288,12 @@ export default function JobReportPage() {
       })
       
       // Use structured error info if available
-      const errorMessage = err?.message || err?.detail || 'Failed to export PDF'
+      const errorMessage = err?.message || err?.detail || 'Failed to generate PDF report'
       const stage = err?.stage || 'unknown'
       const requestId = err?.requestId || 'none'
       
       // Provide more specific error message based on stage
-      let userMessage = `We couldn't generate the PDF report.`
+      let userMessage = `We couldn't generate the PDF report. This action would have been logged in the compliance ledger.`
       if (stage !== 'unknown') {
         userMessage += ` (Stage: ${stage})`
       }

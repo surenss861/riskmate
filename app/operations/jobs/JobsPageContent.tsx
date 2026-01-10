@@ -487,7 +487,7 @@ export function JobsPageContentView(props: JobsPageContentProps) {
               <>
                 <p className="text-white font-medium mb-2">No jobs match these filters</p>
                 <p className="text-sm text-white/60 mb-6 max-w-md mx-auto">
-                  Try adjusting your filters or clear them to see all jobs.
+                  Try adjusting your filters or clear them to see all work records.
                 </p>
                 <Button
                   variant="secondary"

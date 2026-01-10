@@ -15,7 +15,9 @@
     "test:pdf-smoke": "ts-node scripts/pdf-smoke-test.ts",
     "test:executive-closeout": "tsx scripts/test-executive-brief-closeout.ts",
     "test:golden": "jest lib/pdf/reports/executiveBrief/__tests__/golden-assertions.test.ts",
-    "test:golden:watch": "jest lib/pdf/reports/executiveBrief/__tests__/golden-assertions.test.ts --watch"
+    "test:golden:watch": "jest lib/pdf/reports/executiveBrief/__tests__/golden-assertions.test.ts --watch",
+    "test:banned-phrases": "jest __tests__/banned-phrases.test.ts",
+    "test": "jest"
   },
   "dependencies": {
     "@gsap/react": "^2.1.2",

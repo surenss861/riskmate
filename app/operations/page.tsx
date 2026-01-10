@@ -861,7 +861,7 @@ function DashboardPageInner() {
                   <>
                     <p className="mb-2 text-white font-medium">No jobs match your filters</p>
                     <p className="mb-6 text-sm text-white/60">
-                      Try adjusting your search, filters, or time range.
+                      Try adjusting your search, filters, or time range. No ledger events match your criteria.
                     </p>
                     <SharedButton
                       variant="secondary"

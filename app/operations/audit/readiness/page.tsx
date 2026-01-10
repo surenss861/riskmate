@@ -187,7 +187,7 @@ export default function AuditReadinessPage() {
 
       setData((json as ReadinessResponse).data)
     } catch (e: any) {
-      setError({ ok: false, code: 'NETWORK_ERROR', message: e?.message || 'Failed to load readiness' })
+      setError({ ok: false, code: 'NETWORK_ERROR', message: e?.message || 'Failed to load audit readiness. Backend server may be unreachable.' })
       setData(null)
     } finally {
       setLoading(false)
@@ -649,7 +649,7 @@ export default function AuditReadinessPage() {
             <GlassCard className="p-6 border-red-500/30 bg-red-500/10">
               <div className="flex items-center gap-3 mb-2">
                 <XCircle className="w-5 h-5 text-red-400" />
-                <div className="font-semibold text-red-400">Failed to load readiness</div>
+                <div className="font-semibold text-red-400">Failed to load audit readiness</div>
               </div>
               <p className="text-sm text-white/70">{error.message}</p>
               {error.requestId && process.env.NODE_ENV === 'development' && (

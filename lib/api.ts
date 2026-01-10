@@ -846,8 +846,8 @@ export const auditApi = {
       if (contentType?.includes('text/html')) {
         throw new Error(`Backend API not found. Please check NEXT_PUBLIC_BACKEND_URL is set correctly. Attempted: ${url}`)
       }
-      const error = await response.json().catch(() => ({ message: 'Failed to fetch events' }))
-      throw new Error(error.message || 'Failed to fetch events')
+      const error = await response.json().catch(() => ({ message: 'Failed to fetch ledger events' }))
+      throw new Error(error.message || 'Failed to fetch ledger events')
     }
     
     return response.json()
