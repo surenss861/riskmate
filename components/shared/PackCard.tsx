@@ -7,35 +7,35 @@
 
 'use client'
 
+import React from 'react'
 import { Package, Download, CheckCircle2, FileText, Hash, Calendar, Filter } from 'lucide-react'
 import { Badge } from './Badge'
 import { ActionButton } from './ActionButton'
-import { IntegrityBadge } from './IntegrityBadge'
+import { IntegrityBadge, type IntegrityStatus } from './IntegrityBadge'
+
+// Locked type unions (reuse everywhere)
+export type PackType = 'proof' | 'insurance' | 'audit' | 'incident' | 'compliance'
 
 export interface PackContents {
   ledger_pdf?: boolean
   controls_csv?: boolean
   attestations_csv?: boolean
   evidence_manifest?: boolean
+  manifest_json?: boolean
   attachments?: number
 }
 
 export interface PackCardProps {
   packId: string
-  packType: 'proof' | 'insurance' | 'audit' | 'incident' | 'compliance'
-  generatedAt: string
+  packType: PackType
+  generatedAt: string | Date // Accept both, normalize internally
   generatedBy?: string
-  filters: {
-    view?: string
-    category?: string
-    timeRange?: string
-    [key: string]: any
-  }
-  contents: PackContents
+  filters?: Record<string, string | number | boolean | null | undefined> // Render-safe type
+  contents?: Partial<PackContents> // Optional + tolerant
   dataHash?: string
   fileSize?: number // in bytes
   eventCount?: number
-  integrityStatus?: 'verified' | 'unverified' | 'mismatch' | 'pending'
+  integrityStatus?: IntegrityStatus // Reuse from IntegrityBadge
   downloadUrl?: string
   onDownload?: () => void | Promise<void>
   className?: string
@@ -82,6 +82,13 @@ export function PackCard({
   onDownload,
   className,
 }: PackCardProps) {
+  // Normalize generatedAt (accept both string and Date)
+  const generatedDate = typeof generatedAt === 'string' ? new Date(generatedAt) : generatedAt
+  
+  // Default empty filters/contents if not provided
+  const packFilters = filters || {}
+  const packContents = contents || {}
+
   const formatFileSize = (bytes?: number) => {
     if (!bytes) return 'Unknown'
     if (bytes < 1024) return `${bytes} B`
@@ -108,11 +115,12 @@ export function PackCard({
 
   type ContentsItem = { name: string; icon: React.ReactElement }
   const contentsList: ContentsItem[] = [
-    contents.ledger_pdf ? { name: 'Ledger PDF', icon: <FileText className="w-3 h-3" /> } : null,
-    contents.controls_csv ? { name: 'Controls CSV', icon: <FileText className="w-3 h-3" /> } : null,
-    contents.attestations_csv ? { name: 'Attestations CSV', icon: <FileText className="w-3 h-3" /> } : null,
-    contents.evidence_manifest ? { name: 'Evidence Manifest', icon: <FileText className="w-3 h-3" /> } : null,
-    contents.attachments ? { name: `${contents.attachments} attachments`, icon: <Package className="w-3 h-3" /> } : null,
+    packContents.ledger_pdf ? { name: 'Ledger PDF', icon: <FileText className="w-3 h-3" /> } : null,
+    packContents.controls_csv ? { name: 'Controls CSV', icon: <FileText className="w-3 h-3" /> } : null,
+    packContents.attestations_csv ? { name: 'Attestations CSV', icon: <FileText className="w-3 h-3" /> } : null,
+    packContents.evidence_manifest ? { name: 'Evidence Manifest', icon: <FileText className="w-3 h-3" /> } : null,
+    packContents.manifest_json ? { name: 'Manifest JSON', icon: <FileText className="w-3 h-3" /> } : null,
+    packContents.attachments ? { name: `${packContents.attachments} attachments`, icon: <Package className="w-3 h-3" /> } : null,
   ].filter((item): item is ContentsItem => item !== null)
 
   return (
@@ -139,9 +147,8 @@ export function PackCard({
         </div>
         {onDownload && (
           <ActionButton
-            onClick={onDownload}
+            onClick={() => onDownload?.()}
             variant="secondary"
-            size="sm"
             icon={<Download className="w-4 h-4" />}
           >
             Download
@@ -155,7 +162,7 @@ export function PackCard({
           <Calendar className="w-3 h-3 text-white/50" />
           <div>
             <div className="text-white/50">Generated</div>
-            <div className="font-medium">{new Date(generatedAt).toLocaleDateString()}</div>
+            <div className="font-medium">{generatedDate.toLocaleDateString()}</div>
           </div>
         </div>
         {generatedBy && (
@@ -188,26 +195,26 @@ export function PackCard({
       </div>
 
       {/* Filters */}
-      {(filters.view || filters.category || filters.timeRange) && (
+      {(packFilters.view || packFilters.category || packFilters.timeRange) && (
         <div className="pt-2 border-t border-white/10">
           <div className="flex items-center gap-2 text-xs text-white/60 mb-2">
             <Filter className="w-3 h-3" />
             <span className="font-medium">Filters:</span>
           </div>
           <div className="flex flex-wrap gap-1.5">
-            {filters.view && (
+            {packFilters.view && (
               <Badge variant="neutral" className="text-xs">
-                View: {filters.view}
+                View: {String(packFilters.view)}
               </Badge>
             )}
-            {filters.category && (
+            {packFilters.category && (
               <Badge variant="neutral" className="text-xs">
-                Category: {filters.category}
+                Category: {String(packFilters.category)}
               </Badge>
             )}
-            {filters.timeRange && (
+            {packFilters.timeRange && (
               <Badge variant="neutral" className="text-xs">
-                Range: {filters.timeRange}
+                Range: {String(packFilters.timeRange)}
               </Badge>
             )}
           </div>

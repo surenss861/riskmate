@@ -2,7 +2,9 @@
 
 **Status:** 🚧 **IN PROGRESS**  
 **Version:** 1.0  
-**Last Updated:** January 15, 2025
+**Last Updated:** January 10, 2026
+
+**Scope Control:** No new routes unless replacing existing UI. All enhancements are polish/additive to existing pages.
 
 ## 🎯 Goal: Make RiskMate a "Defensibility OS"
 
@@ -28,6 +30,7 @@
    - ⛔ Blocked (logged)
    - ⚠ Needs review (logged)
 4. **Exports always show Pack ID + deterministic fingerprint + verification badge.**
+5. **Trust UI must never lie:** If anything is "Verified," it must be verifiable from real stored data. If verification isn't implemented/available yet, the badge must say "Unverified" not "Verified-ish."
 
 ---
 
@@ -171,16 +174,17 @@
 
 #### ✅ KPI Tiles
 - [ ] **Add:** "Ledger integrity" KPI tile
-  - Show IntegrityBadge status
+  - Show IntegrityBadge status (only if actually verified - see "Trust UI must never lie" rule)
   - Link to ledger verification page
 - [ ] **Copy swap:** "High risk jobs" → "Jobs requiring review"
 - [ ] **Add:** "Proof packs generated" counter
-  - Link to proof pack history
+  - Link to Pack History section in Audit page (not a separate route)
 
 #### ✅ Trend Charts
-- [ ] **Add:** "Enforcement actions" trend line
+- [ ] **Add:** "Enforcement actions" trend line (only if enforcement data already exists in storage)
   - Blocked vs allowed actions over time
 - [ ] **Tooltip enhancement:** Show TrustReceiptStrip on hover
+- [ ] **Note:** If enforcement data doesn't exist yet, skip this (no new features)
 
 ---
 
@@ -221,8 +225,8 @@
 
 #### ✅ Advanced/Integrations Menu
 - [ ] **Already done:** API payload, Proof Pack moved here
-- [ ] **Add:** Pack history link
-- [ ] **Add:** Integrity verification status
+- [ ] **Add:** Pack History section/drawer (opens within Audit page, not new route)
+- [ ] **Add:** Integrity verification status (only if actually verified - see "Trust UI must never lie" rule)
 
 ---
 
@@ -286,13 +290,14 @@
   - Integrity status
   - File size + event count
 
-#### ✅ Pack History (NEW)
-- [ ] **Create:** `/operations/audit/packs` route
+#### ✅ Pack History (Section/Drawer inside Audit page - NOT a new route)
+- [ ] **Add Pack History section/drawer** inside `/operations/audit` under Advanced/Integrations menu
 - [ ] **List all generated packs:**
   - PackCard for each pack
   - Sort by: Most recent first
-  - Filter by: Pack type, date range
+  - Filter by: Pack type, date range (if data exists)
 - [ ] **Actions:** Download, Regenerate (deterministic), View ledger event
+- [ ] **Note:** This is polish, not a new feature - reuses existing pack generation data
 
 ---
 
@@ -308,7 +313,7 @@
   - Detection → Response → Corrective Actions → Closure → Attestation
 - [ ] **Use EnforcementBanner** for blocked escalations
 - [ ] **Show:** Chain of custody (who did what when)
-- [ ] **Copy swap:** "Activity log" → "Chain of custody"
+- [ ] **Copy swap:** "Activity log" → "Chain of Custody" (standardized naming - always use "Chain of Custody", never "activity log")
 
 #### ✅ Corrective Actions
 - [ ] **Add TrustReceiptStrip:**
@@ -477,6 +482,14 @@
 
 ## Copy Swaps (Global)
 
+### Standardized Naming (Enforce Everywhere)
+
+**Pick one set and enforce it in copy + labels globally:**
+
+- ✅ **"Ledger Event"** (not "user action" anywhere)
+- ✅ **"Chain of Custody"** (not "activity log" anywhere)
+- ✅ **"Generate Proof Pack"** (not "export report" anywhere)
+
 ### Productivity Words → Defensibility Words
 
 - [ ] "Complete checklist" → "Seal record"
@@ -521,14 +534,26 @@
 - [x] Create EventChip
 - [x] Create TrustReceiptStrip
 - [x] Create EnforcementBanner
-- [x] Create PackCard
+- [x] Create PackCard (with hardened TypeScript types)
 - [x] Create EvidenceStamp
 - [x] Export all from `components/shared/index.ts`
+- [x] Harden PackCard types (locked unions, date normalization, render-safe filters)
 
-### Phase 2: High-Impact Pages
-- [ ] Compliance Ledger page (`/operations/audit`)
-- [ ] Job Detail page (`/operations/jobs/[id]`)
-- [ ] Landing page (`/`)
+### Phase 2: High-Impact Pages (Implementation Order)
+1. **Compliance Ledger page (`/operations/audit`)** - Highest leverage, most visible
+   - Replace event rows with TrustReceiptStrip
+   - Add EventChip + IntegrityBadge
+   - Blocked events get EnforcementBanner
+   - Add Pack History section/drawer (NOT new route)
+
+2. **Job Detail page (`/operations/jobs/[id]`)** - Second highest leverage
+   - Evidence list becomes EvidenceStamp
+   - Signatures become TrustReceiptStrip
+   - Add IntegrityBadge to job header
+
+3. **Landing page (`/`)** - Brand positioning
+   - Swap headline/subhead (defensibility messaging)
+   - Replace generic features with 3 Proof Moments visuals (using components)
 
 ### Phase 3: Medium-Impact Pages
 - [ ] Operations Dashboard (`/operations`)
@@ -584,12 +609,14 @@
 ## Notes
 
 - **No new features:** This is polish, not new functionality
-- **Reuse existing data:** All components use existing ledger/audit data
+- **No new routes:** All enhancements are sections/drawers within existing pages (e.g., Pack History inside Audit page, not `/operations/audit/packs`)
+- **Reuse existing data:** All components use existing ledger/audit data. If data doesn't exist, skip the UI (don't add new data collection)
+- **Trust UI must never lie:** If verification isn't implemented yet, show "Unverified" not "Verified-ish"
 - **Incremental:** Can be implemented page-by-page without breaking existing functionality
 - **Backward compatible:** All changes are additive (don't break existing UI)
 
 ---
 
-**Last Updated:** January 15, 2025  
+**Last Updated:** January 10, 2026  
 **Next Review:** After Phase 2 completion
 
