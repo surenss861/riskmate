@@ -2,12 +2,13 @@
 
 import { X, Package, Download, ExternalLink, Clock } from 'lucide-react'
 import { useState } from 'react'
-import { PackCard } from '@/components/shared'
+import { PackCard, type PackType } from '@/components/shared'
 import { buttonStyles } from '@/lib/styles/design-system'
+import type { IntegrityStatus } from '@/components/shared/IntegrityBadge'
 
 interface PackHistoryItem {
   packId: string
-  packType: 'proof' | 'audit' | 'incident' | 'permit'
+  packType: PackType
   generatedAt: string | Date
   generatedBy: string
   filters?: Record<string, string | number | boolean | null | undefined>
@@ -21,7 +22,7 @@ interface PackHistoryItem {
   dataHash?: string
   fileSize?: number
   eventCount?: number
-  integrityStatus?: 'verified' | 'unverified' | 'mismatch' | 'pending'
+  integrityStatus?: IntegrityStatus
 }
 
 interface PackHistoryDrawerProps {
