@@ -195,19 +195,18 @@ export function SavedViewCards({
             })()}
 
             {/* Export CSV Button (consistent across all cards, human ops workflow) */}
-            <ActionButton
-              onClick={(e) => {
-                e.stopPropagation()
-                onExportCSV(view.id)
-              }}
-              loading={onExportCSVLoading}
-              variant="secondary"
-              className="w-full text-xs py-1.5 mt-2 flex items-center justify-center gap-1"
-              disabledReason={onExportCSVLoading ? 'Exporting...' : undefined}
-              icon={<Download className="w-3 h-3" />}
-            >
-              Export CSV
-            </ActionButton>
+            <div onClick={(e) => e.stopPropagation()}>
+              <ActionButton
+                onClick={() => onExportCSV(view.id)}
+                loading={onExportCSVLoading}
+                variant="secondary"
+                className="w-full text-xs py-1.5 mt-2 flex items-center justify-center gap-1"
+                disabledReason={onExportCSVLoading ? 'Exporting...' : undefined}
+                icon={<Download className="w-3 h-3" />}
+              >
+                Export CSV
+              </ActionButton>
+            </div>
           </div>
         )
       })}
