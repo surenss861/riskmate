@@ -540,15 +540,9 @@ export default function AuditViewPage() {
 
   const handleGeneratePack = async (view?: string) => {
     try {
-      const token = await (async () => {
-        const supabase = createSupabaseBrowserClient()
-        const { data: { session } } = await supabase.auth.getSession()
-        return session?.access_token || null
-      })()
-
-      const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || ''
-      const backendUrl = API_URL || ''
-      const endpoint = `${backendUrl}/api/audit/export/pack`
+      // Use Next.js API route (which proxies to backend) instead of calling backend directly
+      // This ensures consistent routing and error handling
+      const endpoint = '/api/audit/export/pack'
 
       // Build filter payload (supports all saved view filters)
       const filterPayload: any = {
@@ -571,12 +565,13 @@ export default function AuditViewPage() {
         filterPayload.category = activeTab
       }
 
+      // Use Next.js API route - it handles auth via cookies automatically
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(token && { Authorization: `Bearer ${token}` }),
         },
+        credentials: 'include', // Include cookies for auth
         body: JSON.stringify(filterPayload),
       })
 

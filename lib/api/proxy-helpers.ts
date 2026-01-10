@@ -133,7 +133,8 @@ export async function proxyToBackend(
       error.message?.includes('ECONNREFUSED') ||
       error.message?.includes('fetch failed') ||
       error.code === 'ECONNREFUSED' ||
-      error.cause?.code === 'ECONNREFUSED'
+      error.cause?.code === 'ECONNREFUSED' ||
+      error.name === 'TypeError' && error.message?.includes('fetch')
     
     console.error(`[Proxy] Error for ${endpoint}:`, {
       message: error.message,
