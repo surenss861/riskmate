@@ -91,7 +91,7 @@ export function EventDetailsDrawer({ isOpen, onClose, event }: EventDetailsDrawe
               actorEmail={event.actor_email}
               occurredAt={event.created_at}
               eventType={event.event_type || 'unknown'}
-              category={event.category || mapping.category}
+              category={mapping.category}
               summary={event.summary || mapping.description}
               reason={event.metadata?.reason || mapping.whyItMatters}
               policyStatement={event.metadata?.policy_statement || mapping.policyStatement}
