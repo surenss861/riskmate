@@ -142,8 +142,8 @@ export function PackCard({
           <div className="min-w-0 flex-1">
             <div className="text-xs text-white/60 mb-1">Proof Pack</div>
             <div className="truncate font-mono text-sm text-white mb-1">{packId.slice(0, 16)}...</div>
-            <div className="text-xs text-white/60 mb-2">
-              Generated {formatRelativeTime(generatedDate)}
+            <div className="text-xs text-white/60">
+              {formatRelativeTime(generatedDate)}
             </div>
             {packContents && summarizeContents(packContents) !== 'Contents not available' && (
               <div className="text-xs text-white/50 truncate">

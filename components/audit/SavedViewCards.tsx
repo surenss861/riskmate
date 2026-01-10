@@ -139,7 +139,8 @@ export function SavedViewCards({
         const isActive = activeView === view.id
         
         // Get pack history for this view (stub: returns null for now)
-        const { lastPack } = packHistoryMap[view.id as keyof typeof packHistoryMap] || { lastPack: null }
+        const packHistory = packHistoryMap[view.id as keyof typeof packHistoryMap]
+        const lastPack = packHistory?.lastPack || null
         
         // Get integrity status for this view (defaults to unverified)
         const viewIntegrityStatus = getViewIntegrityStatus(view.id)
