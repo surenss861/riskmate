@@ -1,7 +1,7 @@
 # Compliance Ledger Contract v1.0
 
 **Status:** ✅ **FROZEN - Production Contract**  
-**Version:** 1.0.0  
+**Contract Version: v1.0.0**  
 **Effective Date:** January 2025  
 **Last Updated:** January 10, 2026
 
@@ -443,6 +443,25 @@ No new pages needed. Everything becomes a filtered view or shortcut into the Led
 
 ---
 
+## Non-Goals (v1.0 - What This Is NOT)
+
+**The Compliance Ledger is NOT:**
+- ❌ A task manager or project tracker
+- ❌ A document dump or file storage system
+- ❌ A checklist toy or safety app
+- ❌ A real-time dashboard (it's an audit trail)
+- ❌ A search engine (it's filterable, not searchable)
+
+**What it IS:**
+- ✅ A risk ledger UI — a decision-making surface for execs, insurers, regulators
+- ✅ An immutable audit trail — append-only, tamper-evident, export-ready
+- ✅ A compliance evidence repository — board-grade artifacts for auditors
+- ✅ A single source of truth — everything routes to the Ledger
+
+**This distinction matters for buyer trust. This is enterprise risk governance, not task management.**
+
+---
+
 ## Terminology Notes
 
 - **"API Payload"** (not "JSON export") - Clarifies systems/integrations use case
@@ -452,5 +471,120 @@ No new pages needed. Everything becomes a filtered view or shortcut into the Led
 
 ---
 
+## Event Examples (v1.0 - Canonical Schema)
+
+### Example 1: Job Flagged for Review (Material Severity)
+
+```json
+{
+  "event_id": "evt_abc123def456",
+  "event_type": "job.flagged_for_review",
+  "occurred_at": "2026-01-09T14:30:00.000Z",
+  "org_id": "org_c111f4ed",
+  "actor_id": "user_safety_lead_001",
+  "actor_role": "safety_lead",
+  "actor_name": "Jane Smith",
+  "actor_email": "jane@example.com",
+  "target_type": "job",
+  "target_id": "job_job-1042",
+  "target_name": "Site Electrical Inspection",
+  "severity": "material",
+  "outcome": "success",
+  "summary": "Job flagged for review: High risk score (75) requires safety lead review",
+  "context": {
+    "review_reason": "High risk score threshold exceeded",
+    "risk_score": 75,
+    "assigned_to": "safety_lead",
+    "due_date": "2026-01-11T23:59:59.000Z",
+    "site_id": "site_main_warehouse",
+    "site_name": "Main Warehouse"
+  },
+  "category": "operations",
+  "integrity": {
+    "previous_hash": "hash_prev_event_xyz789",
+    "current_hash": "hash_this_event_abc123"
+  }
+}
+```
+
+### Example 2: Role Violation Blocked (Critical Severity)
+
+```json
+{
+  "event_id": "evt_def789ghi012",
+  "event_type": "auth.role_violation",
+  "occurred_at": "2026-01-09T15:45:00.000Z",
+  "org_id": "org_c111f4ed",
+  "actor_id": "user_exec_001",
+  "actor_role": "executive",
+  "actor_name": "John Doe",
+  "actor_email": "john@example.com",
+  "target_type": "job",
+  "target_id": "job_job-1042",
+  "target_name": "Site Electrical Inspection",
+  "severity": "critical",
+  "outcome": "blocked",
+  "summary": "Action blocked: Executive attempted job deletion (requires owner/admin role)",
+  "context": {
+    "attempted_action": "job.delete",
+    "required_role": "owner",
+    "exposure": {
+      "insurance": "high",
+      "regulatory": "high",
+      "owner": "high"
+    }
+  },
+  "category": "governance",
+  "integrity": {
+    "previous_hash": "hash_prev_event_abc123",
+    "current_hash": "hash_this_event_def789"
+  }
+}
+```
+
+### Example 3: Proof Pack Generated (Info Severity)
+
+```json
+{
+  "event_id": "evt_ghi345jkl678",
+  "event_type": "proof_pack.insurance_generated",
+  "occurred_at": "2026-01-09T16:00:00.000Z",
+  "org_id": "org_c111f4ed",
+  "actor_id": "user_admin_001",
+  "actor_role": "admin",
+  "actor_name": "Admin User",
+  "actor_email": "admin@example.com",
+  "target_type": "system",
+  "target_id": "pack_pack-20260109-001",
+  "target_name": "Insurance Proof Pack - Jan 2026",
+  "severity": "info",
+  "outcome": "success",
+  "summary": "Insurance proof pack generated: 5 completed jobs, 3 attestations, 12 documents",
+  "context": {
+    "pack_type": "insurance",
+    "time_range": "30d",
+    "job_count": 5,
+    "attestation_count": 3,
+    "document_count": 12,
+    "file_hash": "sha256_hash_of_zip_file"
+  },
+  "category": "operations",
+  "integrity": {
+    "previous_hash": "hash_prev_event_def789",
+    "current_hash": "hash_this_event_ghi345"
+  }
+}
+```
+
+**Schema Notes:**
+- All required fields must be present (event_id, event_type, occurred_at, etc.)
+- `summary` must be human-readable (no technical jargon)
+- `context` is flexible JSON (can vary by event_type)
+- `integrity.hash` links to previous event (hash chain)
+- `severity` and `outcome` determine visibility and actions
+
+---
+
 **This contract is frozen. Changes require PM approval and version bump.**
+
 

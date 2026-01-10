@@ -1,0 +1,65 @@
+name: Lint Compliance Ledger Contract
+
+on:
+  pull_request:
+    paths:
+      - 'docs/COMPLIANCE_LEDGER_AS_SOURCE_OF_TRUTH.md'
+      - 'docs/SHIP_FROZEN_COMPLIANCE_LEDGER.md'
+      - '.github/workflows/lint-compliance-contract.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'docs/COMPLIANCE_LEDGER_AS_SOURCE_OF_TRUTH.md'
+      - 'docs/SHIP_FROZEN_COMPLIANCE_LEDGER.md'
+
+jobs:
+  lint-contract:
+    name: Verify Compliance Ledger Contract
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Verify contract file exists
+        run: |
+          if [ ! -f "docs/COMPLIANCE_LEDGER_AS_SOURCE_OF_TRUTH.md" ]; then
+            echo "::error::Compliance Ledger Contract file missing!"
+            exit 1
+          fi
+          echo "✅ Contract file exists"
+      
+      - name: Verify SHIP_FROZEN guard file exists
+        run: |
+          if [ ! -f "docs/SHIP_FROZEN_COMPLIANCE_LEDGER.md" ]; then
+            echo "::error::SHIP_FROZEN guard file missing!"
+            exit 1
+          fi
+          echo "✅ SHIP_FROZEN guard file exists"
+      
+      - name: Verify contract version string
+        run: |
+          if ! grep -q "Contract Version: v1.0\|Version: v1.0\|Version: 1.0.0" docs/COMPLIANCE_LEDGER_AS_SOURCE_OF_TRUTH.md; then
+            echo "::error::Contract version string missing or incorrect!"
+            echo "Contract must contain 'Version: v1.0' or 'Version: 1.0.0'"
+            exit 1
+          fi
+          echo "✅ Contract version string present"
+      
+      - name: Verify SHIP_FROZEN version matches
+        run: |
+          if ! grep -q "v1.0.0\|v1.0" docs/SHIP_FROZEN_COMPLIANCE_LEDGER.md; then
+            echo "::error::SHIP_FROZEN version string missing or incorrect!"
+            exit 1
+          fi
+          echo "✅ SHIP_FROZEN version string present"
+      
+      - name: Verify contract is marked as frozen
+        run: |
+          if ! grep -qi "frozen\|FROZEN" docs/COMPLIANCE_LEDGER_AS_SOURCE_OF_TRUTH.md; then
+            echo "::error::Contract must be marked as FROZEN!"
+            exit 1
+          fi
+          echo "✅ Contract marked as FROZEN"
+
