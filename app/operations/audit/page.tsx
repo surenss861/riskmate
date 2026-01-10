@@ -104,6 +104,7 @@ export default function AuditViewPage() {
   } | null>(null)
   const [mutationLoading, setMutationLoading] = useState(false)
   const [highlightedFailedIds, setHighlightedFailedIds] = useState<Set<string>>(new Set())
+  const [advancedExportMenuOpen, setAdvancedExportMenuOpen] = useState(false)
   const selectionHook = useSelectedRows()
   const { selectedIds, selectedCount } = selectionHook
 
