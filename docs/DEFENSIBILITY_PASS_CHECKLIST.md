@@ -618,5 +618,125 @@
 ---
 
 **Last Updated:** January 10, 2026  
-**Next Review:** After Phase 2 completion
+**Phase 2 Status:** ✅ Complete  
+**Next Review:** After Phase 3 completion
+
+---
+
+## Phase 3: Polish & Consistency (No New Features)
+
+### Phase 3A — Copy Swaps Everywhere (Priority: High)
+
+**Goal:** Replace all leftover productivity language with defensibility language.
+
+**Copy Swap Targets:**
+- "activity log" → "chain of custody"
+- "export report" → "generate proof pack"
+- "permissions" → "governance"
+- "user actions" → "ledger events"
+- "download" → "generate pack" (for packs) / "export" (for CSVs)
+- "save" → "record" (for audit events) / "seal record" (for attestations)
+- "update" → "mutate" (for ledger events)
+- "delete" → "archive" (for soft deletes)
+
+**Files to Update:**
+- [ ] `app/operations/audit/page.tsx` - Button labels, section headers
+- [ ] `app/operations/jobs/[id]/page.tsx` - Action buttons, tab labels
+- [ ] `components/dashboard/*` - Component labels and copy
+- [ ] `components/job/*` - Action button text
+- [ ] All API response messages that use old terminology
+- [ ] Error messages that reference "permissions", "user actions", etc.
+
+**Standardized Naming Enforcement:**
+- [ ] Global search/replace for "activity log" → "chain of custody"
+- [ ] Global search/replace for "export report" → "generate proof pack"
+- [ ] Global search/replace for "permissions" → "governance"
+- [ ] Review all button labels for consistency
+- [ ] Update tooltips and help text
+
+**Acceptance Criteria:**
+- [ ] Zero instances of "activity log", "export report", "permissions" (where defensibility terms apply)
+- [ ] All action buttons use defensibility language
+- [ ] All error messages use defensibility language
+- [ ] Copy feels consistent across all pages
+
+---
+
+### Phase 3B — Saved View Cards Polish (Priority: Medium)
+
+**Goal:** Make saved view cards feel more defensible without adding features.
+
+**UI Enhancements:**
+- [ ] Add PackCard preview snippet showing "Last generated pack" (compact mode)
+- [ ] Add integrity indicator (IntegrityBadge) to saved view cards
+- [ ] Maintain CTA discipline: one primary action per card
+- [ ] Add "Pack ID" preview if a pack was recently generated
+
+**Files to Update:**
+- [ ] `components/audit/SavedViewCards.tsx` - Add PackCard preview
+- [ ] `app/operations/audit/page.tsx` - Pass pack data to saved view cards
+
+**Acceptance Criteria:**
+- [ ] Saved view cards show last pack generated (if available)
+- [ ] Integrity status is visible on each card
+- [ ] One primary CTA per card (orange button)
+- [ ] No visual clutter or information overload
+
+---
+
+### Phase 3C — Executive + Pricing Pages (Priority: Medium)
+
+**Goal:** Make Executive and Pricing pages reflect the same Proof Moments language.
+
+**Executive Dashboard (`/operations/executive`):**
+- [ ] Replace feature lists with "Proof Moments" language
+- [ ] Add IntegrityBadge in prominent placement (header or summary)
+- [ ] Show ledger event count as "Chain of Custody Events"
+- [ ] Use TrustReceiptStrip for "Last Updated" information
+- [ ] Replace "analytics" language with "defensibility metrics"
+
+**Pricing Page (`/pricing`):**
+- [ ] Replace feature bullet lists with "Proof Pack" language
+- [ ] Emphasize "audit-ready" and "verifiable" over "features"
+- [ ] Add IntegrityBadge to each tier showing "Verified" status
+- [ ] Use PackCard to visualize what each tier includes
+- [ ] Copy should answer "Can I prove it?" not "What can I do?"
+
+**Files to Update:**
+- [ ] `app/operations/executive/page.tsx` - Redesign with defensibility language
+- [ ] `app/pricing/page.tsx` - Redesign with proof pack focus
+
+**Acceptance Criteria:**
+- [ ] Executive page feels like "defensibility dashboard" not "analytics dashboard"
+- [ ] Pricing page sells "proof outcomes" not "feature lists"
+- [ ] IntegrityBadge is prominently displayed on Executive page
+- [ ] All copy aligns with defensibility narrative
+
+---
+
+### Phase 3 Implementation Order
+
+1. **Phase 3A** (Copy Swaps) - Highest leverage, lowest risk
+2. **Phase 3B** (Saved View Cards) - Quick visual win
+3. **Phase 3C** (Executive + Pricing) - Marketing alignment
+
+---
+
+### Phase 3 Success Metrics
+
+**Qualitative:**
+- [ ] Zero productivity language in user-facing copy
+- [ ] All pages feel "court-ready"
+- [ ] Users say: "This feels consistent across the whole product"
+
+**Quantitative:**
+- [ ] 100% of action buttons use defensibility language
+- [ ] 100% of saved view cards show integrity status
+- [ ] 100% of pricing/executive pages use proof language
+
+---
+
+**Phase 3 Status:** 🔄 Pending  
+**Estimated Completion:** 2-3 days  
+**Dependencies:** Phase 2 deployment verification
 
