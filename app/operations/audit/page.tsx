@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Download, Filter, Shield, AlertTriangle, User, Calendar, FileText, Clock, CheckCircle, XCircle, ExternalLink, ChevronDown, ChevronUp, Building2 } from 'lucide-react'
+import { Download, Filter, Shield, AlertTriangle, User, Calendar, FileText, Clock, CheckCircle, XCircle, ExternalLink, ChevronDown, ChevronUp, Building2, MoreVertical } from 'lucide-react'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import { jobsApi, auditApi } from '@/lib/api'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
@@ -1601,30 +1601,62 @@ export default function AuditViewPage() {
                     <Download className="w-4 h-4" />
                     Export CSV
                   </Button>
-                  <Button
-                    variant="secondary"
-                    onClick={async () => {
-                      try {
-                        await auditApi.export({
-                          format: 'json',
-                          category: activeTab,
-                          site_id: filters.site || undefined,
-                          job_id: filters.job || undefined,
-                          actor_id: filters.user || undefined,
-                          severity: filters.severity || undefined,
-                          outcome: filters.outcome || undefined,
-                          time_range: filters.timeRange,
-                          view: filters.savedView && filters.savedView !== 'custom' ? filters.savedView : undefined,
-                        })
-                      } catch (err) {
-                        alert('Export failed. Please try again.')
-                      }
-                    }}
-                    title="API payload: For integrations and verification. Humans should use PDF/CSV."
-                  >
-                    <Download className="w-4 h-4" />
-                    API payload
-                  </Button>
+                  {/* Advanced / Integrations Menu */}
+                  <div className="relative">
+                    <Button
+                      variant="secondary"
+                      onClick={() => setAdvancedExportMenuOpen(!advancedExportMenuOpen)}
+                      title="Advanced export options for integrations"
+                    >
+                      <MoreVertical className="w-4 h-4" />
+                    </Button>
+                    {advancedExportMenuOpen && (
+                      <>
+                        {/* Backdrop to close menu */}
+                        <div
+                          className="fixed inset-0 z-10"
+                          onClick={() => setAdvancedExportMenuOpen(false)}
+                        />
+                        {/* Dropdown menu */}
+                        <div className="absolute right-0 top-full mt-2 z-20 w-56 bg-[#1A1A1A] border border-white/10 rounded-lg shadow-xl">
+                          <div className="p-2">
+                            <div className="px-3 py-2 text-xs font-semibold text-white/60 uppercase tracking-wider">
+                              Advanced / Integrations
+                            </div>
+                            <button
+                              onClick={async (e) => {
+                                e.stopPropagation()
+                                setAdvancedExportMenuOpen(false)
+                                try {
+                                  await auditApi.export({
+                                    format: 'json',
+                                    category: activeTab,
+                                    site_id: filters.site || undefined,
+                                    job_id: filters.job || undefined,
+                                    actor_id: filters.user || undefined,
+                                    severity: filters.severity || undefined,
+                                    outcome: filters.outcome || undefined,
+                                    time_range: filters.timeRange,
+                                    view: filters.savedView && filters.savedView !== 'custom' ? filters.savedView : undefined,
+                                  })
+                                } catch (err) {
+                                  alert('Export failed. Please try again.')
+                                }
+                              }}
+                              className="w-full px-3 py-2 text-sm text-white/80 hover:bg-white/10 rounded-md flex items-center gap-2 transition-colors"
+                              title="API payload: For integrations and verification. Humans should use PDF/CSV."
+                            >
+                              <Download className="w-4 h-4" />
+                              API payload (JSON)
+                            </button>
+                            <div className="mt-2 pt-2 border-t border-white/10 px-3 py-1.5 text-xs text-white/50">
+                              For SIEM, GRC tools, and automation. Human-readable exports: PDF/CSV.
+                            </div>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
