@@ -764,15 +764,15 @@ export default function AuditReadinessPage() {
                       window.URL.revokeObjectURL(url)
                       document.body.removeChild(a)
                     } catch (err) {
-                      console.error('Failed to export audit pack:', err)
-                      alert('Failed to export audit pack. Please try again.')
+                      console.error('Failed to generate proof pack:', err)
+                      alert('Failed to generate proof pack. Please try again.')
                     } finally {
                       setExportingPack(false)
                     }
                   }}
                   disabled={exportingPack}
                 >
-                  {exportingPack ? 'Generating...' : 'Export Audit Pack'}
+                  {exportingPack ? 'Generating...' : 'Generate Proof Pack'}
                 </Button>
               </div>
             </div>

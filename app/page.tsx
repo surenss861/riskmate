@@ -506,11 +506,11 @@ export default function HomePage() {
                 </div>
                 <div className="flex items-start gap-2">
                   <span className="text-red-400 text-xl">→</span>
-                  <p>Export reports</p>
+                  <p>Generate proof packs</p>
                 </div>
                 <div className="flex items-start gap-2">
                   <span className="text-red-400 text-xl">→</span>
-                  <p>Activity logs</p>
+                  <p>Chain of custody</p>
                 </div>
                 <div className="flex items-start gap-2">
                   <span className="text-red-400 text-xl">→</span>
@@ -627,8 +627,8 @@ export default function HomePage() {
               { old: 'Photo albums in iMessage', new: 'Organized evidence gallery with timestamps' },
               { old: 'Google Drive folders', new: 'Centralized job dashboard' },
               { old: 'Manual PDF reports', new: 'One-click branded PDF generation' },
-              { old: 'No audit trail', new: 'Complete version history & compliance logs' },
-              { old: 'Lost signatures', new: 'Digital signatures with GPS verification' },
+              { old: 'No audit trail', new: 'Complete chain of custody & compliance ledger' },
+              { old: 'Lost signatures', new: 'Digital attestations with GPS verification' },
             ].map((item, index) => (
               <motion.div
                 key={index}

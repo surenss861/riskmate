@@ -377,7 +377,7 @@ export default function AuditViewPage() {
   // Map events to the three main Compliance Ledger tabs:
   // - governance: Blocked actions, policy enforcement, violations
   // - operations: Human actions (assign/resolve/waive, corrective actions, incident closures, exports)
-  // - access: Identity + permissions (access changes, logins, security events)
+    // - access: Identity + governance (access changes, logins, security events)
   const filteredEvents = events.filter(e => {
     if (filters.savedView && filters.savedView !== 'custom') {
       // Saved Views show all relevant events regardless of tab
@@ -1816,7 +1816,7 @@ export default function AuditViewPage() {
                         No Access & Security events in the last {filters.timeRange === '24h' ? '24 hours' : filters.timeRange === '7d' ? '7 days' : filters.timeRange === '30d' ? '30 days' : 'time period'}.
                       </p>
                       <p className="text-white/40 text-sm mb-4">
-                        This tab shows identity and permissions changes (role changes, revocations, logins, security events). Role changes and revocations will appear here.
+                        This tab shows identity and governance changes (role changes, revocations, logins, security events). Role changes and revocations will appear here.
                       </p>
                     </>
                   )}
