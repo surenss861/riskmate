@@ -25,6 +25,8 @@ export interface PackContents {
   attachments?: number
 }
 
+export type PackCardVariant = 'full' | 'compact'
+
 export interface PackCardProps {
   packId: string
   packType: PackType
@@ -39,6 +41,8 @@ export interface PackCardProps {
   downloadUrl?: string
   onDownload?: () => void | Promise<void>
   className?: string
+  variant?: PackCardVariant // Full or compact mode
+  onClick?: () => void // Optional click handler for compact mode
 }
 
 /**
@@ -67,6 +71,42 @@ export interface PackCardProps {
  * />
  * ```
  */
+/**
+ * Helper: Format relative time (e.g., "2 hours ago")
+ */
+const formatRelativeTime = (date: string | Date): string => {
+  const now = new Date()
+  const then = typeof date === 'string' ? new Date(date) : date
+  const diffMs = now.getTime() - then.getTime()
+  const diffSecs = Math.floor(diffMs / 1000)
+  const diffMins = Math.floor(diffSecs / 60)
+  const diffHours = Math.floor(diffMins / 60)
+  const diffDays = Math.floor(diffHours / 24)
+
+  if (diffSecs < 60) return 'just now'
+  if (diffMins < 60) return `${diffMins}m ago`
+  if (diffHours < 24) return `${diffHours}h ago`
+  if (diffDays < 7) return `${diffDays}d ago`
+  return then.toLocaleDateString()
+}
+
+/**
+ * Helper: Summarize pack contents for compact display
+ */
+function summarizeContents(contents?: Partial<PackContents>): string {
+  if (!contents) return 'Contents not available'
+  
+  const parts: string[] = []
+  if (contents.ledger_pdf) parts.push('Ledger PDF')
+  if (contents.controls_csv) parts.push('Controls CSV')
+  if (contents.attestations_csv) parts.push('Attestations CSV')
+  if (contents.evidence_manifest) parts.push('Evidence Manifest')
+  if (contents.manifest_json) parts.push('Manifest JSON')
+  if (contents.attachments) parts.push(`${contents.attachments} attachments`)
+  
+  return parts.length ? parts.join(' • ') : 'Contents not available'
+}
+
 export function PackCard({
   packId,
   packType,
@@ -81,6 +121,8 @@ export function PackCard({
   downloadUrl,
   onDownload,
   className,
+  variant = 'full',
+  onClick,
 }: PackCardProps) {
   // Normalize generatedAt (accept both string and Date)
   const generatedDate = typeof generatedAt === 'string' ? new Date(generatedAt) : generatedAt
@@ -88,6 +130,37 @@ export function PackCard({
   // Default empty filters/contents if not provided
   const packFilters = filters || {}
   const packContents = contents || {}
+
+  // Compact mode: Minimal display for saved view cards
+  if (variant === 'compact') {
+    return (
+      <div 
+        className={`rounded-lg border border-white/10 bg-white/[0.03] p-3 cursor-pointer hover:bg-white/[0.05] transition-colors ${className}`}
+        onClick={onClick}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="text-xs text-white/60 mb-1">Proof Pack</div>
+            <div className="truncate font-mono text-sm text-white mb-1">{packId.slice(0, 16)}...</div>
+            <div className="text-xs text-white/60 mb-2">
+              Generated {formatRelativeTime(generatedDate)}
+            </div>
+            {packContents && summarizeContents(packContents) !== 'Contents not available' && (
+              <div className="text-xs text-white/50 truncate">
+                {summarizeContents(packContents)}
+              </div>
+            )}
+          </div>
+          <div className="flex-shrink-0">
+            <IntegrityBadge 
+              status={integrityStatus}
+              className="ml-2"
+            />
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   const formatFileSize = (bytes?: number) => {
     if (!bytes) return 'Unknown'

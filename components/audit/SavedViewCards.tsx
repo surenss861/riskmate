@@ -3,7 +3,9 @@
 import { Shield, FileCheck, AlertTriangle, UserCheck, Download, Package, UserPlus, CheckCircle, FileText, Ban, Flag } from 'lucide-react'
 import { buttonStyles } from '@/lib/styles/design-system'
 import { terms } from '@/lib/terms'
-import { ActionButton } from '@/components/shared'
+import { ActionButton, PackCard, IntegrityBadge } from '@/components/shared'
+import { useViewPackHistory } from '@/lib/hooks/useViewPackHistory'
+import { getViewIntegrityStatus } from '@/lib/utils/viewIntegrity'
 
 interface SavedViewCardsProps {
   activeView: string
@@ -34,6 +36,22 @@ export function SavedViewCards({
   onRevokeAccess,
   onFlagSuspicious,
 }: SavedViewCardsProps) {
+  // Hook calls must be at top level - fetch pack history for all views
+  const reviewQueuePack = useViewPackHistory('review-queue')
+  const insuranceReadyPack = useViewPackHistory('insurance-ready')
+  const governanceEnforcementPack = useViewPackHistory('governance-enforcement')
+  const incidentReviewPack = useViewPackHistory('incident-review')
+  const accessReviewPack = useViewPackHistory('access-review')
+  
+  // Map view IDs to their pack history
+  const packHistoryMap = {
+    'review-queue': reviewQueuePack,
+    'insurance-ready': insuranceReadyPack,
+    'governance-enforcement': governanceEnforcementPack,
+    'incident-review': incidentReviewPack,
+    'access-review': accessReviewPack,
+  }
+  
   const views = [
     {
       id: 'review-queue',
@@ -120,6 +138,12 @@ export function SavedViewCards({
         const Icon = view.icon
         const isActive = activeView === view.id
         
+        // Get pack history for this view (stub: returns null for now)
+        const { lastPack } = packHistoryMap[view.id as keyof typeof packHistoryMap] || { lastPack: null }
+        
+        // Get integrity status for this view (defaults to unverified)
+        const viewIntegrityStatus = getViewIntegrityStatus(view.id)
+        
         return (
           <div
             key={view.id}
@@ -132,9 +156,16 @@ export function SavedViewCards({
           >
             <div className="flex items-start justify-between mb-3">
               <Icon className="w-6 h-6 flex-shrink-0" />
-              {isActive && (
-                <span className="text-xs px-2 py-0.5 bg-[#F97316] text-white rounded">Active</span>
-              )}
+              <div className="flex items-center gap-2">
+                {/* Integrity Badge - Top right */}
+                <IntegrityBadge 
+                  status={viewIntegrityStatus}
+                  className="flex-shrink-0"
+                />
+                {isActive && (
+                  <span className="text-xs px-2 py-0.5 bg-[#F97316] text-white rounded flex-shrink-0">Active</span>
+                )}
+              </div>
             </div>
             <h3 className="font-semibold mb-2 text-white">{view.title}</h3>
             <p className="text-sm text-white/70 mb-3">{view.description}</p>
@@ -189,12 +220,35 @@ export function SavedViewCards({
                 onClick={() => onExportCSV(view.id)}
                 loading={onExportCSVLoading}
                 variant="secondary"
-                className="w-full text-xs py-1.5 mt-2 flex items-center justify-center gap-1"
+                className="w-full text-xs py-1.5 mb-3 flex items-center justify-center gap-1"
                 disabledReason={onExportCSVLoading ? 'Exporting...' : undefined}
                 icon={<Download className="w-3 h-3" />}
               >
                 Export CSV
               </ActionButton>
+            </div>
+            
+            {/* Pack Preview Slot - Below CTA area */}
+            <div onClick={(e) => e.stopPropagation()} className="mt-3 -mb-1">
+              {lastPack ? (
+                <PackCard
+                  variant="compact"
+                  packId={lastPack.packId}
+                  packType={lastPack.packType}
+                  generatedAt={lastPack.generatedAt}
+                  integrityStatus={lastPack.integrityStatus ?? 'unverified'}
+                  contents={lastPack.contents}
+                  onClick={() => {
+                    // TODO: Open Pack History drawer with view filter applied
+                    // This will be implemented when pack history API is ready
+                    console.log('View pack history for:', view.id)
+                  }}
+                />
+              ) : (
+                <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3 text-xs text-white/60 text-center">
+                  No proof packs generated for this view yet.
+                </div>
+              )}
             </div>
           </div>
         )
