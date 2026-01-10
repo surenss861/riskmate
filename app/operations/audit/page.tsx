@@ -565,8 +565,9 @@ export default function AuditViewPage() {
         filterPayload.view = view
       } else if (filters.savedView && filters.savedView !== 'custom') {
         filterPayload.view = filters.savedView
-      } else if (!view && !filters.savedView && activeTab && activeTab !== 'all') {
+      } else if (!view && !filters.savedView && activeTab) {
         // If no view, use category as fallback
+        // activeTab is always one of: 'governance', 'operations', 'access'
         filterPayload.category = activeTab
       }
 
