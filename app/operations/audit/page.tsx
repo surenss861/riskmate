@@ -546,6 +546,81 @@ export default function AuditViewPage() {
     exportAction.run(format, view)
   }
 
+  // CSV export handler (used by SavedViewCards)
+  const handleExportCSV = (view: string) => {
+    exportAction.run('csv', view)
+  }
+
+  // API payload (JSON) export - using useAction for standardized UX
+  const apiPayloadAction = useAction(
+    async () => {
+      const endpoint = '/api/audit/export'
+      
+      const filterPayload: any = {
+        format: 'json',
+        category: activeTab,
+        time_range: filters.timeRange || '30d',
+        ...(filters.job && { job_id: filters.job }),
+        ...(filters.site && { site_id: filters.site }),
+        ...(filters.user && { actor_id: filters.user }),
+        ...(filters.severity && { severity: filters.severity }),
+        ...(filters.outcome && { outcome: filters.outcome }),
+      }
+
+      // Use current saved view if applicable
+      if (filters.savedView && filters.savedView !== 'custom') {
+        filterPayload.view = filters.savedView
+      }
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(filterPayload),
+      })
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}))
+        const errorMessage = error.message || error.error || 'Failed to export API payload'
+        if (error.code === 'BACKEND_CONFIG_ERROR' || error.code === 'BACKEND_CONNECTION_ERROR') {
+          throw new Error(error.hint || 'Backend server configuration error. Please check Vercel environment variables.')
+        }
+        throw new Error(errorMessage)
+      }
+
+      // Download the JSON file
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      const contentDisposition = response.headers.get('Content-Disposition')
+      const filename = contentDisposition 
+        ? contentDisposition.split('filename=')[1]?.replace(/"/g, '') || `audit-payload-${new Date().toISOString().split('T')[0]}.json`
+        : `audit-payload-${new Date().toISOString().split('T')[0]}.json`
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      window.URL.revokeObjectURL(url)
+
+      return filename
+    },
+    {
+      onSuccess: (filename) => {
+        setToast({
+          message: `API payload exported: ${filename}`,
+          type: 'success',
+        })
+      },
+      onError: (err: any) => {
+        setToast({
+          message: err.message || 'Failed to export API payload. Please try again.',
+          type: 'error',
+        })
+      },
+    }
+  )
+
   // Generate Proof Pack action (using useAction for standardized UX)
   const generatePackAction = useAction(
     async (view?: string) => {
@@ -1364,9 +1439,8 @@ export default function AuditViewPage() {
               if (savedView === 'governance-enforcement') setActiveTab('governance')
               if (savedView === 'access-review') setActiveTab('access')
             }}
-            onExportCSV={(view) => handleExportFromView('csv', view)}
+            onExportCSV={handleExportCSV}
             onExportCSVLoading={exportAction.loading}
-            onGeneratePack={handleGeneratePack}
             onAssign={(view) => {
               // Check for selection first
               if (selectionHook.selectedIds.length === 0) {
@@ -1612,29 +1686,15 @@ export default function AuditViewPage() {
               <div className="flex items-center gap-4">
                 <span className="text-sm text-white/60">{filteredEvents.length} events</span>
                 <div className="flex items-center gap-2">
-                  <Button
+                  <ActionButton
+                    onClick={() => handleExportFromView('csv', filters.savedView && filters.savedView !== 'custom' ? filters.savedView : 'custom')}
+                    loading={exportAction.loading}
                     variant="secondary"
-                    onClick={async () => {
-                      try {
-                        await auditApi.export({
-                          format: 'csv',
-                          category: activeTab,
-                          site_id: filters.site || undefined,
-                          job_id: filters.job || undefined,
-                          actor_id: filters.user || undefined,
-                          severity: filters.severity || undefined,
-                          outcome: filters.outcome || undefined,
-                          time_range: filters.timeRange,
-                          view: filters.savedView && filters.savedView !== 'custom' ? filters.savedView : undefined,
-                        })
-                      } catch (err) {
-                        alert('Export failed. Please try again.')
-                      }
-                    }}
+                    disabledReason={exportAction.error ? exportAction.error.message : undefined}
+                    icon={<Download className="w-4 h-4" />}
                   >
-                    <Download className="w-4 h-4" />
                     Export CSV
-                  </Button>
+                  </ActionButton>
                   {/* Advanced / Integrations Menu */}
                   <div className="relative">
                     <Button
@@ -1654,48 +1714,39 @@ export default function AuditViewPage() {
                         {/* Dropdown menu */}
                         <div className="absolute right-0 top-full mt-2 z-20 w-56 bg-[#1A1A1A] border border-white/10 rounded-lg shadow-xl">
                           <div className="p-2">
-                            <div className="px-3 py-2 text-xs font-semibold text-white/60 uppercase tracking-wider">
+                            <div className="px-3 py-2 text-xs font-semibold text-white/60 uppercase tracking-wider mb-1">
                               Advanced / Integrations
                             </div>
-                            <button
-                              onClick={async (e) => {
-                                e.stopPropagation()
-                                setAdvancedExportMenuOpen(false)
-                                try {
-                                  await auditApi.export({
-                                    format: 'json',
-                                    category: activeTab,
-                                    site_id: filters.site || undefined,
-                                    job_id: filters.job || undefined,
-                                    actor_id: filters.user || undefined,
-                                    severity: filters.severity || undefined,
-                                    outcome: filters.outcome || undefined,
-                                    time_range: filters.timeRange,
-                                    view: filters.savedView && filters.savedView !== 'custom' ? filters.savedView : undefined,
-                                  })
-                                } catch (err) {
-                                  alert('Export failed. Please try again.')
-                                }
-                              }}
-                              className="w-full px-3 py-2 text-sm text-white/80 hover:bg-white/10 rounded-md flex items-center gap-2 transition-colors"
-                              title="API payload: For integrations and verification. Humans should use PDF/CSV."
-                            >
-                              <Download className="w-4 h-4" />
-                              API payload (JSON)
-                            </button>
-                            <ActionButton
-                              onClick={() => {
-                                setAdvancedExportMenuOpen(false)
-                                handleGeneratePack(filters.savedView && filters.savedView !== 'custom' ? filters.savedView : 'custom')
-                              }}
-                              loading={generatePackAction.loading}
-                              variant="secondary"
-                              className="w-full px-3 py-2 text-sm text-white/80 hover:bg-white/10 rounded-md flex items-center gap-2 transition-colors mt-2"
-                              disabledReason={generatePackAction.error ? generatePackAction.error.message : undefined}
-                              icon={<Package className="w-4 h-4" />}
-                            >
-                              Generate Proof Pack (ZIP)
-                            </ActionButton>
+                            
+                            {/* Active integrations */}
+                            <div className="space-y-1 px-1">
+                              <ActionButton
+                                onClick={() => {
+                                  setAdvancedExportMenuOpen(false)
+                                  apiPayloadAction.run()
+                                }}
+                                loading={apiPayloadAction.loading}
+                                variant="secondary"
+                                className="w-full px-3 py-2 text-sm text-white/80 hover:bg-white/10 rounded-md flex items-center gap-2 transition-colors"
+                                disabledReason={apiPayloadAction.error ? apiPayloadAction.error.message : undefined}
+                                icon={<Download className="w-4 h-4" />}
+                              >
+                                API payload (JSON)
+                              </ActionButton>
+                              <ActionButton
+                                onClick={() => {
+                                  setAdvancedExportMenuOpen(false)
+                                  handleGeneratePack(filters.savedView && filters.savedView !== 'custom' ? filters.savedView : 'custom')
+                                }}
+                                loading={generatePackAction.loading}
+                                variant="secondary"
+                                className="w-full px-3 py-2 text-sm text-white/80 hover:bg-white/10 rounded-md flex items-center gap-2 transition-colors"
+                                disabledReason={generatePackAction.error ? generatePackAction.error.message : undefined}
+                                icon={<Package className="w-4 h-4" />}
+                              >
+                                Generate Proof Pack (ZIP)
+                              </ActionButton>
+                            </div>
                             <div className="mt-3 pt-3 border-t border-white/10 px-3 py-1.5">
                               <div className="text-xs font-semibold text-white/60 mb-2">Coming soon:</div>
                               <div className="space-y-1 text-xs text-white/40">

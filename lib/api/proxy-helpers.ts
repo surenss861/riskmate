@@ -8,7 +8,11 @@ const BACKEND_URL = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_U
 // Validate BACKEND_URL is set (fail fast in production)
 if (process.env.NODE_ENV === 'production' && !process.env.BACKEND_URL) {
   console.error('[Proxy] ERROR: BACKEND_URL environment variable is not set in production!')
-  console.error('[Proxy] The backend server must be deployed separately and BACKEND_URL must point to it.')
+  console.error('[Proxy] Deployment instructions:')
+  console.error('[Proxy]   1. Go to Vercel Project → Settings → Environment Variables')
+  console.error('[Proxy]   2. Add BACKEND_URL = https://your-backend-url.com (not localhost)')
+  console.error('[Proxy]   3. Redeploy (env vars don\'t apply to already-built deployments)')
+  console.error('[Proxy]   4. Backend must be deployed separately (Fly.io / Render / Railway / etc.)')
 }
 
 export async function getSessionToken(request?: NextRequest): Promise<string | null> {
@@ -64,12 +68,27 @@ export async function proxyToBackend(
   
   // Validate BACKEND_URL is set
   if (!BACKEND_URL || BACKEND_URL === 'http://localhost:5173') {
+    const isProduction = process.env.NODE_ENV === 'production' || process.env.VERCEL === '1'
     console.error('[Proxy] ERROR: BACKEND_URL not properly configured')
     return NextResponse.json({
       message: 'Backend server configuration error',
       error: 'BACKEND_URL environment variable is not set',
       code: 'BACKEND_CONFIG_ERROR',
-      hint: 'The backend server must be deployed separately and BACKEND_URL must point to it.',
+      hint: isProduction
+        ? 'Set BACKEND_URL in Vercel: Project → Settings → Environment Variables → Add BACKEND_URL = https://your-backend-url.com → Redeploy (env vars don\'t apply to already-built deployments). Backend must be deployed separately (Fly.io / Render / Railway / etc.).'
+        : 'Set BACKEND_URL environment variable in .env.local. Backend server must be running separately.',
+      troubleshooting: isProduction ? [
+        'Go to Vercel Dashboard → Your Project → Settings → Environment Variables',
+        'Add: BACKEND_URL = https://your-backend-url.com (your actual backend URL, not localhost)',
+        'Select: Production + Preview (and Development if using Vercel dev envs)',
+        'Click "Save" and redeploy (deployments don\'t pick up new env vars automatically)',
+        'Verify backend is accessible at the URL you set',
+      ] : [
+        'Set BACKEND_URL in .env.local file',
+        'Format: BACKEND_URL=http://localhost:5173 (or your backend URL)',
+        'Ensure backend server is running',
+        'Restart Next.js dev server after adding env var',
+      ],
     }, { status: 500 })
   }
   

@@ -11,7 +11,6 @@ interface SavedViewCardsProps {
   onSelectView: (view: 'review-queue' | 'insurance-ready' | 'governance-enforcement' | 'incident-review' | 'access-review' | '') => void
   onExportCSV: (view: string) => void // CSV export only (human ops workflow)
   onExportCSVLoading?: boolean // Loading state for CSV export
-  onGeneratePack?: (view: string) => void
   onAssign?: (view: string) => void
   onResolve?: (view: string) => void
   onExportEnforcement?: (view: string) => void
@@ -27,7 +26,6 @@ export function SavedViewCards({
   onSelectView, 
   onExportCSV,
   onExportCSVLoading = false,
-  onGeneratePack,
   onAssign,
   onResolve,
   onExportEnforcement,
@@ -63,11 +61,7 @@ export function SavedViewCards({
       description: 'Give insurer/client a clean, defensible package fast. Completed work records, verified controls, complete evidence, and attestations.',
       color: 'bg-green-500/20 border-green-500/30 text-green-400',
       hoverColor: 'hover:bg-green-500/30',
-      primaryAction: {
-        label: 'Generate Proof Pack',
-        icon: Package,
-        handler: onGeneratePack,
-      },
+      // No primary action - Generate Proof Pack moved to Advanced/Integrations menu
     },
     {
       id: 'governance-enforcement',
@@ -148,25 +142,22 @@ export function SavedViewCards({
             {/* Primary Action Button */}
             {view.primaryAction && (() => {
               // Action buttons (Assign, Resolve, Create Corrective Action, etc.) require selection
-              // Export buttons (Generate Proof Pack, Export Enforcement Report) don't require selection
               const requiresSelection = ['Assign', 'Resolve', 'Create Corrective Action', 'Close Incident', 'Revoke Access', 'Flag Suspicious'].includes(view.primaryAction.label)
               const isDisabled = requiresSelection && selectedCount === 0
               
               return (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    if (!isDisabled) {
-                      view.primaryAction?.handler?.(view.id)
-                    }
-                  }}
-                  disabled={isDisabled}
-                  title={isDisabled ? 'Select at least 1 item from the list below' : undefined}
-                  className={`${buttonStyles.primary} w-full text-xs py-2 mb-2 flex items-center justify-center gap-2 font-medium disabled:opacity-50 disabled:cursor-not-allowed`}
-                >
-                  {view.primaryAction.icon && <view.primaryAction.icon className="w-3.5 h-3.5" />}
-                  {view.primaryAction.label}
-                </button>
+                <div onClick={(e) => e.stopPropagation()}>
+                  <ActionButton
+                    onClick={() => view.primaryAction?.handler?.(view.id)}
+                    disabled={isDisabled}
+                    disabledReason={isDisabled ? 'Select at least 1 item from the list below' : undefined}
+                    variant="primary"
+                    className="w-full text-xs py-2 mb-2 flex items-center justify-center gap-2 font-medium"
+                    icon={view.primaryAction.icon ? <view.primaryAction.icon className="w-3.5 h-3.5" /> : undefined}
+                  >
+                    {view.primaryAction.label}
+                  </ActionButton>
+                </div>
               )
             })()}
 
@@ -177,20 +168,18 @@ export function SavedViewCards({
               const isDisabled = requiresSelection && selectedCount === 0
               
               return (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    if (!isDisabled) {
-                      view.secondaryAction?.handler?.(view.id)
-                    }
-                  }}
-                  disabled={isDisabled}
-                  title={isDisabled ? 'Select at least 1 item from the list below' : undefined}
-                  className={`${buttonStyles.secondary} w-full text-xs py-1.5 mb-2 flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed`}
-                >
-                  {view.secondaryAction.icon && <view.secondaryAction.icon className="w-3 h-3" />}
-                  {view.secondaryAction.label}
-                </button>
+                <div onClick={(e) => e.stopPropagation()}>
+                  <ActionButton
+                    onClick={() => view.secondaryAction?.handler?.(view.id)}
+                    disabled={isDisabled}
+                    disabledReason={isDisabled ? 'Select at least 1 item from the list below' : undefined}
+                    variant="secondary"
+                    className="w-full text-xs py-1.5 mb-2 flex items-center justify-center gap-1.5"
+                    icon={view.secondaryAction.icon ? <view.secondaryAction.icon className="w-3 h-3" /> : undefined}
+                  >
+                    {view.secondaryAction.label}
+                  </ActionButton>
+                </div>
               )
             })()}
 
