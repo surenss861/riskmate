@@ -577,7 +577,17 @@ export default function AuditViewPage() {
 
       if (!response.ok) {
         const error = await response.json().catch(() => ({}))
-        throw new Error(error.message || 'Failed to generate pack')
+        const errorMessage = error.message || error.error || 'Failed to generate pack'
+        // Handle connection errors with helpful message
+        if (error.code === 'BACKEND_CONNECTION_ERROR') {
+          setToast({
+            message: 'Backend server is not accessible. Please check that the backend is running.',
+            type: 'error',
+            requestId: error._proxy?.configured_backend_url,
+          })
+          return
+        }
+        throw new Error(errorMessage)
       }
 
       // Download the ZIP file
@@ -594,9 +604,18 @@ export default function AuditViewPage() {
       a.click()
       document.body.removeChild(a)
       window.URL.revokeObjectURL(url)
+
+      // Show success toast
+      setToast({
+        message: `Proof Pack generated: ${filename}`,
+        type: 'success',
+      })
     } catch (err: any) {
       console.error('Failed to generate pack:', err)
-      alert(err.message || 'Failed to generate audit pack. Please try again.')
+      setToast({
+        message: err.message || 'Failed to generate audit pack. Please try again.',
+        type: 'error',
+      })
     }
   }
 
