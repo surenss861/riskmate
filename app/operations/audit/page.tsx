@@ -1682,8 +1682,17 @@ export default function AuditViewPage() {
                               <Package className="w-4 h-4" />
                               Generate Proof Pack (ZIP)
                             </button>
+                            <div className="mt-3 pt-3 border-t border-white/10 px-3 py-1.5">
+                              <div className="text-xs font-semibold text-white/60 mb-2">Coming soon:</div>
+                              <div className="space-y-1 text-xs text-white/40">
+                                <div>• Send to Webhook</div>
+                                <div>• Write to S3</div>
+                                <div>• Send to Splunk HEC</div>
+                                <div>• Send to Datadog Logs</div>
+                              </div>
+                            </div>
                             <div className="mt-2 pt-2 border-t border-white/10 px-3 py-1.5 text-xs text-white/50">
-                              Proof Pack: Board-grade ZIP for insurers/auditors. API payload: For SIEM, GRC tools, and automation.
+                              For SIEM, GRC tools, and automation. Human-readable exports: PDF/CSV.
                             </div>
                           </div>
                         </div>
