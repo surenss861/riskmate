@@ -7,7 +7,9 @@ import { DashboardNavbar } from '@/components/dashboard/DashboardNavbar'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { executiveApi } from '@/lib/api'
 import { typography } from '@/lib/styles/design-system'
-import { AppBackground, AppShell, PageSection, GlassCard, Button, Select, PageHeader } from '@/components/shared'
+import { AppBackground, AppShell, PageSection, GlassCard, Button, Select, PageHeader, IntegrityBadge, PackCard, EnforcementBanner, Badge } from '@/components/shared'
+import { terms } from '@/lib/terms'
+import { defensibilityTerms } from '@/lib/copy/terms'
 
 interface RiskPosture {
   exposure_level: 'low' | 'moderate' | 'high'
@@ -243,22 +245,48 @@ export default function ExecutiveSnapshotPage() {
         <DashboardNavbar email={user?.email} onLogout={handleLogout} />
         <AppShell>
             <PageSection>
-              <div className="flex items-center justify-between mb-4">
-                <PageHeader
-                  title="Organizational Risk Posture"
-                  subtitle="Real-time governance confidence based on recorded evidence."
-                />
-                <div className="flex items-center gap-3">
-                  <label className="text-sm text-white/60">Time Range:</label>
-                  <Select
-                    value={timeRange}
-                    onChange={(e) => setTimeRange(e.target.value as TimeRange)}
-                  >
-                    <option value="7d">Last 7 days</option>
-                    <option value="30d">Last 30 days</option>
-                    <option value="90d">Last 90 days</option>
-                    <option value="all">All time</option>
-                  </Select>
+              <div className="flex items-start justify-between mb-4 gap-4">
+                <div className="flex-1">
+                  <PageHeader
+                    title="Defensibility Posture"
+                    subtitle="Audit-ready proof from everyday field work. Immutable compliance ledger + evidence chain-of-custody."
+                  />
+                  {/* Ledger Contract Badge */}
+                  <div className="mt-3">
+                    <Badge variant="neutral" className="text-xs">
+                      Ledger Contract v1.0 (Frozen)
+                    </Badge>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 flex-shrink-0">
+                  {/* IntegrityBadge - Top-right of header */}
+                  <IntegrityBadge 
+                    status={
+                      riskPosture.ledger_integrity === 'verified' ? 'verified' :
+                      riskPosture.ledger_integrity === 'error' ? 'mismatch' :
+                      'unverified'
+                    }
+                    verifiedThrough={riskPosture.ledger_integrity_verified_through_event_id || undefined}
+                    lastVerified={riskPosture.ledger_integrity_last_verified_at || undefined}
+                    errorDetails={riskPosture.ledger_integrity_error_details ? {
+                      failingEventId: riskPosture.ledger_integrity_error_details.failingEventId,
+                      expectedHash: riskPosture.ledger_integrity_error_details.expectedHash,
+                      gotHash: riskPosture.ledger_integrity_error_details.gotHash,
+                    } : undefined}
+                    showDetails
+                  />
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm text-white/60">Time Range:</label>
+                    <Select
+                      value={timeRange}
+                      onChange={(e) => setTimeRange(e.target.value as TimeRange)}
+                    >
+                      <option value="7d">Last 7 days</option>
+                      <option value="30d">Last 30 days</option>
+                      <option value="90d">Last 90 days</option>
+                      <option value="all">All time</option>
+                    </Select>
+                  </div>
                 </div>
               </div>
             </PageSection>
@@ -300,10 +328,10 @@ export default function ExecutiveSnapshotPage() {
               </GlassCard>
             </PageSection>
 
-            {/* Where you're exposed */}
+            {/* Exposure Assessment */}
             <PageSection>
               <h2 className="text-sm font-semibold text-white/80 mb-4">
-                Where you&apos;re exposed
+                Exposure Assessment
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {/* High Risk Jobs */}
@@ -338,8 +366,8 @@ export default function ExecutiveSnapshotPage() {
                 </div>
                 <div className="text-sm text-white/60">
                   {riskPosture.high_risk_jobs === 0 
-                    ? 'All clear — no high-risk jobs in range'
-                    : `${riskPosture.high_risk_jobs} job${riskPosture.high_risk_jobs > 1 ? 's' : ''} scoring above 75`}
+                    ? `All clear — no high-exposure ${terms.workRecord.plural.toLowerCase()} in range`
+                    : `${riskPosture.high_risk_jobs} ${terms.workRecord.plural.toLowerCase()} scoring above 75`}
                 </div>
                 {riskPosture.high_risk_jobs > 0 && riskPosture.drivers?.highRiskJobs?.[0] && (
                   <div className="mt-2 pt-2 border-t border-white/10 text-xs text-white/50">
@@ -348,7 +376,7 @@ export default function ExecutiveSnapshotPage() {
                 )}
                 {hoveredCard === 'high-risk' && (
                   <div className="mt-3 pt-3 border-t border-white/10 text-xs text-white/70">
-                    Jobs above threshold require documented mitigation to remain defensible.
+                    {terms.workRecord.plural} above threshold require documented {terms.control.plural.toLowerCase()} to remain defensible.
                   </div>
                 )}
               </GlassCard>
@@ -452,10 +480,10 @@ export default function ExecutiveSnapshotPage() {
               </div>
           </PageSection>
 
-          {/* Whether controls are working */}
+          {/* Controls Status */}
           <PageSection>
             <h2 className="text-sm font-semibold text-white/80 mb-4">
-              Whether controls are working
+              Controls Status
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {/* Jobs Flagged for Review */}
@@ -486,8 +514,8 @@ export default function ExecutiveSnapshotPage() {
                 </div>
                 <div className="text-sm text-white/60">
                   {riskPosture.flagged_jobs === 0
-                    ? 'All clear — no jobs flagged'
-                    : `${riskPosture.flagged_jobs} job${riskPosture.flagged_jobs > 1 ? 's' : ''} flagged for review`}
+                    ? `All clear — no ${terms.workRecord.plural.toLowerCase()} flagged`
+                    : `${riskPosture.flagged_jobs} ${terms.workRecord.plural.toLowerCase()} flagged for review`}
                 </div>
                 {riskPosture.flagged_jobs > 0 && riskPosture.drivers?.flagged?.[0] && (
                   <div className="mt-2 pt-2 border-t border-white/10 text-xs text-white/50">
@@ -496,7 +524,7 @@ export default function ExecutiveSnapshotPage() {
                 )}
                 {hoveredCard === 'flagged' && (
                   <div className="mt-3 pt-3 border-t border-white/10 text-xs text-white/70">
-                    Flagged jobs require safety lead oversight. Review ensures accountability and defensibility.
+                    Flagged {terms.workRecord.plural.toLowerCase()} require safety lead oversight. Review ensures accountability and defensibility.
                   </div>
                 )}
               </GlassCard>
@@ -534,8 +562,8 @@ export default function ExecutiveSnapshotPage() {
                 </div>
                 <div className="text-sm text-white/60">
                   {riskPosture.pending_signoffs === 0
-                    ? 'All clear — no pending attestations'
-                    : `${riskPosture.pending_signoffs} job${riskPosture.pending_signoffs > 1 ? 's' : ''} awaiting attestations`}
+                    ? `All clear — no pending ${terms.attestation.plural.toLowerCase()}`
+                    : `${riskPosture.pending_signoffs} ${terms.workRecord.plural.toLowerCase()} awaiting ${terms.attestation.plural.toLowerCase()}`}
                 </div>
                 {riskPosture.pending_signoffs > 0 && riskPosture.drivers?.pending?.[0] && (
                   <div className="mt-2 pt-2 border-t border-white/10 text-xs text-white/50">
@@ -544,7 +572,7 @@ export default function ExecutiveSnapshotPage() {
                 )}
                 {hoveredCard === 'pending-signoffs' && (
                   <div className="mt-3 pt-3 border-t border-white/10 text-xs text-white/70">
-                    Unsigned approvals weaken insurance and dispute defensibility.
+                    Pending {terms.attestation.plural.toLowerCase()} require safety lead review to seal the record.
                   </div>
                 )}
               </GlassCard>
@@ -578,8 +606,8 @@ export default function ExecutiveSnapshotPage() {
                 </div>
                 <div className="text-sm text-white/60">
                   {riskPosture.signed_jobs === 0
-                    ? 'No completed attestations yet'
-                    : `${riskPosture.signed_jobs} job${riskPosture.signed_jobs > 1 ? 's' : ''} with completed attestations`}
+                    ? `No sealed ${terms.attestation.plural.toLowerCase()} yet`
+                    : `${riskPosture.signed_jobs} ${terms.workRecord.plural.toLowerCase()} with sealed ${terms.attestation.plural.toLowerCase()}`}
                 </div>
                 {riskPosture.signed_jobs > 0 && riskPosture.drivers?.signed?.[0] && (
                   <div className="mt-2 pt-2 border-t border-white/10 text-xs text-white/50">
@@ -588,7 +616,7 @@ export default function ExecutiveSnapshotPage() {
                 )}
                 {hoveredCard === 'signed' && (
                   <div className="mt-3 pt-3 border-t border-white/10 text-xs text-white/70">
-                    Completed sign-offs provide defensible proof of approval and accountability.
+                    Sealed records provide defensible proof of approval and accountability.
                   </div>
                 )}
               </GlassCard>
@@ -596,12 +624,74 @@ export default function ExecutiveSnapshotPage() {
             </div>
           </PageSection>
 
-          {/* Whether proof exists */}
+          {/* Defensibility Posture */}
           <PageSection>
             <h2 className="text-sm font-semibold text-white/80 mb-4">
-              Whether proof exists
+              Defensibility Posture
             </h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {/* Ledger Integrity */}
+              <GlassCard className={`p-6 ${
+                riskPosture.ledger_integrity === 'verified' 
+                  ? 'bg-green-500/5 border-green-500/30' 
+                  : riskPosture.ledger_integrity === 'error'
+                  ? 'bg-red-500/5 border-red-500/30'
+                  : 'bg-yellow-500/5 border-yellow-500/30'
+              }`}>
+                <div className="flex items-center justify-between mb-4">
+                  <Shield className={`w-5 h-5 ${
+                    riskPosture.ledger_integrity === 'verified' 
+                      ? 'text-green-400' 
+                      : riskPosture.ledger_integrity === 'error'
+                      ? 'text-red-400'
+                      : 'text-yellow-400'
+                  }`} />
+                  <IntegrityBadge 
+                    status={
+                      riskPosture.ledger_integrity === 'verified' ? 'verified' :
+                      riskPosture.ledger_integrity === 'error' ? 'mismatch' :
+                      'unverified'
+                    }
+                    verifiedThrough={riskPosture.ledger_integrity_verified_through_event_id || undefined}
+                    lastVerified={riskPosture.ledger_integrity_last_verified_at || undefined}
+                    errorDetails={riskPosture.ledger_integrity_error_details ? {
+                      failingEventId: riskPosture.ledger_integrity_error_details.failingEventId,
+                      expectedHash: riskPosture.ledger_integrity_error_details.expectedHash,
+                      gotHash: riskPosture.ledger_integrity_error_details.gotHash,
+                    } : undefined}
+                    showDetails
+                  />
+                </div>
+                <div className="text-xs text-white/50 uppercase tracking-wide mb-2">Ledger Integrity</div>
+                <div className={`text-lg font-semibold mb-1 ${
+                  riskPosture.ledger_integrity === 'verified' 
+                    ? 'text-green-400' 
+                    : riskPosture.ledger_integrity === 'error'
+                    ? 'text-red-400'
+                    : 'text-yellow-400'
+                }`}>
+                  {getIntegrityText(riskPosture.ledger_integrity, riskPosture.ledger_integrity_last_verified_at)}
+                </div>
+                <div className="text-xs text-white/60">
+                  {riskPosture.ledger_integrity === 'verified' && riskPosture.ledger_integrity_verified_through_event_id
+                    ? `Verified through event ${riskPosture.ledger_integrity_verified_through_event_id.slice(0, 8)}...`
+                    : riskPosture.ledger_integrity === 'error' && riskPosture.ledger_integrity_error_details?.failingEventId
+                    ? `Mismatch at event ${riskPosture.ledger_integrity_error_details.failingEventId.slice(0, 8)}...`
+                    : 'Hash chain verification pending'}
+                </div>
+                {riskPosture.ledger_integrity === 'error' && riskPosture.ledger_integrity_error_details?.failingEventId && (
+                  <a
+                    href={`/operations/audit?event_id=${riskPosture.ledger_integrity_error_details.failingEventId}`}
+                    className="mt-2 text-xs text-red-400 hover:text-red-300 underline inline-block"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                    }}
+                  >
+                    View failing event →
+                  </a>
+                )}
+              </GlassCard>
+
               {/* Proof Packs Generated */}
               <div
                 onMouseEnter={() => setHoveredCard('proof-packs')}
@@ -620,7 +710,8 @@ export default function ExecutiveSnapshotPage() {
                     <span className="text-xs text-white/50 uppercase tracking-wide">Proof Packs</span>
                   </div>
                 </div>
-                <div className="flex items-baseline gap-2">
+                <div className="text-xs text-white/50 uppercase tracking-wide mb-2">Generated</div>
+                <div className="flex items-baseline gap-2 mb-2">
                   <span className="text-3xl font-bold text-white">{riskPosture.proof_packs_generated}</span>
                   {riskPosture.deltas && riskPosture.deltas.proof_packs !== 0 && (
                     <span className={`text-sm font-medium ${riskPosture.deltas.proof_packs > 0 ? 'text-green-400' : 'text-white/40'}`}>
@@ -628,94 +719,122 @@ export default function ExecutiveSnapshotPage() {
                     </span>
                   )}
                 </div>
-                <div className="text-sm text-white/60">
+                <div className="text-xs text-white/60 mb-3">
                   {riskPosture.proof_packs_generated === 0
-                    ? 'No proof packs generated yet'
+                    ? 'No proof packs generated yet. Use Pack History to generate one.'
                     : `${riskPosture.proof_packs_generated} pack${riskPosture.proof_packs_generated > 1 ? 's' : ''} generated (last 30 days)`}
                 </div>
-                {riskPosture.drivers?.proofPacks?.[0] && riskPosture.drivers.proofPacks[0].count === 0 && (
+                {/* Pack preview (if available) - stub for now, will show when pack history API is ready */}
+                {riskPosture.proof_packs_generated > 0 && (
                   <div className="mt-2 pt-2 border-t border-white/10 text-xs text-white/50">
-                    {riskPosture.drivers.proofPacks[0].label}
-                  </div>
-                )}
-                {riskPosture.proof_packs_generated > 0 && riskPosture.drivers?.proofPacks?.[0] && riskPosture.drivers.proofPacks[0].count > 0 && (
-                  <div className="mt-2 pt-2 border-t border-white/10 text-xs text-white/50">
-                    Top driver: {riskPosture.drivers.proofPacks[0].label} ({riskPosture.drivers.proofPacks[0].count})
+                    <a 
+                      href="/operations/audit?view=insurance-ready" 
+                      className="text-green-400 hover:text-green-300 underline"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                      }}
+                    >
+                      View in Pack History →
+                    </a>
                   </div>
                 )}
                 {hoveredCard === 'proof-packs' && (
                   <div className="mt-3 pt-3 border-t border-white/10 text-xs text-white/70">
-                    Exportable proof bundles ready for insurer, regulator, or legal review.
+                    Exportable proof bundles ready for insurer, regulator, or legal review. Each pack includes verification hash.
                   </div>
                 )}
               </GlassCard>
               </div>
 
-              {/* Last Governance Update */}
+              {/* Enforcement Actions */}
+              <div
+                onMouseEnter={() => setHoveredCard('enforcement')}
+                onMouseLeave={() => setHoveredCard(null)}
+              >
               <GlassCard
-                className={`p-6 cursor-pointer hover:border-blue-500/40 transition-all ${
-                  riskPosture.last_material_event_at ? '' : 'opacity-60'
+                className={`p-6 cursor-pointer hover:border-red-500/40 transition-all ${
+                  riskPosture.recent_violations > 0 ? 'bg-red-500/10 border-red-500/40 shadow-lg shadow-red-500/10' : ''
                 }`}
-                onClick={() => {
-                  if (riskPosture.last_material_event_at) {
-                    window.location.href = '/operations/audit?tab=governance&severity=material'
-                  }
-                }}
+                onClick={() => window.location.href = '/operations/audit?tab=governance&outcome=blocked'}
               >
                 <div className="flex items-center justify-between mb-4">
-                  <Lock className="w-5 h-5 text-white/40" />
-                  <span className="text-xs text-white/50 uppercase tracking-wide">Last Update</span>
+                  <Shield className={`w-5 h-5 ${riskPosture.recent_violations > 0 ? 'text-red-400' : 'text-white/40'}`} />
+                  <div className="flex items-center gap-2">
+                    {hoveredCard === 'enforcement' && (
+                      <Info className="w-4 h-4 text-white/40" />
+                    )}
+                    <span className="text-xs text-white/50 uppercase tracking-wide">Enforcement</span>
+                  </div>
                 </div>
-                <div className="text-lg font-semibold text-white mb-1">
-                  {riskPosture.last_material_event_at 
-                    ? new Date(riskPosture.last_material_event_at).toLocaleDateString()
-                    : 'No material events'}
+                <div className="text-xs text-white/50 uppercase tracking-wide mb-2">Actions</div>
+                <div className="flex items-baseline gap-2 mb-2">
+                  <span className={`text-3xl font-bold ${riskPosture.recent_violations > 0 ? 'text-red-200' : 'text-white'}`}>
+                  {riskPosture.recent_violations}
+                  </span>
+                  <span className="text-xs text-white/50">blocked</span>
+                  {riskPosture.deltas && riskPosture.deltas.violations !== 0 && (
+                    <span className={`text-sm font-medium ${riskPosture.deltas.violations > 0 ? 'text-red-400' : 'text-green-400'}`}>
+                      {formatDelta(riskPosture.deltas.violations)}
+                    </span>
+                  )}
                 </div>
-                <div className="text-sm text-white/60">
-                  {riskPosture.last_material_event_at
-                    ? 'Last material governance event'
-                    : 'No material events recorded yet'}
+                <div className="text-xs text-white/60 mb-3">
+                  {riskPosture.recent_violations === 0
+                    ? 'All actions allowed — no blocked attempts'
+                    : `${riskPosture.recent_violations} blocked attempt${riskPosture.recent_violations > 1 ? 's' : ''} (last 30 days)`}
                 </div>
+                {riskPosture.recent_violations > 0 && (
+                  <div className="mt-2 pt-2 border-t border-white/10 text-xs text-white/60">
+                    <div className="flex items-center gap-2">
+                      <Shield className="w-3 h-3 text-red-400" />
+                      <span>Recent blocked attempts logged in {terms.complianceLedger.short}</span>
+                    </div>
+                    {/* TODO: Show EnforcementBanner with real blocked event when data is available */}
+                  </div>
+                )}
+                {hoveredCard === 'enforcement' && (
+                  <div className="mt-3 pt-3 border-t border-white/10 text-xs text-white/70">
+                    Blocked actions prove governance enforcement. Each violation is logged and defensible.
+                  </div>
+                )}
               </GlassCard>
+              </div>
 
-              {/* Ledger Integrity Status */}
-              <GlassCard className={`p-6 ${
-                riskPosture.ledger_integrity === 'verified' 
-                  ? 'bg-green-500/5 border-green-500/30' 
-                  : riskPosture.ledger_integrity === 'error'
-                  ? 'bg-red-500/5 border-red-500/30'
-                  : ''
-              }`}>
+              {/* Attestations Coverage */}
+              <GlassCard className="p-6 cursor-pointer hover:border-blue-500/40 transition-all"
+                onClick={() => window.location.href = '/operations/audit?view=review-queue'}
+              >
                 <div className="flex items-center justify-between mb-4">
-                  {getIntegrityIcon(riskPosture.ledger_integrity)}
-                  <span className="text-xs text-white/50 uppercase tracking-wide">Integrity</span>
+                  <FileCheck className="w-5 h-5 text-blue-400" />
+                  <span className="text-xs text-white/50 uppercase tracking-wide">Attestations</span>
                 </div>
-                <div className={`text-lg font-semibold mb-1 ${
-                  riskPosture.ledger_integrity === 'verified' 
-                    ? 'text-green-400' 
-                    : riskPosture.ledger_integrity === 'error'
-                    ? 'text-red-400'
-                    : 'text-yellow-400'
-                }`}>
-                  {getIntegrityText(riskPosture.ledger_integrity, riskPosture.ledger_integrity_last_verified_at)}
+                <div className="text-xs text-white/50 uppercase tracking-wide mb-2">Coverage</div>
+                <div className="flex items-baseline gap-2 mb-1">
+                  <span className="text-2xl font-bold text-white">{riskPosture.signed_jobs}</span>
+                  <span className="text-xs text-white/50">sealed</span>
+                  <span className="text-xs text-white/40">/</span>
+                  <span className="text-2xl font-bold text-white">{riskPosture.pending_signoffs + riskPosture.signed_jobs}</span>
+                  <span className="text-xs text-white/50">total</span>
                 </div>
-                <div className="text-sm text-white/60">
-                  {riskPosture.ledger_integrity === 'verified' && riskPosture.ledger_integrity_verified_through_event_id
-                    ? `Verified through event ${riskPosture.ledger_integrity_verified_through_event_id.slice(0, 8)}...`
-                    : riskPosture.ledger_integrity === 'error' && riskPosture.ledger_integrity_error_details?.failingEventId
-                    ? `Mismatch at event ${riskPosture.ledger_integrity_error_details.failingEventId.slice(0, 8)}...`
-                    : 'Hash chain verification'}
+                <div className="text-xs text-white/60 mb-2">
+                  {riskPosture.pending_signoffs > 0
+                    ? `${riskPosture.pending_signoffs} pending seal${riskPosture.pending_signoffs > 1 ? 's' : ''}`
+                    : 'All records sealed'}
                 </div>
-                {riskPosture.ledger_integrity === 'error' && riskPosture.ledger_integrity_error_details?.failingEventId && (
-                  <a
-                    href={`/operations/audit?event_id=${riskPosture.ledger_integrity_error_details.failingEventId}`}
-                    className="mt-2 text-xs text-red-400 hover:text-red-300 underline inline-block"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                    }}
-                  >
-                    View failing event →
-                  </a>
+                {riskPosture.deltas && (riskPosture.deltas.signed_signoffs !== 0 || riskPosture.deltas.pending_signoffs !== 0) && (
+                  <div className="text-xs text-white/50">
+                    {riskPosture.deltas.signed_signoffs > 0 && (
+                      <span className="text-green-400">+{riskPosture.deltas.signed_signoffs} sealed</span>
+                    )}
+                    {riskPosture.deltas.pending_signoffs > 0 && (
+                      <span className="text-yellow-400"> +{riskPosture.deltas.pending_signoffs} pending</span>
+                    )}
+                  </div>
+                )}
+                {hoveredCard === 'attestations' && (
+                  <div className="mt-3 pt-3 border-t border-white/10 text-xs text-white/70">
+                    Sealed records provide defensible proof of approval and accountability.
+                  </div>
                 )}
               </GlassCard>
             </div>
