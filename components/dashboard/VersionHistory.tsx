@@ -198,7 +198,6 @@ export function VersionHistory({ jobId, entries }: VersionHistoryProps) {
                     : 'job.updated'
                   
                   const mapping = getEventMapping(eventType)
-                  const isBlocked = mapping.outcome === 'blocked' || mapping.outcome === 'failure'
                   
                   // Determine severity from actionType or default to 'info'
                   let severity: 'critical' | 'material' | 'info' = mapping.severity || 'info'
@@ -213,6 +212,8 @@ export function VersionHistory({ jobId, entries }: VersionHistoryProps) {
                   } else if (entry.actionType === 'evidence_rejected') {
                     outcome = 'failure'
                   }
+                  
+                  const isBlocked = outcome === 'blocked' || outcome === 'failure'
                   
                   return (
                     <motion.div

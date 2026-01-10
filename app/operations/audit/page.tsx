@@ -1869,7 +1869,7 @@ export default function AuditViewPage() {
                 {filteredEvents.map((event) => {
                   const mapping = getEventMapping(event.event_type)
                   const isExpanded = expandedEvents.has(event.id)
-                  const isBlocked = mapping.outcome === 'blocked' || mapping.outcome === 'failure'
+                  const isBlocked = mapping.outcome === 'blocked' || event.outcome === 'blocked' || event.outcome === 'failure'
 
                   // Enhanced visual weight for Review Queue items
                   const isReviewQueue = filters.savedView === 'review-queue'
