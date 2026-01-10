@@ -63,7 +63,7 @@ export function EventDetailsDrawer({ isOpen, onClose, event }: EventDetailsDrawe
   }
 
   const mapping = getEventMapping(event.event_type || '')
-  const isBlocked = mapping.outcome === 'blocked' || mapping.outcome === 'failure'
+  const isBlocked = mapping.outcome === 'blocked' || event.outcome === 'blocked' || event.outcome === 'failure'
   // Default to 'unverified' if not yet verified (following "Trust UI must never lie" rule)
   const integrityStatus: 'verified' | 'unverified' | 'mismatch' | 'pending' = 'unverified'
 
