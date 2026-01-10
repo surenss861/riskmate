@@ -312,7 +312,7 @@ export default function AuditReadinessPage() {
       })
     }
     
-    toast.success('Resolved — readiness updated', result?.meta?.requestId)
+    toast.success('Resolved — readiness updated. Action logged in compliance ledger.', result?.meta?.requestId)
     
     // Refetch in background to sync with backend
     loadReadinessData()
@@ -380,14 +380,14 @@ export default function AuditReadinessPage() {
         setShowBulkResult(true)
         toast.warning(`Resolved ${result.successful}, ${result.failed} failed`, meta.requestId)
       } else {
-        toast.success(`Resolved ${result.successful} items`, meta.requestId)
+        toast.success(`Resolved ${result.successful} items. Actions logged in compliance ledger.`, meta.requestId)
       }
 
       // Background refetch
       loadReadinessData()
     } catch (error: any) {
       console.error('Bulk resolve failed:', error)
-      toast.error(error.message || 'Failed to resolve items', error.requestId)
+      toast.error(error.message || 'Failed to resolve items. No ledger events were created.', error.requestId)
     }
   }
 

@@ -506,7 +506,7 @@ export function JobsPageContentView(props: JobsPageContentProps) {
               <>
                 <p className="text-white font-medium mb-2">No jobs yet</p>
                 <p className="text-sm text-white/60 mb-6 max-w-md mx-auto">
-                  Jobs are where you track safety, document hazards, and generate audit-ready reports. Create your first job to get started.
+                  Jobs are where you track safety, document hazards, and generate proof packs. Every action creates an immutable ledger event. Create your first job to get started.
                 </p>
                 <Button
                   variant="primary"

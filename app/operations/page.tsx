@@ -879,7 +879,7 @@ function DashboardPageInner() {
                   <>
                     <p className="mb-2 text-lg font-semibold text-white">No active jobs</p>
                     <p className="mb-6 text-sm text-white/60">
-                      Create a job to begin compliance tracking and audit logging.
+                      Create a job to begin compliance tracking and chain of custody. Every action is recorded as a ledger event.
                     </p>
                     <SharedButton
                       variant="primary"

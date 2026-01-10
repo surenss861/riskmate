@@ -516,8 +516,8 @@ export default function TeamPage() {
         <ConfirmModal
           isOpen={showRemoveConfirm}
           title="Deactivate Access"
-          message="This user will lose access immediately. All actions remain in the audit log."
-          consequence="This action is logged and cannot be undone. The user's account will be deactivated."
+          message="This will revoke access immediately. This action will be logged as auth.access_revoked in the compliance ledger."
+          consequence="This action creates an immutable ledger event and cannot be undone. The user's account will be deactivated, but all historical actions remain in the chain of custody."
           confirmLabel="Deactivate Access"
           destructive={true}
           onConfirm={confirmRemoveMember}

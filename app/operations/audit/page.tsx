@@ -531,13 +531,13 @@ export default function AuditViewPage() {
     {
       onSuccess: (filename) => {
         setToast({
-          message: `Export completed: ${filename}`,
+          message: `CSV export completed: ${filename}. Use this for human workflow.`,
           type: 'success',
         })
       },
       onError: (err: any) => {
         setToast({
-          message: err.message || 'Export failed. Please try again.',
+          message: err.message || 'CSV export failed. Please try again.',
           type: 'error',
         })
       },
@@ -610,13 +610,13 @@ export default function AuditViewPage() {
     {
       onSuccess: (filename) => {
         setToast({
-          message: `API payload exported: ${filename}`,
+          message: `API payload exported: ${filename}. Use this for automation/integration.`,
           type: 'success',
         })
       },
       onError: (err: any) => {
         setToast({
-          message: err.message || 'Failed to export API payload. Please try again.',
+          message: err.message || 'API payload export failed. Please try again.',
           type: 'error',
         })
       },
@@ -689,7 +689,7 @@ export default function AuditViewPage() {
       },
       onError: (err: any) => {
         setToast({
-          message: err.message || 'Failed to generate audit pack. Please try again.',
+          message: err.message || 'Failed to generate proof pack. Please try again.',
           type: 'error',
         })
       },
@@ -1780,7 +1780,7 @@ export default function AuditViewPage() {
               </div>
             </div>
             {loading ? (
-              <div className="text-center py-12 text-white/60">Loading audit events...</div>
+              <div className="text-center py-12 text-white/60">Loading ledger events...</div>
             ) : filteredEvents.length === 0 ? (
               <div className="text-center py-12 px-4">
                 <div className="max-w-md mx-auto">
@@ -1801,10 +1801,10 @@ export default function AuditViewPage() {
                       <FileText className="w-12 h-12 text-white/20 mx-auto mb-4" />
                       <h3 className="text-lg font-semibold text-white mb-2">No Operational Actions</h3>
                       <p className="text-white/60 mb-1">
-                        No Operational Actions in the last {filters.timeRange === '24h' ? '24 hours' : filters.timeRange === '7d' ? '7 days' : filters.timeRange === '30d' ? '30 days' : 'time period'}.
+                        No operational ledger events in the last {filters.timeRange === '24h' ? '24 hours' : filters.timeRange === '7d' ? '7 days' : filters.timeRange === '30d' ? '30 days' : 'time period'}.
                       </p>
                       <p className="text-white/40 text-sm mb-4">
-                        This tab shows human workflow actions (assign/resolve/waive, corrective actions, incident closures, exports). Assign or resolve items to generate the trail.
+                        This tab shows operational ledger events (assign/resolve/waive, corrective actions, incident closures, proof pack generation). Assign or resolve items to generate chain-of-custody events.
                       </p>
                     </>
                   )}
@@ -1813,7 +1813,7 @@ export default function AuditViewPage() {
                       <User className="w-12 h-12 text-white/20 mx-auto mb-4" />
                       <h3 className="text-lg font-semibold text-white mb-2">No Access Events</h3>
                       <p className="text-white/60 mb-1">
-                        No Access & Security events in the last {filters.timeRange === '24h' ? '24 hours' : filters.timeRange === '7d' ? '7 days' : filters.timeRange === '30d' ? '30 days' : 'time period'}.
+                        No access & security ledger events in the last {filters.timeRange === '24h' ? '24 hours' : filters.timeRange === '7d' ? '7 days' : filters.timeRange === '30d' ? '30 days' : 'time period'}.
                       </p>
                       <p className="text-white/40 text-sm mb-4">
                         This tab shows identity and governance changes (role changes, revocations, logins, security events). Role changes and revocations will appear here.
@@ -1846,13 +1846,13 @@ export default function AuditViewPage() {
                               headers: { 'Content-Type': 'application/json' },
                             })
                             if (response.ok) {
-                              setToast({ message: 'Sample events generated! Refresh to see them.', type: 'success' })
+                              setToast({ message: 'Sample ledger events generated! Refresh to see them.', type: 'success' })
                               setTimeout(() => loadAuditEvents(), 1000)
                             } else {
-                              setToast({ message: 'Failed to generate sample events', type: 'error' })
+                              setToast({ message: 'Failed to generate sample ledger events', type: 'error' })
                             }
                           } catch (err) {
-                            setToast({ message: 'Failed to generate sample events', type: 'error' })
+                            setToast({ message: 'Failed to generate sample ledger events', type: 'error' })
                           }
                         }}
                         className="border-dashed"
