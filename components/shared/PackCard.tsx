@@ -73,10 +73,21 @@ export interface PackCardProps {
  */
 /**
  * Helper: Format relative time (e.g., "2 hours ago")
+ * Handles invalid dates gracefully (returns "Unknown" if date is invalid)
  */
 const formatRelativeTime = (date: string | Date): string => {
   const now = new Date()
-  const then = typeof date === 'string' ? new Date(date) : date
+  let then: Date
+  try {
+    then = typeof date === 'string' ? new Date(date) : date
+    // Check if date is invalid
+    if (isNaN(then.getTime())) {
+      return 'Unknown'
+    }
+  } catch (err) {
+    return 'Unknown'
+  }
+  
   const diffMs = now.getTime() - then.getTime()
   const diffSecs = Math.floor(diffMs / 1000)
   const diffMins = Math.floor(diffSecs / 60)
