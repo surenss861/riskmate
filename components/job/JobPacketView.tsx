@@ -6,6 +6,7 @@ import { Download, FileText, Shield, CheckCircle, Clock, User, Flag, Upload, X, 
 import { cardStyles, buttonStyles, typography } from '@/lib/styles/design-system'
 import { jobsApi } from '@/lib/api'
 import { useRouter } from 'next/navigation'
+import { TrustReceiptStrip, IntegrityBadge, EnforcementBanner } from '@/components/shared'
 
 interface Attachment {
   id: string
@@ -444,45 +445,94 @@ export function JobPacketView({
           )}
         </section>
 
-        {/* Attestations (Role-based) */}
+        {/* Attestations (Role-based) - Sealed Records */}
         <section>
-          <h3 className={`${typography.h3} mb-4`}>Attestations</h3>
+          <h3 className={`${typography.h3} mb-4`}>Sealed Records</h3>
+          <p className="text-xs text-white/50 mb-4">
+            Role-based attestations that seal this job record. Each seal creates an immutable ledger event.
+          </p>
           {signoffs.length > 0 ? (
-            <div className="space-y-3">
-              {signoffs.map((signoff) => (
-                <div key={signoff.id} className="p-4 bg-white/5 rounded-lg border border-white/10">
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-sm font-semibold text-white">{signoff.signer_name}</p>
-                    <span className={`px-2 py-1 rounded text-xs ${
-                      signoff.status === 'signed' ? 'bg-green-500/20 text-green-400' :
-                      signoff.status === 'rejected' ? 'bg-red-500/20 text-red-400' :
-                      'bg-yellow-500/20 text-yellow-400'
-                    }`}>
-                      {signoff.status.toUpperCase()}
-                    </span>
+            <div className="space-y-4">
+              {signoffs.map((signoff) => {
+                // Determine event type based on signoff status and type
+                const eventType = signoff.status === 'signed' 
+                  ? 'attestation.sealed'
+                  : signoff.status === 'rejected'
+                  ? 'attestation.rejected'
+                  : 'attestation.pending'
+                
+                // Determine integrity status (following "Trust UI must never lie")
+                const integrityStatus: 'verified' | 'unverified' | 'mismatch' | 'pending' = 
+                  signoff.status === 'signed' ? 'unverified' : 'pending' // Default to unverified until verification is implemented
+                
+                // Summary text
+                const summary = signoff.status === 'signed'
+                  ? `Record sealed for ${job.client_name}`
+                  : signoff.status === 'rejected'
+                  ? `Attestation rejected: ${signoff.signoff_type}`
+                  : `Pending attestation: ${signoff.signoff_type}`
+                
+                return (
+                  <div key={signoff.id} className="space-y-3 p-4 bg-white/5 rounded-lg border border-white/10">
+                    {/* TrustReceiptStrip: Who/When/What/Why */}
+                    <TrustReceiptStrip
+                      actorName={signoff.signer_name || 'Unknown'}
+                      actorRole={signoff.signer_role || 'Member'}
+                      occurredAt={signoff.signed_at || new Date().toISOString()}
+                      eventType={eventType}
+                      category="operations"
+                      summary={summary}
+                      reason={signoff.comments || signoff.signoff_type || 'Standard attestation'}
+                      policyStatement={signoff.status === 'rejected' ? `Rejected attestation: ${signoff.comments || 'No reason provided'}` : undefined}
+                    />
+                    
+                    {/* IntegrityBadge */}
+                    <div className="flex items-center gap-2">
+                      <IntegrityBadge
+                        status={integrityStatus}
+                        showDetails
+                      />
+                      {signoff.status === 'signed' && (
+                        <span className="text-xs text-emerald-400">• Record Sealed</span>
+                      )}
+                      {signoff.status === 'rejected' && (
+                        <span className="text-xs text-red-400">• Rejected</span>
+                      )}
+                      {signoff.status === 'pending' && (
+                        <span className="text-xs text-yellow-400">• Pending Seal</span>
+                      )}
+                    </div>
+                    
+                    {/* EnforcementBanner for rejected attestations */}
+                    {signoff.status === 'rejected' && signoff.comments && (
+                      <EnforcementBanner
+                        action={`Attempted to seal record: ${signoff.signoff_type}`}
+                        blocked={true}
+                        eventId={signoff.id}
+                        policyStatement={signoff.comments || 'Attestation was rejected'}
+                        actorRole={signoff.signer_role}
+                        severity="material"
+                      />
+                    )}
                   </div>
-                  <p className="text-xs text-white/50 mb-1">Role: {signoff.signer_role}</p>
-                  <p className="text-xs text-white/50 mb-1">Type: {signoff.signoff_type}</p>
-                  {signoff.signed_at && (
-                    <p className="text-xs text-white/40 mt-2">
-                      Signed: {new Date(signoff.signed_at).toLocaleString()}
-                    </p>
-                  )}
-                  {signoff.comments && (
-                    <p className="text-xs text-white/60 mt-2 italic">{signoff.comments}</p>
-                  )}
-                </div>
-              ))}
+                )
+              })}
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="p-4 bg-white/5 rounded-lg">
+            <div className="space-y-3">
+              <div className="p-4 bg-white/5 rounded-lg border border-white/10">
                 <p className="text-sm text-white/50 mb-2">Safety Lead</p>
-                <p className="text-sm text-white/40 italic">Pending attestation</p>
+                <p className="text-xs text-white/40 italic mb-2">Pending seal record</p>
+                <p className="text-xs text-white/30">
+                  Record will be sealed when Safety Lead attests to job completion and compliance.
+                </p>
               </div>
-              <div className="p-4 bg-white/5 rounded-lg">
+              <div className="p-4 bg-white/5 rounded-lg border border-white/10">
                 <p className="text-sm text-white/50 mb-2">Owner</p>
-                <p className="text-sm text-white/40 italic">Pending attestation</p>
+                <p className="text-xs text-white/40 italic mb-2">Pending seal record</p>
+                <p className="text-xs text-white/30">
+                  Record will be sealed when Owner attests to job acceptance and final approval.
+                </p>
               </div>
             </div>
           )}

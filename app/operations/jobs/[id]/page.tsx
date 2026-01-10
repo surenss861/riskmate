@@ -22,7 +22,7 @@ import { ErrorModal } from '@/components/dashboard/ErrorModal'
 import { optimizePhoto } from '@/lib/utils/photoOptimization'
 import { getGPSLocation } from '@/lib/utils/gpsMetadata'
 import { hasPermission } from '@/lib/utils/permissions'
-import { AppBackground, AppShell, PageSection, GlassCard, Button, Badge } from '@/components/shared'
+import { AppBackground, AppShell, PageSection, GlassCard, Button, Badge, TrustReceiptStrip, IntegrityBadge, EventChip, EnforcementBanner, EvidenceStamp } from '@/components/shared'
 
 // Helper function to convert base64 to Blob
 const base64ToBlob = (base64: string, contentType = 'application/pdf') => {
@@ -742,6 +742,38 @@ export default function JobDetailPage() {
             <p className="text-xs text-white/50 mt-2">
               Status helps your team understand what stage this job is in.
             </p>
+            
+            {/* Trust Receipt: Created by / Last modified + Integrity Badge */}
+            {job && (
+              <div className="mt-6 space-y-3">
+                <TrustReceiptStrip
+                  actorName={versionHistoryEntries.length > 0 ? versionHistoryEntries[0].changedBy : 'System'}
+                  actorRole={undefined}
+                  occurredAt={job.created_at}
+                  eventType="job.created"
+                  category="operations"
+                  summary={`Created job for ${job.client_name}`}
+                  compact
+                />
+                {versionHistoryEntries.length > 1 && (
+                  <TrustReceiptStrip
+                    actorName={versionHistoryEntries[versionHistoryEntries.length - 1].changedBy}
+                    actorRole={undefined}
+                    occurredAt={versionHistoryEntries[versionHistoryEntries.length - 1].changedAt}
+                    eventType="job.updated"
+                    category="operations"
+                    summary={`Last modified: ${versionHistoryEntries[versionHistoryEntries.length - 1].actionType || versionHistoryEntries[versionHistoryEntries.length - 1].changeType}`}
+                    compact
+                  />
+                )}
+                <div>
+                  <IntegrityBadge
+                    status="unverified"
+                    showDetails
+                  />
+                </div>
+              </div>
+            )}
           </PageSection>
 
           <div className="grid lg:grid-cols-3 gap-6 mb-16">

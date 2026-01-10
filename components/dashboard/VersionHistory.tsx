@@ -3,6 +3,8 @@
 import { motion } from 'framer-motion'
 import { useState, useMemo } from 'react'
 import { Plus, Edit, Trash2, FileText, Image, CheckCircle, XCircle, User, Calendar } from 'lucide-react'
+import { EventChip, TrustReceiptStrip, IntegrityBadge, EnforcementBanner } from '@/components/shared'
+import { getEventMapping } from '@/lib/audit/eventMapper'
 
 interface VersionHistoryEntry {
   id: string
@@ -185,45 +187,104 @@ export function VersionHistory({ jobId, entries }: VersionHistoryProps) {
                 </h4>
               </div>
               <div className="space-y-2 pl-5 border-l border-white/10">
-                {(expanded || dateGroup === 'Today' ? groupEntries : groupEntries.slice(0, 5)).map((entry, index) => (
-                  <motion.div
-                    key={entry.id}
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.03 }}
-                    className="flex items-start gap-3 p-3 rounded-lg bg-[#121212]/60 border border-white/10 hover:bg-[#121212]/80 transition-colors group"
-                  >
-                    <div className="flex-shrink-0 mt-0.5">
-                      {getChangeIcon(entry)}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-white/90 mb-1 group-hover:text-white transition-colors">
-                        {formatChange(entry)}
-                      </p>
-                      <div className="flex items-center gap-2 text-xs text-white/50">
-                        <span>by {entry.changedBy}</span>
-                        <span>•</span>
-                        <span>{new Date(entry.changedAt).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })}</span>
-                        {entry.metadata?.templateId && (
-                          <>
-                            <span>•</span>
+                {(expanded || dateGroup === 'Today' ? groupEntries : groupEntries.slice(0, 5)).map((entry, index) => {
+                  // Map VersionHistoryEntry to event format for trust components
+                  const eventType = entry.actionType 
+                    ? entry.actionType.replace(/_/g, '.')
+                    : entry.changeType === 'created' 
+                    ? 'job.created'
+                    : entry.changeType === 'deleted'
+                    ? 'job.deleted'
+                    : 'job.updated'
+                  
+                  const mapping = getEventMapping(eventType)
+                  const isBlocked = mapping.outcome === 'blocked' || mapping.outcome === 'failure'
+                  
+                  // Determine severity from actionType or default to 'info'
+                  let severity: 'critical' | 'material' | 'info' = mapping.severity || 'info'
+                  if (entry.actionType === 'evidence_rejected' || entry.changeType === 'deleted') {
+                    severity = 'material'
+                  }
+                  
+                  // Determine outcome from actionType or default to 'allowed'
+                  let outcome: 'blocked' | 'allowed' | 'success' | 'failure' = mapping.outcome || 'allowed'
+                  if (entry.actionType === 'evidence_approved' || entry.actionType === 'mitigation_completed') {
+                    outcome = 'success'
+                  } else if (entry.actionType === 'evidence_rejected') {
+                    outcome = 'failure'
+                  }
+                  
+                  return (
+                    <motion.div
+                      key={entry.id}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.03 }}
+                      className="p-4 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 transition-colors space-y-3"
+                    >
+                      {/* EventChip: Type + Severity + Outcome */}
+                      <div>
+                        <EventChip
+                          eventType={eventType}
+                          severity={severity}
+                          outcome={outcome}
+                          showOutcome
+                        />
+                      </div>
+                      
+                      {/* TrustReceiptStrip: Who/When/What/Why */}
+                      <div>
+                        <TrustReceiptStrip
+                          actorName={entry.changedBy || 'System'}
+                          actorRole={undefined}
+                          occurredAt={entry.changedAt}
+                          eventType={eventType}
+                          category={mapping.category}
+                          summary={formatChange(entry)}
+                          compact
+                        />
+                      </div>
+                      
+                      {/* IntegrityBadge */}
+                      <div>
+                        <IntegrityBadge
+                          status="unverified"
+                          showDetails
+                        />
+                      </div>
+                      
+                      {/* EnforcementBanner: Show for blocked outcomes */}
+                      {isBlocked && mapping.policyStatement && (
+                        <div>
+                          <EnforcementBanner
+                            action={formatChange(entry)}
+                            blocked={true}
+                            eventId={entry.id}
+                            policyStatement={mapping.policyStatement}
+                            actorRole={undefined}
+                            severity={severity}
+                          />
+                        </div>
+                      )}
+                      
+                      {/* Metadata links */}
+                      {(entry.metadata?.templateId || entry.metadata?.documentId) && (
+                        <div className="flex items-center gap-2 text-xs text-white/50 pt-2 border-t border-white/10">
+                          {entry.metadata?.templateId && (
                             <button className="text-[#F97316] hover:text-[#FB923C] transition-colors">
                               View template
                             </button>
-                          </>
-                        )}
-                        {entry.metadata?.documentId && (
-                          <>
-                            <span>•</span>
+                          )}
+                          {entry.metadata?.documentId && (
                             <button className="text-[#F97316] hover:text-[#FB923C] transition-colors">
                               View evidence
                             </button>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  </motion.div>
-                ))}
+                          )}
+                        </div>
+                      )}
+                    </motion.div>
+                  )
+                })}
               </div>
             </div>
           ))}

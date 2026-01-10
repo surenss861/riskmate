@@ -5,6 +5,7 @@ import * as React from 'react'
 import { motion } from 'framer-motion'
 import { modalStyles, buttonStyles, spacing, shadows, inputStyles, badgeStyles } from '@/lib/styles/design-system'
 import { ConfirmModal } from './ConfirmModal'
+import { EvidenceStamp } from '@/components/shared'
 
 interface EvidenceItem {
   id: string
@@ -223,15 +224,23 @@ export function EvidenceVerification({
                         {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
                       </span>
                     </div>
-                    <h4 className="text-sm font-semibold text-white mb-1">{item.name}</h4>
-                    <p className="text-xs text-white/50">
-                      Submitted by {item.submittedBy} on{' '}
-                      {new Date(item.submittedAt).toLocaleDateString()}
-                    </p>
-                    {item.verifiedBy && (
+                    <h4 className="text-sm font-semibold text-white mb-2">{item.name}</h4>
+                    
+                    {/* EvidenceStamp: Fingerprinted + Uploader + Timestamp */}
+                    <div className="mb-2">
+                      <EvidenceStamp
+                        uploadedAt={item.submittedAt}
+                        uploadedBy={item.submittedBy}
+                        uploadedByRole={undefined} // TODO: Add role if available from evidence data
+                        verified={item.status === 'approved'}
+                        compact
+                      />
+                    </div>
+                    
+                    {item.verifiedBy && item.verifiedAt && (
                       <p className="text-xs text-white/50 mt-1">
                         Verified by {item.verifiedBy} on{' '}
-                        {new Date(item.verifiedAt!).toLocaleDateString()}
+                        {new Date(item.verifiedAt).toLocaleDateString()}
                       </p>
                     )}
                     {item.rejectionReason && (
