@@ -11,14 +11,16 @@ import { Button, type ButtonProps } from './Button'
 import { Loader2 } from 'lucide-react'
 import { ReactNode, useState } from 'react'
 
-export interface ActionButtonProps extends Omit<ButtonProps, 'onClick' | 'disabled'> {
+export interface ActionButtonProps {
   onClick: ((e?: React.MouseEvent<HTMLButtonElement>) => Promise<void> | void) | (() => Promise<void> | void)
   loading?: boolean
   disabled?: boolean
   disabledReason?: string // Tooltip shown when disabled
   icon?: ReactNode
   children: ReactNode
-  variant?: 'primary' | 'secondary' | 'destructive' | 'outline'
+  variant?: 'primary' | 'secondary' | 'ghost' // Match Button component variants
+  size?: 'sm' | 'md' | 'lg'
+  className?: string
   confirmMessage?: string // Optional: show confirm dialog for dangerous actions
   showSuccessToast?: boolean // Auto-show success toast (requires toast hook)
   showErrorToast?: boolean // Auto-show error toast (requires toast hook)
@@ -82,12 +84,12 @@ export function ActionButton({
 
   return (
     <Button
-      variant={variant}
+      variant={variant || 'primary'}
+      size={props.size || 'md'}
       className={className}
       disabled={isDisabled}
       onClick={handleClick}
       title={title}
-      {...props}
     >
       {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
       {!loading && icon && <span className="mr-2">{icon}</span>}
