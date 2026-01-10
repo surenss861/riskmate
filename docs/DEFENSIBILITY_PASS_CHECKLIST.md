@@ -493,10 +493,10 @@
 ### Productivity Words → Defensibility Words
 
 - [ ] "Complete checklist" → "Seal record"
-- [ ] "Export report" → "Generate proof pack"
-- [ ] "Activity log" → "Chain of custody"
+- [ ] "Export report" → "Generate Proof Pack" (always capitalize)
+- [ ] "Activity log" → "Chain of Custody" (always capitalize, never "activity log" anywhere)
 - [ ] "Permissions" → "Governance"
-- [ ] "User actions" → "Ledger events"
+- [ ] "User actions" → "Ledger Events" (always capitalize)
 - [ ] "Download" → "Generate pack" (for exports)
 - [ ] "Save" → "Record" (for actions that create ledger events)
 - [ ] "Update" → "Mutate" (for actions that modify records)
