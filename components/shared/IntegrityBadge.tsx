@@ -9,7 +9,6 @@
 
 import { Shield, AlertTriangle, CheckCircle2, XCircle } from 'lucide-react'
 import { Badge } from './Badge'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
 export type IntegrityStatus = 'verified' | 'unverified' | 'mismatch' | 'pending'
 

@@ -5,17 +5,18 @@ import clsx from 'clsx'
 
 export type BadgeVariant = 'neutral' | 'warning' | 'critical' | 'success'
 
-type BadgeProps = {
+export type BadgeProps = {
   variant?: BadgeVariant
   children: ReactNode
   className?: string
+  title?: string // HTML title attribute for tooltips
 }
 
 /**
  * Badge - Status indicator using muted glass backgrounds
  * No colored dots - use badges instead
  */
-export function Badge({ variant = 'neutral', children, className }: BadgeProps) {
+export function Badge({ variant = 'neutral', children, className, title }: BadgeProps) {
   const variantStyles = {
     neutral: 'bg-white/5 text-white/80 border border-white/10',
     warning: 'bg-[#F97316]/10 text-[#F97316]/90 border border-[#F97316]/20',
@@ -30,6 +31,7 @@ export function Badge({ variant = 'neutral', children, className }: BadgeProps) 
         variantStyles[variant],
         className
       )}
+      title={title}
     >
       {children}
     </span>

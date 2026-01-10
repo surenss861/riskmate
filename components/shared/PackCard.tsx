@@ -107,12 +107,12 @@ export function PackCard({
   }
 
   const contentsList = [
-    contents.ledger_pdf && { name: 'Ledger PDF', icon: <FileText className="w-3 h-3" /> },
-    contents.controls_csv && { name: 'Controls CSV', icon: <FileText className="w-3 h-3" /> },
-    contents.attestations_csv && { name: 'Attestations CSV', icon: <FileText className="w-3 h-3" /> },
-    contents.evidence_manifest && { name: 'Evidence Manifest', icon: <FileText className="w-3 h-3" /> },
-    contents.attachments && { name: `${contents.attachments} attachments`, icon: <Package className="w-3 h-3" /> },
-  ].filter(Boolean)
+    contents.ledger_pdf ? { name: 'Ledger PDF', icon: <FileText className="w-3 h-3" /> } : null,
+    contents.controls_csv ? { name: 'Controls CSV', icon: <FileText className="w-3 h-3" /> } : null,
+    contents.attestations_csv ? { name: 'Attestations CSV', icon: <FileText className="w-3 h-3" /> } : null,
+    contents.evidence_manifest ? { name: 'Evidence Manifest', icon: <FileText className="w-3 h-3" /> } : null,
+    contents.attachments ? { name: `${contents.attachments} attachments`, icon: <Package className="w-3 h-3" /> } : null,
+  ].filter((item): item is { name: string; icon: React.ReactNode } => item !== null)
 
   return (
     <div className={`p-4 bg-white/5 border border-white/10 rounded-lg space-y-4 ${className}`}>
@@ -224,7 +224,8 @@ export function PackCard({
                 className="flex items-center gap-1.5 text-xs px-2 py-1 bg-white/5 rounded border border-white/10"
               >
                 <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                <span className="text-white/80">{item?.name}</span>
+                <span className="text-white/80">{item.name}</span>
+                {item.icon}
               </div>
             ))}
           </div>
