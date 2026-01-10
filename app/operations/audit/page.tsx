@@ -1348,7 +1348,7 @@ export default function AuditViewPage() {
               if (savedView === 'governance-enforcement') setActiveTab('governance')
               if (savedView === 'access-review') setActiveTab('access')
             }}
-            onExport={handleExportFromView}
+            onExportCSV={(view) => handleExportFromView('csv', view)}
             onGeneratePack={handleGeneratePack}
             onAssign={(view) => {
               // Check for selection first

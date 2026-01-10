@@ -8,7 +8,7 @@ interface SavedViewCardsProps {
   activeView: string
   selectedCount?: number // Number of selected items (action buttons require selection)
   onSelectView: (view: 'review-queue' | 'insurance-ready' | 'governance-enforcement' | 'incident-review' | 'access-review' | '') => void
-  onExport: (format: 'csv' | 'json', view: string) => void
+  onExportCSV: (view: string) => void // CSV export only (human ops workflow)
   onGeneratePack?: (view: string) => void
   onAssign?: (view: string) => void
   onResolve?: (view: string) => void
@@ -23,7 +23,7 @@ export function SavedViewCards({
   activeView, 
   selectedCount = 0,
   onSelectView, 
-  onExport,
+  onExportCSV,
   onGeneratePack,
   onAssign,
   onResolve,
@@ -191,30 +191,18 @@ export function SavedViewCards({
               )
             })()}
 
-            {/* Export Buttons (always available) */}
-            <div className="flex gap-2 mt-2">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onExport('csv', view.id)
-                }}
-                className={`${buttonStyles.secondary} flex-1 text-xs py-1.5 flex items-center justify-center gap-1`}
-              >
-                <Download className="w-3 h-3" />
-                CSV
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onExport('json', view.id)
-                }}
-                title="API payload: For integrations and verification. Humans should use PDF/CSV."
-                className={`${buttonStyles.secondary} flex-1 text-xs py-1.5 flex items-center justify-center gap-1`}
-              >
-                <Download className="w-3 h-3" />
-                API
-              </button>
-            </div>
+            {/* Export CSV Button (consistent across all cards, human ops workflow) */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                onExportCSV(view.id)
+              }}
+              className={`${buttonStyles.secondary} w-full text-xs py-1.5 mt-2 flex items-center justify-center gap-1`}
+              title="Export CSV: Human-readable export for ops workflows"
+            >
+              <Download className="w-3 h-3" />
+              Export CSV
+            </button>
           </div>
         )
       })}
