@@ -12,7 +12,7 @@ import { Loader2 } from 'lucide-react'
 import { ReactNode, useState } from 'react'
 
 export interface ActionButtonProps extends Omit<ButtonProps, 'onClick' | 'disabled'> {
-  onClick: () => Promise<void> | void
+  onClick: ((e?: React.MouseEvent<HTMLButtonElement>) => Promise<void> | void) | (() => Promise<void> | void)
   loading?: boolean
   disabled?: boolean
   disabledReason?: string // Tooltip shown when disabled
