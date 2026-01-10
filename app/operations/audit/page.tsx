@@ -1536,7 +1536,7 @@ export default function AuditViewPage() {
               <div className="text-2xl font-bold text-green-400">{summaryMetrics.proofPacksGenerated}</div>
             </GlassCard>
             <GlassCard className="p-4">
-              <div className="text-sm text-white/60 mb-1">Sign-offs</div>
+              <div className="text-sm text-white/60 mb-1">Attestations</div>
               <div className="text-2xl font-bold text-blue-400">{summaryMetrics.signoffsRecorded}</div>
             </GlassCard>
             <GlassCard className="p-4">
