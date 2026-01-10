@@ -1,7 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 
+// Server-only: BACKEND_URL should never be exposed to client
+// NEXT_PUBLIC_BACKEND_URL is only for fallback in local dev
 const BACKEND_URL = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5173'
+
+// Validate BACKEND_URL is set (fail fast in production)
+if (process.env.NODE_ENV === 'production' && !process.env.BACKEND_URL) {
+  console.error('[Proxy] ERROR: BACKEND_URL environment variable is not set in production!')
+  console.error('[Proxy] The backend server must be deployed separately and BACKEND_URL must point to it.')
+}
 
 export async function getSessionToken(request?: NextRequest): Promise<string | null> {
   // First, try to get token from Authorization header (sent by frontend)
@@ -48,10 +56,22 @@ export async function proxyToBackend(
     method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
     body?: any
     isFileDownload?: boolean
+    timeout?: number // Optional timeout in ms (default 25s for file downloads, 10s for JSON)
   } = {}
 ): Promise<NextResponse> {
   // Declare backendUrl outside try block so it's accessible in catch
   let backendUrl = `${BACKEND_URL}${endpoint}`
+  
+  // Validate BACKEND_URL is set
+  if (!BACKEND_URL || BACKEND_URL === 'http://localhost:5173') {
+    console.error('[Proxy] ERROR: BACKEND_URL not properly configured')
+    return NextResponse.json({
+      message: 'Backend server configuration error',
+      error: 'BACKEND_URL environment variable is not set',
+      code: 'BACKEND_CONFIG_ERROR',
+      hint: 'The backend server must be deployed separately and BACKEND_URL must point to it.',
+    }, { status: 500 })
+  }
   
   try {
     const sessionToken = await getSessionToken(request)
@@ -60,7 +80,7 @@ export async function proxyToBackend(
       return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
     }
 
-    const { method = 'GET', body, isFileDownload = false } = options
+    const { method = 'GET', body, isFileDownload = false, timeout } = options
 
     // Build URL with query params for GET requests
     backendUrl = `${BACKEND_URL}${endpoint}`
@@ -70,6 +90,14 @@ export async function proxyToBackend(
 
     console.log(`[Proxy] ${method} ${backendUrl}`)
 
+    // Set timeout (longer for file downloads like ZIP generation)
+    const defaultTimeout = isFileDownload ? 30_000 : 10_000 // 30s for ZIP, 10s for JSON
+    const requestTimeout = timeout || defaultTimeout
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => {
+      controller.abort()
+    }, requestTimeout)
+
     const fetchOptions: RequestInit = {
       method,
       headers: {
@@ -77,13 +105,38 @@ export async function proxyToBackend(
         'Authorization': `Bearer ${sessionToken}`,
       },
       cache: 'no-store',
+      signal: controller.signal, // Enable timeout/abort
     }
 
     if (body && method !== 'GET') {
       fetchOptions.body = JSON.stringify(body)
     }
 
-    const response = await fetch(backendUrl, fetchOptions)
+    let response: Response
+    try {
+      response = await fetch(backendUrl, fetchOptions)
+      clearTimeout(timeoutId) // Clear timeout if request completes
+    } catch (fetchError: any) {
+      clearTimeout(timeoutId)
+      
+      // Handle abort (timeout)
+      if (fetchError.name === 'AbortError' || controller.signal.aborted) {
+        console.error(`[Proxy] Request timeout for ${endpoint} after ${requestTimeout}ms`)
+        return NextResponse.json({
+          message: 'Request timeout',
+          error: `Backend request exceeded ${requestTimeout}ms timeout`,
+          code: 'REQUEST_TIMEOUT',
+          _proxy: {
+            backend_url: backendUrl,
+            timeout_ms: requestTimeout,
+            hint: 'The backend server may be slow or unreachable. For long-running operations like ZIP generation, consider using async job pattern.',
+          },
+        }, { status: 504 }) // Gateway Timeout
+      }
+      
+      // Re-throw other fetch errors (will be caught by outer catch)
+      throw fetchError
+    }
 
     if (!response.ok) {
       // Try to get error text first (might not be JSON)
@@ -149,6 +202,7 @@ export async function proxyToBackend(
     
     // Return more helpful error for connection issues
     if (isConnectionError) {
+      const isLocalhostDefault = BACKEND_URL === 'http://localhost:5173' && !process.env.BACKEND_URL
       return NextResponse.json(
         { 
           message: 'Backend server is not accessible',
@@ -157,9 +211,15 @@ export async function proxyToBackend(
           _proxy: {
             backend_url: backendUrl,
             configured_backend_url: BACKEND_URL,
-            hint: BACKEND_URL === 'http://localhost:5173' 
+            hint: isLocalhostDefault
               ? 'BACKEND_URL environment variable is not set. The backend server must be deployed separately and BACKEND_URL must point to it.'
-              : 'Check that the backend server is running and accessible at the configured URL.',
+              : 'Check that the backend server is running and accessible at the configured URL. For long-running operations (ZIP generation), consider async job pattern.',
+            troubleshooting: [
+              'Verify BACKEND_URL environment variable is set correctly',
+              'Check that backend server is running and accessible',
+              'For Vercel deployments, ensure backend is deployed separately',
+              'For long operations (>30s), use async job + polling pattern',
+            ],
           },
           details: process.env.NODE_ENV === 'development' ? error.stack : undefined
         },
