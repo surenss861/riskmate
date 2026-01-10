@@ -7,6 +7,9 @@ import RiskMateLogo from '@/components/RiskMateLogo'
 import { ErrorModal } from '@/components/dashboard/ErrorModal'
 import { subscriptionsApi } from '@/lib/api'
 import { cardStyles, buttonStyles } from '@/lib/styles/design-system'
+import { Badge, PackCard, IntegrityBadge } from '@/components/shared'
+import { defensibilityTerms } from '@/lib/copy/terms'
+import { terms } from '@/lib/terms'
 
 type PlanCode = 'starter' | 'pro' | 'business'
 
@@ -75,16 +78,27 @@ function PricingContent() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
           >
-            Simple, Transparent Pricing
+            Defensibility Tiers
           </motion.h1>
           <motion.p
-            className="text-xl text-white/60"
+            className="text-xl text-white/60 mb-6"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.1 }}
           >
-            For teams that need audit-proof compliance.
+            Audit-ready proof packs from everyday field work. Immutable compliance ledger + evidence chain-of-custody.
           </motion.p>
+          {/* Ledger Contract Badge */}
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.2 }}
+            className="flex justify-center mb-8"
+          >
+            <Badge variant="neutral" className="text-xs">
+              Ledger Contract v1.0 (Frozen)
+            </Badge>
+          </motion.div>
         </div>
 
         {/* Pricing Cards */}
@@ -119,11 +133,11 @@ function PricingContent() {
               </li>
               <li className="flex items-start">
                 <span className="text-[#F97316] mr-2">✓</span>
-                <span className="text-white/70">Branded watermark PDFs</span>
+                <span className="text-white/70">Branded watermark proof packs</span>
               </li>
               <li className="flex items-start">
                 <span className="text-[#F97316] mr-2">✓</span>
-                <span className="text-white/70">View-only reports</span>
+                <span className="text-white/70">View-only proof packs</span>
               </li>
             </ul>
             <button
@@ -178,11 +192,11 @@ function PricingContent() {
               </li>
               <li className="flex items-start">
                 <span className="text-[#F97316] mr-2">✓</span>
-                <span className="text-white/70">Branded PDFs + notifications</span>
+                <span className="text-white/70">Branded proof packs + notifications</span>
               </li>
               <li className="flex items-start">
                 <span className="text-[#F97316] mr-2">✓</span>
-                <span className="text-white/70">Live, shareable reports</span>
+                <span className="text-white/70">Live, shareable proof packs</span>
               </li>
               <li className="flex items-start">
                 <span className="text-[#F97316] mr-2">✓</span>
@@ -251,7 +265,7 @@ function PricingContent() {
               </li>
               <li className="flex items-start">
                 <span className="text-[#F97316] mr-2">✓</span>
-                <span className="text-white font-semibold">Permit Pack Generator (ZIP bundle)</span>
+                <span className="text-white font-semibold">Generate proof packs (ZIP bundle with verification hash)</span>
               </li>
               <li className="flex items-start">
                 <span className="text-[#F97316] mr-2">✓</span>
@@ -259,7 +273,7 @@ function PricingContent() {
               </li>
               <li className="flex items-start">
                 <span className="text-[#F97316] mr-2">✓</span>
-                <span className="text-white font-semibold">Immutable audit history</span>
+                <span className="text-white font-semibold">Immutable compliance ledger</span>
               </li>
               <li className="flex items-start">
                 <span className="text-[#F97316] mr-2">✓</span>
@@ -309,22 +323,34 @@ function PricingContent() {
                   <td className="p-4 text-center text-[#F97316]">✓</td>
                 </tr>
                 <tr className="border-b border-white/5">
-                  <td className="p-4 text-white/70">PDF reports</td>
+                  <td className="p-4 text-white/70">Proof packs</td>
                   <td className="p-4 text-center text-white/70">Watermarked</td>
                   <td className="p-4 text-center text-[#F97316]">Branded</td>
-                  <td className="p-4 text-center text-[#F97316]">Branded</td>
+                  <td className="p-4 text-center text-[#F97316]">Branded + verification hash</td>
                 </tr>
                 <tr className="border-b border-white/5">
-                  <td className="p-4 text-white/70">Report sharing</td>
+                  <td className="p-4 text-white/70">Proof pack sharing</td>
                   <td className="p-4 text-center text-white/70">View-only</td>
                   <td className="p-4 text-center text-[#F97316]">Live, shareable</td>
                   <td className="p-4 text-center text-[#F97316]">Live, shareable</td>
                 </tr>
                 <tr className="border-b border-white/5">
-                  <td className="p-4 text-white/70">Audit history</td>
+                  <td className="p-4 text-white/70">Compliance ledger</td>
                   <td className="p-4 text-center text-white/40">—</td>
                   <td className="p-4 text-center text-white/40">—</td>
                   <td className="p-4 text-center text-[#F97316]">Immutable</td>
+                </tr>
+                <tr className="border-b border-white/5">
+                  <td className="p-4 text-white/70">Chain of custody</td>
+                  <td className="p-4 text-center text-white/40">—</td>
+                  <td className="p-4 text-center text-white/40">—</td>
+                  <td className="p-4 text-center text-[#F97316]">Complete</td>
+                </tr>
+                <tr className="border-b border-white/5">
+                  <td className="p-4 text-white/70">Governance enforcement</td>
+                  <td className="p-4 text-center text-white/40">—</td>
+                  <td className="p-4 text-center text-white/40">Basic</td>
+                  <td className="p-4 text-center text-[#F97316]">Full role-based</td>
                 </tr>
                 <tr className="border-b border-white/5">
                   <td className="p-4 text-white/70">Priority support</td>
@@ -333,19 +359,54 @@ function PricingContent() {
                   <td className="p-4 text-center text-[#F97316]">Dedicated</td>
                 </tr>
                 <tr className="border-b border-white/5">
-                  <td className="p-4 text-white/70">Permit Pack Generator</td>
+                  <td className="p-4 text-white/70">Generate proof packs</td>
                   <td className="p-4 text-center text-white/40">—</td>
                   <td className="p-4 text-center text-white/40">—</td>
-                  <td className="p-4 text-center text-[#F97316]">✓</td>
+                  <td className="p-4 text-center text-[#F97316]">✓ (ZIP with verification hash)</td>
                 </tr>
                 <tr>
-                  <td className="p-4 text-white/70">Organization analytics</td>
+                  <td className="p-4 text-white/70">Attestations / Seal records</td>
                   <td className="p-4 text-center text-white/40">—</td>
-                  <td className="p-4 text-center text-white/40">—</td>
-                  <td className="p-4 text-center text-[#F97316]">✓</td>
+                  <td className="p-4 text-center text-white/40">Basic</td>
+                  <td className="p-4 text-center text-[#F97316]">Full workflow</td>
                 </tr>
               </tbody>
             </table>
+          </div>
+        </div>
+
+        {/* PackCard Example (Demo) */}
+        <div className="mb-16 bg-white/5 border border-white/10 rounded-2xl p-8">
+          <h2 className="text-3xl font-bold text-center mb-4">Proof Pack Example</h2>
+          <p className="text-center text-white/60 mb-6">
+            Business plan users can generate deterministic proof packs with verification hashes for audit-ready documentation.
+          </p>
+          <div className="max-w-2xl mx-auto">
+            {/* Example PackCard (clearly labeled as demo, unverified) */}
+            <div className="mb-4">
+              <div className="text-xs text-white/50 mb-2 text-center">Example (demo only — not a real generated pack)</div>
+              <PackCard
+                variant="compact"
+                packId="pack_demo_example_1234567890abcdef"
+                packType="proof"
+                generatedAt={new Date(Date.now() - 2 * 60 * 60 * 1000)} // 2 hours ago
+                integrityStatus="unverified" // Truth-safe: demo pack is not verified
+                contents={{
+                  ledger_pdf: true,
+                  controls_csv: true,
+                  attestations_csv: true,
+                  evidence_manifest: true,
+                  manifest_json: true,
+                  attachments: 12,
+                }}
+                onClick={() => {
+                  // No-op for demo
+                }}
+              />
+            </div>
+            <div className="text-xs text-white/50 text-center mt-4 italic">
+              Real proof packs include immutable compliance ledger, evidence chain-of-custody, and verification hash for audit defense.
+            </div>
           </div>
         </div>
 
@@ -360,7 +421,7 @@ function PricingContent() {
               className="bg-white/5 border border-white/10 rounded-xl p-6"
             >
               <p className="text-white/80 mb-4 italic">
-                &quot;RiskMate cut my reporting time in half. Clients love the PDFs.&quot;
+                &quot;RiskMate cut my documentation time in half. Clients love the proof packs.&quot;
               </p>
               <p className="text-sm text-white/60">— James L., Electrical Contractor</p>
             </motion.div>
@@ -371,7 +432,7 @@ function PricingContent() {
               className="bg-white/5 border border-white/10 rounded-xl p-6"
             >
               <p className="text-white/80 mb-4 italic">
-                &quot;The Permit Pack feature pays for itself every week.&quot;
+                &quot;The proof pack feature pays for itself every week. Verification hash makes audits effortless.&quot;
               </p>
               <p className="text-sm text-white/60">— Hector R., Roofing Company Owner</p>
             </motion.div>
@@ -438,19 +499,19 @@ function PricingContent() {
           <div className="space-y-6">
             <div className="bg-white/5 border border-white/10 rounded-xl p-6">
               <h3 className="text-lg font-semibold mb-2">Can I use RiskMate as a solo contractor?</h3>
-              <p className="text-white/70">Absolutely! The Starter plan is perfect for solo contractors. You get 3 jobs per month, automatic risk scoring, and branded PDF reports—everything you need to document your work professionally.</p>
+              <p className="text-white/70">Absolutely! The Starter plan is perfect for solo contractors. You get 3 {terms.workRecord.plural.toLowerCase()} per month, automatic risk scoring, and branded proof packs—everything you need to document your work professionally.</p>
             </div>
             <div className="bg-white/5 border border-white/10 rounded-xl p-6">
               <h3 className="text-lg font-semibold mb-2">Can I invite subcontractors?</h3>
-              <p className="text-white/70">Yes! Pro and Business plans allow you to invite team members. Subcontractors can be added as team members with appropriate permissions. They can document hazards, upload photos, and complete mitigations—all tracked under your organization.</p>
+              <p className="text-white/70">Yes! Pro and Business plans allow you to invite team members. Subcontractors can be added as team members with appropriate governance roles. They can document hazards, upload evidence, and complete controls—all tracked in the immutable compliance ledger.</p>
             </div>
             <div className="bg-white/5 border border-white/10 rounded-xl p-6">
               <h3 className="text-lg font-semibold mb-2">Does every worker need a login?</h3>
               <p className="text-white/70">No. You can document jobs yourself, or invite team members as needed. On the Starter plan, you get 1 seat. Pro gives you up to 5 seats, and Business offers unlimited seats for larger crews.</p>
             </div>
             <div className="bg-white/5 border border-white/10 rounded-xl p-6">
-              <h3 className="text-lg font-semibold mb-2">Are my job reports private?</h3>
-              <p className="text-white/70">Yes. All your data is encrypted and stored securely. Each organization&apos;s data is completely isolated. You control who sees your reports—share them with clients via secure links, or keep them private for your records.</p>
+              <h3 className="text-lg font-semibold mb-2">Are my proof packs private?</h3>
+              <p className="text-white/70">Yes. All your data is encrypted and stored securely. Each organization&apos;s data is completely isolated. You control who sees your proof packs—share them with clients via secure links, or keep them private for your records.</p>
             </div>
             <div className="bg-white/5 border border-white/10 rounded-xl p-6">
               <h3 className="text-lg font-semibold mb-2">Is this tax-deductible?</h3>
@@ -466,7 +527,7 @@ function PricingContent() {
             </div>
             <div className="bg-white/5 border border-white/10 rounded-xl p-6">
               <h3 className="text-lg font-semibold mb-2">Can I export my data?</h3>
-              <p className="text-white/70">Yes. You can download PDF reports for any job at any time. Business plan users can also generate Permit Pack ZIP files that include all job documents, photos, and reports in one bundle.</p>
+              <p className="text-white/70">Yes. You can generate proof packs for any job at any time. Business plan users can generate proof packs (ZIP files with verification hash) that include all job documents, evidence, attestations, and compliance ledger in one bundle.</p>
             </div>
             <div className="bg-white/5 border border-white/10 rounded-xl p-6">
               <h3 className="text-lg font-semibold mb-2">Do you offer refunds?</h3>
