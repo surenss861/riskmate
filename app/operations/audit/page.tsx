@@ -1788,7 +1788,7 @@ export default function AuditViewPage() {
               </div>
             </div>
             {loading ? (
-              <div className="text-center py-12 text-white/60">Loading ledger events...</div>
+              <LedgerEventListSkeleton />
             ) : filteredEvents.length === 0 ? (
               <div className="text-center py-12 px-4">
                 <div className="max-w-md mx-auto">
