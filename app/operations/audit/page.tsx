@@ -8,7 +8,7 @@ import { jobsApi, auditApi } from '@/lib/api'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { typography } from '@/lib/styles/design-system'
 import { DashboardNavbar } from '@/components/dashboard/DashboardNavbar'
-import { AppBackground, AppShell, PageSection, GlassCard, Button, ActionButton, Select, PageHeader } from '@/components/shared'
+import { AppBackground, AppShell, PageSection, GlassCard, Button, ActionButton, Select, PageHeader, EventChip, TrustReceiptStrip, IntegrityBadge, EnforcementBanner } from '@/components/shared'
 import { useAction } from '@/lib/hooks/useAction'
 import { getEventMapping, categorizeEvent, type EventCategory, type EventSeverity, type EventOutcome } from '@/lib/audit/eventMapper'
 import { getIndustryLanguage } from '@/lib/audit/industryLanguage'
@@ -24,6 +24,7 @@ import { EventSelectionTable } from '@/components/audit/EventSelectionTable'
 import { SelectedActionBar } from '@/components/audit/SelectedActionBar'
 import { BulkActionResultModal } from '@/components/audit/BulkActionResultModal'
 import { EventDetailsDrawer } from '@/components/audit/EventDetailsDrawer'
+import { PackHistoryDrawer } from '@/components/audit/PackHistoryDrawer'
 import { useSelectedRows } from '@/lib/hooks/useSelectedRows'
 import { terms } from '@/lib/terms'
 
@@ -106,6 +107,7 @@ export default function AuditViewPage() {
   const [mutationLoading, setMutationLoading] = useState(false)
   const [highlightedFailedIds, setHighlightedFailedIds] = useState<Set<string>>(new Set())
   const [advancedExportMenuOpen, setAdvancedExportMenuOpen] = useState(false)
+  const [packHistoryDrawerOpen, setPackHistoryDrawerOpen] = useState(false)
   const selectionHook = useSelectedRows()
   const { selectedIds, selectedCount } = selectionHook
 
@@ -1746,6 +1748,16 @@ export default function AuditViewPage() {
                               >
                                 Generate Proof Pack (ZIP)
                               </ActionButton>
+                              <button
+                                onClick={() => {
+                                  setAdvancedExportMenuOpen(false)
+                                  setPackHistoryDrawerOpen(true)
+                                }}
+                                className="w-full px-3 py-2 text-sm text-white/80 hover:bg-white/10 rounded-md flex items-center gap-2 transition-colors"
+                              >
+                                <Clock className="w-4 h-4" />
+                                Pack History
+                              </button>
                             </div>
                             <div className="mt-3 pt-3 border-t border-white/10 px-3 py-1.5">
                               <div className="text-xs font-semibold text-white/60 mb-2">Coming soon:</div>
@@ -1857,378 +1869,166 @@ export default function AuditViewPage() {
                 {filteredEvents.map((event) => {
                   const mapping = getEventMapping(event.event_type)
                   const isExpanded = expandedEvents.has(event.id)
-                  const isViolation = mapping.category === 'governance' && mapping.outcome === 'blocked'
+                  const isBlocked = mapping.outcome === 'blocked' || mapping.outcome === 'failure'
 
                   // Enhanced visual weight for Review Queue items
                   const isReviewQueue = filters.savedView === 'review-queue'
                   const isCritical = mapping.severity === 'critical'
                   const isMaterial = mapping.severity === 'material'
-                  const isBlocked = mapping.outcome === 'blocked'
                   const needsAttention = isReviewQueue && (isCritical || isMaterial || isBlocked)
+
+                  // Determine integrity status (default to 'unverified' if not yet verified)
+                  // TODO: Replace with actual integrity check from ledger once implemented
+                  const integrityStatus: 'verified' | 'unverified' | 'mismatch' | 'pending' = 'unverified'
 
                   return (
                     <div
                       key={event.id}
                       className={`p-4 rounded-lg border transition-colors ${
-                        isViolation || needsAttention
+                        isBlocked || needsAttention
                           ? 'border-red-500/40 bg-red-500/10 shadow-lg shadow-red-500/10'
                           : 'border-white/10 bg-white/5'
                       } hover:bg-white/10 ${
                         needsAttention ? 'ring-1 ring-red-500/30' : ''
                       }`}
+                      onClick={() => {
+                        setSelectedEventForDetails(event)
+                        setEventDetailsDrawerOpen(true)
+                      }}
                     >
-                      <div className="flex items-start gap-4">
-                        <div className={`mt-1 p-2 rounded ${
-                          mapping.outcome === 'blocked' ? 'bg-red-500/20' : 'bg-green-500/20'
-                        }`}>
-                          {mapping.outcome === 'blocked' ? (
-                            <XCircle className="w-5 h-5 text-red-400" />
-                          ) : (
-                            <CheckCircle className="w-5 h-5 text-green-400" />
-                          )}
-                        </div>
-                        <div className="flex-1">
-                          <div className="flex items-start justify-between mb-2">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-3 mb-1">
-                                <h3 className={`font-semibold ${
-                                  needsAttention ? 'text-red-200' : 'text-white'
-                                }`}>
-                                  {mapping.title}
-                                  {needsAttention && (
-                                    <span className="ml-2 text-xs text-red-400 font-normal">
-                                      • Requires action
-                                    </span>
-                                  )}
-                                </h3>
-                                <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                                  mapping.severity === 'critical' ? 'bg-red-500/30 text-red-300 border border-red-500/50' :
-                                  mapping.severity === 'material' ? 'bg-yellow-500/30 text-yellow-300 border border-yellow-500/50' :
-                                  'bg-blue-500/20 text-blue-400'
-                                }`}>
-                                  {mapping.severity.toUpperCase()}
-                                </span>
-                                <span className={`px-2 py-0.5 rounded text-xs ${
-                                  mapping.outcome === 'blocked' ? 'bg-red-500/20 text-red-400' :
-                                  'bg-green-500/20 text-green-400'
-                                }`}>
-                                  {mapping.outcome.toUpperCase()}
-                                </span>
-                              </div>
-                              {isViolation && mapping.policyStatement && (
-                                <div className="mt-2 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded text-sm">
-                                  <div className="font-medium text-yellow-200 mb-1">Policy:</div>
-                                  <div className="text-white/90">{mapping.policyStatement}</div>
-                                  {mapping.whyItMatters && (
-                                    <div className="text-white/70 text-xs mt-2 italic">
-                                      Why it matters: {mapping.whyItMatters}
-                                    </div>
-                                  )}
-                                  {mapping.exposure && (
-                                    <div className="mt-3 pt-3 border-t border-yellow-500/20 space-y-1">
-                                      <div className="text-xs font-medium text-yellow-200">Exposure:</div>
-                                      {mapping.exposure.insurance && (
-                                        <div className="text-xs text-white/80">
-                                          <span className="font-medium">Insurance:</span> {mapping.exposure.insurance}
-                                        </div>
-                                      )}
-                                      {mapping.exposure.regulatory && (
-                                        <div className="text-xs text-white/80">
-                                          <span className="font-medium">Regulatory:</span> {mapping.exposure.regulatory}
-                                        </div>
-                                      )}
-                                      {mapping.exposure.owner && (
-                                        <div className="text-xs text-white/80">
-                                          <span className="font-medium">Owner:</span> {mapping.exposure.owner}
-                                        </div>
-                                      )}
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                              {/* Review context for flagged/review events */}
-                              {event.event_type?.includes('flag') && event.metadata && (
-                                <div className="mt-2 p-3 bg-blue-500/10 border border-blue-500/30 rounded text-sm">
-                                  <div className="font-medium text-blue-200 mb-2">Review Context:</div>
-                                  {event.metadata.flag_reason && (
-                                    <div className="text-xs text-white/90 mb-1">
-                                      <span className="font-medium">Reason:</span> {event.metadata.flag_reason}
-                                    </div>
-                                  )}
-                                  {event.metadata.review_owner_role && (
-                                    <div className="text-xs text-white/90 mb-1">
-                                      <span className="font-medium">Assigned To:</span> {event.metadata.review_owner_role}
-                                    </div>
-                                  )}
-                                  {event.metadata.review_due_at && (
-                                    <div className="text-xs text-white/90">
-                                      <span className="font-medium">Due:</span> {new Date(event.metadata.review_due_at).toLocaleDateString()}
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                              <p className="text-sm text-white/70 mt-2">{mapping.description}</p>
-                            </div>
-                          </div>
-                          
-                          {/* Tab-specific row fields */}
-                          {activeTab === 'governance' && (
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-3 text-sm">
-                              <div>
-                                <div className="text-white/60 mb-1">Event</div>
-                                <div className="text-white font-mono text-xs">{event.event_name || event.event_type || 'Unknown'}</div>
-                              </div>
-                              {event.metadata?.policy_statement && (
-                                <div>
-                                  <div className="text-white/60 mb-1">Policy</div>
-                                  <div className="text-white text-xs">{event.metadata.policy_statement}</div>
-                                </div>
-                              )}
-                              {event.metadata?.reason && (
-                                <div>
-                                  <div className="text-white/60 mb-1">Blocked Reason</div>
-                                  <div className="text-red-300 text-xs">{event.metadata.reason}</div>
-                                </div>
-                              )}
-                              <div>
-                                <div className="text-white/60 mb-1">Actor</div>
-                                <div className="text-white flex items-center gap-2">
-                                  <User className="w-4 h-4" />
-                                  {event.actor_name || event.actor_email || event.user_name || 'System'}
-                                  {(event.actor_role || event.user_role) && (
-                                    <span className="text-xs text-white/50">({event.actor_role || event.user_role})</span>
-                                  )}
-                                </div>
-                              </div>
-                              {event.target_type && event.target_id && (
-                                <div>
-                                  <div className="text-white/60 mb-1">Target</div>
-                                  <div className="text-white text-xs">
-                                    {event.target_type}: {event.target_id.slice(0, 8)}...
-                                  </div>
-                                </div>
-                              )}
-                              <div>
-                                <div className="text-white/60 mb-1">Time</div>
-                                <div className="text-white flex items-center gap-2">
-                                  <Clock className="w-4 h-4" />
-                                  {formatRelativeTime(event.created_at)}
-                                </div>
-                              </div>
-                            </div>
-                          )}
-                          
-                          {activeTab === 'operations' && (
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-3 text-sm">
-                              <div>
-                                <div className="text-white/60 mb-1">Action</div>
-                                <div className="text-white font-medium">{mapping.title}</div>
-                              </div>
-                              <div>
-                                <div className="text-white/60 mb-1">Actor</div>
-                                <div className="text-white flex items-center gap-2">
-                                  <User className="w-4 h-4" />
-                                  {event.actor_name || event.actor_email || event.user_name || 'System'}
-                                  {(event.actor_role || event.user_role) && (
-                                    <span className="text-xs text-white/50">({event.actor_role || event.user_role})</span>
-                                  )}
-                                </div>
-                              </div>
-                              {event.job_name && (
-                                <div>
-                                  <div className="text-white/60 mb-1">Target</div>
-                                  <div className="text-white flex items-center gap-2">
-                                    <FileText className="w-4 h-4" />
-                                    <button
-                                      onClick={() => handleOpenEvidence(event.job_id, event.job_name, event.site_name)}
-                                      className="hover:text-[#F97316] transition-colors flex items-center gap-1"
-                                    >
-                                      {event.job_name}
-                                      <ExternalLink className="w-3 h-3" />
-                                    </button>
-                                  </div>
-                                </div>
-                              )}
-                              {event.metadata?.status_change && (
-                                <div>
-                                  <div className="text-white/60 mb-1">Status Change</div>
-                                  <div className="text-white text-xs">
-                                    {event.metadata.status_change.before} → {event.metadata.status_change.after}
-                                  </div>
-                                </div>
-                              )}
-                              {event.metadata?.notes && (
-                                <div className="col-span-2">
-                                  <div className="text-white/60 mb-1">Notes</div>
-                                  <div className="text-white/80 text-xs">{event.metadata.notes}</div>
-                                </div>
-                              )}
-                              <div>
-                                <div className="text-white/60 mb-1">Time</div>
-                                <div className="text-white flex items-center gap-2">
-                                  <Clock className="w-4 h-4" />
-                                  {formatRelativeTime(event.created_at)}
-                                </div>
-                              </div>
-                            </div>
-                          )}
-                          
-                          {activeTab === 'access' && (
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-3 text-sm">
-                              <div>
-                                <div className="text-white/60 mb-1">Change Type</div>
-                                <div className="text-white font-medium">
-                                  {event.event_name?.replace('access.', '').replace('session.', '').replace(/_/g, ' ') || 'Access Change'}
-                                </div>
-                              </div>
-                              {event.metadata?.target_user_name && (
-                                <div>
-                                  <div className="text-white/60 mb-1">Subject User</div>
-                                  <div className="text-white flex items-center gap-2">
-                                    <User className="w-4 h-4" />
-                                    {event.metadata.target_user_name}
-                                  </div>
-                                </div>
-                              )}
-                              <div>
-                                <div className="text-white/60 mb-1">Actor</div>
-                                <div className="text-white flex items-center gap-2">
-                                  <User className="w-4 h-4" />
-                                  {event.actor_name || event.actor_email || event.user_name || 'System'}
-                                  {(event.actor_role || event.user_role) && (
-                                    <span className="text-xs text-white/50">({event.actor_role || event.user_role})</span>
-                                  )}
-                                </div>
-                              </div>
-                              {event.metadata?.reason && (
-                                <div>
-                                  <div className="text-white/60 mb-1">Reason</div>
-                                  <div className="text-white/80 text-xs">{event.metadata.reason}</div>
-                                </div>
-                              )}
-                              {event.metadata?.force_logout && (
-                                <div>
-                                  <div className="text-white/60 mb-1">Force Logout</div>
-                                  <div className="text-red-300 text-xs">Yes</div>
-                                </div>
-                              )}
-                              <div>
-                                <div className="text-white/60 mb-1">Time</div>
-                                <div className="text-white flex items-center gap-2">
-                                  <Clock className="w-4 h-4" />
-                                  {formatRelativeTime(event.created_at)}
-                                </div>
-                              </div>
-                            </div>
-                          )}
-                          
-                          {/* Fallback for custom views or if activeTab doesn't match */}
-                          {activeTab !== 'governance' && activeTab !== 'operations' && activeTab !== 'access' && (
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-3 text-sm">
-                              <div>
-                                <div className="text-white/60 mb-1">Actor</div>
-                                <div className="text-white flex items-center gap-2">
-                                  <User className="w-4 h-4" />
-                                  {event.actor_name || event.actor_email || event.user_name || 'System'}
-                                  {(event.actor_role || event.user_role) && (
-                                    <span className="text-xs text-white/50">({event.actor_role || event.user_role})</span>
-                                  )}
-                                </div>
-                              </div>
-                              {event.job_name && (
-                                <div>
-                                  <div className="text-white/60 mb-1">Target</div>
-                                  <div className="text-white flex items-center gap-2">
-                                    <FileText className="w-4 h-4" />
-                                    <button
-                                      onClick={() => handleOpenEvidence(event.job_id, event.job_name, event.site_name)}
-                                      className="hover:text-[#F97316] transition-colors flex items-center gap-1"
-                                    >
-                                      {event.job_name}
-                                      <ExternalLink className="w-3 h-3" />
-                                    </button>
-                                  </div>
-                                </div>
-                              )}
-                              {event.site_name && (
-                                <div>
-                                  <div className="text-white/60 mb-1">{industryLang.site}</div>
-                                  <div className="text-white flex items-center gap-2">
-                                    <Building2 className="w-4 h-4" />
-                                    {event.site_name}
-                                  </div>
-                                </div>
-                              )}
-                              <div>
-                                <div className="text-white/60 mb-1">Time</div>
-                                <div className="text-white flex items-center gap-2">
-                                  <Clock className="w-4 h-4" />
-                                  <span>{formatRelativeTime(event.created_at)}</span>
-                                </div>
-                                <div className="text-xs text-white/50 mt-1">
-                                  {new Date(event.created_at).toLocaleString('en-US', { timeZone: 'America/New_York', timeZoneName: 'short' })}
-                                </div>
-                              </div>
-                            </div>
-                          )}
-                          {event.job_id && (
-                            <div className="flex gap-2 mt-3">
-                              <button
-                                onClick={() => handleOpenEvidence(event.job_id, event.job_name, event.site_name)}
-                                className="text-xs px-3 py-1 bg-white/10 hover:bg-white/20 rounded transition-colors"
-                              >
-                                View Evidence
-                              </button>
-                              <button
-                                onClick={() => router.push(`/operations/jobs/${event.job_id}`)}
-                                className="text-xs px-3 py-1 bg-white/10 hover:bg-white/20 rounded transition-colors"
-                              >
-                                View {industryLang.job}
-                              </button>
-                              <button
-                                onClick={() => router.push(`/operations/jobs/${event.job_id}?view=packet`)}
-                                className="text-xs px-3 py-1 bg-white/10 hover:bg-white/20 rounded transition-colors"
-                              >
-                                {industryLang.proofPack}
-                              </button>
-                            </div>
-                          )}
-                          <div className="mt-3">
-                            <button
-                              onClick={() => {
-                                setSelectedEventForDetails(event)
-                                setEventDetailsDrawerOpen(true)
-                              }}
-                              className="text-xs text-[#F97316] hover:text-[#FFC857] flex items-center gap-1 transition-colors"
-                            >
-                              <FileText className="w-3 h-3" />
-                              View Full Details
-                            </button>
-                          </div>
-
-                          {/* Review Queue Actions */}
-                          {filters.savedView === 'review-queue' && needsAttention && (
-                            <div className="mt-3 pt-3 border-t border-white/10 flex gap-2">
-                              <Button
-                                variant="secondary"
-                                size="sm"
-                                onClick={() => handleAssignClick(event)}
-                              >
-                                <User className="w-3 h-3" />
-                                Assign
-                              </Button>
-                              <Button
-                                variant="primary"
-                                size="sm"
-                                onClick={() => handleResolveClick(event)}
-                              >
-                                <CheckCircle className="w-3 h-3" />
-                                Resolve
-                              </Button>
-                            </div>
-                          )}
-                        </div>
+                      {/* EventChip: Type + Severity + Outcome */}
+                      <div className="mb-3">
+                        <EventChip
+                          eventType={event.event_type}
+                          severity={event.severity || mapping.severity}
+                          outcome={event.outcome || mapping.outcome}
+                          showOutcome
+                        />
                       </div>
+
+                      {/* TrustReceiptStrip: Who/When/What/Why */}
+                      <div className="mb-3">
+                        <TrustReceiptStrip
+                          actorName={event.actor_name || event.user_name || event.actor_email || event.user_email || 'System'}
+                          actorRole={event.actor_role || event.user_role}
+                          actorEmail={event.actor_email || event.user_email}
+                          occurredAt={event.created_at}
+                          eventType={event.event_type}
+                          category={event.category || mapping.category}
+                          summary={mapping.description || event.metadata?.summary}
+                          reason={event.metadata?.reason || mapping.whyItMatters}
+                          policyStatement={event.metadata?.policy_statement || mapping.policyStatement}
+                        />
+                      </div>
+
+                      {/* IntegrityBadge */}
+                      <div className="mb-3">
+                        <IntegrityBadge
+                          status={integrityStatus}
+                          showDetails
+                        />
+                      </div>
+
+                      {/* EnforcementBanner: Show for blocked outcomes */}
+                      {isBlocked && mapping.policyStatement && (
+                        <div className="mb-3">
+                          <EnforcementBanner
+                            action={mapping.title}
+                            blocked={true}
+                            eventId={event.id}
+                            policyStatement={mapping.policyStatement}
+                            actorRole={event.actor_role || event.user_role}
+                            severity={event.severity || mapping.severity}
+                            onViewLedger={(eventId) => {
+                              setSelectedEventForDetails(event)
+                              setEventDetailsDrawerOpen(true)
+                            }}
+                          />
+                        </div>
+                      )}
+
+                      {/* Additional context for flagged/review events */}
+                      {event.event_type?.includes('flag') && event.metadata && (
+                        <div className="mt-3 p-3 bg-blue-500/10 border border-blue-500/30 rounded text-sm">
+                          <div className="font-medium text-blue-200 mb-2">Review Context:</div>
+                          {event.metadata.flag_reason && (
+                            <div className="text-xs text-white/90 mb-1">
+                              <span className="font-medium">Reason:</span> {event.metadata.flag_reason}
+                            </div>
+                          )}
+                          {event.metadata.review_owner_role && (
+                            <div className="text-xs text-white/90 mb-1">
+                              <span className="font-medium">Assigned To:</span> {event.metadata.review_owner_role}
+                            </div>
+                          )}
+                          {event.metadata.review_due_at && (
+                            <div className="text-xs text-white/90">
+                              <span className="font-medium">Due:</span> {new Date(event.metadata.review_due_at).toLocaleDateString()}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Action buttons */}
+                      {event.job_id && (
+                        <div className="flex gap-2 mt-3 pt-3 border-t border-white/10">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleOpenEvidence(event.job_id, event.job_name, event.site_name)
+                            }}
+                            className="text-xs px-3 py-1 bg-white/10 hover:bg-white/20 rounded transition-colors"
+                          >
+                            View Evidence
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              router.push(`/operations/jobs/${event.job_id}`)
+                            }}
+                            className="text-xs px-3 py-1 bg-white/10 hover:bg-white/20 rounded transition-colors"
+                          >
+                            View {industryLang.job}
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              router.push(`/operations/jobs/${event.job_id}?view=packet`)
+                            }}
+                            className="text-xs px-3 py-1 bg-white/10 hover:bg-white/20 rounded transition-colors"
+                          >
+                            {industryLang.proofPack}
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Review Queue Actions */}
+                      {filters.savedView === 'review-queue' && needsAttention && (
+                        <div className="mt-3 pt-3 border-t border-white/10 flex gap-2">
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleAssignClick(event)
+                            }}
+                          >
+                            <User className="w-3 h-3" />
+                            Assign
+                          </Button>
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleResolveClick(event)
+                            }}
+                          >
+                            <CheckCircle className="w-3 h-3" />
+                            Resolve
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   )
                 })}
@@ -2395,6 +2195,12 @@ export default function AuditViewPage() {
             setSelectedEventForDetails(null)
           }}
           event={selectedEventForDetails}
+        />
+
+        {/* Pack History Drawer */}
+        <PackHistoryDrawer
+          isOpen={packHistoryDrawerOpen}
+          onClose={() => setPackHistoryDrawerOpen(false)}
         />
       </AppBackground>
     </ProtectedRoute>

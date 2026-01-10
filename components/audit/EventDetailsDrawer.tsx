@@ -4,6 +4,8 @@ import { X, ExternalLink, User, FileText, Building2, Clock, Copy, Check } from '
 import { useState } from 'react'
 import { buttonStyles } from '@/lib/styles/design-system'
 import { useRouter } from 'next/navigation'
+import { TrustReceiptStrip, IntegrityBadge, EnforcementBanner, EventChip } from '@/components/shared'
+import { getEventMapping } from '@/lib/audit/eventMapper'
 
 interface AuditEvent {
   id: string
@@ -60,12 +62,17 @@ export function EventDetailsDrawer({ isOpen, onClose, event }: EventDetailsDrawe
     })
   }
 
+  const mapping = getEventMapping(event.event_type || '')
+  const isBlocked = mapping.outcome === 'blocked' || mapping.outcome === 'failure'
+  // Default to 'unverified' if not yet verified (following "Trust UI must never lie" rule)
+  const integrityStatus: 'verified' | 'unverified' | 'mismatch' | 'pending' = 'unverified'
+
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm">
       <div className="bg-[#1A1A1A] border border-white/10 rounded-t-lg sm:rounded-lg w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-white/10">
-          <h2 className="text-xl font-semibold text-white">Event Details</h2>
+          <h2 className="text-xl font-semibold text-white">Ledger Event Details</h2>
           <button
             onClick={onClose}
             className="text-white/60 hover:text-white transition-colors"
@@ -76,76 +83,54 @@ export function EventDetailsDrawer({ isOpen, onClose, event }: EventDetailsDrawe
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          {/* Event Summary */}
+          {/* TrustReceiptStrip: Who/When/What/Why */}
           <div>
-            <h3 className="text-sm font-medium text-white/60 mb-2">Event</h3>
-            <div className="bg-white/5 rounded-lg p-4 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-white font-mono text-sm">
-                  {event.event_name || event.event_type || 'Unknown Event'}
-                </span>
-                <div className="flex gap-2">
-                  {event.severity && (
-                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                      event.severity === 'critical' ? 'bg-red-500/30 text-red-300 border border-red-500/50' :
-                      event.severity === 'material' ? 'bg-yellow-500/30 text-yellow-300 border border-yellow-500/50' :
-                      'bg-blue-500/20 text-blue-400'
-                    }`}>
-                      {event.severity.toUpperCase()}
-                    </span>
-                  )}
-                  {event.outcome && (
-                    <span className={`px-2 py-0.5 rounded text-xs ${
-                      event.outcome === 'blocked' ? 'bg-red-500/20 text-red-400' :
-                      'bg-green-500/20 text-green-400'
-                    }`}>
-                      {event.outcome.toUpperCase()}
-                    </span>
-                  )}
-                </div>
-              </div>
-              {event.summary && (
-                <p className="text-white/80 text-sm">{event.summary}</p>
-              )}
-            </div>
+            <TrustReceiptStrip
+              actorName={event.actor_name || event.actor_email || 'System'}
+              actorRole={event.actor_role}
+              actorEmail={event.actor_email}
+              occurredAt={event.created_at}
+              eventType={event.event_type || 'unknown'}
+              category={event.category || mapping.category}
+              summary={event.summary || mapping.description}
+              reason={event.metadata?.reason || mapping.whyItMatters}
+              policyStatement={event.metadata?.policy_statement || mapping.policyStatement}
+            />
           </div>
 
-          {/* Actor Information */}
-          {event.actor_id && (
+          {/* IntegrityBadge */}
+          <div>
+            <IntegrityBadge
+              status={integrityStatus}
+              showDetails
+            />
+          </div>
+
+          {/* EventChip: Type + Severity + Outcome */}
+          <div>
+            <EventChip
+              eventType={event.event_type || 'unknown'}
+              severity={event.severity || mapping.severity}
+              outcome={event.outcome || mapping.outcome}
+              showOutcome
+            />
+          </div>
+
+          {/* EnforcementBanner: Show for blocked outcomes */}
+          {isBlocked && mapping.policyStatement && (
             <div>
-              <h3 className="text-sm font-medium text-white/60 mb-2 flex items-center gap-2">
-                <User className="w-4 h-4" />
-                Actor
-              </h3>
-              <div className="bg-white/5 rounded-lg p-4 space-y-2">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-white font-medium">
-                      {event.actor_name || event.actor_email || 'Unknown'}
-                    </div>
-                    {event.actor_role && (
-                      <div className="text-white/60 text-sm">Role: {event.actor_role}</div>
-                    )}
-                    {event.actor_email && (
-                      <div className="text-white/60 text-sm font-mono">{event.actor_email}</div>
-                    )}
-                  </div>
-                  {event.actor_id && (
-                    <button
-                      onClick={() => handleCopy(event.actor_id!, 'actor_id')}
-                      className="text-white/40 hover:text-white/60 transition-colors"
-                      title="Copy Actor ID"
-                    >
-                      {copied === 'actor_id' ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                    </button>
-                  )}
-                </div>
-                {event.actor_id && (
-                  <div className="text-xs text-white/50 font-mono">
-                    ID: {event.actor_id}
-                  </div>
-                )}
-              </div>
+              <EnforcementBanner
+                action={mapping.title || event.event_name || event.event_type || 'Action'}
+                blocked={true}
+                eventId={event.id}
+                policyStatement={mapping.policyStatement}
+                actorRole={event.actor_role}
+                severity={event.severity || mapping.severity}
+                onViewLedger={(eventId) => {
+                  // Already viewing this event, could scroll to top or highlight
+                  window.scrollTo({ top: 0, behavior: 'smooth' })
+                }}
+              />
             </div>
           )}
 
