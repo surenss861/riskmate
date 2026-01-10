@@ -3,7 +3,7 @@
 import { ReactNode } from 'react'
 import clsx from 'clsx'
 
-type BadgeVariant = 'neutral' | 'warning' | 'critical' | 'success'
+export type BadgeVariant = 'neutral' | 'warning' | 'critical' | 'success'
 
 type BadgeProps = {
   variant?: BadgeVariant
