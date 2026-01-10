@@ -558,10 +558,16 @@ export default function AuditViewPage() {
         ...(filters.user && { actor_id: filters.user }),
         ...(filters.severity && { severity: filters.severity }),
         ...(filters.outcome && { outcome: filters.outcome }),
-        // Use provided view or current saved view
-        ...(view && view !== 'custom' ? { view } : filters.savedView && filters.savedView !== 'custom' ? { view: filters.savedView } : {}),
-        // If no view, use category
-        ...(!view && !filters.savedView && activeTab && activeTab !== 'all' && { category: activeTab }),
+      }
+
+      // Use provided view or current saved view
+      if (view && view !== 'custom') {
+        filterPayload.view = view
+      } else if (filters.savedView && filters.savedView !== 'custom') {
+        filterPayload.view = filters.savedView
+      } else if (!view && !filters.savedView && activeTab && activeTab !== 'all') {
+        // If no view, use category as fallback
+        filterPayload.category = activeTab
       }
 
       const response = await fetch(endpoint, {
