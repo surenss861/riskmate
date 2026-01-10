@@ -1908,17 +1908,17 @@ export default function AuditViewPage() {
 
                       {/* TrustReceiptStrip: Who/When/What/Why */}
                       <div className="mb-3">
-                        <TrustReceiptStrip
-                          actorName={event.actor_name || event.user_name || event.actor_email || event.user_email || 'System'}
-                          actorRole={event.actor_role || event.user_role}
-                          actorEmail={event.actor_email || event.user_email}
-                          occurredAt={event.created_at}
-                          eventType={event.event_type}
-                          category={event.category || mapping.category}
-                          summary={mapping.description || event.metadata?.summary}
-                          reason={event.metadata?.reason || mapping.whyItMatters}
-                          policyStatement={event.metadata?.policy_statement || mapping.policyStatement}
-                        />
+                      <TrustReceiptStrip
+                        actorName={event.actor_name || event.user_name || event.actor_email || event.user_email || 'System'}
+                        actorRole={event.actor_role || event.user_role}
+                        actorEmail={event.actor_email || event.user_email}
+                        occurredAt={event.created_at}
+                        eventType={event.event_type}
+                        category={mapping.category}
+                        summary={mapping.description || event.metadata?.summary}
+                        reason={event.metadata?.reason || mapping.whyItMatters}
+                        policyStatement={event.metadata?.policy_statement || mapping.policyStatement}
+                      />
                       </div>
 
                       {/* IntegrityBadge */}
