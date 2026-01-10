@@ -41,27 +41,29 @@ function PricingContent() {
     <div className="min-h-screen bg-[#050505] text-white">
       {/* Header */}
       <header className="sticky top-0 z-20 border-b border-white/10 bg-black/40 backdrop-blur-2xl">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
-          <RiskMateLogo size="md" showText />
-          <div className="flex items-center gap-3">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4 min-w-0">
+          <div className="flex-shrink-0 min-w-0">
+            <RiskMateLogo size="md" showText />
+          </div>
+          <div className="flex items-center gap-3 min-w-0 flex-wrap justify-end">
             <button
               onClick={() => router.push('/demo')}
-              className="rounded-lg border border-white/10 px-4 py-2 text-sm text-white/70 transition hover:border-white/30 hover:text-white flex items-center gap-1.5"
+              className="rounded-lg border border-white/10 px-4 py-2 text-sm text-white/70 transition hover:border-white/30 hover:text-white flex items-center gap-1.5 flex-shrink-0"
             >
               Demo
-              <span className="px-1.5 py-0.5 text-xs bg-[#F97316]/20 text-[#F97316] border border-[#F97316]/30 rounded">
+              <span className="px-1.5 py-0.5 text-xs bg-[#F97316]/20 text-[#F97316] border border-[#F97316]/30 rounded flex-shrink-0">
                 Interactive
               </span>
             </button>
             <button
               onClick={() => router.push('/login')}
-              className="rounded-lg border border-white/10 px-4 py-2 text-sm text-white/70 transition hover:border-white/30 hover:text-white"
+              className="rounded-lg border border-white/10 px-4 py-2 text-sm text-white/70 transition hover:border-white/30 hover:text-white flex-shrink-0"
             >
               Sign In
             </button>
             <button
               onClick={() => router.push('/signup')}
-              className="rounded-lg bg-[#F97316] px-6 py-3 text-sm text-black font-semibold hover:bg-[#FB923C]"
+              className="rounded-lg bg-[#F97316] px-6 py-3 text-sm text-black font-semibold hover:bg-[#FB923C] flex-shrink-0"
             >
               Get Started
             </button>
@@ -293,8 +295,9 @@ function PricingContent() {
         {/* Feature Comparison Table */}
         <div className="mb-16">
           <h2 className="text-3xl font-bold text-center mb-8">Compare Plans</h2>
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse">
+          <div className="overflow-x-auto -mx-6 px-6">
+            <div className="min-w-[900px]">
+              <table className="w-full border-collapse">
               <thead>
                 <tr className="border-b border-white/10">
                   <th className="text-left p-4 text-white/80 font-semibold">Feature</th>
@@ -371,7 +374,8 @@ function PricingContent() {
                   <td className="p-4 text-center text-[#F97316]">Full workflow</td>
                 </tr>
               </tbody>
-            </table>
+              </table>
+            </div>
           </div>
         </div>
 
@@ -381,28 +385,30 @@ function PricingContent() {
           <p className="text-center text-white/60 mb-6">
             Business plan users can generate deterministic proof packs with verification hashes for audit-ready documentation.
           </p>
-          <div className="max-w-2xl mx-auto">
+          <div className="max-w-2xl mx-auto min-w-0">
             {/* Example PackCard (clearly labeled as demo, unverified) */}
-            <div className="mb-4">
+            <div className="mb-4 min-w-0">
               <div className="text-xs text-white/50 mb-2 text-center">Example (demo only — not a real generated pack)</div>
-              <PackCard
-                variant="compact"
-                packId="pack_demo_example_1234567890abcdef"
-                packType="proof"
-                generatedAt={new Date(Date.now() - 2 * 60 * 60 * 1000)} // 2 hours ago
-                integrityStatus="unverified" // Truth-safe: demo pack is not verified
-                contents={{
-                  ledger_pdf: true,
-                  controls_csv: true,
-                  attestations_csv: true,
-                  evidence_manifest: true,
-                  manifest_json: true,
-                  attachments: 12,
-                }}
-                onClick={() => {
-                  // No-op for demo
-                }}
-              />
+              <div className="min-w-0">
+                <PackCard
+                  variant="compact"
+                  packId="pack_demo_example_1234567890abcdef"
+                  packType="proof"
+                  generatedAt={new Date(Date.now() - 2 * 60 * 60 * 1000)} // 2 hours ago
+                  integrityStatus="unverified" // Truth-safe: demo pack is not verified
+                  contents={{
+                    ledger_pdf: true,
+                    controls_csv: true,
+                    attestations_csv: true,
+                    evidence_manifest: true,
+                    manifest_json: true,
+                    attachments: 12,
+                  }}
+                  onClick={() => {
+                    // No-op for demo
+                  }}
+                />
+              </div>
             </div>
             <div className="text-xs text-white/50 text-center mt-4 italic">
               Real proof packs include immutable compliance ledger, evidence chain-of-custody, and verification hash for audit defense.

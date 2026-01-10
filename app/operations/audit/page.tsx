@@ -1839,7 +1839,7 @@ export default function AuditViewPage() {
                   return (
                     <div
                       key={event.id}
-                      className={`p-4 rounded-lg border transition-colors ${
+                      className={`p-4 rounded-lg border transition-colors min-w-0 ${
                         isBlocked || needsAttention
                           ? 'border-red-500/40 bg-red-500/10 shadow-lg shadow-red-500/10'
                           : 'border-white/10 bg-white/5'
@@ -1852,7 +1852,7 @@ export default function AuditViewPage() {
                       }}
                     >
                       {/* EventChip: Type + Severity + Outcome */}
-                      <div className="mb-3">
+                      <div className="mb-3 min-w-0">
                         <EventChip
                           eventType={event.event_type}
                           severity={event.severity || mapping.severity}
@@ -1862,7 +1862,7 @@ export default function AuditViewPage() {
                       </div>
 
                       {/* TrustReceiptStrip: Who/When/What/Why */}
-                      <div className="mb-3">
+                      <div className="mb-3 min-w-0">
                       <TrustReceiptStrip
                         actorName={event.actor_name || event.user_name || event.actor_email || event.user_email || 'System'}
                         actorRole={event.actor_role || event.user_role}
@@ -1877,7 +1877,7 @@ export default function AuditViewPage() {
                       </div>
 
                       {/* IntegrityBadge */}
-                      <div className="mb-3">
+                      <div className="mb-3 min-w-0">
                         <IntegrityBadge
                           status={integrityStatus}
                           showDetails
@@ -1904,15 +1904,15 @@ export default function AuditViewPage() {
 
                       {/* Additional context for flagged/review events */}
                       {event.event_type?.includes('flag') && event.metadata && (
-                        <div className="mt-3 p-3 bg-blue-500/10 border border-blue-500/30 rounded text-sm">
+                        <div className="mt-3 p-3 bg-blue-500/10 border border-blue-500/30 rounded text-sm min-w-0">
                           <div className="font-medium text-blue-200 mb-2">Review Context:</div>
                           {event.metadata.flag_reason && (
-                            <div className="text-xs text-white/90 mb-1">
+                            <div className="text-xs text-white/90 mb-1 break-words min-w-0">
                               <span className="font-medium">Reason:</span> {event.metadata.flag_reason}
                             </div>
                           )}
                           {event.metadata.review_owner_role && (
-                            <div className="text-xs text-white/90 mb-1">
+                            <div className="text-xs text-white/90 mb-1 break-words min-w-0">
                               <span className="font-medium">Assigned To:</span> {event.metadata.review_owner_role}
                             </div>
                           )}

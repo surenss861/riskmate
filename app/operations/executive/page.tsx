@@ -677,7 +677,7 @@ export default function ExecutiveSnapshotPage() {
                   />
                 </div>
                 <div className="text-xs text-white/50 uppercase tracking-wide mb-2">Ledger Integrity</div>
-                <div className={`text-lg font-semibold mb-1 ${
+                <div className={`text-lg font-semibold mb-1 truncate min-w-0 ${
                   riskPosture.ledger_integrity === 'verified' 
                     ? 'text-green-400' 
                     : riskPosture.ledger_integrity === 'error'
@@ -686,7 +686,7 @@ export default function ExecutiveSnapshotPage() {
                 }`}>
                   {getIntegrityText(riskPosture.ledger_integrity, riskPosture.ledger_integrity_last_verified_at)}
                 </div>
-                <div className="text-xs text-white/60">
+                <div className="text-xs text-white/60 break-words min-w-0">
                   {riskPosture.ledger_integrity === 'verified' && riskPosture.ledger_integrity_verified_through_event_id
                     ? `Verified through event ${riskPosture.ledger_integrity_verified_through_event_id.slice(0, 8)}...`
                     : riskPosture.ledger_integrity === 'error' && riskPosture.ledger_integrity_error_details?.failingEventId
@@ -696,7 +696,7 @@ export default function ExecutiveSnapshotPage() {
                 {riskPosture.ledger_integrity === 'error' && riskPosture.ledger_integrity_error_details?.failingEventId && (
                   <a
                     href={`/operations/audit?event_id=${riskPosture.ledger_integrity_error_details.failingEventId}`}
-                    className="mt-2 text-xs text-red-400 hover:text-red-300 underline inline-block"
+                    className="mt-2 text-xs text-red-400 hover:text-red-300 underline truncate block min-w-0"
                     onClick={(e) => {
                       e.stopPropagation()
                     }}
@@ -740,10 +740,10 @@ export default function ExecutiveSnapshotPage() {
                 </div>
                 {/* Pack preview (if available) - stub for now, will show when pack history API is ready */}
                 {riskPosture.proof_packs_generated > 0 && (
-                  <div className="mt-2 pt-2 border-t border-white/10 text-xs text-white/50">
+                  <div className="mt-2 pt-2 border-t border-white/10 text-xs text-white/50 min-w-0">
                     <a 
                       href="/operations/audit?view=insurance-ready" 
-                      className="text-green-400 hover:text-green-300 underline"
+                      className="text-green-400 hover:text-green-300 underline truncate block min-w-0"
                       onClick={(e) => {
                         e.stopPropagation()
                       }}

@@ -76,43 +76,43 @@ export function EnforcementBanner({
   const config = getSeverityConfig()
 
   return (
-    <div className={`p-4 rounded-lg border ${config.bgColor} ${className}`}>
-      <div className="flex items-start gap-3">
-        <div className={`mt-0.5 ${config.textColor}`}>
+    <div className={`p-4 rounded-lg border ${config.bgColor} ${className} min-w-0`}>
+      <div className="flex items-start gap-3 min-w-0">
+        <div className={`mt-0.5 ${config.textColor} flex-shrink-0`}>
           {config.icon}
         </div>
-        <div className="flex-1 space-y-2">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className={`font-semibold ${config.textColor}`}>
+        <div className="flex-1 space-y-2 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap min-w-0">
+            <span className={`font-semibold ${config.textColor} flex-shrink-0`}>
               {blocked ? 'Policy Blocked' : 'Policy Enforced'}
             </span>
-            <Badge variant={config.variant} className="text-xs">
+            <Badge variant={config.variant} className="text-xs flex-shrink-0">
               {severity.toUpperCase()}
             </Badge>
             {actorRole && (
-              <span className="text-xs text-white/60">
+              <span className="text-xs text-white/60 truncate min-w-0" title={actorRole}>
                 Role: <span className="font-medium text-white/80">{actorRole}</span>
               </span>
             )}
           </div>
           
-          <div className="text-sm text-white/90">
+          <div className="text-sm text-white/90 break-words min-w-0">
             <span className="font-medium">Action:</span> {action}
           </div>
           
-          <div className="text-sm text-white/80">
+          <div className="text-sm text-white/80 break-words min-w-0">
             <span className="font-medium">Policy:</span> {policyStatement}
           </div>
           
-          <div className="flex items-center gap-2 text-xs text-white/60 pt-2 border-t border-white/10">
-            <span>Logged as:</span>
-            <code className="px-2 py-0.5 bg-white/10 rounded font-mono">
+          <div className="flex items-center gap-2 text-xs text-white/60 pt-2 border-t border-white/10 min-w-0 flex-wrap">
+            <span className="flex-shrink-0">Logged as:</span>
+            <code className="px-2 py-0.5 bg-white/10 rounded font-mono truncate min-w-0" title={eventId}>
               {eventId.slice(0, 16)}...
             </code>
             {onViewLedger && (
               <button
                 onClick={() => onViewLedger(eventId)}
-                className="flex items-center gap-1 text-white/70 hover:text-white transition-colors underline"
+                className="flex items-center gap-1 text-white/70 hover:text-white transition-colors underline flex-shrink-0"
               >
                 View in Ledger
                 <ExternalLink className="w-3 h-3" />

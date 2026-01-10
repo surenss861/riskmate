@@ -89,22 +89,22 @@ export function TrustReceiptStrip({
 
   if (compact) {
     return (
-      <div className={`flex items-center gap-2 text-xs text-white/60 ${className}`}>
+      <div className={`flex items-center gap-2 text-xs text-white/60 min-w-0 flex-wrap ${className}`}>
         {actorName && (
-          <div className="flex items-center gap-1">
-            <User className="w-3 h-3" />
-            <span className="font-medium text-white/80">{actorName}</span>
+          <div className="flex items-center gap-1 min-w-0">
+            <User className="w-3 h-3 flex-shrink-0" />
+            <span className="font-medium text-white/80 truncate min-w-0">{actorName}</span>
             {actorRole && (
-              <span className="text-white/50">({actorRole})</span>
+              <span className="text-white/50 flex-shrink-0">({actorRole})</span>
             )}
           </div>
         )}
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 flex-shrink-0">
           <Clock className="w-3 h-3" />
           <span>{formatRelativeTime(occurredAt)}</span>
         </div>
         {category && (
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 flex-shrink-0">
             {getCategoryIcon()}
             <span className="capitalize">{category}</span>
           </div>
@@ -116,49 +116,49 @@ export function TrustReceiptStrip({
   return (
     <div className={`space-y-2 p-3 bg-white/5 border border-white/10 rounded-lg ${className}`}>
       {/* Actor + Role */}
-      <div className="flex items-center gap-2 text-sm">
-        <User className="w-4 h-4 text-white/60" />
-        <div className="flex-1">
-          <div className="flex items-center gap-2">
-            <span className="font-medium text-white">{actorName || 'System'}</span>
+      <div className="flex items-center gap-2 text-sm min-w-0">
+        <User className="w-4 h-4 text-white/60 flex-shrink-0" />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="font-medium text-white truncate min-w-0">{actorName || 'System'}</span>
             {actorRole && (
-              <span className="text-xs px-2 py-0.5 bg-white/10 rounded text-white/70">
+              <span className="text-xs px-2 py-0.5 bg-white/10 rounded text-white/70 flex-shrink-0">
                 {actorRole}
               </span>
             )}
           </div>
           {actorEmail && (
-            <div className="text-xs text-white/50">{actorEmail}</div>
+            <div className="text-xs text-white/50 truncate min-w-0">{actorEmail}</div>
           )}
         </div>
-        <div className="flex items-center gap-1 text-xs text-white/60">
+        <div className="flex items-center gap-1 text-xs text-white/60 flex-shrink-0">
           <Clock className="w-3 h-3" />
           <time dateTime={occurredAt}>{formatRelativeTime(occurredAt)}</time>
         </div>
       </div>
 
       {/* Event Type + Category */}
-      <div className="flex items-center gap-2 text-xs">
+      <div className="flex items-center gap-2 text-xs min-w-0">
         {category && (
-          <div className="flex items-center gap-1 text-white/60">
+          <div className="flex items-center gap-1 text-white/60 flex-shrink-0">
             {getCategoryIcon()}
             <span className="capitalize">{category}</span>
           </div>
         )}
-        <span className="text-white/50">•</span>
-        <span className="font-mono text-white/70">{displayType}</span>
+        <span className="text-white/50 flex-shrink-0">•</span>
+        <span className="font-mono text-white/70 truncate min-w-0">{displayType}</span>
       </div>
 
       {/* Summary */}
       {summary && (
-        <div className="text-sm text-white/90">
+        <div className="text-sm text-white/90 break-words">
           {summary}
         </div>
       )}
 
       {/* Reason / Policy */}
       {reason && (
-        <div className="text-xs text-white/60 italic">
+        <div className="text-xs text-white/60 italic break-words">
           Why: {reason}
         </div>
       )}
@@ -166,7 +166,7 @@ export function TrustReceiptStrip({
       {policyStatement && (
         <div className="mt-2 pt-2 border-t border-white/10 text-xs">
           <div className="font-medium text-white/80 mb-1">Policy:</div>
-          <div className="text-white/70">{policyStatement}</div>
+          <div className="text-white/70 break-words">{policyStatement}</div>
         </div>
       )}
     </div>

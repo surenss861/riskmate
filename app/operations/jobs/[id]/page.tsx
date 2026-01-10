@@ -644,18 +644,18 @@ export default function JobDetailPage() {
       <AppBackground>
         <div className="sticky top-0 z-40 border-b border-white/5 bg-black/40 backdrop-blur-sm">
           <div className="max-w-7xl mx-auto px-6 py-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
+            <div className="flex items-center justify-between min-w-0">
+              <div className="flex items-center gap-3 min-w-0 flex-shrink-0">
                 <RiskMateLogo size="sm" showText={true} />
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 min-w-0 flex-wrap justify-end">
                 <button
                   onClick={() => router.push('/operations')}
-                  className="text-sm text-white/60 hover:text-white transition-colors"
+                  className="text-sm text-white/60 hover:text-white transition-colors flex-shrink-0"
                 >
                   ← Back to Dashboard
                 </button>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 flex-wrap">
                   {subscriptionTier === 'business' && (
                     <Button
                       variant="primary"
@@ -701,43 +701,45 @@ export default function JobDetailPage() {
               className={`${typography.h1} mb-2`}
               inputClassName={typography.h1}
             />
-            <div className="flex items-center gap-3 mb-1">
-              <p className="text-xl text-[#A1A1A1]">{job.location}</p>
+            <div className="flex items-center gap-3 mb-1 min-w-0 flex-wrap">
+              <p className="text-xl text-[#A1A1A1] truncate min-w-0 flex-1">{job.location}</p>
               {appliedTemplate && (
-                <span className="px-3 py-1 text-xs font-medium bg-[#F97316]/20 text-[#F97316] rounded-lg border border-[#F97316]/30 flex items-center gap-1.5">
+                <span className="px-3 py-1 text-xs font-medium bg-[#F97316]/20 text-[#F97316] rounded-lg border border-[#F97316]/30 flex items-center gap-1.5 flex-shrink-0">
                   <span>📋</span>
-                  <span>From template: {appliedTemplate.name}</span>
+                  <span className="truncate max-w-[200px]" title={`From template: ${appliedTemplate.name}`}>From template: {appliedTemplate.name}</span>
                   <button
                     onClick={() => {
                       // Open template in Account page (new tab)
                       window.open(`/operations/account#template-${appliedTemplate.id}`, '_blank')
                     }}
-                    className="text-[#F97316] hover:text-[#FB923C] underline text-xs"
+                    className="text-[#F97316] hover:text-[#FB923C] underline text-xs flex-shrink-0"
                   >
                     View
                   </button>
                 </span>
               )}
             </div>
-            <div className="flex items-center gap-3 mb-2">
-              <p className="text-sm text-[#A1A1A1]/70">
+            <div className="flex items-center gap-3 mb-2 min-w-0 flex-wrap">
+              <p className="text-sm text-[#A1A1A1]/70 truncate min-w-0">
                 {job.job_type} • {job.client_type}
               </p>
-              <span className="text-[#A1A1A1]/50">•</span>
-              <EditableSelect
-                value={job.status}
-                options={[
-                  { value: 'draft', label: 'Draft', color: '#A1A1A1' },
-                  { value: 'pending', label: 'Pending', color: '#FACC15' },
-                  { value: 'in_progress', label: 'In Progress', color: '#38BDF8' },
-                  { value: 'completed', label: 'Completed', color: '#29E673' },
-                  { value: 'cancelled', label: 'Cancelled', color: '#FB7185' },
-                ]}
-                onSave={async (newValue) => {
-                  await jobsApi.update(jobId, { status: newValue })
-                  setJob({ ...job, status: newValue })
-                }}
-              />
+              <span className="text-[#A1A1A1]/50 flex-shrink-0">•</span>
+              <div className="flex-shrink-0">
+                <EditableSelect
+                  value={job.status}
+                  options={[
+                    { value: 'draft', label: 'Draft', color: '#A1A1A1' },
+                    { value: 'pending', label: 'Pending', color: '#FACC15' },
+                    { value: 'in_progress', label: 'In Progress', color: '#38BDF8' },
+                    { value: 'completed', label: 'Completed', color: '#29E673' },
+                    { value: 'cancelled', label: 'Cancelled', color: '#FB7185' },
+                  ]}
+                  onSave={async (newValue) => {
+                    await jobsApi.update(jobId, { status: newValue })
+                    setJob({ ...job, status: newValue })
+                  }}
+                />
+              </div>
             </div>
             <p className="text-xs text-white/50 mt-2">
               Status helps your team understand what stage this job is in.

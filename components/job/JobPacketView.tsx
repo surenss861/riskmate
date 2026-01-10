@@ -473,33 +473,37 @@ export function JobPacketView({
                   : `Pending attestation: ${signoff.signoff_type}`
                 
                 return (
-                  <div key={signoff.id} className="space-y-3 p-4 bg-white/5 rounded-lg border border-white/10">
+                  <div key={signoff.id} className="space-y-3 p-4 bg-white/5 rounded-lg border border-white/10 min-w-0">
                     {/* TrustReceiptStrip: Who/When/What/Why */}
-                    <TrustReceiptStrip
-                      actorName={signoff.signer_name || 'Unknown'}
-                      actorRole={signoff.signer_role || 'Member'}
-                      occurredAt={signoff.signed_at || new Date().toISOString()}
-                      eventType={eventType}
-                      category="operations"
-                      summary={summary}
-                      reason={signoff.comments || signoff.signoff_type || 'Standard attestation'}
-                      policyStatement={signoff.status === 'rejected' ? `Rejected attestation: ${signoff.comments || 'No reason provided'}` : undefined}
-                    />
+                    <div className="min-w-0">
+                      <TrustReceiptStrip
+                        actorName={signoff.signer_name || 'Unknown'}
+                        actorRole={signoff.signer_role || 'Member'}
+                        occurredAt={signoff.signed_at || new Date().toISOString()}
+                        eventType={eventType}
+                        category="operations"
+                        summary={summary}
+                        reason={signoff.comments || signoff.signoff_type || 'Standard attestation'}
+                        policyStatement={signoff.status === 'rejected' ? `Rejected attestation: ${signoff.comments || 'No reason provided'}` : undefined}
+                      />
+                    </div>
                     
                     {/* IntegrityBadge */}
-                    <div className="flex items-center gap-2">
-                      <IntegrityBadge
-                        status={integrityStatus}
-                        showDetails
-                      />
+                    <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                      <div className="flex-shrink-0">
+                        <IntegrityBadge
+                          status={integrityStatus}
+                          showDetails
+                        />
+                      </div>
                       {signoff.status === 'signed' && (
-                        <span className="text-xs text-emerald-400">• Record Sealed</span>
+                        <span className="text-xs text-emerald-400 flex-shrink-0">• Record Sealed</span>
                       )}
                       {signoff.status === 'rejected' && (
-                        <span className="text-xs text-red-400">• Rejected</span>
+                        <span className="text-xs text-red-400 flex-shrink-0">• Rejected</span>
                       )}
                       {signoff.status === 'pending' && (
-                        <span className="text-xs text-yellow-400">• Pending Seal</span>
+                        <span className="text-xs text-yellow-400 flex-shrink-0">• Pending Seal</span>
                       )}
                     </div>
                     

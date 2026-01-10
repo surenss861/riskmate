@@ -71,11 +71,11 @@ export function EventDetailsDrawer({ isOpen, onClose, event }: EventDetailsDrawe
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm">
       <div className="bg-[#1A1A1A] border border-white/10 rounded-t-lg sm:rounded-lg w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-white/10">
-          <h2 className="text-xl font-semibold text-white">Ledger Event Details</h2>
+        <div className="flex items-center justify-between p-6 border-b border-white/10 min-w-0">
+          <h2 className="text-xl font-semibold text-white truncate min-w-0">Ledger Event Details</h2>
           <button
             onClick={onClose}
-            className="text-white/60 hover:text-white transition-colors"
+            className="text-white/60 hover:text-white transition-colors flex-shrink-0 ml-2"
           >
             <X className="w-5 h-5" />
           </button>

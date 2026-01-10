@@ -211,33 +211,37 @@ export function PackCard({
   return (
     <div className={`p-4 bg-white/5 border border-white/10 rounded-lg space-y-4 ${className}`}>
       {/* Header */}
-      <div className="flex items-start justify-between">
-        <div className="flex-1">
-          <div className="flex items-center gap-2 mb-1">
-            <Package className="w-5 h-5 text-white/80" />
-            <h3 className="font-semibold text-white">{getPackTypeLabel()}</h3>
-            <Badge variant="neutral" className="text-xs">
+      <div className="flex items-start justify-between min-w-0">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1 min-w-0 flex-wrap">
+            <Package className="w-5 h-5 text-white/80 flex-shrink-0" />
+            <h3 className="font-semibold text-white truncate min-w-0">{getPackTypeLabel()}</h3>
+            <Badge variant="neutral" className="text-xs flex-shrink-0">
               {packType}
             </Badge>
           </div>
-          <div className="flex items-center gap-2 text-xs text-white/60">
-            <code className="font-mono">{packId.slice(0, 16)}...</code>
+          <div className="flex items-center gap-2 text-xs text-white/60 min-w-0 flex-wrap">
+            <code className="font-mono truncate min-w-0" title={packId}>{packId.slice(0, 16)}...</code>
             {integrityStatus && (
-              <IntegrityBadge 
-                status={integrityStatus}
-                className="ml-2"
-              />
+              <div className="flex-shrink-0">
+                <IntegrityBadge 
+                  status={integrityStatus}
+                  className="ml-2"
+                />
+              </div>
             )}
           </div>
         </div>
         {onDownload && (
-          <ActionButton
-            onClick={() => onDownload?.()}
-            variant="secondary"
-            icon={<Download className="w-4 h-4" />}
-          >
-            Download
-          </ActionButton>
+          <div className="flex-shrink-0 ml-2">
+            <ActionButton
+              onClick={() => onDownload?.()}
+              variant="secondary"
+              icon={<Download className="w-4 h-4" />}
+            >
+              Download
+            </ActionButton>
+          </div>
         )}
       </div>
 
@@ -308,17 +312,17 @@ export function PackCard({
 
       {/* Contents */}
       {contentsList.length > 0 && (
-        <div className="pt-2 border-t border-white/10">
+        <div className="pt-2 border-t border-white/10 min-w-0">
           <div className="text-xs text-white/60 mb-2 font-medium">Contents:</div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 min-w-0">
             {contentsList.map((item, idx) => (
               <div
                 key={idx}
-                className="flex items-center gap-1.5 text-xs px-2 py-1 bg-white/5 rounded border border-white/10"
+                className="flex items-center gap-1.5 text-xs px-2 py-1 bg-white/5 rounded border border-white/10 flex-shrink-0 min-w-0"
               >
-                <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                <span className="text-white/80">{item.name}</span>
-                {item.icon}
+                <CheckCircle2 className="w-3 h-3 text-emerald-400 flex-shrink-0" />
+                <span className="text-white/80 truncate min-w-0" title={item.name}>{item.name}</span>
+                <div className="flex-shrink-0">{item.icon}</div>
               </div>
             ))}
           </div>
@@ -327,12 +331,12 @@ export function PackCard({
 
       {/* Data Hash (fingerprint) */}
       {dataHash && (
-        <div className="pt-2 border-t border-white/10">
-          <div className="flex items-center gap-2 text-xs text-white/60 mb-1">
-            <Hash className="w-3 h-3" />
-            <span className="font-medium">Fingerprint:</span>
+        <div className="pt-2 border-t border-white/10 min-w-0">
+          <div className="flex items-center gap-2 text-xs text-white/60 mb-1 min-w-0">
+            <Hash className="w-3 h-3 flex-shrink-0" />
+            <span className="font-medium flex-shrink-0">Fingerprint:</span>
           </div>
-          <code className="block text-xs font-mono text-white/70 bg-white/5 px-2 py-1 rounded border border-white/10 break-all">
+          <code className="block text-xs font-mono text-white/70 bg-white/5 px-2 py-1 rounded border border-white/10 break-all min-w-0 truncate" title={dataHash}>
             {dataHash}
           </code>
         </div>

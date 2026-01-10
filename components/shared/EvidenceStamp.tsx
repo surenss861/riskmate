@@ -64,18 +64,18 @@ export function EvidenceStamp({
 }: EvidenceStampProps) {
   if (compact) {
     return (
-      <div className={`flex items-center gap-2 text-xs text-white/60 ${className}`}>
-        <Fingerprint className="w-3 h-3" />
-        <span className="text-white/80">Fingerprinted</span>
+      <div className={`flex items-center gap-2 text-xs text-white/60 min-w-0 flex-wrap ${className}`}>
+        <Fingerprint className="w-3 h-3 flex-shrink-0" />
+        <span className="text-white/80 flex-shrink-0">Fingerprinted</span>
         {verified && (
-          <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+          <CheckCircle2 className="w-3 h-3 text-emerald-400 flex-shrink-0" />
         )}
-        <span className="text-white/50">•</span>
-        <span>{formatRelativeTime(uploadedAt)}</span>
+        <span className="text-white/50 flex-shrink-0">•</span>
+        <span className="flex-shrink-0">{formatRelativeTime(uploadedAt)}</span>
         {uploadedBy && (
           <>
-            <span className="text-white/50">•</span>
-            <span className="text-white/70">{uploadedBy}</span>
+            <span className="text-white/50 flex-shrink-0">•</span>
+            <span className="text-white/70 truncate min-w-0" title={uploadedBy}>{uploadedBy}</span>
           </>
         )}
       </div>
@@ -85,10 +85,10 @@ export function EvidenceStamp({
   return (
     <div className={`p-3 bg-white/5 border border-white/10 rounded-lg space-y-2 ${className}`}>
       {/* Fingerprint badge */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 min-w-0 flex-wrap">
         <Badge 
           variant={verified ? 'success' : 'neutral'} 
-          className="inline-flex items-center gap-1.5"
+          className="inline-flex items-center gap-1.5 flex-shrink-0"
         >
           <Fingerprint className="w-3 h-3" />
           <span className="text-xs font-medium">Fingerprinted</span>
@@ -97,24 +97,24 @@ export function EvidenceStamp({
           )}
         </Badge>
         {fileHash && (
-          <code className="text-xs font-mono text-white/50">
+          <code className="text-xs font-mono text-white/50 truncate min-w-0" title={fileHash}>
             {fileHash.slice(0, 16)}...
           </code>
         )}
       </div>
 
       {/* Uploader + Timestamp */}
-      <div className="flex items-center gap-3 text-xs text-white/70">
+      <div className="flex items-center gap-3 text-xs text-white/70 min-w-0 flex-wrap">
         {uploadedBy && (
-          <div className="flex items-center gap-1">
-            <User className="w-3 h-3 text-white/50" />
-            <span className="font-medium">{uploadedBy}</span>
+          <div className="flex items-center gap-1 min-w-0">
+            <User className="w-3 h-3 text-white/50 flex-shrink-0" />
+            <span className="font-medium truncate min-w-0" title={uploadedBy}>{uploadedBy}</span>
             {uploadedByRole && (
-              <span className="text-white/50">({uploadedByRole})</span>
+              <span className="text-white/50 flex-shrink-0">({uploadedByRole})</span>
             )}
           </div>
         )}
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 flex-shrink-0">
           <Clock className="w-3 h-3 text-white/50" />
           <time dateTime={uploadedAt}>{formatRelativeTime(uploadedAt)}</time>
         </div>

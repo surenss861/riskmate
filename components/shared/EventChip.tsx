@@ -105,23 +105,23 @@ export function EventChip({
     : eventType.replace(/_/g, ' ')
 
   return (
-    <div className={`flex items-center gap-2 flex-wrap ${className}`}>
+    <div className={`flex items-center gap-2 flex-wrap min-w-0 ${className}`}>
       {/* Event type */}
-      <Badge variant={severityConfig.variant} className="inline-flex items-center gap-1.5">
+      <Badge variant={severityConfig.variant} className="inline-flex items-center gap-1.5 flex-shrink-0">
         {severityConfig.icon}
         <span className="text-xs font-medium uppercase">{severityConfig.label}</span>
       </Badge>
       
       {/* Outcome badge (if shown) */}
       {showOutcome && outcomeConfig && (
-        <Badge variant={outcomeConfig.variant} className="inline-flex items-center gap-1.5">
+        <Badge variant={outcomeConfig.variant} className="inline-flex items-center gap-1.5 flex-shrink-0">
           {outcomeConfig.icon}
           <span className="text-xs font-medium uppercase">{outcomeConfig.label}</span>
         </Badge>
       )}
       
-      {/* Event type name (subtle) */}
-      <span className="text-xs text-white/60 font-mono">
+      {/* Event type name (subtle) - truncate on mobile */}
+      <span className="text-xs text-white/60 font-mono truncate min-w-0">
         {displayType}
       </span>
     </div>

@@ -72,16 +72,16 @@ export default function HomePage() {
           }`}
           style={{ backgroundColor: `rgba(0, 0, 0, ${navOpacity})` }}
         >
-          <div className="max-w-4xl mx-auto flex items-center justify-between py-5 px-6">
+          <div className="max-w-4xl mx-auto flex items-center justify-between py-5 px-6 min-w-0">
             <motion.div 
-              className="flex items-center gap-3"
+              className="flex items-center gap-3 flex-shrink-0 min-w-0"
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.4 }}
             >
               <RiskMateLogo size="sm" showText={true} />
             </motion.div>
-            <div className="hidden md:flex items-center gap-6">
+            <div className="hidden md:flex items-center gap-6 min-w-0 flex-wrap justify-end">
               <button
                 onClick={() => router.push('/industries')}
                 className="text-white/70 hover:text-white transition-colors text-sm"
@@ -374,98 +374,112 @@ export default function HomePage() {
           <div className="grid md:grid-cols-3 gap-6">
             {/* Proof Moment 1: Incident Closed */}
             <motion.div
-              className="p-6 bg-[#121212] rounded-xl border border-white/5 space-y-4"
+              className="p-6 bg-[#121212] rounded-xl border border-white/5 space-y-4 min-w-0"
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.6, delay: 0.2 }}
             >
-              <div className="text-2xl font-semibold text-white mb-4">Incident Closed</div>
-              <EventChip 
-                eventType="incident.closed"
-                severity="material"
-                outcome="success"
-                showOutcome
-              />
-              <TrustReceiptStrip
-                actorName="Safety Lead"
-                actorRole="safety_lead"
-                occurredAt={new Date(Date.now() - 3600000).toISOString()}
-                eventType="incident.closed"
-                category="operations"
-                summary="Incident #INC-2025-001 closed with corrective actions"
-                reason="All hazards mitigated, attestation created"
-                compact
-              />
-              <IntegrityBadge
-                status="verified"
-                verifiedThrough="ledger_hash"
-                lastVerified={new Date().toISOString()}
-              />
+              <div className="text-2xl font-semibold text-white mb-4 truncate min-w-0">Incident Closed</div>
+              <div className="min-w-0">
+                <EventChip 
+                  eventType="incident.closed"
+                  severity="material"
+                  outcome="success"
+                  showOutcome
+                />
+              </div>
+              <div className="min-w-0">
+                <TrustReceiptStrip
+                  actorName="Safety Lead"
+                  actorRole="safety_lead"
+                  occurredAt={new Date(Date.now() - 3600000).toISOString()}
+                  eventType="incident.closed"
+                  category="operations"
+                  summary="Incident #INC-2025-001 closed with corrective actions"
+                  reason="All hazards mitigated, attestation created"
+                  compact
+                />
+              </div>
+              <div className="flex-shrink-0">
+                <IntegrityBadge
+                  status="verified"
+                  verifiedThrough="ledger_hash"
+                  lastVerified={new Date().toISOString()}
+                />
+              </div>
             </motion.div>
 
             {/* Proof Moment 2: Access Revoked */}
             <motion.div
-              className="p-6 bg-[#121212] rounded-xl border border-white/5 space-y-4"
+              className="p-6 bg-[#121212] rounded-xl border border-white/5 space-y-4 min-w-0"
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.6, delay: 0.3 }}
             >
-              <div className="text-2xl font-semibold text-white mb-4">Access Revoked</div>
-              <EventChip
-                eventType="access.revoked"
-                severity="material"
-                outcome="allowed"
-                showOutcome
-              />
-              <TrustReceiptStrip
-                actorName="Admin"
-                actorRole="admin"
-                occurredAt={new Date(Date.now() - 7200000).toISOString()}
-                eventType="access.revoked"
-                category="access"
-                summary="Access revoked for former employee"
-                reason="Termination policy enforcement"
-                compact
-              />
-              <EnforcementBanner
-                action="Revoke access"
-                blocked={false}
-                eventId="evt_access_revoked_001"
-                policyStatement="Access revoked per HR termination policy"
-                actorRole="admin"
-                severity="material"
-              />
+              <div className="text-2xl font-semibold text-white mb-4 truncate min-w-0">Access Revoked</div>
+              <div className="min-w-0">
+                <EventChip
+                  eventType="access.revoked"
+                  severity="material"
+                  outcome="allowed"
+                  showOutcome
+                />
+              </div>
+              <div className="min-w-0">
+                <TrustReceiptStrip
+                  actorName="Admin"
+                  actorRole="admin"
+                  occurredAt={new Date(Date.now() - 7200000).toISOString()}
+                  eventType="access.revoked"
+                  category="access"
+                  summary="Access revoked for former employee"
+                  reason="Termination policy enforcement"
+                  compact
+                />
+              </div>
+              <div className="min-w-0">
+                <EnforcementBanner
+                  action="Revoke access"
+                  blocked={false}
+                  eventId="evt_access_revoked_001"
+                  policyStatement="Access revoked per HR termination policy"
+                  actorRole="admin"
+                  severity="material"
+                />
+              </div>
             </motion.div>
 
             {/* Proof Moment 3: Proof Pack Generated */}
             <motion.div
-              className="p-6 bg-[#121212] rounded-xl border border-white/5 space-y-4"
+              className="p-6 bg-[#121212] rounded-xl border border-white/5 space-y-4 min-w-0"
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.6, delay: 0.4 }}
             >
-              <div className="text-2xl font-semibold text-white mb-4">Proof Pack Generated</div>
-              <PackCard
-                packId="pack_abc123"
-                packType="proof"
-                generatedAt={new Date(Date.now() - 86400000).toISOString()}
-                generatedBy="Admin"
-                filters={{ job_id: 'job_xyz789', time_range: '30d' }}
-                contents={{
-                  ledger_pdf: true,
-                  controls_csv: true,
-                  attestations_csv: true,
-                  evidence_manifest: true,
-                }}
-                dataHash="sha256:abc123def456..."
-                fileSize={2048000}
-                eventCount={42}
-                integrityStatus="verified"
-                className="bg-black/20 border-white/10"
-              />
+              <div className="text-2xl font-semibold text-white mb-4 truncate min-w-0">Proof Pack Generated</div>
+              <div className="min-w-0">
+                <PackCard
+                  packId="pack_abc123"
+                  packType="proof"
+                  generatedAt={new Date(Date.now() - 86400000).toISOString()}
+                  generatedBy="Admin"
+                  filters={{ job_id: 'job_xyz789', time_range: '30d' }}
+                  contents={{
+                    ledger_pdf: true,
+                    controls_csv: true,
+                    attestations_csv: true,
+                    evidence_manifest: true,
+                  }}
+                  dataHash="sha256:abc123def456..."
+                  fileSize={2048000}
+                  eventCount={42}
+                  integrityStatus="verified"
+                  className="bg-black/20 border-white/10"
+                />
+              </div>
             </motion.div>
           </div>
         </section>
