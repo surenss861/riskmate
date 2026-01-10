@@ -8,7 +8,7 @@ import { jobsApi, auditApi } from '@/lib/api'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { typography } from '@/lib/styles/design-system'
 import { DashboardNavbar } from '@/components/dashboard/DashboardNavbar'
-import { AppBackground, AppShell, PageSection, GlassCard, Button, ActionButton, Select, PageHeader, EventChip, TrustReceiptStrip, IntegrityBadge, EnforcementBanner } from '@/components/shared'
+import { AppBackground, AppShell, PageSection, GlassCard, Button, ActionButton, Select, PageHeader, EventChip, TrustReceiptStrip, IntegrityBadge, EnforcementBanner, EmptyState } from '@/components/shared'
 import { useAction } from '@/lib/hooks/useAction'
 import { getEventMapping, categorizeEvent, type EventCategory, type EventSeverity, type EventOutcome } from '@/lib/audit/eventMapper'
 import { getIndustryLanguage } from '@/lib/audit/industryLanguage'
@@ -1790,88 +1790,35 @@ export default function AuditViewPage() {
             {loading ? (
               <LedgerEventListSkeleton />
             ) : filteredEvents.length === 0 ? (
-              <div className="text-center py-12 px-4">
-                <div className="max-w-md mx-auto">
-                  {activeTab === 'governance' && (
-                    <>
-                      <Shield className="w-12 h-12 text-white/20 mx-auto mb-4" />
-                      <h3 className="text-lg font-semibold text-white mb-2">No Policy Blocks</h3>
-                      <p className="text-white/60 mb-1">
-                        No Governance Enforcement events in the last {filters.timeRange === '24h' ? '24 hours' : filters.timeRange === '7d' ? '7 days' : filters.timeRange === '30d' ? '30 days' : 'time period'}.
-                      </p>
-                      <p className="text-white/40 text-sm mb-4">
-                        This tab shows blocked actions, policy enforcement, and violations. Try &quot;All time&quot; or trigger a policy block (e.g., executive attempting a mutation) to verify.
-                      </p>
-                    </>
-                  )}
-                  {activeTab === 'operations' && (
-                    <>
-                      <FileText className="w-12 h-12 text-white/20 mx-auto mb-4" />
-                      <h3 className="text-lg font-semibold text-white mb-2">No Operational Actions</h3>
-                      <p className="text-white/60 mb-1">
-                        No operational ledger events in the last {filters.timeRange === '24h' ? '24 hours' : filters.timeRange === '7d' ? '7 days' : filters.timeRange === '30d' ? '30 days' : 'time period'}.
-                      </p>
-                      <p className="text-white/40 text-sm mb-4">
-                        This tab shows operational ledger events (assign/resolve/waive, corrective actions, incident closures, proof pack generation). Assign or resolve items to generate chain-of-custody events.
-                      </p>
-                    </>
-                  )}
-                  {activeTab === 'access' && (
-                    <>
-                      <User className="w-12 h-12 text-white/20 mx-auto mb-4" />
-                      <h3 className="text-lg font-semibold text-white mb-2">No Access Events</h3>
-                      <p className="text-white/60 mb-1">
-                        No access & security ledger events in the last {filters.timeRange === '24h' ? '24 hours' : filters.timeRange === '7d' ? '7 days' : filters.timeRange === '30d' ? '30 days' : 'time period'}.
-                      </p>
-                      <p className="text-white/40 text-sm mb-4">
-                        This tab shows identity and governance changes (role changes, revocations, logins, security events). Role changes and revocations will appear here.
-                      </p>
-                    </>
-                  )}
-                  <div className="flex flex-wrap gap-2 justify-center">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => setFilters({ ...filters, timeRange: 'all' })}
-                    >
-                      Show all time
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => setFilters({ ...filters, outcome: '', severity: '' })}
-                    >
-                      Clear filters
-                    </Button>
-                    {process.env.NODE_ENV === 'development' && (
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={async () => {
-                          try {
-                            const response = await fetch('/api/dev/generate-sample-events', {
-                              method: 'POST',
-                              headers: { 'Content-Type': 'application/json' },
-                            })
-                            if (response.ok) {
-                              setToast({ message: 'Sample ledger events generated! Refresh to see them.', type: 'success' })
-                              setTimeout(() => loadAuditEvents(), 1000)
-                            } else {
-                              setToast({ message: 'Failed to generate sample ledger events', type: 'error' })
-                            }
-                          } catch (err) {
-                            setToast({ message: 'Failed to generate sample ledger events', type: 'error' })
-                          }
-                        }}
-                        className="border-dashed"
-                        title="Dev only: Generate sample events for testing"
-                      >
-                        Generate Sample Events (Dev)
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              </div>
+              <>
+                {activeTab === 'governance' && (
+                  <EmptyState
+                    title="No governance ledger events"
+                    description="Nothing has triggered governance enforcement in this view yet."
+                    hint="Allowed, blocked, and review-required outcomes appear here as immutable ledger events."
+                    actionLabel="Clear filters"
+                    onAction={() => setFilters({ ...filters, outcome: '', severity: '', timeRange: '30d' })}
+                  />
+                )}
+                {activeTab === 'operations' && (
+                  <EmptyState
+                    title="No operational ledger events"
+                    description="No operational activity matches your current filters."
+                    hint="Try adjusting filters. Every operational action is recorded as a ledger event."
+                    actionLabel="Clear filters"
+                    onAction={() => setFilters({ ...filters, outcome: '', severity: '', timeRange: '30d' })}
+                  />
+                )}
+                {activeTab === 'access' && (
+                  <EmptyState
+                    title="No access & security ledger events"
+                    description="No role changes, access revocations, or security events match your criteria."
+                    hint="Policy decisions (allowed/blocked) are recorded here as chain of custody."
+                    actionLabel="Clear filters"
+                    onAction={() => setFilters({ ...filters, outcome: '', severity: '', timeRange: '30d' })}
+                  />
+                )}
+              </>
             ) : (
               <div className="space-y-3">
                 {filteredEvents.map((event) => {

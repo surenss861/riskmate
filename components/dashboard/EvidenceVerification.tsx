@@ -5,7 +5,7 @@ import * as React from 'react'
 import { motion } from 'framer-motion'
 import { modalStyles, buttonStyles, spacing, shadows, inputStyles, badgeStyles } from '@/lib/styles/design-system'
 import { ConfirmModal } from './ConfirmModal'
-import { EvidenceStamp } from '@/components/shared'
+import { EvidenceStamp, EmptyState } from '@/components/shared'
 
 interface EvidenceItem {
   id: string
@@ -179,18 +179,17 @@ export function EvidenceVerification({
 
         <div className="space-y-3">
           {filteredItems.length === 0 ? (
-            <div className="text-center py-8 border border-white/10 rounded-lg bg-[#121212]/40">
-              <p className="text-sm text-white font-medium mb-2">
-                {filter === 'all' ? 'No evidence uploaded yet' : `No ${filter} evidence`}
-              </p>
-              <p className="text-xs text-white/60 max-w-md mx-auto">
-                {filter === 'all' 
-                  ? 'Upload photos and documents to document site conditions. All evidence is timestamped and can be verified by managers for compliance.'
+            <EmptyState
+              title={filter === 'all' ? 'No evidence attached' : `No ${filter} evidence`}
+              description={
+                filter === 'all' 
+                  ? 'This work record has no evidence files yet.'
                   : filter === 'pending'
                   ? 'No evidence waiting for review. Approved or rejected items are shown in their respective tabs.'
-                  : `No ${filter} evidence items. Upload evidence to start the verification process.`}
-              </p>
-            </div>
+                  : `No ${filter} evidence items. Upload evidence to start the verification process.`
+              }
+              hint={filter === 'all' ? 'Evidence added here is fingerprinted and linked to ledger events.' : undefined}
+            />
           ) : (
             filteredItems.map((item) => (
               <motion.div

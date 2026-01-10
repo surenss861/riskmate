@@ -6,7 +6,7 @@ import { Download, FileText, Shield, CheckCircle, Clock, User, Flag, Upload, X, 
 import { cardStyles, buttonStyles, typography } from '@/lib/styles/design-system'
 import { jobsApi } from '@/lib/api'
 import { useRouter } from 'next/navigation'
-import { TrustReceiptStrip, IntegrityBadge, EnforcementBanner } from '@/components/shared'
+import { TrustReceiptStrip, IntegrityBadge, EnforcementBanner, EmptyState } from '@/components/shared'
 
 interface Attachment {
   id: string
@@ -519,22 +519,11 @@ export function JobPacketView({
               })}
             </div>
           ) : (
-            <div className="space-y-3">
-              <div className="p-4 bg-white/5 rounded-lg border border-white/10">
-                <p className="text-sm text-white/50 mb-2">Safety Lead</p>
-                <p className="text-xs text-white/40 italic mb-2">Pending seal record</p>
-                <p className="text-xs text-white/30">
-                  Record will be sealed when Safety Lead attests to job completion and compliance.
-                </p>
-              </div>
-              <div className="p-4 bg-white/5 rounded-lg border border-white/10">
-                <p className="text-sm text-white/50 mb-2">Owner</p>
-                <p className="text-xs text-white/40 italic mb-2">Pending seal record</p>
-                <p className="text-xs text-white/30">
-                  Record will be sealed when Owner attests to job acceptance and final approval.
-                </p>
-              </div>
-            </div>
+            <EmptyState
+              title="No sealed records"
+              description="No attestations have sealed this record yet."
+              hint="Seals create immutable attestations in the compliance ledger."
+            />
           )}
         </section>
       </div>

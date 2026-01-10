@@ -3,7 +3,7 @@
 import { motion } from 'framer-motion'
 import { useState, useMemo } from 'react'
 import { Plus, Edit, Trash2, FileText, Image, CheckCircle, XCircle, User, Calendar } from 'lucide-react'
-import { EventChip, TrustReceiptStrip, IntegrityBadge, EnforcementBanner } from '@/components/shared'
+import { EventChip, TrustReceiptStrip, IntegrityBadge, EnforcementBanner, EmptyState } from '@/components/shared'
 import { getEventMapping } from '@/lib/audit/eventMapper'
 
 interface VersionHistoryEntry {
@@ -147,11 +147,12 @@ export function VersionHistory({ jobId, entries }: VersionHistoryProps) {
   if (entries.length === 0) {
     return (
       <div className="rounded-lg border border-white/10 bg-[#121212]/80 backdrop-blur-sm p-6">
-        <h3 className="text-lg font-semibold text-white mb-2">Version History</h3>
-        <p className="text-sm text-white font-medium mb-2">No activity recorded yet</p>
-        <p className="text-xs text-white/60 max-w-md">
-          Every change to this job is logged here automatically. This creates an audit trail for compliance, insurance, and legal protection. Activity will appear as you work on the job.
-        </p>
+        <h3 className="text-lg font-semibold text-white mb-4">Chain of Custody</h3>
+        <EmptyState
+          title="No chain of custody events"
+          description="No ledger events exist for this record in the selected range."
+          hint="If this seems wrong, check filters or data scope."
+        />
       </div>
     )
   }
@@ -160,9 +161,9 @@ export function VersionHistory({ jobId, entries }: VersionHistoryProps) {
     <div className="rounded-lg border border-white/10 bg-[#121212]/80 backdrop-blur-sm p-6">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h3 className="text-lg font-semibold text-white">Version History</h3>
+          <h3 className="text-lg font-semibold text-white">Chain of Custody</h3>
           <p className="text-xs text-white/50 mt-0.5">
-            Track all changes made to this job
+            Immutable ledger events for this work record
           </p>
         </div>
         {entries.length > 5 && (
