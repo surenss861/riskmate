@@ -3,12 +3,14 @@
 import { Shield, FileCheck, AlertTriangle, UserCheck, Download, Package, UserPlus, CheckCircle, FileText, Ban, Flag } from 'lucide-react'
 import { buttonStyles } from '@/lib/styles/design-system'
 import { terms } from '@/lib/terms'
+import { ActionButton } from '@/components/shared'
 
 interface SavedViewCardsProps {
   activeView: string
   selectedCount?: number // Number of selected items (action buttons require selection)
   onSelectView: (view: 'review-queue' | 'insurance-ready' | 'governance-enforcement' | 'incident-review' | 'access-review' | '') => void
   onExportCSV: (view: string) => void // CSV export only (human ops workflow)
+  onExportCSVLoading?: boolean // Loading state for CSV export
   onGeneratePack?: (view: string) => void
   onAssign?: (view: string) => void
   onResolve?: (view: string) => void
@@ -24,6 +26,7 @@ export function SavedViewCards({
   selectedCount = 0,
   onSelectView, 
   onExportCSV,
+  onExportCSVLoading = false,
   onGeneratePack,
   onAssign,
   onResolve,
@@ -192,17 +195,19 @@ export function SavedViewCards({
             })()}
 
             {/* Export CSV Button (consistent across all cards, human ops workflow) */}
-            <button
+            <ActionButton
               onClick={(e) => {
                 e.stopPropagation()
                 onExportCSV(view.id)
               }}
-              className={`${buttonStyles.secondary} w-full text-xs py-1.5 mt-2 flex items-center justify-center gap-1`}
-              title="Export CSV: Human-readable export for ops workflows"
+              loading={onExportCSVLoading}
+              variant="secondary"
+              className="w-full text-xs py-1.5 mt-2 flex items-center justify-center gap-1"
+              disabledReason={onExportCSVLoading ? 'Exporting...' : undefined}
+              icon={<Download className="w-3 h-3" />}
             >
-              <Download className="w-3 h-3" />
               Export CSV
-            </button>
+            </ActionButton>
           </div>
         )
       })}

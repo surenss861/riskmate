@@ -8,7 +8,8 @@ import { jobsApi, auditApi } from '@/lib/api'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { typography } from '@/lib/styles/design-system'
 import { DashboardNavbar } from '@/components/dashboard/DashboardNavbar'
-import { AppBackground, AppShell, PageSection, GlassCard, Button, Select, PageHeader } from '@/components/shared'
+import { AppBackground, AppShell, PageSection, GlassCard, Button, ActionButton, Select, PageHeader } from '@/components/shared'
+import { useAction } from '@/lib/hooks/useAction'
 import { getEventMapping, categorizeEvent, type EventCategory, type EventSeverity, type EventOutcome } from '@/lib/audit/eventMapper'
 import { getIndustryLanguage } from '@/lib/audit/industryLanguage'
 import { SavedViewCards } from '@/components/audit/SavedViewCards'
@@ -417,13 +418,9 @@ export default function AuditViewPage() {
 
   const industryLang = getIndustryLanguage(industryVertical)
 
-  const handleExportFromView = async (format: 'csv' | 'json', view: string) => {
-    try {
-      setToast({
-        message: 'Exporting...',
-        type: 'success',
-      })
-
+  // Export action (CSV/PDF/JSON) - using useAction for standardized UX
+  const exportAction = useAction(
+    async (format: 'csv' | 'json' | 'pdf', view: string) => {
       let endpoint = ''
       const params = new URLSearchParams({
         format,
@@ -443,7 +440,6 @@ export default function AuditViewPage() {
       } else if (view === 'incident-review') {
         endpoint = `/api/incidents/export?${params.toString()}`
       } else if (view === 'governance-enforcement') {
-        // For enforcement, use CSV format by default, or keep PDF for the export button
         const exportParams = new URLSearchParams({
           format: format === 'json' ? 'json' : 'csv',
           time_range: filters.timeRange || '30d',
@@ -457,9 +453,8 @@ export default function AuditViewPage() {
 
       const response = await fetch(endpoint, {
         method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
       })
 
       if (!response.ok) {
@@ -475,36 +470,39 @@ export default function AuditViewPage() {
 
       // Handle different content types
       const contentType = response.headers.get('content-type') || ''
+      let filename = ''
 
       if (contentType.includes('application/json')) {
         const data = await response.json()
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+        filename = `${view}-export-${new Date().toISOString().split('T')[0]}.json`
         const url = window.URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url
-        a.download = `${view}-export-${new Date().toISOString().split('T')[0]}.json`
+        a.download = filename
         document.body.appendChild(a)
         a.click()
         document.body.removeChild(a)
         window.URL.revokeObjectURL(url)
       } else if (contentType.includes('text/csv')) {
         const blob = await response.blob()
+        filename = `${view}-export-${new Date().toISOString().split('T')[0]}.csv`
         const url = window.URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url
-        a.download = `${view}-export-${new Date().toISOString().split('T')[0]}.csv`
+        a.download = filename
         document.body.appendChild(a)
         a.click()
         document.body.removeChild(a)
         window.URL.revokeObjectURL(url)
       } else if (contentType.includes('application/pdf')) {
         const blob = await response.blob()
-        const url = window.URL.createObjectURL(blob)
-        const a = document.createElement('a')
         const contentDisposition = response.headers.get('Content-Disposition')
-        const filename = contentDisposition
+        filename = contentDisposition
           ? contentDisposition.split('filename=')[1]?.replace(/"/g, '') || `${view}-export-${new Date().toISOString().split('T')[0]}.pdf`
           : `${view}-export-${new Date().toISOString().split('T')[0]}.pdf`
+        const url = window.URL.createObjectURL(blob)
+        const a = document.createElement('a')
         a.href = url
         a.download = filename
         document.body.appendChild(a)
@@ -515,33 +513,42 @@ export default function AuditViewPage() {
         // Fallback: try to parse as JSON
         const data = await response.json()
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+        filename = `${view}-export-${new Date().toISOString().split('T')[0]}.json`
         const url = window.URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url
-        a.download = `${view}-export-${new Date().toISOString().split('T')[0]}.json`
+        a.download = filename
         document.body.appendChild(a)
         a.click()
         document.body.removeChild(a)
         window.URL.revokeObjectURL(url)
       }
 
-      setToast({
-        message: `Export completed successfully`,
-        type: 'success',
-      })
-    } catch (err: any) {
-      console.error('Export failed:', err)
-      setToast({
-        message: err.message || 'Export failed. Please try again.',
-        type: 'error',
-      })
+      return filename
+    },
+    {
+      onSuccess: (filename) => {
+        setToast({
+          message: `Export completed: ${filename}`,
+          type: 'success',
+        })
+      },
+      onError: (err: any) => {
+        setToast({
+          message: err.message || 'Export failed. Please try again.',
+          type: 'error',
+        })
+      },
     }
+  )
+
+  const handleExportFromView = (format: 'csv' | 'json', view: string) => {
+    exportAction.run(format, view)
   }
 
-  const handleGeneratePack = async (view?: string) => {
-    try {
-      // Use Next.js API route (which proxies to backend) instead of calling backend directly
-      // This ensures consistent routing and error handling
+  // Generate Proof Pack action (using useAction for standardized UX)
+  const generatePackAction = useAction(
+    async (view?: string) => {
       const endpoint = '/api/audit/export/pack'
 
       // Build filter payload (supports all saved view filters)
@@ -560,32 +567,21 @@ export default function AuditViewPage() {
       } else if (filters.savedView && filters.savedView !== 'custom') {
         filterPayload.view = filters.savedView
       } else if (!view && !filters.savedView && activeTab) {
-        // If no view, use category as fallback
-        // activeTab is always one of: 'governance', 'operations', 'access'
         filterPayload.category = activeTab
       }
 
-      // Use Next.js API route - it handles auth via cookies automatically
       const response = await fetch(endpoint, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include', // Include cookies for auth
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify(filterPayload),
       })
 
       if (!response.ok) {
         const error = await response.json().catch(() => ({}))
         const errorMessage = error.message || error.error || 'Failed to generate pack'
-        // Handle connection errors with helpful message
         if (error.code === 'BACKEND_CONNECTION_ERROR') {
-          setToast({
-            message: 'Backend server is not accessible. Please check that the backend is running.',
-            type: 'error',
-            requestId: error._proxy?.configured_backend_url,
-          })
-          return
+          throw new Error('Backend server is not accessible. Please check that the backend is running.')
         }
         throw new Error(errorMessage)
       }
@@ -605,19 +601,25 @@ export default function AuditViewPage() {
       document.body.removeChild(a)
       window.URL.revokeObjectURL(url)
 
-      // Show success toast
-      setToast({
-        message: `Proof Pack generated: ${filename}`,
-        type: 'success',
-      })
-    } catch (err: any) {
-      console.error('Failed to generate pack:', err)
-      setToast({
-        message: err.message || 'Failed to generate audit pack. Please try again.',
-        type: 'error',
-      })
+      return filename
+    },
+    {
+      onSuccess: (filename) => {
+        setToast({
+          message: `Proof Pack generated: ${filename}`,
+          type: 'success',
+        })
+      },
+      onError: (err: any) => {
+        setToast({
+          message: err.message || 'Failed to generate audit pack. Please try again.',
+          type: 'error',
+        })
+      },
     }
-  }
+  )
+
+  const handleGeneratePack = (view?: string) => generatePackAction.run(view)
 
   const handleAssign = async (assignment: {
     owner_id: string
@@ -1363,6 +1365,7 @@ export default function AuditViewPage() {
               if (savedView === 'access-review') setActiveTab('access')
             }}
             onExportCSV={(view) => handleExportFromView('csv', view)}
+            onExportCSVLoading={exportAction.loading}
             onGeneratePack={handleGeneratePack}
             onAssign={(view) => {
               // Check for selection first
@@ -1680,22 +1683,19 @@ export default function AuditViewPage() {
                               <Download className="w-4 h-4" />
                               API payload (JSON)
                             </button>
-                            <button
-                              onClick={async (e) => {
-                                e.stopPropagation()
+                            <ActionButton
+                              onClick={() => {
                                 setAdvancedExportMenuOpen(false)
-                                try {
-                                  await handleGeneratePack(filters.savedView && filters.savedView !== 'custom' ? filters.savedView : 'custom')
-                                } catch (err) {
-                                  alert('Failed to generate proof pack. Please try again.')
-                                }
+                                handleGeneratePack(filters.savedView && filters.savedView !== 'custom' ? filters.savedView : 'custom')
                               }}
+                              loading={generatePackAction.loading}
+                              variant="secondary"
                               className="w-full px-3 py-2 text-sm text-white/80 hover:bg-white/10 rounded-md flex items-center gap-2 transition-colors mt-2"
-                              title="Proof Pack: ZIP with Ledger PDF + Controls CSV + Attestations CSV + Evidence Manifest"
+                              disabledReason={generatePackAction.error ? generatePackAction.error.message : undefined}
+                              icon={<Package className="w-4 h-4" />}
                             >
-                              <Package className="w-4 h-4" />
                               Generate Proof Pack (ZIP)
-                            </button>
+                            </ActionButton>
                             <div className="mt-3 pt-3 border-t border-white/10 px-3 py-1.5">
                               <div className="text-xs font-semibold text-white/60 mb-2">Coming soon:</div>
                               <div className="space-y-1 text-xs text-white/40">
