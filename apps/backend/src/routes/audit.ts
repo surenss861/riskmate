@@ -1208,14 +1208,26 @@ auditRouter.post('/export/attestations', authenticate as unknown as express.Requ
 })
 
 // POST /api/audit/export/pack
-// Generates audit pack: bundles Ledger PDF + Controls CSV + Attestations CSV
+// Generates audit pack: bundles Ledger PDF + Controls CSV + Attestations CSV + Evidence Manifest
+// Supports all saved view filters for deterministic proof pack generation
 auditRouter.post('/export/pack', authenticate as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
   const authReq = req as AuthenticatedRequest & RequestWithId
   const requestId = authReq.requestId || 'unknown'
   
   try {
     const { organization_id, id: userId } = authReq.user
-    const { time_range = '30d', job_id, site_id } = req.body
+    const {
+      time_range = '30d',
+      job_id,
+      site_id,
+      category,
+      actor_id,
+      severity,
+      outcome,
+      view, // saved view preset
+      start_date,
+      end_date,
+    } = req.body
 
     // Get organization and user info
     const { data: orgData } = await supabase
@@ -1230,7 +1242,27 @@ auditRouter.post('/export/pack', authenticate as unknown as express.RequestHandl
       .eq('id', userId)
       .single()
 
-    const packId = `PACK-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`
+    // Generate deterministic pack ID from filters (same filters = same pack ID)
+    // This enables reproducible proof packs for audit/verification
+    const filterHash = crypto.createHash('sha256')
+      .update(JSON.stringify({
+        organization_id,
+        time_range: time_range || '30d',
+        job_id: job_id || null,
+        site_id: site_id || null,
+        category: category || null,
+        actor_id: actor_id || null,
+        severity: severity || null,
+        outcome: outcome || null,
+        view: view || null,
+        start_date: start_date || null,
+        end_date: end_date || null,
+      }))
+      .digest('hex')
+      .substring(0, 16)
+      .toUpperCase()
+    
+    const packId = `PACK-${filterHash}`
 
     // Create zip archive
     const archive = archiver('zip', { zlib: { level: 9 } })
@@ -1256,13 +1288,20 @@ auditRouter.post('/export/pack', authenticate as unknown as express.RequestHandl
         .order('created_at', { ascending: false })
         .limit(1000)
 
-      // Apply unified filters for consistency
+      // Apply unified filters for consistency (supports all saved view filters)
       try {
         eventsQuery = applyAuditFilters(eventsQuery, {
           organizationId: organization_id,
-          job_id: job_id || undefined,
-          site_id: site_id || undefined,
-          time_range: time_range || '30d',
+          ...(category && { category: category as any }),
+          ...(job_id && { job_id: job_id }),
+          ...(site_id && { site_id: site_id }),
+          ...(actor_id && { actor_id: actor_id }),
+          ...(severity && { severity: severity as any }),
+          ...(outcome && { outcome: outcome as any }),
+          ...(time_range && { time_range: time_range as any }),
+          ...(start_date && { start_date: start_date }),
+          ...(end_date && { end_date: end_date }),
+          ...(view && { view: view as any }),
         })
       } catch (filterError: any) {
         if (filterError instanceof FilterValidationError) {
@@ -1392,10 +1431,15 @@ auditRouter.post('/export/pack', authenticate as unknown as express.RequestHandl
       },
       filters: {
         time_range: time_range || '30d',
+        start_date: start_date || null,
+        end_date: end_date || null,
+        job_id: job_id || null,
         site_id: site_id || null,
-        severity: 'all',
-        outcome: 'all',
-        user: 'all',
+        category: category || null,
+        actor_id: actor_id || null,
+        severity: severity || null,
+        outcome: outcome || null,
+        view: view || null,
       },
       counts: {
         ledger_events: events.length,
@@ -1450,18 +1494,36 @@ auditRouter.post('/export/pack', authenticate as unknown as express.RequestHandl
     res.setHeader('Content-Disposition', `attachment; filename="audit-pack-${packId}.zip"`)
     res.send(zipBuffer)
 
-    // Store export pack metadata in ledger (immutable receipt)
+    // Store export pack metadata in ledger (immutable receipt per Compliance Ledger Contract)
+    // Event: proof_pack.generated (per contract v1.0)
     await recordAuditLog({
       organizationId: organization_id,
       actorId: userId,
-      eventName: 'export.pack.generated',
+      eventName: 'proof_pack.generated',
+      eventType: 'proof_pack.generated',
       targetType: 'system',
       targetId: packId,
+      category: 'operations',
+      outcome: 'success',
+      severity: 'info',
+      summary: `Proof Pack generated (ID: ${packId}, ${events.length} events, ${controlsCount} controls, ${attestationsCount} attestations)`,
       metadata: {
         format: 'zip',
-        export_type: 'audit_pack',
+        export_type: 'proof_pack',
         pack_id: packId,
-        filters: { time_range, job_id, site_id },
+        pack_type: 'evidence_slice', // Evidence Slice export per contract
+        filters: {
+          time_range: time_range || '30d',
+          start_date: start_date || null,
+          end_date: end_date || null,
+          job_id: job_id || null,
+          site_id: site_id || null,
+          category: category || null,
+          actor_id: actor_id || null,
+          severity: severity || null,
+          outcome: outcome || null,
+          view: view || null,
+        },
         file_hashes: {
           pdf: pdfHash,
           controls_csv: controlsHash,

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Download, Filter, Shield, AlertTriangle, User, Calendar, FileText, Clock, CheckCircle, XCircle, ExternalLink, ChevronDown, ChevronUp, Building2, MoreVertical } from 'lucide-react'
+import { Download, Filter, Shield, AlertTriangle, User, Calendar, FileText, Clock, CheckCircle, XCircle, ExternalLink, ChevronDown, ChevronUp, Building2, MoreVertical, Package } from 'lucide-react'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import { jobsApi, auditApi } from '@/lib/api'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
@@ -538,7 +538,7 @@ export default function AuditViewPage() {
     }
   }
 
-  const handleGeneratePack = async (view: string) => {
+  const handleGeneratePack = async (view?: string) => {
     try {
       const token = await (async () => {
         const supabase = createSupabaseBrowserClient()
@@ -550,18 +550,29 @@ export default function AuditViewPage() {
       const backendUrl = API_URL || ''
       const endpoint = `${backendUrl}/api/audit/export/pack`
 
+      // Build filter payload (supports all saved view filters)
+      const filterPayload: any = {
+        time_range: filters.timeRange || '30d',
+        ...(filters.job && { job_id: filters.job }),
+        ...(filters.site && { site_id: filters.site }),
+        ...(filters.user && { actor_id: filters.user }),
+        ...(filters.severity && { severity: filters.severity }),
+        ...(filters.outcome && { outcome: filters.outcome }),
+        ...(filters.startDate && { start_date: filters.startDate }),
+        ...(filters.endDate && { end_date: filters.endDate }),
+        // Use provided view or current saved view
+        ...(view && view !== 'custom' ? { view } : filters.savedView && filters.savedView !== 'custom' ? { view: filters.savedView } : {}),
+        // If no view, use category
+        ...(!view && !filters.savedView && activeTab && activeTab !== 'all' && { category: activeTab }),
+      }
+
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           ...(token && { Authorization: `Bearer ${token}` }),
         },
-        body: JSON.stringify({
-          time_range: filters.timeRange,
-          job_id: filters.job || undefined,
-          site_id: filters.site || undefined,
-          view: view,
-        }),
+        body: JSON.stringify(filterPayload),
       })
 
       if (!response.ok) {
@@ -1650,8 +1661,24 @@ export default function AuditViewPage() {
                               <Download className="w-4 h-4" />
                               API payload (JSON)
                             </button>
+                            <button
+                              onClick={async (e) => {
+                                e.stopPropagation()
+                                setAdvancedExportMenuOpen(false)
+                                try {
+                                  await handleGeneratePack(filters.savedView && filters.savedView !== 'custom' ? filters.savedView : 'custom')
+                                } catch (err) {
+                                  alert('Failed to generate proof pack. Please try again.')
+                                }
+                              }}
+                              className="w-full px-3 py-2 text-sm text-white/80 hover:bg-white/10 rounded-md flex items-center gap-2 transition-colors mt-2"
+                              title="Proof Pack: ZIP with Ledger PDF + Controls CSV + Attestations CSV + Evidence Manifest"
+                            >
+                              <Package className="w-4 h-4" />
+                              Generate Proof Pack (ZIP)
+                            </button>
                             <div className="mt-2 pt-2 border-t border-white/10 px-3 py-1.5 text-xs text-white/50">
-                              For SIEM, GRC tools, and automation. Human-readable exports: PDF/CSV.
+                              Proof Pack: Board-grade ZIP for insurers/auditors. API payload: For SIEM, GRC tools, and automation.
                             </div>
                           </div>
                         </div>

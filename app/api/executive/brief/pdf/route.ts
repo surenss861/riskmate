@@ -571,7 +571,7 @@ function renderKPIStrip(
       value: kpi.value,
       delta: kpi.delta,
       timeRange,
-      color: kpi.color,
+        color: kpi.color,
       hasPriorPeriodData: hasPriorPeriodData, // CRITICAL: Use the function parameter, not kpi property
     })
   })
@@ -583,15 +583,15 @@ function renderKPIStrip(
     // Normalized prior-period note (only on Page 1 where KPIs/chips live)
     const noteText = 'Note: Prior period unavailable (deltas hidden)'
     safeText(doc, sanitizeAscii(noteText), margin, noteY, {
-      fontSize: STYLES.sizes.caption,
-      font: STYLES.fonts.body,
+        fontSize: STYLES.sizes.caption,
+        font: STYLES.fonts.body,
       color: STYLES.colors.secondaryText,
       width: pageWidth - margin * 2,
     })
     doc.y = noteY + 16 // Add spacing after note
   } else {
     // Update doc.y after cards (normal spacing)
-    doc.y = cardY + kpiCardHeight + STYLES.spacing.sectionGap
+  doc.y = cardY + kpiCardHeight + STYLES.spacing.sectionGap
   }
 }
 
@@ -969,7 +969,7 @@ function renderExecutiveSummary(
         doc
           .fontSize(atomicFontSize)
           .font(STYLES.fonts.header)
-          .fillColor(STYLES.colors.primaryText)
+    .fillColor(STYLES.colors.primaryText)
           .text(line, margin, currentY, {
             lineBreak: false, // CRITICAL: Never allow mid-phrase breaks
           })
@@ -981,7 +981,7 @@ function renderExecutiveSummary(
           .fillColor(STYLES.colors.primaryText)
           .text(line, margin, currentY, {
             width: maxHeadlineWidth,
-            align: 'left',
+      align: 'left',
             lineBreak: false, // CRITICAL: Prevent further wrapping on each line
           })
       }
@@ -1111,7 +1111,7 @@ function renderExecutiveSummary(
         chipX += chipWidthOnNewLine + chipGap
         chipsOnCurrentLine++
         continue
-      } else {
+  } else {
         // Max lines reached - collapse remaining chips into "+n more"
         const remaining = chips.length - i
         const collapseText = `+${remaining} more`
@@ -1353,7 +1353,7 @@ function buildMetricsRows(data: RiskPostureData, hasPriorPeriodData: boolean): A
       }
       
       return {
-        label: row.label,
+      label: row.label,
         value: valueText,
         delta: deltaText,
       }
@@ -1500,13 +1500,13 @@ function renderMetricsTable(
   // CRITICAL: Only show Change column header if prior period is available
   // Note: "prior period unavailable" note is now shown as caption under section title (not in header)
   if (showChangeColumn) {
-    safeText(doc, 'Change', margin + col1Width + col2Width + cellPadding, headerTextY, {
-      width: col3Width - cellPadding * 2,
-      align: 'right',
+  safeText(doc, 'Change', margin + col1Width + col2Width + cellPadding, headerTextY, {
+    width: col3Width - cellPadding * 2,
+    align: 'right',
       fontSize: STYLES.sizes.caption,
-      font: STYLES.fonts.header,
-      color: STYLES.colors.primaryText,
-    })
+    font: STYLES.fonts.header,
+    color: STYLES.colors.primaryText,
+  })
   }
   // If no prior period, header is clean: Metric | Current (no Change column, no note in header)
 
@@ -1518,8 +1518,8 @@ function renderMetricsTable(
     .lineTo(margin + col1Width, tableY + headerHeight)
   if (showChangeColumn) {
     doc
-      .moveTo(margin + col1Width + col2Width, tableY)
-      .lineTo(margin + col1Width + col2Width, tableY + headerHeight)
+    .moveTo(margin + col1Width + col2Width, tableY)
+    .lineTo(margin + col1Width + col2Width, tableY + headerHeight)
   }
   doc.stroke()
 
@@ -1593,14 +1593,14 @@ function renderMetricsTable(
     if (showChangeColumn) {
       const deltaColor = metric.delta === 'No change' || metric.delta === 'N/A' || metric.delta === '—'
         ? STYLES.colors.secondaryText // Neutral gray for N/A, No change, and missing data
-        : (metric.delta.startsWith('+') ? STYLES.colors.riskHigh : STYLES.colors.riskLow)
-      safeText(doc, metric.delta, margin + col1Width + col2Width + cellPadding, rowY + cellPadding, {
-        width: col3Width - cellPadding * 2,
-        align: 'right',
-        fontSize: STYLES.sizes.body,
+      : (metric.delta.startsWith('+') ? STYLES.colors.riskHigh : STYLES.colors.riskLow)
+    safeText(doc, metric.delta, margin + col1Width + col2Width + cellPadding, rowY + cellPadding, {
+      width: col3Width - cellPadding * 2,
+      align: 'right',
+      fontSize: STYLES.sizes.body,
         font: isExposureRow ? STYLES.fonts.header : STYLES.fonts.body,
-        color: deltaColor,
-      })
+      color: deltaColor,
+    })
     }
     // If Change column is hidden, no delta rendering needed
     
@@ -1623,8 +1623,8 @@ function renderMetricsTable(
       .lineTo(margin + col1Width, rowY + tableRowHeight)
     if (showChangeColumn) {
       doc
-        .moveTo(margin + col1Width + col2Width, rowY)
-        .lineTo(margin + col1Width + col2Width, rowY + tableRowHeight)
+      .moveTo(margin + col1Width + col2Width, rowY)
+      .lineTo(margin + col1Width + col2Width, rowY + tableRowHeight)
     }
     doc.stroke()
 
@@ -2431,7 +2431,7 @@ function addHeaderFooter(
     const timeRangeLabel = formatTimeRangeFromWindow 
       ? formatTimeRangeFromWindow(timeRange, timeWindow.start, timeWindow.end)
       : formatTimeRange(timeRange)
-    
+
     const footerText = sanitizeText(
       `RiskMate Executive Brief | ${organizationName} | ${timeRangeLabel} | Generated ${generatedAt.toLocaleDateString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric', year: 'numeric' })} | Report ID: ${reportId.substring(0, 8)} | Page ${pageIndex + 1} of ${pageCount}`
     )
@@ -2524,7 +2524,7 @@ function addHeaderFooter(
       // Title (bold)
       doc
         .fontSize(STYLES.sizes.caption)
-        .font(STYLES.fonts.header)
+      .font(STYLES.fonts.header)
         .fillColor(STYLES.colors.primaryText)
         .text('Report Integrity', capsuleContentX, currentY, { width: capsuleContentWidth })
       currentY = writeLine('', 0, STYLES.fonts.body, 14) // Spacing after title
@@ -2554,15 +2554,15 @@ function addHeaderFooter(
       // Generated timestamp - CRITICAL: Make "Generated:" its own line including timezone
       // Then "Window:" on the next line - prevents "EST Window:" collision
       const generatedText = generatedAt.toLocaleString('en-US', {
-        timeZone: 'America/New_York',
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true,
-        timeZoneName: 'short'
-      })
+      timeZone: 'America/New_York', 
+      month: 'short', 
+      day: 'numeric', 
+      year: 'numeric', 
+      hour: 'numeric', 
+      minute: '2-digit', 
+      hour12: true, 
+      timeZoneName: 'short' 
+    })
       // CRITICAL: Atomic writes - "Generated:" and "Window:" must be completely separate lines
       // Make Generated one atomic write: "Generated: Jan 8, 2026, 5:36 AM EST" (no wrapping, shrink font if needed)
       // Make Window a separate atomic write: "Window: Dec 9, 2025 - Jan 8, 2026" (no wrapping)
