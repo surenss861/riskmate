@@ -158,25 +158,30 @@ export async function proxyToBackend(
     }
 
     if (!response.ok) {
-      // Try to get error text first (might not be JSON)
+      // CRITICAL: Always generate an error ID first (even if backend doesn't provide one)
+      const { randomUUID } = await import('crypto')
+      let errorId = response.headers.get('X-Error-ID')
+      if (!errorId) {
+        errorId = randomUUID()
+        console.warn(`[Proxy] Backend did not provide error ID for ${endpoint}, generated: ${errorId}`)
+      }
+      
+      // Try to get error text (might be JSON, HTML, or plaintext)
       const errorText = await response.text()
       let error: any
       try {
         error = JSON.parse(errorText)
       } catch {
-        error = { message: errorText || 'Backend request failed', raw: errorText }
+        // If response is not JSON (HTML error page, plaintext, etc.), wrap it
+        error = { 
+          message: 'Backend request failed', 
+          raw: errorText.length > 500 ? errorText.substring(0, 500) + '...' : errorText, // Truncate long HTML responses
+          upstream_content_type: response.headers.get('content-type'),
+        }
       }
       
-      // Extract error ID from backend response headers
-      let errorId = response.headers.get('X-Error-ID') || error.error_id || error.errorId
-      
-      // CRITICAL: Always generate an error ID if backend doesn't provide one
-      // This ensures every failure is traceable, even if backend error handling is incomplete
-      if (!errorId) {
-        const { randomUUID } = await import('crypto')
-        errorId = randomUUID()
-        console.warn(`[Proxy] Backend did not provide error ID for ${endpoint}, generated: ${errorId}`)
-      }
+      // Extract error ID from backend response (may be in headers or JSON)
+      errorId = errorId || error.error_id || error.errorId || errorId
       
       console.error(`[Proxy] Backend error for ${endpoint}:`, {
         status: response.status,
@@ -186,17 +191,27 @@ export async function proxyToBackend(
         headers: Object.fromEntries(response.headers.entries()),
       })
       
-      // Include the actual backend error in response for debugging
-      // Pass through structured error (code, message, support_hint, error_id, request_id)
+      // CRITICAL: Always return JSON, even if upstream returned HTML/plaintext
+      // This ensures frontend can always parse the error and extract error_id
       return NextResponse.json({
-        ...error,
         // Always include error_id (generated if backend didn't provide)
         error_id: errorId,
+        // Ensure code is present (use from error or default)
+        code: error.code || (response.status >= 500 ? 'INTERNAL_SERVER_ERROR' : 'BAD_REQUEST'),
         // Ensure message is present
         message: error.message || error.error || 'Backend request failed',
         // Include hint if available
         ...(error.support_hint && { support_hint: error.support_hint }),
         ...(error.hint && { hint: error.hint }),
+        // Include upstream details if response was not JSON
+        ...(error.upstream_content_type && { 
+          upstream: {
+            content_type: error.upstream_content_type,
+            raw_snippet: error.raw,
+          }
+        }),
+        // Pass through other error fields
+        ...(error.request_id && { request_id: error.request_id }),
         _proxy: {
           backend_url: backendUrl,
           status: response.status,
@@ -204,7 +219,10 @@ export async function proxyToBackend(
       }, { 
         status: response.status,
         // Always include error ID header
-        headers: { 'X-Error-ID': errorId },
+        headers: { 
+          'X-Error-ID': errorId,
+          'Content-Type': 'application/json', // Force JSON content type
+        },
       })
     }
 

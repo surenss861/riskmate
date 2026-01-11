@@ -660,18 +660,36 @@ export default function AuditViewPage() {
         // Extract error ID from response headers first
         const errorIdFromHeader = response.headers.get('X-Error-ID')
         
-        const error = await response.json().catch(() => ({}))
+        // CRITICAL: Always try to parse as JSON (proxy should always return JSON)
+        // If parsing fails, create a structured error anyway
+        let error: any = {}
+        try {
+          const errorText = await response.text()
+          try {
+            error = JSON.parse(errorText)
+          } catch {
+            // If response is not JSON, wrap it in a structured error
+            error = {
+              message: 'Failed to generate proof pack',
+              raw: errorText.length > 200 ? errorText.substring(0, 200) + '...' : errorText,
+            }
+          }
+        } catch (err) {
+          // If reading response fails, use default error
+          error = { message: 'Failed to generate proof pack' }
+        }
         
         // Extract structured error details
         const errorMessage = error.message || error.error || 'Failed to generate proof pack'
         const errorId = error.error_id || error.errorId || errorIdFromHeader
         const hint = error.support_hint || error.hint
+        const code = error.code
         
         // Create error object with all details for onError handler
         const errorWithDetails = new Error(errorMessage) as any
         errorWithDetails.error_id = errorId
         errorWithDetails.errorId = errorId
-        errorWithDetails.code = error.code
+        errorWithDetails.code = code
         errorWithDetails.support_hint = hint
         errorWithDetails.hint = hint
         
