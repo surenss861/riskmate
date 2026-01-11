@@ -160,7 +160,7 @@ export async function proxyToBackend(
     if (!response.ok) {
       // CRITICAL: Always generate an error ID first (even if backend doesn't provide one)
       const { randomUUID } = await import('crypto')
-      let errorId = response.headers.get('X-Error-ID')
+      let errorId: string = response.headers.get('X-Error-ID') || ''
       if (!errorId) {
         errorId = randomUUID()
         console.warn(`[Proxy] Backend did not provide error ID for ${endpoint}, generated: ${errorId}`)
@@ -181,7 +181,8 @@ export async function proxyToBackend(
       }
       
       // Extract error ID from backend response (may be in headers or JSON)
-      errorId = errorId || error.error_id || error.errorId || errorId
+      // Use backend's error_id if provided, otherwise keep the one we already have
+      errorId = error.error_id || error.errorId || errorId
       
       console.error(`[Proxy] Backend error for ${endpoint}:`, {
         status: response.status,
