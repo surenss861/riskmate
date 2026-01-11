@@ -487,7 +487,18 @@ export default function JobDetailPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ done: !currentDone }),
       })
-      if (!response.ok) throw new Error('Failed to update')
+      if (!response.ok) {
+        // Extract structured error using shared helper
+        const { code, message, hint, errorId, requestId, statusCode } = await extractProxyError(response)
+        
+        // Log error ID for debugging
+        logProxyError(errorId, code, `/api/jobs/${jobId}/mitigations/${itemId}`, statusCode, requestId)
+        
+        // Format title using shared helper
+        const title = formatProxyErrorTitle(code, errorId, message)
+        
+        throw new Error(title)
+      }
       
       // Success - show Ledger confirmation
       setToast({ 
@@ -580,8 +591,16 @@ export default function JobDetailPage() {
       })
 
       if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.message || 'Failed to apply template')
+        // Extract structured error using shared helper
+        const { code, message, hint, errorId, requestId, statusCode } = await extractProxyError(response)
+        
+        // Log error ID for debugging
+        logProxyError(errorId, code, `/api/jobs/${jobId}/apply-template`, statusCode, requestId)
+        
+        // Format title using shared helper
+        const title = formatProxyErrorTitle(code, errorId, message)
+        
+        throw new Error(title)
       }
 
       const { data } = await response.json()

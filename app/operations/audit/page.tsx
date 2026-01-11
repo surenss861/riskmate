@@ -806,8 +806,24 @@ export default function AuditViewPage() {
       })
 
       if (!response.ok) {
-        const error = await response.json().catch(() => ({}))
-        throw new Error(error.message || 'Failed to assign')
+        // Extract structured error using shared helper
+        const { code, message, hint, errorId, requestId, statusCode } = await extractProxyError(response)
+        
+        // Log error ID for debugging
+        logProxyError(errorId, code, '/api/audit/assign', statusCode, requestId)
+        
+        // Format title using shared helper
+        const title = formatProxyErrorTitle(code, errorId, message)
+        
+        // Create error object with all details for onError handler
+        const errorWithDetails = new Error(title) as any
+        errorWithDetails.error_id = errorId
+        errorWithDetails.errorId = errorId
+        errorWithDetails.code = code
+        errorWithDetails.support_hint = hint
+        errorWithDetails.hint = hint
+        
+        throw errorWithDetails
       }
 
       const data = await response.json()
@@ -921,8 +937,24 @@ export default function AuditViewPage() {
       })
 
       if (!response.ok) {
-        const error = await response.json().catch(() => ({}))
-        throw new Error(error.message || 'Failed to resolve')
+        // Extract structured error using shared helper
+        const { code, message, hint, errorId, requestId, statusCode } = await extractProxyError(response)
+        
+        // Log error ID for debugging
+        logProxyError(errorId, code, '/api/review-queue/resolve', statusCode, requestId)
+        
+        // Format title using shared helper
+        const title = formatProxyErrorTitle(code, errorId, message)
+        
+        // Create error object with all details for onError handler
+        const errorWithDetails = new Error(title) as any
+        errorWithDetails.error_id = errorId
+        errorWithDetails.errorId = errorId
+        errorWithDetails.code = code
+        errorWithDetails.support_hint = hint
+        errorWithDetails.hint = hint
+        
+        throw errorWithDetails
       }
 
       const data = await response.json()
@@ -1073,8 +1105,24 @@ export default function AuditViewPage() {
       })
 
       if (!response.ok) {
-        const error = await response.json().catch(() => ({}))
-        throw new Error(error.message || 'Export failed')
+        // Extract structured error using shared helper
+        const { code, message, hint, errorId, requestId, statusCode } = await extractProxyError(response)
+        
+        // Log error ID for debugging
+        logProxyError(errorId, code, '/api/enforcement-reports/export', statusCode, requestId)
+        
+        // Format title using shared helper
+        const title = formatProxyErrorTitle(code, errorId, message)
+        
+        // Create error object with all details
+        const errorWithDetails = new Error(title) as any
+        errorWithDetails.error_id = errorId
+        errorWithDetails.errorId = errorId
+        errorWithDetails.code = code
+        errorWithDetails.support_hint = hint
+        errorWithDetails.hint = hint
+        
+        throw errorWithDetails
       }
 
       const blob = await response.blob()
@@ -1139,8 +1187,24 @@ export default function AuditViewPage() {
       })
 
       if (!response.ok) {
-        const error = await response.json().catch(() => ({}))
-        throw new Error(error.message || 'Failed to create corrective action')
+        // Extract structured error using shared helper
+        const { code, message, hint, errorId, requestId, statusCode } = await extractProxyError(response)
+        
+        // Log error ID for debugging
+        logProxyError(errorId, code, '/api/audit/incidents/corrective-action', statusCode, requestId)
+        
+        // Format title using shared helper
+        const title = formatProxyErrorTitle(code, errorId, message)
+        
+        // Create error object with all details
+        const errorWithDetails = new Error(title) as any
+        errorWithDetails.error_id = errorId
+        errorWithDetails.errorId = errorId
+        errorWithDetails.code = code
+        errorWithDetails.support_hint = hint
+        errorWithDetails.hint = hint
+        
+        throw errorWithDetails
       }
 
       const data = await response.json()
