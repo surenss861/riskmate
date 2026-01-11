@@ -1543,7 +1543,6 @@ auditRouter.post('/export/pack', authenticate as unknown as express.RequestHandl
         generated_by_email: userData?.email || null,
         request_id: requestId,
         endpoint: '/api/audit/export/pack',
-        summary: `Audit Pack exported (ID: ${packId})`,
       },
     })
   } catch (err: any) {

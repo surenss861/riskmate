@@ -18,7 +18,11 @@
       "@lib/*": ["../../lib/*"]
     }
   },
-  "include": ["src/**/*", "src/types/**/*.d.ts", "../../lib/**/*.ts"],
+  "include": [
+    "src/**/*",
+    "src/types/**/*.d.ts",
+    "../../lib/ledger/contracts.ts"
+  ],
   "exclude": ["node_modules", "dist"]
 }
 

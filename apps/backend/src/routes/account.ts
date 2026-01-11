@@ -358,14 +358,14 @@ accountRouter.post(
       }
 
       // Get organization_id if not provided
-      let orgId = organizationId;
+      let orgId: string | null = organizationId ?? null;
       if (!orgId) {
         const { data: user } = await supabase
           .from("users")
           .select("organization_id")
           .eq("id", userId)
           .maybeSingle();
-        orgId = user?.organization_id || null;
+        orgId = user?.organization_id ?? null;
       }
 
       // Log security event
