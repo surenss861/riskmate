@@ -71,6 +71,14 @@ export default function ExecutiveSnapshotPage() {
   const [user, setUser] = useState<any>(null)
   const [hoveredCard, setHoveredCard] = useState<string | null>(null)
   const [timeRange, setTimeRange] = useState<TimeRange>('30d')
+  const [errorToast, setErrorToast] = useState<{
+    message: string
+    description?: string
+    errorId?: string
+    code?: string
+    hint?: string
+    onRetry?: () => void
+  } | null>(null)
 
   useEffect(() => {
     loadRiskPosture()
@@ -1002,6 +1010,19 @@ export default function ExecutiveSnapshotPage() {
           </PageSection>
         </AppShell>
       </AppBackground>
+      
+      {/* Error Toast (for structured errors with Error ID) */}
+      {errorToast && (
+        <ErrorToast
+          message={errorToast.message}
+          description={errorToast.description}
+          errorId={errorToast.errorId}
+          code={errorToast.code}
+          hint={errorToast.hint}
+          onClose={() => setErrorToast(null)}
+          onRetry={errorToast.onRetry}
+        />
+      )}
     </ProtectedRoute>
   )
 }
