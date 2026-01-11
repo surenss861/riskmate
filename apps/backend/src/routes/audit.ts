@@ -1323,7 +1323,9 @@ auditRouter.post('/export/pack', authenticate as unknown as express.RequestHandl
 
       const { data: eventsData, error: eventsError } = await eventsQuery
 
-      if (eventsError) throw eventsError
+      if (eventsError) {
+        throw new Error(`Database query failed: ${eventsError.message}`)
+      }
       events = eventsData || []
 
       // Enrich events with actor and job info (simplified - full enrichment would match GET /events logic)
@@ -1385,6 +1387,8 @@ auditRouter.post('/export/pack', authenticate as unknown as express.RequestHandl
       }
     } catch (err: any) {
       console.error('Failed to generate PDF for pack:', err)
+      // Don't throw - continue with other files (CSV, manifest) even if PDF fails
+      // This allows partial pack generation
     }
 
     // Generate Controls CSV (inline)
@@ -1545,15 +1549,40 @@ auditRouter.post('/export/pack', authenticate as unknown as express.RequestHandl
       },
     })
   } catch (err: any) {
+    // Determine error code and message based on error type
+    let errorCode = 'AUDIT_EXPORT_ERROR'
+    let userMessage = 'Failed to generate proof pack'
+    let supportHint = 'Proof pack generation failed. Please try again or contact support with the error ID.'
+
+    // Check for specific error types
+    if (err?.code === 'ENOENT' || err?.message?.includes('Cannot find module')) {
+      errorCode = 'BACKEND_CONFIG_ERROR'
+      userMessage = 'Backend configuration error: Required module not found'
+      supportHint = 'Backend services may be misconfigured. Contact support with error ID.'
+    } else if (err?.message?.includes('timeout') || err?.message?.includes('ECONNREFUSED')) {
+      errorCode = 'BACKEND_CONNECTION_ERROR'
+      userMessage = 'Backend connection error: Services unreachable'
+      supportHint = 'Backend services may be unavailable. Please try again in a moment.'
+    } else if (err?.message?.includes('Database') || err?.message?.includes('query failed')) {
+      errorCode = 'DATABASE_ERROR'
+      userMessage = 'Database query failed during proof pack generation'
+      supportHint = 'Database error occurred. Please try again or contact support with error ID.'
+    } else if (err?.message?.includes('PDF') || err?.message?.includes('render')) {
+      errorCode = 'PDF_GENERATION_ERROR'
+      userMessage = 'PDF generation failed'
+      supportHint = 'PDF rendering error. Please try again or contact support with error ID.'
+    }
+
     const { response: errorResponse, errorId } = createErrorResponse({
-      message: 'Failed to export audit pack',
+      message: userMessage,
       internalMessage: err?.message || String(err),
-      code: 'AUDIT_EXPORT_ERROR',
+      code: errorCode,
       requestId,
       statusCode: 500,
+      supportHint,
     })
     res.setHeader('X-Error-ID', errorId)
-    logErrorForSupport(500, 'AUDIT_EXPORT_ERROR', requestId, authReq.user?.organization_id, errorResponse.message, errorResponse.internal_message, errorResponse.category, errorResponse.severity, '/api/audit/export/pack')
+    logErrorForSupport(500, errorCode, requestId, authReq.user?.organization_id, errorResponse.message, errorResponse.internal_message, errorResponse.category, errorResponse.severity, '/api/audit/export/pack')
     res.status(500).json(errorResponse)
   }
 })

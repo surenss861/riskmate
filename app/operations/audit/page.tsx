@@ -658,10 +658,31 @@ export default function AuditViewPage() {
 
       if (!response.ok) {
         const error = await response.json().catch(() => ({}))
-        const errorMessage = error.message || error.error || 'Failed to generate proof pack'
-        if (error.code === 'BACKEND_CONNECTION_ERROR') {
-          throw new Error('Backend server is not accessible. Please check that the backend is running. Proof pack generation requires backend services.')
+        
+        // Build user-friendly error message with code and hint
+        let errorMessage = error.message || error.error || 'Failed to generate proof pack'
+        
+        if (error.code) {
+          errorMessage = `${errorMessage} (${error.code})`
         }
+        
+        if (error.support_hint) {
+          errorMessage = `${errorMessage}. ${error.support_hint}`
+        } else {
+          // Fallback hints based on error code
+          if (error.code === 'BACKEND_CONNECTION_ERROR') {
+            errorMessage = `${errorMessage}. Backend services may be unavailable. Please try again in a moment.`
+          } else if (error.code === 'BACKEND_CONFIG_ERROR') {
+            errorMessage = `${errorMessage}. Backend services may be misconfigured. Contact support with error ID: ${error.error_id || 'unknown'}.`
+          } else if (error.code === 'DATABASE_ERROR') {
+            errorMessage = `${errorMessage}. Database error occurred. Please try again or contact support with error ID: ${error.error_id || 'unknown'}.`
+          } else if (error.code === 'PDF_GENERATION_ERROR') {
+            errorMessage = `${errorMessage}. PDF rendering error. Please try again or contact support with error ID: ${error.error_id || 'unknown'}.`
+          } else if (error.error_id) {
+            errorMessage = `${errorMessage} (Error ID: ${error.error_id}). Contact support if this persists.`
+          }
+        }
+        
         throw new Error(errorMessage)
       }
 

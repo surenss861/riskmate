@@ -535,7 +535,7 @@ function renderKPIStrip(
       hasPriorPeriodData,
     },
     {
-      label: 'Sign-offs',
+      label: 'Sealed Records',
       value: `${data.signed_signoffs}/${data.signed_signoffs + data.pending_signoffs}`, // One line, no split
       delta: undefined,
       color: STYLES.colors.primaryText,
@@ -1047,11 +1047,11 @@ function renderExecutiveSummary(
     color: STYLES.colors.primaryText,
   })
   
-  // 5. Sign-offs: Signed/Required (no delta tracking yet - show value only)
+  // 5. Sealed Records: Signed/Required (no delta tracking yet - show value only)
   // Clarify denominator: "Signed/Required" so execs know what the fraction means
   chips.push({
-    label: sanitizeAscii('Sign-offs (Signed/Required)'),
-    delta: sanitizeAscii(`${data.signed_signoffs ?? 0}/${totalSignoffs}`), // No delta - sign-off deltas not tracked
+    label: sanitizeAscii('Sealed Records (Signed/Required)'),
+    delta: sanitizeAscii(`${data.signed_signoffs ?? 0}/${totalSignoffs}`), // No delta - attestation deltas not tracked
     color: STYLES.colors.primaryText,
   })
   
@@ -1230,7 +1230,7 @@ function renderExecutiveSummary(
     } else if (data.open_incidents > 0) {
       decisionText = `Decision requested: Authorize resolution plan for ${data.open_incidents} open ${pluralize(data.open_incidents, 'incident', 'incidents')} ${earliestDeadlineText}.`
     } else if (data.pending_signoffs > 0) {
-      decisionText = `Decision requested: Complete ${data.pending_signoffs} pending ${pluralize(data.pending_signoffs, 'sign-off', 'sign-offs')} ${earliestDeadlineText}.`
+      decisionText = `Decision requested: Complete ${data.pending_signoffs} pending ${pluralize(data.pending_signoffs, 'attestation', 'attestations')} ${earliestDeadlineText}.`
     } else {
       decisionText = `Decision requested: Continue monitoring risk posture and maintain current control effectiveness.`
     }
@@ -1283,8 +1283,8 @@ const METRIC_LABELS = {
   openIncidents: 'Open incidents',
   recentViolations: 'Recent violations',
   flaggedForReview: 'Flagged for review',
-  signoffsPending: 'Sign-offs (Pending)',
-  signoffsSigned: 'Sign-offs (Signed)',
+  signoffsPending: 'Sealed Records (Pending)',
+  signoffsSigned: 'Sealed Records (Signed)',
   proofPacksGenerated: 'Proof Packs Generated (exportable audit packs)',
 } as const
 
@@ -1435,7 +1435,7 @@ function renderMetricsTable(
     }
   }
   if (data.pending_signoffs > 0) {
-    concerns.push(`${data.pending_signoffs} ${pluralize(data.pending_signoffs, 'pending sign-off', 'pending sign-offs')}`)
+    concerns.push(`${data.pending_signoffs} ${pluralize(data.pending_signoffs, 'pending attestation', 'pending attestations')}`)
   }
   if (data.open_incidents > 0 && concerns.length < 2) {
     concerns.push(`${data.open_incidents} ${pluralize(data.open_incidents, 'open incident', 'open incidents')}`)
@@ -1809,12 +1809,12 @@ function renderMicroTopDrivers(
   })
   doc.moveDown(0.2)
   
-  // Mini table: High risk jobs, Open incidents, Pending sign-offs
+  // Mini table: High risk jobs, Open incidents, Pending attestations
   // CRITICAL: Always render all 3 rows, always show values (even 0)
   const driverRows = [
     { label: 'High risk jobs', value: data.high_risk_jobs ?? 0 },
     { label: 'Open incidents', value: data.open_incidents ?? 0 },
-    { label: 'Pending sign-offs', value: data.pending_signoffs ?? 0 },
+    { label: 'Pending attestations', value: data.pending_signoffs ?? 0 },
   ]
   
   driverRows.forEach((row) => {
@@ -1941,7 +1941,7 @@ function renderMethodologyShort(
   const methodologyPoints = [
     'Risk posture: 0-100 scale based on high-risk jobs, incidents, and violations',
     'Attestation %: Percentage of jobs in window with signed attestations',
-    'Sign-offs (Signed/Required): Signed closeout attestations / required attestations in window',
+    'Sealed Records (Signed/Required): Signed closeout attestations / required attestations in window',
     'Proof Packs: Exportable audit bundles generated from jobs in window',
     'Overall exposure: Risk level (Low/Moderate/High) based on posture score thresholds',
   ]
@@ -2077,9 +2077,9 @@ function renderTopItemsNeedingAttention(
     items.push({ label: 'Open incidents', count: data.open_incidents, priority: 'high' })
   }
   
-  // Pending sign-offs
+  // Pending attestations
   if (data.pending_signoffs > 0) {
-    items.push({ label: 'Pending sign-offs', count: data.pending_signoffs, priority: 'medium' })
+    items.push({ label: 'Pending attestations', count: data.pending_signoffs, priority: 'medium' })
   }
   
   // Show top 3 items
@@ -2214,7 +2214,7 @@ function renderRecommendedActionsShort(
     ensureSpace(doc, 50, columnX)
     // Board-decision-friendly format: Action → Outcome → Deadline
     // Match "Decision requested" tone: clear, actionable, with timeline
-    // CRITICAL: Make Action #1 specific to THIS org's situation (reference actual jobs/sign-offs)
+    // CRITICAL: Make Action #1 specific to THIS org's situation (reference actual jobs/attestations)
     // Makes it feel like a decision memo, not a playbook excerpt
     let actionText = sanitizeText(action.action)
     
@@ -2239,16 +2239,16 @@ function renderRecommendedActionsShort(
           if (action.action.toLowerCase().includes('mitigate') || action.action.toLowerCase().includes('high risk')) {
             actionText = sanitizeText(`Mitigate ${jobRef} controls and attach evidence`)
           } else if (action.action.toLowerCase().includes('sign-off') || action.action.toLowerCase().includes('attestation')) {
-            actionText = sanitizeText(`Require supervisor sign-off for ${jobRef} within 48h`)
+            actionText = sanitizeText(`Seal record for ${jobRef} with attestation within 48h`)
           }
         } else if (action.action.toLowerCase().includes('high risk')) {
           // Specific count: reference the actual number
-          actionText = sanitizeText(`Require supervisor sign-off for ${data.high_risk_jobs} ${pluralize(data.high_risk_jobs, 'high risk job', 'high risk jobs')} within 48h`)
+          actionText = sanitizeText(`Seal records for ${data.high_risk_jobs} ${pluralize(data.high_risk_jobs, 'high risk job', 'high risk jobs')} with attestations within 48h`)
         }
       } else if (data.pending_signoffs > 0) {
-        // If sign-offs are the focus, make it specific
+        // If attestations are the focus, make it specific
         if (action.action.toLowerCase().includes('sign-off') || action.action.toLowerCase().includes('attestation')) {
-          actionText = sanitizeText(`Complete ${data.pending_signoffs} pending ${pluralize(data.pending_signoffs, 'sign-off', 'sign-offs')} to ensure full compliance`)
+          actionText = sanitizeText(`Complete ${data.pending_signoffs} pending ${pluralize(data.pending_signoffs, 'attestation', 'attestations')} to ensure full compliance`)
         }
       }
     }
