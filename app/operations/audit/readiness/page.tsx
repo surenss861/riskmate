@@ -754,7 +754,33 @@ export default function AuditReadinessPage() {
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ time_range: timeRange }),
                       })
-                      if (!response.ok) throw new Error('Export failed')
+                      
+                      if (!response.ok) {
+                        // Extract structured error using shared helper
+                        const { code, message, hint, errorId } = await extractProxyError(response)
+                        
+                        // Log error ID for debugging
+                        logProxyError(errorId, code, '/api/audit/export/pack')
+                        
+                        // Format title using shared helper
+                        const title = formatProxyErrorTitle(code, errorId, message)
+                        
+                        // Build alert message
+                        let alertMessage = title
+                        if (message && message !== title) {
+                          alertMessage += `\n\n${message}`
+                        }
+                        if (hint) {
+                          alertMessage += `\n\n${hint}`
+                        } else {
+                          alertMessage += '\n\nPlease try again or contact support with the Error ID if this persists.'
+                        }
+                        
+                        alert(alertMessage)
+                        return
+                      }
+                      
+                      // Success: download the blob
                       const blob = await response.blob()
                       const url = window.URL.createObjectURL(blob)
                       const a = document.createElement('a')
@@ -766,58 +792,9 @@ export default function AuditReadinessPage() {
                       document.body.removeChild(a)
                     } catch (err: any) {
                       console.error('Failed to generate proof pack:', err)
-                      
-                      // Extract structured error details
-                      let errorMessage = 'Failed to generate proof pack'
-                      let errorId: string | null = null
-                      let hint: string | null = null
-                      let code: string | null = null
-                      
-                      try {
-                        // If err is a Response object, try to extract from it
-                        if (err instanceof Response || err.response) {
-                          const response = err instanceof Response ? err : err.response
-                          const errorIdFromHeader = response.headers.get('X-Error-ID')
-                          
-                          try {
-                            const errorText = await response.text()
-                            try {
-                              const errorData = JSON.parse(errorText)
-                              errorMessage = errorData.message || errorMessage
-                              errorId = errorData.error_id || errorData.errorId || errorIdFromHeader
-                              hint = errorData.support_hint || errorData.hint
-                              code = errorData.code
-                            } catch {
-                              // If not JSON, use header error ID
-                              errorId = errorIdFromHeader
-                            }
-                          } catch {
-                            // If reading fails, use header error ID
-                            errorId = errorIdFromHeader
-                          }
-                        } else if (err.message) {
-                          // If err is an Error object with attached properties
-                          errorMessage = err.message
-                          errorId = err.error_id || err.errorId
-                          hint = err.support_hint || err.hint
-                          code = err.code
-                        }
-                      } catch {
-                        // If parsing fails, use the error message as-is
-                        errorMessage = err.message || errorMessage
-                      }
-                      
-                      // Build user-friendly error message with code and error ID
-                      let displayMessage = errorMessage
-                      if (code && errorId) {
-                        displayMessage = `${code} • Error ID: ${errorId}`
-                      } else if (code) {
-                        displayMessage = `${code} • ${errorMessage}`
-                      } else if (errorId) {
-                        displayMessage = `${errorMessage} • Error ID: ${errorId}`
-                      }
-                      
-                      alert(`${displayMessage}${hint ? `\n\n${hint}` : '\n\nPlease try again or contact support with the Error ID if this persists.'}`)
+                      // Fallback error handling for non-Response errors (network errors, etc.)
+                      const errorMessage = err.message || 'Failed to generate proof pack'
+                      alert(`${errorMessage}\n\nPlease try again or contact support if this persists.`)
                     } finally {
                       setExportingPack(false)
                     }
