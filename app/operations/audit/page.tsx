@@ -703,8 +703,20 @@ export default function AuditViewPage() {
         })
       },
       onError: (err: any) => {
+        // Extract structured error details (code, message, hint, error_id)
+        const errorMessage = err.message || 'Failed to generate proof pack'
+        const errorId = err.error_id || err.errorId
+        const hint = err.support_hint || err.hint || err.supportHint
+        
+        // Build user-friendly error message with error ID
+        let displayMessage = errorMessage
+        if (errorId) {
+          displayMessage = `${errorMessage} (Error ID: ${errorId})`
+        }
+        
         setToast({
-          message: err.message || 'Failed to generate proof pack. Please try again.',
+          message: displayMessage,
+          description: hint || 'Please try again or contact support with the Error ID if this persists.',
           type: 'error',
         })
       },
