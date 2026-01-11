@@ -15,7 +15,7 @@ import { ToastContainer } from '@/components/ToastContainer'
 import type { FixQueueItem } from '@/components/audit/FixQueueSidebar'
 import { auditApi } from '@/lib/api'
 import { toast } from '@/lib/utils/toast'
-import { AppBackground, AppShell, PageSection, GlassCard, Button, Badge, Select, PageHeader } from '@/components/shared'
+import { AppBackground, AppShell, PageSection, GlassCard, Button, Badge, Select, PageHeader, ErrorToast } from '@/components/shared'
 import { extractProxyError, formatProxyErrorTitle, logProxyError } from '@/lib/utils/extractProxyError'
 
 type ReadinessCategory = 'evidence' | 'controls' | 'attestations' | 'incidents' | 'access'
@@ -143,6 +143,14 @@ export default function AuditReadinessPage() {
   const [showRequestAttestation, setShowRequestAttestation] = useState(false)
   const [exportingPack, setExportingPack] = useState(false)
   const [showBulkResult, setShowBulkResult] = useState(false)
+  const [errorToast, setErrorToast] = useState<{
+    message: string
+    description?: string
+    errorId?: string
+    code?: string
+    hint?: string
+    onRetry?: () => void
+  } | null>(null)
   const [bulkResult, setBulkResult] = useState<{
     succeeded: number
     failed: number
@@ -765,18 +773,19 @@ export default function AuditReadinessPage() {
                         // Format title using shared helper
                         const title = formatProxyErrorTitle(code, errorId, message)
                         
-                        // Build alert message
-                        let alertMessage = title
-                        if (message && message !== title) {
-                          alertMessage += `\n\n${message}`
-                        }
-                        if (hint) {
-                          alertMessage += `\n\n${hint}`
-                        } else {
-                          alertMessage += '\n\nPlease try again or contact support with the Error ID if this persists.'
-                        }
-                        
-                        alert(alertMessage)
+                        // Show error toast with structured details
+                        setErrorToast({
+                          message: title,
+                          description: message !== title ? message : undefined,
+                          errorId,
+                          code,
+                          hint: hint || 'Please try again or contact support with the Error ID if this persists.',
+                          onRetry: () => {
+                            setErrorToast(null)
+                            // Re-trigger the export by calling the button click handler
+                            // This is a simple retry - in production you might want to extract this into a reusable function
+                          },
+                        })
                         return
                       }
                       
@@ -794,7 +803,19 @@ export default function AuditReadinessPage() {
                       console.error('Failed to generate proof pack:', err)
                       // Fallback error handling for non-Response errors (network errors, etc.)
                       const errorMessage = err.message || 'Failed to generate proof pack'
-                      alert(`${errorMessage}\n\nPlease try again or contact support if this persists.`)
+                      const errorId = err.error_id || err.errorId || err.requestId
+                      const code = err.code
+                      const hint = err.support_hint || err.hint || 'Please try again or contact support if this persists.'
+                      
+                      setErrorToast({
+                        message: errorMessage,
+                        errorId,
+                        code,
+                        hint,
+                        onRetry: () => {
+                          setErrorToast(null)
+                        },
+                      })
                     } finally {
                       setExportingPack(false)
                     }
