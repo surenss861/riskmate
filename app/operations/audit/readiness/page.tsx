@@ -16,6 +16,7 @@ import type { FixQueueItem } from '@/components/audit/FixQueueSidebar'
 import { auditApi } from '@/lib/api'
 import { toast } from '@/lib/utils/toast'
 import { AppBackground, AppShell, PageSection, GlassCard, Button, Badge, Select, PageHeader } from '@/components/shared'
+import { extractProxyError } from '@/lib/utils/extractProxyError'
 
 type ReadinessCategory = 'evidence' | 'controls' | 'attestations' | 'incidents' | 'access'
 type ReadinessSeverity = 'critical' | 'material' | 'info'
