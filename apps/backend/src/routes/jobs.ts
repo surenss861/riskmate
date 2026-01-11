@@ -891,7 +891,7 @@ jobsRouter.patch("/:id", authenticate as unknown as express.RequestHandler, asyn
     // Verify job belongs to organization
     const { data: existingJob, error: jobError } = await supabase
       .from("jobs")
-      .select("id, organization_id")
+      .select("id, organization_id, risk_score, risk_level")
       .eq("id", jobId)
       .eq("organization_id", organization_id)
       .single();

@@ -117,8 +117,9 @@ export async function generateExecutiveBriefPDF(
     ]
 
     metrics.forEach(([label, count, delta]) => {
-      const deltaText = formatDelta(delta)
-      doc.text(`${label}: ${count}${deltaText}`, { indent: 20 })
+      const deltaText = formatDelta(typeof delta === 'number' ? delta : undefined)
+      const countNum = typeof count === 'number' ? count : 0
+      doc.text(`${label}: ${countNum}${deltaText}`, { indent: 20 })
     })
     doc.moveDown(0.5)
 

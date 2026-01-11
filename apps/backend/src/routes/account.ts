@@ -302,7 +302,7 @@ accountRouter.get(
         .eq("account_status", "active");
 
       const billingData = {
-        tier: subscription?.tier || orgSub?.plan_code || null,
+        tier: (subscription?.tier ?? null) || (orgSub?.plan_code ?? null) || null,
         status: subscription?.status || orgSub?.status || "none",
         stripe_customer_id: subscription?.stripe_customer_id || null,
         stripe_subscription_id: subscription?.stripe_subscription_id || null,
