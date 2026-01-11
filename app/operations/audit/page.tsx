@@ -612,12 +612,24 @@ export default function AuditViewPage() {
       })
 
       if (!response.ok) {
-        const error = await response.json().catch(() => ({}))
-        const errorMessage = error.message || error.error || 'Failed to export API payload. Use this for automation/integration.'
-        if (error.code === 'BACKEND_CONFIG_ERROR' || error.code === 'BACKEND_CONNECTION_ERROR') {
-          throw new Error(error.hint || 'Backend server configuration error. Please check Vercel environment variables.')
-        }
-        throw new Error(errorMessage)
+        // Extract structured error using shared helper
+        const { code, message, hint, errorId, requestId, statusCode } = await extractProxyError(response)
+        
+        // Log error ID for debugging
+        logProxyError(errorId, code, endpoint, statusCode, requestId)
+        
+        // Format title using shared helper
+        const title = formatProxyErrorTitle(code, errorId, message)
+        
+        // Create error object with all details for onError handler
+        const errorWithDetails = new Error(title) as any
+        errorWithDetails.error_id = errorId
+        errorWithDetails.errorId = errorId
+        errorWithDetails.code = code
+        errorWithDetails.support_hint = hint
+        errorWithDetails.hint = hint
+        
+        throw errorWithDetails
       }
 
       // Download the JSON file

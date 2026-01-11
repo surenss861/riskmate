@@ -7,10 +7,11 @@ import { DashboardNavbar } from '@/components/dashboard/DashboardNavbar'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { executiveApi } from '@/lib/api'
 import { typography } from '@/lib/styles/design-system'
-import { AppBackground, AppShell, PageSection, GlassCard, Button, Select, PageHeader, IntegrityBadge, PackCard, EnforcementBanner, Badge } from '@/components/shared'
+import { AppBackground, AppShell, PageSection, GlassCard, Button, Select, PageHeader, IntegrityBadge, PackCard, EnforcementBanner, Badge, ErrorToast } from '@/components/shared'
 import { PostureTilesSkeleton } from '@/components/executive/PostureTilesSkeleton'
 import { terms } from '@/lib/terms'
 import { defensibilityTerms } from '@/lib/copy/terms'
+import { extractProxyError, formatProxyErrorTitle, logProxyError } from '@/lib/utils/extractProxyError'
 
 interface RiskPosture {
   exposure_level: 'low' | 'moderate' | 'high'
@@ -898,7 +899,25 @@ export default function ExecutiveSnapshotPage() {
                         })
                         
                         if (!response.ok) {
-                          throw new Error('Failed to generate PDF')
+                          // Extract structured error using shared helper
+                          const { code, message, hint, errorId, requestId, statusCode } = await extractProxyError(response)
+                          
+                          // Log error ID for debugging
+                          logProxyError(errorId, code, '/api/executive/brief/pdf', statusCode, requestId)
+                          
+                          // Format title using shared helper
+                          const title = formatProxyErrorTitle(code, errorId, message)
+                          
+                          // Show error toast
+                          setErrorToast({
+                            message: title,
+                            description: message !== title ? message : undefined,
+                            errorId,
+                            code,
+                            hint: hint || 'Please try again or contact support with the Error ID if this persists.',
+                            onRetry: () => setErrorToast(null),
+                          })
+                          return
                         }
 
                         const blob = await response.blob()
@@ -911,9 +930,21 @@ export default function ExecutiveSnapshotPage() {
                         a.click()
                         document.body.removeChild(a)
                         URL.revokeObjectURL(url)
-                      } catch (err) {
+                      } catch (err: any) {
                         console.error('PDF export failed:', err)
-                        alert('Failed to generate PDF. Please try again.')
+                        // Fallback error handling for non-Response errors (network errors, etc.)
+                        const errorMessage = err.message || 'Failed to generate PDF'
+                        const errorId = err.error_id || err.errorId || err.requestId
+                        const code = err.code
+                        const hint = err.support_hint || err.hint || 'Please try again or contact support if this persists.'
+                        
+                        setErrorToast({
+                          message: errorMessage,
+                          errorId,
+                          code,
+                          hint,
+                          onRetry: () => setErrorToast(null),
+                        })
                       }
                     }}
                 className="inline-flex items-center gap-2"
