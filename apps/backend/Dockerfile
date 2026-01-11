@@ -16,7 +16,8 @@ COPY lib ./lib
 COPY apps/backend ./apps/backend
 
 # Install dependencies (monorepo-aware, uses workspace)
-RUN pnpm install --frozen-lockfile
+# --prod=false ensures TypeScript is available for build step
+RUN pnpm install --frozen-lockfile --prod=false
 
 # Build backend (TypeScript → dist/)
 RUN pnpm -C apps/backend build
