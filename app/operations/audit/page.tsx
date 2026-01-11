@@ -657,33 +657,25 @@ export default function AuditViewPage() {
       })
 
       if (!response.ok) {
+        // Extract error ID from response headers first
+        const errorIdFromHeader = response.headers.get('X-Error-ID')
+        
         const error = await response.json().catch(() => ({}))
         
-        // Build user-friendly error message with code and hint
-        let errorMessage = error.message || error.error || 'Failed to generate proof pack'
+        // Extract structured error details
+        const errorMessage = error.message || error.error || 'Failed to generate proof pack'
+        const errorId = error.error_id || error.errorId || errorIdFromHeader
+        const hint = error.support_hint || error.hint
         
-        if (error.code) {
-          errorMessage = `${errorMessage} (${error.code})`
-        }
+        // Create error object with all details for onError handler
+        const errorWithDetails = new Error(errorMessage) as any
+        errorWithDetails.error_id = errorId
+        errorWithDetails.errorId = errorId
+        errorWithDetails.code = error.code
+        errorWithDetails.support_hint = hint
+        errorWithDetails.hint = hint
         
-        if (error.support_hint) {
-          errorMessage = `${errorMessage}. ${error.support_hint}`
-        } else {
-          // Fallback hints based on error code
-          if (error.code === 'BACKEND_CONNECTION_ERROR') {
-            errorMessage = `${errorMessage}. Backend services may be unavailable. Please try again in a moment.`
-          } else if (error.code === 'BACKEND_CONFIG_ERROR') {
-            errorMessage = `${errorMessage}. Backend services may be misconfigured. Contact support with error ID: ${error.error_id || 'unknown'}.`
-          } else if (error.code === 'DATABASE_ERROR') {
-            errorMessage = `${errorMessage}. Database error occurred. Please try again or contact support with error ID: ${error.error_id || 'unknown'}.`
-          } else if (error.code === 'PDF_GENERATION_ERROR') {
-            errorMessage = `${errorMessage}. PDF rendering error. Please try again or contact support with error ID: ${error.error_id || 'unknown'}.`
-          } else if (error.error_id) {
-            errorMessage = `${errorMessage} (Error ID: ${error.error_id}). Contact support if this persists.`
-          }
-        }
-        
-        throw new Error(errorMessage)
+        throw errorWithDetails
       }
 
       // Download the ZIP file
