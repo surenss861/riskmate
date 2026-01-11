@@ -725,11 +725,16 @@ export default function AuditViewPage() {
         const errorMessage = err.message || 'Failed to generate proof pack'
         const errorId = err.error_id || err.errorId
         const hint = err.support_hint || err.hint || err.supportHint
+        const code = err.code
         
-        // Build user-friendly error message with error ID
+        // Build user-friendly error message with code and error ID
         let displayMessage = errorMessage
-        if (errorId) {
-          displayMessage = `${errorMessage} (Error ID: ${errorId})`
+        if (code && errorId) {
+          displayMessage = `${code} • Error ID: ${errorId}`
+        } else if (code) {
+          displayMessage = `${code} • ${errorMessage}`
+        } else if (errorId) {
+          displayMessage = `${errorMessage} • Error ID: ${errorId}`
         }
         
         setToast({
