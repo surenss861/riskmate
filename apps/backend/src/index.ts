@@ -1,4 +1,13 @@
-import "dotenv/config";
+// Load dotenv only in development (Railway injects env vars in production)
+// This makes the server boot even if dotenv isn't installed in production
+if (process.env.NODE_ENV !== "production") {
+  try {
+    require("dotenv/config");
+  } catch {
+    // dotenv not available, continue without it (Railway injects env vars)
+  }
+}
+
 import express from "express";
 import cors from "cors";
 import { stripeWebhookHandler } from "./routes/stripeWebhook";
