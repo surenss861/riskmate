@@ -763,9 +763,38 @@ export default function AuditReadinessPage() {
                       a.click()
                       window.URL.revokeObjectURL(url)
                       document.body.removeChild(a)
-                    } catch (err) {
+                    } catch (err: any) {
                       console.error('Failed to generate proof pack:', err)
-                      alert('Failed to generate proof pack. Please try again.')
+                      
+                      // Extract structured error details
+                      let errorMessage = 'Failed to generate proof pack'
+                      let errorId: string | null = null
+                      let hint: string | null = null
+                      
+                      try {
+                        // Try to extract error from response if available
+                        if (err.response) {
+                          const errorData = await err.response.json().catch(() => ({}))
+                          errorMessage = errorData.message || errorMessage
+                          errorId = errorData.error_id || errorData.errorId || err.response.headers.get('X-Error-ID')
+                          hint = errorData.support_hint || errorData.hint
+                        } else if (err.message) {
+                          errorMessage = err.message
+                          errorId = err.error_id || err.errorId
+                          hint = err.support_hint || err.hint
+                        }
+                      } catch {
+                        // If parsing fails, use the error message as-is
+                        errorMessage = err.message || errorMessage
+                      }
+                      
+                      // Build user-friendly error message with error ID
+                      let displayMessage = errorMessage
+                      if (errorId) {
+                        displayMessage = `${errorMessage} (Error ID: ${errorId})`
+                      }
+                      
+                      alert(`${displayMessage}${hint ? `\n\n${hint}` : '\n\nPlease try again or contact support with the Error ID if this persists.'}`)
                     } finally {
                       setExportingPack(false)
                     }

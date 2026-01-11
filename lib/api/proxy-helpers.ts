@@ -168,7 +168,15 @@ export async function proxyToBackend(
       }
       
       // Extract error ID from backend response headers
-      const errorId = response.headers.get('X-Error-ID')
+      let errorId = response.headers.get('X-Error-ID') || error.error_id || error.errorId
+      
+      // CRITICAL: Always generate an error ID if backend doesn't provide one
+      // This ensures every failure is traceable, even if backend error handling is incomplete
+      if (!errorId) {
+        const { randomUUID } = await import('crypto')
+        errorId = randomUUID()
+        console.warn(`[Proxy] Backend did not provide error ID for ${endpoint}, generated: ${errorId}`)
+      }
       
       console.error(`[Proxy] Backend error for ${endpoint}:`, {
         status: response.status,
@@ -182,16 +190,21 @@ export async function proxyToBackend(
       // Pass through structured error (code, message, support_hint, error_id, request_id)
       return NextResponse.json({
         ...error,
-        // Ensure error_id is included if backend provided it
-        ...(errorId && !error.error_id && { error_id: errorId }),
+        // Always include error_id (generated if backend didn't provide)
+        error_id: errorId,
+        // Ensure message is present
+        message: error.message || error.error || 'Backend request failed',
+        // Include hint if available
+        ...(error.support_hint && { support_hint: error.support_hint }),
+        ...(error.hint && { hint: error.hint }),
         _proxy: {
           backend_url: backendUrl,
           status: response.status,
         },
       }, { 
         status: response.status,
-        // Pass through error ID header if available
-        headers: errorId ? { 'X-Error-ID': errorId } : {},
+        // Always include error ID header
+        headers: { 'X-Error-ID': errorId },
       })
     }
 
@@ -212,6 +225,11 @@ export async function proxyToBackend(
     const data = await response.json()
     return NextResponse.json(data)
   } catch (error: any) {
+    // CRITICAL: Always generate an error ID for proxy errors
+    // This ensures every failure is traceable, even for proxy-level errors
+    const { randomUUID } = await import('crypto')
+    const errorId = randomUUID()
+    
     const isConnectionError = 
       error.message?.includes('ECONNREFUSED') ||
       error.message?.includes('fetch failed') ||
@@ -228,6 +246,7 @@ export async function proxyToBackend(
       backendUrl,
       BACKEND_URL,
       isConnectionError,
+      errorId,
     })
     
     // Return more helpful error for connection issues
@@ -238,12 +257,13 @@ export async function proxyToBackend(
           message: 'Backend server is not accessible',
           error: error.message,
           code: 'BACKEND_CONNECTION_ERROR',
+          error_id: errorId,
+          support_hint: isLocalhostDefault
+            ? 'BACKEND_URL environment variable is not set. The backend server must be deployed separately and BACKEND_URL must point to it.'
+            : 'Check that the backend server is running and accessible at the configured URL. For long-running operations (ZIP generation), consider async job pattern.',
           _proxy: {
             backend_url: backendUrl,
             configured_backend_url: BACKEND_URL,
-            hint: isLocalhostDefault
-              ? 'BACKEND_URL environment variable is not set. The backend server must be deployed separately and BACKEND_URL must point to it.'
-              : 'Check that the backend server is running and accessible at the configured URL. For long-running operations (ZIP generation), consider async job pattern.',
             troubleshooting: [
               'Verify BACKEND_URL environment variable is set correctly',
               'Check that backend server is running and accessible',
@@ -253,7 +273,10 @@ export async function proxyToBackend(
           },
           details: process.env.NODE_ENV === 'development' ? error.stack : undefined
         },
-        { status: 503 } // Service Unavailable
+        { 
+          status: 503, // Service Unavailable
+          headers: { 'X-Error-ID': errorId },
+        }
       )
     }
     
@@ -262,13 +285,17 @@ export async function proxyToBackend(
         message: 'Failed to proxy request', 
         error: error.message,
         code: error.code || 'PROXY_ERROR',
+        error_id: errorId,
         _proxy: {
           backend_url: backendUrl,
           configured_backend_url: BACKEND_URL,
         },
         details: process.env.NODE_ENV === 'development' ? error.stack : undefined
       },
-      { status: 500 }
+      { 
+        status: 500,
+        headers: { 'X-Error-ID': errorId },
+      }
     )
   }
 }
