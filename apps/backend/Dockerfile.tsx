@@ -18,12 +18,11 @@ COPY apps/backend ./apps/backend
 # Install dependencies (monorepo-aware, uses workspace)
 RUN pnpm install --frozen-lockfile
 
-# Build backend (TypeScript → dist/)
-RUN pnpm -C apps/backend build
-
-# Expose port (Railway will inject PORT env var)
+# Skip TypeScript build - run directly with tsx (faster deployment)
+# This gets you online immediately, fix types later
+# EXPOSE port (Railway will inject PORT env var)
 EXPOSE 3000
 
-# Start the backend
-CMD ["pnpm", "-C", "apps/backend", "start"]
+# Start the backend with tsx (no build step)
+CMD ["pnpm", "-C", "apps/backend", "start:railway"]
 
