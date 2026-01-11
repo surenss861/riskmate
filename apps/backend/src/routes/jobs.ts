@@ -118,9 +118,9 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
     // - created_desc/created_asc: "created_at|id"
     // - risk_desc/risk_asc: "risk_score|created_at|id"
     // - status_asc/status_desc: DISABLED (use offset only - in-memory sort incompatible with cursor)
-    const { cursor, limit: limitParam } = authReq.query;
+    const { cursor, limit: limitParamFromCursor } = authReq.query;
     const pageNum = parseInt(page as string, 10);
-    const limitNum = limitParam ? parseInt(limitParam as string, 10) : parseInt(limit as string, 10) || 20;
+    const limitNum = limitParamFromCursor ? parseInt(limitParamFromCursor as string, 10) : (limitParamFromQuery ? parseInt(limitParamFromQuery as string, 10) : 20);
     
     // Cursor pagination is only safe for sorts that match SQL ordering
     // status_asc uses in-memory sorting, so cursor pagination would be inconsistent
