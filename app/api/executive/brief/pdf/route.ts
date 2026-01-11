@@ -1937,7 +1937,7 @@ function renderMethodologyShort(
     doc.moveDown(0.5)
   }
   
-  // Fixed definitions - add missing definitions for Sign-offs, Proof Packs, Overall exposure
+  // Fixed definitions - add missing definitions for Sealed Records, Proof Packs, Overall exposure
   const methodologyPoints = [
     'Risk posture: 0-100 scale based on high-risk jobs, incidents, and violations',
     'Attestation %: Percentage of jobs in window with signed attestations',
