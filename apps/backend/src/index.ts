@@ -161,7 +161,7 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
   res.status(statusCode).json(errorResponse);
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 RiskMate Backend API running on port ${PORT}`);
   console.log(`📡 Health check: http://localhost:${PORT}/health`);
 });
