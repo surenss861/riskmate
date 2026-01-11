@@ -1,6 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
 
 // Debug: Log what we're receiving from Railway (safe - no secrets exposed)
+// This log confirms the new build is running (commit cc80181+)
+console.log('[SUPABASE_CLIENT] Initializing with enhanced validation (build: cc80181+)');
 const urlRaw = process.env.SUPABASE_URL;
 const keyRaw = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
