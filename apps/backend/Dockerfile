@@ -17,7 +17,9 @@ COPY apps/backend ./apps/backend
 
 # Install dependencies (monorepo-aware, uses workspace)
 # --prod=false ensures TypeScript is available for build step
+# Explicitly install backend deps to ensure workspace packages are included
 RUN pnpm install --frozen-lockfile --prod=false
+RUN pnpm install --filter @riskmate/backend --prod=false
 
 # Build backend (TypeScript → dist/)
 RUN pnpm -C apps/backend build
