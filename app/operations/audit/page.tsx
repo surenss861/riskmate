@@ -8,7 +8,7 @@ import { jobsApi, auditApi } from '@/lib/api'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { typography } from '@/lib/styles/design-system'
 import { DashboardNavbar } from '@/components/dashboard/DashboardNavbar'
-import { AppBackground, AppShell, PageSection, GlassCard, Button, ActionButton, Select, PageHeader, EventChip, TrustReceiptStrip, IntegrityBadge, EnforcementBanner, EmptyState } from '@/components/shared'
+import { AppBackground, AppShell, PageSection, GlassCard, Button, ActionButton, Select, PageHeader, EventChip, TrustReceiptStrip, IntegrityBadge, EnforcementBanner, EmptyState, ErrorToast } from '@/components/shared'
 import { useAction } from '@/lib/hooks/useAction'
 import { getEventMapping, categorizeEvent, type EventCategory, type EventSeverity, type EventOutcome } from '@/lib/audit/eventMapper'
 import { getIndustryLanguage } from '@/lib/audit/industryLanguage'
@@ -96,7 +96,16 @@ export default function AuditViewPage() {
     requiresEvidence?: boolean
     hasEvidence?: boolean
   } | null>(null)
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error'; requestId?: string; description?: string } | null>(null)
+  const [toast, setToast] = useState<{ 
+    message: string
+    type: 'success' | 'error'
+    requestId?: string
+    description?: string
+    errorId?: string
+    code?: string
+    hint?: string
+    onRetry?: () => void
+  } | null>(null)
   const [userRole, setUserRole] = useState<string | null>(null)
   const [bulkResultModal, setBulkResultModal] = useState<{
     isOpen: boolean
@@ -463,14 +472,24 @@ export default function AuditViewPage() {
       })
 
       if (!response.ok) {
-        const errorText = await response.text()
-        let error
-        try {
-          error = JSON.parse(errorText)
-        } catch {
-          error = { message: errorText || 'Export failed' }
-        }
-        throw new Error(error.message || error.error || 'Export failed')
+        // Extract structured error using shared helper
+        const { code, message, hint, errorId, requestId, statusCode } = await extractProxyError(response)
+        
+        // Log error ID for debugging
+        logProxyError(errorId, code, endpoint, statusCode, requestId)
+        
+        // Format title using shared helper
+        const title = formatProxyErrorTitle(code, errorId, message)
+        
+        // Create error object with all details for onError handler
+        const errorWithDetails = new Error(title) as any
+        errorWithDetails.error_id = errorId
+        errorWithDetails.errorId = errorId
+        errorWithDetails.code = code
+        errorWithDetails.support_hint = hint
+        errorWithDetails.hint = hint
+        
+        throw errorWithDetails
       }
 
       // Handle different content types
@@ -539,9 +558,17 @@ export default function AuditViewPage() {
         })
       },
       onError: (err: any) => {
+        const errorId = err.error_id || err.errorId
+        const code = err.code
+        const hint = err.support_hint || err.hint
+        const message = err.message || 'CSV export failed. Please try again.'
+        
         setToast({
-          message: err.message || 'CSV export failed. Please try again.',
+          message,
           type: 'error',
+          errorId,
+          code,
+          hint,
         })
       },
     }
@@ -618,9 +645,17 @@ export default function AuditViewPage() {
         })
       },
       onError: (err: any) => {
+        const errorId = err.error_id || err.errorId
+        const code = err.code
+        const hint = err.support_hint || err.hint
+        const message = err.message || 'API payload export failed. Please try again.'
+        
         setToast({
-          message: err.message || 'API payload export failed. Please try again.',
+          message,
           type: 'error',
+          errorId,
+          code,
+          hint,
         })
       },
     }
@@ -1203,9 +1238,19 @@ export default function AuditViewPage() {
       loadAuditEvents()
     } catch (err: any) {
       console.error('Failed to close incident:', err)
+      
+      // Extract error details if available
+      const errorId = err.error_id || err.errorId
+      const code = err.code
+      const hint = err.support_hint || err.hint
+      const message = err.message || 'Failed to close incident. Please try again.'
+      
       setToast({
-        message: err.message || 'Failed to close incident. Please try again.',
+        message,
         type: 'error',
+        errorId,
+        code,
+        hint,
       })
       throw err
     }
@@ -2033,39 +2078,36 @@ export default function AuditViewPage() {
 
         {/* Toast Notification */}
         {toast && (
-          <div className={`fixed top-4 right-4 z-50 p-4 rounded-lg border ${
-            toast.type === 'success' 
-              ? 'bg-green-500/20 border-green-500/40 text-green-400' 
-              : 'bg-red-500/20 border-red-500/40 text-red-400'
-          } max-w-md`}>
-            <p className="text-sm">{toast.message}</p>
-            {toast.description && (
-              <p className="text-xs mt-1 opacity-80">{toast.description}</p>
-            )}
-            {toast.requestId && process.env.NODE_ENV === 'development' && (
-              <div className="mt-2 pt-2 border-t border-white/10">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-white/60">Request ID:</span>
-                  <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(toast.requestId!)
-                    }}
-                    className="text-xs text-white/60 hover:text-white flex items-center gap-1"
-                    title="Copy Request ID"
-                  >
-                    <code className="text-xs font-mono">{toast.requestId.slice(0, 16)}...</code>
-                    <span className="text-xs">📋</span>
-                  </button>
+          toast.type === 'success' ? (
+            <div className={`fixed top-4 right-4 z-50 p-4 rounded-lg border bg-green-500/20 border-green-500/40 text-green-400 max-w-md`}>
+              <div className="flex items-start gap-3">
+                <CheckCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium">{toast.message}</p>
+                  {toast.description && (
+                    <p className="text-xs mt-1 opacity-80">{toast.description}</p>
+                  )}
                 </div>
+                <button
+                  onClick={() => setToast(null)}
+                  className="text-white/60 hover:text-white transition-colors flex-shrink-0"
+                  aria-label="Close"
+                >
+                  <XCircle className="w-4 h-4" />
+                </button>
               </div>
-            )}
-            <button
-              onClick={() => setToast(null)}
-              className="absolute top-2 right-2 text-white/60 hover:text-white"
-            >
-              ×
-            </button>
-          </div>
+            </div>
+          ) : (
+            <ErrorToast
+              message={toast.message}
+              description={toast.description}
+              errorId={toast.errorId}
+              code={toast.code}
+              hint={toast.hint}
+              onClose={() => setToast(null)}
+              onRetry={toast.onRetry}
+            />
+          )
         )}
 
         {/* Bulk Result Modal */}
