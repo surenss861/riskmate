@@ -1202,7 +1202,7 @@ function renderExecutiveSummary(
       ? data.recommended_actions
       : [
           { priority: 1, action: 'Require risk assessment on job creation', reason: 'Enable automatic risk scoring and mitigation checklists for every job' },
-          { priority: 2, action: 'Enable attestations on job closeout', reason: 'Ensure all jobs are reviewed and signed off before completion' },
+          { priority: 2, action: 'Enable attestations on job closeout', reason: 'Ensure all jobs are reviewed and sealed before completion' },
           { priority: 3, action: 'Upload evidence for high-risk jobs', reason: 'Document safety measures and compliance for audit trails' },
         ]
     
@@ -2324,7 +2324,7 @@ function renderRecommendedActions(
         { priority: 1, action: 'Require risk assessment on job creation', reason: 'Enable automatic risk scoring and mitigation checklists for every job' },
         { priority: 2, action: 'Enable attestations on job closeout', reason: 'Ensure all jobs are reviewed and signed off before completion' },
         { priority: 3, action: 'Upload evidence for high-risk jobs', reason: 'Document safety measures and compliance for audit trails' },
-        { priority: 4, action: 'Review and sign off on pending attestations', reason: 'Complete governance requirements for job compliance' },
+        { priority: 4, action: 'Review and seal pending records', reason: 'Complete governance requirements for job compliance' },
         { priority: 5, action: 'Monitor risk posture trends over time', reason: 'Track improvements in overall risk exposure and compliance' },
       ]
 

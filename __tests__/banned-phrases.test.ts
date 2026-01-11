@@ -37,11 +37,12 @@ const EXCLUDE_PATTERNS = [
 // File extensions to scan (only UI-facing code)
 const SCAN_EXTENSIONS = ['.tsx', '.ts', '.jsx', '.js']
 
-// Directories to scan (UI-facing code only, exclude API routes)
-const SCAN_DIRECTORIES = ['app/operations', 'components']
+// Directories to scan (UI-facing code + PDF routes)
+const SCAN_DIRECTORIES = ['app/operations', 'components', 'app/api/executive/brief/pdf']
 
 // Exclude these directories/files from scanning (database schema / API code / source of truth)
-const EXCLUDE_DIRECTORIES = ['app/api', 'apps/backend', 'supabase/migrations', 'lib/copy/terms.ts', 'lib/terms.ts']
+// NOTE: app/api/executive/brief/pdf is included because it generates user-facing PDFs
+const EXCLUDE_DIRECTORIES = ['apps/backend', 'supabase/migrations', 'lib/copy/terms.ts', 'lib/terms.ts']
 
 interface Violation {
   file: string
