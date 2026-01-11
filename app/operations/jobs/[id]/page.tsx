@@ -489,7 +489,8 @@ export default function JobDetailPage() {
       })
       if (!response.ok) {
         // Extract structured error using shared helper
-        const { code, message, hint, errorId, requestId, statusCode } = await extractProxyError(response)
+        const errorDetails = await extractProxyError(response)
+        const { code, message, hint, errorId, requestId, statusCode } = errorDetails
         
         // Log error ID for debugging
         logProxyError(errorId, code, `/api/jobs/${jobId}/mitigations/${itemId}`, statusCode, requestId)
