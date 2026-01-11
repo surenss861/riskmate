@@ -29,6 +29,7 @@ import { EventDetailsDrawer } from '@/components/audit/EventDetailsDrawer'
 import { PackHistoryDrawer } from '@/components/audit/PackHistoryDrawer'
 import { useSelectedRows } from '@/lib/hooks/useSelectedRows'
 import { terms } from '@/lib/terms'
+import { extractProxyError } from '@/lib/utils/extractProxyError'
 
 interface AuditEvent {
   id: string
