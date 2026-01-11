@@ -1,8 +1,8 @@
-import express from "express";
+import express, { type Router as ExpressRouter } from "express";
 import { supabase } from "../lib/supabaseClient";
 import { authenticate, AuthenticatedRequest } from "../middleware/auth";
 
-export const riskRouter = express.Router();
+export const riskRouter: ExpressRouter = express.Router();
 
 // GET /api/risk/factors
 // Returns all available risk factors for job creation

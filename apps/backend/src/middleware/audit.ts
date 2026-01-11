@@ -11,7 +11,9 @@ export type AuditTargetType =
   | "system"
   | "site"
   | "user"
-  | "signoff";
+  | "signoff"
+  | "organization"
+  | "proof_pack";
 
 export interface AuditLogEntry {
   organizationId: string;

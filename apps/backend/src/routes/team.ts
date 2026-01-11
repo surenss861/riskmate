@@ -1,11 +1,11 @@
-import express from "express";
+import express, { type Router as ExpressRouter } from "express";
 import crypto from "crypto";
 import { supabase } from "../lib/supabaseClient";
 import { authenticate, AuthenticatedRequest } from "../middleware/auth";
 import { limitsFor } from "../auth/planRules";
 import { recordAuditLog } from "../middleware/audit";
 
-export const teamRouter = express.Router();
+export const teamRouter: ExpressRouter = express.Router();
 
 const ALLOWED_ROLES = new Set(["owner", "admin", "safety_lead", "executive", "member"]);
 

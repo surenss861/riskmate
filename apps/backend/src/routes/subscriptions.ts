@@ -1,11 +1,10 @@
-import express from "express";
-import type { Request, Response, RequestHandler } from "express";
+import express, { type Request, type Response, type RequestHandler, type Router as ExpressRouter } from "express";
 import { supabase } from "../lib/supabaseClient";
 import { authenticate, AuthenticatedRequest } from "../middleware/auth";
 import type { PlanCode } from "../auth/planRules";
 import { applyPlanToOrganization } from "./stripeWebhook";
 
-export const subscriptionsRouter = express.Router();
+export const subscriptionsRouter: ExpressRouter = express.Router();
 
 const STRIPE_PRICE_IDS: Partial<Record<PlanCode, string | undefined>> = {
   starter: process.env.STRIPE_PRICE_STARTER,

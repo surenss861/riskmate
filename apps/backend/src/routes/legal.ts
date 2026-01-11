@@ -1,10 +1,10 @@
-import express from "express";
+import express, { type Router as ExpressRouter } from "express";
 import { authenticate, AuthenticatedRequest } from "../middleware/auth";
 import { supabase } from "../lib/supabaseClient";
 import { LEGAL_VERSION, LEGAL_UPDATED_AT, getClientIp } from "../utils/legal";
 import { recordAuditLog } from "../middleware/audit";
 
-export const legalRouter = express.Router();
+export const legalRouter: ExpressRouter = express.Router();
 
 legalRouter.get("/version", authenticate as unknown as express.RequestHandler, async (_req: express.Request, res: express.Response) => {
   res.json({

@@ -1,9 +1,9 @@
-import express from "express";
+import express, { type Router as ExpressRouter } from "express";
 import { supabase } from "../lib/supabaseClient";
 import { authenticate, AuthenticatedRequest } from "../middleware/auth";
 import { requireFeature } from "../middleware/limits";
 
-export const analyticsRouter = express.Router();
+export const analyticsRouter: ExpressRouter = express.Router();
 
 type MitigationItem = {
   id: string;

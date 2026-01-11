@@ -1,4 +1,4 @@
-import express from 'express'
+import express, { type Router as ExpressRouter } from 'express'
 import { supabase } from '../lib/supabaseClient'
 import { authenticate, AuthenticatedRequest } from '../middleware/auth'
 import { RequestWithId } from '../middleware/requestId'
@@ -8,7 +8,7 @@ import { recordAuditLog } from '../middleware/audit'
 import { sendEmail, hashAlertPayload } from '../utils/email'
 import crypto from 'crypto'
 
-export const executiveRouter = express.Router()
+export const executiveRouter: ExpressRouter = express.Router()
 
 // Cache for executive metrics - invalidated only on material events
 // Cache structure: { data: RiskPosture, timestamp: number, basis_event_ids: string[] }

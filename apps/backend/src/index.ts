@@ -26,7 +26,7 @@ import { executiveRouter } from "./routes/executive";
 import { requestIdMiddleware, RequestWithId } from "./middleware/requestId";
 
 const app = express();
-const PORT = process.env.PORT || 5173;
+const PORT = Number(process.env.PORT ?? 3000);
 
 const defaultAllowedOrigins = [
   "http://localhost:3000",

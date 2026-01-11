@@ -1,4 +1,4 @@
-import express from "express";
+import express, { type Router as ExpressRouter } from "express";
 import { supabase } from "../lib/supabaseClient";
 import { authenticate, AuthenticatedRequest } from "../middleware/auth";
 import { recordAuditLog } from "../middleware/audit";
@@ -9,7 +9,7 @@ import { enforceJobLimit } from "../middleware/limits";
 import { RequestWithId } from "../middleware/requestId";
 import { createErrorResponse, logErrorForSupport } from "../utils/errorResponse";
 
-export const jobsRouter = express.Router();
+export const jobsRouter: ExpressRouter = express.Router();
 
 // Rate-limited logging for cursor misuse (once per organization per hour)
 // This helps identify client misconfigurations without spamming logs
@@ -48,7 +48,7 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
     const { organization_id } = authReq.user;
     const { 
       page = 1, 
-      limit: limitParam, 
+      limit: limitParamFromQuery, 
       page_size,
       status, 
       risk_level, 

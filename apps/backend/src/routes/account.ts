@@ -1,10 +1,10 @@
-import express from "express";
+import express, { type Router as ExpressRouter } from "express";
 import { supabase } from "../lib/supabaseClient";
 import { authenticate } from "../middleware/auth";
 import { recordAuditLog } from "../middleware/audit";
 import { createErrorResponse } from "../utils/errorResponse";
 
-export const accountRouter = express.Router();
+export const accountRouter: ExpressRouter = express.Router();
 
 // Helper to log security events
 async function logSecurityEvent(

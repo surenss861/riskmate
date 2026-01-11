@@ -1,4 +1,4 @@
-import express from 'express'
+import express, { type Router as ExpressRouter } from 'express'
 import { supabase } from '../lib/supabaseClient'
 import { authenticate, AuthenticatedRequest } from '../middleware/auth'
 import { RequestWithId } from '../middleware/requestId'
@@ -13,7 +13,7 @@ import crypto from 'crypto'
 // Event mapping utilities are used in frontend only
 // Backend doesn't need these imports
 
-export const auditRouter = express.Router()
+export const auditRouter: ExpressRouter = express.Router()
 
 // Helper: Generate Controls CSV as Buffer
 async function generateControlsCSV(

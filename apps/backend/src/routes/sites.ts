@@ -1,11 +1,11 @@
-import express from "express";
+import express, { type Router as ExpressRouter } from "express";
 import { supabase } from "../lib/supabaseClient";
 import { authenticate, AuthenticatedRequest } from "../middleware/auth";
 import { recordAuditLog } from "../middleware/audit";
 import { RequestWithId } from "../middleware/requestId";
 import { createErrorResponse, logErrorForSupport } from "../utils/errorResponse";
 
-export const sitesRouter = express.Router();
+export const sitesRouter: ExpressRouter = express.Router();
 
 // GET /api/sites
 // Returns all sites for the organization

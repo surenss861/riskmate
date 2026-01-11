@@ -1,4 +1,4 @@
-import express from "express";
+import express, { type Router as ExpressRouter } from "express";
 import { authenticate, AuthenticatedRequest } from "../middleware/auth";
 import {
   registerDeviceToken,
@@ -6,7 +6,7 @@ import {
 } from "../services/notifications";
 import { requireFeature } from "../middleware/limits";
 
-export const notificationsRouter = express.Router();
+export const notificationsRouter: ExpressRouter = express.Router();
 
 notificationsRouter.post(
   "/register",
