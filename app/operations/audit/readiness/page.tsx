@@ -842,6 +842,19 @@ export default function AuditReadinessPage() {
 
         {/* Toast Container */}
         <ToastContainer />
+        
+        {/* Error Toast (for structured errors with Error ID) */}
+        {errorToast && (
+          <ErrorToast
+            message={errorToast.message}
+            description={errorToast.description}
+            errorId={errorToast.errorId}
+            code={errorToast.code}
+            hint={errorToast.hint}
+            onClose={() => setErrorToast(null)}
+            onRetry={errorToast.onRetry}
+          />
+        )}
 
         {/* Bulk Result Modal */}
         {showBulkResult && bulkResult && (
