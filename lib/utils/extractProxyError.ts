@@ -84,16 +84,22 @@ export function formatProxyErrorTitle(
  * Log error ID client-side for debugging
  * 
  * Logs error information to console (and optionally telemetry) for instant debugging.
- * Only logs in development or if explicitly enabled.
+ * Includes error_id, code, endpoint, status code, requestId, and trace headers for correlation.
  * 
  * @param errorId - Error ID to log
  * @param code - Error code (optional)
  * @param endpoint - Endpoint that failed (optional)
+ * @param statusCode - HTTP status code (optional)
+ * @param requestId - Request ID for correlation (optional)
+ * @param traceHeader - Trace header (X-Trace-Id or similar) for distributed tracing (optional)
  */
 export function logProxyError(
   errorId?: string,
   code?: string,
-  endpoint?: string
+  endpoint?: string,
+  statusCode?: number,
+  requestId?: string,
+  traceHeader?: string
 ): void {
   if (!errorId) return
 
@@ -101,6 +107,9 @@ export function logProxyError(
     error_id: errorId,
     ...(code && { code }),
     ...(endpoint && { endpoint }),
+    ...(statusCode && { status_code: statusCode }),
+    ...(requestId && { request_id: requestId }),
+    ...(traceHeader && { trace_id: traceHeader }),
     timestamp: new Date().toISOString(),
   }
 

@@ -757,10 +757,10 @@ export default function AuditReadinessPage() {
                       
                       if (!response.ok) {
                         // Extract structured error using shared helper
-                        const { code, message, hint, errorId } = await extractProxyError(response)
+                        const { code, message, hint, errorId, requestId, statusCode } = await extractProxyError(response)
                         
-                        // Log error ID for debugging
-                        logProxyError(errorId, code, '/api/audit/export/pack')
+                        // Log error ID for debugging (includes status code, request ID for correlation)
+                        logProxyError(errorId, code, '/api/audit/export/pack', statusCode, requestId)
                         
                         // Format title using shared helper
                         const title = formatProxyErrorTitle(code, errorId, message)
