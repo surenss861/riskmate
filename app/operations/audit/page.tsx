@@ -29,7 +29,7 @@ import { EventDetailsDrawer } from '@/components/audit/EventDetailsDrawer'
 import { PackHistoryDrawer } from '@/components/audit/PackHistoryDrawer'
 import { useSelectedRows } from '@/lib/hooks/useSelectedRows'
 import { terms } from '@/lib/terms'
-import { extractProxyError } from '@/lib/utils/extractProxyError'
+import { extractProxyError, formatProxyErrorTitle, logProxyError } from '@/lib/utils/extractProxyError'
 
 interface AuditEvent {
   id: string
@@ -703,15 +703,8 @@ export default function AuditViewPage() {
         const hint = err.support_hint || err.hint || err.supportHint
         const code = err.code
         
-        // Build user-friendly error message with code and error ID
-        let displayMessage = errorMessage
-        if (code && errorId) {
-          displayMessage = `${code} • Error ID: ${errorId}`
-        } else if (code) {
-          displayMessage = `${code} • ${errorMessage}`
-        } else if (errorId) {
-          displayMessage = `${errorMessage} • Error ID: ${errorId}`
-        }
+        // Format title using shared helper for consistency
+        const displayMessage = formatProxyErrorTitle(code, errorId, errorMessage)
         
         setToast({
           message: displayMessage,
