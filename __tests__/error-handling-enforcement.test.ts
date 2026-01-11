@@ -121,7 +121,7 @@ describe('Error Handling Enforcement', () => {
         (v) => `  ${v.file}:${v.line}\n    ${v.context}`
       )
 
-      fail(
+      throw new Error(
         `Found ${violations.length} fetch error handling violation(s) that do not use extractProxyError:\n\n${violationMessages.join('\n\n')}\n\n` +
           `Fix: Replace manual error handling with extractProxyError helper:\n` +
           `  const { code, message, hint, errorId, requestId, statusCode } = await extractProxyError(response)\n` +
