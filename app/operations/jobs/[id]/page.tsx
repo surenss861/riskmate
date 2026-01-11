@@ -23,6 +23,7 @@ import { optimizePhoto } from '@/lib/utils/photoOptimization'
 import { getGPSLocation } from '@/lib/utils/gpsMetadata'
 import { hasPermission } from '@/lib/utils/permissions'
 import { AppBackground, AppShell, PageSection, GlassCard, Button, Badge, TrustReceiptStrip, IntegrityBadge, EventChip, EnforcementBanner, EvidenceStamp } from '@/components/shared'
+import { extractProxyError, formatProxyErrorTitle, logProxyError } from '@/lib/utils/extractProxyError'
 
 // Helper function to convert base64 to Blob
 const base64ToBlob = (base64: string, contentType = 'application/pdf') => {
