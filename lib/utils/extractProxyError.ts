@@ -13,6 +13,8 @@ export async function extractProxyError(res: Response): Promise<{
   message: string
   hint?: string
   errorId?: string
+  requestId?: string
+  statusCode?: number
   raw?: any
 }> {
   // Extract error ID from response headers first
