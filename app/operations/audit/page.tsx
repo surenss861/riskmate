@@ -1300,8 +1300,24 @@ export default function AuditViewPage() {
       })
 
       if (!response.ok) {
-        const error = await response.json().catch(() => ({}))
-        throw new Error(error.message || 'Failed to close incident')
+        // Extract structured error using shared helper
+        const { code, message, hint, errorId, requestId, statusCode } = await extractProxyError(response)
+        
+        // Log error ID for debugging
+        logProxyError(errorId, code, '/api/audit/incidents/close', statusCode, requestId)
+        
+        // Format title using shared helper
+        const title = formatProxyErrorTitle(code, errorId, message)
+        
+        // Create error object with all details
+        const errorWithDetails = new Error(title) as any
+        errorWithDetails.error_id = errorId
+        errorWithDetails.errorId = errorId
+        errorWithDetails.code = code
+        errorWithDetails.support_hint = hint
+        errorWithDetails.hint = hint
+        
+        throw errorWithDetails
       }
 
       const data = await response.json()
@@ -1463,8 +1479,24 @@ export default function AuditViewPage() {
       })
 
       if (!response.ok) {
-        const error = await response.json().catch(() => ({}))
-        throw new Error(error.message || 'Failed to revoke access')
+        // Extract structured error using shared helper
+        const { code, message, hint, errorId, requestId, statusCode } = await extractProxyError(response)
+        
+        // Log error ID for debugging
+        logProxyError(errorId, code, '/api/audit/access/revoke', statusCode, requestId)
+        
+        // Format title using shared helper
+        const title = formatProxyErrorTitle(code, errorId, message)
+        
+        // Create error object with all details
+        const errorWithDetails = new Error(title) as any
+        errorWithDetails.error_id = errorId
+        errorWithDetails.errorId = errorId
+        errorWithDetails.code = code
+        errorWithDetails.support_hint = hint
+        errorWithDetails.hint = hint
+        
+        throw errorWithDetails
       }
 
       setToast({
@@ -1512,8 +1544,24 @@ export default function AuditViewPage() {
       })
 
       if (!response.ok) {
-        const error = await response.json().catch(() => ({}))
-        throw new Error(error.message || 'Failed to flag suspicious access')
+        // Extract structured error using shared helper
+        const { code, message, hint, errorId, requestId, statusCode } = await extractProxyError(response)
+        
+        // Log error ID for debugging
+        logProxyError(errorId, code, '/api/audit/access/flag-suspicious', statusCode, requestId)
+        
+        // Format title using shared helper
+        const title = formatProxyErrorTitle(code, errorId, message)
+        
+        // Create error object with all details
+        const errorWithDetails = new Error(title) as any
+        errorWithDetails.error_id = errorId
+        errorWithDetails.errorId = errorId
+        errorWithDetails.code = code
+        errorWithDetails.support_hint = hint
+        errorWithDetails.hint = hint
+        
+        throw errorWithDetails
       }
 
       const data = await response.json()
