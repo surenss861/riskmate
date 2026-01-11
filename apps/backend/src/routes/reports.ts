@@ -10,7 +10,7 @@ import { notifyReportReady } from "../services/notifications";
 import { buildJobReport } from "../utils/jobReport";
 import { requireFeature } from "../middleware/limits";
 
-export const reportsRouter = express.Router();
+export const reportsRouter: ExpressRouter = express.Router();
 
 const ensuredBuckets = new Set<string>();
 
