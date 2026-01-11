@@ -659,7 +659,10 @@ export default function AuditViewPage() {
 
       if (!response.ok) {
         // Extract structured error using shared helper
-        const { code, message, hint, errorId } = await extractProxyError(response)
+        const { code, message, hint, errorId, requestId, statusCode } = await extractProxyError(response)
+        
+        // Log error ID for debugging (includes status code, request ID for correlation)
+        logProxyError(errorId, code, endpoint, statusCode, requestId)
         
         // Create error object with all details for onError handler
         const errorWithDetails = new Error(message) as any
