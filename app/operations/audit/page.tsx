@@ -95,7 +95,7 @@ export default function AuditViewPage() {
     requiresEvidence?: boolean
     hasEvidence?: boolean
   } | null>(null)
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error'; requestId?: string } | null>(null)
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error'; requestId?: string; description?: string } | null>(null)
   const [userRole, setUserRole] = useState<string | null>(null)
   const [bulkResultModal, setBulkResultModal] = useState<{
     isOpen: boolean
@@ -2044,6 +2044,9 @@ export default function AuditViewPage() {
               : 'bg-red-500/20 border-red-500/40 text-red-400'
           } max-w-md`}>
             <p className="text-sm">{toast.message}</p>
+            {toast.description && (
+              <p className="text-xs mt-1 opacity-80">{toast.description}</p>
+            )}
             {toast.requestId && process.env.NODE_ENV === 'development' && (
               <div className="mt-2 pt-2 border-t border-white/10">
                 <div className="flex items-center justify-between">
