@@ -167,21 +167,32 @@ export async function proxyToBackend(
         error = { message: errorText || 'Backend request failed', raw: errorText }
       }
       
+      // Extract error ID from backend response headers
+      const errorId = response.headers.get('X-Error-ID')
+      
       console.error(`[Proxy] Backend error for ${endpoint}:`, {
         status: response.status,
         error,
+        errorId,
         backendUrl,
         headers: Object.fromEntries(response.headers.entries()),
       })
       
       // Include the actual backend error in response for debugging
+      // Pass through structured error (code, message, support_hint, error_id, request_id)
       return NextResponse.json({
         ...error,
+        // Ensure error_id is included if backend provided it
+        ...(errorId && !error.error_id && { error_id: errorId }),
         _proxy: {
           backend_url: backendUrl,
           status: response.status,
         },
-      }, { status: response.status })
+      }, { 
+        status: response.status,
+        // Pass through error ID header if available
+        headers: errorId ? { 'X-Error-ID': errorId } : {},
+      })
     }
 
     if (isFileDownload) {
