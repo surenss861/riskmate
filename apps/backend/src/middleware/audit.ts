@@ -93,7 +93,12 @@ function isMaterialEvent(eventName: string, severity: 'info' | 'material' | 'cri
   return false
 }
 
-export async function recordAuditLog(entry: AuditLogEntry) {
+export type AuditWriteResult = {
+  data: { id: string } | null
+  error: { message: string } | null
+}
+
+export async function recordAuditLog(entry: AuditLogEntry): Promise<AuditWriteResult> {
   try {
     const payload = truncateMetadata(entry.metadata);
     
@@ -166,15 +171,19 @@ export async function recordAuditLog(entry: AuditLogEntry) {
 
     if (error) {
       console.error("Audit log insert failed:", error);
-    } else {
-      // Invalidate executive cache only on material events
-      const severity = getSeverityFromEventName(entry.eventName)
-      if (isMaterialEvent(entry.eventName, severity)) {
-        invalidateExecutiveCache(entry.organizationId);
-      }
+      return { data: null, error: { message: error.message } }
     }
-  } catch (err) {
+
+    // Invalidate executive cache only on material events
+    const severity = getSeverityFromEventName(entry.eventName)
+    if (isMaterialEvent(entry.eventName, severity)) {
+      invalidateExecutiveCache(entry.organizationId);
+    }
+
+    return { data: insertedData ? { id: insertedData.id } : null, error: null }
+  } catch (err: any) {
     console.error("Audit log exception:", err);
+    return { data: null, error: { message: err?.message ?? 'Unknown audit log error' } }
   }
 }
 
