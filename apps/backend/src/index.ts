@@ -113,9 +113,6 @@ app.use((req, res, next) => {
 // Request ID middleware (must be early in the chain)
 app.use(requestIdMiddleware);
 
-// CORS preflight handling (already handled by cors() above, but explicit for clarity)
-app.options("*", cors());
-
 app.post(
   "/api/stripe/webhook",
   express.raw({ type: "application/json" }),
@@ -123,11 +120,6 @@ app.post(
 );
 
 app.use(express.json());
-
-// Health check
-app.get("/health", (req, res) => {
-  res.json({ status: "ok", timestamp: new Date().toISOString() });
-});
 
 // API Routes
 app.use("/api/risk", riskRouter);
