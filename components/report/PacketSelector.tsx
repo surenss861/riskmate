@@ -27,7 +27,7 @@ export function PacketSelector({ onSelect, onCancel, isLoading }: PacketSelector
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
       <div className="bg-white rounded-lg shadow-xl p-6 max-w-2xl w-full mx-4">
-        <h2 className="text-2xl font-bold mb-4">Select Report Packet</h2>
+        <h2 className="text-2xl font-bold mb-4 text-gray-900">Select Report Packet</h2>
         <p className="text-gray-600 mb-6">
           Choose the type of report packet you want to export. Each packet type includes different sections
           tailored for specific use cases.
@@ -51,7 +51,7 @@ export function PacketSelector({ onSelect, onCancel, isLoading }: PacketSelector
               >
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="font-semibold text-lg">{packet.title}</h3>
+                    <h3 className="font-semibold text-lg text-gray-900">{packet.title}</h3>
                     <p className="text-sm text-gray-600 mt-1">
                       Includes: {packet.sections.length} section{packet.sections.length !== 1 ? 's' : ''}
                     </p>
@@ -81,7 +81,7 @@ export function PacketSelector({ onSelect, onCancel, isLoading }: PacketSelector
           <button
             onClick={onCancel}
             disabled={isLoading}
-            className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed text-gray-900"
           >
             Cancel
           </button>
