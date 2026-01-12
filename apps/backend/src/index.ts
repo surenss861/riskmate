@@ -63,6 +63,14 @@ const defaultAllowedOrigins = process.env.NODE_ENV === "production"
 const allowedOrigins = Array.from(new Set([...defaultAllowedOrigins, ...envAllowedOrigins]));
 const allowedOriginsSet = new Set(allowedOrigins);
 
+// Helper to check if origin is allowed (never throws)
+const isAllowedOrigin = (origin: string | undefined): boolean => {
+  if (!origin) return true; // server-to-server / curl without Origin
+  if (allowedOriginsSet.has(origin)) return true;
+  const isDev = process.env.NODE_ENV !== "production";
+  return isDev && origin.startsWith("http://localhost");
+};
+
 // Pre-CORS middleware: block invalid origins with 403 (before CORS middleware runs)
 app.use((req, res, next) => {
   const origin = req.headers.origin;
@@ -72,14 +80,8 @@ app.use((req, res, next) => {
     return next();
   }
 
-  // Allow localhost in dev
-  const isDev = process.env.NODE_ENV !== "production";
-  if (isDev && origin.startsWith("http://localhost")) {
-    return next();
-  }
-
   // Check if origin is in allowlist
-  if (!allowedOriginsSet.has(origin)) {
+  if (!isAllowedOrigin(origin)) {
     console.warn(`[CORS] Rejected origin: ${origin}`);
     return res.status(403).json({
       message: "Not allowed by CORS",
@@ -90,21 +92,18 @@ app.use((req, res, next) => {
   return next();
 });
 
-// CORS middleware (simplified - blocking already handled above)
-// This just sets the CORS headers for allowed origins
-const corsOptions: cors.CorsOptionsDelegate = (req, callback) => {
-  const origin = req.headers.origin || undefined;
-
-  // If we got here, origin is either missing (server-to-server) or already validated
-  const options: cors.CorsOptions = {
-    origin: origin ?? true, // Allow all origins if no origin (server-to-server)
-    credentials: true,
-    optionsSuccessStatus: 200,
-    // Allow common headers used by Next.js API routes
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-  };
-  callback(null, options);
-};
+// CORS middleware (never throws - just sets headers for allowed origins)
+// Blocking is already handled above, so this just sets CORS headers
+app.use(cors({
+  origin: (origin, cb) => {
+    // Never pass Error to callback - just return true/false
+    if (!origin) return cb(null, true); // server-to-server / curl
+    return cb(null, isAllowedOrigin(origin)); // false = no CORS header, but NO throw
+  },
+  credentials: true,
+  optionsSuccessStatus: 200,
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+}));
 
 app.use((req, res, next) => {
   res.header("Vary", "Origin");
@@ -114,8 +113,8 @@ app.use((req, res, next) => {
 // Request ID middleware (must be early in the chain)
 app.use(requestIdMiddleware);
 
-app.use(cors(corsOptions));
-app.options("*", cors(corsOptions));
+// CORS preflight handling (already handled by cors() above, but explicit for clarity)
+app.options("*", cors());
 
 app.post(
   "/api/stripe/webhook",
