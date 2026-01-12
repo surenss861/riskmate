@@ -28,6 +28,11 @@ import { requestIdMiddleware, RequestWithId } from "./middleware/requestId";
 const app = express();
 const PORT = Number(process.env.PORT ?? 3000);
 
+// Health check route - MUST be first (no Supabase dependency)
+app.get("/health", (_req, res) => {
+  res.json({ status: "ok", timestamp: new Date().toISOString() });
+});
+
 const defaultAllowedOrigins = [
   "http://localhost:3000",
   "http://localhost:3001",
