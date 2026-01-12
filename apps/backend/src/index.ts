@@ -77,6 +77,10 @@ const isAllowedOrigin = (origin?: string) => {
     if (hostname.includes("vercel.app") || hostname.includes("vercel.com")) {
       return true;
     }
+    // Allow riskmate.dev domains (frontend)
+    if (hostname === "riskmate.dev" || hostname === "www.riskmate.dev" || hostname === "app.riskmate.dev") {
+      return true;
+    }
   } catch (error) {
     console.warn(`Invalid origin received from request: ${origin}`, error);
   }

@@ -6,6 +6,22 @@ import { createErrorResponse } from "../utils/errorResponse";
 
 export const accountRouter: ExpressRouter = express.Router();
 
+// Base route - confirms account router is mounted
+accountRouter.get("/", (_req, res) => {
+  res.json({ 
+    ok: true, 
+    message: "Account API is available",
+    endpoints: [
+      "PATCH /api/account/profile",
+      "PATCH /api/account/organization",
+      "GET /api/account/billing",
+      "POST /api/account/security/revoke-sessions",
+      "GET /api/account/security/events",
+      "POST /api/account/deactivate"
+    ]
+  });
+});
+
 // Helper to log security events
 async function logSecurityEvent(
   organizationId: string | null,
