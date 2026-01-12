@@ -44,17 +44,21 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
-const defaultAllowedOrigins = [
-  "http://localhost:3000",
-  "http://localhost:3001",
-  "http://localhost:3003",
-  "http://localhost:5173",
-];
-
-const envAllowedOrigins = (process.env.ALLOWED_ORIGINS || process.env.FRONTEND_URL || "")
+// Production allowed origins (from env var, comma-separated)
+const envAllowedOrigins = (process.env.ALLOWED_ORIGINS || "")
   .split(",")
   .map((origin) => origin.trim())
   .filter(Boolean);
+
+// In development, allow localhost for local testing
+const defaultAllowedOrigins = process.env.NODE_ENV === "production" 
+  ? [] 
+  : [
+      "http://localhost:3000",
+      "http://localhost:3001",
+      "http://localhost:3003",
+      "http://localhost:5173",
+    ];
 
 const allowedOrigins = Array.from(new Set([...defaultAllowedOrigins, ...envAllowedOrigins]));
 
@@ -64,27 +68,25 @@ const isAllowedOrigin = (origin?: string) => {
     return true;
   }
 
+  // Check exact match in allowlist
   if (allowedOrigins.includes(origin)) {
     return true;
   }
 
-  try {
-    const { hostname } = new URL(origin);
-    if (hostname === "localhost" || hostname === "127.0.0.1") {
-      return true;
+  // In development only: allow localhost variants
+  if (process.env.NODE_ENV !== "production") {
+    try {
+      const { hostname } = new URL(origin);
+      if (hostname === "localhost" || hostname === "127.0.0.1") {
+        return true;
+      }
+    } catch (error) {
+      // Invalid URL, reject
     }
-    // Allow Vercel domains
-    if (hostname.includes("vercel.app") || hostname.includes("vercel.com")) {
-      return true;
-    }
-    // Allow riskmate.dev domains (frontend)
-    if (hostname === "riskmate.dev" || hostname === "www.riskmate.dev" || hostname === "app.riskmate.dev") {
-      return true;
-    }
-  } catch (error) {
-    console.warn(`Invalid origin received from request: ${origin}`, error);
   }
 
+  // Production: strict - only allow what's explicitly in ALLOWED_ORIGINS
+  // No wildcards, no auto-allowing Vercel domains
   return false;
 };
 
