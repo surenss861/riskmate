@@ -61,53 +61,49 @@ const defaultAllowedOrigins = process.env.NODE_ENV === "production"
     ];
 
 const allowedOrigins = Array.from(new Set([...defaultAllowedOrigins, ...envAllowedOrigins]));
+const allowedOriginsSet = new Set(allowedOrigins);
 
-const isAllowedOrigin = (origin?: string) => {
-  // Allow requests with no origin (server-to-server, like Next.js API routes)
+// Pre-CORS middleware: block invalid origins with 403 (before CORS middleware runs)
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+
+  // Non-browser requests (no Origin header) should pass
   if (!origin) {
-    return true;
+    return next();
   }
 
-  // Check exact match in allowlist
-  if (allowedOrigins.includes(origin)) {
-    return true;
+  // Allow localhost in dev
+  const isDev = process.env.NODE_ENV !== "production";
+  if (isDev && origin.startsWith("http://localhost")) {
+    return next();
   }
 
-  // In development only: allow localhost variants
-  if (process.env.NODE_ENV !== "production") {
-    try {
-      const { hostname } = new URL(origin);
-      if (hostname === "localhost" || hostname === "127.0.0.1") {
-        return true;
-      }
-    } catch (error) {
-      // Invalid URL, reject
-    }
+  // Check if origin is in allowlist
+  if (!allowedOriginsSet.has(origin)) {
+    console.warn(`[CORS] Rejected origin: ${origin}`);
+    return res.status(403).json({
+      message: "Not allowed by CORS",
+      code: "CORS_FORBIDDEN",
+    });
   }
 
-  // Production: strict - only allow what's explicitly in ALLOWED_ORIGINS
-  // No wildcards, no auto-allowing Vercel domains
-  return false;
-};
+  return next();
+});
 
-// Middleware
+// CORS middleware (simplified - blocking already handled above)
+// This just sets the CORS headers for allowed origins
 const corsOptions: cors.CorsOptionsDelegate = (req, callback) => {
   const origin = req.headers.origin || undefined;
 
-  if (isAllowedOrigin(origin)) {
-    const options: cors.CorsOptions = {
-      origin: origin ?? true, // Allow all origins if no origin (server-to-server)
-      credentials: true,
-      optionsSuccessStatus: 200,
-      // Allow common headers used by Next.js API routes
-      allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-    };
-    callback(null, options);
-  } else {
-    // Log the rejected origin for debugging
-    console.warn(`CORS rejected origin: ${origin}`);
-    callback(new Error("Not allowed by CORS"));
-  }
+  // If we got here, origin is either missing (server-to-server) or already validated
+  const options: cors.CorsOptions = {
+    origin: origin ?? true, // Allow all origins if no origin (server-to-server)
+    credentials: true,
+    optionsSuccessStatus: 200,
+    // Allow common headers used by Next.js API routes
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  };
+  callback(null, options);
 };
 
 app.use((req, res, next) => {
