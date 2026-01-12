@@ -29,7 +29,15 @@ import { executiveRouter } from "./routes/executive";
 import { requestIdMiddleware, RequestWithId } from "./middleware/requestId";
 
 const app = express();
-const PORT = Number(process.env.PORT ?? 3000);
+
+// ✅ Debug: Log Railway's injected port
+console.log("[BOOT] raw PORT =", JSON.stringify(process.env.PORT));
+console.log("[BOOT] raw HOST =", JSON.stringify(process.env.HOST));
+
+const PORT = Number(process.env.PORT);
+if (!Number.isFinite(PORT)) {
+  throw new Error(`[BOOT] PORT is missing/invalid. Got: ${JSON.stringify(process.env.PORT)}`);
+}
 
 // Health check route - MUST be first (no Supabase dependency)
 app.get("/health", (_req, res) => {
@@ -179,8 +187,9 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 });
 
 app.listen(PORT, '0.0.0.0', () => {
+  console.log(`[BOOT] Listening on 0.0.0.0:${PORT} (raw PORT=${process.env.PORT})`);
   console.log(`🚀 RiskMate Backend API running on port ${PORT}`);
-  console.log(`📡 Health check: http://localhost:${PORT}/health`);
+  console.log(`📡 Health check: http://0.0.0.0:${PORT}/health`);
   console.log(`✅ Build: ${process.env.RAILWAY_DEPLOYMENT_ID || 'local'} | Commit: ${process.env.RAILWAY_GIT_COMMIT_SHA || 'dev'}`);
 });
 
