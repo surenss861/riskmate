@@ -27,6 +27,7 @@ import { sitesRouter } from "./routes/sites";
 import { auditRouter } from "./routes/audit";
 import { executiveRouter } from "./routes/executive";
 import { requestIdMiddleware, RequestWithId } from "./middleware/requestId";
+import { createErrorResponse, logErrorForSupport } from "./utils/errorResponse";
 
 const app = express();
 
@@ -146,9 +147,6 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
   const statusCode = err.status || 500;
   const organizationId = (req as any).user?.organization_id;
   const code = err.code || (statusCode >= 500 ? "INTERNAL_SERVER_ERROR" : "UNKNOWN_ERROR");
-  
-  // Use error response utility for consistent formatting
-  const { createErrorResponse, logErrorForSupport } = require("./utils/errorResponse");
   
   const { response: errorResponse, errorId } = createErrorResponse({
     message: err.message || "Internal server error",

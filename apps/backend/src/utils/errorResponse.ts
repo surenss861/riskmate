@@ -14,6 +14,7 @@ export interface ErrorResponseOptions {
   supportHint?: string;
   severity?: "error" | "warn" | "info";
   category?: string;
+  retry_after_seconds?: number;
   [key: string]: any; // Allow additional fields
 }
 
@@ -54,6 +55,15 @@ export const SUPPORT_HINTS: Record<string, string | null> = {
   
   // Auth errors
   AUTH_ROLE_FORBIDDEN: "This action requires owner role. Contact your organization owner",
+  AUTH_UNAUTHORIZED: "Log in again and retry",
+  AUTH_INVALID_TOKEN: "Log in again and retry",
+  AUTH_INVALID_TOKEN_FORMAT: "Use a real session access token (JWT), not anon key/UUID",
+  
+  // CORS errors
+  CORS_FORBIDDEN: "Request must come from riskmate.dev or www.riskmate.dev",
+  
+  // Backend config errors
+  BACKEND_CONFIG_ERROR: "Server env vars missing/misconfigured (SUPABASE_URL / keys)",
   
   // Legacy codes (for backward compatibility during migration)
   CURSOR_NOT_SUPPORTED_FOR_SORT: "Remove cursor param or switch to page-based pagination",
@@ -81,6 +91,15 @@ export const SUPPORT_URLS: Record<string, string> = {
   
   // Auth errors
   AUTH_ROLE_FORBIDDEN: "/support/runbooks/auth#role-forbidden",
+  AUTH_UNAUTHORIZED: "/support/runbooks/auth#unauthorized",
+  AUTH_INVALID_TOKEN: "/support/runbooks/auth#invalid-token",
+  AUTH_INVALID_TOKEN_FORMAT: "/support/runbooks/auth#invalid-token-format",
+  
+  // CORS errors
+  CORS_FORBIDDEN: "/support/runbooks/cors#forbidden",
+  
+  // Backend config errors
+  BACKEND_CONFIG_ERROR: "/support/runbooks/backend#config-error",
 } as const;
 
 /**
@@ -93,6 +112,9 @@ const ERROR_CLASSIFICATION_MAP: Record<string, string> = {
   ENTITLEMENTS_PLAN_INACTIVE: ERROR_CLASSIFICATIONS.USER_ACTION_REQUIRED,
   ENTITLEMENTS_FEATURE_NOT_ALLOWED: ERROR_CLASSIFICATIONS.USER_ACTION_REQUIRED,
   AUTH_ROLE_FORBIDDEN: ERROR_CLASSIFICATIONS.USER_ACTION_REQUIRED,
+  AUTH_UNAUTHORIZED: ERROR_CLASSIFICATIONS.USER_ACTION_REQUIRED,
+  AUTH_INVALID_TOKEN: ERROR_CLASSIFICATIONS.USER_ACTION_REQUIRED,
+  AUTH_INVALID_TOKEN_FORMAT: ERROR_CLASSIFICATIONS.USER_ACTION_REQUIRED,
   JOB_LIMIT_REACHED: ERROR_CLASSIFICATIONS.USER_ACTION_REQUIRED,
   PLAN_PAST_DUE: ERROR_CLASSIFICATIONS.USER_ACTION_REQUIRED,
   PLAN_INACTIVE: ERROR_CLASSIFICATIONS.USER_ACTION_REQUIRED,
@@ -102,6 +124,8 @@ const ERROR_CLASSIFICATION_MAP: Record<string, string> = {
   // Developer bug (client misconfiguration)
   PAGINATION_CURSOR_NOT_SUPPORTED: ERROR_CLASSIFICATIONS.DEVELOPER_BUG,
   CURSOR_NOT_SUPPORTED_FOR_SORT: ERROR_CLASSIFICATIONS.DEVELOPER_BUG,
+  CORS_FORBIDDEN: ERROR_CLASSIFICATIONS.DEVELOPER_BUG,
+  BACKEND_CONFIG_ERROR: ERROR_CLASSIFICATIONS.DEVELOPER_BUG,
   
   // System transient (default for 5xx)
   INTERNAL_SERVER_ERROR: ERROR_CLASSIFICATIONS.SYSTEM_TRANSIENT,
@@ -128,7 +152,16 @@ const ERROR_CATEGORY_MAP: Record<string, string> = {
   
   // Auth
   AUTH_ROLE_FORBIDDEN: ERROR_CATEGORIES.AUTH,
+  AUTH_UNAUTHORIZED: ERROR_CATEGORIES.AUTH,
+  AUTH_INVALID_TOKEN: ERROR_CATEGORIES.AUTH,
+  AUTH_INVALID_TOKEN_FORMAT: ERROR_CATEGORIES.AUTH,
   ROLE_FORBIDDEN: ERROR_CATEGORIES.AUTH,
+  
+  // Validation
+  CORS_FORBIDDEN: ERROR_CATEGORIES.VALIDATION,
+  
+  // Internal
+  BACKEND_CONFIG_ERROR: ERROR_CATEGORIES.INTERNAL,
 } as const;
 
 /**
