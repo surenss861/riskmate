@@ -1,3 +1,6 @@
+// ✅ BOOT MARKER - This MUST print if new code is running
+console.log("[BOOT] COMMIT MARKER: c638206 / 2D92D8D-LAZY-ADMIN-v3");
+
 // Load dotenv only in development (Railway injects env vars in production)
 // This makes the server boot even if dotenv isn't installed in production
 if (process.env.NODE_ENV !== "production") {

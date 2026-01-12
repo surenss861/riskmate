@@ -19,10 +19,17 @@
     }
   },
   "include": [
-    "src/**/*",
+    "src/**/*.ts",
     "src/types/**/*.d.ts",
     "../../lib/ledger/contracts.ts"
   ],
-  "exclude": ["node_modules", "dist"]
+  "exclude": [
+    "dist",
+    "node_modules",
+    "../../lib/**",
+    "../lib/**",
+    "../../**/*.test.ts",
+    "**/*.test.ts"
+  ]
 }
 
