@@ -1218,6 +1218,9 @@ auditRouter.post('/export/pack', authenticate as unknown as express.RequestHandl
   
   console.log('[EXPORT_PACK] start', { requestId, orgId, timestamp: new Date().toISOString() })
   
+  // Declare archive outside try block so it's accessible in catch
+  let archive: archiver.Archiver | null = null
+  
   try {
     const { organization_id, id: userId } = authReq.user
     const {
@@ -1268,14 +1271,34 @@ auditRouter.post('/export/pack', authenticate as unknown as express.RequestHandl
     
     const packId = `PACK-${filterHash}`
 
+    // Set response headers BEFORE piping (required for streaming)
+    res.setHeader('Content-Type', 'application/zip')
+    res.setHeader('Content-Disposition', `attachment; filename="audit-pack-${packId}.zip"`)
+    res.setHeader('Cache-Control', 'no-store') // Prevent proxy buffering
+    
     // Create zip archive
-    const archive = archiver('zip', { zlib: { level: 9 } })
-    const chunks: Buffer[] = []
-
-    archive.on('data', (chunk: Buffer) => chunks.push(chunk))
-    archive.on('error', (err) => {
-      throw err
+    archive = archiver('zip', { zlib: { level: 9 } })
+    
+    // Handle client disconnect - abort archive if client closes connection
+    res.on('close', () => {
+      if (!res.writableEnded && archive) {
+        archive.abort()
+        console.warn('[EXPORT_PACK] client aborted', { requestId, orgId })
+      }
     })
+    
+    // Handle archiver errors
+    archive.on('error', (err) => {
+      console.error('[EXPORT_PACK] archiver error', { requestId, orgId, error: err?.message })
+      if (!res.headersSent) {
+        res.status(500).json({ message: 'Failed to generate ZIP archive', code: 'ARCHIVE_ERROR' })
+      } else {
+        res.end()
+      }
+    })
+    
+    // Pipe archive directly to response (streaming, no buffering)
+    archive.pipe(res)
 
     // Variables for manifest
     let pdfBuffer: Buffer | null = null
@@ -1488,23 +1511,23 @@ auditRouter.post('/export/pack', authenticate as unknown as express.RequestHandl
     // Update archive with correct manifest
     archive.append(JSON.stringify(manifest, null, 2), { name: `manifest_${packId}.json` })
 
+    // Finalize archive (this starts streaming to response)
     await archive.finalize()
 
-    // Wait for archive to finish
+    // Wait for response stream to finish writing (not archive 'end' event)
+    // This ensures the response is fully sent before we log completion
     await new Promise<void>((resolve, reject) => {
-      archive.on('end', () => resolve())
-      archive.on('error', reject)
+      res.on('finish', () => {
+        const duration = Date.now() - startTime
+        console.log('[EXPORT_PACK] done', { requestId, orgId, duration_ms: duration, timestamp: new Date().toISOString() })
+        resolve()
+      })
+      res.on('error', (err) => {
+        const duration = Date.now() - startTime
+        console.error('[EXPORT_PACK] response stream error', { requestId, orgId, duration_ms: duration, error: err?.message })
+        reject(err)
+      })
     })
-
-    const zipBuffer = Buffer.concat(chunks)
-
-    res.setHeader('Content-Type', 'application/zip')
-    res.setHeader('Content-Disposition', `attachment; filename="audit-pack-${packId}.zip"`)
-    res.send(zipBuffer)
-    
-    // Log completion with timing
-    const duration = Date.now() - startTime
-    console.log('[EXPORT_PACK] done', { requestId, orgId, duration_ms: duration, timestamp: new Date().toISOString() })
 
     // Store export pack metadata in ledger (immutable receipt per Compliance Ledger Contract)
     // Event: proof_pack.generated (per contract v1.0)
@@ -1563,6 +1586,22 @@ auditRouter.post('/export/pack', authenticate as unknown as express.RequestHandl
       error: err?.message || String(err),
       timestamp: new Date().toISOString() 
     })
+    
+    // If response headers haven't been sent yet, send error response
+    // If headers were sent (streaming started), just end the response
+    if (!res.headersSent) {
+      res.status(500).json({
+        message: 'Failed to generate proof pack',
+        code: 'EXPORT_ERROR',
+        error_id: requestId,
+      })
+    } else {
+      // Streaming already started - abort archive and end response
+      if (archive) {
+        archive.abort()
+      }
+      res.end()
+    }
     
     // Determine error code and message based on error type
     let errorCode = 'AUDIT_EXPORT_ERROR'
