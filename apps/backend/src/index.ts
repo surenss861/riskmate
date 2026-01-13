@@ -93,9 +93,8 @@ app.use((req, res, next) => {
   return next();
 });
 
-// CORS middleware (never throws - just sets headers for allowed origins)
-// Blocking is already handled above, so this just sets CORS headers
-app.use(cors({
+// CORS config (shared for both app.use and app.options)
+const corsConfig: cors.CorsOptions = {
   origin: (origin, cb) => {
     // Never pass Error to callback - just return true/false
     if (!origin) return cb(null, true); // server-to-server / curl
@@ -104,7 +103,16 @@ app.use(cors({
   credentials: true,
   optionsSuccessStatus: 200,
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-}));
+  methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
+};
+
+// CORS middleware (never throws - just sets headers for allowed origins)
+// Blocking is already handled above, so this just sets CORS headers
+app.use(cors(corsConfig));
+
+// ✅ IMPORTANT: Handle preflight OPTIONS requests for ALL routes
+// This must come after app.use(cors) but before route handlers
+app.options('*', cors(corsConfig));
 
 app.use((req, res, next) => {
   res.header("Vary", "Origin");

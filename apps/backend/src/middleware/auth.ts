@@ -65,6 +65,12 @@ export const authenticate = async (
   res: Response,
   next: NextFunction
 ) => {
+  // ✅ IMPORTANT: Skip auth for OPTIONS preflight requests
+  // CORS middleware handles OPTIONS, but this prevents 401 errors
+  if (req.method === 'OPTIONS') {
+    return next();
+  }
+
   try {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
