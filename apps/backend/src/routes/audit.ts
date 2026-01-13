@@ -10,6 +10,7 @@ import { checkIdempotency, storeIdempotencyKey, getIdempotencyKey } from '../uti
 import archiver from 'archiver'
 import { Readable } from 'stream'
 import crypto from 'crypto'
+import { generateControlsPDF, generateAttestationsPDF, generateEvidenceIndexPDF } from '../utils/pdf/proofPack'
 // Event mapping utilities are used in frontend only
 // Backend doesn't need these imports
 
@@ -1418,40 +1419,165 @@ auditRouter.post('/export/pack', authenticate as unknown as express.RequestHandl
       // This allows partial pack generation
     }
 
-    // Generate Controls CSV (inline)
-    let controlsBuffer: Buffer | null = null
+    // Generate Controls PDF (instead of CSV)
+    let controlsPdfBuffer: Buffer | null = null
     let controlsHash: string | null = null
     let controlsCount = 0
     try {
+      // Fetch controls data (reuse CSV logic but extract structured data)
       const controlsResult = await generateControlsCSV(organization_id, userId, packId, job_id, site_id, time_range)
-      controlsBuffer = controlsResult.buffer
       controlsCount = controlsResult.count
-      controlsHash = crypto.createHash('sha256').update(controlsBuffer).digest('hex')
-      archive.append(controlsBuffer, { name: `controls_${packId}.csv` })
+      
+      // Parse CSV to get structured data for PDF
+      const controlsCsv = controlsResult.buffer.toString('utf-8')
+      const csvLines = controlsCsv.split('\n')
+      const headerIndex = csvLines.findIndex(line => line.includes('control_id'))
+      if (headerIndex >= 0) {
+        const headers = csvLines[headerIndex].split(',').map(h => h.replace(/"/g, ''))
+        const controlRows: any[] = []
+        
+        for (let i = headerIndex + 1; i < csvLines.length; i++) {
+          const line = csvLines[i].trim()
+          if (!line) continue
+          
+          // Parse CSV row (handling quoted values)
+          const values: string[] = []
+          let current = ''
+          let inQuotes = false
+          for (let j = 0; j < line.length; j++) {
+            if (line[j] === '"') {
+              if (inQuotes && line[j + 1] === '"') {
+                current += '"'
+                j++
+              } else {
+                inQuotes = !inQuotes
+              }
+            } else if (line[j] === ',' && !inQuotes) {
+              values.push(current)
+              current = ''
+            } else {
+              current += line[j]
+            }
+          }
+          values.push(current)
+          
+          if (values.length === headers.length) {
+            const control: any = {}
+            headers.forEach((h, idx) => {
+              control[h] = values[idx] || ''
+            })
+            controlRows.push(control)
+          }
+        }
+        
+        // Generate PDF from structured data
+        const meta = {
+          packId,
+          organizationName: orgData?.name || 'Unknown',
+          generatedBy: userData?.full_name || 'Unknown',
+          generatedByRole: userData?.role || 'Unknown',
+          generatedAt: new Date().toISOString(),
+          timeRange: time_range || '30d',
+        }
+        
+        controlsPdfBuffer = await generateControlsPDF(controlRows, meta)
+        controlsHash = crypto.createHash('sha256').update(controlsPdfBuffer).digest('hex')
+        archive.append(controlsPdfBuffer, { name: `controls_${packId}.pdf` })
+      }
     } catch (err: any) {
-      console.error('Failed to generate Controls CSV for pack:', err)
+      console.error('Failed to generate Controls PDF for pack:', err)
       // Continue with other files
     }
 
-    // Generate Attestations CSV (inline)
-    let attestationsBuffer: Buffer | null = null
+    // Generate Attestations PDF (instead of CSV)
+    let attestationsPdfBuffer: Buffer | null = null
     let attestationsHash: string | null = null
     let attestationsCount = 0
     try {
+      // Fetch attestations data (reuse CSV logic but extract structured data)
       const attestationsResult = await generateAttestationsCSV(organization_id, userId, packId, job_id, site_id, time_range)
-      attestationsBuffer = attestationsResult.buffer
       attestationsCount = attestationsResult.count
-      attestationsHash = crypto.createHash('sha256').update(attestationsBuffer).digest('hex')
-      archive.append(attestationsBuffer, { name: `attestations_${packId}.csv` })
+      
+      // Parse CSV to get structured data for PDF
+      const attestationsCsv = attestationsResult.buffer.toString('utf-8')
+      const csvLines = attestationsCsv.split('\n')
+      const headerIndex = csvLines.findIndex(line => line.includes('attestation_id'))
+      if (headerIndex >= 0) {
+        const headers = csvLines[headerIndex].split(',').map(h => h.replace(/"/g, ''))
+        const attestationRows: any[] = []
+        
+        for (let i = headerIndex + 1; i < csvLines.length; i++) {
+          const line = csvLines[i].trim()
+          if (!line) continue
+          
+          // Parse CSV row (handling quoted values)
+          const values: string[] = []
+          let current = ''
+          let inQuotes = false
+          for (let j = 0; j < line.length; j++) {
+            if (line[j] === '"') {
+              if (inQuotes && line[j + 1] === '"') {
+                current += '"'
+                j++
+              } else {
+                inQuotes = !inQuotes
+              }
+            } else if (line[j] === ',' && !inQuotes) {
+              values.push(current)
+              current = ''
+            } else {
+              current += line[j]
+            }
+          }
+          values.push(current)
+          
+          if (values.length === headers.length) {
+            const attestation: any = {}
+            headers.forEach((h, idx) => {
+              attestation[h] = values[idx] || ''
+            })
+            // Map to PDF format
+            attestationRows.push({
+              attestation_id: attestation.attestation_id || '',
+              ledger_entry_id: attestation.ledger_entry_id || '',
+              ledger_event_type: attestation.ledger_event_type || '',
+              work_record_id: attestation.work_record_id || '',
+              site_id: attestation.site_id || '',
+              org_id: attestation.org_id || '',
+              status_at_export: attestation.status_at_export || '',
+              title: `Attestation ${attestation.attestation_id?.substring(0, 8)}`,
+              description: attestation.statement || '',
+              attested_by_user_id: attestation.signer_user_id || '',
+              attested_by_email: attestation.signer_email || '',
+              attested_at: attestation.signed_at || '',
+              created_at: attestation.signed_at || '',
+            })
+          }
+        }
+        
+        // Generate PDF from structured data
+        const meta = {
+          packId,
+          organizationName: orgData?.name || 'Unknown',
+          generatedBy: userData?.full_name || 'Unknown',
+          generatedByRole: userData?.role || 'Unknown',
+          generatedAt: new Date().toISOString(),
+          timeRange: time_range || '30d',
+        }
+        
+        attestationsPdfBuffer = await generateAttestationsPDF(attestationRows, meta)
+        attestationsHash = crypto.createHash('sha256').update(attestationsPdfBuffer).digest('hex')
+        archive.append(attestationsPdfBuffer, { name: `attestations_${packId}.pdf` })
+      }
     } catch (err: any) {
-      console.error('Failed to generate Attestations CSV for pack:', err)
+      console.error('Failed to generate Attestations PDF for pack:', err)
       // Continue with other files
     }
 
-    // Calculate PDF hash
+    // Calculate PDF hashes
     const pdfHash = pdfBuffer ? crypto.createHash('sha256').update(pdfBuffer).digest('hex') : null
 
-    // Generate manifest with counts and hashes (exact schema per specification)
+    // Generate manifest with counts and hashes
     const manifest = {
       pack_id: packId,
       generated_at: new Date().toISOString(),
@@ -1483,33 +1609,46 @@ auditRouter.post('/export/pack', authenticate as unknown as express.RequestHandl
           sha256: pdfHash || '',
           bytes: pdfBuffer?.length || 0,
         },
-        {
-          name: `controls_${packId}.csv`,
+        ...(controlsPdfBuffer ? [{
+          name: `controls_${packId}.pdf`,
           sha256: controlsHash || '',
-          bytes: controlsBuffer?.length || 0,
-        },
-        {
-          name: `attestations_${packId}.csv`,
+          bytes: controlsPdfBuffer.length,
+        }] : []),
+        ...(attestationsPdfBuffer ? [{
+          name: `attestations_${packId}.pdf`,
           sha256: attestationsHash || '',
-          bytes: attestationsBuffer?.length || 0,
-        },
-        {
-          name: `manifest_${packId}.json`,
-          sha256: '', // Will be calculated after manifest is created
-          bytes: 0, // Will be calculated
-        },
+          bytes: attestationsPdfBuffer.length,
+        }] : []),
       ],
     }
 
-    // Calculate manifest hash and size
-    const manifestJson = JSON.stringify(manifest, null, 2)
-    const manifestBuffer = Buffer.from(manifestJson, 'utf-8')
-    const manifestHash = crypto.createHash('sha256').update(manifestBuffer).digest('hex')
-    manifest.files[3].sha256 = manifestHash
-    manifest.files[3].bytes = manifestBuffer.length
-
-    // Update archive with correct manifest
-    archive.append(JSON.stringify(manifest, null, 2), { name: `manifest_${packId}.json` })
+    // Generate Evidence Index PDF from manifest
+    let evidenceIndexPdfBuffer: Buffer | null = null
+    let evidenceIndexHash: string | null = null
+    try {
+      const meta = {
+        packId,
+        organizationName: orgData?.name || 'Unknown',
+        generatedBy: userData?.full_name || 'Unknown',
+        generatedByRole: userData?.role || 'Unknown',
+        generatedAt: manifest.generated_at,
+        timeRange: time_range || '30d',
+      }
+      
+      evidenceIndexPdfBuffer = await generateEvidenceIndexPDF(manifest, meta)
+      evidenceIndexHash = crypto.createHash('sha256').update(evidenceIndexPdfBuffer).digest('hex')
+      archive.append(evidenceIndexPdfBuffer, { name: `evidence_index_${packId}.pdf` })
+      
+      // Add evidence index to manifest
+      manifest.files.push({
+        name: `evidence_index_${packId}.pdf`,
+        sha256: evidenceIndexHash,
+        bytes: evidenceIndexPdfBuffer.length,
+      })
+    } catch (err: any) {
+      console.error('Failed to generate Evidence Index PDF for pack:', err)
+      // Continue without index PDF
+    }
 
     // Finalize archive (this starts streaming to response)
     await archive.finalize()
@@ -1558,10 +1697,10 @@ auditRouter.post('/export/pack', authenticate as unknown as express.RequestHandl
           view: view || null,
         },
         file_hashes: {
-          pdf: pdfHash,
-          controls_csv: controlsHash,
-          attestations_csv: attestationsHash,
-          manifest: manifestHash,
+          ledger_pdf: pdfHash,
+          controls_pdf: controlsHash,
+          attestations_pdf: attestationsHash,
+          evidence_index_pdf: evidenceIndexHash,
         },
         counts: {
           ledger_events: events.length,
