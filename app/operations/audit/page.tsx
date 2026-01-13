@@ -35,13 +35,18 @@ import { extractProxyError, formatProxyErrorTitle, logProxyError } from '@/lib/u
 // In local dev: use NEXT_PUBLIC_BACKEND_URL or default to localhost:8080
 // In production: use NEXT_PUBLIC_BACKEND_URL or default to api.riskmate.dev
 function getBackendUrl(): string {
-  // If explicitly set, use it
-  if (process.env.NEXT_PUBLIC_BACKEND_URL) {
-    return process.env.NEXT_PUBLIC_BACKEND_URL
+  // If explicitly set and not empty, use it
+  const envUrl = process.env.NEXT_PUBLIC_BACKEND_URL?.trim()
+  if (envUrl) {
+    return envUrl
   }
   
   // In development, default to local backend
-  if (process.env.NODE_ENV === 'development' || typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+  const isDev = process.env.NODE_ENV === 'development' || 
+                (typeof window !== 'undefined' && window.location.hostname === 'localhost')
+  
+  if (isDev) {
+    // Default to port 8080, but can be overridden via env var
     return 'http://localhost:8080' // Adjust port if your local backend uses a different port
   }
   
@@ -50,6 +55,11 @@ function getBackendUrl(): string {
 }
 
 const BACKEND_URL = getBackendUrl()
+
+// Debug log (only in development)
+if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+  console.log('[Export] Using backend URL:', BACKEND_URL)
+}
 
 interface AuditEvent {
   id: string
