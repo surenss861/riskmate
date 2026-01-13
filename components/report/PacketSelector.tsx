@@ -5,7 +5,7 @@
 
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { PacketType } from '@/lib/utils/packets/types'
 import { PACKETS } from '@/lib/utils/packets/types'
 
@@ -15,14 +15,31 @@ interface PacketSelectorProps {
   isLoading?: boolean
 }
 
+// Default to Client Compliance Report (most comprehensive)
+const DEFAULT_PACKET: PacketType = 'client_compliance'
+
 export function PacketSelector({ onSelect, onCancel, isLoading }: PacketSelectorProps) {
-  const [selectedPacket, setSelectedPacket] = useState<PacketType | null>(null)
+  const [selectedPacket, setSelectedPacket] = useState<PacketType | null>(DEFAULT_PACKET)
 
   const handleConfirm = () => {
     if (selectedPacket) {
       onSelect(selectedPacket)
     }
   }
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onCancel()
+      } else if (e.key === 'Enter' && selectedPacket && !isLoading) {
+        handleConfirm()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [selectedPacket, isLoading, onCancel, onSelect])
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
@@ -101,8 +118,30 @@ export function PacketSelector({ onSelect, onCancel, isLoading }: PacketSelector
           <button
             onClick={handleConfirm}
             disabled={!selectedPacket || isLoading}
-            className="px-4 py-2 bg-[#F97316] text-black font-semibold rounded-lg hover:bg-[#FB923C] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="px-4 py-2 bg-[#F97316] text-black font-semibold rounded-lg hover:bg-[#FB923C] disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
           >
+            {isLoading && (
+              <svg
+                className="animate-spin h-4 w-4 text-black"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+              >
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                />
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                />
+              </svg>
+            )}
             {isLoading ? 'Generating...' : 'Generate Proof Pack'}
           </button>
         </div>
