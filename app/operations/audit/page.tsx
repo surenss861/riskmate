@@ -32,7 +32,24 @@ import { terms } from '@/lib/terms'
 import { extractProxyError, formatProxyErrorTitle, logProxyError } from '@/lib/utils/extractProxyError'
 
 // Backend URL for direct calls (bypasses Vercel timeout)
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://api.riskmate.dev'
+// In local dev: use NEXT_PUBLIC_BACKEND_URL or default to localhost:8080
+// In production: use NEXT_PUBLIC_BACKEND_URL or default to api.riskmate.dev
+function getBackendUrl(): string {
+  // If explicitly set, use it
+  if (process.env.NEXT_PUBLIC_BACKEND_URL) {
+    return process.env.NEXT_PUBLIC_BACKEND_URL
+  }
+  
+  // In development, default to local backend
+  if (process.env.NODE_ENV === 'development' || typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+    return 'http://localhost:8080' // Adjust port if your local backend uses a different port
+  }
+  
+  // In production, default to Railway backend
+  return 'https://api.riskmate.dev'
+}
+
+const BACKEND_URL = getBackendUrl()
 
 interface AuditEvent {
   id: string
