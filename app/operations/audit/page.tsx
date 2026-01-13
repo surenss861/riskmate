@@ -34,11 +34,36 @@ import { extractProxyError, formatProxyErrorTitle, logProxyError } from '@/lib/u
 // Backend URL for direct calls (bypasses Vercel timeout)
 // Defaults to production Railway backend: https://api.riskmate.dev
 // Override with NEXT_PUBLIC_BACKEND_URL env var for local dev (e.g., http://localhost:8080)
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL?.trim() || 'https://api.riskmate.dev'
+function getBackendUrl(): string {
+  const envUrl = process.env.NEXT_PUBLIC_BACKEND_URL?.trim()
+  
+  // Safety: ignore localhost URLs in production (common Vercel env var mistake)
+  const isProduction = typeof window !== 'undefined' && 
+                       !window.location.hostname.includes('localhost') &&
+                       !window.location.hostname.includes('127.0.0.1')
+  
+  if (envUrl) {
+    // In production, reject localhost URLs (they're always wrong)
+    if (isProduction && (envUrl.includes('localhost') || envUrl.includes('127.0.0.1'))) {
+      console.warn('[Export] Ignoring localhost backend URL in production, using production backend')
+      return 'https://api.riskmate.dev'
+    }
+    return envUrl
+  }
+  
+  // Default to production backend
+  return 'https://api.riskmate.dev'
+}
 
-// Debug log (only in development)
-if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
-  console.log('[Export] Using backend URL:', BACKEND_URL)
+const BACKEND_URL = getBackendUrl()
+
+// Debug log (always log in dev, warn in prod if using non-default)
+if (typeof window !== 'undefined') {
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[Export] Using backend URL:', BACKEND_URL)
+  } else if (BACKEND_URL !== 'https://api.riskmate.dev') {
+    console.warn('[Export] Using non-default backend URL:', BACKEND_URL)
+  }
 }
 
 interface AuditEvent {
