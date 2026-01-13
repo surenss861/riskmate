@@ -17,6 +17,10 @@ import { auditApi } from '@/lib/api'
 import { toast } from '@/lib/utils/toast'
 import { AppBackground, AppShell, PageSection, GlassCard, Button, Badge, Select, PageHeader, ErrorToast } from '@/components/shared'
 import { extractProxyError, formatProxyErrorTitle, logProxyError } from '@/lib/utils/extractProxyError'
+import { createSupabaseBrowserClient } from '@/lib/supabase/client'
+
+// Backend URL for direct calls (bypasses Vercel timeout)
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://api.riskmate.dev'
 
 type ReadinessCategory = 'evidence' | 'controls' | 'attestations' | 'incidents' | 'access'
 type ReadinessSeverity = 'critical' | 'material' | 'info'
@@ -757,9 +761,28 @@ export default function AuditReadinessPage() {
                   onClick={async () => {
                     setExportingPack(true)
                     try {
-                      const response = await fetch('/api/audit/export/pack', {
+                      // Get Supabase access token for direct Railway call
+                      const supabase = createSupabaseBrowserClient()
+                      const { data: { session } } = await supabase.auth.getSession()
+                      const token = session?.access_token
+                      
+                      if (!token) {
+                        setErrorToast({
+                          message: 'Unauthorized',
+                          description: 'Please log in to export proof packs',
+                          code: 'UNAUTHORIZED',
+                          hint: 'Your session may have expired. Please refresh the page and try again.',
+                        })
+                        return
+                      }
+                      
+                      // Call Railway directly (bypasses Vercel serverless timeout)
+                      const response = await fetch(`${BACKEND_URL}/api/audit/export/pack`, {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: { 
+                          'Content-Type': 'application/json',
+                          'Authorization': `Bearer ${token}`,
+                        },
                         body: JSON.stringify({ time_range: timeRange }),
                       })
                       
@@ -801,10 +824,22 @@ export default function AuditReadinessPage() {
                       document.body.removeChild(a)
                     } catch (err: any) {
                       console.error('Failed to generate proof pack:', err)
-                      // Fallback error handling for non-Response errors (network errors, etc.)
+                      
+                      // Handle network/connection errors
+                      if (err.name === 'TypeError' && err.message?.includes('fetch')) {
+                        setErrorToast({
+                          message: 'Connection error',
+                          description: 'Unable to reach the backend server. Please check your connection and try again.',
+                          code: 'NETWORK_ERROR',
+                          hint: 'The backend server may be temporarily unavailable. Please try again in a moment.',
+                        })
+                        return
+                      }
+                      
+                      // Fallback error handling for non-Response errors
                       const errorMessage = err.message || 'Failed to generate proof pack'
                       const errorId = err.error_id || err.errorId || err.requestId
-                      const code = err.code
+                      const code = err.code || 'EXPORT_ERROR'
                       const hint = err.support_hint || err.hint || 'Please try again or contact support if this persists.'
                       
                       setErrorToast({

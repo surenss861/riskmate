@@ -31,6 +31,9 @@ import { useSelectedRows } from '@/lib/hooks/useSelectedRows'
 import { terms } from '@/lib/terms'
 import { extractProxyError, formatProxyErrorTitle, logProxyError } from '@/lib/utils/extractProxyError'
 
+// Backend URL for direct calls (bypasses Vercel timeout)
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://api.riskmate.dev'
+
 interface AuditEvent {
   id: string
   event_type: string
@@ -676,7 +679,17 @@ export default function AuditViewPage() {
   // Generate Proof Pack action (using useAction for standardized UX)
   const generatePackAction = useAction(
     async (view?: string) => {
-      const endpoint = '/api/audit/export/pack'
+      // Get Supabase access token for direct Railway call
+      const supabase = createSupabaseBrowserClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+      
+      if (!token) {
+        throw new Error('Unauthorized: Please log in to export proof packs')
+      }
+      
+      // Call Railway directly (bypasses Vercel serverless timeout)
+      const endpoint = `${BACKEND_URL}/api/audit/export/pack`
 
       // Build filter payload (supports all saved view filters)
       const filterPayload: any = {
@@ -699,8 +712,10 @@ export default function AuditViewPage() {
 
       const response = await fetch(endpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
         body: JSON.stringify(filterPayload),
       })
 
