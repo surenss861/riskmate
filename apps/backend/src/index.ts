@@ -72,27 +72,6 @@ const isAllowedOrigin = (origin: string | undefined): boolean => {
   return isDev && origin.startsWith("http://localhost");
 };
 
-// Pre-CORS middleware: block invalid origins with 403 (before CORS middleware runs)
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-
-  // Non-browser requests (no Origin header) should pass
-  if (!origin) {
-    return next();
-  }
-
-  // Check if origin is in allowlist
-  if (!isAllowedOrigin(origin)) {
-    console.warn(`[CORS] Rejected origin: ${origin}`);
-    return res.status(403).json({
-      message: "Not allowed by CORS",
-      code: "CORS_FORBIDDEN",
-    });
-  }
-
-  return next();
-});
-
 // CORS config (shared for both app.use and app.options)
 const corsConfig: cors.CorsOptions = {
   origin: (origin, cb) => {
@@ -106,13 +85,37 @@ const corsConfig: cors.CorsOptions = {
   methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
 };
 
-// CORS middleware (never throws - just sets headers for allowed origins)
-// Blocking is already handled above, so this just sets CORS headers
+// ✅ CORS middleware MUST run first (before any blocking or routes)
+// This ensures CORS headers are set on ALL responses, including errors
 app.use(cors(corsConfig));
 
 // ✅ IMPORTANT: Handle preflight OPTIONS requests for ALL routes
 // This must come after app.use(cors) but before route handlers
 app.options('*', cors(corsConfig));
+
+// Post-CORS middleware: block invalid origins with 403 (AFTER CORS headers are set)
+// This ensures even blocked requests return CORS headers (so browser shows real error, not CORS error)
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+
+  // Non-browser requests (no Origin header) should pass
+  if (!origin) {
+    return next();
+  }
+
+  // Check if origin is in allowlist
+  if (!isAllowedOrigin(origin)) {
+    console.warn(`[CORS] Rejected origin: ${origin}`);
+    // CORS headers are already set by cors() middleware above
+    // This ensures browser sees the real 403 error, not a CORS error
+    return res.status(403).json({
+      message: "Not allowed by CORS",
+      code: "CORS_FORBIDDEN",
+    });
+  }
+
+  return next();
+});
 
 app.use((req, res, next) => {
   res.header("Vary", "Origin");
@@ -145,11 +148,13 @@ app.use("/api/audit", auditRouter);
 app.use("/api/executive", executiveRouter);
 
 // 404 handler
+// CORS headers are already set by cors() middleware, so this response will include them
 app.use((req, res) => {
   res.status(404).json({ message: "Route not found" });
 });
 
 // Error handler
+// CORS headers are already set by cors() middleware, so all error responses will include them
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   const requestId = (req as RequestWithId).requestId || 'unknown';
   const statusCode = err.status || 500;
@@ -182,6 +187,8 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
   
   console.error("Error:", err);
   
+  // CORS headers are already set by cors() middleware above
+  // This ensures 401/403/500 errors all include CORS headers
   res.status(statusCode).json(errorResponse);
 });
 
