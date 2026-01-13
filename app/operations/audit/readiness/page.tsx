@@ -809,6 +809,7 @@ export default function AuditReadinessPage() {
                       }
                       
                       // Call Railway directly (bypasses Vercel serverless timeout)
+                      // NO timeout - ZIP generation can take 60-180 seconds
                       const response = await fetch(`${BACKEND_URL}/api/audit/export/pack`, {
                         method: 'POST',
                         headers: { 
@@ -816,6 +817,7 @@ export default function AuditReadinessPage() {
                           'Authorization': `Bearer ${token}`,
                         },
                         body: JSON.stringify({ time_range: timeRange }),
+                        // No AbortController/signal - let it run as long as needed
                       })
                       
                       if (!response.ok) {
@@ -857,6 +859,17 @@ export default function AuditReadinessPage() {
                     } catch (err: any) {
                       console.error('Failed to generate proof pack:', err)
                       
+                      // Handle aborted requests (user cancellation or timeout)
+                      if (err.name === 'AbortError' || err.message?.includes('aborted')) {
+                        setErrorToast({
+                          message: 'Request cancelled',
+                          description: 'The export request was cancelled or timed out.',
+                          code: 'REQUEST_ABORTED',
+                          hint: 'Please try again. If this persists, the export may be taking longer than expected.',
+                        })
+                        return
+                      }
+                      
                       // Handle network/connection errors
                       if (err.name === 'TypeError' && err.message?.includes('fetch')) {
                         setErrorToast({
@@ -884,6 +897,7 @@ export default function AuditReadinessPage() {
                         },
                       })
                     } finally {
+                      // ✅ CRITICAL: Always reset loading state, even if request was aborted
                       setExportingPack(false)
                     }
                   }}
