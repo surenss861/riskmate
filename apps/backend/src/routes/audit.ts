@@ -1587,23 +1587,16 @@ auditRouter.post('/export/pack', authenticate as unknown as express.RequestHandl
       timestamp: new Date().toISOString() 
     })
     
-    // If response headers haven't been sent yet, send error response
-    // If headers were sent (streaming started), just end the response
-    if (!res.headersSent) {
-      res.status(500).json({
-        message: 'Failed to generate proof pack',
-        code: 'EXPORT_ERROR',
-        error_id: requestId,
-      })
-    } else {
-      // Streaming already started - abort archive and end response
+    // ✅ CRITICAL: If streaming already started, you cannot send JSON headers/body
+    // Only abort archive and end the response stream
+    if (res.headersSent) {
       if (archive) {
         archive.abort()
       }
-      res.end()
+      return res.end()
     }
-    
-    // Determine error code and message based on error type
+
+    // Only here (headers not sent) can we build and send JSON error response
     let errorCode = 'AUDIT_EXPORT_ERROR'
     let userMessage = 'Failed to generate proof pack'
     let supportHint = 'Proof pack generation failed. Please try again or contact support with the error ID.'
@@ -1635,9 +1628,21 @@ auditRouter.post('/export/pack', authenticate as unknown as express.RequestHandl
       statusCode: 500,
       supportHint,
     })
+    
     res.setHeader('X-Error-ID', errorId)
-    logErrorForSupport(500, errorCode, requestId, authReq.user?.organization_id, errorResponse.message, errorResponse.internal_message, errorResponse.category, errorResponse.severity, '/api/audit/export/pack')
-    res.status(500).json(errorResponse)
+    logErrorForSupport(
+      500, 
+      errorCode, 
+      requestId, 
+      orgId, 
+      errorResponse.message, 
+      errorResponse.internal_message, 
+      errorResponse.category, 
+      errorResponse.severity, 
+      '/api/audit/export/pack'
+    )
+    
+    return res.status(500).json(errorResponse)
   }
 })
 

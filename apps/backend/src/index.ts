@@ -45,6 +45,19 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
+// Version endpoint - confirms which code is actually running
+app.get("/__version", (_req, res) => {
+  res.json({
+    commit: process.env.RAILWAY_GIT_COMMIT_SHA || "dev",
+    deploy: process.env.RAILWAY_DEPLOYMENT_ID || "local",
+    marker: "c638206 / 2D92D8D-LAZY-ADMIN-v3",
+    cors_config: {
+      allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Idempotency-Key'],
+      exposedHeaders: ['Content-Disposition', 'X-Error-ID', 'X-Request-ID'],
+    },
+  });
+});
+
 // Production allowed origins (from env var, comma-separated)
 const envAllowedOrigins = (process.env.ALLOWED_ORIGINS || "")
   .split(",")
