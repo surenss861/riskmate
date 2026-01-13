@@ -1213,6 +1213,10 @@ auditRouter.post('/export/attestations', authenticate as unknown as express.Requ
 auditRouter.post('/export/pack', authenticate as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
   const authReq = req as AuthenticatedRequest & RequestWithId
   const requestId = authReq.requestId || 'unknown'
+  const orgId = authReq.user?.organization_id || 'unknown'
+  const startTime = Date.now()
+  
+  console.log('[EXPORT_PACK] start', { requestId, orgId, timestamp: new Date().toISOString() })
   
   try {
     const { organization_id, id: userId } = authReq.user
@@ -1497,6 +1501,10 @@ auditRouter.post('/export/pack', authenticate as unknown as express.RequestHandl
     res.setHeader('Content-Type', 'application/zip')
     res.setHeader('Content-Disposition', `attachment; filename="audit-pack-${packId}.zip"`)
     res.send(zipBuffer)
+    
+    // Log completion with timing
+    const duration = Date.now() - startTime
+    console.log('[EXPORT_PACK] done', { requestId, orgId, duration_ms: duration, timestamp: new Date().toISOString() })
 
     // Store export pack metadata in ledger (immutable receipt per Compliance Ledger Contract)
     // Event: proof_pack.generated (per contract v1.0)
@@ -1546,6 +1554,16 @@ auditRouter.post('/export/pack', authenticate as unknown as express.RequestHandl
       },
     })
   } catch (err: any) {
+    // Log error with timing
+    const duration = Date.now() - startTime
+    console.error('[EXPORT_PACK] error', { 
+      requestId, 
+      orgId, 
+      duration_ms: duration, 
+      error: err?.message || String(err),
+      timestamp: new Date().toISOString() 
+    })
+    
     // Determine error code and message based on error type
     let errorCode = 'AUDIT_EXPORT_ERROR'
     let userMessage = 'Failed to generate proof pack'
