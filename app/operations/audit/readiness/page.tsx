@@ -20,29 +20,9 @@ import { extractProxyError, formatProxyErrorTitle, logProxyError } from '@/lib/u
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
 // Backend URL for direct calls (bypasses Vercel timeout)
-// In local dev: use NEXT_PUBLIC_BACKEND_URL or default to localhost:8080
-// In production: use NEXT_PUBLIC_BACKEND_URL or default to api.riskmate.dev
-function getBackendUrl(): string {
-  // If explicitly set and not empty, use it
-  const envUrl = process.env.NEXT_PUBLIC_BACKEND_URL?.trim()
-  if (envUrl) {
-    return envUrl
-  }
-  
-  // In development, default to local backend
-  const isDev = process.env.NODE_ENV === 'development' || 
-                (typeof window !== 'undefined' && window.location.hostname === 'localhost')
-  
-  if (isDev) {
-    // Default to port 8080, but can be overridden via env var
-    return 'http://localhost:8080' // Adjust port if your local backend uses a different port
-  }
-  
-  // In production, default to Railway backend
-  return 'https://api.riskmate.dev'
-}
-
-const BACKEND_URL = getBackendUrl()
+// Defaults to production Railway backend: https://api.riskmate.dev
+// Override with NEXT_PUBLIC_BACKEND_URL env var for local dev (e.g., http://localhost:8080)
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL?.trim() || 'https://api.riskmate.dev'
 
 // Debug log (only in development)
 if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
