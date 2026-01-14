@@ -4,27 +4,33 @@ struct ContentView: View {
     @StateObject private var sessionManager = SessionManager.shared
     
     var body: some View {
-        Group {
-            if sessionManager.isAuthenticated {
-                TabView {
-                    OperationsView()
-                        .tabItem {
-                            Label("Operations", systemImage: "briefcase")
-                        }
-                    
-                    AuditView()
-                        .tabItem {
-                            Label("Audit", systemImage: "doc.text")
-                        }
-                    
-                    AccountView()
-                        .tabItem {
-                            Label("Account", systemImage: "person.circle")
-                        }
+        ZStack {
+            // Ensure background is always applied
+            DesignSystem.Colors.background
+                .ignoresSafeArea(.all)
+            
+            Group {
+                if sessionManager.isAuthenticated {
+                    TabView {
+                        OperationsView()
+                            .tabItem {
+                                Label("Operations", systemImage: "briefcase")
+                            }
+                        
+                        AuditView()
+                            .tabItem {
+                                Label("Audit", systemImage: "doc.text")
+                            }
+                        
+                        AccountView()
+                            .tabItem {
+                                Label("Account", systemImage: "person.circle")
+                            }
+                    }
+                    .preferredColorScheme(.dark)
+                } else {
+                    AuthView()
                 }
-                .preferredColorScheme(.dark)
-            } else {
-                AuthView()
             }
         }
         .task {

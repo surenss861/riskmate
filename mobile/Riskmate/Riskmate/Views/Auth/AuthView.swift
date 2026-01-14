@@ -11,9 +11,9 @@ struct AuthView: View {
     
     var body: some View {
         ZStack {
-            // Background
+            // Background - must be first and ignore safe area
             DesignSystem.Colors.background
-                .ignoresSafeArea()
+                .ignoresSafeArea(.all)
             
             ScrollView {
                 VStack(spacing: 0) {

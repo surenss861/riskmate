@@ -4,12 +4,12 @@ import SwiftUI
 struct DesignSystem {
     // Colors
     struct Colors {
-        static let background = Color(hex: "0A0A0A") // Minimal black
-        static let surface = Color(hex: "121212") // Card background
-        static let accent = Color(hex: "F97316") // Orange
-        static let accentLight = Color(hex: "FB923C") // Light orange
+        static let background = Color(hex: "#0A0A0A") // Minimal black
+        static let surface = Color(hex: "#121212") // Card background
+        static let accent = Color(hex: "#F97316") // Orange
+        static let accentLight = Color(hex: "#FB923C") // Light orange
         static let textPrimary = Color.white
-        static let textSecondary = Color(hex: "A1A1A1") // Muted gray
+        static let textSecondary = Color(hex: "#A1A1A1") // Muted gray
         static let border = Color.white.opacity(0.1)
         static let error = Color.red.opacity(0.4)
         static let errorBackground = Color.red.opacity(0.1)
@@ -43,27 +43,32 @@ struct DesignSystem {
 }
 
 extension Color {
-    init(hex: String) {
-        let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
-        var int: UInt64 = 0
-        Scanner(string: hex).scanHexInt64(&int)
-        let a, r, g, b: UInt64
-        switch hex.count {
-        case 3: // RGB (12-bit)
-            (a, r, g, b) = (255, (int >> 8) * 17, (int >> 4 & 0xF) * 17, (int & 0xF) * 17)
-        case 6: // RGB (24-bit)
-            (a, r, g, b) = (255, int >> 16, int >> 8 & 0xFF, int & 0xFF)
-        case 8: // ARGB (32-bit)
-            (a, r, g, b) = (int >> 24, int >> 16 & 0xFF, int >> 8 & 0xFF, int & 0xFF)
-        default:
-            (a, r, g, b) = (255, 0, 0, 0)
+    init(hex: String, alpha: Double = 1.0) {
+        var hex = hex.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        // Strip # prefix if present
+        if hex.hasPrefix("#") {
+            hex.removeFirst()
         }
-        self.init(
-            .sRGB,
-            red: Double(r) / 255,
-            green: Double(g) / 255,
-            blue: Double(b) / 255,
-            opacity: Double(a) / 255
-        )
+        
+        var rgb: UInt64 = 0
+        Scanner(string: hex).scanHexInt64(&rgb)
+        
+        let r, g, b: Double
+        if hex.count == 6 {
+            r = Double((rgb & 0xFF0000) >> 16) / 255.0
+            g = Double((rgb & 0x00FF00) >> 8) / 255.0
+            b = Double(rgb & 0x0000FF) / 255.0
+            self.init(.sRGB, red: r, green: g, blue: b, opacity: alpha)
+        } else if hex.count == 8 {
+            // ARGB format
+            let a = Double((rgb & 0xFF000000) >> 24) / 255.0
+            r = Double((rgb & 0x00FF0000) >> 16) / 255.0
+            g = Double((rgb & 0x0000FF00) >> 8) / 255.0
+            b = Double(rgb & 0x000000FF) / 255.0
+            self.init(.sRGB, red: r, green: g, blue: b, opacity: a)
+        } else {
+            // Fallback to black so it never becomes invisible
+            self.init(.sRGB, red: 0, green: 0, blue: 0, opacity: 1)
+        }
     }
 }
