@@ -134,12 +134,10 @@ export async function generateLedgerExportPDF(options: LedgerExportOptions): Pro
       }
 
       drawSectionTitle(doc, 'Evidence Reference')
-      // CRITICAL: Use safeTextForPdf() which sanitizes AND validates right before render
-      // This ensures no broken glyphs (like ￾) can slip through
-      const evidenceNote = safeTextForPdf(
-        'Note: Evidence files are auth-gated. Use the Work Record IDs below to retrieve evidence via the Compliance Ledger interface.',
-        'Evidence Reference note'
-      )
+      // CRITICAL: Hardcoded clean constant + safeTextForPdf() validation
+      // This makes it impossible for broken glyphs to slip through
+      const EVIDENCE_NOTE = 'Note: Evidence files are auth-gated. Use the Work Record IDs below to retrieve evidence via the Compliance Ledger interface.'
+      const evidenceNote = safeTextForPdf(EVIDENCE_NOTE, 'Ledger Evidence Reference note')
       doc
         .fillColor(STYLES.colors.secondaryText)
         .fontSize(STYLES.sizes.body)

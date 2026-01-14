@@ -165,11 +165,12 @@ export function truncateText(text: string | undefined | null, maxLength: number)
 
 /**
  * Hard-fail guard: throws if text contains forbidden characters
- * Use this in dev/test to catch regressions immediately
+ * CRITICAL: Always runs in production for PDF exports - we cannot ship corrupted PDFs
  */
 export function assertNoBadChars(text: string, context?: string): void {
-  if (process.env.NODE_ENV === 'production') {
-    // Skip in production to avoid performance overhead
+  // DO NOT skip in production - PDF exports must be audit-grade clean
+  // If you need to disable for performance, use PDF_STRICT=0 env var instead
+  if (process.env.PDF_STRICT === '0') {
     return
   }
   
@@ -197,44 +198,58 @@ export function assertNoBadChars(text: string, context?: string): void {
     errors.push('Private-use area characters (U+E000-U+F8FF)')
   }
   
+  // Check for Unicode Control, Format, and Private-use categories (using property escapes)
+  if (/\p{Cc}|\p{Cf}|\p{Co}/u.test(text)) {
+    errors.push('Unicode Control/Format/Private-use category characters')
+  }
+  
   if (errors.length > 0) {
-    const contextMsg = context ? ` in ${context}` : ''
-    throw new Error(`Forbidden characters detected${contextMsg}: ${errors.join('; ')}\nText: ${JSON.stringify(text)}`)
+    const contextMsg = context ? ` (${context})` : ''
+    throw new Error(`PDF text forbidden chars${contextMsg}: ${errors.join(', ')}\nText: ${JSON.stringify(text)}`)
   }
 }
 
+/**
+ * Bulletproof text sanitization using Unicode property escapes and noncharacter filtering
+ * Removes all Control, Format, and Private-use characters, plus Unicode noncharacters
+ */
 export function sanitizeText(text: string | undefined | null): string {
   if (!text) return ''
   
-  // Remove ASCII control characters (\u0000-\u001F, \u007F)
-  let sanitized = text.replace(/[\x00-\x1F\x7F]/g, '')
+  // Step 1: Normalize first (NFKC reduces weird forms and compatibility characters)
+  let sanitized = text.normalize('NFKC')
   
-  // Remove or replace problematic Unicode characters
-  // Replace zero-width and invisible characters
-  sanitized = sanitized.replace(/[\u200B-\u200D\uFEFF]/g, '')
+  // Step 2: Remove Unicode Control (Cc), Format (Cf), and Private-use (Co) categories
+  // This catches the broken glyph "￾" and similar issues
+  sanitized = sanitized.replace(/\p{Cc}|\p{Cf}|\p{Co}/gu, '')
   
-  // Remove Unicode replacement characters (U+FFFD, U+FFFE, U+FFFF) - these indicate broken glyphs
-  // Replace with nothing (removes the character) - this will leave "authgated" which is acceptable
-  sanitized = sanitized.replace(/[\uFFFD-\uFFFF]/g, '')
+  // Step 3: Remove Unicode noncharacters explicitly
+  // Noncharacters include: FDD0-FDEF (in Arabic Presentation Forms-B) and any codepoint ending with FFFE/FFFF
+  sanitized = [...sanitized].filter((ch) => {
+    const cp = ch.codePointAt(0)
+    if (cp === undefined) return false
+    
+    // Remove noncharacters in the FDD0-FDEF range
+    if (cp >= 0xFDD0 && cp <= 0xFDEF) return false
+    
+    // Remove any codepoint ending with FFFE or FFFF (noncharacters)
+    const low = cp & 0xffff
+    if (low === 0xfffe || low === 0xffff) return false
+    
+    return true
+  }).join('')
   
-  // If we have "authgated" (missing hyphen due to broken glyph removal), we could normalize it
-  // But for audit safety, we'll leave it as-is since the broken glyph is gone
-  // The hyphen was part of the original text, so if it's missing, that's a data issue, not a sanitization issue
-  
-  // Replace common problematic Unicode separators with normal spaces
+  // Step 4: Replace common problematic Unicode separators with normal spaces
   sanitized = sanitized.replace(/[\u2028\u2029]/g, ' ')
   
-  // Normalize weird dashes/hyphens to standard hyphen
+  // Step 5: Normalize weird dashes/hyphens to standard hyphen
   sanitized = sanitized.replace(/[\u2010-\u2015\u2212]/g, '-')
   
-  // Normalize quotes to standard quotes
+  // Step 6: Normalize quotes to standard quotes
   sanitized = sanitized.replace(/[\u2018\u2019]/g, "'")
   sanitized = sanitized.replace(/[\u201C\u201D]/g, '"')
   
-  // Remove private-use area characters (U+E000-U+F8FF) - often used for broken font substitutions
-  sanitized = sanitized.replace(/[\uE000-\uF8FF]/g, '')
-  
-  // Collapse repeated whitespace
+  // Step 7: Collapse repeated whitespace
   sanitized = sanitized.replace(/\s+/g, ' ')
   
   return sanitized.trim()
