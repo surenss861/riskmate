@@ -279,11 +279,13 @@ export async function generateEvidenceIndexPDF(
     })
 
     // KPI row
+    const payloadFileCount = manifest.files?.length || 0
+    const totalFileCount = payloadFileCount + 1 // +1 for this index PDF
     drawKpiRow(doc, [
       { label: 'Ledger Events', value: manifest.counts?.ledger_events || 0 },
       { label: 'Controls', value: manifest.counts?.controls || 0 },
       { label: 'Attestations', value: manifest.counts?.attestations || 0 },
-      { label: 'Files', value: manifest.files?.length || 0, highlight: true },
+      { label: 'Total PDFs', value: totalFileCount, highlight: true },
     ])
 
     // Contents Summary
@@ -292,12 +294,21 @@ export async function generateEvidenceIndexPDF(
       .fillColor(STYLES.colors.secondaryText)
       .fontSize(STYLES.sizes.body)
       .font(STYLES.fonts.body)
-      .text(`This proof pack contains ${manifest.files?.length || 0} file(s) with integrity verification hashes.`, { align: 'left' })
+      .text(`This proof pack contains ${totalFileCount} PDF file(s):`, { align: 'left' })
+    doc.moveDown(0.3)
+    doc
+      .fontSize(STYLES.sizes.body)
+      .font(STYLES.fonts.body)
+      .text(`• ${payloadFileCount} payload PDF(s) with integrity verification hashes`, { align: 'left', indent: 20 })
+    doc
+      .fontSize(STYLES.sizes.body)
+      .font(STYLES.fonts.body)
+      .text(`• 1 index PDF (this file)`, { align: 'left', indent: 20 })
 
     doc.moveDown(1)
 
     // Files in Pack (short hashes in table)
-    drawSectionTitle(doc, 'Files in Pack')
+    drawSectionTitle(doc, 'Payload PDFs (Integrity Verified)')
 
     if (manifest.files && Array.isArray(manifest.files) && manifest.files.length > 0) {
       const tableRows = manifest.files.map((file: any) => [
@@ -318,18 +329,35 @@ export async function generateEvidenceIndexPDF(
         fontSize: 8,
       })
 
+      // Add index PDF entry (not self-hashed)
+      doc.moveDown(0.5)
+      doc
+        .fillColor(STYLES.colors.secondaryText)
+        .fontSize(STYLES.sizes.body)
+        .font(STYLES.fonts.body)
+        .text('Index PDF:', { align: 'left' })
+      doc
+        .fontSize(STYLES.sizes.body)
+        .font(STYLES.fonts.body)
+        .text(`  • evidence_index_${meta.packId}.pdf (included, not self-hashed)`, { align: 'left', indent: 20 })
+
       // Full Hashes Appendix (on new page if needed)
       if (doc.y > doc.page.height - 200) {
         doc.addPage()
         initPage(doc)
       }
 
-      drawSectionTitle(doc, 'Full SHA-256 Hashes (Integrity Verification)')
+      drawSectionTitle(doc, 'Full SHA-256 Hashes (Payload Integrity Verification)')
       doc
         .fillColor(STYLES.colors.secondaryText)
         .fontSize(STYLES.sizes.caption)
         .font('Courier') // Monospace for hashes
-        .text('Use these full hashes to verify file integrity:', { align: 'left' })
+        .text('Use these full hashes to verify payload PDF integrity:', { align: 'left' })
+      doc.moveDown(0.3)
+      doc
+        .fontSize(STYLES.sizes.caption)
+        .font(STYLES.fonts.body)
+        .text('Note: The index PDF is included in the ZIP but not self-hashed (to avoid infinite loop).', { align: 'left' })
 
       doc.moveDown(0.5)
 
@@ -350,8 +378,8 @@ export async function generateEvidenceIndexPDF(
       })
     } else {
       drawEmptyState(doc, {
-        title: 'No Files in Pack',
-        message: 'This proof pack contains no files.',
+        title: 'No Payload Files in Pack',
+        message: 'This proof pack contains no payload PDFs.',
       })
     }
 

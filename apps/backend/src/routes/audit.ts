@@ -1588,7 +1588,25 @@ auditRouter.post('/export/pack', authenticate as unknown as express.RequestHandl
     // Calculate PDF hashes
     const pdfHash = pdfBuffer ? crypto.createHash('sha256').update(pdfBuffer).digest('hex') : null
 
-    // Generate manifest with counts and hashes
+    // Build manifest with payload PDFs (3 files: ledger, controls, attestations)
+    const payloadFiles = [
+      {
+        name: `ledger_export_${packId}.pdf`,
+        sha256: pdfHash || '',
+        bytes: pdfBuffer?.length || 0,
+      },
+      ...(controlsPdfBuffer ? [{
+        name: `controls_${packId}.pdf`,
+        sha256: controlsHash || '',
+        bytes: controlsPdfBuffer.length,
+      }] : []),
+      ...(attestationsPdfBuffer ? [{
+        name: `attestations_${packId}.pdf`,
+        sha256: attestationsHash || '',
+        bytes: attestationsPdfBuffer.length,
+      }] : []),
+    ]
+
     const manifest = {
       pack_id: packId,
       generated_at: new Date().toISOString(),
@@ -1614,26 +1632,13 @@ auditRouter.post('/export/pack', authenticate as unknown as express.RequestHandl
         controls: controlsCount,
         attestations: attestationsCount,
       },
-      files: [
-        {
-          name: `ledger_export_${packId}.pdf`,
-          sha256: pdfHash || '',
-          bytes: pdfBuffer?.length || 0,
-        },
-        ...(controlsPdfBuffer ? [{
-          name: `controls_${packId}.pdf`,
-          sha256: controlsHash || '',
-          bytes: controlsPdfBuffer.length,
-        }] : []),
-        ...(attestationsPdfBuffer ? [{
-          name: `attestations_${packId}.pdf`,
-          sha256: attestationsHash || '',
-          bytes: attestationsPdfBuffer.length,
-        }] : []),
-      ],
+      files: payloadFiles, // Only payload PDFs (for integrity verification)
+      // Note: evidence_index is included in ZIP but not in files array
+      // (to avoid self-hashing infinite loop)
     }
 
     // Generate Evidence Index PDF from manifest
+    // The index will show: 3 payload PDFs + 1 index PDF = 4 total
     let evidenceIndexPdfBuffer: Buffer | null = null
     let evidenceIndexHash: string | null = null
     try {
@@ -1648,14 +1653,9 @@ auditRouter.post('/export/pack', authenticate as unknown as express.RequestHandl
       
       evidenceIndexPdfBuffer = await generateEvidenceIndexPDF(manifest, meta)
       evidenceIndexHash = crypto.createHash('sha256').update(evidenceIndexPdfBuffer).digest('hex')
-      safeAppend(evidenceIndexPdfBuffer, `evidence_index_${packId}.pdf`)
       
-      // Add evidence index to manifest
-      manifest.files.push({
-        name: `evidence_index_${packId}.pdf`,
-        sha256: evidenceIndexHash,
-        bytes: evidenceIndexPdfBuffer.length,
-      })
+      // Append evidence index to ZIP (4th file)
+      safeAppend(evidenceIndexPdfBuffer, `evidence_index_${packId}.pdf`)
     } catch (err: any) {
       console.error('Failed to generate Evidence Index PDF for pack:', err)
       // Continue without index PDF
