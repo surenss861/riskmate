@@ -37,7 +37,11 @@ const mockEvents = [
 const mockFilters = {
   time_range: '30d',
   job_id: 'job-123',
+  site_id: null,
   category: 'security',
+  actor_id: null,
+  severity: null,
+  outcome: null,
 }
 
 async function extractTextFromPdf(pdfBuffer: Buffer): Promise<string> {
