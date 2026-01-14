@@ -208,7 +208,18 @@ function testFilterCounting() {
   console.log('Testing Filter Counting...')
   
   const count = countActiveFilters(mockFilters)
-  console.assert(count === 2, `Expected 2 active filters, got ${count}`) // time_range + job_id + category = 3, but let's check
+  // mockFilters has: time_range='30d', job_id='job-123', category='security' (3 active filters)
+  // Empty/null/undefined values are filtered out by countActiveFilters()
+  console.assert(count === 3, `Expected 3 active filters, got ${count}`)
+  
+  // Test with empty filters
+  const emptyCount = countActiveFilters({})
+  console.assert(emptyCount === 0, `Expected 0 active filters for empty object, got ${emptyCount}`)
+  
+  // Test with null/undefined values (should be filtered out)
+  const partialFilters = { time_range: '30d', job_id: null, category: undefined, status: '' }
+  const partialCount = countActiveFilters(partialFilters)
+  console.assert(partialCount === 1, `Expected 1 active filter (only time_range), got ${partialCount}`)
   
   console.log('✅ Filter Counting passed')
 }

@@ -11,7 +11,7 @@ import {
   finalizePdf,
 } from './proofPackTheme'
 import type { PackContext, LedgerEvent, PackFilters } from './packContext'
-import { sanitizeText, formatDateTime, safeTextForPdf } from './normalize'
+import { sanitizeText, formatDateTime, safeTextForPdf, countActiveFilters } from './normalize'
 
 interface AuditLogEntry {
   id: string
@@ -79,7 +79,7 @@ export async function generateLedgerExportPDF(options: LedgerExportOptions): Pro
 
     // KPI row
     const filteredEvents = events.slice(0, 1000) // Limit for performance
-    const filterCount = Object.keys(filters || {}).length
+    const filterCount = countActiveFilters(filters || {})
     drawKpiRow(doc, [
       { label: 'Total Events', value: events.length, highlight: true },
       { label: 'Displayed', value: filteredEvents.length },
@@ -134,14 +134,15 @@ export async function generateLedgerExportPDF(options: LedgerExportOptions): Pro
       }
 
       drawSectionTitle(doc, 'Evidence Reference')
-      // CRITICAL: Hardcoded clean constant + safeTextForPdf() validation
-      // This makes it impossible for broken glyphs to slip through
+      // CRITICAL: Hardcoded clean constant + safeTextForPdf() validation + Helvetica font
+      // Helvetica is a built-in PDF font with stable text mapping, preventing font encoding issues
+      // This makes it impossible for broken glyphs to slip through at font/text-encoding time
       const EVIDENCE_NOTE = 'Note: Evidence files are auth-gated. Use the Work Record IDs below to retrieve evidence via the Compliance Ledger interface.'
       const evidenceNote = safeTextForPdf(EVIDENCE_NOTE, 'Ledger Evidence Reference note')
       doc
         .fillColor(STYLES.colors.secondaryText)
         .fontSize(STYLES.sizes.body)
-        .font(STYLES.fonts.body)
+        .font('Helvetica') // Built-in font with stable text mapping - prevents font encoding issues
         .text(evidenceNote, {
           align: 'left',
           indent: 20,
@@ -153,7 +154,7 @@ export async function generateLedgerExportPDF(options: LedgerExportOptions): Pro
       if (uniqueJobs.size > 0) {
         doc
           .fontSize(STYLES.sizes.body)
-          .font(STYLES.fonts.body)
+          .font('Helvetica') // Built-in font with stable text mapping - prevents font encoding issues
           .fillColor(STYLES.colors.primaryText)
 
         Array.from(uniqueJobs).slice(0, 50).forEach((jobId) => {
