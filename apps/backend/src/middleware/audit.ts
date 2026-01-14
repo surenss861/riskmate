@@ -126,23 +126,35 @@ export async function recordAuditLog(entry: AuditLogEntry): Promise<AuditWriteRe
 
     // Get actor info for normalized fields
     const { data: actorData } = entry.actorId
-      ? await supabase.from('users').select('email, role').eq('id', entry.actorId).single()
+      ? await supabase.from('users').select('email, role, full_name').eq('id', entry.actorId).single()
       : { data: null }
+
+    // Helper to safely coerce values to objects for spreading
+    const asObject = (v: unknown): Record<string, unknown> =>
+      v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {}
 
     // Build metadata with all extra fields (endpoint, request_id, ip, user_agent, etc.)
     // This prevents schema mismatches - everything goes into the JSONB metadata column
-    const enrichedMetadata = {
-      ...(payload ?? {}),
+    const payloadObj = asObject(payload)
+    const entryMetaObj = asObject(entry.metadata)
+    
+    const enrichedMetadata: Record<string, unknown> = {
+      ...payloadObj,
+      ...entryMetaObj,
       // Add request context to metadata (not as top-level columns)
-      ...(entry.metadata?.request_id && { request_id: entry.metadata.request_id }),
-      ...(entry.metadata?.endpoint && { endpoint: entry.metadata.endpoint }),
-      ...(entry.metadata?.ip && { ip: entry.metadata.ip }),
-      ...(entry.metadata?.user_agent && { user_agent: entry.metadata.user_agent }),
-      ...(entry.metadata?.related_event_id && { related_event_id: entry.metadata.related_event_id }),
+      ...(entry.metadata && typeof entry.metadata === 'object' && !Array.isArray(entry.metadata) && {
+        ...(entry.metadata.request_id && { request_id: entry.metadata.request_id }),
+        ...(entry.metadata.endpoint && { endpoint: entry.metadata.endpoint }),
+        ...(entry.metadata.ip && { ip: entry.metadata.ip }),
+        ...(entry.metadata.user_agent && { user_agent: entry.metadata.user_agent }),
+        ...(entry.metadata.related_event_id && { related_event_id: entry.metadata.related_event_id }),
+      }),
       subject: {
         type: entry.targetType,
         id: entry.targetId,
-        ...(entry.metadata?.related_event_id && { related_event_id: entry.metadata.related_event_id }),
+        ...(entry.metadata && typeof entry.metadata === 'object' && !Array.isArray(entry.metadata) && entry.metadata.related_event_id
+          ? { related_event_id: entry.metadata.related_event_id }
+          : {}),
       },
     }
 
@@ -167,7 +179,9 @@ export async function recordAuditLog(entry: AuditLogEntry): Promise<AuditWriteRe
       // Enriched actor fields (from enterprise upgrade migration)
       actor_email: actorData?.email || null,
       actor_role: actorData?.role || null,
-      actor_name: actorData?.full_name || null,
+      actor_name: (actorData && typeof actorData === 'object' && 'full_name' in actorData && typeof actorData.full_name === 'string')
+        ? actorData.full_name
+        : (actorData?.email || null),
       summary: summary,
     }
 
