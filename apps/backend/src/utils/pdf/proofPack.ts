@@ -12,6 +12,15 @@ import {
   initPage,
   finalizePdf,
 } from './proofPackTheme'
+import {
+  calculateControlKPIs,
+  sortControls,
+  formatDate,
+  truncateText,
+  calculateAttestationKPIs,
+  sortAttestations,
+  formatDateTime,
+} from './normalize'
 
 // Control row can be any object with these fields (from CSV parsing)
 interface ControlRow {
@@ -97,26 +106,16 @@ export async function generateControlsPDF(
       timeRange: meta.timeRange,
     })
 
-    // KPI row with enhanced metrics
-    const completedCount = controls.filter(c => (c.status_at_export || '') === 'completed').length
-    const pendingCount = controls.filter(c => (c.status_at_export || '') === 'pending').length
-    const now = new Date()
-    const overdueCount = controls.filter(c => {
-      if ((c.status_at_export || '') === 'completed') return false
-      if (!c.due_date) return false
-      return new Date(c.due_date) < now
-    }).length
-    const highSeverityCount = controls.filter(c => {
-      const severity = (c.severity || '').toLowerCase()
-      return severity === 'high' || severity === 'critical'
-    }).length
+    // KPI row with enhanced metrics (using normalization layer)
+    const kpis = calculateControlKPIs(controls)
+    const sortedControls = sortControls(controls)
     
     drawKpiRow(doc, [
-      { label: 'Total Controls', value: controls.length, highlight: true },
-      { label: 'Completed', value: completedCount },
-      { label: 'Pending', value: pendingCount },
-      { label: 'Overdue', value: overdueCount },
-      { label: 'High Severity', value: highSeverityCount },
+      { label: 'Total Controls', value: kpis.total, highlight: true },
+      { label: 'Completed', value: kpis.completed },
+      { label: 'Pending', value: kpis.pending },
+      { label: 'Overdue', value: kpis.overdue },
+      { label: 'High Severity', value: kpis.highSeverity },
     ])
 
     // Empty state or table
@@ -134,39 +133,15 @@ export async function generateControlsPDF(
     } else {
       drawSectionTitle(doc, 'Controls Data')
 
-      // Sort controls: overdue first, then high severity, then by due date ascending
-      const sortedControls = [...controls].sort((a, b) => {
-        const aStatus = a.status_at_export || ''
-        const bStatus = b.status_at_export || ''
-        const aDueDate = a.due_date ? new Date(a.due_date).getTime() : Infinity
-        const bDueDate = b.due_date ? new Date(b.due_date).getTime() : Infinity
-        const aSeverity = (a.severity || '').toLowerCase()
-        const bSeverity = (b.severity || '').toLowerCase()
-        const now = Date.now()
-        
-        // Overdue first (not completed + past due)
-        const aOverdue = aStatus !== 'completed' && aDueDate < now ? 1 : 0
-        const bOverdue = bStatus !== 'completed' && bDueDate < now ? 1 : 0
-        if (aOverdue !== bOverdue) return bOverdue - aOverdue
-        
-        // High severity next
-        const aHigh = (aSeverity === 'high' || aSeverity === 'critical') ? 1 : 0
-        const bHigh = (bSeverity === 'high' || bSeverity === 'critical') ? 1 : 0
-        if (aHigh !== bHigh) return bHigh - aHigh
-        
-        // Then by due date ascending
-        return aDueDate - bDueDate
-      })
-
-      // Prepare table data
+      // Prepare table data (using normalized/sorted controls from above)
       const tableRows = sortedControls.map((control) => [
-        (control.control_id || '').substring(0, 16),
-        control.title || 'Untitled',
+        truncateText(control.control_id, 16),
+        truncateText(control.title || 'Untitled', 40),
         control.status_at_export || 'unknown',
         control.severity || 'info',
-        control.owner_email || 'Unassigned',
-        control.due_date ? new Date(control.due_date).toLocaleDateString() : 'N/A',
-        control.updated_at ? new Date(control.updated_at).toLocaleDateString() : 'N/A',
+        truncateText(control.owner_email || 'Unassigned', 30),
+        formatDate(control.due_date, 'short'),
+        formatDate(control.updated_at, 'short'),
       ])
 
       drawTable(doc, {
@@ -230,17 +205,14 @@ export async function generateAttestationsPDF(
       timeRange: meta.timeRange,
     })
 
-    // KPI row
-    const completedCount = attestations.filter(a => {
-      const status = (a.status_at_export || '').toLowerCase()
-      return status === 'signed' || status === 'completed'
-    }).length
-    const pendingCount = attestations.length - completedCount
+    // KPI row (using normalization layer)
+    const kpis = calculateAttestationKPIs(attestations)
+    const sortedAttestations = sortAttestations(attestations)
     
     drawKpiRow(doc, [
-      { label: 'Total Attestations', value: attestations.length, highlight: true },
-      { label: 'Completed', value: completedCount },
-      { label: 'Pending', value: pendingCount },
+      { label: 'Total Attestations', value: kpis.total, highlight: true },
+      { label: 'Completed', value: kpis.completed },
+      { label: 'Pending', value: kpis.pending },
     ])
 
     // Empty state or table
@@ -258,31 +230,13 @@ export async function generateAttestationsPDF(
     } else {
       drawSectionTitle(doc, 'Attestations Data')
 
-      // Sort attestations: pending first, then most recent completed
-      const sortedAttestations = [...attestations].sort((a, b) => {
-        const aStatus = (a.status_at_export || '').toLowerCase()
-        const bStatus = (b.status_at_export || '').toLowerCase()
-        const aCompleted = aStatus === 'signed' || aStatus === 'completed'
-        const bCompleted = bStatus === 'signed' || bStatus === 'completed'
-        
-        // Pending first
-        if (aCompleted !== bCompleted) {
-          return aCompleted ? 1 : -1
-        }
-        
-        // Then by most recent first
-        const aTime = a.attested_at ? new Date(a.attested_at).getTime() : 0
-        const bTime = b.attested_at ? new Date(b.attested_at).getTime() : 0
-        return bTime - aTime
-      })
-
-      // Prepare table data
+      // Prepare table data (using normalized/sorted attestations from above)
       const tableRows = sortedAttestations.map((attestation) => [
-        (attestation.attestation_id || '').substring(0, 16),
-        attestation.title || 'Untitled',
+        truncateText(attestation.attestation_id, 16),
+        truncateText(attestation.title || 'Untitled', 40),
         attestation.status_at_export || 'unknown',
-        attestation.attested_by_email || 'Unknown',
-        attestation.attested_at ? new Date(attestation.attested_at).toLocaleString() : 'N/A',
+        truncateText(attestation.attested_by_email || 'Unknown', 30),
+        formatDateTime(attestation.attested_at),
       ])
 
       drawTable(doc, {
