@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// RiskMate text field - matches web app input styling (light fill, dark text)
+/// RiskMate text field - clean iOS feel (still matches web brightness)
 struct RMTextField: View {
     let title: String
     @Binding var text: String
@@ -8,13 +8,17 @@ struct RMTextField: View {
     var keyboardType: UIKeyboardType = .default
     var textContentType: UITextContentType?
     
+    @FocusState private var isFocused: Bool
+    
     var body: some View {
         Group {
             if isSecure {
-                SecureField(title, text: $text)
+                SecureField("", text: $text, prompt: Text(title).foregroundStyle(Color.black.opacity(0.45)))
+                    .focused($isFocused)
                     .textContentType(textContentType ?? .password)
             } else {
-                TextField(title, text: $text)
+                TextField("", text: $text, prompt: Text(title).foregroundStyle(Color.black.opacity(0.45)))
+                    .focused($isFocused)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .keyboardType(keyboardType)
@@ -22,17 +26,18 @@ struct RMTextField: View {
             }
         }
         .font(.system(size: 16, weight: .medium))
-        .foregroundColor(Color(hex: "#0A0A0A"))
+        .foregroundStyle(Color(hex: "#0A0A0A"))
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color(hex: "#F2F4F7")) // web-like light input
+                .fill(Color(hex: "#F2F4F7"))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(Color.black.opacity(0.08), lineWidth: 1)
+                .stroke(isFocused ? Color(hex: "#F97316").opacity(0.55) : Color.black.opacity(0.08), lineWidth: 1.2)
         )
+        .animation(.easeOut(duration: 0.16), value: isFocused)
     }
 }
 
