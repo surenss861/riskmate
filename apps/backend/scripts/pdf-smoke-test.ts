@@ -175,13 +175,16 @@ function validateActiveFiltersCount(text: string, expectedCount: number): boolea
     return false
   }
   
-  // Look for number near "Active Filters" (within next 200 chars, accounting for line breaks)
-  // In table layouts, it's often: "Active Filters\n3" or "Active Filters\n\n3"
-  const searchWindow = text.substring(activeIndex, activeIndex + 200)
+  // Find the text after "Active Filters" and before the next label (Hash Verified)
+  const afterActive = text.substring(activeIndex + 'active filters'.length)
+  const hashIndex = afterActive.toLowerCase().indexOf('hash verified')
+  const searchWindow = hashIndex > 0 ? afterActive.substring(0, hashIndex) : afterActive.substring(0, 100)
+  
+  // Look for number in this window (should be the Active Filters count)
   const numberPatterns = [
-    /Active\s+Filters[:\s]+(\d+)/i,  // Same line: "Active Filters: 3"
-    /Active\s+Filters\s*\n\s*(\d+)/i, // Next line: "Active Filters\n3"
-    /Active\s+Filters\s+(\d+)/i,     // Space separated: "Active Filters 3"
+    /[:\s]+(\d+)/,  // After colon or space: ": 3" or " 3"
+    /\n\s*(\d+)/,   // On next line: "\n3"
+    /\s+(\d+)/,     // Space separated: " 3"
   ]
   
   let extractedCount: number | null = null
@@ -193,26 +196,23 @@ function validateActiveFiltersCount(text: string, expectedCount: number): boolea
     }
   }
   
-  // Fallback: find any number near "Active Filters" (for table layouts where label and value are separated)
+  // Fallback: find first number in the window (should be Active Filters count)
   if (extractedCount === null) {
-    // In KPI table, order is usually: Total Events, Displayed, Active Filters, Hash Verified
-    // So Active Filters is usually the 3rd number after "Active Filters"
-    const afterActive = searchWindow.substring(searchWindow.toLowerCase().indexOf('active filters') + 'active filters'.length)
-    const numbersAfter = afterActive.match(/\d+/g)
-    if (numbersAfter && numbersAfter.length > 0) {
-      // Take the first number after "Active Filters" (should be the count)
-      extractedCount = parseInt(numbersAfter[0], 10)
+    const numbersInWindow = searchWindow.match(/\d+/g)
+    if (numbersInWindow && numbersInWindow.length > 0) {
+      extractedCount = parseInt(numbersInWindow[0], 10)
     }
   }
   
   if (extractedCount === null) {
     console.warn('Could not find Active Filters count in extracted text')
-    console.warn('Text snippet around "Active Filters":', searchWindow.substring(0, 150))
+    console.warn('Text snippet after "Active Filters":', searchWindow.substring(0, 150))
     return false
   }
   
   if (extractedCount !== expectedCount) {
     console.error(`Active Filters count mismatch: expected ${expectedCount}, extracted ${extractedCount}`)
+    console.warn('Text snippet after "Active Filters":', searchWindow.substring(0, 150))
     return false
   }
   
