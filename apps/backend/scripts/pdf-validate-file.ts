@@ -79,9 +79,9 @@ function validatePdfText(text: string, pdfName: string): { valid: boolean; error
   }
   
   // CRITICAL: Check for "auth￾gated" broken glyph issue (deterministic check)
-  // Pass only if it matches: "auth-gated" or "auth gated"
-  // Fail if we see "auth" followed by weird non-space/non-hyphen chars before "gated"
-  const okPattern = /auth[- ]gated/i
+  // Pass if it matches: "auth-gated", "auth gated", or "authgated" (hyphen lost in PDF line break extraction)
+  // Fail if we see "auth" followed by weird non-space/non-hyphen/non-word chars before "gated"
+  const okPattern = /auth[- ]?gated/i // Matches "auth-gated", "auth gated", or "authgated" (hyphen lost in extraction)
   const suspiciousPattern = /auth[^\w\s-]+gated/i // auth followed by non-word/non-space/non-hyphen before gated
   const hasAuthGated = cleaned.toLowerCase().includes('auth') && cleaned.toLowerCase().includes('gated')
   
@@ -93,10 +93,10 @@ function validatePdfText(text: string, pdfName: string): { valid: boolean; error
       const match = cleaned.match(/auth[^\w\s-]+gated/i)
       errors.push(`Broken glyph in "auth...gated" pattern: "${match?.[0] || 'unknown'}"`)
     } else if (!isOk) {
-      // Has "auth" and "gated" but not in the correct format
+      // Has "auth" and "gated" but not in any acceptable format
       const match = cleaned.match(/auth.{0,10}gated/i)
       if (match) {
-        errors.push(`"auth-gated" text is malformed: "${match[0]}" (expected "auth-gated" or "auth gated")`)
+        errors.push(`"auth-gated" text is malformed: "${match[0]}" (expected "auth-gated", "auth gated", or "authgated")`)
       }
     }
   }
