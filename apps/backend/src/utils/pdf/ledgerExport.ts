@@ -11,7 +11,7 @@ import {
   finalizePdf,
 } from './proofPackTheme'
 import type { PackContext, LedgerEvent, PackFilters } from './packContext'
-import { sanitizeText, formatDateTime } from './normalize'
+import { sanitizeText, formatDateTime, safeTextForPdf } from './normalize'
 
 interface AuditLogEntry {
   id: string
@@ -134,8 +134,12 @@ export async function generateLedgerExportPDF(options: LedgerExportOptions): Pro
       }
 
       drawSectionTitle(doc, 'Evidence Reference')
-      // Sanitize right before doc.text() to prevent any control characters or broken glyphs
-      const evidenceNote = sanitizeText('Note: Evidence files are auth-gated. Use the Work Record IDs below to retrieve evidence via the Compliance Ledger interface.')
+      // CRITICAL: Use safeTextForPdf() which sanitizes AND validates right before render
+      // This ensures no broken glyphs (like ￾) can slip through
+      const evidenceNote = safeTextForPdf(
+        'Note: Evidence files are auth-gated. Use the Work Record IDs below to retrieve evidence via the Compliance Ledger interface.',
+        'Evidence Reference note'
+      )
       doc
         .fillColor(STYLES.colors.secondaryText)
         .fontSize(STYLES.sizes.body)
@@ -157,7 +161,10 @@ export async function generateLedgerExportPDF(options: LedgerExportOptions): Pro
         Array.from(uniqueJobs).slice(0, 50).forEach((jobId) => {
           const event = events.find(e => e.job_id === jobId)
           const jobTitle = event?.job_title ? sanitizeText(event.job_title) : ''
-          const text = sanitizeText(`• Work Record ID: ${jobId}${jobTitle ? ` (${jobTitle})` : ''}`)
+          const text = safeTextForPdf(
+            `• Work Record ID: ${jobId}${jobTitle ? ` (${jobTitle})` : ''}`,
+            `Work Record ID ${jobId}`
+          )
           doc.text(text, {
             align: 'left',
             indent: 20,

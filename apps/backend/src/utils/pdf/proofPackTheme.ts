@@ -2,7 +2,7 @@ import PDFDocument from 'pdfkit'
 import type PDFKit from 'pdfkit'
 import { STYLES } from './styles'
 import { addWatermark } from './helpers'
-import { sanitizeText } from './normalize'
+import { sanitizeText, safeTextForPdf } from './normalize'
 
 interface HeaderOptions {
   title: string
@@ -168,10 +168,10 @@ export function drawKpiRow(doc: PDFKit.PDFDocument, stats: KPIRow[]): void {
       .fillColor(STYLES.colors.secondaryText)
       .fontSize(STYLES.sizes.caption)
       .font(STYLES.fonts.body)
-      .text(sanitizeText(stat.label), x + 8, startY + 6, { width: tileWidth - 16, align: 'left' })
+      .text(safeTextForPdf(stat.label, `KPI label: ${stat.label}`), x + 8, startY + 6, { width: tileWidth - 16, align: 'left' })
 
     // Value (sanitize to prevent control characters - especially important for string values)
-    const valueText = typeof stat.value === 'string' ? sanitizeText(stat.value) : String(stat.value)
+    const valueText = typeof stat.value === 'string' ? safeTextForPdf(stat.value, `KPI value: ${stat.label}`) : String(stat.value)
     doc
       .fillColor(stat.highlight ? STYLES.colors.accent : STYLES.colors.primaryText)
       .fontSize(STYLES.sizes.body)
@@ -248,7 +248,8 @@ export function drawTable(
     let x = margin
     normalizedColumns.forEach((col, colIndex) => {
       const cellValue = row[colIndex] ?? ''
-      const text = sanitizeText(String(cellValue)).substring(0, 100) // Truncate long values (sanitize first)
+      // CRITICAL: Sanitize first, then truncate, then validate
+      const text = safeTextForPdf(String(cellValue), `Table cell [${colIndex}]`).substring(0, 100)
 
       doc.text(text, x, y, {
         width: col.width,
@@ -341,7 +342,7 @@ export function drawEmptyState(
     if (filterText) {
       doc
         .fontSize(STYLES.sizes.caption)
-        .text(sanitizeText(`Applied filters: ${filterText}`), margin + 16, cardY + 70, {
+        .text(safeTextForPdf(`Applied filters: ${filterText}`, 'Empty state filters'), margin + 16, cardY + 70, {
           width: cardWidth - 32,
           align: 'left',
         })
@@ -354,7 +355,7 @@ export function drawEmptyState(
       .fillColor(STYLES.colors.accent)
       .fontSize(STYLES.sizes.caption)
       .font(STYLES.fonts.body)
-      .text(sanitizeText(options.actionHint), margin + 16, cardY + 90, {
+      .text(safeTextForPdf(options.actionHint, 'Empty state actionHint'), margin + 16, cardY + 90, {
         width: cardWidth - 32,
         align: 'left',
       })
