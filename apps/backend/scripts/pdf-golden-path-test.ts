@@ -259,12 +259,14 @@ async function runGoldenPathTest() {
     
     // Step 2: Generate Evidence Index PDF
     console.log('\n📄 Generating Evidence Index PDF...')
-    const evidenceIndexPdf = await generateEvidenceIndexPDF({
+    const packContext = {
       packId: FIXTURE_PACK_ID,
       organizationName: FIXTURE_ORG_NAME,
       generatedBy: FIXTURE_GENERATED_BY,
       generatedByRole: FIXTURE_GENERATED_BY_ROLE,
       filters: FIXTURE_FILTERS,
+    }
+    const evidenceIndexPdf = await generateEvidenceIndexPDF(packContext, {
       payloadFileCount: 3, // Ledger, Controls, Attestations
       payloadFiles: [
         { name: 'ledger_export', hash: 'abc123' },
@@ -299,12 +301,7 @@ async function runGoldenPathTest() {
     
     // Step 3: Generate Controls PDF
     console.log('\n📄 Generating Controls PDF...')
-    const controlsPdf = await generateControlsPDF({
-      packId: FIXTURE_PACK_ID,
-      organizationName: FIXTURE_ORG_NAME,
-      generatedBy: FIXTURE_GENERATED_BY,
-      generatedByRole: FIXTURE_GENERATED_BY_ROLE,
-      filters: FIXTURE_FILTERS,
+    const controlsPdf = await generateControlsPDF(packContext, {
       controls: FIXTURE_CONTROLS,
     })
     const controlsText = extractTextFromPdf(controlsPdf)
@@ -323,12 +320,7 @@ async function runGoldenPathTest() {
     
     // Step 4: Generate Attestations PDF
     console.log('\n📄 Generating Attestations PDF...')
-    const attestationsPdf = await generateAttestationsPDF({
-      packId: FIXTURE_PACK_ID,
-      organizationName: FIXTURE_ORG_NAME,
-      generatedBy: FIXTURE_GENERATED_BY,
-      generatedByRole: FIXTURE_GENERATED_BY_ROLE,
-      filters: FIXTURE_FILTERS,
+    const attestationsPdf = await generateAttestationsPDF(packContext, {
       attestations: FIXTURE_ATTESTATIONS,
     })
     const attestationsText = extractTextFromPdf(attestationsPdf)
