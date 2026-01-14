@@ -173,6 +173,9 @@ export function sanitizeText(text: string | undefined | null): string {
   // Replace zero-width and invisible characters
   sanitized = sanitized.replace(/[\u200B-\u200D\uFEFF]/g, '')
   
+  // Remove Unicode replacement characters (U+FFFD, U+FFFE, U+FFFF) - these indicate broken glyphs
+  sanitized = sanitized.replace(/[\uFFFD-\uFFFF]/g, '')
+  
   // Replace common problematic Unicode separators with normal spaces
   sanitized = sanitized.replace(/[\u2028\u2029]/g, ' ')
   
@@ -182,6 +185,9 @@ export function sanitizeText(text: string | undefined | null): string {
   // Normalize quotes to standard quotes
   sanitized = sanitized.replace(/[\u2018\u2019]/g, "'")
   sanitized = sanitized.replace(/[\u201C\u201D]/g, '"')
+  
+  // Remove private-use area characters (U+E000-U+F8FF) - often used for broken font substitutions
+  sanitized = sanitized.replace(/[\uE000-\uF8FF]/g, '')
   
   // Collapse repeated whitespace
   sanitized = sanitized.replace(/\s+/g, ' ')

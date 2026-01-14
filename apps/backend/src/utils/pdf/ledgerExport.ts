@@ -134,11 +134,13 @@ export async function generateLedgerExportPDF(options: LedgerExportOptions): Pro
       }
 
       drawSectionTitle(doc, 'Evidence Reference')
+      // Sanitize right before doc.text() to prevent any control characters or broken glyphs
+      const evidenceNote = sanitizeText('Note: Evidence files are auth-gated. Use the Work Record IDs below to retrieve evidence via the Compliance Ledger interface.')
       doc
         .fillColor(STYLES.colors.secondaryText)
         .fontSize(STYLES.sizes.body)
         .font(STYLES.fonts.body)
-        .text(sanitizeText('Note: Evidence files are auth-gated. Use the Work Record IDs below to retrieve evidence via the Compliance Ledger interface.'), {
+        .text(evidenceNote, {
           align: 'left',
           indent: 20,
         })

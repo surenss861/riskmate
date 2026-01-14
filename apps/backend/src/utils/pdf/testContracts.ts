@@ -308,6 +308,33 @@ function testNoControlCharacters() {
   console.assert(!stillHasControlChars, 'Sanitization should remove control character \\u0005')
   console.assert(sanitizedProblematic === 'Hash Verified', `Expected "Hash Verified", got "${sanitizedProblematic}"`)
   
+  // Test the "auth￾gated" broken glyph case (U+FFFE or similar replacement character)
+  const brokenGlyphText = 'Note: Evidence files are auth￾gated. Use the Work Record IDs below to retrieve evidence via the Compliance Ledger interface.'
+  const sanitizedBrokenGlyph = sanitizeText(brokenGlyphText)
+  const hasBrokenGlyph = /[\uFFFD\uFFFE\uFFFF]/.test(sanitizedBrokenGlyph)
+  console.assert(!hasBrokenGlyph, 'Evidence reference text contains replacement/broken glyph characters after sanitization')
+  // Should normalize to "auth-gated" or "auth gated"
+  const expectedNormalized = sanitizedBrokenGlyph.includes('auth-gated') || sanitizedBrokenGlyph.includes('auth gated')
+  console.assert(expectedNormalized, `Expected "auth-gated" or "auth gated", got "${sanitizedBrokenGlyph.substring(sanitizedBrokenGlyph.indexOf('auth'), sanitizedBrokenGlyph.indexOf('auth') + 15)}"`)
+  
+  // Test with various broken Unicode characters that might appear
+  const unicodeVariants = [
+    'auth￾gated', // U+FFFE (replacement character)
+    'auth\uFFFDgated', // U+FFFD (replacement character)
+    'auth\u200Bgated', // Zero-width space
+    'auth\uFEFFgated', // Zero-width no-break space
+  ]
+  
+  unicodeVariants.forEach((variant) => {
+    const sanitized = sanitizeText(variant)
+    const hasControlChars = /[\x00-\x1F\x7F]/.test(sanitized)
+    const hasBrokenGlyphs = /[\uFFFD\uFFFE\uFFFF]/.test(sanitized)
+    const hasZeroWidth = /[\u200B-\u200D\uFEFF]/.test(sanitized)
+    console.assert(!hasControlChars, `Variant "${variant}" still contains control characters after sanitization`)
+    console.assert(!hasBrokenGlyphs, `Variant "${variant}" still contains broken glyph characters after sanitization`)
+    console.assert(!hasZeroWidth, `Variant "${variant}" still contains zero-width characters after sanitization`)
+  })
+  
   console.log('✅ No Control Characters test passed')
 }
 
