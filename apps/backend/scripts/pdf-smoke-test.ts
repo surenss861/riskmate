@@ -168,26 +168,46 @@ function validatePdfText(text: string): { valid: boolean; errors: string[] } {
 }
 
 function validateActiveFiltersCount(text: string, expectedCount: number): boolean {
-  // Look for "Active Filters" line in the text (flexible matching for PDF extraction quirks)
-  // Try multiple patterns: "Active Filters: 3", "Active Filters 3", "ActiveFilters3", etc.
-  const patterns = [
-    /Active\s+Filters[:\s]+(\d+)/i,
-    /ActiveFilters[:\s]+(\d+)/i,
-    /Active\s+Filters\s*(\d+)/i,
+  // Look for "Active Filters" in the text (PDF extraction may put label and value on separate lines)
+  const activeIndex = text.toLowerCase().indexOf('active filters')
+  if (activeIndex === -1) {
+    console.warn('Could not find "Active Filters" in extracted text')
+    return false
+  }
+  
+  // Look for number near "Active Filters" (within next 200 chars, accounting for line breaks)
+  // In table layouts, it's often: "Active Filters\n3" or "Active Filters\n\n3"
+  const searchWindow = text.substring(activeIndex, activeIndex + 200)
+  const numberPatterns = [
+    /Active\s+Filters[:\s]+(\d+)/i,  // Same line: "Active Filters: 3"
+    /Active\s+Filters\s*\n\s*(\d+)/i, // Next line: "Active Filters\n3"
+    /Active\s+Filters\s+(\d+)/i,     // Space separated: "Active Filters 3"
   ]
   
   let extractedCount: number | null = null
-  for (const pattern of patterns) {
-    const match = text.match(pattern)
+  for (const pattern of numberPatterns) {
+    const match = searchWindow.match(pattern)
     if (match) {
       extractedCount = parseInt(match[1], 10)
       break
     }
   }
   
+  // Fallback: find any number near "Active Filters" (for table layouts where label and value are separated)
   if (extractedCount === null) {
-    console.warn('Could not find "Active Filters" line in extracted text')
-    console.warn('Text snippet around "Active":', text.substring(Math.max(0, text.indexOf('Active') - 20), text.indexOf('Active') + 100))
+    // In KPI table, order is usually: Total Events, Displayed, Active Filters, Hash Verified
+    // So Active Filters is usually the 3rd number after "Active Filters"
+    const afterActive = searchWindow.substring(searchWindow.toLowerCase().indexOf('active filters') + 'active filters'.length)
+    const numbersAfter = afterActive.match(/\d+/g)
+    if (numbersAfter && numbersAfter.length > 0) {
+      // Take the first number after "Active Filters" (should be the count)
+      extractedCount = parseInt(numbersAfter[0], 10)
+    }
+  }
+  
+  if (extractedCount === null) {
+    console.warn('Could not find Active Filters count in extracted text')
+    console.warn('Text snippet around "Active Filters":', searchWindow.substring(0, 150))
     return false
   }
   
