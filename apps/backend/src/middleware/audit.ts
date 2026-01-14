@@ -138,25 +138,28 @@ export async function recordAuditLog(entry: AuditLogEntry): Promise<AuditWriteRe
     const payloadObj = asObject(payload)
     const entryMetaObj = asObject(entry.metadata)
     
+    // Build subject object safely
+    const subjectObj: Record<string, unknown> = {
+      type: entry.targetType,
+      id: entry.targetId,
+    }
+    if (entryMetaObj.related_event_id) {
+      subjectObj.related_event_id = entryMetaObj.related_event_id
+    }
+    
+    // Build enriched metadata object
     const enrichedMetadata: Record<string, unknown> = {
       ...payloadObj,
       ...entryMetaObj,
-      // Add request context to metadata (not as top-level columns)
-      ...(entry.metadata && typeof entry.metadata === 'object' && !Array.isArray(entry.metadata) && {
-        ...(entry.metadata.request_id && { request_id: entry.metadata.request_id }),
-        ...(entry.metadata.endpoint && { endpoint: entry.metadata.endpoint }),
-        ...(entry.metadata.ip && { ip: entry.metadata.ip }),
-        ...(entry.metadata.user_agent && { user_agent: entry.metadata.user_agent }),
-        ...(entry.metadata.related_event_id && { related_event_id: entry.metadata.related_event_id }),
-      }),
-      subject: {
-        type: entry.targetType,
-        id: entry.targetId,
-        ...(entry.metadata && typeof entry.metadata === 'object' && !Array.isArray(entry.metadata) && entry.metadata.related_event_id
-          ? { related_event_id: entry.metadata.related_event_id }
-          : {}),
-      },
+      subject: subjectObj,
     }
+    
+    // Add request context fields if they exist (not as top-level columns)
+    if (entryMetaObj.request_id) enrichedMetadata.request_id = entryMetaObj.request_id
+    if (entryMetaObj.endpoint) enrichedMetadata.endpoint = entryMetaObj.endpoint
+    if (entryMetaObj.ip) enrichedMetadata.ip = entryMetaObj.ip
+    if (entryMetaObj.user_agent) enrichedMetadata.user_agent = entryMetaObj.user_agent
+    if (entryMetaObj.related_event_id) enrichedMetadata.related_event_id = entryMetaObj.related_event_id
 
     // Only insert columns that actually exist in the audit_logs table
     // Extra fields go into metadata JSONB column
