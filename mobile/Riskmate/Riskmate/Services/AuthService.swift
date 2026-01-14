@@ -1,4 +1,6 @@
 import Foundation
+// Try: import Supabase
+// If that fails, the package isn't added correctly
 import Supabase
 
 /// Wraps Supabase authentication
