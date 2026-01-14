@@ -5,8 +5,12 @@ export const runtime = 'nodejs'
 
 export async function PATCH(request: NextRequest) {
   try {
+    // Read request body before proxying (NextRequest body is a stream, can only be read once)
+    const body = await request.json()
+    
     return await proxyToBackend(request, '/api/account/organization', {
       method: 'PATCH',
+      body, // Forward the parsed body
     })
   } catch (error: any) {
     console.error('Organization update proxy error:', error)
