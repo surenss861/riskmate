@@ -309,35 +309,39 @@ function testNoControlCharacters() {
   console.assert(sanitizedProblematic === 'Hash Verified', `Expected "Hash Verified", got "${sanitizedProblematic}"`)
   
   // Test the "auth￾gated" broken glyph case (U+FFFE or similar replacement character)
-  const brokenGlyphText = 'Note: Evidence files are auth￾gated. Use the Work Record IDs below to retrieve evidence via the Compliance Ledger interface.'
+  // Use explicit Unicode escapes to avoid encoding issues
+  const brokenGlyphText = 'Note: Evidence files are auth\uFFFEgated. Use the Work Record IDs below to retrieve evidence via the Compliance Ledger interface.'
   const sanitizedBrokenGlyph = sanitizeText(brokenGlyphText)
-  const hasBrokenGlyph = /[\uFFFD-\uFFFF]/.test(sanitizedBrokenGlyph)
+  
+  // Check for broken glyphs using Unicode property escapes (more comprehensive)
+  const hasBrokenGlyph = /\p{Cc}|\p{Cf}|\p{Co}/u.test(sanitizedBrokenGlyph) || /[\uFFFD-\uFFFF]/.test(sanitizedBrokenGlyph)
   console.assert(!hasBrokenGlyph, 'Evidence reference text contains replacement/broken glyph characters after sanitization')
-  // Should normalize to "auth-gated" (the broken glyph should be removed, leaving "authgated" which we can detect)
-  // The key is that it should NOT contain the broken glyph character
+  
+  // Should normalize to "auth-gated" or "authgated" (the broken glyph should be removed)
   const authIndex = sanitizedBrokenGlyph.indexOf('auth')
   if (authIndex >= 0) {
     const authSection = sanitizedBrokenGlyph.substring(authIndex, authIndex + 20)
-    const hasBrokenChar = /[\uFFFD-\uFFFF]/.test(authSection)
+    const hasBrokenChar = /\p{Cc}|\p{Cf}|\p{Co}/u.test(authSection) || /[\uFFFD-\uFFFF]/.test(authSection)
     console.assert(!hasBrokenChar, `Auth section still contains broken glyph: "${authSection}"`)
   }
   
   // Test with various broken Unicode characters that might appear
   const unicodeVariants = [
-    'auth￾gated', // U+FFFE (replacement character)
-    'auth\uFFFDgated', // U+FFFD (replacement character)
-    'auth\u200Bgated', // Zero-width space
-    'auth\uFEFFgated', // Zero-width no-break space
+    { text: 'auth\uFFFEgated', name: 'U+FFFE (noncharacter)' },
+    { text: 'auth\uFFFDgated', name: 'U+FFFD (replacement character)' },
+    { text: 'auth\u200Bgated', name: 'U+200B (zero-width space)' },
+    { text: 'auth\uFEFFgated', name: 'U+FEFF (zero-width no-break space)' },
+    { text: 'auth\uFDD0gated', name: 'U+FDD0 (noncharacter in FDD0-FDEF range)' },
   ]
   
   unicodeVariants.forEach((variant) => {
-    const sanitized = sanitizeText(variant)
+    const sanitized = sanitizeText(variant.text)
     const hasControlChars = /[\x00-\x1F\x7F]/.test(sanitized)
-    const hasBrokenGlyphs = /[\uFFFD\uFFFE\uFFFF]/.test(sanitized)
+    const hasBrokenGlyphs = /\p{Cc}|\p{Cf}|\p{Co}/u.test(sanitized) || /[\uFFFD-\uFFFF]/.test(sanitized)
     const hasZeroWidth = /[\u200B-\u200D\uFEFF]/.test(sanitized)
-    console.assert(!hasControlChars, `Variant "${variant}" still contains control characters after sanitization`)
-    console.assert(!hasBrokenGlyphs, `Variant "${variant}" still contains broken glyph characters after sanitization`)
-    console.assert(!hasZeroWidth, `Variant "${variant}" still contains zero-width characters after sanitization`)
+    console.assert(!hasControlChars, `Variant "${variant.name}" still contains control characters after sanitization`)
+    console.assert(!hasBrokenGlyphs, `Variant "${variant.name}" still contains broken glyph characters after sanitization`)
+    console.assert(!hasZeroWidth, `Variant "${variant.name}" still contains zero-width characters after sanitization`)
   })
   
   console.log('✅ No Control Characters test passed')
