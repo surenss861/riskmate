@@ -8,17 +8,33 @@ This guide explains how to validate real pack PDFs and diagnose issues like inco
 
 ### Validate a Real Pack PDF
 
-```bash
-# Single PDF
-pnpm --filter @riskmate/backend validate:pdf path/to/ledger_export_PACK-*.pdf
+**Important:** zsh requires quotes around globs, or use full paths.
 
-# Multiple PDFs
+```bash
+# Option 1: Use full paths (most reliable)
 pnpm --filter @riskmate/backend validate:pdf \
-  ledger_export_PACK-*.pdf \
-  evidence_index_PACK-*.pdf \
-  controls_PACK-*.pdf \
-  attestations_PACK-*.pdf
+  ~/Downloads/ledger_export_PACK-35CB8B07C6A2.pdf \
+  ~/Downloads/evidence_index_PACK-35CB8B07C6A.pdf
+
+# Option 2: Copy PDFs to project root first, then use relative paths
+cp ~/Downloads/*PACK*.pdf .
+pnpm --filter @riskmate/backend validate:pdf \
+  ledger_export_PACK-35CB8B07C6A2.pdf \
+  evidence_index_PACK-35CB8B07C6A.pdf
+
+# Option 3: Quote globs (zsh-safe)
+pnpm --filter @riskmate/backend validate:pdf \
+  "~/Downloads/ledger_export_PACK-*.pdf" \
+  "~/Downloads/evidence_index_PACK-*.pdf"
+
+# Option 4: Find PDFs first (if you're not sure where they are)
+find ~/Downloads ~/Desktop . -name "*PACK*.pdf" -type f 2>/dev/null
 ```
+
+**Troubleshooting:**
+- If you get "no matches found": The PDFs aren't in that location. Use `find` to locate them first.
+- If globs don't work: Use full file paths instead of globs.
+- To test the validator: Run `pnpm test:pdf-golden` first to generate test PDFs.
 
 ## Diagnosing Active Filters Count Issues
 
