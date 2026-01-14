@@ -51,14 +51,6 @@ interface AttestationRow {
   [key: string]: any // Allow additional fields from CSV
 }
 
-interface ProofPackMeta {
-  packId: string
-  organizationName: string
-  generatedBy: string
-  generatedByRole: string
-  generatedAt: string
-  timeRange: string
-}
 
 /**
  * Generate Controls PDF from controls data
@@ -97,13 +89,26 @@ export async function generateControlsPDF(
       timeRange: meta.timeRange,
     })
 
-    // KPI row
+    // KPI row with enhanced metrics
     const completedCount = controls.filter(c => (c.status_at_export || '') === 'completed').length
     const pendingCount = controls.filter(c => (c.status_at_export || '') === 'pending').length
+    const now = new Date()
+    const overdueCount = controls.filter(c => {
+      if ((c.status_at_export || '') === 'completed') return false
+      if (!c.due_date) return false
+      return new Date(c.due_date) < now
+    }).length
+    const highSeverityCount = controls.filter(c => {
+      const severity = (c.severity || '').toLowerCase()
+      return severity === 'high' || severity === 'critical'
+    }).length
+    
     drawKpiRow(doc, [
       { label: 'Total Controls', value: controls.length, highlight: true },
       { label: 'Completed', value: completedCount },
       { label: 'Pending', value: pendingCount },
+      { label: 'Overdue', value: overdueCount },
+      { label: 'High Severity', value: highSeverityCount },
     ])
 
     // Empty state or table
@@ -113,30 +118,58 @@ export async function generateControlsPDF(
         message: 'No controls were found for this proof pack with the applied filters.',
         filters: {
           time_range: meta.timeRange,
+          job_id: meta.packId.includes('JOB') ? 'filtered' : undefined,
+          site_id: meta.packId.includes('SITE') ? 'filtered' : undefined,
         },
         actionHint: 'Try adjusting the time range or filters, or add controls to jobs in the system.',
       })
     } else {
       drawSectionTitle(doc, 'Controls Data')
 
+      // Sort controls: overdue first, then high severity, then by due date ascending
+      const sortedControls = [...controls].sort((a, b) => {
+        const aStatus = a.status_at_export || ''
+        const bStatus = b.status_at_export || ''
+        const aDueDate = a.due_date ? new Date(a.due_date).getTime() : Infinity
+        const bDueDate = b.due_date ? new Date(b.due_date).getTime() : Infinity
+        const aSeverity = (a.severity || '').toLowerCase()
+        const bSeverity = (b.severity || '').toLowerCase()
+        const now = Date.now()
+        
+        // Overdue first (not completed + past due)
+        const aOverdue = aStatus !== 'completed' && aDueDate < now ? 1 : 0
+        const bOverdue = bStatus !== 'completed' && bDueDate < now ? 1 : 0
+        if (aOverdue !== bOverdue) return bOverdue - aOverdue
+        
+        // High severity next
+        const aHigh = (aSeverity === 'high' || aSeverity === 'critical') ? 1 : 0
+        const bHigh = (bSeverity === 'high' || bSeverity === 'critical') ? 1 : 0
+        if (aHigh !== bHigh) return bHigh - aHigh
+        
+        // Then by due date ascending
+        return aDueDate - bDueDate
+      })
+
       // Prepare table data
-      const tableRows = controls.map((control) => [
+      const tableRows = sortedControls.map((control) => [
         (control.control_id || '').substring(0, 16),
         control.title || 'Untitled',
         control.status_at_export || 'unknown',
         control.severity || 'info',
         control.owner_email || 'Unassigned',
         control.due_date ? new Date(control.due_date).toLocaleDateString() : 'N/A',
+        control.updated_at ? new Date(control.updated_at).toLocaleDateString() : 'N/A',
       ])
 
       drawTable(doc, {
         columns: [
-          { header: 'Control ID', width: 80 },
-          { header: 'Title', width: 120 },
-          { header: 'Status', width: 70 },
-          { header: 'Severity', width: 70 },
-          { header: 'Owner', width: 100 },
-          { header: 'Due Date', width: 90 },
+          { header: 'Control ID', width: 70 },
+          { header: 'Title', width: 110 },
+          { header: 'Status', width: 60 },
+          { header: 'Severity', width: 60 },
+          { header: 'Owner', width: 90 },
+          { header: 'Due Date', width: 80 },
+          { header: 'Last Updated', width: 80 },
         ],
         rows: tableRows,
         zebraStriping: true,
@@ -190,11 +223,16 @@ export async function generateAttestationsPDF(
     })
 
     // KPI row
-    const signedCount = attestations.filter(a => (a.status_at_export || '') === 'signed').length
+    const completedCount = attestations.filter(a => {
+      const status = (a.status_at_export || '').toLowerCase()
+      return status === 'signed' || status === 'completed'
+    }).length
+    const pendingCount = attestations.length - completedCount
+    
     drawKpiRow(doc, [
       { label: 'Total Attestations', value: attestations.length, highlight: true },
-      { label: 'Signed', value: signedCount },
-      { label: 'Pending', value: attestations.length - signedCount },
+      { label: 'Completed', value: completedCount },
+      { label: 'Pending', value: pendingCount },
     ])
 
     // Empty state or table
@@ -204,14 +242,34 @@ export async function generateAttestationsPDF(
         message: 'No attestations were found for this proof pack with the applied filters.',
         filters: {
           time_range: meta.timeRange,
+          job_id: meta.packId.includes('JOB') ? 'filtered' : undefined,
+          site_id: meta.packId.includes('SITE') ? 'filtered' : undefined,
         },
         actionHint: 'Try adjusting the time range or filters, or generate attestations in the system.',
       })
     } else {
       drawSectionTitle(doc, 'Attestations Data')
 
+      // Sort attestations: pending first, then most recent completed
+      const sortedAttestations = [...attestations].sort((a, b) => {
+        const aStatus = (a.status_at_export || '').toLowerCase()
+        const bStatus = (b.status_at_export || '').toLowerCase()
+        const aCompleted = aStatus === 'signed' || aStatus === 'completed'
+        const bCompleted = bStatus === 'signed' || bStatus === 'completed'
+        
+        // Pending first
+        if (aCompleted !== bCompleted) {
+          return aCompleted ? 1 : -1
+        }
+        
+        // Then by most recent first
+        const aTime = a.attested_at ? new Date(a.attested_at).getTime() : 0
+        const bTime = b.attested_at ? new Date(b.attested_at).getTime() : 0
+        return bTime - aTime
+      })
+
       // Prepare table data
-      const tableRows = attestations.map((attestation) => [
+      const tableRows = sortedAttestations.map((attestation) => [
         (attestation.attestation_id || '').substring(0, 16),
         attestation.title || 'Untitled',
         attestation.status_at_export || 'unknown',
