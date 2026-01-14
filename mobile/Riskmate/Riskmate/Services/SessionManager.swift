@@ -26,7 +26,7 @@ class SessionManager: ObservableObject {
         defer { isLoading = false }
         
         do {
-            if let session = try await authService.getCurrentSession() {
+            if try await authService.getCurrentSession() != nil {
                 isAuthenticated = true
                 await loadUserData()
             } else {
