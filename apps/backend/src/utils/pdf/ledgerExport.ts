@@ -35,11 +35,13 @@ interface LedgerExportOptions {
   exportId: string
   timeRange: string
   filters?: {
-    category?: string
-    site_id?: string
-    job_id?: string
-    severity?: string
-    outcome?: string
+    time_range?: string | null
+    category?: string | null
+    site_id?: string | null
+    job_id?: string | null
+    actor_id?: string | null
+    severity?: string | null
+    outcome?: string | null
   }
   events: AuditLogEntry[]
 }
