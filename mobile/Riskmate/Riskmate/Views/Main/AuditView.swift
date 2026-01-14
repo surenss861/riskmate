@@ -3,13 +3,22 @@ import SwiftUI
 struct AuditView: View {
     var body: some View {
         NavigationView {
-            List {
-                Text("Audit Log")
-                    .font(.title2)
-                    .fontWeight(.semibold)
+            ZStack {
+                DesignSystem.Colors.background
+                    .ignoresSafeArea()
+                
+                VStack {
+                    Text("Audit")
+                        .font(DesignSystem.Typography.title)
+                        .foregroundColor(DesignSystem.Colors.textPrimary)
+                    Text("Coming soon")
+                        .font(DesignSystem.Typography.body)
+                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                }
             }
             .navigationTitle("Audit")
         }
+        .preferredColorScheme(.dark)
     }
 }
 
