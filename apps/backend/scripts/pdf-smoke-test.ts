@@ -151,7 +151,7 @@ async function runSmokeTest() {
   try {
     // Step 1: Generate ledger PDF
     console.log('📄 Generating Ledger PDF...')
-    const pdfBuffer = await generateLedgerPDF({
+    const pdfBuffer = await generateLedgerExportPDF({
       exportId: TEST_PACK_ID,
       organizationName: TEST_ORG_NAME,
       generatedBy: TEST_GENERATED_BY,
