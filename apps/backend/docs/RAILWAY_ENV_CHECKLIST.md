@@ -2,6 +2,8 @@
 
 ## Required (Backend won't boot without these)
 
+**Note**: These are the absolute minimum. Backend will crash on startup if missing.
+
 ✅ **SUPABASE_URL**
 - Used in: `src/lib/supabaseClient.ts`
 - Required for: All database operations
@@ -17,11 +19,13 @@
 - Required for: Server binding
 - **Railway auto-injects this** - don't set manually
 
-✅ **ALLOWED_ORIGINS**
+⚠️ **ALLOWED_ORIGINS** (Conditional - only if calling backend directly from browser)
 - Used in: `src/index.ts` (CORS config)
-- Required for: Frontend to call backend
+- Required for: Direct browser → Railway backend calls
 - Format: Comma-separated URLs: `https://riskmate.dev,https://riskmate.vercel.app`
-- **Critical**: Without this, frontend requests will be blocked by CORS
+- **Note**: If using Next.js API routes as proxy (most common), CORS may not be involved since requests are server → server
+- **Test**: If frontend works through `/api/*` routes, you're probably fine
+- **Only needed if**: You call Railway backend directly from browser (fetch from `https://api.riskmate.dev` in client code)
 
 ## Optional (Features work without these, but may be limited)
 
@@ -81,9 +85,10 @@ echo "PORT: ${PORT:+SET (Railway auto-injected)}"
 
 Check these in Railway dashboard:
 
-1. **ALLOWED_ORIGINS** - Most likely missing!
-   - Should include: `https://riskmate.dev,https://riskmate.vercel.app`
-   - Without this, CORS will block frontend requests
+1. **ALLOWED_ORIGINS** - Only if calling backend directly from browser
+   - **Test first**: Does your frontend work? If yes through Next.js proxy, you may not need it
+   - **If needed**: `https://riskmate.dev,https://riskmate.vercel.app`
+   - **Quick test**: `curl -i https://api.riskmate.dev/health -H "Origin: https://riskmate.dev"` → check for `Access-Control-Allow-Origin` header
 
 2. **Email config** (if you need emails)
    - Either `RESEND_API_KEY` + `RESEND_FROM_EMAIL`
@@ -96,10 +101,27 @@ Check these in Railway dashboard:
 ## Quick Fix Commands
 
 ```bash
-# Add ALLOWED_ORIGINS (most critical)
+# Add ALLOWED_ORIGINS (only if calling backend directly from browser)
 railway variables set ALLOWED_ORIGINS="https://riskmate.dev,https://riskmate.vercel.app"
 
 # Or in Railway dashboard:
 # Settings → Variables → Add:
 # ALLOWED_ORIGINS = https://riskmate.dev,https://riskmate.vercel.app
+```
+
+## CORS Testing
+
+If you're unsure whether ALLOWED_ORIGINS is needed:
+
+```bash
+# Test CORS from your laptop
+curl -i https://api.riskmate.dev/health \
+  -H "Origin: https://riskmate.dev"
+
+# Look for:
+# Access-Control-Allow-Origin: https://riskmate.dev
+# (or Access-Control-Allow-Origin: * if not configured)
+
+# If you see the header → CORS is working
+# If you don't see it → may need ALLOWED_ORIGINS (but only if calling directly from browser)
 ```
