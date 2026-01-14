@@ -253,6 +253,64 @@ function testInputValidation() {
   console.log('✅ Input Validation passed')
 }
 
+function testNoControlCharacters() {
+  console.log('Testing No Control Characters in Ledger PDF...')
+  
+  const { sanitizeText } = require('./normalize')
+  
+  // Test KPI row values (the most common source of control characters)
+  const kpiValues = [
+    { label: 'Total Events', value: 100 },
+    { label: 'Displayed', value: 100 },
+    { label: 'Active Filters', value: 2 },
+    { label: 'Hash Verified', value: 'Yes' }, // This was the problematic one
+  ]
+  
+  kpiValues.forEach((kpi) => {
+    const labelText = sanitizeText(kpi.label)
+    const valueText = typeof kpi.value === 'string' ? sanitizeText(kpi.value) : String(kpi.value)
+    
+    // Check for control characters (ASCII 0-31, 127)
+    const hasControlChars = /[\x00-\x1F\x7F]/.test(labelText) || /[\x00-\x1F\x7F]/.test(valueText)
+    console.assert(!hasControlChars, `KPI "${kpi.label}" contains control characters`)
+    
+    // Check for zero-width characters
+    const hasZeroWidth = /[\u200B-\u200D\uFEFF]/.test(labelText) || /[\u200B-\u200D\uFEFF]/.test(valueText)
+    console.assert(!hasZeroWidth, `KPI "${kpi.label}" contains zero-width characters`)
+  })
+  
+  // Test table cell data
+  const tableCellData = [
+    'Event Name',
+    'Category',
+    'Outcome',
+    'Severity',
+    'Actor Name',
+    'System',
+  ]
+  
+  tableCellData.forEach((cell) => {
+    const sanitized = sanitizeText(cell)
+    const hasControlChars = /[\x00-\x1F\x7F]/.test(sanitized)
+    console.assert(!hasControlChars, `Table cell "${cell}" contains control characters after sanitization`)
+  })
+  
+  // Test evidence reference text
+  const evidenceText = 'Note: Evidence files are auth-gated. Use the Work Record IDs below to retrieve evidence via the Compliance Ledger interface.'
+  const sanitizedEvidence = sanitizeText(evidenceText)
+  const hasControlChars = /[\x00-\x1F\x7F]/.test(sanitizedEvidence)
+  console.assert(!hasControlChars, 'Evidence reference text contains control characters after sanitization')
+  
+  // Test with actual problematic characters
+  const problematicText = 'Hash Verified\u0005' // The exact issue reported
+  const sanitizedProblematic = sanitizeText(problematicText)
+  const stillHasControlChars = /[\x00-\x1F\x7F]/.test(sanitizedProblematic)
+  console.assert(!stillHasControlChars, 'Sanitization should remove control character \\u0005')
+  console.assert(sanitizedProblematic === 'Hash Verified', `Expected "Hash Verified", got "${sanitizedProblematic}"`)
+  
+  console.log('✅ No Control Characters test passed')
+}
+
 // ============================================================================
 // RUN ALL TESTS
 // ============================================================================
@@ -271,6 +329,7 @@ function runAllTests() {
     testDateFormatting()
     testFilterCounting()
     testInputValidation()
+    testNoControlCharacters()
     
     console.log('\n✅ All tests passed!')
     process.exit(0)
