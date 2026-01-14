@@ -1,67 +1,121 @@
 /**
- * PDF Smoke Test
- * Generates a proof pack, unzips it, extracts text from each PDF,
- * and asserts no control chars / broken glyphs / private-use characters
+ * PDF Smoke Test - End-to-End
+ * Generates a ledger PDF, extracts text, and validates it's audit-grade clean
  * 
- * Run with: tsx scripts/pdf-smoke-test.ts
+ * Run with: tsx apps/backend/scripts/pdf-smoke-test.ts
  */
 
-import { execSync } from 'child_process'
-import { readFileSync, unlinkSync, mkdirSync, rmdirSync } from 'fs'
+import { generateLedgerPDF } from '../src/utils/pdf/ledgerExport'
+import { readFileSync, writeFileSync, unlinkSync } from 'fs'
 import { join } from 'path'
-import AdmZip from 'adm-zip'
+import { execSync } from 'child_process'
 
 // Test configuration
-const TEST_ORG_ID = process.env.TEST_ORG_ID || 'test-org-id'
-const TEST_USER_ID = process.env.TEST_USER_ID || 'test-user-id'
-const TEST_PACK_ID = `PACK-TEST-${Date.now()}`
+const TEST_PACK_ID = `PACK-SMOKE-${Date.now()}`
+const TEST_ORG_NAME = 'Test Organization'
+const TEST_GENERATED_BY = 'Test User'
+const TEST_GENERATED_BY_ROLE = 'Admin'
 
-// Patterns to detect problematic characters
-const CONTROL_CHAR_PATTERN = /[\x00-\x1F\x7F]/
-const BROKEN_GLYPH_PATTERN = /[\uFFFD-\uFFFF]/
-const ZERO_WIDTH_PATTERN = /[\u200B-\u200D\uFEFF]/
-const PRIVATE_USE_PATTERN = /[\uE000-\uF8FF]/
+// Mock data
+const mockEvents = [
+  {
+    id: 'event-1',
+    event_name: 'job_created',
+    created_at: new Date().toISOString(),
+    category: 'security',
+    outcome: 'success',
+    severity: 'low',
+    actor_name: 'Test User',
+    actor_role: 'admin',
+    job_id: 'job-123',
+    job_title: 'Test Job',
+    target_type: 'job',
+    summary: 'Test event summary',
+  },
+]
 
-function extractTextFromPdf(pdfPath: string): string {
+const mockFilters = {
+  time_range: '30d',
+  job_id: 'job-123',
+  category: 'security',
+}
+
+async function extractTextFromPdf(pdfBuffer: Buffer): Promise<string> {
+  // Write to temp file
+  const tempPath = join(process.cwd(), `temp-${TEST_PACK_ID}.pdf`)
+  writeFileSync(tempPath, pdfBuffer)
+  
   try {
-    // Use pdftotext if available, otherwise fall back to basic extraction
-    const text = execSync(`pdftotext "${pdfPath}" - 2>/dev/null || echo "pdftotext not available"`, {
-      encoding: 'utf-8',
-      maxBuffer: 10 * 1024 * 1024, // 10MB
-    })
-    return text
-  } catch (error: any) {
-    console.warn(`Could not extract text from ${pdfPath}: ${error.message}`)
-    return ''
+    // Try pdftotext first (most reliable)
+    try {
+      const text = execSync(`pdftotext "${tempPath}" - 2>/dev/null`, {
+        encoding: 'utf-8',
+        maxBuffer: 10 * 1024 * 1024,
+      })
+      return text
+    } catch {
+      // Fallback: try pdfjs-dist if available
+      try {
+        const pdfjs = require('pdfjs-dist/legacy/build/pdf.js')
+        const data = new Uint8Array(pdfBuffer)
+        const pdf = await pdfjs.getDocument({ data }).promise
+        let fullText = ''
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i)
+          const textContent = await page.getTextContent()
+          fullText += textContent.items.map((item: any) => item.str).join(' ')
+        }
+        return fullText
+      } catch {
+        throw new Error('No PDF text extraction method available (install pdftotext or pdfjs-dist)')
+      }
+    }
+  } finally {
+    // Cleanup
+    try {
+      unlinkSync(tempPath)
+    } catch {
+      // Ignore cleanup errors
+    }
   }
 }
 
-function validatePdfText(text: string, pdfName: string): { valid: boolean; errors: string[] } {
+function validatePdfText(text: string): { valid: boolean; errors: string[] } {
   const errors: string[] = []
   
-  if (CONTROL_CHAR_PATTERN.test(text)) {
-    const matches = text.match(CONTROL_CHAR_PATTERN)
-    errors.push(`Contains control characters: ${matches?.map(m => `\\u${m.charCodeAt(0).toString(16).padStart(4, '0')}`).join(', ')}`)
+  // Check for Unicode Control, Format, Private-use categories
+  if (/\p{Cc}|\p{Cf}|\p{Co}/u.test(text)) {
+    errors.push('Contains Unicode Control/Format/Private-use category characters')
   }
   
-  if (BROKEN_GLYPH_PATTERN.test(text)) {
+  // Check for broken glyphs
+  if (/[\uFFFD-\uFFFF]/.test(text)) {
     errors.push('Contains Unicode replacement/broken glyph characters (U+FFFD-U+FFFF)')
   }
   
-  if (ZERO_WIDTH_PATTERN.test(text)) {
+  // Check for zero-width characters
+  if (/[\u200B-\u200D\uFEFF]/.test(text)) {
     errors.push('Contains zero-width characters')
   }
   
-  if (PRIVATE_USE_PATTERN.test(text)) {
-    errors.push('Contains private-use area characters (U+E000-U+F8FF)')
+  // Check for ASCII control characters
+  if (/[\x00-\x1F\x7F]/.test(text)) {
+    const matches = text.match(/[\x00-\x1F\x7F]/g) || []
+    const codes = matches.map(m => `\\u${m.charCodeAt(0).toString(16).padStart(4, '0')}`).join(', ')
+    errors.push(`Contains ASCII control characters: ${codes}`)
   }
   
-  // Check for the specific "auth￾gated" issue
+  // CRITICAL: Check for "auth￾gated" broken glyph issue
   if (text.includes('auth') && !text.includes('auth-gated') && !text.includes('auth gated')) {
     const authMatch = text.match(/auth[^\s-]+gated/)
-    if (authMatch) {
-      errors.push(`Suspicious "auth...gated" pattern found: "${authMatch[0]}"`)
+    if (authMatch && /[\uFFFD-\uFFFF]/.test(authMatch[0])) {
+      errors.push(`Broken glyph in "auth...gated" pattern: "${authMatch[0]}"`)
     }
+  }
+  
+  // Check that Evidence Reference note is clean
+  if (text.includes('Evidence files are') && !text.includes('auth-gated') && !text.includes('auth gated')) {
+    errors.push('Evidence Reference note does not contain clean "auth-gated" text')
   }
   
   return {
@@ -70,55 +124,99 @@ function validatePdfText(text: string, pdfName: string): { valid: boolean; error
   }
 }
 
-async function runSmokeTest() {
-  console.log('🧪 Running PDF Smoke Test...\n')
+function validateActiveFiltersCount(text: string, expectedCount: number): boolean {
+  // Look for "Active Filters" line in the text
+  const activeFiltersMatch = text.match(/Active Filters[:\s]+(\d+)/i)
+  if (!activeFiltersMatch) {
+    console.warn('Could not find "Active Filters" line in extracted text')
+    return false
+  }
   
-  const tempDir = join(process.cwd(), 'temp-pdf-test')
-  const zipPath = join(tempDir, 'test-pack.zip')
+  const extractedCount = parseInt(activeFiltersMatch[1], 10)
+  if (extractedCount !== expectedCount) {
+    console.error(`Active Filters count mismatch: expected ${expectedCount}, extracted ${extractedCount}`)
+    return false
+  }
+  
+  return true
+}
+
+async function runSmokeTest() {
+  console.log('🧪 Running PDF Smoke Test (End-to-End)...\n')
   
   try {
-    // Create temp directory
-    mkdirSync(tempDir, { recursive: true })
+    // Step 1: Generate ledger PDF
+    console.log('📄 Generating Ledger PDF...')
+    const pdfBuffer = await generateLedgerPDF({
+      exportId: TEST_PACK_ID,
+      organizationName: TEST_ORG_NAME,
+      generatedBy: TEST_GENERATED_BY,
+      generatedByRole: TEST_GENERATED_BY_ROLE,
+      events: mockEvents,
+      filters: mockFilters,
+      timeRange: 'Last 30 days',
+    })
     
-    // Note: In a real test, you would call the actual export endpoint
-    // For now, this is a template that can be extended
-    console.log('📦 Generating proof pack...')
-    console.log('   (In real test, this would call POST /api/audit/export/pack)')
+    console.log(`   ✅ Generated PDF (${pdfBuffer.length} bytes)\n`)
     
-    // Simulate: if we had a zip file, unzip it
-    // const zip = new AdmZip(zipPath)
-    // zip.extractAllTo(tempDir, true)
+    // Step 2: Extract text
+    console.log('🔍 Extracting text from PDF...')
+    const extractedText = await extractTextFromPdf(pdfBuffer)
+    console.log(`   ✅ Extracted ${extractedText.length} characters\n`)
     
-    // For now, just validate the test structure
-    console.log('✅ Test structure validated')
-    console.log('\n📋 Expected PDF files:')
-    console.log('   - ledger_export_*.pdf')
-    console.log('   - controls_*.pdf')
-    console.log('   - attestations_*.pdf')
-    console.log('   - evidence_index_*.pdf')
+    // Step 3: Validate text is clean
+    console.log('✅ Validating extracted text...')
+    const validation = validatePdfText(extractedText)
     
-    console.log('\n🔍 Validation checks:')
-    console.log('   - No control characters (\\u0000-\\u001F, \\u007F)')
-    console.log('   - No broken glyphs (U+FFFD-U+FFFF)')
-    console.log('   - No zero-width characters')
-    console.log('   - No private-use area characters')
-    console.log('   - "auth-gated" text is clean (not "auth￾gated")')
+    if (!validation.valid) {
+      console.error('❌ Text validation failed:')
+      validation.errors.forEach(error => console.error(`   - ${error}`))
+      console.error('\n📄 Extracted text snippet (first 500 chars):')
+      console.error(extractedText.substring(0, 500))
+      process.exit(1)
+    }
     
-    console.log('\n✅ Smoke test structure ready')
-    console.log('   (Extend this to actually generate and validate PDFs)')
+    console.log('   ✅ No forbidden characters detected\n')
+    
+    // Step 4: Validate Active Filters count
+    console.log('🔢 Validating Active Filters count...')
+    const { countActiveFilters } = require('../src/utils/pdf/normalize')
+    const expectedFilterCount = countActiveFilters(mockFilters)
+    const filtersValid = validateActiveFiltersCount(extractedText, expectedFilterCount)
+    
+    if (!filtersValid) {
+      console.error('❌ Active Filters count validation failed')
+      process.exit(1)
+    }
+    
+    console.log(`   ✅ Active Filters count is correct (${expectedFilterCount})\n`)
+    
+    // Step 5: Validate Evidence Reference note
+    console.log('📝 Validating Evidence Reference note...')
+    if (!extractedText.includes('auth-gated') && !extractedText.includes('auth gated')) {
+      console.error('❌ Evidence Reference note does not contain clean "auth-gated" text')
+      console.error('   Extracted text around "Evidence":')
+      const evidenceIndex = extractedText.indexOf('Evidence')
+      if (evidenceIndex >= 0) {
+        console.error(extractedText.substring(evidenceIndex, evidenceIndex + 200))
+      }
+      process.exit(1)
+    }
+    
+    console.log('   ✅ Evidence Reference note is clean\n')
+    
+    console.log('✅ All smoke test checks passed!')
+    console.log('\n📋 Summary:')
+    console.log('   - PDF generated successfully')
+    console.log('   - Text extraction successful')
+    console.log('   - No forbidden characters')
+    console.log('   - Active Filters count correct')
+    console.log('   - Evidence Reference note clean')
     
   } catch (error: any) {
     console.error('❌ Smoke test failed:', error.message)
+    console.error(error.stack)
     process.exit(1)
-  } finally {
-    // Cleanup
-    try {
-      if (require('fs').existsSync(tempDir)) {
-        rmdirSync(tempDir, { recursive: true })
-      }
-    } catch {
-      // Ignore cleanup errors
-    }
   }
 }
 
@@ -126,7 +224,6 @@ async function runSmokeTest() {
 if (require.main === module) {
   runSmokeTest()
     .then(() => {
-      console.log('\n✅ All checks passed!')
       process.exit(0)
     })
     .catch((error) => {

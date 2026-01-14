@@ -267,13 +267,15 @@ function testInputValidation() {
 function testNoControlCharacters() {
   console.log('Testing No Control Characters in Ledger PDF...')
   
-  const { sanitizeText } = require('./normalize')
+  const { sanitizeText, countActiveFilters } = require('./normalize')
   
   // Test KPI row values (the most common source of control characters)
+  // Use countActiveFilters() to compute the correct filter count from mockFilters
+  const correctFilterCount = countActiveFilters(mockFilters)
   const kpiValues = [
     { label: 'Total Events', value: 100 },
     { label: 'Displayed', value: 100 },
-    { label: 'Active Filters', value: 2 },
+    { label: 'Active Filters', value: correctFilterCount }, // Use computed value, not hardcoded
     { label: 'Hash Verified', value: 'Yes' }, // This was the problematic one
   ]
   

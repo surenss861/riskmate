@@ -12,8 +12,8 @@ import {
   initPage,
   finalizePdf,
 } from './proofPackTheme'
-import { safeTextForPdf } from './normalize'
 import {
+  safeTextForPdf,
   calculateControlKPIs,
   sortControls,
   formatDate,
@@ -21,6 +21,8 @@ import {
   calculateAttestationKPIs,
   sortAttestations,
   formatDateTime,
+  formatFilterContext,
+  countActiveFilters,
 } from './normalize'
 
 // Control row can be any object with these fields (from CSV parsing)
@@ -404,13 +406,11 @@ export async function generateEvidenceIndexPDF(
       })
     }
 
-    // Filters
+    // Filters - use formatFilterContext() for consistent display
     if (manifest.filters) {
-      const activeFilters = Object.entries(manifest.filters)
-        .filter(([_, v]) => v !== null && v !== undefined && v !== '')
-        .reduce((acc, [k, v]) => ({ ...acc, [k]: v }), {})
-
-      if (Object.keys(activeFilters).length > 0) {
+      const filterCount = countActiveFilters(manifest.filters)
+      
+      if (filterCount > 0) {
         doc.moveDown(1)
         drawSectionTitle(doc, 'Applied Filters')
         doc
@@ -418,9 +418,9 @@ export async function generateEvidenceIndexPDF(
           .fontSize(STYLES.sizes.body)
           .font(STYLES.fonts.body)
 
-        Object.entries(activeFilters).forEach(([key, value]) => {
-          doc.text(`${key.replace(/_/g, ' ')}: ${value}`, { align: 'left' })
-        })
+        // Use formatFilterContext() for consistent formatting (shows all active filters)
+        const filterText = formatFilterContext(manifest.filters)
+        doc.text(safeTextForPdf(filterText, 'Evidence Index filters'), { align: 'left' })
       }
     }
 

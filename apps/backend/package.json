@@ -9,7 +9,8 @@
     "start:railway": "tsx src/index.ts",
     "lint": "eslint src --ext .ts",
     "type-check": "tsc --noEmit",
-    "test:pdf-contracts": "tsx src/utils/pdf/testContracts.ts"
+    "test:pdf-contracts": "tsx src/utils/pdf/testContracts.ts",
+    "test:pdf-smoke": "tsx scripts/pdf-smoke-test.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0",
