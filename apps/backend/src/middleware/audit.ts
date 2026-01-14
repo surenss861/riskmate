@@ -129,35 +129,45 @@ export async function recordAuditLog(entry: AuditLogEntry): Promise<AuditWriteRe
       ? await supabase.from('users').select('email, role').eq('id', entry.actorId).single()
       : { data: null }
 
+    // Build metadata with all extra fields (endpoint, request_id, ip, user_agent, etc.)
+    // This prevents schema mismatches - everything goes into the JSONB metadata column
+    const enrichedMetadata = {
+      ...(payload ?? {}),
+      // Add request context to metadata (not as top-level columns)
+      ...(entry.metadata?.request_id && { request_id: entry.metadata.request_id }),
+      ...(entry.metadata?.endpoint && { endpoint: entry.metadata.endpoint }),
+      ...(entry.metadata?.ip && { ip: entry.metadata.ip }),
+      ...(entry.metadata?.user_agent && { user_agent: entry.metadata.user_agent }),
+      ...(entry.metadata?.related_event_id && { related_event_id: entry.metadata.related_event_id }),
+      subject: {
+        type: entry.targetType,
+        id: entry.targetId,
+        ...(entry.metadata?.related_event_id && { related_event_id: entry.metadata.related_event_id }),
+      },
+    }
+
+    // Only insert columns that actually exist in the audit_logs table
+    // Extra fields go into metadata JSONB column
     const insertData: any = {
       organization_id: entry.organizationId,
       actor_id: entry.actorId ?? null,
       event_name: entry.eventName,
       target_type: entry.targetType,
       target_id: entry.targetId ?? null,
-      metadata: payload ?? {},
-      // Standardized fields for easier querying
+      metadata: enrichedMetadata,
+      // Standardized fields (from enterprise upgrade migration)
       category: getCategoryFromEventName(entry.eventName),
       action: action,
       outcome: getOutcomeFromEventName(entry.eventName),
       severity: getSeverityFromEventName(entry.eventName),
       resource_type: resourceType,
       resource_id: resourceId,
-      job_id: workRecordId, // Use work_record_id from metadata if available
-      work_record_id: workRecordId, // Normalized field name
-      site_id: siteId,
-      // Removed actor_user_id - table only has actor_id (already set above)
+      job_id: workRecordId ?? null,
+      site_id: siteId ?? null,
+      // Enriched actor fields (from enterprise upgrade migration)
       actor_email: actorData?.email || null,
       actor_role: actorData?.role || null,
-      request_id: entry.metadata?.request_id as string || null,
-      endpoint: entry.metadata?.endpoint as string || null,
-      ip: entry.metadata?.ip as string || null,
-      user_agent: entry.metadata?.user_agent as string || null,
-      subject: {
-        type: entry.targetType,
-        id: entry.targetId,
-        related_event_id: entry.metadata?.related_event_id as string || null,
-      },
+      actor_name: actorData?.full_name || null,
       summary: summary,
     }
 
