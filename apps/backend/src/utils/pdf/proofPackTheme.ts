@@ -184,6 +184,35 @@ export function drawKpiRow(doc: PDFKit.PDFDocument, stats: KPIRow[]): void {
 }
 
 // Draw table with proper pagination, wrapping, and styling
+/**
+ * Truncate text to fit within a given width, adding ellipsis if needed
+ * Uses binary search to find the maximum text length that fits
+ */
+function truncateToWidth(
+  doc: PDFKit.PDFDocument,
+  text: string,
+  width: number,
+  opts: { font: string; fontSize: number }
+): string {
+  const clean = safeTextForPdf(String(text ?? ''), 'truncateToWidth')
+  doc.font(opts.font).fontSize(opts.fontSize)
+
+  if (doc.widthOfString(clean) <= width) return clean
+  const ell = '…'
+  if (doc.widthOfString(ell) > width) return '' // width too tiny
+
+  // Binary search best fit
+  let lo = 0
+  let hi = clean.length
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2)
+    const candidate = clean.slice(0, mid) + ell
+    if (doc.widthOfString(candidate) <= width) lo = mid
+    else hi = mid - 1
+  }
+  return clean.slice(0, lo) + ell
+}
+
 export function drawTable(
   doc: PDFKit.PDFDocument,
   options: TableOptions
@@ -191,18 +220,23 @@ export function drawTable(
   const margin = STYLES.spacing.pageMargin
   const pageWidth = doc.page.width
   const pageHeight = doc.page.height
-  const availableWidth = pageWidth - (margin * 2)
   const rowHeight = options.rowHeight || 20
   const fontSize = options.fontSize || 8
   const zebraStriping = options.zebraStriping !== false
+
+  // CRITICAL FIX: Account for column gaps in width normalization
+  const columnGap = 4
+  const colCount = options.columns.length
+  const availableWidth = pageWidth - (margin * 2)
+  const availableForColumns = availableWidth - columnGap * Math.max(0, colCount - 1)
 
   let currentY = doc.y
   let isFirstPage = true
   let rowIndex = 0
 
-  // Calculate column widths (normalize to available width)
+  // Calculate column widths (normalize to available width *minus gaps*)
   const totalColumnWidth = options.columns.reduce((sum, col) => sum + col.width, 0)
-  const scaleFactor = availableWidth / totalColumnWidth
+  const scaleFactor = availableForColumns / totalColumnWidth
   const normalizedColumns = options.columns.map(col => ({
     ...col,
     width: col.width * scaleFactor,
