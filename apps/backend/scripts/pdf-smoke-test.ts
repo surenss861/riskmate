@@ -23,8 +23,8 @@ const mockEvents = [
     event_name: 'job_created',
     created_at: new Date().toISOString(),
     category: 'security',
-    outcome: 'success',
-    severity: 'low',
+    outcome: 'allowed',
+    severity: 'info',
     actor_name: 'Test User',
     actor_role: 'admin',
     job_id: 'job-123',
@@ -168,51 +168,33 @@ function validatePdfText(text: string): { valid: boolean; errors: string[] } {
 }
 
 function validateActiveFiltersCount(text: string, expectedCount: number): boolean {
-  // Look for "Active Filters" in the text (PDF extraction may put label and value on separate lines)
-  const activeIndex = text.toLowerCase().indexOf('active filters')
-  if (activeIndex === -1) {
-    console.warn('Could not find "Active Filters" in extracted text')
+  // In table layouts, labels and values are on separate rows:
+  // Row 1: "Total Events\nDisplayed\nActive Filters\nHash Verified"
+  // Row 2: "1\n1\n3\nYes"
+  // So "Active Filters" is the 3rd label (index 2), and its value is the 3rd number after "Hash Verified"
+  
+  const hashIndex = text.toLowerCase().indexOf('hash verified')
+  if (hashIndex === -1) {
+    console.warn('Could not find "Hash Verified" in extracted text')
     return false
   }
   
-  // Find the text after "Active Filters" and before the next label (Hash Verified)
-  const afterActive = text.substring(activeIndex + 'active filters'.length)
-  const hashIndex = afterActive.toLowerCase().indexOf('hash verified')
-  const searchWindow = hashIndex > 0 ? afterActive.substring(0, hashIndex) : afterActive.substring(0, 100)
+  // Find all numbers after "Hash Verified" (these are the KPI values in order)
+  const afterHash = text.substring(hashIndex + 'hash verified'.length)
+  const numbersAfterHash = afterHash.match(/\d+/g)
   
-  // Look for number in this window (should be the Active Filters count)
-  const numberPatterns = [
-    /[:\s]+(\d+)/,  // After colon or space: ": 3" or " 3"
-    /\n\s*(\d+)/,   // On next line: "\n3"
-    /\s+(\d+)/,     // Space separated: " 3"
-  ]
-  
-  let extractedCount: number | null = null
-  for (const pattern of numberPatterns) {
-    const match = searchWindow.match(pattern)
-    if (match) {
-      extractedCount = parseInt(match[1], 10)
-      break
-    }
-  }
-  
-  // Fallback: find first number in the window (should be Active Filters count)
-  if (extractedCount === null) {
-    const numbersInWindow = searchWindow.match(/\d+/g)
-    if (numbersInWindow && numbersInWindow.length > 0) {
-      extractedCount = parseInt(numbersInWindow[0], 10)
-    }
-  }
-  
-  if (extractedCount === null) {
-    console.warn('Could not find Active Filters count in extracted text')
-    console.warn('Text snippet after "Active Filters":', searchWindow.substring(0, 150))
+  if (!numbersAfterHash || numbersAfterHash.length < 3) {
+    console.warn(`Could not find enough numbers after "Hash Verified" (found ${numbersAfterHash?.length || 0}, need at least 3)`)
     return false
   }
+  
+  // KPI order: Total Events (index 0), Displayed (index 1), Active Filters (index 2)
+  // So Active Filters is the 3rd number (index 2)
+  const extractedCount = parseInt(numbersAfterHash[2], 10)
   
   if (extractedCount !== expectedCount) {
     console.error(`Active Filters count mismatch: expected ${expectedCount}, extracted ${extractedCount}`)
-    console.warn('Text snippet after "Active Filters":', searchWindow.substring(0, 150))
+    console.warn(`Numbers after "Hash Verified": ${numbersAfterHash.join(', ')}`)
     return false
   }
   
@@ -240,7 +222,7 @@ async function runSmokeTest() {
     // Step 2: Extract text
     console.log('🔍 Extracting text from PDF...')
     const rawExtractedText = await extractTextFromPdf(pdfBuffer)
-    console.log(`   ✅ Extracted ${rawExtractedText.length} characters (raw)`)
+    console.log(`   ✅ Extracted ${rawExtractedText.length} characters (raw)\n`)
     
     // Step 3: Validate text is clean (validation includes sanitization)
     console.log('✅ Validating extracted text...')
