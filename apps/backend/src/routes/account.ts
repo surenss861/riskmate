@@ -244,19 +244,24 @@ accountRouter.patch(
         }).response);
       }
 
-      // Log audit event
-      await recordAuditLog({
-        organizationId: user.organization_id,
-        actorId: userId,
-        eventName: "account.organization_updated",
-        targetType: "system",
-        targetId: user.organization_id,
-        metadata: {
-          field: "name",
-          old_value: currentOrg.name,
-          new_value: updatedOrg.name,
-        },
-      });
+      // Log audit event (non-blocking - don't fail request if logging fails)
+      try {
+        await recordAuditLog({
+          organizationId: user.organization_id,
+          actorId: userId,
+          eventName: "account.organization_updated",
+          targetType: "system",
+          targetId: user.organization_id,
+          metadata: {
+            field: "name",
+            old_value: currentOrg.name,
+            new_value: updatedOrg.name,
+          },
+        });
+      } catch (auditError) {
+        // Non-fatal: log but don't fail the request
+        console.warn("Audit log failed for organization update:", auditError);
+      }
 
       res.json({
         data: updatedOrg,

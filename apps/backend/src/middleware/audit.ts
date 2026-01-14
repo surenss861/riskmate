@@ -146,7 +146,7 @@ export async function recordAuditLog(entry: AuditLogEntry): Promise<AuditWriteRe
       job_id: workRecordId, // Use work_record_id from metadata if available
       work_record_id: workRecordId, // Normalized field name
       site_id: siteId,
-      actor_user_id: entry.actorId ?? null,
+      // Removed actor_user_id - table only has actor_id (already set above)
       actor_email: actorData?.email || null,
       actor_role: actorData?.role || null,
       request_id: entry.metadata?.request_id as string || null,
