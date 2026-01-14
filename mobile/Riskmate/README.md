@@ -12,31 +12,25 @@ SwiftUI app that connects to RiskMate backend API.
 ## Project Structure
 
 ```
-Riskmate/
+mobile/Riskmate/Riskmate/
 ├── RiskmateApp.swift          # App entry point
-├── Models/                     # Data models
+├── Config.swift               # Config loader
+├── Config.plist              # Backend URL, Supabase config
+├── Models/                    # Data models
 │   ├── Organization.swift
-│   ├── User.swift
-│   └── AuditLog.swift
-├── Services/                   # Business logic
+│   └── User.swift
+├── Services/                  # Business logic
 │   ├── AuthService.swift      # Supabase auth wrapper
 │   ├── APIClient.swift        # Backend API client
 │   └── SessionManager.swift   # Session state management
-├── Views/                      # SwiftUI views
-│   ├── Auth/
-│   │   ├── LoginView.swift
-│   │   └── SplashView.swift
-│   ├── Main/
-│   │   ├── ContentView.swift  # Tab bar container
-│   │   ├── OperationsView.swift
-│   │   ├── AuditView.swift
-│   │   └── AccountView.swift
-│   └── Components/
-│       ├── LoadingView.swift
-│       └── ErrorView.swift
-└── Resources/
-    ├── Config.plist           # Backend URL, Supabase config
-    └── Assets.xcassets
+└── Views/                     # SwiftUI views
+    ├── Auth/
+    │   └── LoginView.swift
+    └── Main/
+        ├── ContentView.swift  # Tab bar container
+        ├── OperationsView.swift
+        ├── AuditView.swift
+        └── AccountView.swift
 ```
 
 ## Configuration

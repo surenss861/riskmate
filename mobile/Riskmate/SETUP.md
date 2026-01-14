@@ -21,30 +21,20 @@
 
 ## Step 3: Add Files to Project
 
-Copy all files from this directory into your Xcode project:
+All files are already in `mobile/Riskmate/Riskmate/`. In Xcode:
 
-**Models:**
-- `Models/Organization.swift`
-- `Models/User.swift`
+1. Right-click on `Riskmate` folder in Project Navigator
+2. Select "Add Files to Riskmate..."
+3. Navigate to `mobile/Riskmate/Riskmate/`
+4. Select these folders/files:
+   - `Models/` folder
+   - `Services/` folder
+   - `Views/` folder
+   - `Config.swift`
+   - `Config.plist`
+   - `RiskmateApp.swift` (replace the default one)
 
-**Services:**
-- `Services/SessionManager.swift`
-- `Services/AuthService.swift`
-- `Services/APIClient.swift`
-- `Config.swift`
-
-**Views:**
-- `Views/Auth/LoginView.swift`
-- `Views/Main/ContentView.swift`
-- `Views/Main/AccountView.swift`
-- `Views/Main/OperationsView.swift`
-- `Views/Main/AuditView.swift`
-
-**App Entry:**
-- `RiskmateApp.swift` (replace the default)
-
-**Resources:**
-- `Config.plist` (add to project, ensure it's in Copy Bundle Resources)
+**Important:** Make sure "Copy items if needed" is **unchecked** (files are already in the right place) and "Add to targets: Riskmate" is **checked**.
 
 ## Step 4: Configure Config.plist
 
