@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// RiskMate glass card - Apple-native material (no gradients)
+/// RiskMate glass card - native material, not gradient-y
 struct RMGlassCard<Content: View>: View {
     let content: Content
     
@@ -12,14 +12,14 @@ struct RMGlassCard<Content: View>: View {
         content
             .padding(24)
             .background(
-                RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .fill(.ultraThinMaterial)
+                RoundedRectangle(cornerRadius: 26, style: .continuous)
+                    .fill(.ultraThinMaterial) // iOS-native glass
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 26, style: .continuous)
+                            .stroke(Color.white.opacity(0.10), lineWidth: 1)
+                    )
             )
-            .overlay(
-                RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .stroke(Color.white.opacity(0.10), lineWidth: 1)
-            )
-            .shadow(color: .black.opacity(0.45), radius: 26, x: 0, y: 18)
+            .shadow(color: .black.opacity(0.35), radius: 18, x: 0, y: 12)
     }
 }
 

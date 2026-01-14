@@ -1,18 +1,24 @@
 import SwiftUI
 
-/// RiskMate primary button - iOS-native press + clean depth
+/// RiskMate primary button - keep orange, add press feel + haptic
 struct RMPrimaryButton: View {
     let title: String
     var isLoading: Bool = false
     var isDisabled: Bool = false
     var action: () -> Void
     
+    @State private var isPressed = false
+    
     var body: some View {
-        Button(action: action) {
+        Button {
+            guard !(isDisabled || isLoading) else { return }
+            UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+            action()
+        } label: {
             ZStack {
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .fill(Color(hex: "#F97316"))
-                    .opacity(isDisabled ? 0.45 : 1.0)
+                    .opacity(isDisabled ? 0.5 : 1.0)
                 
                 if isLoading {
                     ProgressView()
@@ -20,37 +26,21 @@ struct RMPrimaryButton: View {
                 } else {
                     Text(title)
                         .font(.system(size: 16, weight: .bold))
-                        .foregroundStyle(.black)
+                        .foregroundColor(.black)
                 }
             }
             .frame(height: 52)
+            .scaleEffect(isPressed ? 0.98 : 1.0)
+            .animation(.spring(response: 0.25, dampingFraction: 0.9), value: isPressed)
         }
         .buttonStyle(.plain)
         .disabled(isDisabled || isLoading)
-        .shadow(color: .black.opacity(0.35), radius: 16, x: 0, y: 10)
-        .pressEffect()
-    }
-}
-
-/// Tiny native-feeling press animation
-private struct PressEffect: ViewModifier {
-    @GestureState private var isPressed = false
-    
-    func body(content: Content) -> some View {
-        content
-            .scaleEffect(isPressed ? 0.985 : 1)
-            .opacity(isPressed ? 0.92 : 1)
-            .animation(.spring(response: 0.25, dampingFraction: 0.9), value: isPressed)
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .updating($isPressed) { _, state, _ in state = true }
-            )
-    }
-}
-
-private extension View {
-    func pressEffect() -> some View {
-        modifier(PressEffect())
+        .shadow(color: Color(hex: "#F97316").opacity(0.18), radius: 18, x: 0, y: 10)
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in isPressed = true }
+                .onEnded { _ in isPressed = false }
+        )
     }
 }
 
