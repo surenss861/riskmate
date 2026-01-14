@@ -12,12 +12,25 @@
    - Minimum iOS: **17.0** (or 16.0 if needed)
 5. Save to: `mobile/Riskmate/`
 
-## Step 2: Add Supabase Package
+## Step 2: Add Supabase Package (REQUIRED - Fixes "Unable to find module dependency: 'Supabase'")
 
-1. In Xcode: File → Add Package Dependencies
-2. Enter URL: `https://github.com/supabase/supabase-swift`
-3. Version: Latest (or `2.0.0+`)
-4. Add to target: `Riskmate`
+1. In Xcode: **File → Add Package Dependencies...**
+2. In the search box, enter: `https://github.com/supabase/supabase-swift`
+3. Click **Add Package**
+4. Select version: **Up to Next Major Version** with `2.0.0` (or latest)
+5. Click **Add Package** again
+6. **IMPORTANT**: Make sure "Riskmate" target is checked
+7. Click **Add Package** to finish
+
+**Verify it worked:**
+- In Project Navigator, you should see "Package Dependencies" section
+- Expand it to see "supabase-swift"
+- If you don't see it, repeat the steps above
+
+**If you still get the error:**
+- Clean build folder: **Product → Clean Build Folder** (Cmd+Shift+K)
+- Close and reopen Xcode
+- Try building again
 
 ## Step 3: Add Files to Project
 
