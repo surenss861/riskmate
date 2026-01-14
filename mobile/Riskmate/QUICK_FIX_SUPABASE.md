@@ -5,21 +5,29 @@ Xcode can't find the Supabase Swift package because it's not added to the projec
 
 ## The Solution (Do This Now)
 
-### Step 1: Open Package Dependencies
-1. In Xcode, click on the **project name** in Project Navigator (top item: "Riskmate")
-2. Select the **Riskmate** project (blue icon)
-3. Select the **Riskmate** target (under TARGETS)
-4. Click the **Package Dependencies** tab
+### ⚠️ IMPORTANT: Use "Add Package Dependencies", NOT "Add Package Collection"
 
-### Step 2: Add Supabase Package
-1. Click the **+** button (bottom left of Package Dependencies section)
-2. In the search box, paste: `https://github.com/supabase/supabase-swift`
-3. Press Enter or click the search result
-4. Click **Add Package**
+You're seeing an error because you clicked "Add Package Collection" - that's the wrong option!
+
+### Step 1: Close the Current Dialog
+1. Click **Cancel** on the error dialog
+2. Click **Cancel** on the "Add Package Collection" dialog
+
+### Step 2: Open the Correct Menu
+1. In Xcode menu bar: **File → Add Package Dependencies...**
+   - **NOT** "Add Package Collection"
+   - **NOT** "Add Local Package"
+   - **MUST BE** "Add Package Dependencies..."
+
+### Step 3: Add Supabase Package
+1. In the search box at the top, paste: `https://github.com/supabase/supabase-swift`
+2. Press Enter or wait for search results
+3. You should see "supabase-swift" in the results
+4. Click **Add Package** button
 5. Select version: **Up to Next Major Version** → `2.0.0`
 6. Click **Add Package** again
 7. **CRITICAL**: In the "Add to Target" section, check the box next to **Riskmate** ✅
-8. Click **Add Package**
+8. Click **Add Package** to finish
 
 ### Step 3: Verify It Worked
 - In Project Navigator, scroll down to **Package Dependencies**
