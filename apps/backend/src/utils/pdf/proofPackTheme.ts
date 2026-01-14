@@ -373,7 +373,7 @@ export function initPage(doc: PDFKit.PDFDocument): void {
 
 /**
  * Finalize PDF with proper page buffering and footers
- * MUST call doc.bufferPages() before adding any content
+ * PDFDocument must be created with bufferPages: true option
  */
 export function finalizePdf(
   doc: PDFKit.PDFDocument,
@@ -388,10 +388,11 @@ export function finalizePdf(
   }
 
   // Draw footer on each page using correct page indices
-  for (let i = 0; i < range.count; i++) {
-    doc.switchToPage(range.start + i)
+  // Never assume page 0 exists - always use range.start
+  for (let i = range.start; i < range.start + range.count; i++) {
+    doc.switchToPage(i)
     drawFooter(doc, {
-      pageNumber: i + 1,
+      pageNumber: i - range.start + 1, // Page number (1-based, relative to range)
       totalPages: range.count,
       packId: meta.packId,
     })

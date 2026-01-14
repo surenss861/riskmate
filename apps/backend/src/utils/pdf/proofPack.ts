@@ -76,6 +76,7 @@ export async function generateControlsPDF(
         left: STYLES.spacing.pageMargin,
         right: STYLES.spacing.pageMargin,
       },
+      bufferPages: true, // Enable page buffering for footer rendering
     })
 
     const chunks: Buffer[] = []
@@ -83,8 +84,6 @@ export async function generateControlsPDF(
     doc.on('end', () => resolve(Buffer.concat(chunks)))
     doc.on('error', reject)
 
-    // Enable page buffering BEFORE adding any content
-    ;(doc as any).bufferPages()
     initPage(doc)
 
     // Header with metadata
@@ -169,6 +168,7 @@ export async function generateAttestationsPDF(
         left: STYLES.spacing.pageMargin,
         right: STYLES.spacing.pageMargin,
       },
+      bufferPages: true, // Enable page buffering for footer rendering
     })
 
     const chunks: Buffer[] = []
@@ -176,8 +176,6 @@ export async function generateAttestationsPDF(
     doc.on('end', () => resolve(Buffer.concat(chunks)))
     doc.on('error', reject)
 
-    // Enable page buffering BEFORE adding any content
-    ;(doc as any).bufferPages()
     initPage(doc)
 
     // Header with metadata
@@ -259,6 +257,7 @@ export async function generateEvidenceIndexPDF(
         left: STYLES.spacing.pageMargin,
         right: STYLES.spacing.pageMargin,
       },
+      bufferPages: true, // Enable page buffering for footer rendering
     })
 
     const chunks: Buffer[] = []
@@ -266,8 +265,6 @@ export async function generateEvidenceIndexPDF(
     doc.on('end', () => resolve(Buffer.concat(chunks)))
     doc.on('error', reject)
 
-    // Enable page buffering BEFORE adding any content
-    ;(doc as any).bufferPages()
     initPage(doc)
 
     // Header with metadata

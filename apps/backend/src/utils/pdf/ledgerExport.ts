@@ -54,6 +54,7 @@ export async function generateLedgerExportPDF(options: LedgerExportOptions): Pro
         left: STYLES.spacing.pageMargin,
         right: STYLES.spacing.pageMargin,
       },
+      bufferPages: true, // Enable page buffering for footer rendering
     })
 
     const chunks: Buffer[] = []
@@ -61,8 +62,6 @@ export async function generateLedgerExportPDF(options: LedgerExportOptions): Pro
     doc.on('end', () => resolve(Buffer.concat(chunks)))
     doc.on('error', reject)
 
-    // Enable page buffering BEFORE adding any content
-    ;(doc as any).bufferPages()
     initPage(doc)
 
     // Header with metadata
