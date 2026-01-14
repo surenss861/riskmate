@@ -216,11 +216,18 @@ export function drawTable(
 
     let x = margin
     normalizedColumns.forEach((col) => {
-      doc.text(safeTextForPdf(col.header, `Table header: ${col.header}`), x, y, {
+      // Truncate header text to fit width, prevent wrapping
+      const headerText = truncateToWidth(doc, col.header, col.width, {
+        font: STYLES.fonts.header,
+        fontSize,
+      })
+
+      doc.text(headerText, x, y, {
         width: col.width,
         align: col.align || 'left',
+        lineBreak: false, // Prevent line breaks inside cells
       })
-      x += col.width + 4
+      x += col.width + columnGap
     })
 
     // Header underline
@@ -249,15 +256,18 @@ export function drawTable(
     let x = margin
     normalizedColumns.forEach((col, colIndex) => {
       const cellValue = row[colIndex] ?? ''
-      // CRITICAL: Sanitize first, then truncate, then validate
-      const text = safeTextForPdf(String(cellValue), `Table cell [${colIndex}]`).substring(0, 100)
+      // CRITICAL: Truncate to width to prevent wrapping, use lineBreak: false
+      const cellText = truncateToWidth(doc, cellValue, col.width, {
+        font: STYLES.fonts.body,
+        fontSize,
+      })
 
-      doc.text(text, x, y, {
+      doc.text(cellText, x, y, {
         width: col.width,
         align: col.align || 'left',
-        ellipsis: true,
+        lineBreak: false, // Prevent line breaks inside cells
       })
-      x += col.width + 4
+      x += col.width + columnGap
     })
   }
 
