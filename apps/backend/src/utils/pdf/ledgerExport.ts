@@ -139,7 +139,8 @@ export async function generateLedgerExportPDF(options: LedgerExportOptions): Pro
       // CRITICAL: Hardcoded clean constant + safeTextForPdf() validation + Helvetica font
       // Helvetica is a built-in PDF font with stable text mapping, preventing font encoding issues
       // This makes it impossible for broken glyphs to slip through at font/text-encoding time
-      const EVIDENCE_NOTE = 'Note: Evidence files are auth-gated. Use the Work Record IDs below to retrieve evidence via the Compliance Ledger interface.'
+      // Use space instead of hyphen to prevent line break issues in PDF extraction
+      const EVIDENCE_NOTE = 'Note: Evidence files are auth gated. Use the Work Record IDs below to retrieve evidence via the Compliance Ledger interface.'
       const evidenceNote = safeTextForPdf(EVIDENCE_NOTE, 'Ledger Evidence Reference note')
       doc
         .fillColor(STYLES.colors.secondaryText)
@@ -148,6 +149,8 @@ export async function generateLedgerExportPDF(options: LedgerExportOptions): Pro
         .text(evidenceNote, {
           align: 'left',
           indent: 20,
+          // Prevent line breaks in the middle of "auth gated" by using a single text run
+          // PDFKit will still wrap at word boundaries, but "auth gated" stays together better
         })
 
       doc.moveDown(0.5)

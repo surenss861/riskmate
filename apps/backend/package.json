@@ -11,6 +11,7 @@
     "type-check": "tsc --noEmit",
     "test:pdf-contracts": "tsx src/utils/pdf/testContracts.ts",
     "test:pdf-smoke": "tsx scripts/pdf-smoke-test.ts",
+    "test:pdf-golden": "tsx scripts/pdf-golden-path-test.ts",
     "validate:pdf": "tsx scripts/pdf-validate-file.ts"
   },
   "dependencies": {
