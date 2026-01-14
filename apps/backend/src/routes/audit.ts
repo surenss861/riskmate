@@ -1280,6 +1280,17 @@ auditRouter.post('/export/pack', authenticate as unknown as express.RequestHandl
     // Create zip archive
     archive = archiver('zip', { zlib: { level: 9 } })
     
+    // Guard: Only allow PDF files in proof pack
+    const safeAppend = (buffer: Buffer, filename: string) => {
+      if (!filename.toLowerCase().endsWith('.pdf')) {
+        throw new Error(`[EXPORT_PACK] Attempted to add non-PDF file: ${filename}. Proof packs must contain only PDF files.`)
+      }
+      if (!archive) {
+        throw new Error('[EXPORT_PACK] Archive not initialized')
+      }
+      archive.append(buffer, { name: filename })
+    }
+    
     // Handle client disconnect - abort archive if client closes connection
     res.on('close', () => {
       if (!res.writableEnded && archive) {
@@ -1411,7 +1422,7 @@ auditRouter.post('/export/pack', authenticate as unknown as express.RequestHandl
       })
 
       if (pdfBuffer) {
-        archive.append(pdfBuffer, { name: `ledger_export_${packId}.pdf` })
+        safeAppend(pdfBuffer, `ledger_export_${packId}.pdf`)
       }
     } catch (err: any) {
       console.error('Failed to generate PDF for pack:', err)
@@ -1482,7 +1493,7 @@ auditRouter.post('/export/pack', authenticate as unknown as express.RequestHandl
         
         controlsPdfBuffer = await generateControlsPDF(controlRows, meta)
         controlsHash = crypto.createHash('sha256').update(controlsPdfBuffer).digest('hex')
-        archive.append(controlsPdfBuffer, { name: `controls_${packId}.pdf` })
+        safeAppend(controlsPdfBuffer, `controls_${packId}.pdf`)
       }
     } catch (err: any) {
       console.error('Failed to generate Controls PDF for pack:', err)
@@ -1567,7 +1578,7 @@ auditRouter.post('/export/pack', authenticate as unknown as express.RequestHandl
         
         attestationsPdfBuffer = await generateAttestationsPDF(attestationRows, meta)
         attestationsHash = crypto.createHash('sha256').update(attestationsPdfBuffer).digest('hex')
-        archive.append(attestationsPdfBuffer, { name: `attestations_${packId}.pdf` })
+        safeAppend(attestationsPdfBuffer, `attestations_${packId}.pdf`)
       }
     } catch (err: any) {
       console.error('Failed to generate Attestations PDF for pack:', err)
@@ -1637,7 +1648,7 @@ auditRouter.post('/export/pack', authenticate as unknown as express.RequestHandl
       
       evidenceIndexPdfBuffer = await generateEvidenceIndexPDF(manifest, meta)
       evidenceIndexHash = crypto.createHash('sha256').update(evidenceIndexPdfBuffer).digest('hex')
-      archive.append(evidenceIndexPdfBuffer, { name: `evidence_index_${packId}.pdf` })
+      safeAppend(evidenceIndexPdfBuffer, `evidence_index_${packId}.pdf`)
       
       // Add evidence index to manifest
       manifest.files.push({
