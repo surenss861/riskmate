@@ -54,7 +54,7 @@ export function drawHeader(doc: PDFKit.PDFDocument, options: HeaderOptions): voi
     .fillColor(STYLES.colors.primaryText)
     .fontSize(STYLES.sizes.h1)
     .font(STYLES.fonts.header)
-    .text(sanitizeText(options.title), margin, margin, { align: 'left' })
+    .text(safeTextForPdf(options.title, 'Header title'), margin, margin, { align: 'left' })
 
   const underlineY = doc.y - 4
   doc
@@ -101,10 +101,11 @@ export function drawFooter(doc: PDFKit.PDFDocument, options: FooterOptions): voi
     .fontSize(STYLES.sizes.caption)
     .font(STYLES.fonts.body)
     .text(
-      sanitizeText(
+      safeTextForPdf(
         options.totalPages
           ? `Page ${options.pageNumber} of ${options.totalPages}`
-          : `Page ${options.pageNumber}`
+          : `Page ${options.pageNumber}`,
+        'Footer page number'
       ),
       margin,
       pageHeight - 40,
@@ -113,7 +114,7 @@ export function drawFooter(doc: PDFKit.PDFDocument, options: FooterOptions): voi
 
   if (options.packId) {
     doc.text(
-      sanitizeText(`Pack ID: ${options.packId}`),
+      safeTextForPdf(`Pack ID: ${options.packId}`, 'Footer packId'),
       doc.page.width - margin,
       pageHeight - 40,
       { align: 'right' }
@@ -128,7 +129,7 @@ export function drawSectionTitle(doc: PDFKit.PDFDocument, text: string): void {
     .fillColor(STYLES.colors.primaryText)
     .fontSize(STYLES.sizes.h3)
     .font(STYLES.fonts.header)
-    .text(sanitizeText(text), { align: 'left' })
+    .text(safeTextForPdf(text, 'Section title'), { align: 'left' })
 
   // Subtle divider line
   const dividerY = doc.y - 4
@@ -215,7 +216,7 @@ export function drawTable(
 
     let x = margin
     normalizedColumns.forEach((col) => {
-      doc.text(sanitizeText(col.header), x, y, {
+      doc.text(safeTextForPdf(col.header, `Table header: ${col.header}`), x, y, {
         width: col.width,
         align: col.align || 'left',
       })
@@ -320,14 +321,14 @@ export function drawEmptyState(
     .fillColor(STYLES.colors.primaryText)
     .fontSize(STYLES.sizes.h3)
     .font(STYLES.fonts.header)
-    .text(sanitizeText(options.title), margin + 16, cardY + 16, { align: 'left' })
+    .text(safeTextForPdf(options.title, 'Empty state title'), margin + 16, cardY + 16, { align: 'left' })
 
   // Message (sanitize to prevent control characters)
   doc
     .fillColor(STYLES.colors.secondaryText)
     .fontSize(STYLES.sizes.body)
     .font(STYLES.fonts.body)
-    .text(sanitizeText(options.message), margin + 16, cardY + 40, {
+    .text(safeTextForPdf(options.message, 'Empty state message'), margin + 16, cardY + 40, {
       width: cardWidth - 32,
       align: 'left',
     })

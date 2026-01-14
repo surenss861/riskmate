@@ -163,6 +163,46 @@ export function truncateText(text: string | undefined | null, maxLength: number)
   return text.substring(0, maxLength - 3) + '...'
 }
 
+/**
+ * Hard-fail guard: throws if text contains forbidden characters
+ * Use this in dev/test to catch regressions immediately
+ */
+export function assertNoBadChars(text: string, context?: string): void {
+  if (process.env.NODE_ENV === 'production') {
+    // Skip in production to avoid performance overhead
+    return
+  }
+  
+  const errors: string[] = []
+  
+  // Check for ASCII control characters
+  if (/[\x00-\x1F\x7F]/.test(text)) {
+    const matches = text.match(/[\x00-\x1F\x7F]/g) || []
+    const codes = matches.map(m => `\\u${m.charCodeAt(0).toString(16).padStart(4, '0')}`).join(', ')
+    errors.push(`ASCII control characters: ${codes}`)
+  }
+  
+  // Check for zero-width characters
+  if (/[\u200B-\u200D\uFEFF]/.test(text)) {
+    errors.push('Zero-width characters detected')
+  }
+  
+  // Check for Unicode replacement/broken glyph characters
+  if (/[\uFFFD-\uFFFF]/.test(text)) {
+    errors.push('Unicode replacement/broken glyph characters (U+FFFD-U+FFFF)')
+  }
+  
+  // Check for private-use area characters
+  if (/[\uE000-\uF8FF]/.test(text)) {
+    errors.push('Private-use area characters (U+E000-U+F8FF)')
+  }
+  
+  if (errors.length > 0) {
+    const contextMsg = context ? ` in ${context}` : ''
+    throw new Error(`Forbidden characters detected${contextMsg}: ${errors.join('; ')}\nText: ${JSON.stringify(text)}`)
+  }
+}
+
 export function sanitizeText(text: string | undefined | null): string {
   if (!text) return ''
   
@@ -198,6 +238,16 @@ export function sanitizeText(text: string | undefined | null): string {
   sanitized = sanitized.replace(/\s+/g, ' ')
   
   return sanitized.trim()
+}
+
+/**
+ * Safe text renderer: sanitizes and validates text before PDF rendering
+ * Use this as the final step before any doc.text() call
+ */
+export function safeTextForPdf(text: string | undefined | null, context?: string): string {
+  const sanitized = sanitizeText(text)
+  assertNoBadChars(sanitized, context)
+  return sanitized
 }
 
 // ============================================================================
