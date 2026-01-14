@@ -15,6 +15,19 @@ struct AuthView: View {
             DesignSystem.Colors.background
                 .ignoresSafeArea(.all)
             
+            // Canary text to verify rendering (remove after debugging)
+            #if DEBUG
+            VStack {
+                Text("AuthView Rendered")
+                    .foregroundColor(.red)
+                    .font(.caption)
+                    .padding(8)
+                    .background(Color.yellow.opacity(0.3))
+                Spacer()
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            #endif
+            
             ScrollView {
                 VStack(spacing: 0) {
                     Spacer(minLength: 60)

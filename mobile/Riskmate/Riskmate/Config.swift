@@ -29,12 +29,18 @@ struct AppConfig {
             fatalError("SUPABASE_ANON_KEY is still a placeholder or invalid. Replace with your actual anon key from Supabase dashboard.")
         }
         
-        // Debug logging (only in DEBUG builds)
-        #if DEBUG
+        // Debug logging (always print to catch issues)
         print("[Config] ✅ Backend URL: \(backendURL)")
-        print("[Config] ✅ Supabase URL: \(supabaseURL.prefix(30))...")
-        print("[Config] ✅ Supabase Anon Key: \(supabaseAnonKey.prefix(20))... (length: \(supabaseAnonKey.count))")
-        #endif
+        print("[Config] ✅ Supabase URL: \(supabaseURL)")
+        print("[Config] ✅ Supabase Anon Key prefix: \(supabaseAnonKey.prefix(20))... (length: \(supabaseAnonKey.count))")
+        
+        // Warn if still using placeholders
+        if supabaseURL.contains("YOUR_SUPABASE") || supabaseURL.contains("xxxxx") {
+            print("⚠️ [Config] WARNING: SUPABASE_URL is still a placeholder!")
+        }
+        if supabaseAnonKey.contains("YOUR_SUPABASE") || supabaseAnonKey.count < 50 {
+            print("⚠️ [Config] WARNING: SUPABASE_ANON_KEY is still a placeholder or invalid!")
+        }
         
         self.backendURL = backendURL.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         self.supabaseURL = supabaseURL

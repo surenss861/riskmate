@@ -22,18 +22,24 @@ class SessionManager: ObservableObject {
     
     /// Check if user is already logged in (on app launch)
     func checkSession() async {
+        print("[SessionManager] Starting session check...")
         isLoading = true
-        defer { isLoading = false }
+        defer { 
+            isLoading = false
+            print("[SessionManager] Session check complete. isAuthenticated=\(isAuthenticated), isLoading=\(isLoading)")
+        }
         
         do {
-            if try await authService.getCurrentSession() != nil {
+            if let session = try await authService.getCurrentSession() {
+                print("[SessionManager] ✅ Found existing session")
                 isAuthenticated = true
                 await loadUserData()
             } else {
+                print("[SessionManager] No existing session found")
                 isAuthenticated = false
             }
         } catch {
-            print("[SessionManager] No existing session: \(error)")
+            print("[SessionManager] ❌ Error checking session: \(error)")
             isAuthenticated = false
         }
     }

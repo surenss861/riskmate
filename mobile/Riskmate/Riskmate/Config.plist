@@ -5,7 +5,7 @@
 	<key>BACKEND_URL</key>
 	<string>https://api.riskmate.dev</string>
 	<key>SUPABASE_URL</key>
-	<string>YOUR_SUPABASE_URL</string>
+	<string>https://xwxghduwkzmzjrbpzwwq.supabase.co</string>
 	<key>SUPABASE_ANON_KEY</key>
 	<string>YOUR_SUPABASE_ANON_KEY</string>
 </dict>
