@@ -51,6 +51,14 @@ interface AttestationRow {
   [key: string]: any // Allow additional fields from CSV
 }
 
+interface ProofPackMeta {
+  packId: string
+  organizationName: string
+  generatedBy: string
+  generatedByRole: string
+  generatedAt: string
+  timeRange: string
+}
 
 /**
  * Generate Controls PDF from controls data
