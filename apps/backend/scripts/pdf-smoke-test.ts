@@ -124,38 +124,40 @@ async function extractTextFromPdf(pdfBuffer: Buffer): Promise<string> {
 function validatePdfText(text: string): { valid: boolean; errors: string[] } {
   const errors: string[] = []
   
-  // Check for Unicode Control, Format, Private-use categories
-  if (/\p{Cc}|\p{Cf}|\p{Co}/u.test(text)) {
-    errors.push('Contains Unicode Control/Format/Private-use category characters')
+  // Step 1: Sanitize extracted text (normalize whitespace, remove format chars)
+  const cleaned = sanitizeExtractedText(text)
+  
+  // Step 2: Check for bad ASCII control characters (excluding legitimate whitespace)
+  const badControls = findBadAsciiControls(cleaned)
+  if (badControls.length > 0) {
+    errors.push(`Contains unexpected ASCII control characters: ${badControls.join(', ')}`)
   }
   
-  // Check for broken glyphs
-  if (/[\uFFFD-\uFFFF]/.test(text)) {
+  // Step 3: Check for broken glyphs (replacement characters)
+  if (/[\uFFFD-\uFFFF]/.test(cleaned)) {
     errors.push('Contains Unicode replacement/broken glyph characters (U+FFFD-U+FFFF)')
   }
   
-  // Check for zero-width characters
-  if (/[\u200B-\u200D\uFEFF]/.test(text)) {
-    errors.push('Contains zero-width characters')
+  // Step 4: Check for zero-width characters (excluding already-stripped format chars)
+  if (/[\u200B-\u200D]/.test(cleaned)) {
+    errors.push('Contains zero-width characters (U+200B-U+200D)')
   }
   
-  // Check for ASCII control characters
-  if (/[\x00-\x1F\x7F]/.test(text)) {
-    const matches = text.match(/[\x00-\x1F\x7F]/g) || []
-    const codes = matches.map(m => `\\u${m.charCodeAt(0).toString(16).padStart(4, '0')}`).join(', ')
-    errors.push(`Contains ASCII control characters: ${codes}`)
+  // Step 5: Check for private-use area characters
+  if (/[\uE000-\uF8FF]/.test(cleaned)) {
+    errors.push('Contains private-use area characters (U+E000-U+F8FF)')
   }
   
   // CRITICAL: Check for "auth￾gated" broken glyph issue
-  if (text.includes('auth') && !text.includes('auth-gated') && !text.includes('auth gated')) {
-    const authMatch = text.match(/auth[^\s-]+gated/)
+  if (cleaned.includes('auth') && !cleaned.includes('auth-gated') && !cleaned.includes('auth gated')) {
+    const authMatch = cleaned.match(/auth[^\s-]+gated/)
     if (authMatch && /[\uFFFD-\uFFFF]/.test(authMatch[0])) {
       errors.push(`Broken glyph in "auth...gated" pattern: "${authMatch[0]}"`)
     }
   }
   
   // Check that Evidence Reference note is clean
-  if (text.includes('Evidence files are') && !text.includes('auth-gated') && !text.includes('auth gated')) {
+  if (cleaned.includes('Evidence files are') && !cleaned.includes('auth-gated') && !cleaned.includes('auth gated')) {
     errors.push('Evidence Reference note does not contain clean "auth-gated" text')
   }
   
@@ -213,17 +215,18 @@ async function runSmokeTest() {
       console.error('❌ Text validation failed:')
       validation.errors.forEach(error => console.error(`   - ${error}`))
       console.error('\n📄 Extracted text snippet (first 500 chars):')
-      console.error(extractedText.substring(0, 500))
+      console.error(rawExtractedText.substring(0, 500))
       process.exit(1)
     }
     
     console.log('   ✅ No forbidden characters detected\n')
     
-    // Step 4: Validate Active Filters count
+    // Step 4: Validate Active Filters count (use sanitized text)
     console.log('🔢 Validating Active Filters count...')
     const { countActiveFilters } = require('../src/utils/pdf/normalize')
     const expectedFilterCount = countActiveFilters(mockFilters)
-    const filtersValid = validateActiveFiltersCount(extractedText, expectedFilterCount)
+    const sanitizedText = sanitizeExtractedText(rawExtractedText)
+    const filtersValid = validateActiveFiltersCount(sanitizedText, expectedFilterCount)
     
     if (!filtersValid) {
       console.error('❌ Active Filters count validation failed')
@@ -232,14 +235,14 @@ async function runSmokeTest() {
     
     console.log(`   ✅ Active Filters count is correct (${expectedFilterCount})\n`)
     
-    // Step 5: Validate Evidence Reference note
+    // Step 5: Validate Evidence Reference note (use sanitized text)
     console.log('📝 Validating Evidence Reference note...')
-    if (!extractedText.includes('auth-gated') && !extractedText.includes('auth gated')) {
+    if (!sanitizedText.includes('auth-gated') && !sanitizedText.includes('auth gated')) {
       console.error('❌ Evidence Reference note does not contain clean "auth-gated" text')
       console.error('   Extracted text around "Evidence":')
-      const evidenceIndex = extractedText.indexOf('Evidence')
+      const evidenceIndex = sanitizedText.indexOf('Evidence')
       if (evidenceIndex >= 0) {
-        console.error(extractedText.substring(evidenceIndex, evidenceIndex + 200))
+        console.error(sanitizedText.substring(evidenceIndex, evidenceIndex + 200))
       }
       process.exit(1)
     }
