@@ -168,14 +168,29 @@ function validatePdfText(text: string): { valid: boolean; errors: string[] } {
 }
 
 function validateActiveFiltersCount(text: string, expectedCount: number): boolean {
-  // Look for "Active Filters" line in the text
-  const activeFiltersMatch = text.match(/Active Filters[:\s]+(\d+)/i)
-  if (!activeFiltersMatch) {
+  // Look for "Active Filters" line in the text (flexible matching for PDF extraction quirks)
+  // Try multiple patterns: "Active Filters: 3", "Active Filters 3", "ActiveFilters3", etc.
+  const patterns = [
+    /Active\s+Filters[:\s]+(\d+)/i,
+    /ActiveFilters[:\s]+(\d+)/i,
+    /Active\s+Filters\s*(\d+)/i,
+  ]
+  
+  let extractedCount: number | null = null
+  for (const pattern of patterns) {
+    const match = text.match(pattern)
+    if (match) {
+      extractedCount = parseInt(match[1], 10)
+      break
+    }
+  }
+  
+  if (extractedCount === null) {
     console.warn('Could not find "Active Filters" line in extracted text')
+    console.warn('Text snippet around "Active":', text.substring(Math.max(0, text.indexOf('Active') - 20), text.indexOf('Active') + 100))
     return false
   }
   
-  const extractedCount = parseInt(activeFiltersMatch[1], 10)
   if (extractedCount !== expectedCount) {
     console.error(`Active Filters count mismatch: expected ${expectedCount}, extracted ${extractedCount}`)
     return false
