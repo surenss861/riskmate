@@ -44,6 +44,42 @@ const mockFilters = {
   outcome: null,
 }
 
+/**
+ * Sanitize extracted PDF text by normalizing whitespace and removing common Unicode format characters
+ * This handles the fact that PDF text extraction often includes form feeds, direction markers, etc.
+ */
+function sanitizeExtractedText(text: string): string {
+  return text
+    .replace(/\r\n/g, '\n') // Normalize Windows line endings
+    .replace(/\r/g, '\n') // Normalize Mac line endings
+    .replace(/\u000c/g, '\n') // Form feed (page break) -> newline
+    .replace(/\u0000/g, '') // Remove null bytes
+    // Common Unicode format characters that show up in extracted text (not actual content issues):
+    .replace(/[\u200E\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g, '') // Left-to-right/right-to-left marks, etc.
+}
+
+/**
+ * Find bad ASCII control characters (excluding legitimate whitespace)
+ * Allows: \t (0x09), \n (0x0A), \r (0x0D)
+ */
+function findBadAsciiControls(text: string): string[] {
+  const bad: string[] = []
+  for (const ch of text) {
+    const code = ch.codePointAt(0)
+    if (code === undefined) continue
+    
+    const allowed =
+      code === 0x09 || // \t (tab)
+      code === 0x0a || // \n (newline)
+      code === 0x0d    // \r (carriage return)
+    
+    if (!allowed && (code < 0x20 || (code >= 0x7f && code <= 0x9f))) {
+      bad.push(`\\u${code.toString(16).padStart(4, '0')}`)
+    }
+  }
+  return [...new Set(bad)]
+}
+
 async function extractTextFromPdf(pdfBuffer: Buffer): Promise<string> {
   // Write to temp file
   const tempPath = join(process.cwd(), `temp-${TEST_PACK_ID}.pdf`)
@@ -52,7 +88,8 @@ async function extractTextFromPdf(pdfBuffer: Buffer): Promise<string> {
   try {
     // Try pdftotext first (most reliable)
     try {
-      const text = execSync(`pdftotext "${tempPath}" - 2>/dev/null`, {
+      // Use -nopgbrk to prevent form feeds, -enc UTF-8 for proper encoding
+      const text = execSync(`pdftotext -nopgbrk -enc UTF-8 "${tempPath}" - 2>/dev/null`, {
         encoding: 'utf-8',
         maxBuffer: 10 * 1024 * 1024,
       })
@@ -165,12 +202,12 @@ async function runSmokeTest() {
     
     // Step 2: Extract text
     console.log('🔍 Extracting text from PDF...')
-    const extractedText = await extractTextFromPdf(pdfBuffer)
-    console.log(`   ✅ Extracted ${extractedText.length} characters\n`)
+    const rawExtractedText = await extractTextFromPdf(pdfBuffer)
+    console.log(`   ✅ Extracted ${rawExtractedText.length} characters (raw)`)
     
-    // Step 3: Validate text is clean
+    // Step 3: Validate text is clean (validation includes sanitization)
     console.log('✅ Validating extracted text...')
-    const validation = validatePdfText(extractedText)
+    const validation = validatePdfText(rawExtractedText)
     
     if (!validation.valid) {
       console.error('❌ Text validation failed:')
