@@ -91,13 +91,13 @@ private extension View {
             VStack(spacing: 16) {
                 RMAuthTextField(
                     title: "Email",
-                    systemImage: "envelope",
-                    text: .constant("")
+                    text: .constant(""),
+                    icon: "envelope"
                 )
                 RMAuthTextField(
                     title: "Password",
-                    systemImage: "lock",
                     text: .constant(""),
+                    icon: "lock",
                     isSecure: true
                 )
             }
