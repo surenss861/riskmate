@@ -1,0 +1,35 @@
+import SwiftUI
+
+/// RiskMate glass card - matches web app card styling
+struct RMGlassCard<Content: View>: View {
+    let content: Content
+    
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+    
+    var body: some View {
+        content
+            .padding(24)
+            .background(
+                RoundedRectangle(cornerRadius: 28, style: .continuous)
+                    .fill(Color(hex: "#121212").opacity(0.80))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 28, style: .continuous)
+                            .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                    )
+            )
+            .shadow(color: .black.opacity(0.45), radius: 28, x: 0, y: 18)
+    }
+}
+
+#Preview {
+    RMBackground()
+        .overlay {
+            RMGlassCard {
+                Text("Glass Card Content")
+                    .foregroundColor(.white)
+            }
+            .padding()
+        }
+}

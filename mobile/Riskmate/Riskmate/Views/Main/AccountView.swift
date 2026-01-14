@@ -12,8 +12,7 @@ struct AccountView: View {
     var body: some View {
         NavigationView {
             ZStack {
-                DesignSystem.Colors.background
-                    .ignoresSafeArea()
+                RMBackground()
                 
                 List {
                     if let org = sessionManager.currentOrganization {

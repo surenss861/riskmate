@@ -5,9 +5,7 @@ struct ContentView: View {
     
     var body: some View {
         ZStack {
-            // Ensure background is always applied
-            DesignSystem.Colors.background
-                .ignoresSafeArea(.all)
+            RMBackground()
             
             // Always show something - never return empty
             if sessionManager.isLoading {

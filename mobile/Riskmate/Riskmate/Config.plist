@@ -7,6 +7,6 @@
 	<key>SUPABASE_URL</key>
 	<string>https://xwxghduwkzmzjrbpzwwq.supabase.co</string>
 	<key>SUPABASE_ANON_KEY</key>
-	<string>YOUR_SUPABASE_ANON_KEY</string>
+	<string>eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh3eGdoZHV3a3ptempyYnB6d3dxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjIzOTE1NjIsImV4cCI6MjA3Nzk2NzU2Mn0.-vLpuaDWxd0-XQMN1YymKl6aOXSxz_OFwS3JDDhm3fA</string>
 </dict>
 </plist>

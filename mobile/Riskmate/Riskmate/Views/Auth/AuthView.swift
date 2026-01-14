@@ -1,235 +1,162 @@
 import SwiftUI
 
 struct AuthView: View {
-    @State private var isLogin = true
+    @StateObject private var sessionManager = SessionManager.shared
+    
+    @State private var isSignup = false
     @State private var email = ""
     @State private var password = ""
     @State private var confirmPassword = ""
-    @State private var isLoading = false
-    @State private var errorMessage: String?
-    @StateObject private var sessionManager = SessionManager.shared
+    @State private var errorText: String?
     
     var body: some View {
         ZStack {
-            // Background - must be first and ignore safe area
-            DesignSystem.Colors.background
-                .ignoresSafeArea(.all)
+            RMBackground()
             
-            // Canary text to verify rendering (remove after debugging)
-            #if DEBUG
             VStack {
-                Text("AuthView Rendered")
-                    .foregroundColor(.red)
-                    .font(.caption)
-                    .padding(8)
-                    .background(Color.yellow.opacity(0.3))
                 Spacer()
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            #endif
-            
-            ScrollView {
-                VStack(spacing: 0) {
-                    Spacer(minLength: 60)
-                    
-                    // Card Container
-                    VStack(spacing: DesignSystem.Spacing.xl) {
+                
+                RMGlassCard {
+                    VStack(spacing: 18) {
                         // Logo
                         RiskMateLogo(size: .large, showText: true)
-                            .padding(.bottom, DesignSystem.Spacing.md)
+                            .padding(.bottom, 4)
                         
-                        // Title
-                        VStack(spacing: DesignSystem.Spacing.sm) {
-                            Text(isLogin ? "Welcome Back" : "Create Account")
-                                .font(DesignSystem.Typography.title)
-                                .foregroundColor(DesignSystem.Colors.textPrimary)
+                        // Title Section
+                        VStack(spacing: 6) {
+                            Text(isSignup ? "Create Account" : "Welcome Back")
+                                .font(.system(size: 34, weight: .bold))
+                                .foregroundColor(.white)
                             
-                            Text(isLogin ? "Sign in to your RiskMate account" : "Start protecting every job before it starts")
-                                .font(DesignSystem.Typography.bodySmall)
-                                .foregroundColor(DesignSystem.Colors.textSecondary)
+                            Text(isSignup ? "Start protecting every job before it starts" : "Sign in to your RiskMate account")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundColor(.white.opacity(0.65))
                         }
-                        .padding(.bottom, DesignSystem.Spacing.md)
-                        
-                        // Error Message
-                        if let error = errorMessage {
-                            HStack {
-                                Image(systemName: "exclamationmark.triangle.fill")
-                                    .foregroundColor(DesignSystem.Colors.error)
-                                Text(error)
-                                    .font(DesignSystem.Typography.caption)
-                                    .foregroundColor(DesignSystem.Colors.error)
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(DesignSystem.Spacing.md)
-                            .background(DesignSystem.Colors.errorBackground)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: DesignSystem.Radius.medium)
-                                    .stroke(DesignSystem.Colors.errorBorder, lineWidth: 1)
-                            )
-                            .cornerRadius(DesignSystem.Radius.medium)
-                        }
+                        .padding(.bottom, 8)
                         
                         // Form Fields
-                        VStack(spacing: DesignSystem.Spacing.md) {
-                            // Email
-                            TextField("Email", text: $email)
-                                .textContentType(.emailAddress)
-                                .keyboardType(.emailAddress)
-                                .autocapitalization(.none)
-                                .autocorrectionDisabled()
-                                .padding(DesignSystem.Spacing.md)
-                                .background(Color.black.opacity(0.4))
-                                .foregroundColor(DesignSystem.Colors.textPrimary)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: DesignSystem.Radius.medium)
-                                        .stroke(DesignSystem.Colors.border, lineWidth: 1)
-                                )
-                                .cornerRadius(DesignSystem.Radius.medium)
-                                .disabled(isLoading)
+                        VStack(spacing: 12) {
+                            RMTextField(
+                                title: "Email",
+                                text: $email,
+                                keyboardType: .emailAddress,
+                                textContentType: .emailAddress
+                            )
                             
-                            // Password
-                            SecureField("Password", text: $password)
-                                .textContentType(isLogin ? .password : .newPassword)
-                                .padding(DesignSystem.Spacing.md)
-                                .background(Color.black.opacity(0.4))
-                                .foregroundColor(DesignSystem.Colors.textPrimary)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: DesignSystem.Radius.medium)
-                                        .stroke(DesignSystem.Colors.border, lineWidth: 1)
-                                )
-                                .cornerRadius(DesignSystem.Radius.medium)
-                                .disabled(isLoading)
+                            RMTextField(
+                                title: "Password",
+                                text: $password,
+                                isSecure: true,
+                                textContentType: isSignup ? .newPassword : .password
+                            )
                             
                             // Confirm Password (Signup only)
-                            if !isLogin {
-                                SecureField("Confirm Password", text: $confirmPassword)
-                                    .textContentType(.newPassword)
-                                    .padding(DesignSystem.Spacing.md)
-                                    .background(Color.black.opacity(0.4))
-                                    .foregroundColor(DesignSystem.Colors.textPrimary)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: DesignSystem.Radius.medium)
-                                            .stroke(DesignSystem.Colors.border, lineWidth: 1)
-                                    )
-                                    .cornerRadius(DesignSystem.Radius.medium)
-                                    .disabled(isLoading)
+                            if isSignup {
+                                RMTextField(
+                                    title: "Confirm Password",
+                                    text: $confirmPassword,
+                                    isSecure: true,
+                                    textContentType: .newPassword
+                                )
                                 
                                 Text("Minimum 6 characters")
-                                    .font(DesignSystem.Typography.caption)
-                                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                                    .font(.system(size: 12, weight: .regular))
+                                    .foregroundColor(.white.opacity(0.5))
                                     .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.leading, 4)
                             }
-                            
-                            // Submit Button
-                            Button(action: handleSubmit) {
-                                if isLoading {
-                                    ProgressView()
-                                        .progressViewStyle(CircularProgressViewStyle(tint: .black))
-                                        .frame(maxWidth: .infinity)
-                                        .frame(height: 48)
-                                } else {
-                                    Text(isLogin ? "Log In" : "Sign Up")
-                                        .font(DesignSystem.Typography.body)
-                                        .fontWeight(.semibold)
-                                        .foregroundColor(.black)
-                                        .frame(maxWidth: .infinity)
-                                        .frame(height: 48)
-                                }
-                            }
-                            .background(DesignSystem.Colors.accent)
-                            .cornerRadius(DesignSystem.Radius.medium)
-                            .disabled(isLoading || email.isEmpty || password.isEmpty || (!isLogin && confirmPassword.isEmpty))
-                            .opacity((isLoading || email.isEmpty || password.isEmpty || (!isLogin && confirmPassword.isEmpty)) ? 0.5 : 1.0)
                         }
                         
-                        // Forgot Password (Login only)
-                        if isLogin {
-                            Button("Forgot password?") {
-                                // TODO: Implement forgot password
+                        // Submit Button
+                        RMPrimaryButton(
+                            title: isSignup ? "Sign Up" : "Log In",
+                            isLoading: sessionManager.isLoading,
+                            isDisabled: email.isEmpty || password.isEmpty || (isSignup && confirmPassword.isEmpty)
+                        ) {
+                            handleSubmit()
+                        }
+                        .padding(.top, 6)
+                        
+                        // Error Message
+                        if let errorText = errorText {
+                            HStack(spacing: 8) {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .font(.system(size: 12))
+                                Text(errorText)
+                                    .font(.system(size: 13, weight: .semibold))
                             }
-                            .font(DesignSystem.Typography.caption)
-                            .foregroundColor(DesignSystem.Colors.textSecondary)
-                            .padding(.top, DesignSystem.Spacing.sm)
+                            .foregroundColor(Color.red.opacity(0.95))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.top, 2)
                         }
                         
                         // Divider
-                        Divider()
-                            .background(DesignSystem.Colors.border)
-                            .padding(.vertical, DesignSystem.Spacing.md)
+                        Rectangle()
+                            .fill(Color.white.opacity(0.10))
+                            .frame(height: 1)
+                            .padding(.vertical, 10)
                         
                         // Toggle Login/Signup
-                        HStack {
-                            Text(isLogin ? "Don't have an account?" : "Already have an account?")
-                                .font(DesignSystem.Typography.caption)
-                                .foregroundColor(DesignSystem.Colors.textSecondary)
+                        HStack(spacing: 6) {
+                            Text(isSignup ? "Already have an account?" : "Don't have an account?")
+                                .font(.system(size: 15, weight: .regular))
+                                .foregroundColor(.white.opacity(0.65))
                             
-                            Button(isLogin ? "Sign up" : "Log in") {
-                                withAnimation {
-                                    isLogin.toggle()
-                                    errorMessage = nil
+                            Button(isSignup ? "Log in" : "Sign up") {
+                                withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) {
+                                    isSignup.toggle()
+                                    errorText = nil
                                     password = ""
                                     confirmPassword = ""
                                 }
                             }
-                            .font(DesignSystem.Typography.caption)
-                            .fontWeight(.medium)
-                            .foregroundColor(DesignSystem.Colors.accent)
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(Color(hex: "#F97316"))
                         }
                         
                         // Terms (Signup only)
-                        if !isLogin {
+                        if isSignup {
                             Text("By signing up, you agree to our Terms and Privacy Policy")
-                                .font(DesignSystem.Typography.caption)
-                                .foregroundColor(DesignSystem.Colors.textSecondary)
+                                .font(.system(size: 12, weight: .regular))
+                                .foregroundColor(.white.opacity(0.5))
                                 .multilineTextAlignment(.center)
-                                .padding(.top, DesignSystem.Spacing.md)
+                                .padding(.top, 8)
                         }
                     }
-                    .padding(DesignSystem.Spacing.xl)
-                    .background(
-                        DesignSystem.Colors.surface.opacity(0.8)
-                            .background(.ultraThinMaterial)
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: DesignSystem.Radius.large)
-                            .stroke(DesignSystem.Colors.border, lineWidth: 1)
-                    )
-                    .cornerRadius(DesignSystem.Radius.large)
-                    .padding(.horizontal, DesignSystem.Spacing.lg)
-                    
-                    Spacer(minLength: 60)
                 }
+                .padding(.horizontal, 22)
+                
+                Spacer()
             }
         }
+        .preferredColorScheme(.dark)
     }
     
     private func handleSubmit() {
-        errorMessage = nil
+        errorText = nil
         
-        if !isLogin && password != confirmPassword {
-            errorMessage = "Passwords do not match"
-            return
+        if isSignup {
+            if password != confirmPassword {
+                errorText = "Passwords do not match"
+                return
+            }
+            
+            if password.count < 6 {
+                errorText = "Password must be at least 6 characters"
+                return
+            }
         }
-        
-        if !isLogin && password.count < 6 {
-            errorMessage = "Password must be at least 6 characters"
-            return
-        }
-        
-        isLoading = true
         
         Task {
             do {
-                if isLogin {
-                    try await sessionManager.login(email: email, password: password)
-                } else {
+                if isSignup {
                     try await sessionManager.signup(email: email, password: password)
+                } else {
+                    try await sessionManager.login(email: email, password: password)
                 }
             } catch {
-                errorMessage = error.localizedDescription
+                errorText = error.localizedDescription
             }
-            
-            isLoading = false
         }
     }
 }

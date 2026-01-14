@@ -4,8 +4,7 @@ struct AuditView: View {
     var body: some View {
         NavigationView {
             ZStack {
-                DesignSystem.Colors.background
-                    .ignoresSafeArea()
+                RMBackground()
                 
                 VStack {
                     Text("Audit")
