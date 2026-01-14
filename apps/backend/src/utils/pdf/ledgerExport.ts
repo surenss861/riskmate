@@ -82,6 +82,16 @@ export async function generateLedgerExportPDF(options: LedgerExportOptions): Pro
     // KPI row
     const filteredEvents = events.slice(0, 1000) // Limit for performance
     const filterCount = countActiveFilters(filters || {})
+    
+    // Debug log to help diagnose Active Filters count issues
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('[ledger pdf] Active Filters calculation:', {
+        filterCount,
+        filters: filters || {},
+        filterEntries: Object.entries(filters || {}).map(([k, v]) => ({ key: k, value: v, active: v !== null && v !== undefined && v !== '' })),
+      })
+    }
+    
     drawKpiRow(doc, [
       { label: 'Total Events', value: events.length, highlight: true },
       { label: 'Displayed', value: filteredEvents.length },
