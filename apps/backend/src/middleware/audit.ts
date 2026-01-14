@@ -118,9 +118,16 @@ export async function recordAuditLog(entry: AuditLogEntry): Promise<AuditWriteRe
     const workRecordId = (entry.metadata?.work_record_id as string) || (entry.targetType === 'job' ? entry.targetId : null)
     const siteId = entry.metadata?.site_id as string || null
 
-    // Build summary
+    // Build summary (humanize event name)
+    const humanizeEventName = (name: string): string => {
+      return name
+        .replace(/\./g, ' ')
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, (l) => l.toUpperCase())
+    }
+    
     const summary = entry.metadata?.summary as string || 
-      `${entry.eventName.replace(/\./g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())}${entry.targetId ? ` for ${entry.targetType}` : ''}`
+      `${humanizeEventName(entry.eventName)}${entry.targetId ? ` for ${entry.targetType}` : ''}`
 
     // Get actor info for normalized fields
     const { data: actorData } = entry.actorId
