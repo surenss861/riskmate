@@ -88,24 +88,20 @@ const FIXTURE_CONTROLS = [
 
 const FIXTURE_ATTESTATIONS = [
   {
-    id: 'attestation-1',
-    control_id: 'control-1',
-    control_name: 'Golden Path Control 1',
-    attested_by: 'Test User',
-    attested_by_role: 'Admin',
-    status: 'compliant',
+    attestation_id: 'attestation-1',
+    title: 'Golden Path Control 1',
+    status_at_export: 'compliant',
     attested_at: new Date('2024-01-10').toISOString(),
-    notes: 'Golden path attestation test',
+    attested_by_email: 'test@example.com',
+    description: 'Golden path attestation test',
   },
   {
-    id: 'attestation-2',
-    control_id: 'control-2',
-    control_name: 'Golden Path Control 2',
-    attested_by: 'Test User',
-    attested_by_role: 'Admin',
-    status: 'non_compliant',
+    attestation_id: 'attestation-2',
+    title: 'Golden Path Control 2',
+    status_at_export: 'non_compliant',
     attested_at: new Date('2024-01-05').toISOString(),
-    notes: 'Golden path non-compliant test',
+    attested_by_email: 'test@example.com',
+    description: 'Golden path non-compliant test',
   },
 ]
 
@@ -259,21 +255,24 @@ async function runGoldenPathTest() {
     
     // Step 2: Generate Evidence Index PDF
     console.log('\n📄 Generating Evidence Index PDF...')
-    const packContext = {
+    const proofPackMeta = {
       packId: FIXTURE_PACK_ID,
       organizationName: FIXTURE_ORG_NAME,
       generatedBy: FIXTURE_GENERATED_BY,
       generatedByRole: FIXTURE_GENERATED_BY_ROLE,
-      filters: FIXTURE_FILTERS,
+      generatedAt: new Date().toISOString(),
+      timeRange: 'Last 30 days',
     }
-    const evidenceIndexPdf = await generateEvidenceIndexPDF(packContext, {
+    const manifest = {
+      packId: FIXTURE_PACK_ID,
       payloadFileCount: 3, // Ledger, Controls, Attestations
-      payloadFiles: [
-        { name: 'ledger_export', hash: 'abc123' },
-        { name: 'controls', hash: 'def456' },
-        { name: 'attestations', hash: 'ghi789' },
+      files: [
+        { name: 'ledger_export', sha256: 'abc123' },
+        { name: 'controls', sha256: 'def456' },
+        { name: 'attestations', sha256: 'ghi789' },
       ],
-    })
+    }
+    const evidenceIndexPdf = await generateEvidenceIndexPDF(manifest, proofPackMeta)
     const evidenceIndexText = extractTextFromPdf(evidenceIndexPdf)
     const evidenceIndexValidation = validatePdfText(evidenceIndexText)
     
@@ -301,9 +300,7 @@ async function runGoldenPathTest() {
     
     // Step 3: Generate Controls PDF
     console.log('\n📄 Generating Controls PDF...')
-    const controlsPdf = await generateControlsPDF(packContext, {
-      controls: FIXTURE_CONTROLS,
-    })
+    const controlsPdf = await generateControlsPDF(FIXTURE_CONTROLS, proofPackMeta)
     const controlsText = extractTextFromPdf(controlsPdf)
     const controlsValidation = validatePdfText(controlsText)
     
@@ -320,9 +317,7 @@ async function runGoldenPathTest() {
     
     // Step 4: Generate Attestations PDF
     console.log('\n📄 Generating Attestations PDF...')
-    const attestationsPdf = await generateAttestationsPDF(packContext, {
-      attestations: FIXTURE_ATTESTATIONS,
-    })
+    const attestationsPdf = await generateAttestationsPDF(FIXTURE_ATTESTATIONS, proofPackMeta)
     const attestationsText = extractTextFromPdf(attestationsPdf)
     const attestationsValidation = validatePdfText(attestationsText)
     
