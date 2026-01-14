@@ -1411,13 +1411,27 @@ auditRouter.post('/export/pack', authenticate as unknown as express.RequestHandl
         summary: e.summary,
       }))
 
+      // Build complete filters object for PDF generation (includes all active filters)
+      const pdfFilters = {
+        time_range: time_range || null,
+        job_id: job_id || null,
+        site_id: site_id || null,
+        category: category || null,
+        actor_id: actor_id || null,
+        severity: severity || null,
+        outcome: outcome || null,
+      }
+      
+      // Debug log to verify filters are being passed correctly
+      console.log('[ledger pdf] filters being passed:', JSON.stringify(pdfFilters))
+      
       pdfBuffer = await generateLedgerExportPDF({
         organizationName: orgData?.name || 'Unknown',
         generatedBy: userData?.full_name || 'Unknown',
         generatedByRole: userData?.role || 'Unknown',
         exportId: packId,
         timeRange: time_range || 'All',
-        filters: { job_id, site_id },
+        filters: pdfFilters,
         events: auditEntries,
       })
 

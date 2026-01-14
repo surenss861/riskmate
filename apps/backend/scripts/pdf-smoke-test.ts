@@ -5,7 +5,7 @@
  * Run with: tsx apps/backend/scripts/pdf-smoke-test.ts
  */
 
-import { generateLedgerPDF } from '../src/utils/pdf/ledgerExport'
+import { generateLedgerExportPDF } from '../src/utils/pdf/ledgerExport'
 import { readFileSync, writeFileSync, unlinkSync } from 'fs'
 import { join } from 'path'
 import { execSync } from 'child_process'
