@@ -81,17 +81,21 @@ class APIClient {
     
     /// Get organization info
     func getOrganization() async throws -> Organization {
-        return try await request<OrganizationResponse>(endpoint: "/api/account/organization").data
+        let response: OrganizationResponse = try await request(
+            endpoint: "/api/account/organization"
+        )
+        return response.data
     }
     
     /// Update organization name
     func updateOrganization(name: String) async throws -> Organization {
         let body = try JSONEncoder().encode(["name": name])
-        return try await request<OrganizationResponse>(
+        let response: OrganizationResponse = try await request(
             endpoint: "/api/account/organization",
             method: "PATCH",
             body: body
-        ).data
+        )
+        return response.data
     }
 }
 
