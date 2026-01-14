@@ -12,6 +12,7 @@ accountRouter.get("/", (_req, res) => {
     ok: true, 
     message: "Account API is available",
     endpoints: [
+      "GET /api/account/organization",
       "PATCH /api/account/profile",
       "PATCH /api/account/organization",
       "GET /api/account/billing",
@@ -21,6 +22,53 @@ accountRouter.get("/", (_req, res) => {
     ]
   });
 });
+
+// GET /api/account/organization
+// Returns organization info for the current user
+accountRouter.get(
+  "/organization",
+  authenticate as unknown as express.RequestHandler,
+  async (req: express.Request, res: express.Response) => {
+    try {
+      const userId = req.user?.id;
+      const organizationId = req.user?.organization_id;
+      
+      if (!userId || !organizationId) {
+        return res.status(401).json(createErrorResponse({
+          message: "Unauthorized",
+          code: "AUTH_UNAUTHORIZED",
+          status: 401,
+        }).response);
+      }
+
+      const { data: organization, error: orgError } = await supabase
+        .from("organizations")
+        .select("id, name, updated_at")
+        .eq("id", organizationId)
+        .single();
+
+      if (orgError || !organization) {
+        return res.status(404).json(createErrorResponse({
+          message: "Organization not found",
+          code: "ACCOUNT_ORG_NOT_FOUND",
+          status: 404,
+        }).response);
+      }
+
+      res.json({
+        data: organization,
+        message: "Organization retrieved successfully",
+      });
+    } catch (err: any) {
+      console.error("Organization fetch error:", err);
+      res.status(500).json(createErrorResponse({
+        message: "Internal server error",
+        code: "INTERNAL_ERROR",
+        status: 500,
+      }).response);
+    }
+  }
+);
 
 // Helper to log security events
 async function logSecurityEvent(

@@ -17,8 +17,13 @@ class AuthService {
     
     /// Get current session (if logged in)
     func getCurrentSession() async throws -> Session? {
-        let session = try await supabase.auth.session
-        return session
+        do {
+            let session = try await supabase.auth.session
+            return session
+        } catch {
+            // No session exists
+            return nil
+        }
     }
     
     /// Sign in with email/password
@@ -33,7 +38,11 @@ class AuthService {
     
     /// Get access token for API requests
     func getAccessToken() async throws -> String? {
-        let session = try await supabase.auth.session
-        return session?.accessToken
+        do {
+            let session = try await supabase.auth.session
+            return session?.accessToken
+        } catch {
+            return nil
+        }
     }
 }
