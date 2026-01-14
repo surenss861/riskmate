@@ -1,51 +1,87 @@
 import SwiftUI
 
-/// RiskMate auth text field - dark, native, focus ring, icon
+/// RiskMate auth text field - dark, native, focus ring, icon, reveal toggle
 struct RMAuthTextField: View {
     let title: String
-    let systemImage: String
     @Binding var text: String
+    var icon: String
     var isSecure: Bool = false
     var keyboardType: UIKeyboardType = .default
-    var textContentType: UITextContentType?
+    var textContentType: UITextContentType? = nil
     
-    @FocusState private var isFocused: Bool
+    @FocusState private var focused: Bool
+    @State private var reveal: Bool = false
     
     var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: systemImage)
+        HStack(spacing: 12) {
+            Image(systemName: icon)
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundColor(.white.opacity(0.55))
-                .frame(width: 20)
+                .frame(width: 18)
             
             Group {
-                if isSecure {
-                    SecureField(title, text: $text)
+                if isSecure && !reveal {
+                    SecureField("", text: $text)
                         .textContentType(textContentType ?? .password)
-                        .focused($isFocused)
+                        .focused($focused)
                 } else {
-                    TextField(title, text: $text)
+                    TextField("", text: $text)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .keyboardType(keyboardType)
-                        .textContentType(textContentType ?? .emailAddress)
-                        .focused($isFocused)
+                        .textContentType(textContentType)
+                        .focused($focused)
                 }
             }
             .foregroundColor(.white)
             .font(.system(size: 16, weight: .medium))
+            .tint(Color(hex: "#F97316"))
+            .placeholder(when: text.isEmpty) {
+                Text(title)
+                    .foregroundColor(.white.opacity(0.38))
+                    .font(.system(size: 16, weight: .medium))
+            }
+            
+            if isSecure {
+                Button { reveal.toggle() } label: {
+                    Image(systemName: reveal ? "eye.slash" : "eye")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.55))
+                }
+                .buttonStyle(.plain)
+            }
         }
-        .padding(.horizontal, 14)
+        .padding(.horizontal, 16)
         .padding(.vertical, 14)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.white.opacity(0.06)) // dark field (native vibe)
+                .fill(Color.white.opacity(0.06))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(isFocused ? Color(hex: "#F97316").opacity(0.75) : Color.white.opacity(0.10), lineWidth: 1)
+                .stroke(
+                    focused
+                    ? Color(hex: "#F97316").opacity(0.55)
+                    : Color.white.opacity(0.12),
+                    lineWidth: focused ? 1.6 : 1
+                )
         )
-        .animation(.easeOut(duration: 0.16), value: isFocused)
+        .animation(.spring(response: 0.22, dampingFraction: 0.9), value: focused)
+    }
+}
+
+// Simple placeholder helper
+private extension View {
+    @ViewBuilder
+    func placeholder<Content: View>(
+        when shouldShow: Bool,
+        alignment: Alignment = .leading,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        ZStack(alignment: alignment) {
+            content().opacity(shouldShow ? 1 : 0)
+            self
+        }
     }
 }
 

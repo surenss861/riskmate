@@ -15,7 +15,7 @@ struct AuthView: View {
             
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 18) {
-                    Spacer(minLength: 44)
+                    Spacer(minLength: 28)
                     
                     RMGlassCard {
                         VStack(spacing: 16) {
@@ -37,26 +37,29 @@ struct AuthView: View {
                             VStack(spacing: 12) {
                                 RMAuthTextField(
                                     title: "Email",
-                                    systemImage: "envelope",
                                     text: $email,
+                                    icon: "envelope",
+                                    isSecure: false,
                                     keyboardType: .emailAddress,
                                     textContentType: .emailAddress
                                 )
                                 
                                 RMAuthTextField(
                                     title: "Password",
-                                    systemImage: "lock",
                                     text: $password,
+                                    icon: "lock",
                                     isSecure: true,
+                                    keyboardType: .default,
                                     textContentType: isSignup ? .newPassword : .password
                                 )
                                 
                                 if isSignup {
                                     RMAuthTextField(
                                         title: "Confirm Password",
-                                        systemImage: "lock.fill",
                                         text: $confirmPassword,
+                                        icon: "lock",
                                         isSecure: true,
+                                        keyboardType: .default,
                                         textContentType: .newPassword
                                     )
                                     
@@ -118,11 +121,13 @@ struct AuthView: View {
                             }
                         }
                     }
+                    .frame(maxWidth: 420) // feels premium on iPad too
                     .padding(.horizontal, 20)
                     
                     Spacer(minLength: 44)
                 }
             }
+            .scrollDismissesKeyboard(.interactively)
         }
         .preferredColorScheme(.dark)
     }
