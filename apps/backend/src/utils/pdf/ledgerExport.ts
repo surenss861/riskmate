@@ -10,6 +10,8 @@ import {
   initPage,
   finalizePdf,
 } from './proofPackTheme'
+import type { PackContext, LedgerEvent, PackFilters } from './packContext'
+import { sanitizeText, formatDateTime } from './normalize'
 
 interface AuditLogEntry {
   id: string
@@ -82,7 +84,7 @@ export async function generateLedgerExportPDF(options: LedgerExportOptions): Pro
       { label: 'Total Events', value: events.length, highlight: true },
       { label: 'Displayed', value: filteredEvents.length },
       { label: 'Active Filters', value: filterCount },
-      { label: 'Hash Verified', value: '✅' },
+      { label: 'Hash Verified', value: 'Yes' }, // Use text instead of emoji to avoid encoding issues
     ])
 
     // Empty state or table
@@ -96,16 +98,16 @@ export async function generateLedgerExportPDF(options: LedgerExportOptions): Pro
     } else {
       drawSectionTitle(doc, 'Event Data')
 
-      // Prepare table data
+      // Prepare table data (sanitize all text to prevent control characters)
       const tableRows = filteredEvents.map((event) => [
-        new Date(event.created_at).toLocaleString(),
-        event.event_name || 'unknown',
-        event.category || 'operations',
-        event.outcome || 'allowed',
-        event.severity || 'info',
-        event.actor_name || 'System',
-        event.actor_role || '',
-        event.job_title || event.target_type || '',
+        formatDateTime(event.created_at),
+        sanitizeText(event.event_name || 'unknown'),
+        sanitizeText(event.category || 'operations'),
+        sanitizeText(event.outcome || 'allowed'),
+        sanitizeText(event.severity || 'info'),
+        sanitizeText(event.actor_name || 'System'),
+        sanitizeText(event.actor_role || ''),
+        sanitizeText(event.job_title || event.target_type || ''),
       ])
 
       drawTable(doc, {
@@ -136,7 +138,7 @@ export async function generateLedgerExportPDF(options: LedgerExportOptions): Pro
         .fillColor(STYLES.colors.secondaryText)
         .fontSize(STYLES.sizes.body)
         .font(STYLES.fonts.body)
-        .text('Note: Evidence files are auth-gated. Use the Work Record IDs below to retrieve evidence via the Compliance Ledger interface.', {
+        .text(sanitizeText('Note: Evidence files are auth-gated. Use the Work Record IDs below to retrieve evidence via the Compliance Ledger interface.'), {
           align: 'left',
           indent: 20,
         })
@@ -152,7 +154,9 @@ export async function generateLedgerExportPDF(options: LedgerExportOptions): Pro
 
         Array.from(uniqueJobs).slice(0, 50).forEach((jobId) => {
           const event = events.find(e => e.job_id === jobId)
-          doc.text(`• Work Record ID: ${jobId}${event?.job_title ? ` (${event.job_title})` : ''}`, {
+          const jobTitle = event?.job_title ? sanitizeText(event.job_title) : ''
+          const text = sanitizeText(`• Work Record ID: ${jobId}${jobTitle ? ` (${jobTitle})` : ''}`)
+          doc.text(text, {
             align: 'left',
             indent: 20,
           })

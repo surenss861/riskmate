@@ -165,8 +165,28 @@ export function truncateText(text: string | undefined | null, maxLength: number)
 
 export function sanitizeText(text: string | undefined | null): string {
   if (!text) return ''
-  // Remove control characters, normalize whitespace
-  return text.replace(/[\x00-\x1F\x7F]/g, '').trim()
+  
+  // Remove ASCII control characters (\u0000-\u001F, \u007F)
+  let sanitized = text.replace(/[\x00-\x1F\x7F]/g, '')
+  
+  // Remove or replace problematic Unicode characters
+  // Replace zero-width and invisible characters
+  sanitized = sanitized.replace(/[\u200B-\u200D\uFEFF]/g, '')
+  
+  // Replace common problematic Unicode separators with normal spaces
+  sanitized = sanitized.replace(/[\u2028\u2029]/g, ' ')
+  
+  // Normalize weird dashes/hyphens to standard hyphen
+  sanitized = sanitized.replace(/[\u2010-\u2015\u2212]/g, '-')
+  
+  // Normalize quotes to standard quotes
+  sanitized = sanitized.replace(/[\u2018\u2019]/g, "'")
+  sanitized = sanitized.replace(/[\u201C\u201D]/g, '"')
+  
+  // Collapse repeated whitespace
+  sanitized = sanitized.replace(/\s+/g, ' ')
+  
+  return sanitized.trim()
 }
 
 // ============================================================================
