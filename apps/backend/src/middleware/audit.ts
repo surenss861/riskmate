@@ -42,30 +42,28 @@ const truncateMetadata = (metadata: Record<string, unknown> | undefined) => {
 };
 
 // Helper to determine category from event name
-// Maps to all categories: governance, operations, access, review_queue, incident_review, attestations, access_review, system
-function getCategoryFromEventName(eventName: string): 'governance' | 'operations' | 'access' | 'review_queue' | 'incident_review' | 'attestations' | 'access_review' | 'system' {
-  // Review queue events
-  if (eventName.includes('review.')) return 'review_queue'
+// Maps to DB-allowed categories: 'governance', 'operations', 'access'
+// The constraint only allows these three values, so we normalize all internal categories to these
+function getCategoryFromEventName(eventName: string): 'governance' | 'operations' | 'access' {
+  // Governance enforcement events (policy violations, auth blocks)
+  if (eventName.includes('auth.') || eventName.includes('violation') || eventName.includes('policy.')) {
+    return 'governance'
+  }
   
-  // Incident review events
-  if (eventName.includes('incident.') || eventName.includes('corrective_action')) return 'incident_review'
+  // Access/security events (logins, role changes, team/account management)
+  if (eventName.includes('access.') || eventName.includes('security.') || eventName.includes('role_change') || 
+      eventName.includes('login') || eventName.includes('team.') || eventName.includes('account.')) {
+    return 'access'
+  }
   
-  // Attestation events
-  if (eventName.includes('attestation.')) return 'attestations'
+  // Review queue, incidents, attestations, exports, system events → operations
+  // (These are all operational activities)
+  if (eventName.includes('review.') || eventName.includes('incident.') || eventName.includes('corrective_action') ||
+      eventName.includes('attestation.') || eventName.includes('export.') || eventName.includes('system.')) {
+    return 'operations'
+  }
   
-  // Access review events
-  if (eventName.includes('access.') || eventName.includes('security.') || eventName.includes('role_change') || eventName.includes('login')) return 'access_review'
-  
-  // Governance enforcement events
-  if (eventName.includes('auth.') || eventName.includes('violation') || eventName.includes('policy.')) return 'governance'
-  
-  // System/export events
-  if (eventName.includes('export.') || eventName.includes('system.')) return 'system'
-  
-  // Team/account management (legacy)
-  if (eventName.includes('team.') || eventName.includes('account.')) return 'access_review'
-  
-  // Default to operations
+  // Default to operations (most events are operational)
   return 'operations'
 }
 
