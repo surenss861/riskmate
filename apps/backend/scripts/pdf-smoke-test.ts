@@ -148,17 +148,36 @@ function validatePdfText(text: string): { valid: boolean; errors: string[] } {
     errors.push('Contains private-use area characters (U+E000-U+F8FF)')
   }
   
-  // CRITICAL: Check for "auth￾gated" broken glyph issue
-  if (cleaned.includes('auth') && !cleaned.includes('auth-gated') && !cleaned.includes('auth gated')) {
-    const authMatch = cleaned.match(/auth[^\s-]+gated/)
-    if (authMatch && /[\uFFFD-\uFFFF]/.test(authMatch[0])) {
-      errors.push(`Broken glyph in "auth...gated" pattern: "${authMatch[0]}"`)
+  // CRITICAL: Check for "auth￾gated" broken glyph issue (deterministic check)
+  // Pass only if it matches: "auth-gated" or "auth gated"
+  // Fail if we see "auth" followed by weird non-space/non-hyphen chars before "gated"
+  const hasAuthGated = cleaned.toLowerCase().includes('auth') && cleaned.toLowerCase().includes('gated')
+  
+  if (hasAuthGated) {
+    const okPattern = /auth[- ]gated/i // Matches "auth-gated" or "auth gated"
+    const suspiciousPattern = /auth[^\w\s-]+gated/i // auth followed by non-word/non-space/non-hyphen before gated
+    
+    const isOk = okPattern.test(cleaned)
+    const isSuspicious = suspiciousPattern.test(cleaned)
+    
+    if (isSuspicious && !isOk) {
+      const match = cleaned.match(/auth[^\w\s-]+gated/i)
+      errors.push(`Broken glyph in "auth...gated" pattern: "${match?.[0] || 'unknown'}"`)
+    } else if (!isOk) {
+      // Has "auth" and "gated" but not in the correct format
+      const match = cleaned.match(/auth.{0,10}gated/i)
+      if (match) {
+        errors.push(`"auth-gated" text is malformed: "${match[0]}" (expected "auth-gated" or "auth gated")`)
+      }
     }
   }
   
-  // Check that Evidence Reference note is clean
-  if (cleaned.includes('Evidence files are') && !cleaned.includes('auth-gated') && !cleaned.includes('auth gated')) {
-    errors.push('Evidence Reference note does not contain clean "auth-gated" text')
+  // Check that Evidence Reference note is clean (if section exists)
+  if (cleaned.includes('Evidence files are')) {
+    const okPattern = /auth[- ]gated/i
+    if (!okPattern.test(cleaned)) {
+      errors.push('Evidence Reference note does not contain clean "auth-gated" text')
+    }
   }
   
   return {
