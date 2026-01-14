@@ -42,7 +42,8 @@ class AuthService {
     func getAccessToken() async throws -> String? {
         do {
             let session = try await supabase.auth.session
-            return session?.accessToken
+            // Session is non-optional, but accessToken might be optional
+            return session.accessToken
         } catch {
             return nil
         }
