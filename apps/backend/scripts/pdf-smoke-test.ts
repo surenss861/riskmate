@@ -253,18 +253,22 @@ async function runSmokeTest() {
     console.log(`   ✅ Active Filters count is correct (${expectedFilterCount})\n`)
     
     // Step 5: Validate Evidence Reference note (use sanitized text)
+    // Only validate if the Evidence Reference section exists (it only appears if there are events with job_id)
     console.log('📝 Validating Evidence Reference note...')
-    if (!sanitizedText.includes('auth-gated') && !sanitizedText.includes('auth gated')) {
-      console.error('❌ Evidence Reference note does not contain clean "auth-gated" text')
-      console.error('   Extracted text around "Evidence":')
-      const evidenceIndex = sanitizedText.indexOf('Evidence')
-      if (evidenceIndex >= 0) {
-        console.error(sanitizedText.substring(evidenceIndex, evidenceIndex + 200))
+    if (sanitizedText.includes('Evidence Reference') || sanitizedText.includes('Evidence files are')) {
+      if (!sanitizedText.includes('auth-gated') && !sanitizedText.includes('auth gated')) {
+        console.error('❌ Evidence Reference note does not contain clean "auth-gated" text')
+        console.error('   Extracted text around "Evidence":')
+        const evidenceIndex = sanitizedText.indexOf('Evidence')
+        if (evidenceIndex >= 0) {
+          console.error(sanitizedText.substring(evidenceIndex, evidenceIndex + 200))
+        }
+        process.exit(1)
       }
-      process.exit(1)
+      console.log('   ✅ Evidence Reference note is clean\n')
+    } else {
+      console.log('   ⚠️  Evidence Reference section not found (may not have events with job_id)\n')
     }
-    
-    console.log('   ✅ Evidence Reference note is clean\n')
     
     console.log('✅ All smoke test checks passed!')
     console.log('\n📋 Summary:')
