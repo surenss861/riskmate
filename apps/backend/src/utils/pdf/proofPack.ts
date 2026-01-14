@@ -10,6 +10,7 @@ import {
   drawEmptyState,
   formatHashShort,
   initPage,
+  finalizePdf,
 } from './proofPackTheme'
 
 // Control row can be any object with these fields (from CSV parsing)
@@ -82,6 +83,8 @@ export async function generateControlsPDF(
     doc.on('end', () => resolve(Buffer.concat(chunks)))
     doc.on('error', reject)
 
+    // Enable page buffering BEFORE adding any content
+    ;(doc as any).bufferPages()
     initPage(doc)
 
     // Header with metadata
@@ -143,12 +146,8 @@ export async function generateControlsPDF(
       })
     }
 
-    // Footer
-    const pageCount = doc.bufferedPageRange().count + 1
-    for (let i = 0; i < pageCount; i++) {
-      doc.switchToPage(i)
-      drawFooter(doc, { pageNumber: i + 1, totalPages: pageCount, packId: meta.packId })
-    }
+    // Finalize PDF (adds footers to all pages)
+    finalizePdf(doc, { packId: meta.packId })
 
     doc.end()
   })
@@ -177,6 +176,8 @@ export async function generateAttestationsPDF(
     doc.on('end', () => resolve(Buffer.concat(chunks)))
     doc.on('error', reject)
 
+    // Enable page buffering BEFORE adding any content
+    ;(doc as any).bufferPages()
     initPage(doc)
 
     // Header with metadata
@@ -235,12 +236,8 @@ export async function generateAttestationsPDF(
       })
     }
 
-    // Footer
-    const pageCount = doc.bufferedPageRange().count + 1
-    for (let i = 0; i < pageCount; i++) {
-      doc.switchToPage(i)
-      drawFooter(doc, { pageNumber: i + 1, totalPages: pageCount, packId: meta.packId })
-    }
+    // Finalize PDF (adds footers to all pages)
+    finalizePdf(doc, { packId: meta.packId })
 
     doc.end()
   })
@@ -269,6 +266,8 @@ export async function generateEvidenceIndexPDF(
     doc.on('end', () => resolve(Buffer.concat(chunks)))
     doc.on('error', reject)
 
+    // Enable page buffering BEFORE adding any content
+    ;(doc as any).bufferPages()
     initPage(doc)
 
     // Header with metadata
@@ -379,12 +378,8 @@ export async function generateEvidenceIndexPDF(
       }
     }
 
-    // Footer
-    const pageCount = doc.bufferedPageRange().count + 1
-    for (let i = 0; i < pageCount; i++) {
-      doc.switchToPage(i)
-      drawFooter(doc, { pageNumber: i + 1, totalPages: pageCount, packId: meta.packId })
-    }
+    // Finalize PDF (adds footers to all pages)
+    finalizePdf(doc, { packId: meta.packId })
 
     doc.end()
   })

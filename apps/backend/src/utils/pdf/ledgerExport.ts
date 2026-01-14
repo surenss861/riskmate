@@ -8,6 +8,7 @@ import {
   drawTable,
   drawEmptyState,
   initPage,
+  finalizePdf,
 } from './proofPackTheme'
 
 interface AuditLogEntry {
@@ -60,6 +61,8 @@ export async function generateLedgerExportPDF(options: LedgerExportOptions): Pro
     doc.on('end', () => resolve(Buffer.concat(chunks)))
     doc.on('error', reject)
 
+    // Enable page buffering BEFORE adding any content
+    ;(doc as any).bufferPages()
     initPage(doc)
 
     // Header with metadata
@@ -158,12 +161,8 @@ export async function generateLedgerExportPDF(options: LedgerExportOptions): Pro
       }
     }
 
-    // Footer
-    const pageCount = doc.bufferedPageRange().count + 1
-    for (let i = 0; i < pageCount; i++) {
-      doc.switchToPage(i)
-      drawFooter(doc, { pageNumber: i + 1, totalPages: pageCount, packId: exportId })
-    }
+    // Finalize PDF (adds footers to all pages)
+    finalizePdf(doc, { packId: exportId })
 
     doc.end()
   })

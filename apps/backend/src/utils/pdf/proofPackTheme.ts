@@ -265,11 +265,7 @@ export function drawTable(
   options.rows.forEach((row, index) => {
     // Check if we need a new page
     if (currentY + rowHeight > pageHeight - 60) {
-      // Add footer to current page
-      const pageNum = doc.bufferedPageRange().count + 1
-      drawFooter(doc, { pageNumber: pageNum, packId: undefined })
-
-      // New page
+      // New page (don't add footer here - finalizePdf handles all footers)
       doc.addPage()
       addWatermark(doc)
       currentY = margin + 40
@@ -373,4 +369,34 @@ export function formatHashShort(hash: string, length: number = 16): string {
 export function initPage(doc: PDFKit.PDFDocument): void {
   addWatermark(doc)
   doc.y = STYLES.spacing.sectionTop
+}
+
+/**
+ * Finalize PDF with proper page buffering and footers
+ * MUST call doc.bufferPages() before adding any content
+ */
+export function finalizePdf(
+  doc: PDFKit.PDFDocument,
+  meta: { packId: string }
+): void {
+  // Get the buffered page range (may not start at 0)
+  const range = (doc as any).bufferedPageRange()
+  
+  if (!range || range.count === 0) {
+    // No pages buffered, nothing to finalize
+    return
+  }
+
+  // Draw footer on each page using correct page indices
+  for (let i = 0; i < range.count; i++) {
+    doc.switchToPage(range.start + i)
+    drawFooter(doc, {
+      pageNumber: i + 1,
+      totalPages: range.count,
+      packId: meta.packId,
+    })
+  }
+
+  // Flush buffered pages
+  ;(doc as any).flushPages()
 }
