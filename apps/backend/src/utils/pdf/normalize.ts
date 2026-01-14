@@ -174,7 +174,12 @@ export function sanitizeText(text: string | undefined | null): string {
   sanitized = sanitized.replace(/[\u200B-\u200D\uFEFF]/g, '')
   
   // Remove Unicode replacement characters (U+FFFD, U+FFFE, U+FFFF) - these indicate broken glyphs
+  // Replace with nothing (removes the character) - this will leave "authgated" which is acceptable
   sanitized = sanitized.replace(/[\uFFFD-\uFFFF]/g, '')
+  
+  // If we have "authgated" (missing hyphen due to broken glyph removal), we could normalize it
+  // But for audit safety, we'll leave it as-is since the broken glyph is gone
+  // The hyphen was part of the original text, so if it's missing, that's a data issue, not a sanitization issue
   
   // Replace common problematic Unicode separators with normal spaces
   sanitized = sanitized.replace(/[\u2028\u2029]/g, ' ')
