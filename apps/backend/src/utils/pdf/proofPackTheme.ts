@@ -101,9 +101,11 @@ export function drawFooter(doc: PDFKit.PDFDocument, options: FooterOptions): voi
     .fontSize(STYLES.sizes.caption)
     .font(STYLES.fonts.body)
     .text(
-      options.totalPages
-        ? `Page ${options.pageNumber} of ${options.totalPages}`
-        : `Page ${options.pageNumber}`,
+      sanitizeText(
+        options.totalPages
+          ? `Page ${options.pageNumber} of ${options.totalPages}`
+          : `Page ${options.pageNumber}`
+      ),
       margin,
       pageHeight - 40,
       { align: 'left' }
