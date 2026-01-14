@@ -12,6 +12,7 @@ import {
   initPage,
   finalizePdf,
 } from './proofPackTheme'
+import { safeTextForPdf } from './normalize'
 import {
   calculateControlKPIs,
   sortControls,
