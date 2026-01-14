@@ -22,8 +22,9 @@ struct ContentView: View {
                             Label("Account", systemImage: "person.circle")
                         }
                 }
+                .preferredColorScheme(.dark)
             } else {
-                LoginView()
+                AuthView()
             }
         }
         .task {

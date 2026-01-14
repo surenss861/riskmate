@@ -54,6 +54,42 @@ class SessionManager: ObservableObject {
         }
     }
     
+    /// Signup with email/password
+    func signup(email: String, password: String) async throws {
+        isLoading = true
+        errorMessage = nil
+        defer { isLoading = false }
+        
+        do {
+            // First create user via backend API (creates user + organization)
+            let signupURL = URL(string: "\(AppConfig.shared.backendURL)/api/auth/signup")!
+            var request = URLRequest(url: signupURL)
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = try JSONEncoder().encode(["email": email, "password": password])
+            
+            let (data, response) = try await URLSession.shared.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw NSError(domain: "AuthError", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid response"])
+            }
+            
+            if !(200...299).contains(httpResponse.statusCode) {
+                let errorData = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+                let errorMsg = errorData?["error"] as? String ?? "Signup failed"
+                throw NSError(domain: "AuthError", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: errorMsg])
+            }
+            
+            // Then sign in with Supabase
+            try await authService.signIn(email: email, password: password)
+            isAuthenticated = true
+            await loadUserData()
+        } catch {
+            errorMessage = error.localizedDescription
+            throw error
+        }
+    }
+    
     /// Logout
     func logout() async {
         isLoading = true

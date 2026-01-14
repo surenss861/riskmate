@@ -7,65 +7,96 @@ struct AccountView: View {
     @State private var editedOrgName = ""
     @State private var showError = false
     @State private var errorMessage = ""
+    @State private var isLoading = false
     
     var body: some View {
         NavigationView {
-            List {
-                if let org = sessionManager.currentOrganization {
-                    Section("Organization") {
-                        HStack {
-                            Text("Name")
-                            Spacer()
-                            if isEditingOrgName {
-                                TextField("Organization Name", text: $editedOrgName)
-                                    .textFieldStyle(.plain)
-                                    .multilineTextAlignment(.trailing)
-                            } else {
-                                Text(org.name)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                        
-                        if isEditingOrgName {
-                            Button("Save") {
-                                saveOrganizationName()
-                            }
-                            .disabled(editedOrgName.isEmpty || editedOrgName == org.name)
-                            
-                            Button("Cancel", role: .cancel) {
-                                isEditingOrgName = false
-                                editedOrgName = org.name
-                            }
-                        } else {
-                            Button("Edit") {
-                                editedOrgName = org.name
-                                isEditingOrgName = true
-                            }
-                        }
-                    }
-                }
+            ZStack {
+                DesignSystem.Colors.background
+                    .ignoresSafeArea()
                 
-                Section {
-                    Button("Sign Out", role: .destructive) {
-                        Task {
-                            await sessionManager.logout()
+                List {
+                    if let org = sessionManager.currentOrganization {
+                        Section {
+                            HStack {
+                                Text("Organization Name")
+                                    .foregroundColor(DesignSystem.Colors.textPrimary)
+                                Spacer()
+                                if isEditingOrgName {
+                                    TextField("Organization Name", text: $editedOrgName)
+                                        .textFieldStyle(.plain)
+                                        .multilineTextAlignment(.trailing)
+                                        .foregroundColor(DesignSystem.Colors.textPrimary)
+                                } else {
+                                    Text(org.name)
+                                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                                }
+                            }
+                            .listRowBackground(DesignSystem.Colors.surface.opacity(0.5))
+                            
+                            if isEditingOrgName {
+                                Button(action: saveOrganizationName) {
+                                    if isLoading {
+                                        HStack {
+                                            ProgressView()
+                                                .progressViewStyle(CircularProgressViewStyle(tint: DesignSystem.Colors.accent))
+                                            Text("Saving...")
+                                                .foregroundColor(DesignSystem.Colors.accent)
+                                        }
+                                    } else {
+                                        Text("Save")
+                                            .foregroundColor(DesignSystem.Colors.accent)
+                                    }
+                                }
+                                .disabled(isLoading || editedOrgName.isEmpty || editedOrgName == org.name)
+                                .listRowBackground(DesignSystem.Colors.surface.opacity(0.5))
+                                
+                                Button("Cancel", role: .cancel) {
+                                    isEditingOrgName = false
+                                    editedOrgName = org.name
+                                }
+                                .listRowBackground(DesignSystem.Colors.surface.opacity(0.5))
+                            } else {
+                                Button("Edit") {
+                                    editedOrgName = org.name
+                                    isEditingOrgName = true
+                                }
+                                .foregroundColor(DesignSystem.Colors.accent)
+                                .listRowBackground(DesignSystem.Colors.surface.opacity(0.5))
+                            }
+                        } header: {
+                            Text("Organization")
+                                .foregroundColor(DesignSystem.Colors.textSecondary)
                         }
                     }
+                    
+                    Section {
+                        Button("Sign Out", role: .destructive) {
+                            Task {
+                                await sessionManager.logout()
+                            }
+                        }
+                        .listRowBackground(DesignSystem.Colors.surface.opacity(0.5))
+                    }
                 }
-            }
-            .navigationTitle("Account")
-            .refreshable {
-                await sessionManager.refreshOrganization()
-            }
-            .alert("Error", isPresented: $showError) {
-                Button("OK", role: .cancel) { }
-            } message: {
-                Text(errorMessage)
+                .scrollContentBackground(.hidden)
+                .navigationTitle("Account")
+                .navigationBarTitleDisplayMode(.large)
+                .refreshable {
+                    await sessionManager.refreshOrganization()
+                }
+                .alert("Error", isPresented: $showError) {
+                    Button("OK", role: .cancel) { }
+                } message: {
+                    Text(errorMessage)
+                }
             }
         }
+        .preferredColorScheme(.dark)
     }
     
     private func saveOrganizationName() {
+        isLoading = true
         Task {
             do {
                 let updated = try await APIClient.shared.updateOrganization(name: editedOrgName)
@@ -75,6 +106,7 @@ struct AccountView: View {
                 errorMessage = error.localizedDescription
                 showError = true
             }
+            isLoading = false
         }
     }
 }
