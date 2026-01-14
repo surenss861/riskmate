@@ -78,8 +78,9 @@ const allowedOrigins = Array.from(new Set([...defaultAllowedOrigins, ...envAllow
 const allowedOriginsSet = new Set(allowedOrigins);
 
 // Helper to check if origin is allowed (never throws)
+// iOS apps don't send Origin header, so missing origin = allowed (mobile client)
 const isAllowedOrigin = (origin: string | undefined): boolean => {
-  if (!origin) return true; // server-to-server / curl without Origin
+  if (!origin) return true; // server-to-server / curl / iOS apps (no Origin header)
   if (allowedOriginsSet.has(origin)) return true;
   const isDev = process.env.NODE_ENV !== "production";
   return isDev && origin.startsWith("http://localhost");
