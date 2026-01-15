@@ -82,7 +82,11 @@ END;
 $$;
 
 -- Add comment
-COMMENT ON FUNCTION claim_export_job IS 'Atomically claims one queued export job using FOR UPDATE SKIP LOCKED. Prevents race conditions when multiple workers are running.';
+COMMENT ON FUNCTION public.claim_export_job IS 'Atomically claims one queued export job using FOR UPDATE SKIP LOCKED. Prevents race conditions when multiple workers are running.';
+
+-- Grant execute permission to authenticated users (backend uses service role)
+GRANT EXECUTE ON FUNCTION public.claim_export_job(INTEGER) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.claim_export_job(INTEGER) TO service_role;
 
 -- ============================================================================
 -- Option 2: Index for Efficient Claiming
@@ -102,5 +106,5 @@ WHERE state IN ('preparing', 'generating', 'uploading');
 -- Grant Permissions
 -- ============================================================================
 
--- Allow authenticated users to call the function (backend will use service role)
--- RLS will still apply to the underlying exports table
+-- Refresh PostgREST schema cache so the function is immediately available
+SELECT pg_notify('pgrst', 'reload schema');
