@@ -71,10 +71,20 @@ async function processExportQueue() {
 
     // Fallback: Manual claim with optimistic locking
     // (Use this if RPC function doesn't exist yet)
-    if (rpcError && rpcError.code !== '42883') {
-      // 42883 = function does not exist, which is OK (we'll use fallback)
-      // Other errors are unexpected
-      console.warn('[ExportWorker] RPC claim failed, using fallback:', rpcError.message)
+    if (rpcError) {
+      if (rpcError.code === '42883') {
+        // 42883 = function does not exist
+        // Log once per minute to avoid spam
+        const lastWarning = (global as any).__exportWorkerRpcWarningTime || 0
+        const now = Date.now()
+        if (now - lastWarning > 60000) { // 1 minute
+          console.warn('[ExportWorker] RPC function claim_export_job not found. Using fallback. Apply migration 20251203000004_export_worker_atomic_claim.sql')
+          ;(global as any).__exportWorkerRpcWarningTime = now
+        }
+      } else {
+        // Other errors are unexpected
+        console.warn('[ExportWorker] RPC claim failed, using fallback:', rpcError.message)
+      }
     }
 
     const { data: manualClaim, error: manualError } = await supabase
