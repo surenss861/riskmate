@@ -1,14 +1,8 @@
 -- ============================================================================
--- Atomic Export Job Claiming
+-- Apply claim_export_job Migration
 -- ============================================================================
--- 
--- Provides DB-atomic claiming for export jobs to prevent race conditions
--- when multiple backend instances are running.
---
--- Two approaches:
--- 1. RPC function for atomic claiming (recommended)
--- 2. Direct SQL with FOR UPDATE SKIP LOCKED (fallback)
---
+-- Copy and paste this ENTIRE file into Supabase SQL Editor and run it.
+-- This creates the RPC function needed by the export worker.
 
 -- ============================================================================
 -- Option 1: RPC Function for Atomic Claiming (Recommended)
@@ -26,6 +20,7 @@ RETURNS TABLE (
   started_at TIMESTAMPTZ
 ) 
 LANGUAGE plpgsql
+SECURITY DEFINER
 AS $$
 DECLARE
   claimed_job RECORD;
@@ -82,7 +77,11 @@ END;
 $$;
 
 -- Add comment
-COMMENT ON FUNCTION claim_export_job IS 'Atomically claims one queued export job using FOR UPDATE SKIP LOCKED. Prevents race conditions when multiple workers are running.';
+COMMENT ON FUNCTION public.claim_export_job IS 'Atomically claims one queued export job using FOR UPDATE SKIP LOCKED. Prevents race conditions when multiple workers are running.';
+
+-- Grant execute permission to authenticated users (backend uses service role)
+GRANT EXECUTE ON FUNCTION public.claim_export_job(INTEGER) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.claim_export_job(INTEGER) TO service_role;
 
 -- ============================================================================
 -- Option 2: Index for Efficient Claiming
@@ -99,8 +98,27 @@ ON exports (organization_id, state)
 WHERE state IN ('preparing', 'generating', 'uploading');
 
 -- ============================================================================
--- Grant Permissions
+-- Refresh PostgREST Schema Cache
 -- ============================================================================
+-- This makes the function immediately available to PostgREST/Supabase API
 
--- Allow authenticated users to call the function (backend will use service role)
--- RLS will still apply to the underlying exports table
+SELECT pg_notify('pgrst', 'reload schema');
+
+-- ============================================================================
+-- Verify Function Was Created
+-- ============================================================================
+-- Run this after applying the migration to confirm it worked:
+
+SELECT
+  n.nspname AS schema,
+  p.proname AS function_name,
+  pg_get_function_identity_arguments(p.oid) AS args
+FROM pg_proc p
+JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'public'
+  AND p.proname = 'claim_export_job';
+
+-- Expected result:
+-- schema | function_name     | args
+-- -------|-------------------|------------------
+-- public | claim_export_job  | p_max_concurrent integer DEFAULT 3
