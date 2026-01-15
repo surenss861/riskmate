@@ -7,20 +7,22 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		211794F52F182CC200FDF243 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 211794F42F182CC200FDF243 /* Supabase */; };
-		211794F72F182CE000FDF243 /* Storage in Frameworks */ = {isa = PBXBuildFile; productRef = 211794F62F182CE000FDF243 /* Storage */; };
-		211794F92F182CE400FDF243 /* Realtime in Frameworks */ = {isa = PBXBuildFile; productRef = 211794F82F182CE400FDF243 /* Realtime */; };
-		211794FB2F182CE800FDF243 /* PostgREST in Frameworks */ = {isa = PBXBuildFile; productRef = 211794FA2F182CE800FDF243 /* PostgREST */; };
-		211794FD2F182CED00FDF243 /* Functions in Frameworks */ = {isa = PBXBuildFile; productRef = 211794FC2F182CED00FDF243 /* Functions */; };
-		211794FF2F182CF500FDF243 /* Auth in Frameworks */ = {isa = PBXBuildFile; productRef = 211794FE2F182CF500FDF243 /* Auth */; };
-		2117954F2F18F51D00FDF243 /* swiftlint in Frameworks */ = {isa = PBXBuildFile; productRef = 2117954E2F18F51D00FDF243 /* swiftlint */; };
-		211795512F18F52200FDF243 /* SwiftLintFramework in Frameworks */ = {isa = PBXBuildFile; productRef = 211795502F18F52200FDF243 /* SwiftLintFramework */; };
-		211795532F18F52900FDF243 /* Lottie in Frameworks */ = {isa = PBXBuildFile; productRef = 211795522F18F52900FDF243 /* Lottie */; };
-		211795552F18F52E00FDF243 /* Lottie-Dynamic in Frameworks */ = {isa = PBXBuildFile; productRef = 211795542F18F52E00FDF243 /* Lottie-Dynamic */; };
-		211795562F18F52E00FDF243 /* Lottie-Dynamic in Embed Frameworks */ = {isa = PBXBuildFile; productRef = 211795542F18F52E00FDF243 /* Lottie-Dynamic */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
-		211795592F18F53300FDF243 /* SwiftDate in Frameworks */ = {isa = PBXBuildFile; productRef = 211795582F18F53300FDF243 /* SwiftDate */; };
-		2117955B2F18F53D00FDF243 /* Kingfisher in Frameworks */ = {isa = PBXBuildFile; productRef = 2117955A2F18F53D00FDF243 /* Kingfisher */; };
-		2117955E2F18F65700FDF243 /* RiveRuntime in Frameworks */ = {isa = PBXBuildFile; productRef = 2117955D2F18F65700FDF243 /* RiveRuntime */; };
+		211795702F18FC1A00FDF243 /* Auth in Frameworks */ = {isa = PBXBuildFile; productRef = 2117956F2F18FC1A00FDF243 /* Auth */; };
+		211795722F18FC1A00FDF243 /* Functions in Frameworks */ = {isa = PBXBuildFile; productRef = 211795712F18FC1A00FDF243 /* Functions */; };
+		211795742F18FC1A00FDF243 /* PostgREST in Frameworks */ = {isa = PBXBuildFile; productRef = 211795732F18FC1A00FDF243 /* PostgREST */; };
+		211795762F18FC1A00FDF243 /* Realtime in Frameworks */ = {isa = PBXBuildFile; productRef = 211795752F18FC1A00FDF243 /* Realtime */; };
+		211795782F18FC1A00FDF243 /* Storage in Frameworks */ = {isa = PBXBuildFile; productRef = 211795772F18FC1A00FDF243 /* Storage */; };
+		2117957A2F18FC2400FDF243 /* RiveRuntime in Frameworks */ = {isa = PBXBuildFile; productRef = 211795792F18FC2400FDF243 /* RiveRuntime */; };
+		2117957C2F18FC2900FDF243 /* Kingfisher in Frameworks */ = {isa = PBXBuildFile; productRef = 2117957B2F18FC2900FDF243 /* Kingfisher */; };
+		2117957E2F18FC2D00FDF243 /* SwiftDate in Frameworks */ = {isa = PBXBuildFile; productRef = 2117957D2F18FC2D00FDF243 /* SwiftDate */; };
+		211795802F18FC3000FDF243 /* Lottie in Frameworks */ = {isa = PBXBuildFile; productRef = 2117957F2F18FC3000FDF243 /* Lottie */; };
+		211795822F18FC3400FDF243 /* Lottie-Dynamic in Frameworks */ = {isa = PBXBuildFile; productRef = 211795812F18FC3400FDF243 /* Lottie-Dynamic */; };
+		211795832F18FC3400FDF243 /* Lottie-Dynamic in Embed Frameworks */ = {isa = PBXBuildFile; productRef = 211795812F18FC3400FDF243 /* Lottie-Dynamic */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
+		211795852F18FC3800FDF243 /* swiftlint in Frameworks */ = {isa = PBXBuildFile; productRef = 211795842F18FC3800FDF243 /* swiftlint */; };
+		211795872F18FC3D00FDF243 /* SwiftLintFramework in Frameworks */ = {isa = PBXBuildFile; productRef = 211795862F18FC3D00FDF243 /* SwiftLintFramework */; };
+		211795892F18FC4A00FDF243 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 211795882F18FC4A00FDF243 /* Supabase */; };
+		2117958A2F18FC4A00FDF243 /* RiskmateTests.xctest in Embed PlugIns */ = {isa = PBXBuildFile; fileRef = 211794B62F18213C00FDF243 /* RiskmateTests.xctest */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		2117958D2F18FC4A00FDF243 /* RiskmateUITests.xctest in Embed PlugIns */ = {isa = PBXBuildFile; fileRef = 211794C02F18213C00FDF243 /* RiskmateUITests.xctest */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -38,6 +40,20 @@
 			remoteGlobalIDString = 211794A42F18213B00FDF243;
 			remoteInfo = Riskmate;
 		};
+		2117958B2F18FC4A00FDF243 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 2117949D2F18213B00FDF243 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 211794B52F18213C00FDF243;
+			remoteInfo = RiskmateTests;
+		};
+		2117958E2F18FC4A00FDF243 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 2117949D2F18213B00FDF243 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 211794BF2F18213C00FDF243;
+			remoteInfo = RiskmateUITests;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -47,9 +63,21 @@
 			dstPath = "";
 			dstSubfolderSpec = 10;
 			files = (
-				211795562F18F52E00FDF243 /* Lottie-Dynamic in Embed Frameworks */,
+				211795832F18FC3400FDF243 /* Lottie-Dynamic in Embed Frameworks */,
 			);
 			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		211795902F18FC4B00FDF243 /* Embed PlugIns */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				2117958D2F18FC4A00FDF243 /* RiskmateUITests.xctest in Embed PlugIns */,
+				2117958A2F18FC4A00FDF243 /* RiskmateTests.xctest in Embed PlugIns */,
+			);
+			name = "Embed PlugIns";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXCopyFilesBuildPhase section */
@@ -58,6 +86,150 @@
 		211794A52F18213B00FDF243 /* Riskmate.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Riskmate.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		211794B62F18213C00FDF243 /* RiskmateTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RiskmateTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		211794C02F18213C00FDF243 /* RiskmateUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RiskmateUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		211795912F18FC4B00FDF243 /* FinanceKitUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = FinanceKitUI.framework; path = System/Library/Frameworks/FinanceKitUI.framework; sourceTree = SDKROOT; };
+		211795922F18FC4B00FDF243 /* CloudKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CloudKit.framework; path = System/Library/Frameworks/CloudKit.framework; sourceTree = SDKROOT; };
+		211795932F18FC4B00FDF243 /* iAd.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = iAd.framework; path = System/Library/Frameworks/iAd.framework; sourceTree = SDKROOT; };
+		211795942F18FC4B00FDF243 /* CoreAudioTypes.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreAudioTypes.framework; path = System/Library/Frameworks/CoreAudioTypes.framework; sourceTree = SDKROOT; };
+		211795952F18FC4B00FDF243 /* AdSupport.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AdSupport.framework; path = System/Library/Frameworks/AdSupport.framework; sourceTree = SDKROOT; };
+		211795962F18FC4B00FDF243 /* CryptoKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CryptoKit.framework; path = System/Library/Frameworks/CryptoKit.framework; sourceTree = SDKROOT; };
+		211795972F18FC4B00FDF243 /* DeclaredAgeRange.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = DeclaredAgeRange.framework; path = System/Library/Frameworks/DeclaredAgeRange.framework; sourceTree = SDKROOT; };
+		211795982F18FC4B00FDF243 /* CoreNFC.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreNFC.framework; path = System/Library/Frameworks/CoreNFC.framework; sourceTree = SDKROOT; };
+		211795992F18FC4B00FDF243 /* DeviceCheck.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = DeviceCheck.framework; path = System/Library/Frameworks/DeviceCheck.framework; sourceTree = SDKROOT; };
+		2117959A2F18FC4B00FDF243 /* CoreTransferable.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreTransferable.framework; path = System/Library/Frameworks/CoreTransferable.framework; sourceTree = SDKROOT; };
+		2117959B2F18FC4B00FDF243 /* IdentityDocumentServices.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = IdentityDocumentServices.framework; path = System/Library/Frameworks/IdentityDocumentServices.framework; sourceTree = SDKROOT; };
+		2117959C2F18FC4B00FDF243 /* IOSurface.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = IOSurface.framework; path = System/Library/Frameworks/IOSurface.framework; sourceTree = SDKROOT; };
+		2117959D2F18FC4B00FDF243 /* HealthKitUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = HealthKitUI.framework; path = System/Library/Frameworks/HealthKitUI.framework; sourceTree = SDKROOT; };
+		2117959E2F18FC4B00FDF243 /* IdentityLookupUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = IdentityLookupUI.framework; path = System/Library/Frameworks/IdentityLookupUI.framework; sourceTree = SDKROOT; };
+		2117959F2F18FC4B00FDF243 /* libapp_launch_measurement.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libapp_launch_measurement.tbd; path = usr/lib/libapp_launch_measurement.tbd; sourceTree = SDKROOT; };
+		211795A02F18FC4B00FDF243 /* CoreLocation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreLocation.framework; path = System/Library/Frameworks/CoreLocation.framework; sourceTree = SDKROOT; };
+		211795A12F18FC4B00FDF243 /* BackgroundAssets.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = BackgroundAssets.framework; path = System/Library/Frameworks/BackgroundAssets.framework; sourceTree = SDKROOT; };
+		211795A22F18FC4B00FDF243 /* BrowserKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = BrowserKit.framework; path = System/Library/Frameworks/BrowserKit.framework; sourceTree = SDKROOT; };
+		211795A32F18FC4B00FDF243 /* CoreML.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreML.framework; path = System/Library/Frameworks/CoreML.framework; sourceTree = SDKROOT; };
+		211795A42F18FC4B00FDF243 /* AddressBookUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AddressBookUI.framework; path = System/Library/Frameworks/AddressBookUI.framework; sourceTree = SDKROOT; };
+		211795A52F18FC4B00FDF243 /* GameKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = GameKit.framework; path = System/Library/Frameworks/GameKit.framework; sourceTree = SDKROOT; };
+		211795A62F18FC4B00FDF243 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = System/Library/Frameworks/Foundation.framework; sourceTree = SDKROOT; };
+		211795A72F18FC4B00FDF243 /* HomeKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = HomeKit.framework; path = System/Library/Frameworks/HomeKit.framework; sourceTree = SDKROOT; };
+		211795A82F18FC4B00FDF243 /* AutomatedDeviceEnrollment.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AutomatedDeviceEnrollment.framework; path = System/Library/Frameworks/AutomatedDeviceEnrollment.framework; sourceTree = SDKROOT; };
+		211795A92F18FC4B00FDF243 /* ExtensionFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ExtensionFoundation.framework; path = System/Library/Frameworks/ExtensionFoundation.framework; sourceTree = SDKROOT; };
+		211795AA2F18FC4B00FDF243 /* Accelerate.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Accelerate.framework; path = System/Library/Frameworks/Accelerate.framework; sourceTree = SDKROOT; };
+		211795AB2F18FC4B00FDF243 /* Combine.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Combine.framework; path = System/Library/Frameworks/Combine.framework; sourceTree = SDKROOT; };
+		211795AC2F18FC4B00FDF243 /* libamsupport.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libamsupport.tbd; path = usr/lib/libamsupport.tbd; sourceTree = SDKROOT; };
+		211795AD2F18FC4B00FDF243 /* DeveloperToolsSupport.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = DeveloperToolsSupport.framework; path = System/Library/Frameworks/DeveloperToolsSupport.framework; sourceTree = SDKROOT; };
+		211795AE2F18FC4B00FDF243 /* ColorSync.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ColorSync.framework; path = System/Library/Frameworks/ColorSync.framework; sourceTree = SDKROOT; };
+		211795AF2F18FC4B00FDF243 /* ARKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ARKit.framework; path = System/Library/Frameworks/ARKit.framework; sourceTree = SDKROOT; };
+		211795B02F18FC4B00FDF243 /* CallKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CallKit.framework; path = System/Library/Frameworks/CallKit.framework; sourceTree = SDKROOT; };
+		211795B12F18FC4B00FDF243 /* AssetsLibrary.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AssetsLibrary.framework; path = System/Library/Frameworks/AssetsLibrary.framework; sourceTree = SDKROOT; };
+		211795B22F18FC4B00FDF243 /* CoreMotion.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreMotion.framework; path = System/Library/Frameworks/CoreMotion.framework; sourceTree = SDKROOT; };
+		211795B32F18FC4B00FDF243 /* libarchive.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libarchive.tbd; path = usr/lib/libarchive.tbd; sourceTree = SDKROOT; };
+		211795B42F18FC4B00FDF243 /* CoreTelephony.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreTelephony.framework; path = System/Library/Frameworks/CoreTelephony.framework; sourceTree = SDKROOT; };
+		211795B52F18FC4B00FDF243 /* AppIntents.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AppIntents.framework; path = System/Library/Frameworks/AppIntents.framework; sourceTree = SDKROOT; };
+		211795B62F18FC4B00FDF243 /* FinanceKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = FinanceKit.framework; path = System/Library/Frameworks/FinanceKit.framework; sourceTree = SDKROOT; };
+		211795B72F18FC4B00FDF243 /* libacmobileshim.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libacmobileshim.tbd; path = usr/lib/libacmobileshim.tbd; sourceTree = SDKROOT; };
+		211795B82F18FC4C00FDF243 /* IdentityLookup.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = IdentityLookup.framework; path = System/Library/Frameworks/IdentityLookup.framework; sourceTree = SDKROOT; };
+		211795B92F18FC4C00FDF243 /* CoreHaptics.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreHaptics.framework; path = System/Library/Frameworks/CoreHaptics.framework; sourceTree = SDKROOT; };
+		211795BA2F18FC4C00FDF243 /* EventKitUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = EventKitUI.framework; path = System/Library/Frameworks/EventKitUI.framework; sourceTree = SDKROOT; };
+		211795BB2F18FC4C00FDF243 /* CoreText.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreText.framework; path = System/Library/Frameworks/CoreText.framework; sourceTree = SDKROOT; };
+		211795BC2F18FC4C00FDF243 /* CreateMLComponents.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CreateMLComponents.framework; path = System/Library/Frameworks/CreateMLComponents.framework; sourceTree = SDKROOT; };
+		211795BD2F18FC4C00FDF243 /* AppleConvergedTransport.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = AppleConvergedTransport.tbd; path = usr/lib/AppleConvergedTransport.tbd; sourceTree = SDKROOT; };
+		211795BE2F18FC4C00FDF243 /* ImageCaptureCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ImageCaptureCore.framework; path = System/Library/Frameworks/ImageCaptureCore.framework; sourceTree = SDKROOT; };
+		211795BF2F18FC4C00FDF243 /* libAppleSSEExt.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libAppleSSEExt.tbd; path = usr/lib/libAppleSSEExt.tbd; sourceTree = SDKROOT; };
+		211795C02F18FC4C00FDF243 /* libAppPatch.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libAppPatch.tbd; path = usr/lib/libAppPatch.tbd; sourceTree = SDKROOT; };
+		211795C12F18FC4C00FDF243 /* CryptoTokenKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CryptoTokenKit.framework; path = System/Library/Frameworks/CryptoTokenKit.framework; sourceTree = SDKROOT; };
+		211795C22F18FC4C00FDF243 /* CoreData.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreData.framework; path = System/Library/Frameworks/CoreData.framework; sourceTree = SDKROOT; };
+		211795C32F18FC4C00FDF243 /* AlarmKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AlarmKit.framework; path = System/Library/Frameworks/AlarmKit.framework; sourceTree = SDKROOT; };
+		211795C42F18FC4C00FDF243 /* CoreGraphics.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreGraphics.framework; path = System/Library/Frameworks/CoreGraphics.framework; sourceTree = SDKROOT; };
+		211795C52F18FC4C00FDF243 /* FoundationModels.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = FoundationModels.framework; path = System/Library/Frameworks/FoundationModels.framework; sourceTree = SDKROOT; };
+		211795C62F18FC4C00FDF243 /* AudioUnit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AudioUnit.framework; path = System/Library/Frameworks/AudioUnit.framework; sourceTree = SDKROOT; };
+		211795C72F18FC4C00FDF243 /* AVRouting.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVRouting.framework; path = System/Library/Frameworks/AVRouting.framework; sourceTree = SDKROOT; };
+		211795C82F18FC4C00FDF243 /* BrowserEngineKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = BrowserEngineKit.framework; path = System/Library/Frameworks/BrowserEngineKit.framework; sourceTree = SDKROOT; };
+		211795C92F18FC4C00FDF243 /* AVFAudio.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVFAudio.framework; path = System/Library/Frameworks/AVFAudio.framework; sourceTree = SDKROOT; };
+		211795CA2F18FC4C00FDF243 /* ImagePlayground.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ImagePlayground.framework; path = System/Library/Frameworks/ImagePlayground.framework; sourceTree = SDKROOT; };
+		211795CB2F18FC4C00FDF243 /* libarchive.2.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libarchive.2.tbd; path = usr/lib/libarchive.2.tbd; sourceTree = SDKROOT; };
+		211795CC2F18FC4C00FDF243 /* CreateML.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CreateML.framework; path = System/Library/Frameworks/CreateML.framework; sourceTree = SDKROOT; };
+		211795CD2F18FC4C00FDF243 /* AccessoryTransportExtension.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AccessoryTransportExtension.framework; path = System/Library/Frameworks/AccessoryTransportExtension.framework; sourceTree = SDKROOT; };
+		211795CE2F18FC4C00FDF243 /* AppMigrationKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AppMigrationKit.framework; path = System/Library/Frameworks/AppMigrationKit.framework; sourceTree = SDKROOT; };
+		211795CF2F18FC4C00FDF243 /* CoreFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreFoundation.framework; path = System/Library/Frameworks/CoreFoundation.framework; sourceTree = SDKROOT; };
+		211795D02F18FC4C00FDF243 /* CoreMedia.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreMedia.framework; path = System/Library/Frameworks/CoreMedia.framework; sourceTree = SDKROOT; };
+		211795D12F18FC4C00FDF243 /* CoreVideo.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreVideo.framework; path = System/Library/Frameworks/CoreVideo.framework; sourceTree = SDKROOT; };
+		211795D22F18FC4C00FDF243 /* CoreImage.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreImage.framework; path = System/Library/Frameworks/CoreImage.framework; sourceTree = SDKROOT; };
+		211795D32F18FC4C00FDF243 /* ClassKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ClassKit.framework; path = System/Library/Frameworks/ClassKit.framework; sourceTree = SDKROOT; };
+		211795D42F18FC4C00FDF243 /* AdAttributionKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AdAttributionKit.framework; path = System/Library/Frameworks/AdAttributionKit.framework; sourceTree = SDKROOT; };
+		211795D52F18FC4C00FDF243 /* BackgroundTasks.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = BackgroundTasks.framework; path = System/Library/Frameworks/BackgroundTasks.framework; sourceTree = SDKROOT; };
+		211795D62F18FC4C00FDF243 /* libARI.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libARI.tbd; path = usr/lib/libARI.tbd; sourceTree = SDKROOT; };
+		211795D72F18FC4C00FDF243 /* CarKey.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CarKey.framework; path = System/Library/Frameworks/CarKey.framework; sourceTree = SDKROOT; };
+		211795D82F18FC4C00FDF243 /* FileProviderUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = FileProviderUI.framework; path = System/Library/Frameworks/FileProviderUI.framework; sourceTree = SDKROOT; };
+		211795D92F18FC4C00FDF243 /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
+		211795DA2F18FC4C00FDF243 /* libAppleArchive.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libAppleArchive.tbd; path = usr/lib/libAppleArchive.tbd; sourceTree = SDKROOT; };
+		211795DB2F18FC4C00FDF243 /* DeviceDiscoveryExtension.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = DeviceDiscoveryExtension.framework; path = System/Library/Frameworks/DeviceDiscoveryExtension.framework; sourceTree = SDKROOT; };
+		211795DC2F18FC4C00FDF243 /* CoreMIDI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreMIDI.framework; path = System/Library/Frameworks/CoreMIDI.framework; sourceTree = SDKROOT; };
+		211795DD2F18FC4C00FDF243 /* AccessorySetupKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AccessorySetupKit.framework; path = System/Library/Frameworks/AccessorySetupKit.framework; sourceTree = SDKROOT; };
+		211795DE2F18FC4C00FDF243 /* AuthenticationServices.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AuthenticationServices.framework; path = System/Library/Frameworks/AuthenticationServices.framework; sourceTree = SDKROOT; };
+		211795DF2F18FC4C00FDF243 /* libapple_nghttp2.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libapple_nghttp2.tbd; path = usr/lib/libapple_nghttp2.tbd; sourceTree = SDKROOT; };
+		211795E02F18FC4C00FDF243 /* CoreBluetooth.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreBluetooth.framework; path = System/Library/Frameworks/CoreBluetooth.framework; sourceTree = SDKROOT; };
+		211795E12F18FC4C00FDF243 /* IOKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = IOKit.framework; path = System/Library/Frameworks/IOKit.framework; sourceTree = SDKROOT; };
+		211795E22F18FC4C00FDF243 /* CarPlay.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CarPlay.framework; path = System/Library/Frameworks/CarPlay.framework; sourceTree = SDKROOT; };
+		211795E32F18FC4C00FDF243 /* FileProvider.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = FileProvider.framework; path = System/Library/Frameworks/FileProvider.framework; sourceTree = SDKROOT; };
+		211795E42F18FC4C00FDF243 /* DeviceActivity.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = DeviceActivity.framework; path = System/Library/Frameworks/DeviceActivity.framework; sourceTree = SDKROOT; };
+		211795E52F18FC4C00FDF243 /* AudioToolbox.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AudioToolbox.framework; path = System/Library/Frameworks/AudioToolbox.framework; sourceTree = SDKROOT; };
+		211795E62F18FC4C00FDF243 /* CoreMediaIO.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreMediaIO.framework; path = System/Library/Frameworks/CoreMediaIO.framework; sourceTree = SDKROOT; };
+		211795E72F18FC4C00FDF243 /* Cinematic.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Cinematic.framework; path = System/Library/Frameworks/Cinematic.framework; sourceTree = SDKROOT; };
+		211795E82F18FC4C00FDF243 /* AVKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVKit.framework; path = System/Library/Frameworks/AVKit.framework; sourceTree = SDKROOT; };
+		211795E92F18FC4C00FDF243 /* Assignables.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Assignables.framework; path = System/Library/Frameworks/Assignables.framework; sourceTree = SDKROOT; };
+		211795EA2F18FC4C00FDF243 /* CoreAudio.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreAudio.framework; path = System/Library/Frameworks/CoreAudio.framework; sourceTree = SDKROOT; };
+		211795EB2F18FC4C00FDF243 /* GLKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = GLKit.framework; path = System/Library/Frameworks/GLKit.framework; sourceTree = SDKROOT; };
+		211795EC2F18FC4C00FDF243 /* DeviceDiscoveryUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = DeviceDiscoveryUI.framework; path = System/Library/Frameworks/DeviceDiscoveryUI.framework; sourceTree = SDKROOT; };
+		211795ED2F18FC4C00FDF243 /* GeoToolbox.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = GeoToolbox.framework; path = System/Library/Frameworks/GeoToolbox.framework; sourceTree = SDKROOT; };
+		211795EE2F18FC4C00FDF243 /* GameSave.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = GameSave.framework; path = System/Library/Frameworks/GameSave.framework; sourceTree = SDKROOT; };
+		211795EF2F18FC4C00FDF243 /* Intents.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Intents.framework; path = System/Library/Frameworks/Intents.framework; sourceTree = SDKROOT; };
+		211795F02F18FC4C00FDF243 /* IntentsUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = IntentsUI.framework; path = System/Library/Frameworks/IntentsUI.framework; sourceTree = SDKROOT; };
+		211795F12F18FC4C00FDF243 /* libAppleEXR.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libAppleEXR.tbd; path = usr/lib/libAppleEXR.tbd; sourceTree = SDKROOT; };
+		211795F22F18FC4D00FDF243 /* libAHTRestore.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libAHTRestore.tbd; path = usr/lib/libAHTRestore.tbd; sourceTree = SDKROOT; };
+		211795F32F18FC4D00FDF243 /* ExposureNotification.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ExposureNotification.framework; path = System/Library/Frameworks/ExposureNotification.framework; sourceTree = SDKROOT; };
+		211795F42F18FC4D00FDF243 /* CoreLocationUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreLocationUI.framework; path = System/Library/Frameworks/CoreLocationUI.framework; sourceTree = SDKROOT; };
+		211795F52F18FC4D00FDF243 /* Accessibility.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Accessibility.framework; path = System/Library/Frameworks/Accessibility.framework; sourceTree = SDKROOT; };
+		211795F62F18FC4D00FDF243 /* HealthKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = HealthKit.framework; path = System/Library/Frameworks/HealthKit.framework; sourceTree = SDKROOT; };
+		211795F72F18FC4D00FDF243 /* ContactsUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ContactsUI.framework; path = System/Library/Frameworks/ContactsUI.framework; sourceTree = SDKROOT; };
+		211795F82F18FC4D00FDF243 /* Contacts.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Contacts.framework; path = System/Library/Frameworks/Contacts.framework; sourceTree = SDKROOT; };
+		211795F92F18FC4D00FDF243 /* ActivityKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ActivityKit.framework; path = System/Library/Frameworks/ActivityKit.framework; sourceTree = SDKROOT; };
+		211795FA2F18FC4D00FDF243 /* GameController.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = GameController.framework; path = System/Library/Frameworks/GameController.framework; sourceTree = SDKROOT; };
+		211795FB2F18FC4D00FDF243 /* CFNetwork.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CFNetwork.framework; path = System/Library/Frameworks/CFNetwork.framework; sourceTree = SDKROOT; };
+		211795FC2F18FC4D00FDF243 /* EventKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = EventKit.framework; path = System/Library/Frameworks/EventKit.framework; sourceTree = SDKROOT; };
+		211795FD2F18FC4D00FDF243 /* libAccessibility.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libAccessibility.tbd; path = usr/lib/libAccessibility.tbd; sourceTree = SDKROOT; };
+		211795FE2F18FC4D00FDF243 /* ClockKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ClockKit.framework; path = System/Library/Frameworks/ClockKit.framework; sourceTree = SDKROOT; };
+		211795FF2F18FC4D00FDF243 /* DataDetection.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = DataDetection.framework; path = System/Library/Frameworks/DataDetection.framework; sourceTree = SDKROOT; };
+		211796002F18FC4D00FDF243 /* AdServices.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AdServices.framework; path = System/Library/Frameworks/AdServices.framework; sourceTree = SDKROOT; };
+		211796012F18FC4D00FDF243 /* ExternalAccessory.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ExternalAccessory.framework; path = System/Library/Frameworks/ExternalAccessory.framework; sourceTree = SDKROOT; };
+		211796022F18FC4D00FDF243 /* libAmber.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libAmber.tbd; path = usr/lib/libAmber.tbd; sourceTree = SDKROOT; };
+		211796032F18FC4D00FDF243 /* libafc.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libafc.tbd; path = usr/lib/libafc.tbd; sourceTree = SDKROOT; };
+		211796042F18FC4D00FDF243 /* CarrierBundleUtilities.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = CarrierBundleUtilities.tbd; path = usr/lib/CarrierBundleUtilities.tbd; sourceTree = SDKROOT; };
+		211796052F18FC4D00FDF243 /* Accounts.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Accounts.framework; path = System/Library/Frameworks/Accounts.framework; sourceTree = SDKROOT; };
+		211796062F18FC4D00FDF243 /* GroupActivities.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = GroupActivities.framework; path = System/Library/Frameworks/GroupActivities.framework; sourceTree = SDKROOT; };
+		211796072F18FC4D00FDF243 /* GSS.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = GSS.framework; path = System/Library/Frameworks/GSS.framework; sourceTree = SDKROOT; };
+		211796082F18FC4D00FDF243 /* BusinessChat.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = BusinessChat.framework; path = System/Library/Frameworks/BusinessChat.framework; sourceTree = SDKROOT; };
+		211796092F18FC4D00FDF243 /* ContactProvider.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ContactProvider.framework; path = System/Library/Frameworks/ContactProvider.framework; sourceTree = SDKROOT; };
+		2117960A2F18FC4D00FDF243 /* JournalingSuggestions.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JournalingSuggestions.framework; path = System/Library/Frameworks/JournalingSuggestions.framework; sourceTree = SDKROOT; };
+		2117960B2F18FC4D00FDF243 /* EnergyKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = EnergyKit.framework; path = System/Library/Frameworks/EnergyKit.framework; sourceTree = SDKROOT; };
+		2117960C2F18FC4D00FDF243 /* libAppleHIDSWDFlash.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libAppleHIDSWDFlash.tbd; path = usr/lib/libAppleHIDSWDFlash.tbd; sourceTree = SDKROOT; };
+		2117960D2F18FC4D00FDF243 /* AVFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVFoundation.framework; path = System/Library/Frameworks/AVFoundation.framework; sourceTree = SDKROOT; };
+		2117960E2F18FC4D00FDF243 /* GameplayKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = GameplayKit.framework; path = System/Library/Frameworks/GameplayKit.framework; sourceTree = SDKROOT; };
+		2117960F2F18FC4D00FDF243 /* FamilyControls.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = FamilyControls.framework; path = System/Library/Frameworks/FamilyControls.framework; sourceTree = SDKROOT; };
+		211796102F18FC4D00FDF243 /* ImageIO.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ImageIO.framework; path = System/Library/Frameworks/ImageIO.framework; sourceTree = SDKROOT; };
+		211796112F18FC4D00FDF243 /* BrowserEngineCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = BrowserEngineCore.framework; path = System/Library/Frameworks/BrowserEngineCore.framework; sourceTree = SDKROOT; };
+		211796122F18FC4D00FDF243 /* ACIPCBTLib.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = ACIPCBTLib.tbd; path = usr/lib/ACIPCBTLib.tbd; sourceTree = SDKROOT; };
+		211796132F18FC4D00FDF243 /* AutomaticAssessmentConfiguration.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AutomaticAssessmentConfiguration.framework; path = System/Library/Frameworks/AutomaticAssessmentConfiguration.framework; sourceTree = SDKROOT; };
+		211796142F18FC4D00FDF243 /* CoreSpotlight.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreSpotlight.framework; path = System/Library/Frameworks/CoreSpotlight.framework; sourceTree = SDKROOT; };
+		211796152F18FC4D00FDF243 /* DockKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = DockKit.framework; path = System/Library/Frameworks/DockKit.framework; sourceTree = SDKROOT; };
+		211796162F18FC4D00FDF243 /* AppTrackingTransparency.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AppTrackingTransparency.framework; path = System/Library/Frameworks/AppTrackingTransparency.framework; sourceTree = SDKROOT; };
+		211796172F18FC4D00FDF243 /* CoreAudioKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreAudioKit.framework; path = System/Library/Frameworks/CoreAudioKit.framework; sourceTree = SDKROOT; };
+		211796182F18FC4D00FDF243 /* Charts.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Charts.framework; path = System/Library/Frameworks/Charts.framework; sourceTree = SDKROOT; };
+		211796192F18FC4D00FDF243 /* CoreServices.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreServices.framework; path = System/Library/Frameworks/CoreServices.framework; sourceTree = SDKROOT; };
+		2117961A2F18FC4D00FDF243 /* ExtensionKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ExtensionKit.framework; path = System/Library/Frameworks/ExtensionKit.framework; sourceTree = SDKROOT; };
+		2117961B2F18FC4D00FDF243 /* AddressBook.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AddressBook.framework; path = System/Library/Frameworks/AddressBook.framework; sourceTree = SDKROOT; };
+		2117961C2F18FC4D00FDF243 /* libAppleSSE.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libAppleSSE.tbd; path = usr/lib/libAppleSSE.tbd; sourceTree = SDKROOT; };
+		2117961D2F18FC4D00FDF243 /* libAONConnection.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libAONConnection.tbd; path = usr/lib/libAONConnection.tbd; sourceTree = SDKROOT; };
+		2117961E2F18FC4D00FDF243 /* libAppletTranslationLibrary.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libAppletTranslationLibrary.tbd; path = usr/lib/libAppletTranslationLibrary.tbd; sourceTree = SDKROOT; };
+		2117961F2F18FC4D00FDF243 /* AppClip.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AppClip.framework; path = System/Library/Frameworks/AppClip.framework; sourceTree = SDKROOT; };
+		211796202F18FC4D00FDF243 /* IdentityDocumentServicesUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = IdentityDocumentServicesUI.framework; path = System/Library/Frameworks/IdentityDocumentServicesUI.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -96,19 +268,19 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				2117955B2F18F53D00FDF243 /* Kingfisher in Frameworks */,
-				211794FD2F182CED00FDF243 /* Functions in Frameworks */,
-				211794FB2F182CE800FDF243 /* PostgREST in Frameworks */,
-				211795532F18F52900FDF243 /* Lottie in Frameworks */,
-				211794FF2F182CF500FDF243 /* Auth in Frameworks */,
-				211794F92F182CE400FDF243 /* Realtime in Frameworks */,
-				211795552F18F52E00FDF243 /* Lottie-Dynamic in Frameworks */,
-				211795512F18F52200FDF243 /* SwiftLintFramework in Frameworks */,
-				2117955E2F18F65700FDF243 /* RiveRuntime in Frameworks */,
-				211795592F18F53300FDF243 /* SwiftDate in Frameworks */,
-				2117954F2F18F51D00FDF243 /* swiftlint in Frameworks */,
-				211794F72F182CE000FDF243 /* Storage in Frameworks */,
-				211794F52F182CC200FDF243 /* Supabase in Frameworks */,
+				211795742F18FC1A00FDF243 /* PostgREST in Frameworks */,
+				211795722F18FC1A00FDF243 /* Functions in Frameworks */,
+				211795802F18FC3000FDF243 /* Lottie in Frameworks */,
+				211795852F18FC3800FDF243 /* swiftlint in Frameworks */,
+				2117957C2F18FC2900FDF243 /* Kingfisher in Frameworks */,
+				211795702F18FC1A00FDF243 /* Auth in Frameworks */,
+				211795822F18FC3400FDF243 /* Lottie-Dynamic in Frameworks */,
+				2117957E2F18FC2D00FDF243 /* SwiftDate in Frameworks */,
+				211795872F18FC3D00FDF243 /* SwiftLintFramework in Frameworks */,
+				211795782F18FC1A00FDF243 /* Storage in Frameworks */,
+				211795762F18FC1A00FDF243 /* Realtime in Frameworks */,
+				2117957A2F18FC2400FDF243 /* RiveRuntime in Frameworks */,
+				211795892F18FC4A00FDF243 /* Supabase in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -153,6 +325,150 @@
 		211794F32F182CC200FDF243 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				211795AA2F18FC4B00FDF243 /* Accelerate.framework */,
+				211795F52F18FC4D00FDF243 /* Accessibility.framework */,
+				211795DD2F18FC4C00FDF243 /* AccessorySetupKit.framework */,
+				211795CD2F18FC4C00FDF243 /* AccessoryTransportExtension.framework */,
+				211796052F18FC4D00FDF243 /* Accounts.framework */,
+				211796122F18FC4D00FDF243 /* ACIPCBTLib.tbd */,
+				211795F92F18FC4D00FDF243 /* ActivityKit.framework */,
+				211795D42F18FC4C00FDF243 /* AdAttributionKit.framework */,
+				2117961B2F18FC4D00FDF243 /* AddressBook.framework */,
+				211795A42F18FC4B00FDF243 /* AddressBookUI.framework */,
+				211796002F18FC4D00FDF243 /* AdServices.framework */,
+				211795952F18FC4B00FDF243 /* AdSupport.framework */,
+				211795C32F18FC4C00FDF243 /* AlarmKit.framework */,
+				2117961F2F18FC4D00FDF243 /* AppClip.framework */,
+				211795B52F18FC4B00FDF243 /* AppIntents.framework */,
+				211795BD2F18FC4C00FDF243 /* AppleConvergedTransport.tbd */,
+				211795CE2F18FC4C00FDF243 /* AppMigrationKit.framework */,
+				211796162F18FC4D00FDF243 /* AppTrackingTransparency.framework */,
+				211795AF2F18FC4B00FDF243 /* ARKit.framework */,
+				211795B12F18FC4B00FDF243 /* AssetsLibrary.framework */,
+				211795E92F18FC4C00FDF243 /* Assignables.framework */,
+				211795E52F18FC4C00FDF243 /* AudioToolbox.framework */,
+				211795C62F18FC4C00FDF243 /* AudioUnit.framework */,
+				211795DE2F18FC4C00FDF243 /* AuthenticationServices.framework */,
+				211795A82F18FC4B00FDF243 /* AutomatedDeviceEnrollment.framework */,
+				211796132F18FC4D00FDF243 /* AutomaticAssessmentConfiguration.framework */,
+				211795C92F18FC4C00FDF243 /* AVFAudio.framework */,
+				2117960D2F18FC4D00FDF243 /* AVFoundation.framework */,
+				211795E82F18FC4C00FDF243 /* AVKit.framework */,
+				211795C72F18FC4C00FDF243 /* AVRouting.framework */,
+				211795A12F18FC4B00FDF243 /* BackgroundAssets.framework */,
+				211795D52F18FC4C00FDF243 /* BackgroundTasks.framework */,
+				211796112F18FC4D00FDF243 /* BrowserEngineCore.framework */,
+				211795C82F18FC4C00FDF243 /* BrowserEngineKit.framework */,
+				211795A22F18FC4B00FDF243 /* BrowserKit.framework */,
+				211796082F18FC4D00FDF243 /* BusinessChat.framework */,
+				211795B02F18FC4B00FDF243 /* CallKit.framework */,
+				211795D72F18FC4C00FDF243 /* CarKey.framework */,
+				211795E22F18FC4C00FDF243 /* CarPlay.framework */,
+				211796042F18FC4D00FDF243 /* CarrierBundleUtilities.tbd */,
+				211795FB2F18FC4D00FDF243 /* CFNetwork.framework */,
+				211796182F18FC4D00FDF243 /* Charts.framework */,
+				211795E72F18FC4C00FDF243 /* Cinematic.framework */,
+				211795D32F18FC4C00FDF243 /* ClassKit.framework */,
+				211795FE2F18FC4D00FDF243 /* ClockKit.framework */,
+				211795922F18FC4B00FDF243 /* CloudKit.framework */,
+				211795AE2F18FC4B00FDF243 /* ColorSync.framework */,
+				211795AB2F18FC4B00FDF243 /* Combine.framework */,
+				211796092F18FC4D00FDF243 /* ContactProvider.framework */,
+				211795F82F18FC4D00FDF243 /* Contacts.framework */,
+				211795F72F18FC4D00FDF243 /* ContactsUI.framework */,
+				211795EA2F18FC4C00FDF243 /* CoreAudio.framework */,
+				211796172F18FC4D00FDF243 /* CoreAudioKit.framework */,
+				211795942F18FC4B00FDF243 /* CoreAudioTypes.framework */,
+				211795E02F18FC4C00FDF243 /* CoreBluetooth.framework */,
+				211795C22F18FC4C00FDF243 /* CoreData.framework */,
+				211795CF2F18FC4C00FDF243 /* CoreFoundation.framework */,
+				211795C42F18FC4C00FDF243 /* CoreGraphics.framework */,
+				211795B92F18FC4C00FDF243 /* CoreHaptics.framework */,
+				211795D22F18FC4C00FDF243 /* CoreImage.framework */,
+				211795A02F18FC4B00FDF243 /* CoreLocation.framework */,
+				211795F42F18FC4D00FDF243 /* CoreLocationUI.framework */,
+				211795D02F18FC4C00FDF243 /* CoreMedia.framework */,
+				211795E62F18FC4C00FDF243 /* CoreMediaIO.framework */,
+				211795DC2F18FC4C00FDF243 /* CoreMIDI.framework */,
+				211795A32F18FC4B00FDF243 /* CoreML.framework */,
+				211795B22F18FC4B00FDF243 /* CoreMotion.framework */,
+				211795982F18FC4B00FDF243 /* CoreNFC.framework */,
+				211796192F18FC4D00FDF243 /* CoreServices.framework */,
+				211796142F18FC4D00FDF243 /* CoreSpotlight.framework */,
+				211795B42F18FC4B00FDF243 /* CoreTelephony.framework */,
+				211795BB2F18FC4C00FDF243 /* CoreText.framework */,
+				2117959A2F18FC4B00FDF243 /* CoreTransferable.framework */,
+				211795D12F18FC4C00FDF243 /* CoreVideo.framework */,
+				211795CC2F18FC4C00FDF243 /* CreateML.framework */,
+				211795BC2F18FC4C00FDF243 /* CreateMLComponents.framework */,
+				211795962F18FC4B00FDF243 /* CryptoKit.framework */,
+				211795C12F18FC4C00FDF243 /* CryptoTokenKit.framework */,
+				211795FF2F18FC4D00FDF243 /* DataDetection.framework */,
+				211795972F18FC4B00FDF243 /* DeclaredAgeRange.framework */,
+				211795AD2F18FC4B00FDF243 /* DeveloperToolsSupport.framework */,
+				211795E42F18FC4C00FDF243 /* DeviceActivity.framework */,
+				211795992F18FC4B00FDF243 /* DeviceCheck.framework */,
+				211795DB2F18FC4C00FDF243 /* DeviceDiscoveryExtension.framework */,
+				211795EC2F18FC4C00FDF243 /* DeviceDiscoveryUI.framework */,
+				211796152F18FC4D00FDF243 /* DockKit.framework */,
+				2117960B2F18FC4D00FDF243 /* EnergyKit.framework */,
+				211795FC2F18FC4D00FDF243 /* EventKit.framework */,
+				211795BA2F18FC4C00FDF243 /* EventKitUI.framework */,
+				211795F32F18FC4D00FDF243 /* ExposureNotification.framework */,
+				211795A92F18FC4B00FDF243 /* ExtensionFoundation.framework */,
+				2117961A2F18FC4D00FDF243 /* ExtensionKit.framework */,
+				211796012F18FC4D00FDF243 /* ExternalAccessory.framework */,
+				2117960F2F18FC4D00FDF243 /* FamilyControls.framework */,
+				211795E32F18FC4C00FDF243 /* FileProvider.framework */,
+				211795D82F18FC4C00FDF243 /* FileProviderUI.framework */,
+				211795B62F18FC4B00FDF243 /* FinanceKit.framework */,
+				211795912F18FC4B00FDF243 /* FinanceKitUI.framework */,
+				211795A62F18FC4B00FDF243 /* Foundation.framework */,
+				211795C52F18FC4C00FDF243 /* FoundationModels.framework */,
+				211795FA2F18FC4D00FDF243 /* GameController.framework */,
+				211795A52F18FC4B00FDF243 /* GameKit.framework */,
+				2117960E2F18FC4D00FDF243 /* GameplayKit.framework */,
+				211795EE2F18FC4C00FDF243 /* GameSave.framework */,
+				211795ED2F18FC4C00FDF243 /* GeoToolbox.framework */,
+				211795EB2F18FC4C00FDF243 /* GLKit.framework */,
+				211796062F18FC4D00FDF243 /* GroupActivities.framework */,
+				211796072F18FC4D00FDF243 /* GSS.framework */,
+				211795F62F18FC4D00FDF243 /* HealthKit.framework */,
+				2117959D2F18FC4B00FDF243 /* HealthKitUI.framework */,
+				211795A72F18FC4B00FDF243 /* HomeKit.framework */,
+				211795932F18FC4B00FDF243 /* iAd.framework */,
+				2117959B2F18FC4B00FDF243 /* IdentityDocumentServices.framework */,
+				211796202F18FC4D00FDF243 /* IdentityDocumentServicesUI.framework */,
+				211795B82F18FC4C00FDF243 /* IdentityLookup.framework */,
+				2117959E2F18FC4B00FDF243 /* IdentityLookupUI.framework */,
+				211795BE2F18FC4C00FDF243 /* ImageCaptureCore.framework */,
+				211796102F18FC4D00FDF243 /* ImageIO.framework */,
+				211795CA2F18FC4C00FDF243 /* ImagePlayground.framework */,
+				211795EF2F18FC4C00FDF243 /* Intents.framework */,
+				211795F02F18FC4C00FDF243 /* IntentsUI.framework */,
+				211795E12F18FC4C00FDF243 /* IOKit.framework */,
+				2117959C2F18FC4B00FDF243 /* IOSurface.framework */,
+				211795D92F18FC4C00FDF243 /* JavaScriptCore.framework */,
+				2117960A2F18FC4D00FDF243 /* JournalingSuggestions.framework */,
+				211795FD2F18FC4D00FDF243 /* libAccessibility.tbd */,
+				211795B72F18FC4B00FDF243 /* libacmobileshim.tbd */,
+				211796032F18FC4D00FDF243 /* libafc.tbd */,
+				211795F22F18FC4D00FDF243 /* libAHTRestore.tbd */,
+				211796022F18FC4D00FDF243 /* libAmber.tbd */,
+				211795AC2F18FC4B00FDF243 /* libamsupport.tbd */,
+				2117961D2F18FC4D00FDF243 /* libAONConnection.tbd */,
+				2117959F2F18FC4B00FDF243 /* libapp_launch_measurement.tbd */,
+				211795DF2F18FC4C00FDF243 /* libapple_nghttp2.tbd */,
+				211795DA2F18FC4C00FDF243 /* libAppleArchive.tbd */,
+				211795F12F18FC4C00FDF243 /* libAppleEXR.tbd */,
+				2117960C2F18FC4D00FDF243 /* libAppleHIDSWDFlash.tbd */,
+				2117961C2F18FC4D00FDF243 /* libAppleSSE.tbd */,
+				211795BF2F18FC4C00FDF243 /* libAppleSSEExt.tbd */,
+				2117961E2F18FC4D00FDF243 /* libAppletTranslationLibrary.tbd */,
+				211795C02F18FC4C00FDF243 /* libAppPatch.tbd */,
+				211795B32F18FC4B00FDF243 /* libarchive.tbd */,
+				211795CB2F18FC4C00FDF243 /* libarchive.2.tbd */,
+				211795D62F18FC4C00FDF243 /* libARI.tbd */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -168,29 +484,32 @@
 				211794A22F18213B00FDF243 /* Frameworks */,
 				211794A32F18213B00FDF243 /* Resources */,
 				211795572F18F52E00FDF243 /* Embed Frameworks */,
+				211795902F18FC4B00FDF243 /* Embed PlugIns */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				2117958C2F18FC4A00FDF243 /* PBXTargetDependency */,
+				2117958F2F18FC4A00FDF243 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				211794A72F18213B00FDF243 /* Riskmate */,
 			);
 			name = Riskmate;
 			packageProductDependencies = (
-				211794F42F182CC200FDF243 /* Supabase */,
-				211794F62F182CE000FDF243 /* Storage */,
-				211794F82F182CE400FDF243 /* Realtime */,
-				211794FA2F182CE800FDF243 /* PostgREST */,
-				211794FC2F182CED00FDF243 /* Functions */,
-				211794FE2F182CF500FDF243 /* Auth */,
-				2117954E2F18F51D00FDF243 /* swiftlint */,
-				211795502F18F52200FDF243 /* SwiftLintFramework */,
-				211795522F18F52900FDF243 /* Lottie */,
-				211795542F18F52E00FDF243 /* Lottie-Dynamic */,
-				211795582F18F53300FDF243 /* SwiftDate */,
-				2117955A2F18F53D00FDF243 /* Kingfisher */,
-				2117955D2F18F65700FDF243 /* RiveRuntime */,
+				2117956F2F18FC1A00FDF243 /* Auth */,
+				211795712F18FC1A00FDF243 /* Functions */,
+				211795732F18FC1A00FDF243 /* PostgREST */,
+				211795752F18FC1A00FDF243 /* Realtime */,
+				211795772F18FC1A00FDF243 /* Storage */,
+				211795792F18FC2400FDF243 /* RiveRuntime */,
+				2117957B2F18FC2900FDF243 /* Kingfisher */,
+				2117957D2F18FC2D00FDF243 /* SwiftDate */,
+				2117957F2F18FC3000FDF243 /* Lottie */,
+				211795812F18FC3400FDF243 /* Lottie-Dynamic */,
+				211795842F18FC3800FDF243 /* swiftlint */,
+				211795862F18FC3D00FDF243 /* SwiftLintFramework */,
+				211795882F18FC4A00FDF243 /* Supabase */,
 			);
 			productName = Riskmate;
 			productReference = 211794A52F18213B00FDF243 /* Riskmate.app */;
@@ -275,12 +594,12 @@
 			mainGroup = 2117949C2F18213B00FDF243;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				211794F22F18293E00FDF243 /* XCRemoteSwiftPackageReference "supabase-swift" */,
-				211795442F18422700FDF243 /* XCRemoteSwiftPackageReference "SwiftLint" */,
-				211795452F18F24500FDF243 /* XCRemoteSwiftPackageReference "lottie-ios" */,
-				211795462F18F26D00FDF243 /* XCRemoteSwiftPackageReference "SwiftDate" */,
-				211795472F18F32900FDF243 /* XCRemoteSwiftPackageReference "Kingfisher" */,
-				2117955C2F18F64F00FDF243 /* XCRemoteSwiftPackageReference "rive-ios" */,
+				211795692F18FBD100FDF243 /* XCRemoteSwiftPackageReference "rive-ios" */,
+				2117956A2F18FBDC00FDF243 /* XCRemoteSwiftPackageReference "Kingfisher" */,
+				2117956B2F18FBE800FDF243 /* XCRemoteSwiftPackageReference "SwiftDate" */,
+				2117956C2F18FBF300FDF243 /* XCRemoteSwiftPackageReference "lottie-ios" */,
+				2117956D2F18FC0500FDF243 /* XCRemoteSwiftPackageReference "SwiftLint" */,
+				2117956E2F18FC1A00FDF243 /* XCRemoteSwiftPackageReference "supabase-swift" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 211794A62F18213B00FDF243 /* Products */;
@@ -352,6 +671,16 @@
 			isa = PBXTargetDependency;
 			target = 211794A42F18213B00FDF243 /* Riskmate */;
 			targetProxy = 211794C12F18213C00FDF243 /* PBXContainerItemProxy */;
+		};
+		2117958C2F18FC4A00FDF243 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 211794B52F18213C00FDF243 /* RiskmateTests */;
+			targetProxy = 2117958B2F18FC4A00FDF243 /* PBXContainerItemProxy */;
+		};
+		2117958F2F18FC4A00FDF243 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 211794BF2F18213C00FDF243 /* RiskmateUITests */;
+			targetProxy = 2117958E2F18FC4A00FDF243 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -675,47 +1004,7 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		211794F22F18293E00FDF243 /* XCRemoteSwiftPackageReference "supabase-swift" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/supabase/supabase-swift";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 2.5.1;
-			};
-		};
-		211795442F18422700FDF243 /* XCRemoteSwiftPackageReference "SwiftLint" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/realm/SwiftLint";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 0.63.0;
-			};
-		};
-		211795452F18F24500FDF243 /* XCRemoteSwiftPackageReference "lottie-ios" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/airbnb/lottie-ios";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 4.6.0;
-			};
-		};
-		211795462F18F26D00FDF243 /* XCRemoteSwiftPackageReference "SwiftDate" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/malcommac/SwiftDate";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 7.0.0;
-			};
-		};
-		211795472F18F32900FDF243 /* XCRemoteSwiftPackageReference "Kingfisher" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/onevcat/Kingfisher";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 8.6.2;
-			};
-		};
-		2117955C2F18F64F00FDF243 /* XCRemoteSwiftPackageReference "rive-ios" */ = {
+		211795692F18FBD100FDF243 /* XCRemoteSwiftPackageReference "rive-ios" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/rive-app/rive-ios";
 			requirement = {
@@ -723,73 +1012,113 @@
 				minimumVersion = 6.13.0;
 			};
 		};
+		2117956A2F18FBDC00FDF243 /* XCRemoteSwiftPackageReference "Kingfisher" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/onevcat/Kingfisher";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 8.6.2;
+			};
+		};
+		2117956B2F18FBE800FDF243 /* XCRemoteSwiftPackageReference "SwiftDate" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/malcommac/SwiftDate";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 7.0.0;
+			};
+		};
+		2117956C2F18FBF300FDF243 /* XCRemoteSwiftPackageReference "lottie-ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/airbnb/lottie-ios";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 4.6.0;
+			};
+		};
+		2117956D2F18FC0500FDF243 /* XCRemoteSwiftPackageReference "SwiftLint" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/realm/SwiftLint";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.63.0;
+			};
+		};
+		2117956E2F18FC1A00FDF243 /* XCRemoteSwiftPackageReference "supabase-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/supabase/supabase-swift";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.5.1;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		211794F42F182CC200FDF243 /* Supabase */ = {
+		2117956F2F18FC1A00FDF243 /* Auth */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 211794F22F18293E00FDF243 /* XCRemoteSwiftPackageReference "supabase-swift" */;
-			productName = Supabase;
-		};
-		211794F62F182CE000FDF243 /* Storage */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 211794F22F18293E00FDF243 /* XCRemoteSwiftPackageReference "supabase-swift" */;
-			productName = Storage;
-		};
-		211794F82F182CE400FDF243 /* Realtime */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 211794F22F18293E00FDF243 /* XCRemoteSwiftPackageReference "supabase-swift" */;
-			productName = Realtime;
-		};
-		211794FA2F182CE800FDF243 /* PostgREST */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 211794F22F18293E00FDF243 /* XCRemoteSwiftPackageReference "supabase-swift" */;
-			productName = PostgREST;
-		};
-		211794FC2F182CED00FDF243 /* Functions */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 211794F22F18293E00FDF243 /* XCRemoteSwiftPackageReference "supabase-swift" */;
-			productName = Functions;
-		};
-		211794FE2F182CF500FDF243 /* Auth */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 211794F22F18293E00FDF243 /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			package = 2117956E2F18FC1A00FDF243 /* XCRemoteSwiftPackageReference "supabase-swift" */;
 			productName = Auth;
 		};
-		2117954E2F18F51D00FDF243 /* swiftlint */ = {
+		211795712F18FC1A00FDF243 /* Functions */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 211795442F18422700FDF243 /* XCRemoteSwiftPackageReference "SwiftLint" */;
-			productName = swiftlint;
+			package = 2117956E2F18FC1A00FDF243 /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Functions;
 		};
-		211795502F18F52200FDF243 /* SwiftLintFramework */ = {
+		211795732F18FC1A00FDF243 /* PostgREST */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 211795442F18422700FDF243 /* XCRemoteSwiftPackageReference "SwiftLint" */;
-			productName = SwiftLintFramework;
+			package = 2117956E2F18FC1A00FDF243 /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = PostgREST;
 		};
-		211795522F18F52900FDF243 /* Lottie */ = {
+		211795752F18FC1A00FDF243 /* Realtime */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 211795452F18F24500FDF243 /* XCRemoteSwiftPackageReference "lottie-ios" */;
-			productName = Lottie;
+			package = 2117956E2F18FC1A00FDF243 /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Realtime;
 		};
-		211795542F18F52E00FDF243 /* Lottie-Dynamic */ = {
+		211795772F18FC1A00FDF243 /* Storage */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 211795452F18F24500FDF243 /* XCRemoteSwiftPackageReference "lottie-ios" */;
-			productName = "Lottie-Dynamic";
+			package = 2117956E2F18FC1A00FDF243 /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Storage;
 		};
-		211795582F18F53300FDF243 /* SwiftDate */ = {
+		211795792F18FC2400FDF243 /* RiveRuntime */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 211795462F18F26D00FDF243 /* XCRemoteSwiftPackageReference "SwiftDate" */;
-			productName = SwiftDate;
+			package = 211795692F18FBD100FDF243 /* XCRemoteSwiftPackageReference "rive-ios" */;
+			productName = RiveRuntime;
 		};
-		2117955A2F18F53D00FDF243 /* Kingfisher */ = {
+		2117957B2F18FC2900FDF243 /* Kingfisher */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 211795472F18F32900FDF243 /* XCRemoteSwiftPackageReference "Kingfisher" */;
+			package = 2117956A2F18FBDC00FDF243 /* XCRemoteSwiftPackageReference "Kingfisher" */;
 			productName = Kingfisher;
 		};
-		2117955D2F18F65700FDF243 /* RiveRuntime */ = {
+		2117957D2F18FC2D00FDF243 /* SwiftDate */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 2117955C2F18F64F00FDF243 /* XCRemoteSwiftPackageReference "rive-ios" */;
-			productName = RiveRuntime;
+			package = 2117956B2F18FBE800FDF243 /* XCRemoteSwiftPackageReference "SwiftDate" */;
+			productName = SwiftDate;
+		};
+		2117957F2F18FC3000FDF243 /* Lottie */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 2117956C2F18FBF300FDF243 /* XCRemoteSwiftPackageReference "lottie-ios" */;
+			productName = Lottie;
+		};
+		211795812F18FC3400FDF243 /* Lottie-Dynamic */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 2117956C2F18FBF300FDF243 /* XCRemoteSwiftPackageReference "lottie-ios" */;
+			productName = "Lottie-Dynamic";
+		};
+		211795842F18FC3800FDF243 /* swiftlint */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 2117956D2F18FC0500FDF243 /* XCRemoteSwiftPackageReference "SwiftLint" */;
+			productName = swiftlint;
+		};
+		211795862F18FC3D00FDF243 /* SwiftLintFramework */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 2117956D2F18FC0500FDF243 /* XCRemoteSwiftPackageReference "SwiftLint" */;
+			productName = SwiftLintFramework;
+		};
+		211795882F18FC4A00FDF243 /* Supabase */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 2117956E2F18FC1A00FDF243 /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Supabase;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
