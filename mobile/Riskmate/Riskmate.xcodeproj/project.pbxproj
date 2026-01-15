@@ -20,6 +20,7 @@
 		211795562F18F52E00FDF243 /* Lottie-Dynamic in Embed Frameworks */ = {isa = PBXBuildFile; productRef = 211795542F18F52E00FDF243 /* Lottie-Dynamic */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		211795592F18F53300FDF243 /* SwiftDate in Frameworks */ = {isa = PBXBuildFile; productRef = 211795582F18F53300FDF243 /* SwiftDate */; };
 		2117955B2F18F53D00FDF243 /* Kingfisher in Frameworks */ = {isa = PBXBuildFile; productRef = 2117955A2F18F53D00FDF243 /* Kingfisher */; };
+		2117955E2F18F65700FDF243 /* RiveRuntime in Frameworks */ = {isa = PBXBuildFile; productRef = 2117955D2F18F65700FDF243 /* RiveRuntime */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -103,6 +104,7 @@
 				211794F92F182CE400FDF243 /* Realtime in Frameworks */,
 				211795552F18F52E00FDF243 /* Lottie-Dynamic in Frameworks */,
 				211795512F18F52200FDF243 /* SwiftLintFramework in Frameworks */,
+				2117955E2F18F65700FDF243 /* RiveRuntime in Frameworks */,
 				211795592F18F53300FDF243 /* SwiftDate in Frameworks */,
 				2117954F2F18F51D00FDF243 /* swiftlint in Frameworks */,
 				211794F72F182CE000FDF243 /* Storage in Frameworks */,
@@ -188,6 +190,7 @@
 				211795542F18F52E00FDF243 /* Lottie-Dynamic */,
 				211795582F18F53300FDF243 /* SwiftDate */,
 				2117955A2F18F53D00FDF243 /* Kingfisher */,
+				2117955D2F18F65700FDF243 /* RiveRuntime */,
 			);
 			productName = Riskmate;
 			productReference = 211794A52F18213B00FDF243 /* Riskmate.app */;
@@ -277,6 +280,7 @@
 				211795452F18F24500FDF243 /* XCRemoteSwiftPackageReference "lottie-ios" */,
 				211795462F18F26D00FDF243 /* XCRemoteSwiftPackageReference "SwiftDate" */,
 				211795472F18F32900FDF243 /* XCRemoteSwiftPackageReference "Kingfisher" */,
+				2117955C2F18F64F00FDF243 /* XCRemoteSwiftPackageReference "rive-ios" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 211794A62F18213B00FDF243 /* Products */;
@@ -707,6 +711,14 @@
 				minimumVersion = 8.6.2;
 			};
 		};
+		2117955C2F18F64F00FDF243 /* XCRemoteSwiftPackageReference "rive-ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/rive-app/rive-ios";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 6.13.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -769,6 +781,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 211795472F18F32900FDF243 /* XCRemoteSwiftPackageReference "Kingfisher" */;
 			productName = Kingfisher;
+		};
+		2117955D2F18F65700FDF243 /* RiveRuntime */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 2117955C2F18F64F00FDF243 /* XCRemoteSwiftPackageReference "rive-ios" */;
+			productName = RiveRuntime;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

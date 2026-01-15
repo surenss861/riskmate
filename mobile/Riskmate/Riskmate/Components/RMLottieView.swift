@@ -1,10 +1,31 @@
 import SwiftUI
 
-// Lottie import is conditional - package must be added via SPM
-#if canImport(Lottie)
-@preconcurrency import Lottie
+// Lottie is conditionally compiled - remove this file or add Lottie package if needed
+// For now, using a simple placeholder that works without Lottie
 
-/// Lottie animation wrapper for SwiftUI
+/// Placeholder animation view (replace with Lottie when package is properly linked)
+struct RMLottieView: View {
+    let name: String
+    let loopMode: LottieLoopMode
+    var speed: CGFloat = 1.0
+    
+    var body: some View {
+        ProgressView()
+            .tint(DesignSystem.Colors.accent)
+            .scaleEffect(1.2)
+    }
+}
+
+/// Loop mode enum (matches Lottie's API when available)
+enum LottieLoopMode {
+    case loop
+    case playOnce
+}
+
+// MARK: - Lottie Implementation (Uncomment when package is linked)
+/*
+import Lottie
+
 struct RMLottieView: UIViewRepresentable {
     let name: String
     let loopMode: LottieLoopMode
@@ -13,7 +34,7 @@ struct RMLottieView: UIViewRepresentable {
     func makeUIView(context: Context) -> UIView {
         let container = UIView()
         let animationView = LottieAnimationView(name: name)
-        animationView.loopMode = loopMode
+        animationView.loopMode = loopMode == .loop ? .loop : .playOnce
         animationView.animationSpeed = speed
         animationView.play()
         animationView.translatesAutoresizingMaskIntoConstraints = false
@@ -33,25 +54,7 @@ struct RMLottieView: UIViewRepresentable {
         // Animation updates automatically
     }
 }
-#else
-/// Placeholder when Lottie is not available
-struct RMLottieView: View {
-    let name: String
-    let loopMode: LottieLoopMode
-    var speed: CGFloat = 1.0
-    
-    var body: some View {
-        ProgressView()
-            .tint(DesignSystem.Colors.accent)
-    }
-}
-
-/// Dummy type for when Lottie isn't available
-enum LottieLoopMode {
-    case loop
-    case playOnce
-}
-#endif
+*/
 
 #Preview {
     RMLottieView(name: "loading", loopMode: .loop)
