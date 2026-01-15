@@ -1,0 +1,47 @@
+# SwiftLint Configuration for RiskMate iOS
+
+# Disabled rules (too strict for now)
+disabled_rules:
+  - trailing_whitespace
+  - line_length
+  - todo
+  - comment_spacing
+
+# Opt-in rules (good practices)
+opt_in_rules:
+  - empty_count
+  - explicit_init
+  - first_where
+  - sorted_first_last
+  - sorted_imports
+  - vertical_parameter_alignment_on_call
+
+# File-level exclusions
+excluded:
+  - RiskmateTests
+  - RiskmateUITests
+  - .build
+  - DerivedData
+
+# Rule configurations
+line_length:
+  warning: 120
+  error: 150
+  ignores_function_declarations: true
+  ignores_comments: true
+  ignores_urls: true
+
+function_body_length:
+  warning: 60
+  error: 100
+
+type_body_length:
+  warning: 300
+  error: 400
+
+file_length:
+  warning: 500
+  error: 1000
+
+# Reporter
+reporter: "xcode"

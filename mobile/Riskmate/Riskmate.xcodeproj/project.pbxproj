@@ -18,8 +18,6 @@
 		211795802F18FC3000FDF243 /* Lottie in Frameworks */ = {isa = PBXBuildFile; productRef = 2117957F2F18FC3000FDF243 /* Lottie */; };
 		211795822F18FC3400FDF243 /* Lottie-Dynamic in Frameworks */ = {isa = PBXBuildFile; productRef = 211795812F18FC3400FDF243 /* Lottie-Dynamic */; };
 		211795832F18FC3400FDF243 /* Lottie-Dynamic in Embed Frameworks */ = {isa = PBXBuildFile; productRef = 211795812F18FC3400FDF243 /* Lottie-Dynamic */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
-		211795852F18FC3800FDF243 /* swiftlint in Frameworks */ = {isa = PBXBuildFile; productRef = 211795842F18FC3800FDF243 /* swiftlint */; };
-		211795872F18FC3D00FDF243 /* SwiftLintFramework in Frameworks */ = {isa = PBXBuildFile; productRef = 211795862F18FC3D00FDF243 /* SwiftLintFramework */; };
 		211795892F18FC4A00FDF243 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 211795882F18FC4A00FDF243 /* Supabase */; };
 		2117958A2F18FC4A00FDF243 /* RiskmateTests.xctest in Embed PlugIns */ = {isa = PBXBuildFile; fileRef = 211794B62F18213C00FDF243 /* RiskmateTests.xctest */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		2117958D2F18FC4A00FDF243 /* RiskmateUITests.xctest in Embed PlugIns */ = {isa = PBXBuildFile; fileRef = 211794C02F18213C00FDF243 /* RiskmateUITests.xctest */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
@@ -271,12 +269,10 @@
 				211795742F18FC1A00FDF243 /* PostgREST in Frameworks */,
 				211795722F18FC1A00FDF243 /* Functions in Frameworks */,
 				211795802F18FC3000FDF243 /* Lottie in Frameworks */,
-				211795852F18FC3800FDF243 /* swiftlint in Frameworks */,
 				2117957C2F18FC2900FDF243 /* Kingfisher in Frameworks */,
 				211795702F18FC1A00FDF243 /* Auth in Frameworks */,
 				211795822F18FC3400FDF243 /* Lottie-Dynamic in Frameworks */,
 				2117957E2F18FC2D00FDF243 /* SwiftDate in Frameworks */,
-				211795872F18FC3D00FDF243 /* SwiftLintFramework in Frameworks */,
 				211795782F18FC1A00FDF243 /* Storage in Frameworks */,
 				211795762F18FC1A00FDF243 /* Realtime in Frameworks */,
 				2117957A2F18FC2400FDF243 /* RiveRuntime in Frameworks */,
@@ -507,8 +503,6 @@
 				2117957D2F18FC2D00FDF243 /* SwiftDate */,
 				2117957F2F18FC3000FDF243 /* Lottie */,
 				211795812F18FC3400FDF243 /* Lottie-Dynamic */,
-				211795842F18FC3800FDF243 /* swiftlint */,
-				211795862F18FC3D00FDF243 /* SwiftLintFramework */,
 				211795882F18FC4A00FDF243 /* Supabase */,
 			);
 			productName = Riskmate;
@@ -598,7 +592,6 @@
 				2117956A2F18FBDC00FDF243 /* XCRemoteSwiftPackageReference "Kingfisher" */,
 				2117956B2F18FBE800FDF243 /* XCRemoteSwiftPackageReference "SwiftDate" */,
 				2117956C2F18FBF300FDF243 /* XCRemoteSwiftPackageReference "lottie-ios" */,
-				2117956D2F18FC0500FDF243 /* XCRemoteSwiftPackageReference "SwiftLint" */,
 				2117956E2F18FC1A00FDF243 /* XCRemoteSwiftPackageReference "supabase-swift" */,
 			);
 			preferredProjectObjectVersion = 77;
@@ -1036,14 +1029,6 @@
 				minimumVersion = 4.6.0;
 			};
 		};
-		2117956D2F18FC0500FDF243 /* XCRemoteSwiftPackageReference "SwiftLint" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/realm/SwiftLint";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 0.63.0;
-			};
-		};
 		2117956E2F18FC1A00FDF243 /* XCRemoteSwiftPackageReference "supabase-swift" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/supabase/supabase-swift";
@@ -1104,16 +1089,6 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 2117956C2F18FBF300FDF243 /* XCRemoteSwiftPackageReference "lottie-ios" */;
 			productName = "Lottie-Dynamic";
-		};
-		211795842F18FC3800FDF243 /* swiftlint */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 2117956D2F18FC0500FDF243 /* XCRemoteSwiftPackageReference "SwiftLint" */;
-			productName = swiftlint;
-		};
-		211795862F18FC3D00FDF243 /* SwiftLintFramework */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 2117956D2F18FC0500FDF243 /* XCRemoteSwiftPackageReference "SwiftLint" */;
-			productName = SwiftLintFramework;
 		};
 		211795882F18FC4A00FDF243 /* Supabase */ = {
 			isa = XCSwiftPackageProductDependency;
