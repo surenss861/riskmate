@@ -102,6 +102,8 @@ struct AuthView: View {
                                     .font(RMTheme.Typography.body)
                                 
                                 Button(isSignup ? "Log in" : "Sign up") {
+                                    let generator = UIImpactFeedbackGenerator(style: .light)
+                                    generator.impactOccurred()
                                     withAnimation(RMTheme.Animation.spring) {
                                         isSignup.toggle()
                                         errorText = nil

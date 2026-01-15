@@ -54,6 +54,10 @@ struct RMTheme {
         static let lg: CGFloat = 24
         static let xl: CGFloat = 32
         static let xxl: CGFloat = 48
+        
+        // Layout tokens
+        static let pagePadding: CGFloat = 20
+        static let sectionSpacing: CGFloat = 16
     }
     
     // MARK: - Typography
@@ -64,6 +68,8 @@ struct RMTheme {
         static let title = Font.system(size: 28, weight: .bold, design: .default)
         static let title2 = Font.system(size: 22, weight: .semibold, design: .default)
         static let title3 = Font.system(size: 20, weight: .semibold, design: .default)
+        static let headingLarge = Font.system(size: 28, weight: .bold, design: .default)
+        static let headingSmall = Font.system(size: 18, weight: .semibold, design: .default)
         
         // Body
         static let body = Font.system(size: 17, weight: .regular, design: .default)
@@ -85,16 +91,19 @@ struct RMTheme {
         static let md: CGFloat = 16
         static let lg: CGFloat = 24
         static let xl: CGFloat = 26 // Glass cards
+        
+        // Standardized card radius
+        static let card: CGFloat = 24
     }
     
     // MARK: - Shadows
     
     struct Shadow {
         static let card = ShadowStyle(
-            color: .black.opacity(0.45),
-            radius: 14,
+            color: .black.opacity(0.3),
+            radius: 12,
             x: 0,
-            y: 10
+            y: 6
         )
         
         static let button = ShadowStyle(

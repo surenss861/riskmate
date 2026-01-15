@@ -31,6 +31,13 @@ class APIClient {
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
+        // Set timeout based on operation type
+        if endpoint.contains("export") {
+            request.timeoutInterval = 120.0 // 2 minutes for exports
+        } else {
+            request.timeoutInterval = 30.0 // 30 seconds for normal requests
+        }
+        
         // Add auth token (required for all requests)
         do {
             guard let token = try await authService.getAccessToken() else {
@@ -66,10 +73,17 @@ class APIClient {
         
         guard (200...299).contains(httpResponse.statusCode) else {
             let errorMessage = try? JSONDecoder().decode(APIErrorResponse.self, from: data)
-            throw APIError.httpError(
+            let error = APIError.httpError(
                 statusCode: httpResponse.statusCode,
                 message: errorMessage?.message ?? "Request failed with status \(httpResponse.statusCode)"
             )
+            
+            // Tag error with category for better handling
+            #if DEBUG
+            print("[APIClient] Error category: \(errorCategory(for: httpResponse.statusCode))")
+            #endif
+            
+            throw error
         }
         
         let decoder = JSONDecoder()
@@ -97,7 +111,288 @@ class APIClient {
         )
         return response.data
     }
+    
+    // MARK: - Readiness API
+    
+    /// Get audit readiness data
+    func getReadiness(
+        timeRange: String? = nil,
+        category: String? = nil,
+        severity: String? = nil
+    ) async throws -> ReadinessResponse {
+        var queryItems: [String] = []
+        if let timeRange = timeRange { queryItems.append("time_range=\(timeRange)") }
+        if let category = category { queryItems.append("category=\(category)") }
+        if let severity = severity { queryItems.append("severity=\(severity)") }
+        
+        let query = queryItems.isEmpty ? "" : "?\(queryItems.joined(separator: "&"))"
+        return try await request(endpoint: "/api/audit/readiness\(query)")
+    }
+    
+    // MARK: - Executive API
+    
+    /// Get executive risk posture
+    func getExecutivePosture() async throws -> ExecutivePostureResponse {
+        return try await request(endpoint: "/api/executive/risk-posture")
+    }
+    
+    // MARK: - Team API
+    
+    /// Get team members and invites
+    func getTeam() async throws -> TeamResponse {
+        return try await request(endpoint: "/api/team")
+    }
+    
+    /// Send team invite
+    func inviteTeamMember(email: String, role: String) async throws {
+        let body = try JSONEncoder().encode(InviteRequest(email: email, role: role))
+        let _: EmptyResponse = try await request(
+            endpoint: "/api/team/invite",
+            method: "POST",
+            body: body
+        )
+    }
+    
+    // MARK: - Job API
+    
+    /// Create a new job
+    func createJob(_ job: Job) async throws -> Job {
+        let body = try JSONEncoder().encode(job)
+        let response: JobResponse = try await request(
+            endpoint: "/api/jobs",
+            method: "POST",
+            body: body
+        )
+        return response.data
+    }
+    
+    /// Update an existing job
+    func updateJob(_ job: Job) async throws -> Job {
+        let body = try JSONEncoder().encode(job)
+        let response: JobResponse = try await request(
+            endpoint: "/api/jobs/\(job.id)",
+            method: "PATCH",
+            body: body
+        )
+        return response.data
+    }
+    
+    /// Delete a job
+    func deleteJob(_ jobId: String) async throws {
+        let _: EmptyResponse = try await request(
+            endpoint: "/api/jobs/\(jobId)",
+            method: "DELETE"
+        )
+    }
+    
+    // MARK: - Evidence API
+    
+    /// Upload evidence (photo/document)
+    func uploadEvidence(_ evidence: EvidenceUpload) async throws -> EvidenceUpload {
+        // TODO: Implement multipart form data upload
+        let body = try JSONEncoder().encode(evidence)
+        let response: EvidenceResponse = try await request(
+            endpoint: "/api/jobs/\(evidence.jobId)/evidence",
+            method: "POST",
+            body: body
+        )
+        return response.data
+    }
+    
+    /// Update evidence
+    func updateEvidence(_ evidence: EvidenceUpload) async throws -> EvidenceUpload {
+        let body = try JSONEncoder().encode(evidence)
+        let response: EvidenceResponse = try await request(
+            endpoint: "/api/evidence/\(evidence.id)",
+            method: "PATCH",
+            body: body
+        )
+        return response.data
+    }
+    
+    /// Delete evidence
+    func deleteEvidence(_ evidenceId: String) async throws {
+        let _: EmptyResponse = try await request(
+            endpoint: "/api/evidence/\(evidenceId)",
+            method: "DELETE"
+        )
+    }
+    
+    /// Get evidence for a job
+    func getEvidence(jobId: String) async throws -> [EvidenceItem] {
+        let response: EvidenceListResponse = try await request(
+            endpoint: "/api/jobs/\(jobId)/evidence"
+        )
+        return response.data
+    }
+    
+    /// Get hazards for a job
+    func getHazards(jobId: String) async throws -> [Hazard] {
+        let response: HazardsResponse = try await request(
+            endpoint: "/api/jobs/\(jobId)/hazards"
+        )
+        return response.data
+    }
+    
+    /// Get controls for a job
+    func getControls(jobId: String) async throws -> [Control] {
+        let response: ControlsResponse = try await request(
+            endpoint: "/api/jobs/\(jobId)/controls"
+        )
+        return response.data
+    }
+    
+    /// Generate Risk Snapshot PDF
+    func generateRiskSnapshot(jobId: String) async throws -> URL {
+        // Check if backend returns URL or base64
+        let response: PDFResponse = try await request(
+            endpoint: "/api/jobs/\(jobId)/export/pdf",
+            method: "POST"
+        )
+        
+        // If response has URL, download it
+        if !response.url.isEmpty {
+            return try await downloadPDF(url: response.url)
+        }
+        
+        // If response has base64, decode it
+        if let base64 = response.base64, !base64.isEmpty {
+            return try await decodeBase64PDF(base64: base64)
+        }
+        
+        throw APIError.invalidResponse
+    }
+    
+    /// Generate Proof Pack ZIP
+    func generateProofPack(jobId: String) async throws -> URL {
+        let response: ZIPResponse = try await request(
+            endpoint: "/api/jobs/\(jobId)/export/proof-pack",
+            method: "POST"
+        )
+        
+        if !response.url.isEmpty {
+            return try await downloadZIP(url: response.url)
+        }
+        
+        if let base64 = response.base64, !base64.isEmpty {
+            return try await decodeBase64ZIP(base64: base64)
+        }
+        
+        throw APIError.invalidResponse
+    }
+    
+    private func downloadPDF(url: String) async throws -> URL {
+        guard let downloadURL = URL(string: url) else {
+            throw APIError.invalidURL
+        }
+        
+        let (data, _) = try await URLSession.shared.data(from: downloadURL)
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("risk-snapshot-\(UUID().uuidString).pdf")
+        try data.write(to: tempURL)
+        return tempURL
+    }
+    
+    private func downloadZIP(url: String) async throws -> URL {
+        guard let downloadURL = URL(string: url) else {
+            throw APIError.invalidURL
+        }
+        
+        let (data, _) = try await URLSession.shared.data(from: downloadURL)
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("proof-pack-\(UUID().uuidString).zip")
+        try data.write(to: tempURL)
+        return tempURL
+    }
+    
+    private func decodeBase64PDF(base64: String) async throws -> URL {
+        guard let data = Data(base64Encoded: base64) else {
+            throw APIError.decodingError
+        }
+        
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("risk-snapshot-\(UUID().uuidString).pdf")
+        try data.write(to: tempURL)
+        return tempURL
+    }
+    
+    private func decodeBase64ZIP(base64: String) async throws -> URL {
+        guard let data = Data(base64Encoded: base64) else {
+            throw APIError.decodingError
+        }
+        
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("proof-pack-\(UUID().uuidString).zip")
+        try data.write(to: tempURL)
+        return tempURL
+    }
 }
+
+struct EvidenceListResponse: Codable {
+    let data: [EvidenceItem]
+}
+
+struct HazardsResponse: Codable {
+    let data: [Hazard]
+}
+
+struct ControlsResponse: Codable {
+    let data: [Control]
+}
+
+struct PDFResponse: Codable {
+    let url: String?
+    let base64: String?
+    let hash: String?
+    let generatedAt: String?
+    
+    enum CodingKeys: String, CodingKey {
+        case url = "pdf_url"
+        case base64 = "pdf_base64"
+        case hash
+        case generatedAt = "generated_at"
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        url = try? container.decode(String.self, forKey: .url)
+        base64 = try? container.decode(String.self, forKey: .base64)
+        hash = try? container.decode(String.self, forKey: .hash)
+        generatedAt = try? container.decode(String.self, forKey: .generatedAt)
+    }
+}
+
+struct ZIPResponse: Codable {
+    let url: String?
+    let base64: String?
+    let hash: String?
+    let generatedAt: String?
+    
+    enum CodingKeys: String, CodingKey {
+        case url = "zip_url"
+        case base64 = "zip_base64"
+        case hash
+        case generatedAt = "generated_at"
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        url = try? container.decode(String.self, forKey: .url)
+        base64 = try? container.decode(String.self, forKey: .base64)
+        hash = try? container.decode(String.self, forKey: .hash)
+        generatedAt = try? container.decode(String.self, forKey: .generatedAt)
+    }
+}
+
+struct JobResponse: Codable {
+    let data: Job
+}
+
+struct EvidenceResponse: Codable {
+    let data: EvidenceUpload
+}
+
+struct EmptyResponse: Codable {}
 
 // MARK: - Error Types
 
@@ -124,4 +419,47 @@ enum APIError: LocalizedError {
 struct APIErrorResponse: Codable {
     let message: String?
     let code: String?
+}
+
+// MARK: - Error Categorization
+
+extension APIError {
+    var category: ErrorCategory {
+        switch self {
+        case .invalidURL, .invalidResponse:
+            return .client
+        case .httpError(let statusCode, _):
+            return errorCategory(for: statusCode)
+        case .decodingError:
+            return .client
+        }
+    }
+}
+
+enum ErrorCategory {
+    case auth // 401/403
+    case client // 4xx (except auth)
+    case server // 5xx
+    case timeout
+    case network
+}
+
+func errorCategory(for statusCode: Int) -> ErrorCategory {
+    switch statusCode {
+    case 401, 403:
+        return .auth
+    case 408, 504:
+        return .timeout
+    case 400...499:
+        return .client
+    case 500...599:
+        return .server
+    default:
+        return .client
+    }
+}
+
+struct InviteRequest: Codable {
+    let email: String
+    let role: String
 }

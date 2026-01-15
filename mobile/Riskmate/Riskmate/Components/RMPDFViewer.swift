@@ -97,7 +97,9 @@ struct RMPDFViewerScreen: View {
                             .padding(.horizontal, RMTheme.Spacing.lg)
                         
                         RMPrimaryButton(title: "Retry", action: {
-                            loadPDF()
+                            Task {
+                                await loadPDF()
+                            }
                         })
                         .padding(.top, RMTheme.Spacing.sm)
                     }

@@ -10,87 +10,131 @@ struct AccountView: View {
     @State private var isLoading = false
     
     var body: some View {
-        NavigationView {
-            ZStack {
-                RMBackground()
-                
-                List {
-                    if let org = sessionManager.currentOrganization {
-                        Section {
-                            HStack {
-                                Text("Organization Name")
-                                    .foregroundColor(DesignSystem.Colors.textPrimary)
-                                Spacer()
-                                if isEditingOrgName {
-                                    TextField("Organization Name", text: $editedOrgName)
-                                        .textFieldStyle(.plain)
-                                        .multilineTextAlignment(.trailing)
-                                        .foregroundColor(DesignSystem.Colors.textPrimary)
-                                } else {
-                                    Text(org.name)
-                                        .foregroundColor(DesignSystem.Colors.textSecondary)
-                                }
-                            }
-                            .listRowBackground(DesignSystem.Colors.surface.opacity(0.5))
-                            
-                            if isEditingOrgName {
-                                Button(action: saveOrganizationName) {
-                                    if isLoading {
-                                        HStack {
-                                            ProgressView()
-                                                .progressViewStyle(CircularProgressViewStyle(tint: DesignSystem.Colors.accent))
-                                            Text("Saving...")
-                                                .foregroundColor(DesignSystem.Colors.accent)
-                                        }
-                                    } else {
-                                        Text("Save")
-                                            .foregroundColor(DesignSystem.Colors.accent)
-                                    }
-                                }
-                                .disabled(isLoading || editedOrgName.isEmpty || editedOrgName == org.name)
-                                .listRowBackground(DesignSystem.Colors.surface.opacity(0.5))
-                                
-                                Button("Cancel", role: .cancel) {
-                                    isEditingOrgName = false
-                                    editedOrgName = org.name
-                                }
-                                .listRowBackground(DesignSystem.Colors.surface.opacity(0.5))
-                            } else {
-                                Button("Edit") {
-                                    editedOrgName = org.name
-                                    isEditingOrgName = true
-                                }
-                                .foregroundColor(DesignSystem.Colors.accent)
-                                .listRowBackground(DesignSystem.Colors.surface.opacity(0.5))
-                            }
-                        } header: {
-                            Text("Organization")
-                                .foregroundColor(DesignSystem.Colors.textSecondary)
-                        }
-                    }
-                    
+        ZStack {
+            RMBackground()
+            
+            List {
+                if let org = sessionManager.currentOrganization {
                     Section {
-                        Button("Sign Out", role: .destructive) {
-                            Task {
-                                await sessionManager.logout()
+                        HStack {
+                            Text("Organization Name")
+                                .foregroundColor(RMTheme.Colors.textPrimary)
+                            Spacer()
+                            if isEditingOrgName {
+                                TextField("Organization Name", text: $editedOrgName)
+                                    .textFieldStyle(.plain)
+                                    .multilineTextAlignment(.trailing)
+                                    .foregroundColor(RMTheme.Colors.textPrimary)
+                            } else {
+                                Text(org.name)
+                                    .foregroundColor(RMTheme.Colors.textSecondary)
                             }
                         }
-                        .listRowBackground(DesignSystem.Colors.surface.opacity(0.5))
+                        .listRowBackground(RMTheme.Colors.surface.opacity(0.5))
+                        
+                        if isEditingOrgName {
+                            Button {
+                                let generator = UIImpactFeedbackGenerator(style: .medium)
+                                generator.impactOccurred()
+                                saveOrganizationName()
+                            } label: {
+                                if isLoading {
+                                    HStack {
+                                        ProgressView()
+                                            .progressViewStyle(CircularProgressViewStyle(tint: RMTheme.Colors.accent))
+                                        Text("Saving...")
+                                            .foregroundColor(RMTheme.Colors.accent)
+                                    }
+                                } else {
+                                    Text("Save")
+                                        .foregroundColor(RMTheme.Colors.accent)
+                                }
+                            }
+                            .disabled(isLoading || editedOrgName.isEmpty || editedOrgName == org.name)
+                            .listRowBackground(RMTheme.Colors.surface.opacity(0.5))
+                            
+                            Button("Cancel", role: .cancel) {
+                                let generator = UIImpactFeedbackGenerator(style: .light)
+                                generator.impactOccurred()
+                                isEditingOrgName = false
+                                editedOrgName = org.name
+                            }
+                            .listRowBackground(RMTheme.Colors.surface.opacity(0.5))
+                        } else {
+                            Button {
+                                let generator = UIImpactFeedbackGenerator(style: .light)
+                                generator.impactOccurred()
+                                editedOrgName = org.name
+                                isEditingOrgName = true
+                            } label: {
+                                Text("Edit")
+                                    .foregroundColor(RMTheme.Colors.accent)
+                            }
+                            .listRowBackground(RMTheme.Colors.surface.opacity(0.5))
+                        }
+                    } header: {
+                        Text("Organization")
+                            .foregroundColor(RMTheme.Colors.textSecondary)
                     }
                 }
-                .scrollContentBackground(.hidden)
-                .navigationTitle("Account")
-                .navigationBarTitleDisplayMode(.large)
-                .refreshable {
-                    await sessionManager.refreshOrganization()
-                }
-                .alert("Error", isPresented: $showError) {
-                    Button("OK", role: .cancel) { }
-                } message: {
-                    Text(errorMessage)
+                
+                Section {
+                    NavigationLink {
+                        SupportBundleView()
+                    } label: {
+                        HStack {
+                            Image(systemName: "questionmark.circle")
+                            Text("Support")
+                        }
+                        .foregroundColor(RMTheme.Colors.textPrimary)
+                    }
+                    .listRowBackground(RMTheme.Colors.surface.opacity(0.5))
+                    
+                    NavigationLink {
+                        PrivacyPolicyView()
+                    } label: {
+                        HStack {
+                            Image(systemName: "hand.raised.fill")
+                            Text("Privacy Policy")
+                        }
+                        .foregroundColor(RMTheme.Colors.textPrimary)
+                    }
+                    .listRowBackground(RMTheme.Colors.surface.opacity(0.5))
+                    
+                    NavigationLink {
+                        TermsOfServiceView()
+                    } label: {
+                        HStack {
+                            Image(systemName: "doc.text.fill")
+                            Text("Terms of Service")
+                        }
+                        .foregroundColor(RMTheme.Colors.textPrimary)
+                    }
+                    .listRowBackground(RMTheme.Colors.surface.opacity(0.5))
+                    
+                    Button("Sign Out", role: .destructive) {
+                        let generator = UINotificationFeedbackGenerator()
+                        generator.notificationOccurred(.warning)
+                        Task {
+                            await sessionManager.logout()
+                        }
+                    }
+                    .listRowBackground(RMTheme.Colors.surface.opacity(0.5))
                 }
             }
+            .scrollContentBackground(.hidden)
+                .navigationTitle("Settings")
+                .navigationBarTitleDisplayMode(.large)
+            .refreshable {
+                await sessionManager.refreshOrganization()
+            }
+            .alert("Error", isPresented: $showError) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text(errorMessage)
+            }
         }
+        .rmNavigationBar(title: "Settings")
         .preferredColorScheme(.dark)
     }
     

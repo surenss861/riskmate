@@ -30,7 +30,13 @@ class AuthService {
     
     /// Sign in with email/password
     func signIn(email: String, password: String) async throws {
-        _ = try await supabase.auth.signIn(email: email, password: password)
+        do {
+            _ = try await supabase.auth.signIn(email: email, password: password)
+            Analytics.shared.trackLoginSuccess()
+        } catch {
+            Analytics.shared.trackLoginFailed(reason: error.localizedDescription)
+            throw error
+        }
     }
     
     /// Sign out

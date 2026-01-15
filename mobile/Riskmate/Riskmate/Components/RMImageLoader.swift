@@ -5,9 +5,9 @@ import Kingfisher
 struct RMImageLoader: View {
     let url: URL?
     var placeholder: AnyView?
-    var contentMode: ContentMode = .fill
+    var contentMode: SwiftUI.ContentMode = .fill
     
-    init(url: URL?, placeholder: AnyView? = nil, contentMode: ContentMode = .fill) {
+    init(url: URL?, placeholder: AnyView? = nil, contentMode: SwiftUI.ContentMode = .fill) {
         self.url = url
         self.placeholder = placeholder
         self.contentMode = contentMode
@@ -24,7 +24,6 @@ struct RMImageLoader: View {
                 }
                 .resizable()
                 .aspectRatio(contentMode: contentMode)
-                .fade(duration: 0.25)
         } else {
             placeholder ?? AnyView(
                 Rectangle()
@@ -36,7 +35,7 @@ struct RMImageLoader: View {
 
 /// Convenience initializer for String URLs
 extension RMImageLoader {
-    init(urlString: String?, placeholder: AnyView? = nil, contentMode: ContentMode = .fill) {
+    init(urlString: String?, placeholder: AnyView? = nil, contentMode: SwiftUI.ContentMode = .fill) {
         if let urlString = urlString, let url = URL(string: urlString) {
             self.init(url: url, placeholder: placeholder, contentMode: contentMode)
         } else {
@@ -48,7 +47,7 @@ extension RMImageLoader {
 #Preview {
     RMImageLoader(
         urlString: "https://picsum.photos/200",
-        contentMode: .fill
+        contentMode: SwiftUI.ContentMode.fill
     )
     .frame(width: 200, height: 200)
     .clipShape(RoundedRectangle(cornerRadius: RMTheme.Radius.md))

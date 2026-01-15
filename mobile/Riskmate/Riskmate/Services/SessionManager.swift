@@ -30,7 +30,7 @@ class SessionManager: ObservableObject {
         }
         
         do {
-            if let session = try await authService.getCurrentSession() {
+            if try await authService.getCurrentSession() != nil {
                 print("[SessionManager] ✅ Found existing session")
                 isAuthenticated = true
                 await loadUserData()

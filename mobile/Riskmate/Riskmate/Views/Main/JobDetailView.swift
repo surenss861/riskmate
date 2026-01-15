@@ -1,0 +1,1275 @@
+import SwiftUI
+import PDFKit
+import UserNotifications
+
+/// Job Detail screen with tabs: Overview, Hazards, Controls, Evidence, Exports
+struct JobDetailView: View {
+    let jobId: String
+    @State private var selectedTab: JobDetailTab = .overview
+    @State private var job: Job?
+    @State private var isLoading = true
+    @State private var showPDFViewer = false
+    @State private var pdfURL: URL?
+    @Environment(\.dismiss) private var dismiss
+    
+    var body: some View {
+        RMBackground()
+            .overlay {
+                if isLoading {
+                    VStack(spacing: RMTheme.Spacing.lg) {
+                        RMSkeletonCard()
+                        RMSkeletonList(count: 3)
+                    }
+                    .padding(RMTheme.Spacing.pagePadding)
+                } else if let job = job {
+                    VStack(spacing: 0) {
+                        // Tab Picker
+                        Picker("Tab", selection: $selectedTab) {
+                            ForEach(JobDetailTab.allCases, id: \.self) { tab in
+                                Text(tab.title).tag(tab)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .padding(RMTheme.Spacing.pagePadding)
+                        .background(RMTheme.Colors.background)
+                        
+                        // Tab Content
+                        TabView(selection: $selectedTab) {
+                            OverviewTab(job: job)
+                                .tag(JobDetailTab.overview)
+                            
+                            HazardsTab(jobId: jobId)
+                                .tag(JobDetailTab.hazards)
+                            
+                            ControlsTab(jobId: jobId)
+                                .tag(JobDetailTab.controls)
+                            
+                            EvidenceTab(jobId: jobId)
+                                .tag(JobDetailTab.evidence)
+                            
+                            ExportsTab(jobId: jobId)
+                            .tag(JobDetailTab.exports)
+                        }
+                        .tabViewStyle(.page(indexDisplayMode: .never))
+                    }
+                } else {
+                    RMEmptyState(
+                        icon: "exclamationmark.triangle",
+                        title: "Job Not Found",
+                        message: "This job could not be loaded"
+                    )
+                }
+            }
+            .rmNavigationBar(title: job?.title ?? "Job Details")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    HStack(spacing: RMTheme.Spacing.sm) {
+                        // Evidence Requirements Badge
+                        if let job = job {
+                            RMEvidenceRequirementsBadge(
+                                required: 5, // TODO: Get from job/API
+                                uploaded: 2, // TODO: Get from evidence count
+                                onTap: {
+                                    selectedTab = .evidence
+                                }
+                            )
+                        }
+                        
+                        Menu {
+                            Button {
+                                // TODO: Share job
+                            } label: {
+                                Label("Share", systemImage: "square.and.arrow.up")
+                            }
+                            
+                            Button(role: .destructive) {
+                                // TODO: Delete job
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                        } label: {
+                            Image(systemName: "ellipsis.circle")
+                                .foregroundColor(RMTheme.Colors.textSecondary)
+                        }
+                    }
+                }
+            }
+            .sheet(isPresented: $showPDFViewer) {
+                if let pdfURL = pdfURL {
+                    RMPDFViewerScreen(pdfURL: pdfURL)
+                }
+            }
+            .onAppear {
+                // Request notification permission for export completion
+                UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
+            }
+            .onAppear {
+                // Request notification permission for export completion
+                UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
+            }
+            .task {
+                await loadJob()
+            }
+    }
+    
+    private func loadJob() async {
+        isLoading = true
+        defer { isLoading = false }
+        
+        // Track job opened
+        Analytics.shared.trackJobOpened(jobId: jobId)
+        
+        // TODO: Replace with real API call
+        try? await Task.sleep(nanoseconds: 500_000_000)
+        
+        // Mock data
+        job = Job(
+            id: jobId,
+            title: "Main St Electrical Installation",
+            status: "In Progress",
+            riskLevel: "High",
+            client: "ABC Construction",
+            location: "123 Main St",
+            dueDate: Date().addingTimeInterval(86400 * 3),
+            owner: "John Doe",
+            templateApplied: nil,
+            readinessScore: 65,
+            blockers: ["Missing evidence upload", "Controls not completed"]
+        )
+    }
+}
+
+// MARK: - Tabs
+
+enum JobDetailTab: String, CaseIterable {
+    case overview
+    case hazards
+    case controls
+    case evidence
+    case exports
+    
+    var title: String {
+        switch self {
+        case .overview: return "Overview"
+        case .hazards: return "Hazards"
+        case .controls: return "Controls"
+        case .evidence: return "Evidence"
+        case .exports: return "Exports"
+        }
+    }
+}
+
+// MARK: - Overview Tab
+
+struct OverviewTab: View {
+    let job: Job
+    @State private var recentReceipts: [ActionReceipt] = []
+    
+    var body: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(spacing: RMTheme.Spacing.sectionSpacing) {
+                // Risk Score Card
+                RiskScoreCard(job: job)
+                    .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                
+                // Status & Info
+                StatusInfoCard(job: job)
+                    .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                
+                // Readiness Score
+                ReadinessScoreCard(job: job)
+                    .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                
+                // Blockers (if any)
+                if !job.blockers.isEmpty {
+                    BlockersCard(blockers: job.blockers)
+                        .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                }
+                
+                // Proof Readiness Meter
+                RMProofReadinessMeter(
+                    readiness: ProofReadiness(
+                        status: job.readinessScore >= 80 ? .ready : .needsEvidence,
+                        evidenceCount: 2, // TODO: Get from evidence
+                        evidenceRequired: 5,
+                        evidenceStatus: 2 >= 5 ? .complete : (2 > 0 ? .partial : .missing),
+                        controlsCompleted: 3, // TODO: Get from controls
+                        controlsRequired: 5,
+                        controlsStatus: 3 >= 5 ? .complete : (3 > 0 ? .partial : .missing),
+                        needsAttestation: false
+                    )
+                )
+                .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                
+                // Recorded Strip
+                RMRecordedStrip(
+                    actor: "Alex",
+                    role: "Safety Lead",
+                    timestamp: Date().addingTimeInterval(-120)
+                )
+                .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                
+                // Recent Receipts
+                RMRecentReceipts(receipts: recentReceipts)
+            }
+            .padding(.vertical, RMTheme.Spacing.lg)
+        }
+        .task {
+            loadRecentReceipts()
+        }
+    }
+    
+    private func loadRecentReceipts() {
+        // TODO: Load from API/audit log
+        recentReceipts = [
+            ActionReceipt(
+                id: "1",
+                type: .controlCompleted,
+                title: "Control completed",
+                actor: "Alex",
+                role: "Safety Lead",
+                timestamp: Date().addingTimeInterval(-300),
+                jobId: job.id,
+                jobTitle: job.title,
+                details: ["Control": "Lockout/Tagout"]
+            ),
+            ActionReceipt(
+                id: "2",
+                type: .evidenceUploaded,
+                title: "Evidence uploaded",
+                actor: "Sarah",
+                role: "Field Worker",
+                timestamp: Date().addingTimeInterval(-1800),
+                jobId: job.id,
+                jobTitle: job.title,
+                details: ["Files": "3 photos"]
+            )
+        ]
+    }
+}
+
+struct RiskScoreCard: View {
+    let job: Job
+    
+    var body: some View {
+        RMGlassCard {
+            VStack(alignment: .leading, spacing: RMTheme.Spacing.md) {
+                HStack {
+                    Text("Risk Score")
+                        .rmSectionHeader()
+                    Spacer()
+                    Text("\(riskScore)")
+                        .font(RMTheme.Typography.title)
+                        .foregroundColor(riskColor)
+                }
+                
+                Text(riskLevel)
+                    .font(RMTheme.Typography.bodySmall)
+                    .foregroundColor(RMTheme.Colors.textSecondary)
+                
+                // Risk level indicator
+                GeometryReader { geometry in
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(RMTheme.Colors.inputFill)
+                            .frame(height: 8)
+                        
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(riskColor)
+                            .frame(width: geometry.size.width * CGFloat(riskScore) / 100, height: 8)
+                    }
+                }
+                .frame(height: 8)
+            }
+        }
+    }
+    
+    private var riskScore: Int {
+        switch job.riskLevel {
+        case "Critical": return 95
+        case "High": return 80
+        case "Medium": return 55
+        case "Low": return 30
+        default: return 50
+        }
+    }
+    
+    private var riskColor: Color {
+        switch job.riskLevel {
+        case "Critical": return RMTheme.Colors.error
+        case "High": return RMTheme.Colors.warning
+        case "Medium": return RMTheme.Colors.info
+        case "Low": return RMTheme.Colors.success
+        default: return RMTheme.Colors.textTertiary
+        }
+    }
+}
+
+struct StatusInfoCard: View {
+    let job: Job
+    
+    var body: some View {
+        RMGlassCard {
+            VStack(spacing: RMTheme.Spacing.md) {
+                InfoRow(label: "Status", value: job.status)
+                InfoRow(label: "Client", value: job.client)
+                InfoRow(label: "Location", value: job.location)
+                if let dueDate = job.dueDate {
+                    InfoRow(label: "Due Date", value: formatDate(dueDate))
+                }
+                if let owner = job.owner {
+                    InfoRow(label: "Owner", value: owner)
+                }
+            }
+        }
+    }
+    
+    private func formatDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .none
+        return formatter.string(from: date)
+    }
+}
+
+struct InfoRow: View {
+    let label: String
+    let value: String
+    
+    var body: some View {
+        HStack {
+            Text(label)
+                .font(RMTheme.Typography.bodySmall)
+                .foregroundColor(RMTheme.Colors.textSecondary)
+            Spacer()
+            Text(value)
+                .font(RMTheme.Typography.bodySmallBold)
+                .foregroundColor(RMTheme.Colors.textPrimary)
+        }
+    }
+}
+
+struct ReadinessScoreCard: View {
+    let job: Job
+    
+    var body: some View {
+        RMGlassCard {
+            VStack(alignment: .leading, spacing: RMTheme.Spacing.md) {
+                HStack {
+                    Text("Readiness Score")
+                        .rmSectionHeader()
+                    Spacer()
+                    Text("\(job.readinessScore)%")
+                        .font(RMTheme.Typography.title)
+                        .foregroundColor(readinessColor)
+                }
+                
+                GeometryReader { geometry in
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(RMTheme.Colors.inputFill)
+                            .frame(height: 8)
+                        
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(readinessColor)
+                            .frame(width: geometry.size.width * CGFloat(job.readinessScore) / 100, height: 8)
+                    }
+                }
+                .frame(height: 8)
+            }
+        }
+    }
+    
+    private var readinessColor: Color {
+        if job.readinessScore >= 80 { return RMTheme.Colors.success }
+        if job.readinessScore >= 60 { return RMTheme.Colors.warning }
+        return RMTheme.Colors.error
+    }
+}
+
+struct BlockersCard: View {
+    let blockers: [String]
+    
+    var body: some View {
+        RMGlassCard {
+            VStack(alignment: .leading, spacing: RMTheme.Spacing.md) {
+                HStack {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundColor(RMTheme.Colors.warning)
+                    Text("Blockers")
+                        .rmSectionHeader()
+                }
+                
+                VStack(alignment: .leading, spacing: RMTheme.Spacing.sm) {
+                    ForEach(blockers, id: \.self) { blocker in
+                        HStack(alignment: .top, spacing: RMTheme.Spacing.sm) {
+                            Circle()
+                                .fill(RMTheme.Colors.warning)
+                                .frame(width: 6, height: 6)
+                                .padding(.top, 6)
+                            
+                            Text(blocker)
+                                .font(RMTheme.Typography.bodySmall)
+                                .foregroundColor(RMTheme.Colors.textPrimary)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Hazards Tab
+
+struct HazardsTab: View {
+    let jobId: String
+    @State private var hazards: [Hazard] = []
+    @State private var isLoading = true
+    
+    var body: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(spacing: RMTheme.Spacing.sectionSpacing) {
+                if hazards.isEmpty {
+                    RMEmptyState(
+                        icon: "exclamationmark.triangle",
+                        title: "No Hazards",
+                        message: "Add hazards to assess job risks"
+                    )
+                    .padding(.top, RMTheme.Spacing.xxl)
+                } else {
+                    ForEach(hazards) { hazard in
+                        HazardCard(hazard: hazard)
+                            .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                    }
+                }
+            }
+            .padding(.vertical, RMTheme.Spacing.lg)
+        }
+        .task {
+            await loadHazards()
+        }
+    }
+    
+    private func loadHazards() async {
+        isLoading = true
+        defer { isLoading = false }
+        
+        do {
+            // Try API first
+            hazards = try await APIClient.shared.getHazards(jobId: jobId)
+        } catch {
+            // Fallback to cache or empty
+            hazards = []
+        }
+    }
+}
+
+struct Hazard: Identifiable, Codable {
+    let id: String
+    let code: String
+    let description: String
+    let severity: String
+}
+
+struct HazardCard: View {
+    let hazard: Hazard
+    
+    var body: some View {
+        RMGlassCard {
+            VStack(alignment: .leading, spacing: RMTheme.Spacing.sm) {
+                HStack {
+                    Text(hazard.code)
+                        .font(RMTheme.Typography.captionBold)
+                        .foregroundColor(.white)
+                        .padding(.horizontal, RMTheme.Spacing.sm)
+                        .padding(.vertical, RMTheme.Spacing.xs)
+                        .background(severityColor)
+                        .clipShape(Capsule())
+                    
+                    Spacer()
+                    
+                    Text(hazard.severity)
+                        .font(RMTheme.Typography.caption)
+                        .foregroundColor(severityColor)
+                }
+                
+                Text(hazard.description)
+                    .font(RMTheme.Typography.bodySmall)
+                    .foregroundColor(RMTheme.Colors.textPrimary)
+            }
+        }
+    }
+    
+    private var severityColor: Color {
+        switch hazard.severity {
+        case "Critical": return RMTheme.Colors.error
+        case "High": return RMTheme.Colors.warning
+        case "Medium": return RMTheme.Colors.info
+        case "Low": return RMTheme.Colors.success
+        default: return RMTheme.Colors.textTertiary
+        }
+    }
+}
+
+// MARK: - Controls Tab
+
+struct ControlsTab: View {
+    let jobId: String
+    @State private var controls: [Control] = []
+    @State private var isLoading = true
+    
+    var body: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(spacing: RMTheme.Spacing.sectionSpacing) {
+                if controls.isEmpty {
+                    RMEmptyState(
+                        icon: "checkmark.shield",
+                        title: "No Controls",
+                        message: "Controls will appear here based on selected hazards"
+                    )
+                    .padding(.top, RMTheme.Spacing.xxl)
+                } else {
+                    ForEach(controls) { control in
+                        ControlCard(control: control)
+                            .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                    }
+                }
+            }
+            .padding(.vertical, RMTheme.Spacing.lg)
+        }
+        .task {
+            await loadControls()
+        }
+    }
+    
+    private func loadControls() async {
+        isLoading = true
+        defer { isLoading = false }
+        
+        do {
+            // Try API first
+            controls = try await APIClient.shared.getControls(jobId: jobId)
+        } catch {
+            // Fallback to cache or empty
+            controls = []
+        }
+    }
+}
+
+struct Control: Identifiable, Codable {
+    let id: String
+    let description: String
+    let status: String
+}
+
+struct ControlCard: View {
+    let control: Control
+    let jobId: String
+    @StateObject private var cache = OfflineCache.shared
+    @State private var showTrustReceipt = false
+    @State private var trustAction: TrustAction?
+    
+    var body: some View {
+        RMGlassCard {
+            HStack(spacing: RMTheme.Spacing.md) {
+                Button {
+                    Task {
+                        await toggleControl()
+                    }
+                } label: {
+                    Image(systemName: statusIcon)
+                        .foregroundColor(statusColor)
+                        .font(.system(size: 20))
+                }
+                .accessibilityLabel(control.status == "Completed" ? "Control completed" : "Control not completed")
+                .accessibilityAddTraits(.isButton)
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(control.description)
+                        .font(RMTheme.Typography.bodySmall)
+                        .foregroundColor(RMTheme.Colors.textPrimary)
+                    
+                    if isPendingSync {
+                        HStack(spacing: 4) {
+                            Image(systemName: "clock.fill")
+                                .font(.system(size: 10))
+                            Text("Pending sync")
+                                .font(RMTheme.Typography.captionSmall)
+                        }
+                        .foregroundColor(RMTheme.Colors.warning)
+                    } else if control.status == "Blocked" {
+                        HStack(spacing: 4) {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 10))
+                            Text("Blocked")
+                                .font(RMTheme.Typography.captionSmall)
+                        }
+                        .foregroundColor(RMTheme.Colors.error)
+                    }
+                }
+                
+                Spacer()
+                
+                Text(control.status)
+                    .font(RMTheme.Typography.caption)
+                    .foregroundColor(statusColor)
+            }
+        }
+        .trustReceipt(trustAction, isPresented: $showTrustReceipt)
+    }
+    
+    private var statusIcon: String {
+        switch control.status {
+        case "Completed": return "checkmark.circle.fill"
+        case "Blocked": return "xmark.circle.fill"
+        default: return "circle"
+        }
+    }
+    
+    private var statusColor: Color {
+        switch control.status {
+        case "Completed": return RMTheme.Colors.success
+        case "Pending": return RMTheme.Colors.warning
+        case "Blocked": return RMTheme.Colors.error
+        default: return RMTheme.Colors.textTertiary
+        }
+    }
+    
+    private var isPendingSync: Bool {
+        return cache.queuedItems.contains { item in
+            item.type == .control && (item.itemId == control.id || item.id == control.id)
+        }
+    }
+    
+    private func toggleControl() async {
+        let isOffline = !ServerStatusManager.shared.isOnline
+        let wasCompleted = control.status == "Completed"
+        let newStatus = wasCompleted ? "Pending" : "Completed"
+        
+        // Create trust action
+        trustAction = TrustAction(
+            id: UUID().uuidString,
+            type: .controlCompleted,
+            title: "Control \(newStatus.lowercased())",
+            actor: "Current User", // TODO: Get from session
+            role: nil, // TODO: Get from session
+            timestamp: Date(),
+            jobId: jobId,
+            jobTitle: nil,
+            details: ["Control": control.description, "Status": newStatus],
+            outcome: isOffline ? .pending : .allowed,
+            reason: nil
+        )
+        
+        showTrustReceipt = true
+        
+        // Track analytics
+        Analytics.shared.trackControlCompleted(controlId: control.id, wasOffline: isOffline)
+        
+        // TODO: Call API to update control
+    }
+}
+
+// MARK: - Evidence Tab
+
+struct EvidenceTab: View {
+    let jobId: String
+    @StateObject private var uploadManager = BackgroundUploadManager.shared
+    @State private var evidence: [EvidenceItem] = []
+    @State private var isLoading = true
+    @State private var showImagePicker = false
+    
+    var body: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(spacing: RMTheme.Spacing.sectionSpacing) {
+                // Upload button
+                Button {
+                    showImagePicker = true
+                } label: {
+                    HStack {
+                        Image(systemName: "plus.circle.fill")
+                        Text("Add Evidence")
+                    }
+                    .font(RMTheme.Typography.bodyBold)
+                    .foregroundColor(.black)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, RMTheme.Spacing.md)
+                    .background(RMTheme.Colors.accent)
+                    .clipShape(RoundedRectangle(cornerRadius: RMTheme.Radius.sm))
+                }
+                .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                
+                // Active uploads
+                let activeUploads = uploadManager.uploads.filter { $0.jobId == jobId }
+                if !activeUploads.isEmpty {
+                    VStack(alignment: .leading, spacing: RMTheme.Spacing.sm) {
+                        Text("Uploading")
+                            .rmSectionHeader()
+                            .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                        
+                        ForEach(activeUploads) { upload in
+                            UploadStatusCard(upload: upload)
+                                .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                        }
+                    }
+                }
+                
+                // Synced evidence
+                if evidence.isEmpty && activeUploads.isEmpty {
+                    RMEmptyState(
+                        icon: "photo",
+                        title: "No Evidence",
+                        message: "Upload photos and documents to complete readiness"
+                    )
+                    .padding(.top, RMTheme.Spacing.xxl)
+                } else {
+                    ForEach(evidence) { item in
+                        EvidenceCard(item: item)
+                            .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                    }
+                }
+            }
+            .padding(.vertical, RMTheme.Spacing.lg)
+        }
+        .sheet(isPresented: $showImagePicker) {
+            RMPhotoPicker(jobId: jobId)
+        }
+        .task {
+            await loadEvidence()
+        }
+    }
+    
+    private func loadEvidence() async {
+        isLoading = true
+        defer { isLoading = false }
+        
+        do {
+            // Try API first
+            evidence = try await APIClient.shared.getEvidence(jobId: jobId)
+            
+            // Cache for offline
+            OfflineCache.shared.cacheEvidence(jobId: jobId, evidence: evidence)
+        } catch {
+            // Fallback to cache
+            if let cached = OfflineCache.shared.getCachedEvidence(jobId: jobId) {
+                evidence = cached
+            }
+        }
+    }
+}
+
+struct UploadStatusCard: View {
+    let upload: UploadTask
+    @StateObject private var uploadManager = BackgroundUploadManager.shared
+    
+    var body: some View {
+        RMGlassCard {
+            VStack(alignment: .leading, spacing: RMTheme.Spacing.sm) {
+                HStack {
+                    Image(systemName: iconName)
+                        .foregroundColor(iconColor)
+                        .font(.system(size: 16))
+                    
+                    Text(upload.fileName)
+                        .font(RMTheme.Typography.bodySmallBold)
+                        .foregroundColor(RMTheme.Colors.textPrimary)
+                    
+                    Spacer()
+                    
+                    if upload.state == .failed {
+                        Button {
+                            Task {
+                                try? await uploadManager.retryUpload(upload)
+                            }
+                        } label: {
+                            Text("Retry")
+                                .font(RMTheme.Typography.captionBold)
+                                .foregroundColor(RMTheme.Colors.accent)
+                        }
+                    }
+                }
+                
+                if case .uploading = upload.state {
+                    GeometryReader { geometry in
+                        ZStack(alignment: .leading) {
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(RMTheme.Colors.inputFill)
+                                .frame(height: 4)
+                            
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(RMTheme.Colors.accent)
+                                .frame(width: geometry.size.width * upload.progress, height: 4)
+                        }
+                    }
+                    .frame(height: 4)
+                }
+                
+                Text(statusText)
+                    .font(RMTheme.Typography.caption)
+                    .foregroundColor(RMTheme.Colors.textSecondary)
+            }
+        }
+    }
+    
+    private var iconName: String {
+        switch upload.state {
+        case .queued: return "clock.fill"
+        case .uploading: return "arrow.up.circle.fill"
+        case .synced: return "checkmark.circle.fill"
+        case .failed: return "exclamationmark.triangle.fill"
+        }
+    }
+    
+    private var iconColor: Color {
+        switch upload.state {
+        case .queued: return RMTheme.Colors.textTertiary
+        case .uploading: return RMTheme.Colors.accent
+        case .synced: return RMTheme.Colors.success
+        case .failed: return RMTheme.Colors.error
+        }
+    }
+    
+    private var statusText: String {
+        switch upload.state {
+        case .queued:
+            return "Queued"
+        case .uploading:
+            return "Uploading... \(Int(upload.progress * 100))%"
+        case .synced:
+            return "Synced"
+        case .failed(let error):
+            return "Failed: \(error)"
+        }
+    }
+}
+
+struct EvidenceItem: Identifiable, Codable {
+    let id: String
+    let type: String
+    let fileName: String
+    let uploadedAt: Date
+    
+    enum CodingKeys: String, CodingKey {
+        case id
+        case type
+        case fileName = "file_name"
+        case uploadedAt = "uploaded_at"
+    }
+}
+
+struct EvidenceCard: View {
+    let item: EvidenceItem
+    
+    var body: some View {
+        RMGlassCard {
+            HStack(spacing: RMTheme.Spacing.md) {
+                Image(systemName: item.type == "photo" ? "photo.fill" : "doc.fill")
+                    .foregroundColor(RMTheme.Colors.accent)
+                    .font(.system(size: 24))
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(item.fileName)
+                        .font(RMTheme.Typography.bodySmallBold)
+                        .foregroundColor(RMTheme.Colors.textPrimary)
+                    
+                    Text(formatDate(item.uploadedAt))
+                        .font(RMTheme.Typography.caption)
+                        .foregroundColor(RMTheme.Colors.textSecondary)
+                }
+                
+                Spacer()
+            }
+        }
+    }
+    
+    private func formatDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
+    }
+}
+
+// MARK: - Exports Tab
+
+struct ExportsTab: View {
+    let jobId: String
+    @StateObject private var exportManager = BackgroundExportManager.shared
+    @State private var showShareSheet = false
+    @State private var shareURL: URL?
+    @State private var showError = false
+    @State private var errorMessage = ""
+    @State private var showTrustToast = false
+    @State private var completedExport: ExportTask?
+    @State private var showExportReceipt = false
+    
+    var activeExports: [ExportTask] {
+        exportManager.exports.filter { $0.jobId == jobId && ($0.state == .queued || $0.state == .preparing || $0.state == .downloading) }
+    }
+    
+    var recentExports: [ExportTask] {
+        exportManager.getAllExportsForJob(jobId: jobId)
+            .filter { $0.state == .ready }
+            .prefix(5)
+            .map { $0 }
+    }
+    
+    var body: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(spacing: RMTheme.Spacing.sectionSpacing) {
+                // Integrity Surface
+                RMIntegritySurface(jobId: jobId)
+                    .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                
+                // Generate Buttons
+                VStack(spacing: RMTheme.Spacing.md) {
+                    ExportCard(
+                        title: "Risk Snapshot Report",
+                        description: "Complete job documentation with hazards, controls, and evidence",
+                        icon: "doc.text.fill",
+                        action: {
+                            await generateExport(type: .pdf)
+                        },
+                        isGenerating: isGenerating(.pdf)
+                    )
+                    
+                    ExportCard(
+                        title: "Proof Pack",
+                        description: "ZIP archive with all PDFs, evidence, and verification",
+                        icon: "archivebox.fill",
+                        action: {
+                            await generateExport(type: .proofPack)
+                        },
+                        isGenerating: isGenerating(.proofPack)
+                    )
+                }
+                .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                
+                // Export Queue
+                if !activeExports.isEmpty {
+                    VStack(alignment: .leading, spacing: RMTheme.Spacing.md) {
+                        Text("Export Queue")
+                            .rmSectionHeader()
+                            .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                        
+                        ForEach(activeExports) { export in
+                            ExportStatusCard(export: export)
+                                .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                        }
+                    }
+                }
+                
+                // Recent Exports
+                if !recentExports.isEmpty {
+                    VStack(alignment: .leading, spacing: RMTheme.Spacing.md) {
+                        Text("Recent Exports")
+                            .rmSectionHeader()
+                            .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                        
+                        ForEach(recentExports) { export in
+                            RecentExportCard(export: export, onView: {
+                                if let url = export.fileURL {
+                                    shareURL = url
+                                    showShareSheet = true
+                                }
+                            })
+                            .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                        }
+                    }
+                }
+                
+                // Last Export Quick Access
+                if let lastPDF = exportManager.getLastExport(jobId: jobId, type: .pdf) {
+                    LastExportCard(export: lastPDF, onView: {
+                        shareURL = lastPDF.fileURL
+                        showShareSheet = true
+                    })
+                    .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                }
+            }
+            .padding(.vertical, RMTheme.Spacing.lg)
+        }
+        .trustToast(
+            message: "Ledger recorded",
+            icon: "checkmark.circle.fill",
+            isPresented: $showTrustToast
+        )
+        .sheet(isPresented: $showShareSheet) {
+            if let shareURL = shareURL {
+                ShareSheet(items: [shareURL])
+            }
+        }
+        .alert("Error", isPresented: $showError) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(errorMessage)
+        }
+        .onChange(of: exportManager.exports) { _, _ in
+            // Check for completed exports to show receipt
+            if let export = exportManager.exports.first(where: { $0.jobId == jobId && $0.state == .ready && $0.initiatedFromForeground && $0.fileURL != nil }) {
+                completedExport = export
+                showExportReceipt = true
+                showTrustToast = true
+            }
+        }
+        .sheet(isPresented: $showExportReceipt) {
+            if let export = completedExport {
+                ExportReceiptView(export: export)
+            }
+        }
+        .onAppear {
+            // Request notification permission for export completion
+            UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
+        }
+    }
+    
+    private func isGenerating(_ type: ExportType) -> Bool {
+        activeExports.contains { $0.type == type }
+    }
+    
+    private func generateExport(type: ExportType) async {
+        do {
+            try await exportManager.export(
+                jobId: jobId,
+                type: type,
+                initiatedFromForeground: true
+            )
+        } catch {
+            errorMessage = error.localizedDescription
+            showError = true
+        }
+    }
+}
+
+struct ExportStatusCard: View {
+    let export: ExportTask
+    
+    var body: some View {
+        RMGlassCard {
+            VStack(alignment: .leading, spacing: RMTheme.Spacing.sm) {
+                HStack {
+                    Image(systemName: iconName)
+                        .foregroundColor(iconColor)
+                        .font(.system(size: 16))
+                    
+                    Text(export.type.displayName)
+                        .font(RMTheme.Typography.bodySmallBold)
+                        .foregroundColor(RMTheme.Colors.textPrimary)
+                    
+                    Spacer()
+                }
+                
+                if case .preparing = export.state {
+                    ProgressView()
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } else if case .downloading = export.state {
+                    GeometryReader { geometry in
+                        ZStack(alignment: .leading) {
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(RMTheme.Colors.inputFill)
+                                .frame(height: 4)
+                            
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(RMTheme.Colors.accent)
+                                .frame(width: geometry.size.width * export.progress, height: 4)
+                        }
+                    }
+                    .frame(height: 4)
+                }
+                
+                Text(statusText)
+                    .font(RMTheme.Typography.caption)
+                    .foregroundColor(RMTheme.Colors.textSecondary)
+            }
+        }
+    }
+    
+    private var iconName: String {
+        switch export.state {
+        case .queued: return "clock.fill"
+        case .preparing: return "gearshape.fill"
+        case .downloading: return "arrow.down.circle.fill"
+        case .ready: return "checkmark.circle.fill"
+        case .failed: return "exclamationmark.triangle.fill"
+        }
+    }
+    
+    private var iconColor: Color {
+        switch export.state {
+        case .queued: return RMTheme.Colors.textTertiary
+        case .preparing, .downloading: return RMTheme.Colors.accent
+        case .ready: return RMTheme.Colors.success
+        case .failed: return RMTheme.Colors.error
+        }
+    }
+    
+    private var statusText: String {
+        switch export.state {
+        case .queued: return "Queued"
+        case .preparing: return "Preparing..."
+        case .downloading: return "Downloading... \(Int(export.progress * 100))%"
+        case .ready: return "Ready"
+        case .failed(let error): return "Failed: \(error)"
+        }
+    }
+}
+
+struct RecentExportCard: View {
+    let export: ExportTask
+    let onView: () -> Void
+    
+    var body: some View {
+        RMGlassCard {
+            HStack {
+                Image(systemName: export.type == .pdf ? "doc.text.fill" : "archivebox.fill")
+                    .foregroundColor(RMTheme.Colors.accent)
+                    .font(.system(size: 20))
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(export.type.displayName)
+                        .font(RMTheme.Typography.bodySmallBold)
+                        .foregroundColor(RMTheme.Colors.textPrimary)
+                    
+                    Text(formatDate(export.createdAt))
+                        .font(RMTheme.Typography.caption)
+                        .foregroundColor(RMTheme.Colors.textSecondary)
+                }
+                
+                Spacer()
+                
+                Button {
+                    onView()
+                } label: {
+                    Text("View")
+                        .font(RMTheme.Typography.bodySmallBold)
+                        .foregroundColor(RMTheme.Colors.accent)
+                }
+            }
+        }
+    }
+    
+    private func formatDate(_ date: Date) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .short
+        return formatter.localizedString(for: date, relativeTo: Date())
+    }
+}
+
+struct LastExportCard: View {
+    let export: LastExport
+    let onView: () -> Void
+    
+    var body: some View {
+        RMGlassCard {
+            VStack(alignment: .leading, spacing: RMTheme.Spacing.sm) {
+                HStack {
+                    Image(systemName: "clock.arrow.circlepath")
+                        .foregroundColor(RMTheme.Colors.accent)
+                        .font(.system(size: 16))
+                    
+                    Text("Last \(export.type.displayName)")
+                        .rmSectionHeader()
+                    
+                    Spacer()
+                }
+                
+                Text("Generated \(formatDate(export.generatedAt))")
+                    .font(RMTheme.Typography.bodySmall)
+                    .foregroundColor(RMTheme.Colors.textSecondary)
+                
+                Button {
+                    onView()
+                } label: {
+                    Text("View Last Export")
+                        .font(RMTheme.Typography.bodySmallBold)
+                        .foregroundColor(.black)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, RMTheme.Spacing.sm)
+                        .background(RMTheme.Colors.accent)
+                        .clipShape(RoundedRectangle(cornerRadius: RMTheme.Radius.sm))
+                }
+            }
+        }
+    }
+    
+    private func formatDate(_ date: Date) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .short
+        return formatter.localizedString(for: date, relativeTo: Date())
+    }
+}
+
+struct ShareSheet: UIViewControllerRepresentable {
+    let items: [Any]
+    
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        let controller = UIActivityViewController(activityItems: items, applicationActivities: nil)
+        return controller
+    }
+    
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+}
+
+struct ExportCard: View {
+    let title: String
+    let description: String
+    let icon: String
+    let action: () async -> Void
+    let isGenerating: Bool
+    
+    var body: some View {
+        RMGlassCard {
+            VStack(alignment: .leading, spacing: RMTheme.Spacing.md) {
+                HStack {
+                    Image(systemName: icon)
+                        .foregroundColor(RMTheme.Colors.accent)
+                        .font(.system(size: 24))
+                    
+                    Text(title)
+                        .rmSectionHeader()
+                    
+                    Spacer()
+                }
+                
+                Text(description)
+                    .font(RMTheme.Typography.bodySmall)
+                    .foregroundColor(RMTheme.Colors.textSecondary)
+                
+                Button {
+                    Task {
+                        await action()
+                    }
+                } label: {
+                    if isGenerating {
+                        HStack {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: .black))
+                            Text("Generating...")
+                                .font(RMTheme.Typography.bodySmallBold)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, RMTheme.Spacing.sm)
+                        .background(RMTheme.Colors.accent.opacity(0.7))
+                        .foregroundColor(.black)
+                        .clipShape(RoundedRectangle(cornerRadius: RMTheme.Radius.sm))
+                    } else {
+                        Text("Generate")
+                            .font(RMTheme.Typography.bodySmallBold)
+                            .foregroundColor(.black)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, RMTheme.Spacing.sm)
+                            .background(RMTheme.Colors.accent)
+                            .clipShape(RoundedRectangle(cornerRadius: RMTheme.Radius.sm))
+                    }
+                }
+                .disabled(isGenerating)
+            }
+        }
+    }
+}
+
+#Preview {
+    NavigationStack {
+        JobDetailView(jobId: "1")
+    }
+}

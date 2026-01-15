@@ -14,26 +14,29 @@ struct DashboardView: View {
         RMBackground()
             .overlay {
                 ScrollView(showsIndicators: false) {
+                    RMOfflineBanner()
                     VStack(spacing: RMTheme.Spacing.lg) {
-                        // Header
-                        VStack(alignment: .leading, spacing: RMTheme.Spacing.xs) {
-                            Text("Dashboard")
-                                .font(RMTheme.Typography.largeTitle)
-                                .foregroundColor(RMTheme.Colors.textPrimary)
-                            
-                            Text("Overview of your compliance status")
-                                .font(RMTheme.Typography.bodySmall)
-                                .foregroundColor(RMTheme.Colors.textSecondary)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, RMTheme.Spacing.md)
-                        .padding(.top, RMTheme.Spacing.md)
+                        // Setup Checklist (if not dismissed)
+                        SetupChecklistView(isDismissed: .constant(UserDefaults.standard.bool(forKey: "setup_checklist_dismissed")))
+                        
+                        // Subtitle (navigationTitle handles main title)
+                        Text("Overview of your compliance status")
+                            .font(RMTheme.Typography.bodySmall)
+                            .foregroundColor(RMTheme.Colors.textSecondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                            .padding(.top, RMTheme.Spacing.sm)
                         
                         if isLoading {
-                            ProgressView()
-                                .tint(RMTheme.Colors.accent)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, RMTheme.Spacing.xxl)
+                            // Premium skeleton loading
+                            VStack(spacing: RMTheme.Spacing.lg) {
+                                RMSkeletonKPIGrid()
+                                
+                                RMSkeletonCard()
+                                    .frame(height: 200)
+                                
+                                RMSkeletonList(count: 3)
+                            }
                         } else if let kpis = kpis {
                             // KPI Cards
                             ScrollView(.horizontal, showsIndicators: false) {
@@ -45,6 +48,7 @@ struct DashboardView: View {
                                         icon: "checkmark.shield.fill",
                                         color: RMTheme.Colors.categoryGovernance
                                     )
+                                    .accessibilityLabel("Compliance: \(kpis.complianceScore) percent")
                                     
                                     RMKpiCard(
                                         title: "Open Risks",
@@ -53,6 +57,7 @@ struct DashboardView: View {
                                         icon: "exclamationmark.triangle.fill",
                                         color: RMTheme.Colors.error
                                     )
+                                    .accessibilityLabel("Open risks: \(kpis.openRisks)")
                                     
                                     RMKpiCard(
                                         title: "Jobs This Week",
@@ -61,15 +66,28 @@ struct DashboardView: View {
                                         icon: "briefcase.fill",
                                         color: RMTheme.Colors.accent
                                     )
+                                    .accessibilityLabel("Jobs this week: \(kpis.jobsThisWeek)")
                                 }
-                                .padding(.horizontal, RMTheme.Spacing.md)
+                                .padding(.horizontal, RMTheme.Spacing.pagePadding)
                             }
                             
                             // Chart Card
                             if !chartData.isEmpty {
                                 RMChartCard(data: chartData)
-                                    .padding(.horizontal, RMTheme.Spacing.md)
+                                    .padding(.horizontal, RMTheme.Spacing.pagePadding)
                             }
+                            
+                            // Top Hazards Section
+                            TopHazardsSection()
+                                .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                            
+                            // Jobs at Risk Section
+                            JobsAtRiskSection()
+                                .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                            
+                            // Missing Evidence CTA
+                            MissingEvidenceCTACard()
+                                .padding(.horizontal, RMTheme.Spacing.pagePadding)
                             
                             // Recent Activity
                             if !recentActivity.isEmpty {
@@ -81,20 +99,24 @@ struct DashboardView: View {
                                         
                                         Spacer()
                                         
-                                        Button("View All") {
+                                        Button {
+                                            let generator = UIImpactFeedbackGenerator(style: .light)
+                                            generator.impactOccurred()
                                             // Navigate to full audit feed
+                                        } label: {
+                                            Text("View All")
+                                                .font(RMTheme.Typography.bodySmallBold)
+                                                .foregroundColor(RMTheme.Colors.accent)
                                         }
-                                        .font(RMTheme.Typography.bodySmallBold)
-                                        .foregroundColor(RMTheme.Colors.accent)
                                     }
-                                    .padding(.horizontal, RMTheme.Spacing.md)
+                                    .padding(.horizontal, RMTheme.Spacing.pagePadding)
                                     
                                     VStack(spacing: RMTheme.Spacing.sm) {
                                         ForEach(recentActivity.prefix(5)) { event in
                                             RMActivityRow(event: event)
                                         }
                                     }
-                                    .padding(.horizontal, RMTheme.Spacing.md)
+                                    .padding(.horizontal, RMTheme.Spacing.pagePadding)
                                 }
                             } else {
                                 RMEmptyState(
@@ -114,6 +136,20 @@ struct DashboardView: View {
                         }
                     }
                     .padding(.bottom, RMTheme.Spacing.xl)
+                }
+            }
+            .rmNavigationBar(title: "Dashboard")
+            .syncStatusChip()
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        let generator = UIImpactFeedbackGenerator(style: .light)
+                        generator.impactOccurred()
+                        // TODO: Add filter/export action
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                            .foregroundColor(RMTheme.Colors.textSecondary)
+                    }
                 }
             }
             .task {
@@ -178,12 +214,6 @@ enum Trend {
     case up(Int)
     case down(Int)
     case neutral
-}
-
-struct ChartDataPoint: Identifiable {
-    let id = UUID()
-    let date: Date
-    let value: Double
 }
 
 struct AuditEvent: Identifiable {
@@ -255,60 +285,6 @@ struct RMKpiCard: View {
     }
 }
 
-// MARK: - Chart Card Component
-
-struct RMChartCard: View {
-    let data: [ChartDataPoint]
-    
-    var body: some View {
-        RMGlassCard {
-            VStack(alignment: .leading, spacing: RMTheme.Spacing.md) {
-                Text("Compliance Trend")
-                    .font(RMTheme.Typography.title3)
-                    .foregroundColor(RMTheme.Colors.textPrimary)
-                
-                Chart(data) { point in
-                    LineMark(
-                        x: .value("Date", point.date, unit: .day),
-                        y: .value("Score", point.value)
-                    )
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [
-                                RMTheme.Colors.accent.opacity(0.8),
-                                RMTheme.Colors.accent.opacity(0.2)
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                    .interpolationMethod(.catmullRom)
-                    .lineStyle(StrokeStyle(lineWidth: 3))
-                    
-                    AreaMark(
-                        x: .value("Date", point.date, unit: .day),
-                        y: .value("Score", point.value)
-                    )
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [
-                                RMTheme.Colors.accent.opacity(0.15),
-                                RMTheme.Colors.accent.opacity(0.0)
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                    .interpolationMethod(.catmullRom)
-                }
-                .frame(height: 160)
-                .chartXAxis(.hidden)
-                .chartYAxis(.hidden)
-            }
-        }
-    }
-}
-
 // MARK: - Activity Row Component
 
 struct RMActivityRow: View {
@@ -354,33 +330,212 @@ struct RMActivityRow: View {
     }
     
     private func relativeTime(_ date: Date) -> String {
-        return date.toRelative(style: RelativeFormatter.defaultStyle())
+        return date.toRelative(since: nil, dateTimeStyle: .named, unitsStyle: .short)
     }
 }
 
-// MARK: - Empty State Component
+// MARK: - Dashboard Sections
 
-struct RMEmptyState: View {
-    let icon: String
-    let title: String
-    let message: String
+struct TopHazardsSection: View {
+    @State private var hazards: [HazardPill] = []
     
     var body: some View {
-        VStack(spacing: RMTheme.Spacing.md) {
-            Image(systemName: icon)
-                .font(.system(size: 48, weight: .light))
-                .foregroundColor(RMTheme.Colors.textTertiary)
+        VStack(alignment: .leading, spacing: RMTheme.Spacing.md) {
+            HStack {
+                Text("Top Hazards (Last 30d)")
+                    .rmSectionHeader()
+                Spacer()
+            }
             
-            Text(title)
-                .font(RMTheme.Typography.title3)
-                .foregroundColor(RMTheme.Colors.textPrimary)
-            
-            Text(message)
-                .font(RMTheme.Typography.bodySmall)
-                .foregroundColor(RMTheme.Colors.textSecondary)
-                .multilineTextAlignment(.center)
+            if hazards.isEmpty {
+                Text("No hazards recorded")
+                    .rmSecondary()
+                    .padding(.vertical, RMTheme.Spacing.sm)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: RMTheme.Spacing.sm) {
+                        ForEach(hazards) { hazard in
+                            HazardPillView(hazard: hazard)
+                        }
+                    }
+                }
+            }
         }
-        .padding(RMTheme.Spacing.xl)
+        .task {
+            await loadHazards()
+        }
+    }
+    
+    private func loadHazards() async {
+        // TODO: Replace with real API call
+        try? await Task.sleep(nanoseconds: 300_000_000)
+        hazards = [
+            HazardPill(id: "1", code: "ELEC-001", count: 12),
+            HazardPill(id: "2", code: "FALL-003", count: 8),
+            HazardPill(id: "3", code: "CHEM-002", count: 5)
+        ]
+    }
+}
+
+struct HazardPill: Identifiable {
+    let id: String
+    let code: String
+    let count: Int
+}
+
+struct HazardPillView: View {
+    let hazard: HazardPill
+    
+    var body: some View {
+        HStack(spacing: RMTheme.Spacing.xs) {
+            Text(hazard.code)
+                .font(RMTheme.Typography.captionBold)
+                .foregroundColor(.white)
+            
+            Text("\(hazard.count)")
+                .font(RMTheme.Typography.caption)
+                .foregroundColor(RMTheme.Colors.textSecondary)
+                .padding(.horizontal, RMTheme.Spacing.xs)
+                .padding(.vertical, 2)
+                .background(RMTheme.Colors.textTertiary.opacity(0.3))
+                .clipShape(Capsule())
+        }
+        .padding(.horizontal, RMTheme.Spacing.sm)
+        .padding(.vertical, RMTheme.Spacing.xs)
+        .background(RMTheme.Colors.categoryOperations.opacity(0.2))
+        .overlay {
+            RoundedRectangle(cornerRadius: RMTheme.Radius.sm)
+                .stroke(RMTheme.Colors.categoryOperations.opacity(0.4), lineWidth: 1)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: RMTheme.Radius.sm))
+    }
+}
+
+struct JobsAtRiskSection: View {
+    @State private var atRiskJobs: [AtRiskJob] = []
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: RMTheme.Spacing.md) {
+            HStack {
+                Text("Jobs at Risk")
+                    .rmSectionHeader()
+                Spacer()
+                if !atRiskJobs.isEmpty {
+                    Button {
+                        // TODO: Navigate to filtered jobs list
+                    } label: {
+                        Text("View All")
+                            .font(RMTheme.Typography.bodySmallBold)
+                            .foregroundColor(RMTheme.Colors.accent)
+                    }
+                }
+            }
+            
+            if atRiskJobs.isEmpty {
+                Text("No high-risk jobs")
+                    .rmSecondary()
+                    .padding(.vertical, RMTheme.Spacing.sm)
+            } else {
+                VStack(spacing: RMTheme.Spacing.sm) {
+                    ForEach(atRiskJobs.prefix(3)) { job in
+                        AtRiskJobRow(job: job)
+                    }
+                }
+            }
+        }
+        .task {
+            await loadAtRiskJobs()
+        }
+    }
+    
+    private func loadAtRiskJobs() async {
+        // TODO: Replace with real API call
+        try? await Task.sleep(nanoseconds: 300_000_000)
+        atRiskJobs = [
+            AtRiskJob(id: "1", title: "Main St Electrical", riskScore: 85, status: "In Progress"),
+            AtRiskJob(id: "2", title: "Warehouse HVAC", riskScore: 78, status: "Draft")
+        ]
+    }
+}
+
+struct AtRiskJob: Identifiable {
+    let id: String
+    let title: String
+    let riskScore: Int
+    let status: String
+}
+
+struct AtRiskJobRow: View {
+    let job: AtRiskJob
+    
+    var body: some View {
+        HStack(spacing: RMTheme.Spacing.md) {
+            // Risk indicator
+            Circle()
+                .fill(riskColor)
+                .frame(width: 8, height: 8)
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text(job.title)
+                    .font(RMTheme.Typography.bodySmallBold)
+                    .foregroundColor(RMTheme.Colors.textPrimary)
+                
+                Text("Risk: \(job.riskScore) • \(job.status)")
+                    .font(RMTheme.Typography.caption)
+                    .foregroundColor(RMTheme.Colors.textSecondary)
+            }
+            
+            Spacer()
+            
+            Image(systemName: "chevron.right")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(RMTheme.Colors.textTertiary)
+        }
+        .padding(RMTheme.Spacing.md)
+        .background(RMTheme.Colors.inputFill)
+        .clipShape(RoundedRectangle(cornerRadius: RMTheme.Radius.sm))
+    }
+    
+    private var riskColor: Color {
+        if job.riskScore >= 90 { return RMTheme.Colors.error }
+        if job.riskScore >= 70 { return RMTheme.Colors.warning }
+        return RMTheme.Colors.success
+    }
+}
+
+struct MissingEvidenceCTACard: View {
+    var body: some View {
+        RMGlassCard {
+            VStack(alignment: .leading, spacing: RMTheme.Spacing.md) {
+                HStack {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundColor(RMTheme.Colors.warning)
+                    
+                    Spacer()
+                }
+                
+                Text("Missing Evidence")
+                    .font(RMTheme.Typography.title3)
+                    .foregroundColor(RMTheme.Colors.textPrimary)
+                
+                Text("3 jobs need evidence uploads to complete readiness")
+                    .font(RMTheme.Typography.bodySmall)
+                    .foregroundColor(RMTheme.Colors.textSecondary)
+                
+                Button {
+                    // TODO: Navigate to Readiness view
+                } label: {
+                    Text("Review Readiness")
+                        .font(RMTheme.Typography.bodySmallBold)
+                        .foregroundColor(.black)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, RMTheme.Spacing.sm)
+                        .background(RMTheme.Colors.accent)
+                        .clipShape(RoundedRectangle(cornerRadius: RMTheme.Radius.sm))
+                }
+            }
+        }
     }
 }
 

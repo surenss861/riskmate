@@ -12,22 +12,22 @@ struct RMGlassCard<Content: View>: View {
         content
             .padding(RMTheme.Spacing.lg)
             .background {
-                RoundedRectangle(cornerRadius: RMTheme.Radius.xl, style: .continuous)
+                RoundedRectangle(cornerRadius: RMTheme.Radius.card, style: .continuous)
                     // iOS material base
                     .fill(.ultraThinMaterial)
                     // web-like dark tint (prevents grey mush)
                     .overlay(
-                        RoundedRectangle(cornerRadius: RMTheme.Radius.xl, style: .continuous)
+                        RoundedRectangle(cornerRadius: RMTheme.Radius.card, style: .continuous)
                             .fill(RMTheme.Colors.cardBackground)
                     )
-                    // crisp outer border
+                    // crisp outer border (standardized: 1px white @ 10% opacity)
                     .overlay(
-                        RoundedRectangle(cornerRadius: RMTheme.Radius.xl, style: .continuous)
-                            .stroke(RMTheme.Colors.border, lineWidth: 1)
+                        RoundedRectangle(cornerRadius: RMTheme.Radius.card, style: .continuous)
+                            .stroke(Color.white.opacity(0.10), lineWidth: 1)
                     )
                     // inner "glass highlight" (web sharpness)
                     .overlay(
-                        RoundedRectangle(cornerRadius: RMTheme.Radius.xl, style: .continuous)
+                        RoundedRectangle(cornerRadius: RMTheme.Radius.card, style: .continuous)
                             .stroke(
                                 LinearGradient(
                                     colors: [

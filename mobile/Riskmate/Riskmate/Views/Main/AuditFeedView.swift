@@ -11,14 +11,28 @@ struct AuditFeedView: View {
     var body: some View {
         RMBackground()
             .overlay {
-                if isLoading {
-                    ProgressView()
-                        .tint(RMTheme.Colors.accent)
+                VStack(spacing: 0) {
+                    RMOfflineBanner()
+                    
+                    if isLoading {
+                    // Premium skeleton loading
+                    ScrollView {
+                        VStack(spacing: RMTheme.Spacing.md) {
+                            RMSkeletonList(count: 8)
+                        }
+                        .padding(.top, RMTheme.Spacing.md)
+                    }
                 } else if events.isEmpty {
                     RMEmptyState(
                         icon: "tray",
                         title: "No Audit Events",
-                        message: "Audit events will appear here as they occur"
+                        message: "No events in last 30 days. Try viewing 90 days or all time.",
+                        action: RMEmptyStateAction(
+                            title: "View 90 Days",
+                            action: {
+                                // TODO: Change time range filter
+                            }
+                        )
                     )
                 } else {
                     List {
@@ -47,7 +61,31 @@ struct AuditFeedView: View {
                                     }
                                     .tint(RMTheme.Colors.categoryAccess)
                                 }
+                                .contextMenu {
+                                    Button {
+                                        copyEventId(event.id)
+                                    } label: {
+                                        Label("Copy Event ID", systemImage: "doc.on.doc")
+                                    }
+                                    
+                                    Button {
+                                        exportEvent(event)
+                                    } label: {
+                                        Label("Export", systemImage: "square.and.arrow.up")
+                                    }
+                                    
+                                    Divider()
+                                    
+                                    Button {
+                                        selectedEvent = event
+                                        showingDetail = true
+                                    } label: {
+                                        Label("View Details", systemImage: "eye")
+                                    }
+                                }
                                 .onTapGesture {
+                                    let generator = UIImpactFeedbackGenerator(style: .light)
+                                    generator.impactOccurred()
                                     selectedEvent = event
                                     showingDetail = true
                                 }
@@ -55,8 +93,11 @@ struct AuditFeedView: View {
                     }
                     .listStyle(.plain)
                     .scrollContentBackground(.hidden)
+                    }
                 }
             }
+            .rmNavigationBar(title: "Ledger")
+            .syncStatusChip()
             .task {
                 await loadEvents()
             }
@@ -184,7 +225,7 @@ struct RMAuditRow: View {
     }
     
     private func relativeTime(_ date: Date) -> String {
-        return date.toRelative(style: RelativeFormatter.defaultStyle())
+        return date.toRelative(since: nil, dateTimeStyle: .named, unitsStyle: .short)
     }
 }
 
@@ -331,7 +372,7 @@ struct RMAuditDetailSheet: View {
     }
     
     private func relativeTime(_ date: Date) -> String {
-        return date.toRelative(style: RelativeFormatter.defaultStyle())
+        return date.toRelative(since: nil, dateTimeStyle: .named, unitsStyle: .short)
     }
 }
 

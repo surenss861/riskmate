@@ -12,7 +12,9 @@ struct RMPrimaryButton: View {
     var body: some View {
         Button {
             guard !(isDisabled || isLoading) else { return }
-            UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+            // Haptic feedback on press
+            let generator = UIImpactFeedbackGenerator(style: .medium)
+            generator.impactOccurred()
             action()
         } label: {
             ZStack {
@@ -41,6 +43,9 @@ struct RMPrimaryButton: View {
                 .onChanged { _ in isPressed = true }
                 .onEnded { _ in isPressed = false }
         )
+        .accessibilityLabel(title)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityHint(isLoading ? "Loading" : "")
     }
 }
 

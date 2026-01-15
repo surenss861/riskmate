@@ -1,29 +1,31 @@
 import SwiftUI
+#if canImport(RiveRuntime)
 import RiveRuntime
+#endif
 
 /// Rive animation wrapper for SwiftUI
-struct RMRiveView: UIViewRepresentable {
+struct RMRiveView: View {
     let resourceName: String
     var autoPlay: Bool = true
-    var fit: RiveFit = .contain
     
-    func makeUIView(context: Context) -> RiveView {
-        guard let url = Bundle.main.url(forResource: resourceName, withExtension: "riv") else {
-            return RiveView()
-        }
-        
-        let riveView = RiveView()
-        riveView.fit = fit
-        
-        if autoPlay {
-            riveView.play()
-        }
-        
-        return riveView
-    }
-    
-    func updateUIView(_ riveView: RiveView, context: Context) {
-        // Updates handled automatically
+    var body: some View {
+        #if canImport(RiveRuntime)
+        // RiveRuntime integration - placeholder until package is properly configured
+        // TODO: Implement with RiveViewModel once RiveRuntime v2+ is confirmed
+        Rectangle()
+            .fill(RMTheme.Colors.inputFill)
+            .overlay(
+                Text("Rive: \(resourceName)")
+                    .foregroundColor(RMTheme.Colors.textSecondary)
+            )
+        #else
+        Rectangle()
+            .fill(RMTheme.Colors.inputFill)
+            .overlay(
+                Text("RiveRuntime not available")
+                    .foregroundColor(RMTheme.Colors.textSecondary)
+            )
+        #endif
     }
 }
 

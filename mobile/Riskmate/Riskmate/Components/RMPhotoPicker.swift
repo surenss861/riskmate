@@ -1,40 +1,87 @@
 import SwiftUI
 import PhotosUI
 
-/// Multi-select photo picker for job photos
+/// Multi-select photo picker for job photos with background upload
 struct RMPhotoPicker: View {
-    @Binding var selectedItems: [PhotosPickerItem]
-    @Binding var images: [UIImage]
-    var maxSelection: Int = 10
+    let jobId: String
+    @Environment(\.dismiss) private var dismiss
+    @State private var selectedItems: [PhotosPickerItem] = []
+    @State private var isUploading = false
     
     var body: some View {
-        PhotosPicker(
-            selection: $selectedItems,
-            maxSelectionCount: maxSelection,
-            matching: .images
-        ) {
-            RMPrimaryButton(title: "Select Photos") {}
-        }
-        .onChange(of: selectedItems) { _, newItems in
-            Task {
-                await loadImages(from: newItems)
+        NavigationStack {
+            VStack(spacing: RMTheme.Spacing.lg) {
+                PhotosPicker(
+                    selection: $selectedItems,
+                    maxSelectionCount: 10,
+                    matching: .images
+                ) {
+                    HStack {
+                        Image(systemName: "photo.on.rectangle")
+                        Text("Select Photos")
+                    }
+                    .font(RMTheme.Typography.bodyBold)
+                    .foregroundColor(.black)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, RMTheme.Spacing.md)
+                    .background(RMTheme.Colors.accent)
+                    .clipShape(RoundedRectangle(cornerRadius: RMTheme.Radius.sm))
+                }
+                .disabled(isUploading)
+                
+                if isUploading {
+                    ProgressView("Uploading...")
+                        .padding()
+                }
+            }
+            .padding(RMTheme.Spacing.pagePadding)
+            .background(RMBackground())
+            .navigationTitle("Add Evidence")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+            }
+            .onChange(of: selectedItems) { _, newItems in
+                Task {
+                    await uploadImages(from: newItems)
+                }
             }
         }
     }
     
-    private func loadImages(from items: [PhotosPickerItem]) async {
-        var loadedImages: [UIImage] = []
+    private func uploadImages(from items: [PhotosPickerItem]) async {
+        isUploading = true
+        defer { isUploading = false }
         
         for item in items {
-            if let data = try? await item.loadTransferable(type: Data.self),
-               let image = UIImage(data: data) {
-                loadedImages.append(image)
+            guard let data = try? await item.loadTransferable(type: Data.self),
+                  let image = UIImage(data: data),
+                  let jpegData = image.jpegData(compressionQuality: 0.8) else {
+                continue
+            }
+            
+            let evidenceId = UUID().uuidString
+            let fileName = "evidence-\(evidenceId).jpg"
+            
+            do {
+                try await BackgroundUploadManager.shared.uploadEvidence(
+                    jobId: jobId,
+                    evidenceId: evidenceId,
+                    fileData: jpegData,
+                    fileName: fileName,
+                    mimeType: "image/jpeg"
+                )
+            } catch {
+                print("[RMPhotoPicker] Upload failed: \(error)")
             }
         }
         
-        await MainActor.run {
-            images = loadedImages
-        }
+        // Dismiss after uploads are queued
+        dismiss()
     }
 }
 
