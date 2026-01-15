@@ -11,7 +11,7 @@ struct RMLottieView: View {
     
     var body: some View {
         ProgressView()
-            .tint(DesignSystem.Colors.accent)
+            .tint(RMTheme.Colors.accent)
             .scaleEffect(1.2)
     }
 }
