@@ -33,13 +33,13 @@ struct RMAuthTextField: View {
                         .focused($focused)
                 }
             }
-            .foregroundColor(.white)
-            .font(.system(size: 16, weight: .medium))
-            .tint(Color(hex: "#F97316"))
+            .foregroundColor(RMTheme.Colors.textPrimary)
+            .font(RMTheme.Typography.body)
+            .tint(RMTheme.Colors.accent)
             .placeholder(when: text.isEmpty) {
                 Text(title)
-                    .foregroundColor(.white.opacity(0.38))
-                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(RMTheme.Colors.textPlaceholder)
+                    .font(RMTheme.Typography.body)
             }
             
             if isSecure {
@@ -51,18 +51,18 @@ struct RMAuthTextField: View {
                 .buttonStyle(.plain)
             }
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, RMTheme.Spacing.md)
         .padding(.vertical, 14)
         .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.white.opacity(0.06))
+            RoundedRectangle(cornerRadius: RMTheme.Radius.sm, style: .continuous)
+                .fill(RMTheme.Colors.inputFill)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
+            RoundedRectangle(cornerRadius: RMTheme.Radius.sm, style: .continuous)
                 .stroke(
                     focused
-                    ? Color(hex: "#F97316").opacity(0.55)
-                    : Color.white.opacity(0.12),
+                    ? RMTheme.Colors.inputStrokeFocused
+                    : RMTheme.Colors.inputStroke,
                     lineWidth: focused ? 1.6 : 1
                 )
         )

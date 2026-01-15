@@ -10,24 +10,24 @@ struct RMGlassCard<Content: View>: View {
     
     var body: some View {
         content
-            .padding(24)
+            .padding(RMTheme.Spacing.lg)
             .background {
-                RoundedRectangle(cornerRadius: 26, style: .continuous)
+                RoundedRectangle(cornerRadius: RMTheme.Radius.xl, style: .continuous)
                     // iOS material base
                     .fill(.ultraThinMaterial)
                     // web-like dark tint (prevents grey mush)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 26, style: .continuous)
-                            .fill(Color(hex: "#0B0B0C").opacity(0.72))
+                        RoundedRectangle(cornerRadius: RMTheme.Radius.xl, style: .continuous)
+                            .fill(RMTheme.Colors.cardBackground)
                     )
                     // crisp outer border
                     .overlay(
-                        RoundedRectangle(cornerRadius: 26, style: .continuous)
-                            .stroke(Color.white.opacity(0.10), lineWidth: 1)
+                        RoundedRectangle(cornerRadius: RMTheme.Radius.xl, style: .continuous)
+                            .stroke(RMTheme.Colors.border, lineWidth: 1)
                     )
                     // inner "glass highlight" (web sharpness)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 26, style: .continuous)
+                        RoundedRectangle(cornerRadius: RMTheme.Radius.xl, style: .continuous)
                             .stroke(
                                 LinearGradient(
                                     colors: [
@@ -43,8 +43,7 @@ struct RMGlassCard<Content: View>: View {
                             .padding(0.5)
                     )
             }
-            // tight shadow (sharp web depth)
-            .shadow(color: .black.opacity(0.45), radius: 14, x: 0, y: 10)
+            .themeShadow(RMTheme.Shadow.card)
     }
 }
 

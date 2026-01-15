@@ -338,22 +338,6 @@ struct RMAuditDetailSheet: View {
     }
 }
 
-// MARK: - Extended Audit Event Model
-
-extension AuditEvent {
-    var details: String {
-        // Extended model - add details field
-        return ""
-    }
-    
-    var actor: String {
-        return ""
-    }
-    
-    var metadata: [String: String] {
-        return [:]
-    }
-}
 
 #Preview {
     AuditFeedView()

@@ -16,8 +16,8 @@ struct RMPrimaryButton: View {
             action()
         } label: {
             ZStack {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(Color(hex: "#F97316"))
+                RoundedRectangle(cornerRadius: RMTheme.Radius.md, style: .continuous)
+                    .fill(RMTheme.Colors.accent)
                     .opacity(isDisabled ? 0.5 : 1.0)
                 
                 if isLoading {
@@ -25,17 +25,17 @@ struct RMPrimaryButton: View {
                         .tint(.black)
                 } else {
                     Text(title)
-                        .font(.system(size: 16, weight: .bold))
+                        .font(RMTheme.Typography.bodyBold)
                         .foregroundColor(.black)
                 }
             }
             .frame(height: 52)
             .scaleEffect(isPressed ? 0.98 : 1.0)
-            .animation(.spring(response: 0.25, dampingFraction: 0.9), value: isPressed)
+            .animation(RMTheme.Animation.springFast, value: isPressed)
         }
         .buttonStyle(.plain)
         .disabled(isDisabled || isLoading)
-        .shadow(color: Color(hex: "#F97316").opacity(0.18), radius: 18, x: 0, y: 10)
+        .themeShadow(RMTheme.Shadow.button)
         .simultaneousGesture(
             DragGesture(minimumDistance: 0)
                 .onChanged { _ in isPressed = true }

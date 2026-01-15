@@ -22,15 +22,15 @@ struct AuthView: View {
                             RiskMateLogo(size: .large, showText: true)
                                 .padding(.bottom, 2)
                             
-                            VStack(spacing: 6) {
+                            VStack(spacing: RMTheme.Spacing.xs) {
                                 Text(isSignup ? "Create Account" : "Welcome Back")
-                                    .font(.largeTitle.weight(.bold))
-                                    .foregroundColor(.white)
+                                    .font(RMTheme.Typography.largeTitle)
+                                    .foregroundColor(RMTheme.Colors.textPrimary)
                                 
                                 Text(isSignup ? "Start protecting every job before it starts"
                                               : "Sign in to your RiskMate account")
-                                    .font(.body)
-                                    .foregroundColor(.white.opacity(0.65))
+                                    .font(RMTheme.Typography.body)
+                                    .foregroundColor(RMTheme.Colors.textSecondary)
                             }
                             .padding(.bottom, 8)
                             
@@ -81,35 +81,36 @@ struct AuthView: View {
                             .padding(.top, 6)
                             
                             if let errorText = errorText {
-                                HStack(spacing: 8) {
+                                HStack(spacing: RMTheme.Spacing.sm) {
                                     Image(systemName: "exclamationmark.triangle.fill")
-                                        .font(.system(size: 12))
+                                        .font(.system(size: 12, weight: .semibold))
                                     Text(errorText)
-                                        .font(.subheadline.weight(.semibold))
+                                        .font(RMTheme.Typography.bodySmallBold)
                                 }
-                                .foregroundColor(Color.red.opacity(0.95))
+                                .foregroundColor(RMTheme.Colors.error)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.top, 2)
+                                .padding(.top, RMTheme.Spacing.xs)
                             }
                             
                             Divider()
-                                .overlay(Color.white.opacity(0.10))
-                                .padding(.vertical, 10)
+                                .overlay(RMTheme.Colors.divider)
+                                .padding(.vertical, RMTheme.Spacing.sm)
                             
-                            HStack(spacing: 6) {
+                            HStack(spacing: RMTheme.Spacing.xs) {
                                 Text(isSignup ? "Already have an account?" : "Don't have an account?")
-                                    .foregroundColor(.white.opacity(0.65))
+                                    .foregroundColor(RMTheme.Colors.textSecondary)
+                                    .font(RMTheme.Typography.body)
                                 
                                 Button(isSignup ? "Log in" : "Sign up") {
-                                    withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) {
+                                    withAnimation(RMTheme.Animation.spring) {
                                         isSignup.toggle()
                                         errorText = nil
                                         password = ""
                                         confirmPassword = ""
                                     }
                                 }
-                                .foregroundColor(Color(hex: "#F97316"))
-                                .font(.body.weight(.semibold))
+                                .foregroundColor(RMTheme.Colors.accent)
+                                .font(RMTheme.Typography.bodyBold)
                             }
                             
                             if isSignup {

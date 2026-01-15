@@ -190,6 +190,9 @@ struct AuditEvent: Identifiable {
     let category: String
     let summary: String
     let timestamp: Date
+    var details: String = ""
+    var actor: String = ""
+    var metadata: [String: String] = [:]
 }
 
 // MARK: - KPI Card Component
