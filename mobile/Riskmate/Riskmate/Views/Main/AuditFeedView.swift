@@ -184,9 +184,7 @@ struct RMAuditRow: View {
     }
     
     private func relativeTime(_ date: Date) -> String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .abbreviated
-        return formatter.localizedString(for: date, relativeTo: Date())
+        return date.toRelative(style: RelativeFormatter.defaultStyle())
     }
 }
 
@@ -333,9 +331,7 @@ struct RMAuditDetailSheet: View {
     }
     
     private func relativeTime(_ date: Date) -> String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .abbreviated
-        return formatter.localizedString(for: date, relativeTo: Date())
+        return date.toRelative(style: RelativeFormatter.defaultStyle())
     }
 }
 
