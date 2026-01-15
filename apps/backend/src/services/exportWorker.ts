@@ -583,14 +583,23 @@ async function generateExecutiveBrief(
   
   // TODO: Fetch executive brief data from database
   // For now, use placeholder data
+  const now = new Date().toISOString()
   const briefData = {
-    riskScore: 0,
-    totalJobs: 0,
-    highRiskJobs: 0,
-    controlsCompleted: 0,
-    controlsTotal: 0,
-    evidenceCount: 0,
-    lastExportDate: null,
+    generated_at: now,
+    time_range: 'Last 30 days',
+    summary: {
+      exposure_level: 'low' as const,
+      confidence_statement: 'System-generated from ledger + evidence status',
+      counts: {
+        high_risk_jobs: 0,
+        open_incidents: 0,
+        violations: 0,
+        flagged: 0,
+        pending_attestations: 0,
+        signed_attestations: 0,
+        proof_packs: 0,
+      },
+    },
   }
   
   // Get organization name
