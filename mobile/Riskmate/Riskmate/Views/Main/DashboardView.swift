@@ -1,5 +1,6 @@
 import SwiftUI
 import Charts
+import SwiftDate
 
 /// Dashboard with KPIs, charts, and recent activity
 struct DashboardView: View {

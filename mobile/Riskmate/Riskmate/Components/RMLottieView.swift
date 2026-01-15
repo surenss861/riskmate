@@ -1,31 +1,7 @@
 import SwiftUI
-
-// Lottie is conditionally compiled - remove this file or add Lottie package if needed
-// For now, using a simple placeholder that works without Lottie
-
-/// Placeholder animation view (replace with Lottie when package is properly linked)
-struct RMLottieView: View {
-    let name: String
-    let loopMode: LottieLoopMode
-    var speed: CGFloat = 1.0
-    
-    var body: some View {
-        ProgressView()
-            .tint(RMTheme.Colors.accent)
-            .scaleEffect(1.2)
-    }
-}
-
-/// Loop mode enum (matches Lottie's API when available)
-enum LottieLoopMode {
-    case loop
-    case playOnce
-}
-
-// MARK: - Lottie Implementation (Uncomment when package is linked)
-/*
 import Lottie
 
+/// Lottie animation wrapper for SwiftUI
 struct RMLottieView: UIViewRepresentable {
     let name: String
     let loopMode: LottieLoopMode
@@ -54,7 +30,12 @@ struct RMLottieView: UIViewRepresentable {
         // Animation updates automatically
     }
 }
-*/
+
+/// Loop mode enum
+enum LottieLoopMode {
+    case loop
+    case playOnce
+}
 
 #Preview {
     RMLottieView(name: "loading", loopMode: .loop)
