@@ -1,4 +1,6 @@
 import SwiftUI
+
+#if canImport(Lottie)
 import Lottie
 
 /// Lottie animation wrapper for SwiftUI
@@ -30,6 +32,25 @@ struct RMLottieView: UIViewRepresentable {
         // Animation updates automatically
     }
 }
+#else
+/// Placeholder when Lottie is not available
+struct RMLottieView: View {
+    let name: String
+    let loopMode: LottieLoopMode
+    var speed: CGFloat = 1.0
+    
+    var body: some View {
+        ProgressView()
+            .tint(DesignSystem.Colors.accent)
+    }
+}
+
+/// Dummy type for when Lottie isn't available
+enum LottieLoopMode {
+    case loop
+    case playOnce
+}
+#endif
 
 #Preview {
     RMLottieView(name: "loading", loopMode: .loop)
