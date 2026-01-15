@@ -31,6 +31,7 @@ struct RMEmptyState: View {
                     .font(RMTheme.Typography.bodySmall)
                     .foregroundColor(RMTheme.Colors.textSecondary)
                     .multilineTextAlignment(.center)
+            }
             
             if let action = action {
                 Button {

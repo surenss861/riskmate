@@ -10,13 +10,14 @@ struct ExecutiveViewRedesigned: View {
     @State private var governanceViolations: [GovernanceEvent] = []
     @State private var exposureOverview: ExposureOverview?
     @State private var isLoading = true
+    @State private var showEnforcementReceipts = false
     
     var body: some View {
         RMBackground()
             .overlay {
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: RMTheme.Spacing.sectionSpacing) {
-                        // Hero Defensibility Score
+                        // Hero Defensibility Brief
                         HeroDefensibilityCard(
                             score: defensibilityScore,
                             status: status,
@@ -26,8 +27,49 @@ struct ExecutiveViewRedesigned: View {
                         .padding(.horizontal, RMTheme.Spacing.pagePadding)
                         .padding(.top, RMTheme.Spacing.md)
                         
-                        // Chain-of-Custody Timeline
-                        ChainOfCustodyTimeline(events: chainOfCustody)
+                        // 3 Proof-First Tiles
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: RMTheme.Spacing.md) {
+                                ProofFirstTile(
+                                    title: "Chain-of-Custody",
+                                    status: .verified,
+                                    count: chainOfCustody.filter { $0.integrity == .verified }.count,
+                                    total: chainOfCustody.count,
+                                    icon: "link.circle.fill",
+                                    color: RMTheme.Colors.success
+                                ) {
+                                    // Show chain-of-custody detail
+                                }
+                                
+                                ProofFirstTile(
+                                    title: "Exports Generated",
+                                    status: .ready,
+                                    count: 12, // TODO: Get from API
+                                    total: nil,
+                                    icon: "doc.badge.plus",
+                                    color: RMTheme.Colors.accent,
+                                    subtitle: "Last: 2h ago"
+                                ) {
+                                    // Show exports list
+                                }
+                                
+                                ProofFirstTile(
+                                    title: "Enforcement Events",
+                                    status: .blocked,
+                                    count: governanceViolations.count,
+                                    total: nil,
+                                    icon: "shield.checkered",
+                                    color: RMTheme.Colors.error,
+                                    subtitle: "\(governanceViolations.count) blocked"
+                                ) {
+                                    showEnforcementReceipts = true
+                                }
+                            }
+                            .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                        }
+                        
+                        // Narrative Timeline
+                        NarrativeTimelineView(events: chainOfCustody)
                             .padding(.horizontal, RMTheme.Spacing.pagePadding)
                         
                         // Governance Model Badge
@@ -48,6 +90,9 @@ struct ExecutiveViewRedesigned: View {
                 }
             }
             .rmNavigationBar(title: "Executive")
+            .sheet(isPresented: $showEnforcementReceipts) {
+                EnforcementReceiptsView(violations: governanceViolations)
+            }
             .task {
                 loadData()
             }
@@ -200,11 +245,11 @@ struct HeroDefensibilityCard: View {
     private var confidenceStatement: String {
         switch status {
         case .insurerReady:
-            return "Your organization is insurer-ready with complete audit trails and verified evidence."
+            return "All work records are sealed, verified, and ready for insurance or audit review. Chain-of-custody is intact with no integrity gaps."
         case .needsReview:
-            return "Some areas need attention. Review the chain-of-custody timeline for details."
+            return "Some work records require attention before audit submission. Review pending evidence and control completions."
         case .highExposure:
-            return "High exposure detected. Immediate review recommended."
+            return "Critical exposure detected. Immediate review of high-risk jobs and governance violations required."
         }
     }
     
@@ -226,12 +271,16 @@ enum DefensibilityStatus {
     case insurerReady
     case needsReview
     case highExposure
+    case auditRisk
+    case criticalBlockers
     
     var displayName: String {
         switch self {
-        case .insurerReady: return "Insurer-Ready"
+        case .insurerReady: return "Insurance-Ready"
         case .needsReview: return "Needs Review"
         case .highExposure: return "High Exposure"
+        case .auditRisk: return "Audit Risk"
+        case .criticalBlockers: return "Critical Blockers"
         }
     }
     

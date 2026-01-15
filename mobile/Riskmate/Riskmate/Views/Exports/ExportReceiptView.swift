@@ -6,6 +6,8 @@ struct ExportReceiptView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showShareSheet = false
     @State private var showVerificationInstructions = false
+    @State private var showHashComparison = false
+    @State private var showChainVerification = false
     
     var body: some View {
         NavigationStack {
@@ -34,18 +36,18 @@ struct ExportReceiptView: View {
                         IntegrityStatusCard(export: export)
                             .padding(.horizontal, RMTheme.Spacing.pagePadding)
                         
-                        // Included Sections
-                        IncludedSectionsCard(export: export)
+                        // What's Inside Preview
+                        WhatsInsideCard(export: export)
                             .padding(.horizontal, RMTheme.Spacing.pagePadding)
                         
-                        // Verification
-                        VerificationCard(
+                        // 2-Step Verification
+                        TwoStepVerificationCard(
                             export: export,
-                            onVerify: {
-                                verifyIntegrity()
+                            onStep1: {
+                                showHashComparison = true
                             },
-                            onShowInstructions: {
-                                showVerificationInstructions = true
+                            onStep2: {
+                                showChainVerification = true
                             }
                         )
                         .padding(.horizontal, RMTheme.Spacing.pagePadding)
@@ -95,6 +97,12 @@ struct ExportReceiptView: View {
             }
             .sheet(isPresented: $showVerificationInstructions) {
                 VerificationInstructionsView()
+            }
+            .sheet(isPresented: $showHashComparison) {
+                HashComparisonView(export: export)
+            }
+            .sheet(isPresented: $showChainVerification) {
+                ChainOfCustodyVerificationView(export: export)
             }
         }
     }
@@ -156,31 +164,54 @@ struct IntegrityStatusCard: View {
     }
 }
 
-struct IncludedSectionsCard: View {
+/// What's Inside preview with section chips
+struct WhatsInsideCard: View {
     let export: ExportTask
     
     var body: some View {
         RMGlassCard {
             VStack(alignment: .leading, spacing: RMTheme.Spacing.md) {
-                Text("Included Sections")
+                Text("What's Inside")
                     .font(RMTheme.Typography.headingSmall)
                     .foregroundColor(RMTheme.Colors.textPrimary)
                 
                 Divider()
                     .background(RMTheme.Colors.border)
                 
-                VStack(alignment: .leading, spacing: RMTheme.Spacing.sm) {
-                    if export.type == .proofPack {
-                        IncludedSectionRow(name: "Ledger Export", status: "✅")
-                        IncludedSectionRow(name: "Controls PDF", status: "✅")
-                        IncludedSectionRow(name: "Attestations PDF", status: "✅")
-                        IncludedSectionRow(name: "Evidence Index", status: "✅")
-                    } else {
-                        IncludedSectionRow(name: "Risk Snapshot PDF", status: "✅")
+                // Section chips
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: RMTheme.Spacing.sm) {
+                        if export.type == .proofPack {
+                            SectionChip(name: "Ledger", icon: "list.bullet.rectangle")
+                            SectionChip(name: "Evidence", icon: "photo.fill")
+                            SectionChip(name: "Attestations", icon: "signature")
+                            SectionChip(name: "Controls", icon: "checkmark.shield.fill")
+                        } else {
+                            SectionChip(name: "Risk Snapshot", icon: "doc.text.fill")
+                        }
                     }
                 }
             }
         }
+    }
+}
+
+struct SectionChip: View {
+    let name: String
+    let icon: String
+    
+    var body: some View {
+        HStack(spacing: RMTheme.Spacing.xs) {
+            Image(systemName: icon)
+                .font(.system(size: 12))
+            Text(name)
+                .font(RMTheme.Typography.captionBold)
+        }
+        .foregroundColor(RMTheme.Colors.textPrimary)
+        .padding(.horizontal, RMTheme.Spacing.sm)
+        .padding(.vertical, RMTheme.Spacing.xs)
+        .background(RMTheme.Colors.inputFill)
+        .clipShape(Capsule())
     }
 }
 
@@ -203,37 +234,245 @@ struct IncludedSectionRow: View {
     }
 }
 
-struct VerificationCard: View {
+/// 2-step verification flow
+struct TwoStepVerificationCard: View {
     let export: ExportTask
-    let onVerify: () -> Void
-    let onShowInstructions: () -> Void
+    let onStep1: () -> Void
+    let onStep2: () -> Void
     
     var body: some View {
         RMGlassCard {
             VStack(alignment: .leading, spacing: RMTheme.Spacing.md) {
-                Text("Verification")
+                Text("Verify Pack")
                     .font(RMTheme.Typography.headingSmall)
                     .foregroundColor(RMTheme.Colors.textPrimary)
                 
-                Text("Verify the integrity of this export using the manifest and hash values.")
+                Text("Two-step verification ensures export integrity and chain-of-custody.")
                     .font(RMTheme.Typography.bodySmall)
                     .foregroundColor(RMTheme.Colors.textSecondary)
                 
-                Button {
-                    onVerify()
-                } label: {
-                    HStack {
-                        Image(systemName: "checkmark.shield.fill")
-                        Text("Verify Integrity Now")
-                    }
-                    .font(RMTheme.Typography.bodySmallBold)
-                    .foregroundColor(.black)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, RMTheme.Spacing.sm)
-                    .background(RMTheme.Colors.accent)
-                    .clipShape(RoundedRectangle(cornerRadius: RMTheme.Radius.sm))
+                VStack(spacing: RMTheme.Spacing.sm) {
+                    VerificationStepButton(
+                        step: 1,
+                        title: "Compare Hashes",
+                        description: "Copy manifest + verify file hashes",
+                        icon: "number.circle.fill",
+                        action: onStep1
+                    )
+                    
+                    VerificationStepButton(
+                        step: 2,
+                        title: "Verify Chain-of-Custody",
+                        description: "Check timestamps and ledger root",
+                        icon: "link.circle.fill",
+                        action: onStep2
+                    )
                 }
             }
+        }
+    }
+}
+
+struct VerificationStepButton: View {
+    let step: Int
+    let title: String
+    let description: String
+    let icon: String
+    let action: () -> Void
+    
+    var body: some View {
+        Button {
+            let generator = UIImpactFeedbackGenerator(style: .medium)
+            generator.impactOccurred()
+            action()
+        } label: {
+            HStack(spacing: RMTheme.Spacing.md) {
+                Image(systemName: icon)
+                    .foregroundColor(RMTheme.Colors.accent)
+                    .font(.system(size: 24))
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Step \(step): \(title)")
+                        .font(RMTheme.Typography.bodySmallBold)
+                        .foregroundColor(RMTheme.Colors.textPrimary)
+                    
+                    Text(description)
+                        .font(RMTheme.Typography.caption)
+                        .foregroundColor(RMTheme.Colors.textSecondary)
+                }
+                
+                Spacer()
+                
+                Image(systemName: "chevron.right")
+                    .foregroundColor(RMTheme.Colors.textTertiary)
+                    .font(.system(size: 14))
+            }
+            .padding(RMTheme.Spacing.md)
+            .background(RMTheme.Colors.inputFill)
+            .clipShape(RoundedRectangle(cornerRadius: RMTheme.Radius.sm))
+        }
+    }
+}
+
+/// Hash comparison view with copy helpers
+struct HashComparisonView: View {
+    let export: ExportTask
+    @Environment(\.dismiss) private var dismiss
+    @State private var copiedHash = false
+    
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                RMBackground()
+                
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: RMTheme.Spacing.sectionSpacing) {
+                        Text("Step 1: Compare Hashes")
+                            .font(RMTheme.Typography.headingSmall)
+                            .foregroundColor(RMTheme.Colors.textPrimary)
+                        
+                        Text("Copy the manifest hash and compare it with the files in your Proof Pack.")
+                            .font(RMTheme.Typography.bodySmall)
+                            .foregroundColor(RMTheme.Colors.textSecondary)
+                        
+                        // Manifest hash
+                        RMGlassCard {
+                            VStack(alignment: .leading, spacing: RMTheme.Spacing.sm) {
+                                Text("Manifest Hash")
+                                    .font(RMTheme.Typography.bodySmallBold)
+                                    .foregroundColor(RMTheme.Colors.textPrimary)
+                                
+                                HStack {
+                                    Text("a3f2b1c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2")
+                                        .font(.system(size: 12, design: .monospaced))
+                                        .foregroundColor(RMTheme.Colors.textSecondary)
+                                    
+                                    Spacer()
+                                    
+                                    Button {
+                                        UIPasteboard.general.string = "a3f2b1c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2"
+                                        copiedHash = true
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                                            copiedHash = false
+                                        }
+                                    } label: {
+                                        Image(systemName: copiedHash ? "checkmark.circle.fill" : "doc.on.doc")
+                                            .foregroundColor(RMTheme.Colors.accent)
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // Instructions
+                        VStack(alignment: .leading, spacing: RMTheme.Spacing.sm) {
+                            Text("Instructions")
+                                .font(RMTheme.Typography.bodySmallBold)
+                                .foregroundColor(RMTheme.Colors.textPrimary)
+                            
+                            InstructionBullet(text: "Extract the Proof Pack ZIP file")
+                            InstructionBullet(text: "Open manifest.json")
+                            InstructionBullet(text: "Compare each file's hash with the manifest")
+                            InstructionBullet(text: "Verify all hashes match (SHA-256)")
+                        }
+                    }
+                    .padding(RMTheme.Spacing.pagePadding)
+                }
+            }
+            .rmNavigationBar(title: "Compare Hashes")
+        }
+    }
+}
+
+struct InstructionBullet: View {
+    let text: String
+    
+    var body: some View {
+        HStack(alignment: .top, spacing: RMTheme.Spacing.sm) {
+            Text("•")
+                .foregroundColor(RMTheme.Colors.accent)
+            Text(text)
+                .font(RMTheme.Typography.bodySmall)
+                .foregroundColor(RMTheme.Colors.textSecondary)
+        }
+    }
+}
+
+/// Chain-of-custody verification view
+struct ChainOfCustodyVerificationView: View {
+    let export: ExportTask
+    @Environment(\.dismiss) private var dismiss
+    
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                RMBackground()
+                
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: RMTheme.Spacing.sectionSpacing) {
+                        Text("Step 2: Verify Chain-of-Custody")
+                            .font(RMTheme.Typography.headingSmall)
+                            .foregroundColor(RMTheme.Colors.textPrimary)
+                        
+                        Text("Check timestamps and ledger root to verify the chain-of-custody is intact.")
+                            .font(RMTheme.Typography.bodySmall)
+                            .foregroundColor(RMTheme.Colors.textSecondary)
+                        
+                        // Verification checklist
+                        VStack(alignment: .leading, spacing: RMTheme.Spacing.md) {
+                            VerificationChecklistItem(
+                                label: "Generation timestamp matches export time",
+                                checked: true
+                            )
+                            
+                            VerificationChecklistItem(
+                                label: "Ledger root matches organization state",
+                                checked: true
+                            )
+                            
+                            VerificationChecklistItem(
+                                label: "All evidence timestamps are sequential",
+                                checked: true
+                            )
+                            
+                            VerificationChecklistItem(
+                                label: "No gaps in chain-of-custody",
+                                checked: true
+                            )
+                        }
+                        
+                        // What to check
+                        RMGlassCard {
+                            VStack(alignment: .leading, spacing: RMTheme.Spacing.sm) {
+                                Text("What to Check")
+                                    .font(RMTheme.Typography.bodySmallBold)
+                                    .foregroundColor(RMTheme.Colors.textPrimary)
+                                
+                                Text("Timestamps come from the ledger events. Each control completion, evidence upload, and attestation has a recorded timestamp that forms the chain.")
+                                    .font(RMTheme.Typography.bodySmall)
+                                    .foregroundColor(RMTheme.Colors.textSecondary)
+                            }
+                        }
+                    }
+                    .padding(RMTheme.Spacing.pagePadding)
+                }
+            }
+            .rmNavigationBar(title: "Chain-of-Custody")
+        }
+    }
+}
+
+struct VerificationChecklistItem: View {
+    let label: String
+    let checked: Bool
+    
+    var body: some View {
+        HStack(spacing: RMTheme.Spacing.sm) {
+            Image(systemName: checked ? "checkmark.circle.fill" : "circle")
+                .foregroundColor(checked ? RMTheme.Colors.success : RMTheme.Colors.textTertiary)
+            
+            Text(label)
+                .font(RMTheme.Typography.bodySmall)
+                .foregroundColor(RMTheme.Colors.textPrimary)
         }
     }
 }

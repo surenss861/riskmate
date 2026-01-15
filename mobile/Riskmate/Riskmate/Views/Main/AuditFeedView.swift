@@ -14,6 +14,16 @@ struct AuditFeedView: View {
                 VStack(spacing: 0) {
                     RMOfflineBanner()
                     
+                    // Integrity Surface Pinned at Top
+                    LedgerIntegritySurface()
+                        .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                        .padding(.top, RMTheme.Spacing.sm)
+                    
+                    // Saved Views as Horizontal Cards
+                    SavedViewsCarousel()
+                        .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                        .padding(.top, RMTheme.Spacing.md)
+                    
                     if isLoading {
                     // Premium skeleton loading
                     ScrollView {
@@ -37,15 +47,28 @@ struct AuditFeedView: View {
                 } else {
                     List {
                         ForEach(events) { event in
-                            RMAuditRow(event: event)
-                                .listRowBackground(Color.clear)
-                                .listRowSeparator(.hidden)
-                                .listRowInsets(EdgeInsets(
-                                    top: RMTheme.Spacing.xs,
-                                    leading: RMTheme.Spacing.md,
-                                    bottom: RMTheme.Spacing.xs,
-                                    trailing: RMTheme.Spacing.md
-                                ))
+                            // Use enforcement row for blocked events
+                            if event.category == "GOVERNANCE" && (event.metadata?["blocked"] as? Bool == true || event.summary.lowercased().contains("blocked")) {
+                                EnforcementRow(event: event)
+                                    .listRowBackground(Color.clear)
+                                    .listRowSeparator(.hidden)
+                                    .listRowInsets(EdgeInsets(
+                                        top: RMTheme.Spacing.xs,
+                                        leading: RMTheme.Spacing.md,
+                                        bottom: RMTheme.Spacing.xs,
+                                        trailing: RMTheme.Spacing.md
+                                    ))
+                            } else {
+                                RMAuditRow(event: event)
+                                    .listRowBackground(Color.clear)
+                                    .listRowSeparator(.hidden)
+                                    .listRowInsets(EdgeInsets(
+                                        top: RMTheme.Spacing.xs,
+                                        leading: RMTheme.Spacing.md,
+                                        bottom: RMTheme.Spacing.xs,
+                                        trailing: RMTheme.Spacing.md
+                                    ))
+                            }
                                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                                     Button {
                                         copyEventId(event.id)
