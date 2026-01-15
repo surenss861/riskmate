@@ -1,5 +1,6 @@
 import Foundation
 import UIKit
+import Combine
 
 /// Background upload manager for evidence and documents
 /// Handles background URLSession uploads that continue even when app is backgrounded
@@ -51,7 +52,15 @@ class BackgroundUploadManager: NSObject, ObservableObject {
         mimeType: String
     ) async throws {
         // Check for duplicate upload (idempotency)
-        if uploads.contains(where: { $0.id == evidenceId && ($0.state == .uploading || $0.state == .queued) }) {
+        if uploads.contains(where: { upload in
+            guard upload.id == evidenceId else { return false }
+            switch upload.state {
+            case .uploading, .queued:
+                return true
+            case .synced, .failed:
+                return false
+            }
+        }) {
             print("[BackgroundUploadManager] Duplicate upload detected for \(evidenceId), skipping")
             return
         }
@@ -203,9 +212,17 @@ class BackgroundUploadManager: NSObject, ObservableObject {
         saveTaskMappings(mappings)
     }
     
-    private func getUploadId(for taskIdentifier: Int) -> String? {
-        let mappings = getTaskMappings()
-        return mappings[taskIdentifier]
+    nonisolated private func getUploadId(for taskIdentifier: Int) -> String? {
+        // Access UserDefaults directly (thread-safe for reads)
+        guard let data = UserDefaults.standard.data(forKey: taskMappingKey),
+              let mappings = try? JSONDecoder().decode([String: String].self, from: data) else {
+            return nil
+        }
+        guard let stringKey = String(taskIdentifier) as String?,
+              let uploadId = mappings[stringKey] else {
+            return nil
+        }
+        return uploadId
     }
     
     private func getTaskId(for uploadId: String) -> Int? {
@@ -235,10 +252,10 @@ class BackgroundUploadManager: NSObject, ObservableObject {
 // MARK: - URLSessionDelegate
 
 extension BackgroundUploadManager: URLSessionDelegate {
-    func urlSessionDidFinishEvents(forBackgroundURLSession session: URLSession) {
-        DispatchQueue.main.async {
-            self.backgroundCompletionHandler?()
-            self.backgroundCompletionHandler = nil
+    nonisolated func urlSessionDidFinishEvents(forBackgroundURLSession session: URLSession) {
+        DispatchQueue.main.async { [weak self] in
+            self?.backgroundCompletionHandler?()
+            self?.backgroundCompletionHandler = nil
         }
     }
 }
@@ -246,10 +263,11 @@ extension BackgroundUploadManager: URLSessionDelegate {
 // MARK: - URLSessionTaskDelegate
 
 extension BackgroundUploadManager: URLSessionTaskDelegate {
-    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+    nonisolated func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
         guard let uploadId = getUploadId(for: task.taskIdentifier) else { return }
         
-        DispatchQueue.main.async {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
             if let error = error {
                 let errorMessage = error.localizedDescription
                 self.updateUploadState(uploadId, state: .failed(errorMessage))
@@ -262,12 +280,13 @@ extension BackgroundUploadManager: URLSessionTaskDelegate {
         }
     }
     
-    func urlSession(_ session: URLSession, task: URLSessionTask, didSendBodyData bytesSent: Int64, totalBytesSent: Int64, totalBytesExpectedToSend: Int64) {
+    nonisolated func urlSession(_ session: URLSession, task: URLSessionTask, didSendBodyData bytesSent: Int64, totalBytesSent: Int64, totalBytesExpectedToSend: Int64) {
         guard let uploadId = getUploadId(for: task.taskIdentifier) else { return }
         
         let progress = Double(totalBytesSent) / Double(totalBytesExpectedToSend)
         
-        DispatchQueue.main.async {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
             self.updateUploadState(uploadId, state: .uploading, progress: progress)
         }
     }

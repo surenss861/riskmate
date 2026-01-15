@@ -345,20 +345,34 @@ struct PhotoPickerView: View {
             ) {
                 Text("Select Photos")
             }
-            .onChange(of: selectedItems) { _, newItems in
-                for item in newItems {
+            .onChange(of: selectedItems) { (oldItems: [PhotosPickerItem], newItems: [PhotosPickerItem]) in
+                // Process all new items (PhotosPickerItem doesn't conform to Equatable)
+                // Only process if we have new items
+                guard newItems.count > oldItems.count else { return }
+                
+                let addedCount = newItems.count - oldItems.count
+                let addedItems = Array(newItems.suffix(addedCount))
+                
+                for item in addedItems {
                     item.loadTransferable(type: Data.self) { result in
                         if case .success(let data) = result, let data = data {
                             // Upload with metadata
                             Task {
-                                await uploadManager.uploadEvidence(
-                                    jobId: jobId,
-                                    data: data,
-                                    metadata: [
-                                        "phase": phase.rawValue,
-                                        "type": type.rawValue
-                                    ]
-                                )
+                                let evidenceId = "ev_\(UUID().uuidString)"
+                                let fileName = "evidence_\(Date().timeIntervalSince1970).jpg" // Default to jpg, could detect from item
+                                let mimeType = "image/jpeg" // Default, could detect from item
+                                
+                                do {
+                                    try await uploadManager.uploadEvidence(
+                                        jobId: jobId,
+                                        evidenceId: evidenceId,
+                                        fileData: data,
+                                        fileName: fileName,
+                                        mimeType: mimeType
+                                    )
+                                } catch {
+                                    print("Failed to upload evidence: \(error)")
+                                }
                             }
                         }
                     }

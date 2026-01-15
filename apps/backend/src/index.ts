@@ -26,6 +26,14 @@ import { accountRouter } from "./routes/account";
 import { sitesRouter } from "./routes/sites";
 import { auditRouter } from "./routes/audit";
 import { executiveRouter } from "./routes/executive";
+import { evidenceRouter } from "./routes/evidence";
+import { exportsRouter } from "./routes/exports";
+import { verificationRouter } from "./routes/verification";
+import { publicVerificationRouter } from "./routes/publicVerification";
+import { metricsRouter } from "./routes/metrics";
+import { startExportWorker } from "./services/exportWorker";
+import { startRetentionWorker } from "./services/retentionWorker";
+import { startLedgerRootWorker } from "./services/ledgerRootWorker";
 import { requestIdMiddleware, RequestWithId } from "./middleware/requestId";
 import { createErrorResponse, logErrorForSupport } from "./utils/errorResponse";
 
@@ -161,6 +169,11 @@ app.use("/api/account", accountRouter);
 app.use("/api/sites", sitesRouter);
 app.use("/api/audit", auditRouter);
 app.use("/api/executive", executiveRouter);
+app.use("/api", evidenceRouter);
+app.use("/api", exportsRouter);
+app.use("/api", verificationRouter);
+app.use("/api/public", publicVerificationRouter);
+app.use("/api/metrics", metricsRouter);
 
 // 404 handler
 // CORS headers are already set by cors() middleware, so this response will include them
@@ -212,5 +225,10 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 RiskMate Backend API running on port ${PORT}`);
   console.log(`📡 Health check: http://0.0.0.0:${PORT}/health`);
   console.log(`✅ Build: ${process.env.RAILWAY_DEPLOYMENT_ID || 'local'} | Commit: ${process.env.RAILWAY_GIT_COMMIT_SHA || 'dev'}`);
+  
+  // Start background workers
+  startExportWorker();
+  startRetentionWorker();
+  startLedgerRootWorker();
 });
 
