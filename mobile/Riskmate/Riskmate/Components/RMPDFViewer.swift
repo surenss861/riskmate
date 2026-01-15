@@ -29,10 +29,13 @@ struct RMPDFViewer: UIViewRepresentable {
     }
 }
 
-/// Full-screen PDF viewer with toolbar
+/// Full-screen PDF viewer with toolbar, loading, and error states
 struct RMPDFViewerScreen: View {
     let url: URL
     @Environment(\.dismiss) private var dismiss
+    @State private var isLoading = true
+    @State private var error: Error?
+    @State private var downloadedURL: URL?
     
     var body: some View {
         ZStack {
@@ -44,30 +47,116 @@ struct RMPDFViewerScreen: View {
                     Button(action: { dismiss() }) {
                         Image(systemName: "xmark")
                             .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.white)
+                            .foregroundColor(RMTheme.Colors.textPrimary)
                             .frame(width: 44, height: 44)
-                            .background(Color.white.opacity(0.1))
+                            .background(RMTheme.Colors.inputFill)
                             .clipShape(Circle())
                     }
                     
                     Spacer()
                     
-                    ShareLink(item: url) {
-                        Image(systemName: "square.and.arrow.up")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.white)
-                            .frame(width: 44, height: 44)
-                            .background(Color.white.opacity(0.1))
-                            .clipShape(Circle())
+                    if downloadedURL != nil {
+                        ShareLink(item: downloadedURL!) {
+                            Image(systemName: "square.and.arrow.up")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(RMTheme.Colors.textPrimary)
+                                .frame(width: 44, height: 44)
+                                .background(RMTheme.Colors.inputFill)
+                                .clipShape(Circle())
+                        }
+                        
+                        Button(action: { downloadPDF() }) {
+                            Image(systemName: "arrow.down.circle")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(RMTheme.Colors.textPrimary)
+                                .frame(width: 44, height: 44)
+                                .background(RMTheme.Colors.inputFill)
+                                .clipShape(Circle())
+                        }
                     }
                 }
-                .padding()
+                .padding(RMTheme.Spacing.md)
+                .background(RMTheme.Colors.surface.opacity(0.5))
                 
-                // PDF Content
-                RMPDFViewer(url: url)
+                // Content
+                if let error = error {
+                    // Error State
+                    VStack(spacing: RMTheme.Spacing.md) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 48, weight: .light))
+                            .foregroundColor(RMTheme.Colors.error)
+                        
+                        Text("Failed to Load PDF")
+                            .font(RMTheme.Typography.title3)
+                            .foregroundColor(RMTheme.Colors.textPrimary)
+                        
+                        Text(error.localizedDescription)
+                            .font(RMTheme.Typography.bodySmall)
+                            .foregroundColor(RMTheme.Colors.textSecondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, RMTheme.Spacing.lg)
+                        
+                        RMPrimaryButton(title: "Retry", action: {
+                            loadPDF()
+                        })
+                        .padding(.top, RMTheme.Spacing.sm)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if isLoading {
+                    // Loading State
+                    VStack(spacing: RMTheme.Spacing.md) {
+                        RMLottieView(name: "loading", loopMode: .loop)
+                            .frame(width: 80, height: 80)
+                        
+                        Text("Loading PDF...")
+                            .font(RMTheme.Typography.body)
+                            .foregroundColor(RMTheme.Colors.textSecondary)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if let pdfURL = downloadedURL {
+                    // PDF Content
+                    RMPDFViewer(url: pdfURL)
+                }
             }
         }
         .preferredColorScheme(.dark)
+        .task {
+            await loadPDF()
+        }
+    }
+    
+    private func loadPDF() async {
+        isLoading = true
+        error = nil
+        
+        do {
+            // Download PDF to local cache
+            let (data, _) = try await URLSession.shared.data(from: url)
+            let tempURL = FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString)
+                .appendingPathExtension("pdf")
+            
+            try data.write(to: tempURL)
+            downloadedURL = tempURL
+            isLoading = false
+        } catch {
+            self.error = error
+            isLoading = false
+        }
+    }
+    
+    private func downloadPDF() {
+        guard let pdfURL = downloadedURL else { return }
+        
+        let activityVC = UIActivityViewController(
+            activityItems: [pdfURL],
+            applicationActivities: nil
+        )
+        
+        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let rootViewController = windowScene.windows.first?.rootViewController {
+            rootViewController.present(activityVC, animated: true)
+        }
     }
 }
 
