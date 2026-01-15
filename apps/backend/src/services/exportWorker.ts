@@ -291,11 +291,93 @@ async function generateProofPack(
   manifestHash: string
   manifest: any
 }> {
-  // Generate all PDFs
-  const ledgerPdf = await generateLedgerExportPDF(organizationId, filters)
-  const controlsPdf = await generateControlsPDF(organizationId, jobId, filters)
-  const attestationsPdf = await generateAttestationsPDF(organizationId, jobId, filters)
-  const evidenceIndexPdf = await generateEvidenceIndexPDF(organizationId, jobId, filters)
+  // Fetch data for PDFs
+  const { data: orgData } = await supabase
+    .from('organizations')
+    .select('name')
+    .eq('id', organizationId)
+    .single()
+
+  const { data: userData } = await supabase
+    .from('users')
+    .select('full_name, role')
+    .eq('organization_id', organizationId)
+    .limit(1)
+    .single()
+
+  const exportId = `EXP-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`
+  
+  // Fetch ledger events
+  let eventsQuery = supabase
+    .from('audit_logs')
+    .select('*')
+    .eq('organization_id', organizationId)
+    .order('created_at', { ascending: false })
+    .limit(1000)
+
+  if (filters.time_range) {
+    // Apply time range filter
+    const now = new Date()
+    const daysAgo = parseInt(filters.time_range) || 30
+    const startDate = new Date(now.getTime() - daysAgo * 24 * 60 * 60 * 1000)
+    eventsQuery = eventsQuery.gte('created_at', startDate.toISOString())
+  }
+
+  const { data: events } = await eventsQuery
+
+  const auditEntries = (events || []).map((e: any) => ({
+    id: e.id,
+    event_name: e.event_name,
+    created_at: e.created_at,
+    category: e.category,
+    outcome: e.outcome,
+    severity: e.severity,
+    actor_name: e.actor_name,
+    actor_role: e.actor_role,
+    job_id: e.job_id,
+    job_title: e.job_title,
+    target_type: e.target_type,
+    summary: e.summary,
+  }))
+
+  // Generate ledger PDF
+  const ledgerPdf = await generateLedgerExportPDF({
+    organizationName: orgData?.name || 'Unknown',
+    generatedBy: userData?.full_name || 'Unknown',
+    generatedByRole: userData?.role || 'Unknown',
+    exportId,
+    timeRange: filters.time_range || 'All',
+    filters,
+    events: auditEntries,
+  })
+
+  // Generate other PDFs (stub for now - these need proper data fetching)
+  const controlsPdf = await generateControlsPDF([], {
+    packId: exportId,
+    organizationName: orgData?.name || 'Unknown',
+    generatedBy: userData?.full_name || 'Unknown',
+    generatedByRole: userData?.role || 'Unknown',
+    generatedAt: new Date().toISOString(),
+    timeRange: filters.time_range || 'All',
+  })
+
+  const attestationsPdf = await generateAttestationsPDF([], {
+    packId: exportId,
+    organizationName: orgData?.name || 'Unknown',
+    generatedBy: userData?.full_name || 'Unknown',
+    generatedByRole: userData?.role || 'Unknown',
+    generatedAt: new Date().toISOString(),
+    timeRange: filters.time_range || 'All',
+  })
+
+  const evidenceIndexPdf = await generateEvidenceIndexPDF([], {
+    packId: exportId,
+    organizationName: orgData?.name || 'Unknown',
+    generatedBy: userData?.full_name || 'Unknown',
+    generatedByRole: userData?.role || 'Unknown',
+    generatedAt: new Date().toISOString(),
+    timeRange: filters.time_range || 'All',
+  })
 
   // Create ZIP archive
   const archive = archiver('zip', { zlib: { level: 9 } })
@@ -383,7 +465,63 @@ async function generateLedgerExport(
   manifestHash: string
   manifest: any
 }> {
-  const pdfBuffer = await generateLedgerExportPDF(organizationId, filters)
+  // Fetch data for ledger export
+  const { data: orgData } = await supabase
+    .from('organizations')
+    .select('name')
+    .eq('id', organizationId)
+    .single()
+
+  const { data: userData } = await supabase
+    .from('users')
+    .select('full_name, role')
+    .eq('organization_id', organizationId)
+    .limit(1)
+    .single()
+
+  const exportId = `EXP-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`
+
+  // Fetch ledger events
+  let eventsQuery = supabase
+    .from('audit_logs')
+    .select('*')
+    .eq('organization_id', organizationId)
+    .order('created_at', { ascending: false })
+    .limit(1000)
+
+  if (filters.time_range) {
+    const now = new Date()
+    const daysAgo = parseInt(filters.time_range) || 30
+    const startDate = new Date(now.getTime() - daysAgo * 24 * 60 * 60 * 1000)
+    eventsQuery = eventsQuery.gte('created_at', startDate.toISOString())
+  }
+
+  const { data: events } = await eventsQuery
+
+  const auditEntries = (events || []).map((e: any) => ({
+    id: e.id,
+    event_name: e.event_name,
+    created_at: e.created_at,
+    category: e.category,
+    outcome: e.outcome,
+    severity: e.severity,
+    actor_name: e.actor_name,
+    actor_role: e.actor_role,
+    job_id: e.job_id,
+    job_title: e.job_title,
+    target_type: e.target_type,
+    summary: e.summary,
+  }))
+
+  const pdfBuffer = await generateLedgerExportPDF({
+    organizationName: orgData?.name || 'Unknown',
+    generatedBy: userData?.full_name || 'Unknown',
+    generatedByRole: userData?.role || 'Unknown',
+    exportId,
+    timeRange: filters.time_range || 'All',
+    filters,
+    events: auditEntries,
+  })
   const pdfHash = crypto.createHash('sha256').update(pdfBuffer).digest('hex')
 
   const storagePath = `${organizationId}/ledger-exports/${Date.now()}.pdf`
@@ -443,8 +581,30 @@ async function generateExecutiveBrief(
   // Import executive brief generator
   const { generateExecutiveBriefPDF } = await import('../utils/pdf/executiveBrief')
   
-  const pdfBuffer = await generateExecutiveBriefPDF(organizationId, jobId)
-  const pdfHash = crypto.createHash('sha256').update(pdfBuffer).digest('hex')
+  // TODO: Fetch executive brief data from database
+  // For now, use placeholder data
+  const briefData = {
+    riskScore: 0,
+    totalJobs: 0,
+    highRiskJobs: 0,
+    controlsCompleted: 0,
+    controlsTotal: 0,
+    evidenceCount: 0,
+    lastExportDate: null,
+  }
+  
+  // Get organization name
+  const { data: orgData } = await supabase
+    .from('organizations')
+    .select('name')
+    .eq('id', organizationId)
+    .single()
+  
+  const { buffer: pdfBuffer, hash: pdfHash } = await generateExecutiveBriefPDF(
+    briefData,
+    orgData?.name || 'Organization',
+    'System'
+  )
 
   const storagePath = `${organizationId}/executive-briefs/${jobId || 'all'}-${Date.now()}.pdf`
   const { error: uploadError } = await supabase.storage

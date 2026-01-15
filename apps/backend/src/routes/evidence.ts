@@ -8,7 +8,8 @@ import { getIdempotencyKey } from '../utils/idempotency'
 import { uploadRateLimiter } from '../middleware/rateLimiter'
 import { logWithRequest } from '../utils/structuredLog'
 import crypto from 'crypto'
-import busboy from 'busboy'
+import busboy, { type FileInfo } from 'busboy'
+import type { Request, Response } from 'express'
 
 export const evidenceRouter: ExpressRouter = express.Router()
 
@@ -55,7 +56,7 @@ async function parseMultipartFormData(req: express.Request): Promise<{
 
     const bb = busboy({ headers: req.headers })
 
-    bb.on('file', (name, file, info) => {
+    bb.on('file', (name: string, file: NodeJS.ReadableStream, info: FileInfo) => {
       const { filename, encoding, mimeType } = info
       fileName = filename || 'unknown'
       fileType = mimeType || 'application/octet-stream'
@@ -72,7 +73,7 @@ async function parseMultipartFormData(req: express.Request): Promise<{
       })
     })
 
-    bb.on('field', (name, value) => {
+    bb.on('field', (name: string, value: string) => {
       fields[name] = value
     })
 
@@ -91,7 +92,7 @@ async function parseMultipartFormData(req: express.Request): Promise<{
       })
     })
 
-    bb.on('error', (err) => {
+    bb.on('error', (err: Error) => {
       reject(err)
     })
 

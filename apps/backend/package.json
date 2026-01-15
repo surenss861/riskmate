@@ -12,12 +12,14 @@
     "test:pdf-contracts": "tsx src/utils/pdf/testContracts.ts",
     "test:pdf-smoke": "tsx scripts/pdf-smoke-test.ts",
     "test:pdf-golden": "tsx scripts/pdf-golden-path-test.ts",
-    "validate:pdf": "tsx scripts/pdf-validate-file.ts"
+    "validate:pdf": "tsx scripts/pdf-validate-file.ts",
+    "test:golden-path": "tsx scripts/golden-path-test.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0",
     "@types/pdfkit": "^0.17.3",
     "archiver": "^6.0.1",
+    "busboy": "^1.6.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^4.22.1",
@@ -30,6 +32,7 @@
   },
   "devDependencies": {
     "@types/archiver": "^6.0.2",
+    "@types/busboy": "^1.5.4",
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
     "@types/node": "^20.10.5",
