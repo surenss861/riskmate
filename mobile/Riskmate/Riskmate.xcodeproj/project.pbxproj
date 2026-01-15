@@ -13,6 +13,13 @@
 		211794FB2F182CE800FDF243 /* PostgREST in Frameworks */ = {isa = PBXBuildFile; productRef = 211794FA2F182CE800FDF243 /* PostgREST */; };
 		211794FD2F182CED00FDF243 /* Functions in Frameworks */ = {isa = PBXBuildFile; productRef = 211794FC2F182CED00FDF243 /* Functions */; };
 		211794FF2F182CF500FDF243 /* Auth in Frameworks */ = {isa = PBXBuildFile; productRef = 211794FE2F182CF500FDF243 /* Auth */; };
+		2117954F2F18F51D00FDF243 /* swiftlint in Frameworks */ = {isa = PBXBuildFile; productRef = 2117954E2F18F51D00FDF243 /* swiftlint */; };
+		211795512F18F52200FDF243 /* SwiftLintFramework in Frameworks */ = {isa = PBXBuildFile; productRef = 211795502F18F52200FDF243 /* SwiftLintFramework */; };
+		211795532F18F52900FDF243 /* Lottie in Frameworks */ = {isa = PBXBuildFile; productRef = 211795522F18F52900FDF243 /* Lottie */; };
+		211795552F18F52E00FDF243 /* Lottie-Dynamic in Frameworks */ = {isa = PBXBuildFile; productRef = 211795542F18F52E00FDF243 /* Lottie-Dynamic */; };
+		211795562F18F52E00FDF243 /* Lottie-Dynamic in Embed Frameworks */ = {isa = PBXBuildFile; productRef = 211795542F18F52E00FDF243 /* Lottie-Dynamic */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
+		211795592F18F53300FDF243 /* SwiftDate in Frameworks */ = {isa = PBXBuildFile; productRef = 211795582F18F53300FDF243 /* SwiftDate */; };
+		2117955B2F18F53D00FDF243 /* Kingfisher in Frameworks */ = {isa = PBXBuildFile; productRef = 2117955A2F18F53D00FDF243 /* Kingfisher */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -31,6 +38,20 @@
 			remoteInfo = Riskmate;
 		};
 /* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		211795572F18F52E00FDF243 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				211795562F18F52E00FDF243 /* Lottie-Dynamic in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		211794A52F18213B00FDF243 /* Riskmate.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Riskmate.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -74,10 +95,16 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2117955B2F18F53D00FDF243 /* Kingfisher in Frameworks */,
 				211794FD2F182CED00FDF243 /* Functions in Frameworks */,
 				211794FB2F182CE800FDF243 /* PostgREST in Frameworks */,
+				211795532F18F52900FDF243 /* Lottie in Frameworks */,
 				211794FF2F182CF500FDF243 /* Auth in Frameworks */,
 				211794F92F182CE400FDF243 /* Realtime in Frameworks */,
+				211795552F18F52E00FDF243 /* Lottie-Dynamic in Frameworks */,
+				211795512F18F52200FDF243 /* SwiftLintFramework in Frameworks */,
+				211795592F18F53300FDF243 /* SwiftDate in Frameworks */,
+				2117954F2F18F51D00FDF243 /* swiftlint in Frameworks */,
 				211794F72F182CE000FDF243 /* Storage in Frameworks */,
 				211794F52F182CC200FDF243 /* Supabase in Frameworks */,
 			);
@@ -138,6 +165,7 @@
 				211794A12F18213B00FDF243 /* Sources */,
 				211794A22F18213B00FDF243 /* Frameworks */,
 				211794A32F18213B00FDF243 /* Resources */,
+				211795572F18F52E00FDF243 /* Embed Frameworks */,
 			);
 			buildRules = (
 			);
@@ -154,6 +182,12 @@
 				211794FA2F182CE800FDF243 /* PostgREST */,
 				211794FC2F182CED00FDF243 /* Functions */,
 				211794FE2F182CF500FDF243 /* Auth */,
+				2117954E2F18F51D00FDF243 /* swiftlint */,
+				211795502F18F52200FDF243 /* SwiftLintFramework */,
+				211795522F18F52900FDF243 /* Lottie */,
+				211795542F18F52E00FDF243 /* Lottie-Dynamic */,
+				211795582F18F53300FDF243 /* SwiftDate */,
+				2117955A2F18F53D00FDF243 /* Kingfisher */,
 			);
 			productName = Riskmate;
 			productReference = 211794A52F18213B00FDF243 /* Riskmate.app */;
@@ -705,6 +739,36 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 211794F22F18293E00FDF243 /* XCRemoteSwiftPackageReference "supabase-swift" */;
 			productName = Auth;
+		};
+		2117954E2F18F51D00FDF243 /* swiftlint */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 211795442F18422700FDF243 /* XCRemoteSwiftPackageReference "SwiftLint" */;
+			productName = swiftlint;
+		};
+		211795502F18F52200FDF243 /* SwiftLintFramework */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 211795442F18422700FDF243 /* XCRemoteSwiftPackageReference "SwiftLint" */;
+			productName = SwiftLintFramework;
+		};
+		211795522F18F52900FDF243 /* Lottie */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 211795452F18F24500FDF243 /* XCRemoteSwiftPackageReference "lottie-ios" */;
+			productName = Lottie;
+		};
+		211795542F18F52E00FDF243 /* Lottie-Dynamic */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 211795452F18F24500FDF243 /* XCRemoteSwiftPackageReference "lottie-ios" */;
+			productName = "Lottie-Dynamic";
+		};
+		211795582F18F53300FDF243 /* SwiftDate */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 211795462F18F26D00FDF243 /* XCRemoteSwiftPackageReference "SwiftDate" */;
+			productName = SwiftDate;
+		};
+		2117955A2F18F53D00FDF243 /* Kingfisher */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 211795472F18F32900FDF243 /* XCRemoteSwiftPackageReference "Kingfisher" */;
+			productName = Kingfisher;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

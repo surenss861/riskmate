@@ -1,7 +1,8 @@
 import SwiftUI
 
+// Lottie import is conditional - package must be added via SPM
 #if canImport(Lottie)
-import Lottie
+@preconcurrency import Lottie
 
 /// Lottie animation wrapper for SwiftUI
 struct RMLottieView: UIViewRepresentable {
