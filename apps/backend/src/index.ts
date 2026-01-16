@@ -36,6 +36,7 @@ import { startRetentionWorker } from "./services/retentionWorker";
 import { startLedgerRootWorker } from "./services/ledgerRootWorker";
 import { requestIdMiddleware, RequestWithId } from "./middleware/requestId";
 import { createErrorResponse, logErrorForSupport } from "./utils/errorResponse";
+import { authenticate } from "./middleware/auth";
 import devAuthRouter from "./routes/devAuth";
 
 const app = express();
@@ -160,6 +161,39 @@ v1Router.get("/health", async (_req, res) => {
       status: "error",
       timestamp: new Date().toISOString(),
       error: error.message,
+    });
+  }
+});
+
+// Top-level /v1/me endpoint (delegates to account router)
+// This provides a cleaner API surface: /v1/me instead of /v1/account/me
+v1Router.get("/me", authenticate as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
+  try {
+    const userId = (req as any).user?.id;
+    const organizationId = (req as any).user?.organization_id;
+    const email = (req as any).user?.email;
+    const role = (req as any).user?.role;
+    
+    if (!userId || !organizationId) {
+      return res.status(401).json({ 
+        message: "Unauthorized",
+        code: "AUTH_UNAUTHORIZED"
+      });
+    }
+
+    res.json({
+      data: {
+        id: userId,
+        email: email,
+        organization_id: organizationId,
+        role: role,
+      },
+    });
+  } catch (err: any) {
+    console.error("Me endpoint error:", err);
+    res.status(500).json({ 
+      message: "Internal server error",
+      code: "INTERNAL_ERROR"
     });
   }
 });
