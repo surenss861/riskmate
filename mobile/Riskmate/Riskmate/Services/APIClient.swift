@@ -39,11 +39,25 @@ class APIClient {
         }
         
         // Add auth token (required for all requests)
+        // CRITICAL: Only use Supabase session.accessToken (JWT format: eyJ...xxx.yyy.zzz)
         // Always fetch fresh token right before request to avoid stale tokens
         do {
             guard let token = try await authService.getAccessToken() else {
                 print("[APIClient] ❌ No authentication token available - user may need to log in")
                 throw APIError.httpError(statusCode: 401, message: "No authentication token available - please log in")
+            }
+            
+            // Double-check token format before attaching (should already be validated in AuthService)
+            let parts = token.split(separator: ".")
+            guard parts.count == 3 && token.hasPrefix("eyJ") else {
+                print("[APIClient] ❌ CRITICAL: Token is not a valid JWT! Not attaching to request.")
+                print("[APIClient] ❌ Token preview: \(String(token.prefix(30)))..., parts: \(parts.count)")
+                print("[APIClient] ❌ Expected: 3 dot-separated parts starting with 'eyJ'")
+                throw NSError(
+                    domain: "APIClient",
+                    code: 1,
+                    userInfo: [NSLocalizedDescriptionKey: "Token is not a valid JWT format (expected 3 parts starting with 'eyJ', got \(parts.count) parts)"]
+                )
             }
             
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
@@ -52,9 +66,10 @@ class APIClient {
             #if DEBUG
             let preview = String(token.prefix(20))
             print("[APIClient] ✅ Auth token attached (length: \(token.count), preview: \(preview)…)")
+            print("[APIClient] ✅ Token format verified: JWT (3 parts, starts with eyJ)")
             #endif
         } catch {
-            print("[APIClient] ❌ Failed to get authentication token: \(error.localizedDescription)")
+            print("[APIClient] ❌ Failed to get valid auth token: \(error.localizedDescription)")
             // Re-throw AuthService errors as-is (they have better messages)
             if let nsError = error as NSError? {
                 throw APIError.httpError(statusCode: 401, message: nsError.localizedDescription)
