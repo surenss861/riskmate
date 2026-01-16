@@ -57,39 +57,74 @@ class APIClient {
         print("[APIClient] Base URL: \(baseURL)")
         print("[APIClient] Path: \(path)")
         
-        let (data, response) = try await URLSession.shared.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse else {
-            print("[APIClient] ❌ Invalid response (not HTTPURLResponse)")
-            throw APIError.invalidResponse
-        }
-        
-        // Always log response status
-        print("[APIClient] 📡 Response: \(httpResponse.statusCode) for \(method) \(path)")
-        
-        if httpResponse.statusCode >= 400 {
-            let errorPreview = String(data: data, encoding: .utf8)?.prefix(200) ?? "No error body"
-            print("[APIClient] ❌ Error response body (first 200 chars): \(errorPreview)")
-        }
-        
-        guard (200...299).contains(httpResponse.statusCode) else {
-            let errorMessage = try? JSONDecoder().decode(APIErrorResponse.self, from: data)
-            let error = APIError.httpError(
-                statusCode: httpResponse.statusCode,
-                message: errorMessage?.message ?? "Request failed with status \(httpResponse.statusCode)"
-            )
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
             
-            // Tag error with category for better handling
-            #if DEBUG
-            print("[APIClient] Error category: \(errorCategory(for: httpResponse.statusCode))")
-            #endif
+            guard let httpResponse = response as? HTTPURLResponse else {
+                print("[APIClient] ❌ Invalid response (not HTTPURLResponse)")
+                throw APIError.invalidResponse
+            }
             
-            throw error
+            // Always log response status
+            print("[APIClient] 📡 Response: \(httpResponse.statusCode) for \(method) \(path)")
+            
+            if httpResponse.statusCode >= 400 {
+                let errorPreview = String(data: data, encoding: .utf8)?.prefix(200) ?? "No error body"
+                print("[APIClient] ❌ Error response body (first 200 chars): \(errorPreview)")
+            }
+            
+            guard (200...299).contains(httpResponse.statusCode) else {
+                let errorMessage = try? JSONDecoder().decode(APIErrorResponse.self, from: data)
+                let error = APIError.httpError(
+                    statusCode: httpResponse.statusCode,
+                    message: errorMessage?.message ?? "Request failed with status \(httpResponse.statusCode)"
+                )
+                
+                // Tag error with category for better handling
+                print("[APIClient] Error category: \(errorCategory(for: httpResponse.statusCode))")
+                
+                throw error
+            }
+            
+            let decoder = JSONDecoder()
+            decoder.keyDecodingStrategy = .convertFromSnakeCase
+            return try decoder.decode(T.self, from: data)
+        } catch let urlError as URLError {
+            // Handle network-level errors (offline, timeout, DNS, etc.)
+            let errorCategory: ErrorCategory
+            let errorMessage: String
+            
+            switch urlError.code {
+            case .timedOut:
+                errorCategory = .timeout
+                errorMessage = "Request timed out. Please check your connection and try again."
+            case .notConnectedToInternet, .networkConnectionLost:
+                errorCategory = .network
+                errorMessage = "No internet connection. Please check your network settings."
+            case .cannotFindHost, .cannotConnectToHost:
+                errorCategory = .network
+                errorMessage = "Cannot reach server. Please check your connection."
+            case .dnsLookupFailed:
+                errorCategory = .network
+                errorMessage = "DNS lookup failed. Please check your connection."
+            default:
+                errorCategory = .network
+                errorMessage = "Network error: \(urlError.localizedDescription)"
+            }
+            
+            print("[APIClient] ❌ Network error: \(urlError.code.rawValue) - \(urlError.localizedDescription)")
+            print("[APIClient] Error category: \(errorCategory)")
+            
+            throw APIError.networkError(category: errorCategory, message: errorMessage, underlyingError: urlError)
+        } catch {
+            // Re-throw APIError as-is, wrap other errors
+            if error is APIError {
+                throw error
+            }
+            
+            print("[APIClient] ❌ Unexpected error: \(error.localizedDescription)")
+            throw APIError.decodingError
         }
-        
-        let decoder = JSONDecoder()
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
-        return try decoder.decode(T.self, from: data)
     }
     
     // MARK: - Organization API
@@ -344,7 +379,28 @@ class APIClient {
             throw APIError.invalidURL
         }
         
-        let (data, _) = try await URLSession.shared.data(from: downloadURL)
+        // Use authenticated request for downloads (in case backend requires auth)
+        var request = URLRequest(url: downloadURL)
+        
+        // Add auth token if available
+        do {
+            if let token = try await authService.getAccessToken() {
+                request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            }
+        } catch {
+            print("[APIClient] ⚠️ Could not get auth token for download, proceeding without it")
+        }
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        // Check response status
+        if let httpResponse = response as? HTTPURLResponse, !(200...299).contains(httpResponse.statusCode) {
+            throw APIError.httpError(
+                statusCode: httpResponse.statusCode,
+                message: "Failed to download PDF: HTTP \(httpResponse.statusCode)"
+            )
+        }
+        
         let tempURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("risk-snapshot-\(UUID().uuidString).pdf")
         try data.write(to: tempURL)
@@ -356,7 +412,28 @@ class APIClient {
             throw APIError.invalidURL
         }
         
-        let (data, _) = try await URLSession.shared.data(from: downloadURL)
+        // Use authenticated request for downloads (in case backend requires auth)
+        var request = URLRequest(url: downloadURL)
+        
+        // Add auth token if available
+        do {
+            if let token = try await authService.getAccessToken() {
+                request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            }
+        } catch {
+            print("[APIClient] ⚠️ Could not get auth token for download, proceeding without it")
+        }
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        // Check response status
+        if let httpResponse = response as? HTTPURLResponse, !(200...299).contains(httpResponse.statusCode) {
+            throw APIError.httpError(
+                statusCode: httpResponse.statusCode,
+                message: "Failed to download ZIP: HTTP \(httpResponse.statusCode)"
+            )
+        }
+        
         let tempURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("proof-pack-\(UUID().uuidString).zip")
         try data.write(to: tempURL)
@@ -638,6 +715,7 @@ enum APIError: LocalizedError {
     case invalidURL
     case invalidResponse
     case httpError(statusCode: Int, message: String)
+    case networkError(category: ErrorCategory, message: String, underlyingError: URLError)
     case decodingError
     
     var errorDescription: String? {
@@ -648,6 +726,8 @@ enum APIError: LocalizedError {
             return "Invalid response from server"
         case .httpError(let statusCode, let message):
             return "\(message) (Status: \(statusCode))"
+        case .networkError(_, let message, _):
+            return message
         case .decodingError:
             return "Failed to decode response"
         }
@@ -668,6 +748,8 @@ extension APIError {
             return .client
         case .httpError(let statusCode, _):
             return errorCategory(for: statusCode)
+        case .networkError(let category, _, _):
+            return category
         case .decodingError:
             return .client
         }

@@ -4,6 +4,7 @@ import SwiftUI
 struct ExecutiveView: View {
     @State private var postureData: ExecutivePostureResponse?
     @State private var isLoading = true
+    @State private var errorMessage: String?
     @State private var isExportingPDF = false
     @State private var isExportingJSON = false
     
@@ -20,6 +21,22 @@ struct ExecutiveView: View {
                         }
                         .padding(RMTheme.Spacing.md)
                     }
+                } else if let errorMessage = errorMessage {
+                    // Error state - show error with retry
+                    RMEmptyState(
+                        icon: "exclamationmark.triangle.fill",
+                        title: "Failed to Load Executive Data",
+                        message: errorMessage,
+                        action: RMEmptyStateAction(
+                            title: "Retry",
+                            action: {
+                                Task {
+                                    await loadPosture()
+                                }
+                            }
+                        )
+                    )
+                    .padding(RMTheme.Spacing.pagePadding)
                 } else if let errorMessage = errorMessage {
                     // Error state - show error with retry
                     RMEmptyState(
@@ -201,13 +218,17 @@ struct ExecutiveView: View {
     
     private func loadPosture() async {
         isLoading = true
+        errorMessage = nil
         defer { isLoading = false }
         
         do {
-            postureData = try await APIClient.shared.getExecutivePosture()
+            postureData = try await APIClient.shared.getExecutivePosture(timeRange: "30d")
+            errorMessage = nil // Clear any previous error
         } catch {
-            print("[ExecutiveView] Failed to load: \(error)")
-            // TODO: Show error toast
+            let errorDesc = error.localizedDescription
+            print("[ExecutiveView] ❌ Failed to load: \(errorDesc)")
+            errorMessage = errorDesc
+            postureData = nil // Clear on error - never show stale data
         }
     }
 }

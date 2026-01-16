@@ -121,10 +121,6 @@ struct JobDetailView: View {
                 // Request notification permission for export completion
                 UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
             }
-            .onAppear {
-                // Request notification permission for export completion
-                UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
-            }
             .task {
                 await loadJob()
             }
@@ -219,36 +215,51 @@ struct OverviewTab: View {
             .padding(.vertical, RMTheme.Spacing.lg)
         }
         .task {
-            loadRecentReceipts()
+            await loadRecentReceipts()
         }
     }
     
-    private func loadRecentReceipts() {
-        // TODO: Load from API/audit log
-        recentReceipts = [
-            ActionReceipt(
-                id: "1",
-                type: .controlCompleted,
-                title: "Control completed",
-                actor: "Alex",
-                role: "Safety Lead",
-                timestamp: Date().addingTimeInterval(-300),
-                jobId: job.id,
-                jobTitle: job.clientName,
-                details: ["Control": "Lockout/Tagout"]
-            ),
-            ActionReceipt(
-                id: "2",
-                type: .evidenceUploaded,
-                title: "Evidence uploaded",
-                actor: "Sarah",
-                role: "Field Worker",
-                timestamp: Date().addingTimeInterval(-1800),
-                jobId: job.id,
-                jobTitle: job.clientName,
-                details: ["Files": "3 photos"]
-            )
-        ]
+    private func loadRecentReceipts() async {
+        // Load from audit events for this job
+        do {
+            let events = try await APIClient.shared.getAuditEvents(timeRange: "7d", limit: 10)
+            // Filter events for this job and map to ActionReceipt
+            recentReceipts = events
+                .filter { event in
+                    event.metadata["job_id"] == job.id || event.metadata["jobId"] == job.id
+                }
+                .prefix(5)
+                .map { event in
+                    // Map event category to ActionType
+                    let actionType: ActionType
+                    if event.summary.lowercased().contains("evidence") || event.summary.lowercased().contains("upload") {
+                        actionType = .evidenceUploaded
+                    } else if event.summary.lowercased().contains("hazard") {
+                        actionType = .hazardChanged
+                    } else if event.summary.lowercased().contains("export") || event.summary.lowercased().contains("proof pack") {
+                        actionType = .exportGenerated
+                    } else if event.category == "GOVERNANCE" {
+                        actionType = .roleChanged
+                    } else {
+                        actionType = .controlCompleted
+                    }
+                    
+                    return ActionReceipt(
+                        id: event.id,
+                        type: actionType,
+                        title: event.summary,
+                        actor: event.actor,
+                        role: nil,
+                        timestamp: event.timestamp,
+                        jobId: job.id,
+                        jobTitle: job.clientName,
+                        details: event.metadata
+                    )
+                }
+        } catch {
+            print("[OverviewTab] ❌ Failed to load recent receipts: \(error.localizedDescription)")
+            recentReceipts = [] // Show empty - no demo data
+        }
     }
 }
 

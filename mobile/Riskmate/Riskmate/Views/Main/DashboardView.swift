@@ -426,13 +426,39 @@ struct TopHazardsSection: View {
     }
     
     private func loadHazards() async {
-        // TODO: Replace with real API call
-        try? await Task.sleep(nanoseconds: 300_000_000)
-        hazards = [
-            HazardPill(id: "1", code: "ELEC-001", count: 12),
-            HazardPill(id: "2", code: "FALL-003", count: 8),
-            HazardPill(id: "3", code: "CHEM-002", count: 5)
-        ]
+        // Load from jobs API and calculate top hazards
+        // TODO: Replace with dedicated /api/dashboard/top-hazards endpoint when available
+        do {
+            let jobsResponse = try await APIClient.shared.getJobs(page: 1, limit: 100)
+            let allJobs = jobsResponse.data
+            
+            // Get hazards from all jobs and count occurrences
+            var hazardCounts: [String: Int] = [:]
+            for job in allJobs {
+                do {
+                    let jobHazards = try await APIClient.shared.getHazards(jobId: job.id)
+                    for hazard in jobHazards {
+                        hazardCounts[hazard.code, default: 0] += 1
+                    }
+                } catch {
+                    // Skip jobs that fail to load hazards
+                    continue
+                }
+            }
+            
+            // Convert to HazardPill array, sorted by count
+            hazards = hazardCounts
+                .sorted { $0.value > $1.value }
+                .prefix(5)
+                .enumerated()
+                .map { index, element in
+                    HazardPill(id: "\(index)", code: element.key, count: element.value)
+                }
+        } catch {
+            print("[TopHazardsSection] ❌ Failed to load hazards: \(error.localizedDescription)")
+            // Show empty - no demo data
+            hazards = []
+        }
     }
 }
 
@@ -508,12 +534,30 @@ struct JobsAtRiskSection: View {
     }
     
     private func loadAtRiskJobs() async {
-        // TODO: Replace with real API call
-        try? await Task.sleep(nanoseconds: 300_000_000)
-        atRiskJobs = [
-            AtRiskJob(id: "1", title: "Main St Electrical", riskScore: 85, status: "In Progress"),
-            AtRiskJob(id: "2", title: "Warehouse HVAC", riskScore: 78, status: "Draft")
-        ]
+        // Load high-risk jobs from API
+        // TODO: Replace with dedicated /api/dashboard/jobs-at-risk endpoint when available
+        do {
+            let jobsResponse = try await APIClient.shared.getJobs(page: 1, limit: 100, riskLevel: "high")
+            let highRiskJobs = jobsResponse.data.filter { job in
+                if let score = job.riskScore {
+                    return score >= 70
+                }
+                return job.riskLevel?.lowercased() == "high" || job.riskLevel?.lowercased() == "critical"
+            }
+            
+            atRiskJobs = highRiskJobs.prefix(3).map { job in
+                AtRiskJob(
+                    id: job.id,
+                    title: job.clientName,
+                    riskScore: job.riskScore ?? 75,
+                    status: job.status
+                )
+            }
+        } catch {
+            print("[JobsAtRiskSection] ❌ Failed to load at-risk jobs: \(error.localizedDescription)")
+            // Show empty - no demo data
+            atRiskJobs = []
+        }
     }
 }
 
@@ -563,6 +607,9 @@ struct AtRiskJobRow: View {
 }
 
 struct MissingEvidenceCTACard: View {
+    @State private var missingEvidenceCount: Int = 0
+    @State private var isLoading = true
+    
     var body: some View {
         RMGlassCard {
             VStack(alignment: .leading, spacing: RMTheme.Spacing.md) {
@@ -578,9 +625,19 @@ struct MissingEvidenceCTACard: View {
                     .font(RMTheme.Typography.title3)
                     .foregroundColor(RMTheme.Colors.textPrimary)
                 
-                Text("3 jobs need evidence uploads to complete readiness")
-                    .font(RMTheme.Typography.bodySmall)
-                    .foregroundColor(RMTheme.Colors.textSecondary)
+                if isLoading {
+                    Text("Loading...")
+                        .font(RMTheme.Typography.bodySmall)
+                        .foregroundColor(RMTheme.Colors.textSecondary)
+                } else if missingEvidenceCount > 0 {
+                    Text("\(missingEvidenceCount) job\(missingEvidenceCount == 1 ? "" : "s") need evidence uploads to complete readiness")
+                        .font(RMTheme.Typography.bodySmall)
+                        .foregroundColor(RMTheme.Colors.textSecondary)
+                } else {
+                    Text("All jobs have required evidence")
+                        .font(RMTheme.Typography.bodySmall)
+                        .foregroundColor(RMTheme.Colors.textSecondary)
+                }
                 
                 Button {
                     // TODO: Navigate to Readiness view
@@ -594,6 +651,35 @@ struct MissingEvidenceCTACard: View {
                         .clipShape(RoundedRectangle(cornerRadius: RMTheme.Radius.sm))
                 }
             }
+        }
+        .task {
+            await loadMissingEvidenceCount()
+        }
+    }
+    
+    private func loadMissingEvidenceCount() async {
+        // Load jobs and check for missing evidence
+        // TODO: Replace with dedicated /api/dashboard/missing-evidence endpoint when available
+        do {
+            let jobsResponse = try await APIClient.shared.getJobs(page: 1, limit: 100)
+            let allJobs = jobsResponse.data
+            
+            var count = 0
+            for job in allJobs {
+                let evidence = try? await APIClient.shared.getEvidence(jobId: job.id)
+                // Assume jobs need at least 3 evidence items (this should come from job requirements)
+                if (evidence?.count ?? 0) < 3 {
+                    count += 1
+                }
+            }
+            
+            missingEvidenceCount = count
+            isLoading = false
+        } catch {
+            print("[MissingEvidenceCTACard] ❌ Failed to load missing evidence count: \(error.localizedDescription)")
+            // Show 0 - no demo data
+            missingEvidenceCount = 0
+            isLoading = false
         }
     }
 }
