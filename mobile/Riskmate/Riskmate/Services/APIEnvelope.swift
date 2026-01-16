@@ -76,18 +76,30 @@ extension APIClient {
 }
 
 /// Helper for decoding flexible JSON structures
+/// Handles all JSON types: null, bool, numbers (Int/Double/Float), strings, arrays, objects
 struct AnyCodable: Codable {
     let value: Any
     
     init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
         
+        // Handle null first
+        if container.decodeNil() {
+            value = NSNull()
+            return
+        }
+        
+        // Try decoding as different types in order of likelihood
         if let bool = try? container.decode(Bool.self) {
             value = bool
         } else if let int = try? container.decode(Int.self) {
             value = int
+        } else if let int64 = try? container.decode(Int64.self) {
+            value = int64
         } else if let double = try? container.decode(Double.self) {
             value = double
+        } else if let float = try? container.decode(Float.self) {
+            value = float
         } else if let string = try? container.decode(String.self) {
             value = string
         } else if let array = try? container.decode([AnyCodable].self) {
@@ -95,7 +107,12 @@ struct AnyCodable: Codable {
         } else if let dict = try? container.decode([String: AnyCodable].self) {
             value = dict.mapValues { $0.value }
         } else {
-            throw DecodingError.dataCorruptedError(in: container, debugDescription: "AnyCodable value cannot be decoded")
+            // Last resort: try to decode as a generic JSON value
+            // This handles edge cases like date strings, special number formats, etc.
+            throw DecodingError.dataCorruptedError(
+                in: container,
+                debugDescription: "AnyCodable value cannot be decoded - unsupported type"
+            )
         }
     }
     
@@ -103,12 +120,18 @@ struct AnyCodable: Codable {
         var container = encoder.singleValueContainer()
         
         switch value {
+        case is NSNull:
+            try container.encodeNil()
         case let bool as Bool:
             try container.encode(bool)
         case let int as Int:
             try container.encode(int)
+        case let int64 as Int64:
+            try container.encode(int64)
         case let double as Double:
             try container.encode(double)
+        case let float as Float:
+            try container.encode(float)
         case let string as String:
             try container.encode(string)
         case let array as [Any]:

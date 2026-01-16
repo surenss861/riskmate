@@ -750,6 +750,23 @@ struct AuditEventAPI: Codable {
         case severity
     }
     
+    // Custom decoder to handle metadata defensively (can be null, missing, or malformed)
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        category = try container.decodeIfPresent(String.self, forKey: .category)
+        eventName = try container.decodeIfPresent(String.self, forKey: .eventName)
+        summary = try container.decodeIfPresent(String.self, forKey: .summary)
+        createdAt = try container.decode(String.self, forKey: .createdAt)
+        details = try container.decodeIfPresent(String.self, forKey: .details)
+        actorName = try container.decodeIfPresent(String.self, forKey: .actorName)
+        actorRole = try container.decodeIfPresent(String.self, forKey: .actorRole)
+        // Defensive metadata decoding: default to empty dict if null/missing/malformed
+        metadata = (try? container.decode([String: AnyCodable].self, forKey: .metadata)) ?? [:]
+        outcome = try container.decodeIfPresent(String.self, forKey: .outcome)
+        severity = try container.decodeIfPresent(String.self, forKey: .severity)
+    }
+    
     func toAuditEvent() -> AuditEvent {
         // Parse ISO8601 date string
         let formatter = ISO8601DateFormatter()
@@ -766,26 +783,30 @@ struct AuditEventAPI: Codable {
         let finalDate = date ?? Date()
         
         // Convert metadata from [String: AnyCodable] to [String: String]
-        // Handles nested objects, arrays, and primitive values
+        // Handles nested objects, arrays, null values, and primitive values
         var finalMetadata: [String: String] = [:]
-        if let metadata = metadata {
-            for (key, anyCodable) in metadata {
-                // Handle nested objects (like "subject": {"id": "...", "type": "..."})
-                if let nestedDict = anyCodable.value as? [String: Any] {
-                    // Flatten nested dictionary keys
-                    for (nestedKey, nestedValue) in nestedDict {
-                        finalMetadata["\(key).\(nestedKey)"] = String(describing: nestedValue)
-                    }
-                    // Also keep the original key with a stringified version
-                    let dictString = nestedDict.map { "\($0.key)=\($0.value)" }.joined(separator: ", ")
-                    finalMetadata[key] = "{\(dictString)}"
-                } else if let array = anyCodable.value as? [Any] {
-                    // Handle arrays
-                    finalMetadata[key] = "[\(array.map { String(describing: $0) }.joined(separator: ", "))]"
-                } else {
-                    // Handle primitives (String, Int, Bool, etc.)
-                    finalMetadata[key] = String(describing: anyCodable.value)
+        for (key, anyCodable) in metadata {
+            // Handle null values
+            if anyCodable.value is NSNull {
+                finalMetadata[key] = "null"
+                continue
+            }
+            
+            // Handle nested objects (like "subject": {"id": "...", "type": "..."})
+            if let nestedDict = anyCodable.value as? [String: Any] {
+                // Flatten nested dictionary keys
+                for (nestedKey, nestedValue) in nestedDict {
+                    finalMetadata["\(key).\(nestedKey)"] = String(describing: nestedValue)
                 }
+                // Also keep the original key with a stringified version
+                let dictString = nestedDict.map { "\($0.key)=\($0.value)" }.joined(separator: ", ")
+                finalMetadata[key] = "{\(dictString)}"
+            } else if let array = anyCodable.value as? [Any] {
+                // Handle arrays
+                finalMetadata[key] = "[\(array.map { String(describing: $0) }.joined(separator: ", "))]"
+            } else {
+                // Handle primitives (String, Int, Bool, Double, Float, Int64, etc.)
+                finalMetadata[key] = String(describing: anyCodable.value)
             }
         }
         
