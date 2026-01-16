@@ -67,6 +67,19 @@ class ServerStatusManager: ObservableObject {
             throw HealthCheckError.backendUnavailable
         }
     }
+    
+    private func startPeriodicChecks() {
+        // Check every 30 seconds
+        checkTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                await self?.checkHealth()
+            }
+        }
+    }
+    
+    deinit {
+        checkTimer?.invalidate()
+    }
 }
 
 // MARK: - Health Response Model
@@ -90,19 +103,5 @@ enum HealthCheckError: LocalizedError {
         case .backendUnavailable:
             return "Backend service is unavailable. Please check your connection and try again."
         }
-    }
-}
-    
-    private func startPeriodicChecks() {
-        // Check every 30 seconds
-        checkTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { [weak self] _ in
-            Task { @MainActor in
-                await self?.checkHealth()
-            }
-        }
-    }
-    
-    deinit {
-        checkTimer?.invalidate()
     }
 }
