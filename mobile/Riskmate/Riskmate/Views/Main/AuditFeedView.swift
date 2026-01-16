@@ -5,6 +5,7 @@ import SwiftDate
 struct AuditFeedView: View {
     @State private var events: [AuditEvent] = []
     @State private var isLoading = true
+    @State private var errorMessage: String?
     @State private var selectedEvent: AuditEvent?
     @State private var showingDetail = false
     
@@ -32,6 +33,24 @@ struct AuditFeedView: View {
                         }
                         .padding(.top, RMTheme.Spacing.md)
                     }
+                } else if let errorMessage = errorMessage {
+                    // Error state - show error with retry
+                    VStack(spacing: RMTheme.Spacing.lg) {
+                        RMEmptyState(
+                            icon: "exclamationmark.triangle.fill",
+                            title: "Failed to Load Events",
+                            message: errorMessage,
+                            action: RMEmptyStateAction(
+                                title: "Retry",
+                                action: {
+                                    Task {
+                                        await loadEvents()
+                                    }
+                                }
+                            )
+                        )
+                    }
+                    .padding(RMTheme.Spacing.pagePadding)
                 } else if events.isEmpty {
                     RMEmptyState(
                         icon: "tray",
@@ -181,48 +200,18 @@ struct AuditFeedView: View {
     
     private func loadEvents() async {
         isLoading = true
+        errorMessage = nil
         defer { isLoading = false }
         
-        // TODO: Replace with real API call
-        try? await Task.sleep(nanoseconds: 500_000_000)
-        
-        // Mock data
-        events = generateMockEvents()
-    }
-    
-    private func generateMockEvents() -> [AuditEvent] {
-        let now = Date()
-        let calendar = Calendar.current
-        
-        return [
-            AuditEvent(
-                id: "evt_001",
-                category: "ACCESS",
-                summary: "User access review completed",
-                timestamp: calendar.date(byAdding: .hour, value: -2, to: now) ?? now,
-                details: "Access review for Q1 2024 completed with 12 approvals and 3 rejections.",
-                actor: "John Doe",
-                metadata: ["review_id": "rev_123", "approvals": "12", "rejections": "3"]
-            ),
-            AuditEvent(
-                id: "evt_002",
-                category: "OPS",
-                summary: "Job risk assessment updated",
-                timestamp: calendar.date(byAdding: .hour, value: -5, to: now) ?? now,
-                details: "Risk level changed from Medium to High based on new findings.",
-                actor: "Jane Smith",
-                metadata: ["job_id": "job_456", "old_level": "Medium", "new_level": "High"]
-            ),
-            AuditEvent(
-                id: "evt_003",
-                category: "GOV",
-                summary: "Compliance report generated",
-                timestamp: calendar.date(byAdding: .day, value: -1, to: now) ?? now,
-                details: "Monthly compliance report generated and shared with stakeholders.",
-                actor: "System",
-                metadata: ["report_id": "rpt_789", "period": "2024-01"]
-            ),
-        ]
+        do {
+            events = try await APIClient.shared.getAuditEvents(timeRange: "30d", limit: 100)
+            errorMessage = nil // Clear any previous error
+        } catch {
+            let errorDesc = error.localizedDescription
+            print("[AuditFeedView] ❌ Failed to load events: \(errorDesc)")
+            errorMessage = errorDesc
+            events = [] // Clear events on error - never show stale data
+        }
     }
     
     private func copyEventId(_ id: String) {

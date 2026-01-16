@@ -1,17 +1,43 @@
 import Foundation
 
-/// Executive Dashboard models
+/// Executive Dashboard models - matches backend response structure
 struct ExecutivePostureResponse: Codable {
-    let riskPosture: RiskPosture
-    let exposure: ExposureAssessment
-    let controls: ControlsStatus
-    let defensibility: DefensibilityPosture
+    let exposureLevel: String
+    let highRiskJobs: Int
+    let openIncidents: Int
+    let recentViolations: Int
+    let flaggedJobs: Int
+    let pendingSignoffs: Int
+    let signedJobs: Int
+    let proofPacksGenerated: Int
+    let confidenceStatement: String
+    let ledgerIntegrity: String
+    let deltas: ExecutiveDeltas?
     
     enum CodingKeys: String, CodingKey {
-        case riskPosture = "risk_posture"
-        case exposure
-        case controls
-        case defensibility
+        case exposureLevel = "exposure_level"
+        case highRiskJobs = "high_risk_jobs"
+        case openIncidents = "open_incidents"
+        case recentViolations = "recent_violations"
+        case flaggedJobs = "flagged_jobs"
+        case pendingSignoffs = "pending_signoffs"
+        case signedJobs = "signed_jobs"
+        case proofPacksGenerated = "proof_packs_generated"
+        case confidenceStatement = "confidence_statement"
+        case ledgerIntegrity = "ledger_integrity"
+        case deltas
+    }
+}
+
+struct ExecutiveDeltas: Codable {
+    let highRiskJobs: Int?
+    let openIncidents: Int?
+    let violations: Int?
+    
+    enum CodingKeys: String, CodingKey {
+        case highRiskJobs = "high_risk_jobs"
+        case openIncidents = "open_incidents"
+        case violations
     }
 }
 

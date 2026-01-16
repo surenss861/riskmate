@@ -8,6 +8,7 @@ struct JobDetailView: View {
     @State private var selectedTab: JobDetailTab = .overview
     @State private var job: Job?
     @State private var isLoading = true
+    @State private var errorMessage: String?
     @State private var showPDFViewer = false
     @State private var pdfURL: URL?
     @Environment(\.dismiss) private var dismiss
@@ -20,6 +21,22 @@ struct JobDetailView: View {
                         RMSkeletonCard()
                         RMSkeletonList(count: 3)
                     }
+                    .padding(RMTheme.Spacing.pagePadding)
+                } else if let errorMessage = errorMessage {
+                    // Error state - show error with retry
+                    RMEmptyState(
+                        icon: "exclamationmark.triangle.fill",
+                        title: "Failed to Load Job",
+                        message: errorMessage,
+                        action: RMEmptyStateAction(
+                            title: "Retry",
+                            action: {
+                                Task {
+                                    await loadJob()
+                                }
+                            }
+                        )
+                    )
                     .padding(RMTheme.Spacing.pagePadding)
                 } else if let job = job {
                     VStack(spacing: 0) {
@@ -115,26 +132,21 @@ struct JobDetailView: View {
     
     private func loadJob() async {
         isLoading = true
+        errorMessage = nil
         defer { isLoading = false }
         
         // Track job opened
         Analytics.shared.trackJobOpened(jobId: jobId)
         
-        // TODO: Replace with real API call
-        try? await Task.sleep(nanoseconds: 500_000_000)
-        
-        // Mock data
-        job = Job(
-            id: jobId,
-            clientName: "ABC Construction",
-            jobType: "Electrical Installation",
-            location: "123 Main St",
-            status: "In Progress",
-            riskScore: 75,
-            riskLevel: "High",
-            createdAt: ISO8601DateFormatter().string(from: Date()),
-            updatedAt: nil
-        )
+        do {
+            job = try await APIClient.shared.getJob(jobId)
+            errorMessage = nil // Clear any previous error
+        } catch {
+            let errorDesc = error.localizedDescription
+            print("[JobDetailView] ❌ Failed to load job: \(errorDesc)")
+            errorMessage = errorDesc
+            job = nil // Clear job on error - never show stale data
+        }
     }
 }
 
@@ -184,10 +196,10 @@ struct OverviewTab: View {
                         status: .needsEvidence, // Default until we fetch readiness data
                         evidenceCount: 2, // TODO: Get from evidence
                         evidenceRequired: 5,
-                        evidenceStatus: .partial, // Mock: 2 of 5 required
+                        evidenceStatus: .partial,
                         controlsCompleted: 3, // TODO: Get from controls
                         controlsRequired: 5,
-                        controlsStatus: .partial, // Mock: 3 of 5 required
+                        controlsStatus: .partial,
                         needsAttestation: false
                     )
                 )
@@ -247,7 +259,7 @@ struct RiskScoreCard: View {
         if let score = job.riskScore {
             return score
         }
-        // Fallback to computing from risk level
+        // Compute from risk level if score not available
         switch job.riskLevel {
         case "Critical": return 95
         case "High": return 80
@@ -448,10 +460,10 @@ struct HazardsTab: View {
         defer { isLoading = false }
         
         do {
-            // Try API first
             hazards = try await APIClient.shared.getHazards(jobId: jobId)
         } catch {
-            // Fallback to cache or empty
+            // On error, show empty (no demo data)
+            print("[HazardsTab] ❌ Failed to load hazards: \(error.localizedDescription)")
             hazards = []
         }
     }
@@ -540,10 +552,10 @@ struct ControlsTab: View {
         defer { isLoading = false }
         
         do {
-            // Try API first
             controls = try await APIClient.shared.getControls(jobId: jobId)
         } catch {
-            // Fallback to cache or empty
+            // On error, show empty (no demo data)
+            print("[ControlsTab] ❌ Failed to load controls: \(error.localizedDescription)")
             controls = []
         }
     }
@@ -737,15 +749,19 @@ struct EvidenceTab: View {
         defer { isLoading = false }
         
         do {
-            // Try API first
             evidence = try await APIClient.shared.getEvidence(jobId: jobId)
             
-            // Cache for offline
+            // Cache for offline (real data only)
             OfflineCache.shared.cacheEvidence(jobId: jobId, evidence: evidence)
         } catch {
-            // Fallback to cache
+            // Try offline cache (real previously-fetched data only)
             if let cached = OfflineCache.shared.getCachedEvidence(jobId: jobId) {
+                print("[EvidenceTab] Using cached evidence (offline mode)")
                 evidence = cached
+            } else {
+                // No cache available - show empty (no demo data)
+                print("[EvidenceTab] ❌ Failed to load evidence and no cache: \(error.localizedDescription)")
+                evidence = []
             }
         }
     }

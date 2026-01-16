@@ -6,6 +6,7 @@ import SwiftDate
 struct DashboardView: View {
     @StateObject private var sessionManager = SessionManager.shared
     @State private var isLoading = true
+    @State private var errorMessage: String?
     @State private var kpis: DashboardKPIs?
     @State private var chartData: [ChartDataPoint] = []
     @State private var recentActivity: [AuditEvent] = []
@@ -37,6 +38,22 @@ struct DashboardView: View {
                                 
                                 RMSkeletonList(count: 3)
                             }
+                        } else if let errorMessage = errorMessage {
+                            // Error state - show error with retry
+                            RMEmptyState(
+                                icon: "exclamationmark.triangle.fill",
+                                title: "Failed to Load Dashboard",
+                                message: errorMessage,
+                                action: RMEmptyStateAction(
+                                    title: "Retry",
+                                    action: {
+                                        Task {
+                                            await loadDashboardData()
+                                        }
+                                    }
+                                )
+                            )
+                            .padding(.vertical, RMTheme.Spacing.xxl)
                         } else if let kpis = kpis {
                             // KPI Cards
                             ScrollView(.horizontal, showsIndicators: false) {
@@ -162,40 +179,90 @@ struct DashboardView: View {
     
     private func loadDashboardData() async {
         isLoading = true
+        errorMessage = nil
         defer { isLoading = false }
         
-        // TODO: Replace with real API calls
-        try? await Task.sleep(nanoseconds: 500_000_000) // Simulate loading
-        
-        // Mock data for now
-        kpis = DashboardKPIs(
-            complianceScore: 87,
-            complianceTrend: .up(5),
-            openRisks: 12,
-            risksTrend: .down(3),
-            jobsThisWeek: 24,
-            jobsTrend: .up(8)
-        )
-        
-        chartData = generateMockChartData()
-        recentActivity = generateMockActivity()
+        do {
+            // Load jobs to calculate KPIs
+            let jobsResponse = try await APIClient.shared.getJobs(page: 1, limit: 100)
+            let allJobs = jobsResponse.data
+            
+            // Calculate jobs this week
+            let calendar = Calendar.current
+            let now = Date()
+            let weekAgo = calendar.date(byAdding: .day, value: -7, to: now) ?? now
+            let jobsThisWeek = allJobs.filter { job in
+                if let createdAt = ISO8601DateFormatter().date(from: job.createdAt) {
+                    return createdAt >= weekAgo
+                }
+                return false
+            }.count
+            
+            // Calculate open risks (high risk jobs)
+            let highRiskJobs = allJobs.filter { job in
+                if let score = job.riskScore {
+                    return score > 75
+                }
+                return job.riskLevel?.lowercased() == "high" || job.riskLevel?.lowercased() == "critical"
+            }
+            
+            // Calculate compliance score from completed jobs
+            let completedJobs = allJobs.filter { $0.status.lowercased() == "completed" }
+            let complianceScore = allJobs.isEmpty ? 0 : Int((Double(completedJobs.count) / Double(allJobs.count)) * 100)
+            
+            kpis = DashboardKPIs(
+                complianceScore: complianceScore,
+                complianceTrend: .neutral, // Would need historical data
+                openRisks: highRiskJobs.count,
+                risksTrend: .neutral, // Would need historical data
+                jobsThisWeek: jobsThisWeek,
+                jobsTrend: .neutral // Would need historical data
+            )
+            
+            // Generate chart data from jobs (compliance over time)
+            chartData = generateChartDataFromJobs(allJobs)
+            
+            // Load recent activity
+            recentActivity = try await APIClient.shared.getAuditEvents(timeRange: "7d", limit: 5)
+            errorMessage = nil // Clear any previous error
+        } catch {
+            let errorDesc = error.localizedDescription
+            print("[DashboardView] ❌ Failed to load dashboard data: \(errorDesc)")
+            errorMessage = errorDesc
+            kpis = nil
+            chartData = []
+            recentActivity = []
+        }
     }
     
-    private func generateMockChartData() -> [ChartDataPoint] {
+    private func generateChartDataFromJobs(_ jobs: [Job]) -> [ChartDataPoint] {
         let calendar = Calendar.current
         let now = Date()
+        var dataByDate: [Date: [Job]] = [:]
+        
+        // Group jobs by date
+        for job in jobs {
+            if let createdAt = ISO8601DateFormatter().date(from: job.createdAt) {
+                let dayStart = calendar.startOfDay(for: createdAt)
+                if dataByDate[dayStart] == nil {
+                    dataByDate[dayStart] = []
+                }
+                dataByDate[dayStart]?.append(job)
+            }
+        }
+        
+        // Generate last 7 days
         return (0..<7).map { daysAgo in
             let date = calendar.date(byAdding: .day, value: -daysAgo, to: now) ?? now
-            return ChartDataPoint(
-                date: date,
-                value: Double.random(in: 70...95)
-            )
+            let dayStart = calendar.startOfDay(for: date)
+            let jobsForDay = dataByDate[dayStart] ?? []
+            
+            // Calculate compliance for this day (completed / total)
+            let completed = jobsForDay.filter { $0.status.lowercased() == "completed" }
+            let compliance = jobsForDay.isEmpty ? 0.0 : (Double(completed.count) / Double(jobsForDay.count)) * 100.0
+            
+            return ChartDataPoint(date: date, value: compliance)
         }.reversed()
-    }
-    
-    private func generateMockActivity() -> [AuditEvent] {
-        // Mock audit events
-        return []
     }
 }
 

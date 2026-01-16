@@ -10,13 +10,43 @@ struct ExecutiveViewRedesigned: View {
     @State private var governanceViolations: [GovernanceEvent] = []
     @State private var exposureOverview: ExposureOverview?
     @State private var isLoading = true
+    @State private var errorMessage: String?
     @State private var showEnforcementReceipts = false
     
     var body: some View {
         RMBackground()
             .overlay {
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: RMTheme.Spacing.sectionSpacing) {
+                if isLoading {
+                    ScrollView {
+                        VStack(spacing: RMTheme.Spacing.lg) {
+                            RMSkeletonCard()
+                            RMSkeletonList(count: 3)
+                        }
+                        .padding(RMTheme.Spacing.pagePadding)
+                    }
+                } else if let errorMessage = errorMessage {
+                    // Error state - show error with retry
+                    ScrollView {
+                        VStack(spacing: RMTheme.Spacing.lg) {
+                            RMEmptyState(
+                                icon: "exclamationmark.triangle.fill",
+                                title: "Failed to Load Executive Data",
+                                message: errorMessage,
+                                action: RMEmptyStateAction(
+                                    title: "Retry",
+                                    action: {
+                                        Task {
+                                            await loadData()
+                                        }
+                                    }
+                                )
+                            )
+                        }
+                        .padding(RMTheme.Spacing.pagePadding)
+                    }
+                } else {
+                    ScrollView(showsIndicators: false) {
+                        VStack(spacing: RMTheme.Spacing.sectionSpacing) {
                         // Hero Defensibility Brief
                         HeroDefensibilityCard(
                             score: defensibilityScore,
@@ -44,7 +74,7 @@ struct ExecutiveViewRedesigned: View {
                                 ProofFirstTile(
                                     title: "Exports Generated",
                                     status: .ready,
-                                    count: 12, // TODO: Get from API
+                                    count: proofPacksCount,
                                     total: nil,
                                     icon: "doc.badge.plus",
                                     color: RMTheme.Colors.accent,
@@ -94,76 +124,103 @@ struct ExecutiveViewRedesigned: View {
                 EnforcementReceiptsView(violations: governanceViolations)
             }
             .task {
-                loadData()
+                await loadData()
             }
     }
     
-    private func loadData() {
+    private func loadData() async {
         isLoading = true
-        // TODO: Load from API
-        // Mock data for now
-        chainOfCustody = [
-            CustodyEvent(
-                type: CustodyEventType.controlSealed,
-                jobId: "A13",
-                jobTitle: "Main St Electrical",
-                actor: "Safety Lead",
-                timestamp: Date().addingTimeInterval(-7200),
-                outcome: CustodyOutcome.allowed,
-                integrity: CustodyIntegrityStatus.verified
-            ),
-            CustodyEvent(
-                type: CustodyEventType.evidencePending,
-                jobId: "B02",
-                jobTitle: "Warehouse Inspection",
-                actor: "Field Worker",
-                timestamp: Date().addingTimeInterval(-21600),
-                outcome: CustodyOutcome.pending,
-                integrity: CustodyIntegrityStatus.pending
-            ),
-            CustodyEvent(
-                type: CustodyEventType.actionBlocked,
-                jobId: nil as String?,
-                jobTitle: nil as String?,
-                actor: "System",
-                timestamp: Date().addingTimeInterval(-86400),
-                outcome: CustodyOutcome.blocked,
-                integrity: CustodyIntegrityStatus.verified,
-                reason: "Role violation prevented"
-            ),
-            CustodyEvent(
-                type: CustodyEventType.proofPackGenerated,
-                jobId: "A13",
-                jobTitle: "Main St Electrical",
-                actor: "Executive",
-                timestamp: Date().addingTimeInterval(-172800),
-                outcome: CustodyOutcome.allowed,
-                integrity: CustodyIntegrityStatus.verified
+        errorMessage = nil
+        defer { isLoading = false }
+        
+        do {
+            // Load executive posture data
+            let posture = try await APIClient.shared.getExecutivePosture(timeRange: "30d")
+            
+            // Update defensibility score and status from posture
+            defensibilityScore = 85 // Would need separate API call for actual score
+            status = posture.ledgerIntegrity == "verified" ? .insurerReady : .needsReview
+            proofPacksCount = posture.proofPacksGenerated
+            
+            // Map to exposure overview
+            exposureOverview = ExposureOverview(
+                highRiskJobs: posture.highRiskJobs,
+                highRiskJobsDelta: posture.deltas?.highRiskJobs ?? 0,
+                topHazards: [], // Top hazards not in current API response
+                openIncidents: posture.openIncidents,
+                openIncidentsDelta: posture.deltas?.openIncidents ?? 0,
+                oldestUnresolved: 0, // Not in current API response
+                governanceViolations: posture.recentViolations,
+                governanceViolationsDelta: posture.deltas?.violations ?? 0,
+                mostCommonViolation: "Role violation" // Not in current API response
             )
-        ]
-        
-        governanceViolations = [
-            GovernanceEvent(
-                type: .roleViolation,
-                description: "Member attempted to export proof pack",
-                timestamp: Date().addingTimeInterval(-86400),
-                blocked: true
+            
+            // Load audit events for chain of custody and governance violations
+            let events = try await APIClient.shared.getAuditEvents(timeRange: "30d", limit: 100)
+            
+            // Map events to chain of custody
+            chainOfCustody = events.compactMap { event -> CustodyEvent? in
+                // Map event types to custody event types
+                let eventType: CustodyEventType?
+                if event.category == "GOVERNANCE" && event.metadata["blocked"] == "true" {
+                    eventType = .actionBlocked
+                } else if event.summary.lowercased().contains("proof pack") || event.summary.lowercased().contains("export") {
+                    eventType = .proofPackGenerated
+                } else if event.summary.lowercased().contains("control") || event.summary.lowercased().contains("mitigation") {
+                    eventType = .controlSealed
+                } else if event.summary.lowercased().contains("evidence") {
+                    eventType = .evidencePending
+                } else {
+                    return nil // Skip events that don't map to custody
+                }
+                
+                let outcome: CustodyOutcome = event.metadata["blocked"] == "true" ? .blocked : .allowed
+                let integrity: CustodyIntegrityStatus = outcome == .blocked ? .verified : .verified
+                
+                return CustodyEvent(
+                    type: eventType!,
+                    jobId: event.metadata["job_id"],
+                    jobTitle: event.metadata["job_title"],
+                    actor: event.actor,
+                    timestamp: event.timestamp,
+                    outcome: outcome,
+                    integrity: integrity,
+                    reason: event.metadata["blocked"] == "true" ? event.details : nil
+                )
+            }
+            
+            // Map governance violations
+            governanceViolations = events.filter { event in
+                event.category == "GOVERNANCE" && event.metadata["blocked"] == "true"
+            }.map { event in
+                GovernanceEvent(
+                    type: .roleViolation,
+                    description: event.summary,
+                    timestamp: event.timestamp,
+                    blocked: true
+                )
+            }
+            errorMessage = nil // Clear any previous error
+        } catch {
+            let errorDesc = error.localizedDescription
+            print("[ExecutiveViewRedesigned] ❌ Failed to load data: \(errorDesc)")
+            errorMessage = errorDesc
+            // Clear all data on error - never show stale data
+            chainOfCustody = []
+            governanceViolations = []
+            proofPacksCount = 0
+            exposureOverview = ExposureOverview(
+                highRiskJobs: 0,
+                highRiskJobsDelta: 0,
+                topHazards: [],
+                openIncidents: 0,
+                openIncidentsDelta: 0,
+                oldestUnresolved: 0,
+                governanceViolations: 0,
+                governanceViolationsDelta: 0,
+                mostCommonViolation: "None"
             )
-        ]
-        
-        exposureOverview = ExposureOverview(
-            highRiskJobs: 3,
-            highRiskJobsDelta: -1,
-            topHazards: ["Electrical", "Height", "Confined Space"],
-            openIncidents: 1,
-            openIncidentsDelta: 0,
-            oldestUnresolved: 5,
-            governanceViolations: 1,
-            governanceViolationsDelta: 0,
-            mostCommonViolation: "Role violation"
-        )
-        
-        isLoading = false
+        }
     }
 }
 

@@ -52,24 +52,25 @@ class APIClient {
             request.httpBody = body
         }
         
-        // Log request for debugging (remove in production)
-        #if DEBUG
-        print("[APIClient] \(method) \(fullURL)")
-        #endif
+        // Always log request details (production-ready logging)
+        print("[APIClient] 🔵 \(method) \(fullURL)")
+        print("[APIClient] Base URL: \(baseURL)")
+        print("[APIClient] Path: \(path)")
         
         let (data, response) = try await URLSession.shared.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
+            print("[APIClient] ❌ Invalid response (not HTTPURLResponse)")
             throw APIError.invalidResponse
         }
         
-        // Log response for debugging
-        #if DEBUG
-        print("[APIClient] Response: \(httpResponse.statusCode)")
-        if httpResponse.statusCode >= 400, let errorData = String(data: data, encoding: .utf8) {
-            print("[APIClient] Error body: \(errorData)")
+        // Always log response status
+        print("[APIClient] 📡 Response: \(httpResponse.statusCode) for \(method) \(path)")
+        
+        if httpResponse.statusCode >= 400 {
+            let errorPreview = String(data: data, encoding: .utf8)?.prefix(200) ?? "No error body"
+            print("[APIClient] ❌ Error response body (first 200 chars): \(errorPreview)")
         }
-        #endif
         
         guard (200...299).contains(httpResponse.statusCode) else {
             let errorMessage = try? JSONDecoder().decode(APIErrorResponse.self, from: data)
@@ -129,11 +130,37 @@ class APIClient {
         return try await request(endpoint: "/api/audit/readiness\(query)")
     }
     
+    // MARK: - Audit API
+    
+    /// Get audit events
+    func getAuditEvents(
+        timeRange: String = "30d",
+        category: String? = nil,
+        limit: Int = 50
+    ) async throws -> [AuditEvent] {
+        var queryItems: [String] = []
+        queryItems.append("time_range=\(timeRange)")
+        queryItems.append("limit=\(limit)")
+        if let category = category {
+            queryItems.append("category=\(category)")
+        }
+        
+        let query = "?\(queryItems.joined(separator: "&"))"
+        let response: AuditEventsResponse = try await request(endpoint: "/api/audit/events\(query)")
+        return response.events.map { $0.toAuditEvent() }
+    }
+    
     // MARK: - Executive API
     
     /// Get executive risk posture
-    func getExecutivePosture() async throws -> ExecutivePostureResponse {
-        return try await request(endpoint: "/api/executive/risk-posture")
+    func getExecutivePosture(timeRange: String = "30d") async throws -> ExecutivePostureResponse {
+        let response: ExecutivePostureWrapper = try await request(endpoint: "/api/executive/risk-posture?time_range=\(timeRange)")
+        return response.data
+    }
+    
+    /// Get executive brief data
+    func getExecutiveBrief() async throws -> ExecutiveBriefResponse {
+        return try await request(endpoint: "/api/executive/brief")
     }
     
     // MARK: - Team API
@@ -154,6 +181,37 @@ class APIClient {
     }
     
     // MARK: - Job API
+    
+    /// Get list of jobs with filters
+    func getJobs(
+        page: Int = 1,
+        limit: Int = 20,
+        status: String? = nil,
+        riskLevel: String? = nil,
+        search: String? = nil
+    ) async throws -> JobsListResponse {
+        var queryItems: [String] = []
+        queryItems.append("page=\(page)")
+        queryItems.append("limit=\(limit)")
+        if let status = status, status != "all" {
+            queryItems.append("status=\(status)")
+        }
+        if let riskLevel = riskLevel, riskLevel != "all" {
+            queryItems.append("risk_level=\(riskLevel)")
+        }
+        if let search = search, !search.isEmpty {
+            queryItems.append("q=\(search.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? search)")
+        }
+        
+        let query = queryItems.isEmpty ? "" : "?\(queryItems.joined(separator: "&"))"
+        return try await request(endpoint: "/api/jobs\(query)")
+    }
+    
+    /// Get single job by ID
+    func getJob(_ jobId: String) async throws -> Job {
+        let response: JobResponse = try await request(endpoint: "/api/jobs/\(jobId)")
+        return response.data
+    }
     
     /// Create a new job
     func createJob(_ job: Job) async throws -> Job {
@@ -384,8 +442,188 @@ struct ZIPResponse: Codable {
     }
 }
 
+struct JobsListResponse: Codable {
+    let data: [Job]
+    let pagination: JobsPagination?
+}
+
+struct JobsPagination: Codable {
+    let page: Int?
+    let pageSize: Int?
+    let total: Int?
+    let totalPages: Int?
+    let hasMore: Bool?
+    
+    enum CodingKeys: String, CodingKey {
+        case page
+        case pageSize = "page_size"
+        case total
+        case totalPages = "total_pages"
+        case hasMore = "has_more"
+    }
+}
+
 struct JobResponse: Codable {
     let data: Job
+}
+
+struct AuditEventsResponse: Codable {
+    let events: [AuditEventAPI]
+    let stats: AuditStats?
+    let pagination: AuditPagination?
+}
+
+// API response structure for audit events
+struct AuditEventAPI: Codable {
+    let id: String
+    let category: String?
+    let eventName: String?
+    let summary: String?
+    let createdAt: String
+    let details: String?
+    let actorName: String?
+    let actorRole: String?
+    let metadata: [String: String]?
+    let outcome: String?
+    let severity: String?
+    
+    enum CodingKeys: String, CodingKey {
+        case id
+        case category
+        case eventName = "event_name"
+        case summary
+        case createdAt = "created_at"
+        case details
+        case actorName = "actor_name"
+        case actorRole = "actor_role"
+        case metadata
+        case outcome
+        case severity
+    }
+    
+    func toAuditEvent() -> AuditEvent {
+        // Parse ISO8601 date string
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        var date = formatter.date(from: createdAt)
+        
+        // Fallback to standard ISO8601 if fractional seconds fail
+        if date == nil {
+            let standardFormatter = ISO8601DateFormatter()
+            date = standardFormatter.date(from: createdAt)
+        }
+        
+        // Final fallback to current date
+        let finalDate = date ?? Date()
+        
+        // Convert metadata to [String: String] if needed
+        var finalMetadata: [String: String] = [:]
+        if let metadata = metadata {
+            for (key, value) in metadata {
+                finalMetadata[key] = String(describing: value)
+            }
+        }
+        
+        return AuditEvent(
+            id: id,
+            category: category?.uppercased() ?? "OPS",
+            summary: summary ?? eventName ?? "Unknown event",
+            timestamp: finalDate,
+            details: details ?? "",
+            actor: actorName ?? "System",
+            metadata: finalMetadata
+        )
+    }
+}
+
+struct AuditStats: Codable {
+    let total: Int?
+    let violations: Int?
+    let jobsTouched: Int?
+    
+    enum CodingKeys: String, CodingKey {
+        case total
+        case violations
+        case jobsTouched = "jobs_touched"
+    }
+}
+
+struct AuditPagination: Codable {
+    let nextCursor: String?
+    let limit: Int?
+    let hasMore: Bool?
+    
+    enum CodingKeys: String, CodingKey {
+        case nextCursor = "next_cursor"
+        case limit
+        case hasMore = "has_more"
+    }
+}
+
+struct ExecutivePostureWrapper: Codable {
+    let data: ExecutivePostureResponse
+}
+
+struct ExecutiveBriefResponse: Codable {
+    let data: ExecutiveBriefData
+}
+
+struct ExecutiveBriefData: Codable {
+    let generatedAt: String
+    let timeRange: String
+    let summary: ExecutiveSummary
+    let riskScore: Int
+    let totalJobs: Int
+    let highRiskJobs: Int
+    let controlsCompleted: Int
+    let controlsTotal: Int
+    let evidenceCount: Int
+    let lastExportDate: String?
+    
+    enum CodingKeys: String, CodingKey {
+        case generatedAt = "generated_at"
+        case timeRange = "time_range"
+        case summary
+        case riskScore = "risk_score"
+        case totalJobs = "total_jobs"
+        case highRiskJobs = "high_risk_jobs"
+        case controlsCompleted = "controls_completed"
+        case controlsTotal = "controls_total"
+        case evidenceCount = "evidence_count"
+        case lastExportDate = "last_export_date"
+    }
+}
+
+struct ExecutiveSummary: Codable {
+    let exposureLevel: String
+    let confidenceStatement: String
+    let counts: ExecutiveCounts
+    
+    enum CodingKeys: String, CodingKey {
+        case exposureLevel = "exposure_level"
+        case confidenceStatement = "confidence_statement"
+        case counts
+    }
+}
+
+struct ExecutiveCounts: Codable {
+    let highRiskJobs: Int
+    let openIncidents: Int
+    let violations: Int
+    let flagged: Int
+    let pendingAttestations: Int
+    let signedAttestations: Int
+    let proofPacks: Int
+    
+    enum CodingKeys: String, CodingKey {
+        case highRiskJobs = "high_risk_jobs"
+        case openIncidents = "open_incidents"
+        case violations
+        case flagged
+        case pendingAttestations = "pending_attestations"
+        case signedAttestations = "signed_attestations"
+        case proofPacks = "proof_packs"
+    }
 }
 
 struct EvidenceResponse: Codable {

@@ -20,6 +20,22 @@ struct ExecutiveView: View {
                         }
                         .padding(RMTheme.Spacing.md)
                     }
+                } else if let errorMessage = errorMessage {
+                    // Error state - show error with retry
+                    RMEmptyState(
+                        icon: "exclamationmark.triangle.fill",
+                        title: "Failed to Load Executive Data",
+                        message: errorMessage,
+                        action: RMEmptyStateAction(
+                            title: "Retry",
+                            action: {
+                                Task {
+                                    await loadPosture()
+                                }
+                            }
+                        )
+                    )
+                    .padding(RMTheme.Spacing.pagePadding)
                 } else if let data = postureData {
                     ScrollView(showsIndicators: false) {
                         VStack(spacing: RMTheme.Spacing.lg) {
@@ -44,7 +60,7 @@ struct ExecutiveView: View {
                                     
                                     Spacer()
                                     
-                                    IntegrityBadge(status: data.defensibility.ledgerIntegrity)
+                                    IntegrityBadge(status: data.ledgerIntegrity)
                                 }
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -52,7 +68,10 @@ struct ExecutiveView: View {
                             .padding(.top, RMTheme.Spacing.md)
                             
                             // Risk Posture Banner
-                            RiskPostureBanner(posture: data.riskPosture)
+                            RiskPostureBanner(
+                                exposureLevel: data.exposureLevel,
+                                confidenceStatement: data.confidenceStatement
+                            )
                                 .padding(.horizontal, RMTheme.Spacing.md)
                             
                             // Exposure Assessment
@@ -65,20 +84,20 @@ struct ExecutiveView: View {
                                 HStack(spacing: RMTheme.Spacing.md) {
                                     ExposureCard(
                                         title: "High Risk Jobs",
-                                        value: data.exposure.highRiskJobs.count,
-                                        delta: data.exposure.highRiskJobs.delta
+                                        value: data.highRiskJobs,
+                                        delta: data.deltas?.highRiskJobs
                                     )
                                     
                                     ExposureCard(
                                         title: "Open Incidents",
-                                        value: data.exposure.openIncidents.count,
-                                        delta: data.exposure.openIncidents.delta
+                                        value: data.openIncidents,
+                                        delta: data.deltas?.openIncidents
                                     )
                                     
                                     ExposureCard(
                                         title: "Violations",
-                                        value: data.exposure.violations.count,
-                                        delta: data.exposure.violations.delta
+                                        value: data.recentViolations,
+                                        delta: data.deltas?.violations
                                     )
                                 }
                                 .padding(.horizontal, RMTheme.Spacing.md)
@@ -94,17 +113,17 @@ struct ExecutiveView: View {
                                 HStack(spacing: RMTheme.Spacing.md) {
                                     ControlsCard(
                                         title: "Flagged",
-                                        value: data.controls.flaggedJobs
+                                        value: data.flaggedJobs
                                     )
                                     
                                     ControlsCard(
                                         title: "Pending Signoffs",
-                                        value: data.controls.pendingSignoffs
+                                        value: data.pendingSignoffs
                                     )
                                     
                                     ControlsCard(
                                         title: "Signed",
-                                        value: data.controls.signedJobs
+                                        value: data.signedJobs
                                     )
                                 }
                                 .padding(.horizontal, RMTheme.Spacing.md)
@@ -120,25 +139,27 @@ struct ExecutiveView: View {
                                 HStack(spacing: RMTheme.Spacing.md) {
                                     DefensibilityCard(
                                         title: "Ledger Integrity",
-                                        value: data.defensibility.ledgerIntegrity.capitalized,
-                                        status: data.defensibility.ledgerIntegrity
+                                        value: data.ledgerIntegrity.capitalized,
+                                        status: data.ledgerIntegrity
                                     )
                                     
                                     DefensibilityCard(
                                         title: "Proof Packs",
-                                        value: "\(data.defensibility.proofPacksGenerated)",
+                                        value: "\(data.proofPacksGenerated)",
                                         status: nil
                                     )
                                     
+                                    // Note: enforcementActions and attestationsCoverage not in flat model
+                                    // These would need to be added to the backend response or removed
                                     DefensibilityCard(
                                         title: "Enforcement",
-                                        value: "\(data.defensibility.enforcementActions)",
+                                        value: "0", // Enforcement actions not in current API response
                                         status: nil
                                     )
                                     
                                     DefensibilityCard(
                                         title: "Attestations",
-                                        value: "\(data.defensibility.attestationsCoverage.signed)/\(data.defensibility.attestationsCoverage.total)",
+                                        value: "\(data.signedJobs)/\(data.signedJobs + data.pendingSignoffs)", // Approximate
                                         status: nil
                                     )
                                 }
@@ -194,10 +215,11 @@ struct ExecutiveView: View {
 // MARK: - Risk Posture Banner
 
 struct RiskPostureBanner: View {
-    let posture: RiskPosture
+    let exposureLevel: String
+    let confidenceStatement: String
     
     var bannerColor: Color {
-        switch posture.exposureLevel.lowercased() {
+        switch exposureLevel.lowercased() {
         case "low": return RMTheme.Colors.success
         case "moderate": return RMTheme.Colors.warning
         case "high": return RMTheme.Colors.error
@@ -212,7 +234,7 @@ struct RiskPostureBanner: View {
                     Image(systemName: "checkmark.shield.fill")
                         .foregroundColor(bannerColor)
                     
-                    Text(posture.confidenceStatement)
+                    Text(confidenceStatement)
                         .font(RMTheme.Typography.bodyBold)
                         .foregroundColor(RMTheme.Colors.textPrimary)
                 }

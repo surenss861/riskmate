@@ -5,6 +5,7 @@ import SwiftDate
 struct JobsListView: View {
     @State private var jobs: [Job] = []
     @State private var isLoading = true
+    @State private var errorMessage: String?
     @State private var searchText = ""
     @State private var debouncedSearchText = ""
     @State private var selectedStatus: String = "all"
@@ -120,6 +121,24 @@ struct JobsListView: View {
                             }
                             .padding(.top, RMTheme.Spacing.md)
                         }
+                    } else if let errorMessage = errorMessage {
+                        // Error state - show error with retry
+                        VStack(spacing: RMTheme.Spacing.lg) {
+                            RMEmptyState(
+                                icon: "exclamationmark.triangle.fill",
+                                title: "Failed to Load Jobs",
+                                message: errorMessage,
+                                action: RMEmptyStateAction(
+                                    title: "Retry",
+                                    action: {
+                                        Task {
+                                            await loadJobs()
+                                        }
+                                    }
+                                )
+                            )
+                        }
+                        .padding(RMTheme.Spacing.pagePadding)
                     } else if filteredJobs.isEmpty {
                         RMSellingEmptyState(
                             icon: "briefcase",
@@ -228,54 +247,25 @@ struct JobsListView: View {
     
     private func loadJobs() async {
         isLoading = true
+        errorMessage = nil
         defer { isLoading = false }
         
-        // TODO: Replace with real API call
-        try? await Task.sleep(nanoseconds: 800_000_000)
-        
-        // Mock data
-        jobs = generateMockJobs()
-    }
-    
-    private func generateMockJobs() -> [Job] {
-        let now = Date()
-        let calendar = Calendar.current
-        
-        return [
-            Job(
-                id: "job_001",
-                clientName: "Acme Construction",
-                jobType: "Site Inspection",
-                location: "123 Main St, San Francisco, CA",
-                status: "in_progress",
-                riskScore: 85,
-                riskLevel: "high",
-                createdAt: ISO8601DateFormatter().string(from: calendar.date(byAdding: .day, value: -5, to: now) ?? now),
-                updatedAt: nil
-            ),
-            Job(
-                id: "job_002",
-                clientName: "TechCorp Office",
-                jobType: "Safety Audit",
-                location: "456 Market St, San Francisco, CA",
-                status: "active",
-                riskScore: 45,
-                riskLevel: "medium",
-                createdAt: ISO8601DateFormatter().string(from: calendar.date(byAdding: .day, value: -2, to: now) ?? now),
-                updatedAt: nil
-            ),
-            Job(
-                id: "job_003",
-                clientName: "Residential Complex",
-                jobType: "Compliance Review",
-                location: "789 Oak Ave, Oakland, CA",
-                status: "completed",
-                riskScore: 25,
-                riskLevel: "low",
-                createdAt: ISO8601DateFormatter().string(from: calendar.date(byAdding: .day, value: -10, to: now) ?? now),
-                updatedAt: nil
-            ),
-        ]
+        do {
+            let response = try await APIClient.shared.getJobs(
+                page: 1,
+                limit: 100,
+                status: selectedStatus != "all" ? selectedStatus : nil,
+                riskLevel: selectedRiskLevel != "all" ? selectedRiskLevel : nil,
+                search: debouncedSearchText.isEmpty ? nil : debouncedSearchText
+            )
+            jobs = response.data
+            errorMessage = nil // Clear any previous error
+        } catch {
+            let errorDesc = error.localizedDescription
+            print("[JobsListView] ❌ Failed to load jobs: \(errorDesc)")
+            errorMessage = errorDesc
+            jobs = [] // Clear jobs on error - never show stale data
+        }
     }
     
     private func copyJobId(_ id: String) {
