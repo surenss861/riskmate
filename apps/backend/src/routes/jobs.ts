@@ -11,6 +11,9 @@ import { createErrorResponse, logErrorForSupport } from "../utils/errorResponse"
 
 export const jobsRouter: ExpressRouter = express.Router();
 
+// Log that jobs routes are being loaded (verification for deployment)
+console.log("[ROUTES] ✅ Jobs routes loaded (including /:id/hazards and /:id/controls)");
+
 // Rate-limited logging for cursor misuse (once per organization per hour)
 // This helps identify client misconfigurations without spamming logs
 const cursorMisuseLogs = new Map<string, number>();

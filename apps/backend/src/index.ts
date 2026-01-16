@@ -296,6 +296,7 @@ app.use(express.json());
 // API Routes (keep /api/* for backward compatibility)
 app.use("/api/risk", riskRouter);
 app.use("/api/subscriptions", subscriptionsRouter);
+console.log("[ROUTES] ✅ Jobs router mounted at /api/jobs");
 app.use("/api/jobs", jobsRouter);
 app.use("/api/reports", reportsRouter);
 app.use("/api/analytics", analyticsRouter);

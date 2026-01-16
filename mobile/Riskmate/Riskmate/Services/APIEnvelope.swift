@@ -61,7 +61,7 @@ extension APIClient {
             return try decoder.decode(T.self, from: data)
         } catch {
             // If direct decode also fails, try envelope again and extract whatever is available
-            if let envelope = try? decoder.decode(APIEnvelope<[String: RMAnyCodable]>.self, from: data) {
+            if (try? decoder.decode(APIEnvelope<[String: RMAnyCodable]>.self, from: data)) != nil {
                 // Last resort: try to decode from envelope's raw structure
                 throw DecodingError.dataCorrupted(
                     DecodingError.Context(

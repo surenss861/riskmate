@@ -248,15 +248,10 @@ final class DashboardViewModel: ObservableObject {
         
         var missingEvidenceJobs: [Job] = []
         for job in allJobs.prefix(20) { // Limit for performance
-            do {
-                let evidence = try? await APIClient.shared.getEvidence(jobId: job.id)
-                // Assume jobs need at least 3 evidence items (this should come from job requirements)
-                if (evidence?.count ?? 0) < 3 {
-                    missingEvidenceJobs.append(job)
-                }
-            } catch {
-                // Skip if evidence check fails
-                continue
+            let evidence = try? await APIClient.shared.getEvidence(jobId: job.id)
+            // Assume jobs need at least 3 evidence items (this should come from job requirements)
+            if (evidence?.count ?? 0) < 3 {
+                missingEvidenceJobs.append(job)
             }
         }
         
