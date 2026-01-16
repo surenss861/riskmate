@@ -133,8 +133,33 @@ export const authenticate = async (
       .eq("id", userId)
       .maybeSingle();
 
-    if (userError || !userRecord?.organization_id) {
-      return res.status(401).json({ message: "Unauthorized - User not found" });
+    // Handle missing user record gracefully (return 403, not 500)
+    if (userError) {
+      console.error("[AUTH] Database error fetching user:", userError);
+      return res.status(500).json({ 
+        message: "Internal server error",
+        code: "DATABASE_ERROR",
+        hint: "Failed to fetch user record from database"
+      });
+    }
+
+    if (!userRecord) {
+      // User exists in Supabase Auth but not in public.users table
+      // This is a provisioning issue, not an auth failure
+      return res.status(403).json({ 
+        message: "Account not provisioned",
+        code: "USER_NOT_PROVISIONED",
+        hint: "User account exists but has not been fully set up. Please contact support."
+      });
+    }
+
+    if (!userRecord.organization_id) {
+      // User exists but has no organization_id
+      return res.status(403).json({ 
+        message: "No organization assigned",
+        code: "NO_ORGANIZATION",
+        hint: "User account is missing organization assignment. Please contact support."
+      });
     }
 
     if (userRecord.archived_at) {

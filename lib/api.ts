@@ -7,11 +7,11 @@ import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { fetchWithIdempotency, generateBulkIdempotencyKey } from './api/fetchWithIdempotency'
 
 // Get backend API URL from environment variable
-// Always use relative paths - Next.js API routes will proxy to backend
-// This works in both local dev and production
+// Use NEXT_PUBLIC_BACKEND_URL if set, otherwise fall back to relative paths for Next.js API routes
 const getApiUrl = () => {
-  // Always use relative paths - Next.js API route proxies handle backend communication
-  return ''
+  // If NEXT_PUBLIC_BACKEND_URL is set, use it (direct backend calls like iOS)
+  // Otherwise, use relative paths (Next.js API routes will proxy)
+  return process.env.NEXT_PUBLIC_BACKEND_URL || ''
 }
 
 const API_URL = getApiUrl()
