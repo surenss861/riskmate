@@ -79,44 +79,94 @@ class APIClient {
                 throw APIError.invalidResponse
             }
             
-            // Always log response status
-            print("[APIClient] 📡 Response: \(httpResponse.statusCode) for \(method) \(path)")
+            // Always log response status and content-type BEFORE attempting decode
+            let statusCode = httpResponse.statusCode
+            let contentType = httpResponse.value(forHTTPHeaderField: "Content-Type") ?? "nil"
+            print("[APIClient] 📡 Response: \(statusCode) for \(method) \(path)")
+            print("[APIClient] Content-Type: \(contentType)")
             
-            guard (200...299).contains(httpResponse.statusCode) else {
-                let errorPreview = String(data: data, encoding: .utf8)?.prefix(200) ?? "No error body"
-                
+            // Log raw response body BEFORE decoding (this is the truth serum)
+            let rawBody = String(data: data, encoding: .utf8) ?? "<non-utf8 data>"
+            let bodyPreview = String(rawBody.prefix(800))
+            print("[APIClient] Raw response body (first 800 chars): \(bodyPreview)")
+            
+            // Don't attempt to decode non-2xx responses (they're likely error pages or JSON errors)
+            guard (200...299).contains(statusCode) else {
                 // Special handling for 401 to help debug auth issues
-                if httpResponse.statusCode == 401 {
+                if statusCode == 401 {
                     print("[APIClient] ❌ 401 Unauthorized")
-                    print("[APIClient] Error response body (first 200 chars): \(errorPreview)")
-                    
-                    let errorMessage = try? JSONDecoder().decode(APIErrorResponse.self, from: data)
-                    throw APIError.httpError(
-                        statusCode: 401,
-                        message: errorMessage?.message ?? "Unauthorized - check authentication token"
+                    // Try to decode error JSON, but fall back to raw body if it fails
+                    if let errorMessage = try? JSONDecoder().decode(APIErrorResponse.self, from: data) {
+                        throw APIError.httpError(
+                            statusCode: 401,
+                            message: errorMessage.message ?? "Unauthorized - check authentication token"
+                        )
+                    } else {
+                        throw APIError.httpError(
+                            statusCode: 401,
+                            message: "Unauthorized - response was not JSON: \(bodyPreview.prefix(200))"
+                        )
+                    }
+                }
+                
+                // For other errors, log and throw
+                print("[APIClient] ❌ Error response (status \(statusCode))")
+                
+                // Try to decode error JSON
+                if let errorMessage = try? JSONDecoder().decode(APIErrorResponse.self, from: data) {
+                    let error = APIError.httpError(
+                        statusCode: statusCode,
+                        message: errorMessage.message ?? "Request failed with status \(statusCode)"
                     )
+                    print("[APIClient] Error category: \(errorCategory(for: statusCode))")
+                    throw error
+                } else {
+                    // If it's not JSON (could be HTML error page, etc.), throw with raw body
+                    let error = APIError.httpError(
+                        statusCode: statusCode,
+                        message: "Request failed with status \(statusCode) - response was not JSON: \(bodyPreview.prefix(200))"
+                    )
+                    print("[APIClient] Error category: \(errorCategory(for: statusCode))")
+                    throw error
                 }
-                
-                // Log other errors
-                if httpResponse.statusCode >= 400 {
-                    print("[APIClient] ❌ Error response (status \(httpResponse.statusCode))")
-                    print("[APIClient] Error response body (first 200 chars): \(errorPreview)")
-                }
-                
-                let errorMessage = try? JSONDecoder().decode(APIErrorResponse.self, from: data)
-                let error = APIError.httpError(
-                    statusCode: httpResponse.statusCode,
-                    message: errorMessage?.message ?? "Request failed with status \(httpResponse.statusCode)"
-                )
-                
-                // Tag error with category for better handling
-                print("[APIClient] Error category: \(errorCategory(for: httpResponse.statusCode))")
-                
-                throw error
             }
             
+            // Only attempt decode for 2xx responses
             let decoder = JSONDecoder()
             decoder.keyDecodingStrategy = .convertFromSnakeCase
+            
+            // Custom date decoder to handle fractional seconds (Supabase/Node often returns these)
+            let dateFormatter = ISO8601DateFormatter()
+            dateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            
+            decoder.dateDecodingStrategy = .custom { decoder in
+                let container = try decoder.singleValueContainer()
+                let dateString = try container.decode(String.self)
+                
+                // Try with fractional seconds first
+                if let date = dateFormatter.date(from: dateString) {
+                    return date
+                }
+                
+                // Fallback to standard ISO8601 (no fractional seconds)
+                let standardFormatter = ISO8601DateFormatter()
+                if let date = standardFormatter.date(from: dateString) {
+                    return date
+                }
+                
+                // Final fallback: try RFC3339
+                let rfc3339Formatter = ISO8601DateFormatter()
+                rfc3339Formatter.formatOptions = [.withInternetDateTime]
+                if let date = rfc3339Formatter.date(from: dateString) {
+                    return date
+                }
+                
+                throw DecodingError.dataCorruptedError(
+                    in: container,
+                    debugDescription: "Invalid date format: \(dateString)"
+                )
+            }
+            
             return try decoder.decode(T.self, from: data)
         } catch let urlError as URLError {
             // Handle network-level errors (offline, timeout, DNS, etc.)

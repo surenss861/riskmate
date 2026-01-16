@@ -56,7 +56,7 @@ tsx src/index.ts
 - `ALLOWED_ORIGINS` - Comma-separated list of allowed CORS origins
 - `RAILWAY_GIT_COMMIT_SHA` - Automatically set by Railway (for health checks)
 - `RAILWAY_DEPLOYMENT_ID` - Automatically set by Railway (for health checks)
-- `DEV_AUTH_SECRET` - (Optional) Secret for dev testing endpoints (`/v1/dev/*`). Only set if you need dev utilities.
+- `DEV_AUTH_SECRET` - (Optional) Secret for dev testing endpoints (`/v1/dev/*`). Generate with `openssl rand -hex 32`. Never use a short/weak secret. Example: `cd741bb64a9f9296f8418dcfa8c42215c090d119d31126a05984d689c8589f52`
 
 ## Health Check Endpoints
 
@@ -144,6 +144,7 @@ If `DEV_AUTH_SECRET` is set, you can use `/v1/dev/whoami` to verify user data wi
 
 ```bash
 # Verify user exists (bypasses auth, requires DEV_AUTH_SECRET header)
+# Generate secret: openssl rand -hex 32
 curl -H "X-Dev-Secret: <DEV_AUTH_SECRET>" \
   "https://api.riskmate.dev/v1/dev/whoami?user_id=<uuid>&org_id=<uuid>"
 ```
