@@ -6,13 +6,18 @@ struct RiskmateApp: App {
     @StateObject private var sessionManager = SessionManager.shared
     
     init() {
+        // Initialize crash reporting
+        _ = CrashReporting.shared
+        
+        // Restore Supabase session early (before any API calls)
+        Task {
+            await AuthService.shared.ensureSessionRestored()
+        }
+        
         // Initial health check on app launch
         Task {
             await ServerStatusManager.shared.checkHealth()
         }
-        
-        // Initialize crash reporting
-        _ = CrashReporting.shared
     }
     
     var body: some Scene {
