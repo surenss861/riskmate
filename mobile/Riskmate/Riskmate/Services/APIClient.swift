@@ -230,7 +230,7 @@ class APIClient {
     // MARK: - Health Check API
     
     /// Check backend health (no auth required)
-    func checkHealth() async throws -> HealthResponse {
+    func checkHealth() async throws -> BackendHealthResponse {
         let base = baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         let fullURL = "\(base)/health"
         
@@ -261,7 +261,7 @@ class APIClient {
         }
         
         let decoder = JSONDecoder()
-        return try decoder.decode(HealthResponse.self, from: data)
+        return try decoder.decode(BackendHealthResponse.self, from: data)
     }
     
     // MARK: - Job API
@@ -758,7 +758,8 @@ struct EvidenceResponse: Codable {
 
 struct EmptyResponse: Codable {}
 
-struct HealthResponse: Codable {
+// Backend health response (different from ServerStatusManager's HealthResponse)
+struct BackendHealthResponse: Codable {
     let status: String
     let timestamp: String?
     let commit: String?

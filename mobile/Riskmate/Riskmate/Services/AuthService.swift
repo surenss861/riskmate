@@ -50,9 +50,12 @@ class AuthService {
         do {
             let session = try await supabase.auth.session
             
-            // Validate session exists and has token
-            guard let token = session.accessToken, !token.isEmpty else {
-                print("[AuthService] ⚠️ Session exists but accessToken is nil or empty")
+            // accessToken is non-optional String in Supabase Swift
+            let token = session.accessToken
+            
+            // Validate token is not empty
+            guard !token.isEmpty else {
+                print("[AuthService] ⚠️ Session exists but accessToken is empty")
                 return nil
             }
             
@@ -70,7 +73,8 @@ class AuthService {
     func isAuthenticated() async -> Bool {
         do {
             let session = try await supabase.auth.session
-            return session.accessToken != nil && !session.accessToken.isEmpty
+            // accessToken is non-optional String, just check if not empty
+            return !session.accessToken.isEmpty
         } catch {
             return false
         }
