@@ -853,9 +853,8 @@ export const auditApi = {
       })
     }
     const token = await getAuthToken()
-    // Use API_URL from getApiUrl() to ensure we have the backend URL
-    const backendUrl = getApiUrl()
-    const url = backendUrl ? `${backendUrl}/api/audit/events?${queryParams.toString()}` : `/api/audit/events?${queryParams.toString()}`
+    // Use centralized BACKEND_URL - always call backend directly
+    const url = `${API_URL}/api/audit/events?${queryParams.toString()}`
     
     const response = await fetch(url, {
       method: 'GET',
@@ -898,9 +897,8 @@ export const auditApi = {
       : '/api/audit/export'
     
     const token = await getAuthToken()
-    // Use getApiUrl() to ensure we have the backend URL
-    const backendUrl = getApiUrl()
-    const apiUrl = backendUrl ? `${backendUrl}${endpoint}` : endpoint
+    // Use centralized BACKEND_URL - always call backend directly
+    const apiUrl = `${API_URL}${endpoint}`
     const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
