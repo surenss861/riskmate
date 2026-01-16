@@ -292,14 +292,17 @@ v1Router.use("/", verificationRouter);
 v1Router.use("/public", publicVerificationRouter);
 v1Router.use("/metrics", metricsRouter);
 
-// Mount v1 router
-app.use("/v1", v1Router);
-
 // Dev endpoints (only available when DEV_AUTH_SECRET is set)
+// MUST be mounted BEFORE app.use("/v1", v1Router) to ensure Express registers it
 if (process.env.DEV_AUTH_SECRET) {
   v1Router.use("/dev", devAuthRouter);
   console.log("[BOOT] ✅ Dev auth endpoints enabled at /v1/dev/*");
+} else {
+  console.log("[BOOT] ⚠️ Dev auth endpoints disabled (DEV_AUTH_SECRET not set)");
 }
+
+// Mount v1 router (after all routes are added to v1Router)
+app.use("/v1", v1Router);
 
 // 404 handler
 // CORS headers are already set by cors() middleware, so this response will include them
