@@ -5,16 +5,11 @@
 import { JobReportData } from '@/types/report'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { fetchWithIdempotency, generateBulkIdempotencyKey } from './api/fetchWithIdempotency'
+import { BACKEND_URL } from '@/lib/config'
 
-// Get backend API URL from environment variable
-// Use NEXT_PUBLIC_BACKEND_URL if set, otherwise fall back to relative paths for Next.js API routes
-const getApiUrl = () => {
-  // If NEXT_PUBLIC_BACKEND_URL is set, use it (direct backend calls like iOS)
-  // Otherwise, use relative paths (Next.js API routes will proxy)
-  return process.env.NEXT_PUBLIC_BACKEND_URL || ''
-}
-
-const API_URL = getApiUrl()
+// Use centralized backend URL - always call backend directly (like iOS)
+// This ensures consistency and avoids hitting Next.js API routes
+const API_URL = BACKEND_URL
 
 export interface ApiError {
   message: string;
@@ -67,8 +62,9 @@ async function apiRequest<T>(
 ): Promise<T> {
   const token = await getAuthToken();
   
-  // Use API_URL if set, otherwise use relative path (Next.js API routes)
-  const url = API_URL ? `${API_URL}${endpoint}` : endpoint;
+  // Always use BACKEND_URL - ensure endpoint starts with / if it doesn't already
+  const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  const url = `${API_URL}${normalizedEndpoint}`;
   
   const response = await fetch(url, {
     ...options,
