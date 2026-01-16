@@ -13,15 +13,12 @@ struct RiskmateApp: App {
         // This prevents "logged in on launch" when Supabase session persists in Keychain
         #if DEBUG
         Task {
-            do {
-                // Clear Supabase session
-                try await AuthService.shared.signOut()
-                print("[RiskmateApp] 🧹 DEBUG: Cleared session on launch")
-            } catch {
-                print("[RiskmateApp] ⚠️ DEBUG: Failed to clear session: \(error)")
-            }
-            // Clear session manager state
-            await sessionManager.logout()
+            // Clear Supabase session (signOut is not throwing, so no try needed)
+            await AuthService.shared.signOut()
+            print("[RiskmateApp] 🧹 DEBUG: Cleared session on launch")
+            
+            // Clear session manager state (use singleton directly to avoid capturing self)
+            await SessionManager.shared.logout()
         }
         #endif
         
