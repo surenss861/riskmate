@@ -732,7 +732,7 @@ struct AuditEventAPI: Codable {
     let details: String?
     let actorName: String?
     let actorRole: String?
-    let metadata: [String: AnyCodable]  // Non-optional with default empty dict in custom decoder
+    let metadata: [String: RMAnyCodable]  // Non-optional with default empty dict in custom decoder
     let outcome: String?
     let severity: String?
     
@@ -762,7 +762,7 @@ struct AuditEventAPI: Codable {
         actorName = try container.decodeIfPresent(String.self, forKey: .actorName)
         actorRole = try container.decodeIfPresent(String.self, forKey: .actorRole)
         // Defensive metadata decoding: default to empty dict if null/missing/malformed
-        metadata = (try? container.decode([String: AnyCodable].self, forKey: .metadata)) ?? [:]
+        metadata = (try? container.decode([String: RMAnyCodable].self, forKey: .metadata)) ?? [:]
         outcome = try container.decodeIfPresent(String.self, forKey: .outcome)
         severity = try container.decodeIfPresent(String.self, forKey: .severity)
     }

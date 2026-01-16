@@ -61,7 +61,7 @@ extension APIClient {
             return try decoder.decode(T.self, from: data)
         } catch {
             // If direct decode also fails, try envelope again and extract whatever is available
-            if let envelope = try? decoder.decode(APIEnvelope<[String: AnyCodable]>.self, from: data) {
+            if let envelope = try? decoder.decode(APIEnvelope<[String: RMAnyCodable]>.self, from: data) {
                 // Last resort: try to decode from envelope's raw structure
                 throw DecodingError.dataCorrupted(
                     DecodingError.Context(
@@ -77,7 +77,8 @@ extension APIClient {
 
 /// Helper for decoding flexible JSON structures
 /// Handles all JSON types: null, bool, numbers (Int/Double/Float), strings, arrays, objects
-struct AnyCodable: Codable {
+/// NOTE: If Flight-School AnyCodable package is added, remove this and import AnyCodable instead
+struct RMAnyCodable: Codable {
     let value: Any
     
     init(from decoder: Decoder) throws {
@@ -102,9 +103,9 @@ struct AnyCodable: Codable {
             value = float
         } else if let string = try? container.decode(String.self) {
             value = string
-        } else if let array = try? container.decode([AnyCodable].self) {
+        } else if let array = try? container.decode([RMAnyCodable].self) {
             value = array.map { $0.value }
-        } else if let dict = try? container.decode([String: AnyCodable].self) {
+        } else if let dict = try? container.decode([String: RMAnyCodable].self) {
             value = dict.mapValues { $0.value }
         } else {
             // Last resort: try to decode as a generic JSON value
@@ -135,10 +136,10 @@ struct AnyCodable: Codable {
         case let string as String:
             try container.encode(string)
         case let array as [Any]:
-            let codableArray = array.map { AnyCodable(value: $0) }
+            let codableArray = array.map { RMAnyCodable(value: $0) }
             try container.encode(codableArray)
         case let dict as [String: Any]:
-            let codableDict = dict.mapValues { AnyCodable(value: $0) }
+            let codableDict = dict.mapValues { RMAnyCodable(value: $0) }
             try container.encode(codableDict)
         default:
             // Fallback: encode as string representation

@@ -5,11 +5,7 @@ import SwiftDate
 /// Dashboard with KPIs, charts, and recent activity
 struct DashboardView: View {
     @StateObject private var sessionManager = SessionManager.shared
-    @State private var isLoading = true
-    @State private var errorMessage: String?
-    @State private var kpis: DashboardKPIs?
-    @State private var chartData: [ChartDataPoint] = []
-    @State private var recentActivity: [AuditEvent] = []
+    @StateObject private var viewModel = DashboardViewModel()
     
     var body: some View {
         RMBackground()
@@ -28,7 +24,7 @@ struct DashboardView: View {
                             .padding(.horizontal, RMTheme.Spacing.pagePadding)
                             .padding(.top, RMTheme.Spacing.sm)
                         
-                        if isLoading {
+                        if viewModel.isLoading {
                             // Premium skeleton loading
                             VStack(spacing: RMTheme.Spacing.lg) {
                                 RMSkeletonKPIGrid()
@@ -38,7 +34,7 @@ struct DashboardView: View {
                                 
                                 RMSkeletonList(count: 3)
                             }
-                        } else if let errorMessage = errorMessage {
+                        } else if let errorMessage = viewModel.errorMessage {
                             // Error state - show error with retry
                             RMEmptyState(
                                 icon: "exclamationmark.triangle.fill",
@@ -47,14 +43,12 @@ struct DashboardView: View {
                                 action: RMEmptyStateAction(
                                     title: "Retry",
                                     action: {
-                                        Task {
-                                            await loadDashboardData()
-                                        }
+                                        viewModel.load()
                                     }
                                 )
                             )
                             .padding(.vertical, RMTheme.Spacing.xxl)
-                        } else if let kpis = kpis {
+                        } else if let kpis = viewModel.kpis {
                             // KPI Cards
                             ScrollView(.horizontal, showsIndicators: false) {
                                 HStack(spacing: RMTheme.Spacing.md) {
@@ -89,17 +83,17 @@ struct DashboardView: View {
                             }
                             
                             // Chart Card
-                            if !chartData.isEmpty {
-                                RMChartCard(data: chartData)
+                            if !viewModel.chartData.isEmpty {
+                                RMChartCard(data: viewModel.chartData)
                                     .padding(.horizontal, RMTheme.Spacing.pagePadding)
                             }
                             
-                            // Top Hazards Section
-                            TopHazardsSection()
+                            // Top Hazards Section (using ViewModel data)
+                            TopHazardsSection(hazards: viewModel.topHazards)
                                 .padding(.horizontal, RMTheme.Spacing.pagePadding)
                             
-                            // Jobs at Risk Section
-                            JobsAtRiskSection()
+                            // Jobs at Risk Section (using ViewModel data)
+                            JobsAtRiskSection(jobs: viewModel.jobsAtRisk)
                                 .padding(.horizontal, RMTheme.Spacing.pagePadding)
                             
                             // Missing Evidence CTA
@@ -129,7 +123,7 @@ struct DashboardView: View {
                                     .padding(.horizontal, RMTheme.Spacing.pagePadding)
                                     
                                     VStack(spacing: RMTheme.Spacing.sm) {
-                                        ForEach(recentActivity.prefix(5)) { event in
+                                        ForEach(viewModel.recentActivity.prefix(5)) { event in
                                             RMActivityRow(event: event)
                                         }
                                     }
@@ -170,69 +164,14 @@ struct DashboardView: View {
                 }
             }
             .task {
-                await loadDashboardData()
+                viewModel.load()
             }
             .refreshable {
-                await loadDashboardData()
+                viewModel.load()
             }
-    }
-    
-    private func loadDashboardData() async {
-        isLoading = true
-        errorMessage = nil
-        defer { isLoading = false }
-        
-        do {
-            // Load jobs to calculate KPIs
-            let jobsResponse = try await APIClient.shared.getJobs(page: 1, limit: 100)
-            let allJobs = jobsResponse.data
-            
-            // Calculate jobs this week
-            let calendar = Calendar.current
-            let now = Date()
-            let weekAgo = calendar.date(byAdding: .day, value: -7, to: now) ?? now
-            let jobsThisWeek = allJobs.filter { job in
-                if let createdAt = ISO8601DateFormatter().date(from: job.createdAt) {
-                    return createdAt >= weekAgo
-                }
-                return false
-            }.count
-            
-            // Calculate open risks (high risk jobs)
-            let highRiskJobs = allJobs.filter { job in
-                if let score = job.riskScore {
-                    return score > 75
-                }
-                return job.riskLevel?.lowercased() == "high" || job.riskLevel?.lowercased() == "critical"
+            .onDisappear {
+                viewModel.cancel()
             }
-            
-            // Calculate compliance score from completed jobs
-            let completedJobs = allJobs.filter { $0.status.lowercased() == "completed" }
-            let complianceScore = allJobs.isEmpty ? 0 : Int((Double(completedJobs.count) / Double(allJobs.count)) * 100)
-            
-            kpis = DashboardKPIs(
-                complianceScore: complianceScore,
-                complianceTrend: .neutral, // Would need historical data
-                openRisks: highRiskJobs.count,
-                risksTrend: .neutral, // Would need historical data
-                jobsThisWeek: jobsThisWeek,
-                jobsTrend: .neutral // Would need historical data
-            )
-            
-            // Generate chart data from jobs (compliance over time)
-            chartData = generateChartDataFromJobs(allJobs)
-            
-            // Load recent activity
-            recentActivity = try await APIClient.shared.getAuditEvents(timeRange: "7d", limit: 5)
-            errorMessage = nil // Clear any previous error
-        } catch {
-            let errorDesc = error.localizedDescription
-            print("[DashboardView] ❌ Failed to load dashboard data: \(errorDesc)")
-            errorMessage = errorDesc
-            kpis = nil
-            chartData = []
-            recentActivity = []
-        }
     }
     
     private func generateChartDataFromJobs(_ jobs: [Job]) -> [ChartDataPoint] {
@@ -497,7 +436,7 @@ struct HazardPillView: View {
 }
 
 struct JobsAtRiskSection: View {
-    @State private var atRiskJobs: [AtRiskJob] = []
+    let jobs: [Job]  // Pass jobs from ViewModel
     
     var body: some View {
         VStack(alignment: .leading, spacing: RMTheme.Spacing.md) {
@@ -516,47 +455,22 @@ struct JobsAtRiskSection: View {
                 }
             }
             
-            if atRiskJobs.isEmpty {
+            if jobs.isEmpty {
                 Text("No high-risk jobs")
                     .rmSecondary()
                     .padding(.vertical, RMTheme.Spacing.sm)
             } else {
                 VStack(spacing: RMTheme.Spacing.sm) {
-                    ForEach(atRiskJobs.prefix(3)) { job in
-                        AtRiskJobRow(job: job)
+                    ForEach(jobs.prefix(3)) { job in
+                        AtRiskJobRow(job: AtRiskJob(
+                            id: job.id,
+                            title: job.clientName,
+                            riskScore: job.riskScore ?? 75,
+                            status: job.status
+                        ))
                     }
                 }
             }
-        }
-        .task {
-            await loadAtRiskJobs()
-        }
-    }
-    
-    private func loadAtRiskJobs() async {
-        // Load high-risk jobs from API
-        // TODO: Replace with dedicated /api/dashboard/jobs-at-risk endpoint when available
-        do {
-            let jobsResponse = try await APIClient.shared.getJobs(page: 1, limit: 100, riskLevel: "high")
-            let highRiskJobs = jobsResponse.data.filter { job in
-                if let score = job.riskScore {
-                    return score >= 70
-                }
-                return job.riskLevel?.lowercased() == "high" || job.riskLevel?.lowercased() == "critical"
-            }
-            
-            atRiskJobs = highRiskJobs.prefix(3).map { job in
-                AtRiskJob(
-                    id: job.id,
-                    title: job.clientName,
-                    riskScore: job.riskScore ?? 75,
-                    status: job.status
-                )
-            }
-        } catch {
-            print("[JobsAtRiskSection] ❌ Failed to load at-risk jobs: \(error.localizedDescription)")
-            // Show empty - no demo data
-            atRiskJobs = []
         }
     }
 }
