@@ -47,76 +47,77 @@ struct ExecutiveViewRedesigned: View {
                 } else {
                     ScrollView(showsIndicators: false) {
                         VStack(spacing: RMTheme.Spacing.sectionSpacing) {
-                        // Hero Defensibility Brief
-                        HeroDefensibilityCard(
-                            score: defensibilityScore,
-                            status: status,
-                            lastVerified: lastVerified,
-                            ledgerRoot: ledgerRoot
-                        )
-                        .padding(.horizontal, RMTheme.Spacing.pagePadding)
-                        .padding(.top, RMTheme.Spacing.md)
-                        
-                        // 3 Proof-First Tiles
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: RMTheme.Spacing.md) {
-                                ProofFirstTile(
-                                    title: "Chain-of-Custody",
-                                    status: .verified,
-                                    count: chainOfCustody.filter { $0.integrity == .verified }.count,
-                                    total: chainOfCustody.count,
-                                    icon: "link.circle.fill",
-                                    color: RMTheme.Colors.success
-                                ) {
-                                    // Show chain-of-custody detail
+                            // Hero Defensibility Brief
+                            HeroDefensibilityCard(
+                                score: defensibilityScore,
+                                status: status,
+                                lastVerified: lastVerified,
+                                ledgerRoot: ledgerRoot
+                            )
+                            .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                            .padding(.top, RMTheme.Spacing.md)
+                            
+                            // 3 Proof-First Tiles
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: RMTheme.Spacing.md) {
+                                    ProofFirstTile(
+                                        title: "Chain-of-Custody",
+                                        status: .verified,
+                                        count: chainOfCustody.filter { $0.integrity == .verified }.count,
+                                        total: chainOfCustody.count,
+                                        icon: "link.circle.fill",
+                                        color: RMTheme.Colors.success
+                                    ) {
+                                        // Show chain-of-custody detail
+                                    }
+                                    
+                                    ProofFirstTile(
+                                        title: "Exports Generated",
+                                        status: .ready,
+                                        count: proofPacksCount,
+                                        total: nil,
+                                        icon: "doc.badge.plus",
+                                        color: RMTheme.Colors.accent,
+                                        subtitle: "Last: 2h ago"
+                                    ) {
+                                        // Show exports list
+                                    }
+                                    
+                                    ProofFirstTile(
+                                        title: "Enforcement Events",
+                                        status: .blocked,
+                                        count: governanceViolations.count,
+                                        total: nil,
+                                        icon: "shield.checkered",
+                                        color: RMTheme.Colors.error,
+                                        subtitle: "\(governanceViolations.count) blocked"
+                                    ) {
+                                        showEnforcementReceipts = true
+                                    }
                                 }
-                                
-                                ProofFirstTile(
-                                    title: "Exports Generated",
-                                    status: .ready,
-                                    count: proofPacksCount,
-                                    total: nil,
-                                    icon: "doc.badge.plus",
-                                    color: RMTheme.Colors.accent,
-                                    subtitle: "Last: 2h ago"
-                                ) {
-                                    // Show exports list
-                                }
-                                
-                                ProofFirstTile(
-                                    title: "Enforcement Events",
-                                    status: .blocked,
-                                    count: governanceViolations.count,
-                                    total: nil,
-                                    icon: "shield.checkered",
-                                    color: RMTheme.Colors.error,
-                                    subtitle: "\(governanceViolations.count) blocked"
-                                ) {
-                                    showEnforcementReceipts = true
-                                }
+                                .padding(.horizontal, RMTheme.Spacing.pagePadding)
                             }
-                            .padding(.horizontal, RMTheme.Spacing.pagePadding)
-                        }
-                        
-                        // Narrative Timeline
-                        NarrativeTimelineView(events: chainOfCustody)
-                            .padding(.horizontal, RMTheme.Spacing.pagePadding)
-                        
-                        // Governance Model Badge
-                        GovernanceModelCard(violations: governanceViolations)
-                            .padding(.horizontal, RMTheme.Spacing.pagePadding)
-                        
-                        // Exposure Overview
-                        if let exposure = exposureOverview {
-                            ExposureOverviewCard(exposure: exposure)
+                            
+                            // Narrative Timeline
+                            NarrativeTimelineView(events: chainOfCustody)
+                                .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                            
+                            // Governance Model Badge
+                            GovernanceModelCard(violations: governanceViolations)
+                                .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                            
+                            // Exposure Overview
+                            if let exposure = exposureOverview {
+                                ExposureOverviewCard(exposure: exposure)
+                                    .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                            }
+                            
+                            // Audit Readiness Link
+                            AuditReadinessLink()
                                 .padding(.horizontal, RMTheme.Spacing.pagePadding)
                         }
-                        
-                        // Audit Readiness Link
-                        AuditReadinessLink()
-                            .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                        .padding(.vertical, RMTheme.Spacing.lg)
                     }
-                    .padding(.vertical, RMTheme.Spacing.lg)
                 }
             }
             .rmNavigationBar(title: "Executive")
