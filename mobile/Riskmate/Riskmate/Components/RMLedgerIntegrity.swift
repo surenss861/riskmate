@@ -164,7 +164,7 @@ struct EnforcementRow: View {
                     .font(RMTheme.Typography.bodySmall)
                     .foregroundColor(RMTheme.Colors.textPrimary)
                 
-                if let reason = event.metadata?["reason"] as? String {
+                if let reason = event.metadata["reason"] {
                     HStack {
                         Image(systemName: "info.circle.fill")
                             .foregroundColor(RMTheme.Colors.warning)
@@ -220,7 +220,7 @@ struct EnforcementReportView: View {
                                 EnforcementReportRow(label: "Blocked At", value: formatDate(event.timestamp))
                                 EnforcementReportRow(label: "Category", value: event.category)
                                 
-                                if let reason = event.metadata?["reason"] as? String {
+                                if let reason = event.metadata["reason"] {
                                     EnforcementReportRow(label: "Policy Reason", value: reason)
                                 }
                             }

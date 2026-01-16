@@ -251,8 +251,8 @@ class APIClient {
         )
         
         // If response has URL, download it
-        if !response.url.isEmpty {
-            return try await downloadPDF(url: response.url)
+        if let url = response.url, !url.isEmpty {
+            return try await downloadPDF(url: url)
         }
         
         // If response has base64, decode it
@@ -270,8 +270,8 @@ class APIClient {
             method: "POST"
         )
         
-        if !response.url.isEmpty {
-            return try await downloadZIP(url: response.url)
+        if let url = response.url, !url.isEmpty {
+            return try await downloadZIP(url: url)
         }
         
         if let base64 = response.base64, !base64.isEmpty {
@@ -459,7 +459,4 @@ func errorCategory(for statusCode: Int) -> ErrorCategory {
     }
 }
 
-struct InviteRequest: Codable {
-    let email: String
-    let role: String
-}
+// InviteRequest is defined in Team.swift

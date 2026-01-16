@@ -2,8 +2,8 @@ import SwiftUI
 
 struct ContentView: View {
     @StateObject private var sessionManager = SessionManager.shared
-    @State private var selectedTab: MainTab = .dashboard
-    @State private var selectedSidebarItem: SidebarItem? = .dashboard
+    @State private var selectedTab: MainTab = .operations
+    @State private var selectedSidebarItem: SidebarItem? = .operations
     @State private var showOnboarding = false
     
     var body: some View {

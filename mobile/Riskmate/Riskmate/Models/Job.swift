@@ -1,7 +1,7 @@
 import Foundation
 
 /// Job/Work Record model
-struct Job: Identifiable, Codable {
+struct Job: Identifiable, Codable, Hashable {
     let id: String
     let clientName: String
     let jobType: String

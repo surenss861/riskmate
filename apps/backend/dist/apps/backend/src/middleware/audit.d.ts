@@ -1,4 +1,4 @@
-export type AuditTargetType = "job" | "mitigation" | "document" | "report" | "subscription" | "legal" | "system" | "site" | "user" | "signoff" | "organization" | "proof_pack";
+export type AuditTargetType = "job" | "mitigation" | "document" | "report" | "subscription" | "legal" | "system" | "site" | "user" | "signoff" | "organization" | "proof_pack" | "evidence" | "export";
 export interface AuditLogEntry {
     organizationId: string;
     actorId?: string | null;

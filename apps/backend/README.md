@@ -64,4 +64,5 @@ The token is validated against Supabase Auth, and the user's organization_id is 
 - `STRIPE_SECRET_KEY` - Stripe API secret key
 - `FRONTEND_URL` - Frontend URL for CORS
 - `PORT` - Server port (default: 5173)
+- `EXPORT_WORKER_REQUIRE_RPC` - (Optional) Set to `true` in production to fail fast if RPC function is missing. Default: `false` (allows fallback)
 

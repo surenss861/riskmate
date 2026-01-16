@@ -250,6 +250,10 @@ struct HeroDefensibilityCard: View {
             return "Some work records require attention before audit submission. Review pending evidence and control completions."
         case .highExposure:
             return "Critical exposure detected. Immediate review of high-risk jobs and governance violations required."
+        case .auditRisk:
+            return "Audit risk identified. Review compliance gaps and missing documentation before submission."
+        case .criticalBlockers:
+            return "Critical blockers prevent audit submission. Address governance violations and missing evidence immediately."
         }
     }
     
@@ -289,6 +293,8 @@ enum DefensibilityStatus {
         case .insurerReady: return RMTheme.Colors.success
         case .needsReview: return RMTheme.Colors.warning
         case .highExposure: return RMTheme.Colors.error
+        case .auditRisk: return RMTheme.Colors.warning
+        case .criticalBlockers: return RMTheme.Colors.error
         }
     }
 }

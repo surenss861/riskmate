@@ -27,24 +27,24 @@ struct SupportBundleView: View {
             }
             
             Section("App Info") {
-                InfoRow(label: "Version", value: appVersion)
-                InfoRow(label: "Build", value: buildNumber)
-                InfoRow(label: "iOS Version", value: iosVersion)
-                InfoRow(label: "Device", value: deviceModel)
+                SupportInfoRow(label: "Version", value: appVersion)
+                SupportInfoRow(label: "Build", value: buildNumber)
+                SupportInfoRow(label: "iOS Version", value: iosVersion)
+                SupportInfoRow(label: "Device", value: deviceModel)
             }
             
             Section("Backend") {
-                InfoRow(label: "Backend URL", value: AppConfig.shared.backendURL)
-                InfoRow(label: "Status", value: statusManager.isOnline ? "Online" : "Offline")
+                SupportInfoRow(label: "Backend URL", value: AppConfig.shared.backendURL)
+                SupportInfoRow(label: "Status", value: statusManager.isOnline ? "Online" : "Offline")
                 if let lastCheck = statusManager.lastCheck {
-                    InfoRow(label: "Last Check", value: formatDate(lastCheck))
+                    SupportInfoRow(label: "Last Check", value: formatDate(lastCheck))
                 }
             }
             
             Section("Sync Status") {
-                InfoRow(label: "Sync State", value: syncStateText)
-                InfoRow(label: "Queued Items", value: "\(cache.queuedItems.count)")
-                InfoRow(label: "Active Uploads", value: "\(uploadManager.uploads.filter { $0.state == .uploading || $0.state == .queued }.count)")
+                SupportInfoRow(label: "Sync State", value: syncStateText)
+                SupportInfoRow(label: "Queued Items", value: "\(cache.queuedItems.count)")
+                SupportInfoRow(label: "Active Uploads", value: "\(uploadManager.uploads.filter { $0.state == .uploading || $0.state == .queued }.count)")
             }
         }
         .navigationTitle("Support")
@@ -125,7 +125,7 @@ struct SupportBundleView: View {
     }
 }
 
-struct InfoRow: View {
+struct SupportInfoRow: View {
     let label: String
     let value: String
     

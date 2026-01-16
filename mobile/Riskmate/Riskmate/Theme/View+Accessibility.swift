@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 /// Accessibility extensions for Dynamic Type, VoiceOver, and contrast
 extension View {

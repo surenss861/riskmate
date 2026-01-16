@@ -305,11 +305,24 @@ struct UploadTask: Identifiable, Codable {
     var idempotencyKey: String?
 }
 
-enum UploadState: Codable {
+enum UploadState: Codable, Equatable {
     case queued
     case uploading
     case synced
     case failed(String)
+    
+    static func == (lhs: UploadState, rhs: UploadState) -> Bool {
+        switch (lhs, rhs) {
+        case (.queued, .queued),
+             (.uploading, .uploading),
+             (.synced, .synced):
+            return true
+        case (.failed(let lhsError), .failed(let rhsError)):
+            return lhsError == rhsError
+        default:
+            return false
+        }
+    }
     
     enum CodingKeys: String, CodingKey {
         case type

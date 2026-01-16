@@ -30,6 +30,14 @@ const account_1 = require("./routes/account");
 const sites_1 = require("./routes/sites");
 const audit_1 = require("./routes/audit");
 const executive_1 = require("./routes/executive");
+const evidence_1 = require("./routes/evidence");
+const exports_1 = require("./routes/exports");
+const verification_1 = require("./routes/verification");
+const publicVerification_1 = require("./routes/publicVerification");
+const metrics_1 = require("./routes/metrics");
+const exportWorker_1 = require("./services/exportWorker");
+const retentionWorker_1 = require("./services/retentionWorker");
+const ledgerRootWorker_1 = require("./services/ledgerRootWorker");
 const requestId_1 = require("./middleware/requestId");
 const errorResponse_1 = require("./utils/errorResponse");
 const app = (0, express_1.default)();
@@ -143,6 +151,11 @@ app.use("/api/account", account_1.accountRouter);
 app.use("/api/sites", sites_1.sitesRouter);
 app.use("/api/audit", audit_1.auditRouter);
 app.use("/api/executive", executive_1.executiveRouter);
+app.use("/api", evidence_1.evidenceRouter);
+app.use("/api", exports_1.exportsRouter);
+app.use("/api", verification_1.verificationRouter);
+app.use("/api/public", publicVerification_1.publicVerificationRouter);
+app.use("/api/metrics", metrics_1.metricsRouter);
 // 404 handler
 // CORS headers are already set by cors() middleware, so this response will include them
 app.use((req, res) => {
@@ -176,5 +189,9 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 RiskMate Backend API running on port ${PORT}`);
     console.log(`📡 Health check: http://0.0.0.0:${PORT}/health`);
     console.log(`✅ Build: ${process.env.RAILWAY_DEPLOYMENT_ID || 'local'} | Commit: ${process.env.RAILWAY_GIT_COMMIT_SHA || 'dev'}`);
+    // Start background workers
+    (0, exportWorker_1.startExportWorker)();
+    (0, retentionWorker_1.startRetentionWorker)();
+    (0, ledgerRootWorker_1.startLedgerRootWorker)();
 });
 //# sourceMappingURL=index.js.map

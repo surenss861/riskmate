@@ -190,7 +190,7 @@ function createErrorResponse(options) {
         classification,
         retryable,
         retry_strategy,
-        ...(hint && { support_hint: hint }),
+        error_hint: hint || null, // Always include hint field (null if none)
         ...(supportUrl && { support_url: supportUrl }),
         ...(retry_after_seconds !== undefined && { retry_after_seconds }),
         ...additionalFields,

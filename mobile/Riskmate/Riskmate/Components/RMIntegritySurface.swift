@@ -90,7 +90,7 @@ struct IntegrityRow: View {
             
             Spacer()
             
-            if let status = status {
+            if status != nil {
                 HStack(spacing: 4) {
                     Circle()
                         .fill(statusColor)

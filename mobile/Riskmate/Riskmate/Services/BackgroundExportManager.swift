@@ -208,7 +208,7 @@ class BackgroundExportManager: NSObject, ObservableObject {
 
 // MARK: - Models
 
-struct ExportTask: Identifiable, Codable {
+struct ExportTask: Identifiable, Codable, Equatable {
     let id: String
     let jobId: String
     let type: ExportType
@@ -262,6 +262,17 @@ struct ExportTask: Identifiable, Codable {
             try container.encode(fileURL.path, forKey: .fileURL)
         }
     }
+    
+    static func == (lhs: ExportTask, rhs: ExportTask) -> Bool {
+        return lhs.id == rhs.id &&
+               lhs.jobId == rhs.jobId &&
+               lhs.type == rhs.type &&
+               lhs.state == rhs.state &&
+               lhs.progress == rhs.progress &&
+               lhs.createdAt == rhs.createdAt &&
+               lhs.fileURL?.absoluteString == rhs.fileURL?.absoluteString &&
+               lhs.initiatedFromForeground == rhs.initiatedFromForeground
+    }
 }
 
 enum ExportType: String, Codable {
@@ -276,7 +287,7 @@ enum ExportType: String, Codable {
     }
 }
 
-enum ExportState: Codable {
+enum ExportState: Codable, Equatable {
     case queued
     case preparing
     case downloading
@@ -286,6 +297,20 @@ enum ExportState: Codable {
     enum CodingKeys: String, CodingKey {
         case type
         case error
+    }
+    
+    static func == (lhs: ExportState, rhs: ExportState) -> Bool {
+        switch (lhs, rhs) {
+        case (.queued, .queued),
+             (.preparing, .preparing),
+             (.downloading, .downloading),
+             (.ready, .ready):
+            return true
+        case (.failed(let lhsError), .failed(let rhsError)):
+            return lhsError == rhsError
+        default:
+            return false
+        }
     }
     
     enum StateType: String, Codable {

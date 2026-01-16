@@ -81,7 +81,7 @@ struct RMProofReadinessMeter: View {
 }
 
 struct ProofReadiness {
-    let status: ReadinessStatus
+    let status: ProofReadinessStatus
     let evidenceCount: Int
     let evidenceRequired: Int
     let evidenceStatus: ReadinessItemStatus
@@ -91,7 +91,7 @@ struct ProofReadiness {
     let needsAttestation: Bool
 }
 
-enum ReadinessStatus {
+enum ProofReadinessStatus {
     case ready
     case needsEvidence
     case needsAttestation

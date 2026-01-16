@@ -92,7 +92,7 @@ class Analytics {
     // MARK: - Private
     
     private func trackEvent(_ name: String, metadata: [String: String]? = nil) {
-        let event: [String: Any] = [
+        let _: [String: Any] = [
             "name": name,
             "timestamp": ISO8601DateFormatter().string(from: Date()),
             "metadata": metadata ?? [:]

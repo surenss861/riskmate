@@ -55,7 +55,7 @@ struct ExportReceiptView: View {
                         // Actions
                         VStack(spacing: RMTheme.Spacing.md) {
                             Button {
-                                if let url = export.fileURL {
+                                if export.fileURL != nil {
                                     showShareSheet = true
                                 }
                             } label: {

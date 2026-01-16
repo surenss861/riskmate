@@ -216,15 +216,7 @@ enum Trend {
     case neutral
 }
 
-struct AuditEvent: Identifiable {
-    let id: String
-    let category: String
-    let summary: String
-    let timestamp: Date
-    var details: String = ""
-    var actor: String = ""
-    var metadata: [String: String] = [:]
-}
+// AuditEvent is defined in OfflineCache.swift
 
 // MARK: - KPI Card Component
 

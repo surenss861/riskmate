@@ -77,20 +77,37 @@ async function processExportQueue() {
     }
 
     // Fallback: Manual claim with optimistic locking
-    // (Use this if RPC function doesn't exist yet)
+    // In production, RPC should always exist - fail fast if missing
+    const requireRpc = process.env.EXPORT_WORKER_REQUIRE_RPC === 'true'
+    
     if (rpcError) {
       if (rpcError.code === '42883') {
         // 42883 = function does not exist
-        // Log once per minute to avoid spam
-        const lastWarning = (global as any).__exportWorkerRpcWarningTime || 0
-        const now = Date.now()
-        if (now - lastWarning > 60000) { // 1 minute
-          console.warn('[ExportWorker] RPC function claim_export_job not found. Using fallback. Apply migration 20251203000004_export_worker_atomic_claim.sql')
-          ;(global as any).__exportWorkerRpcWarningTime = now
+        const errorMsg = 'RPC function claim_export_job not found. Apply migration 20251203000004_export_worker_atomic_claim.sql'
+        
+        if (requireRpc) {
+          // Production: Fail fast with loud error
+          console.error('[ExportWorker] ❌ CRITICAL: RPC function missing in production!')
+          console.error('[ExportWorker] This should never happen. Check Supabase migrations.')
+          console.error('[ExportWorker] Error:', errorMsg)
+          // Don't process exports if RPC is required but missing
+          return
+        } else {
+          // Development: Log warning once per minute
+          const lastWarning = (global as any).__exportWorkerRpcWarningTime || 0
+          const now = Date.now()
+          if (now - lastWarning > 60000) { // 1 minute
+            console.warn('[ExportWorker] ⚠️  RPC function not found. Using fallback. Apply migration 20251203000004_export_worker_atomic_claim.sql')
+            ;(global as any).__exportWorkerRpcWarningTime = now
+          }
         }
       } else {
         // Other errors are unexpected
         console.warn('[ExportWorker] RPC claim failed, using fallback:', rpcError.message)
+        if (requireRpc) {
+          console.error('[ExportWorker] ❌ CRITICAL: RPC call failed in production!')
+          return
+        }
       }
     }
 

@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 
 /// Crash reporting setup (Sentry-ready structure)
 /// Attaches diagnostics to crashes automatically

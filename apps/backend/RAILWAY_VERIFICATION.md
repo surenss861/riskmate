@@ -94,6 +94,11 @@ Check logs for:
 - **Check**: Verify all required env vars are set (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, etc.)
 - **Check**: Verify `/health` endpoint responds
 
+**Issue: Export worker using fallback instead of RPC**
+- **Check**: Verify `claim_export_job` RPC function exists in Supabase (see `RPC_FUNCTION_SETUP.md`)
+- **Check**: Set `EXPORT_WORKER_REQUIRE_RPC=true` in Railway to fail fast if RPC is missing
+- **Check**: Logs should show "Claimed export job via RPC" (not "via fallback")
+
 **Issue: Workers not starting**
 - **Check**: Verify workers are imported and started in `apps/backend/src/index.ts`
 - **Check**: Check logs for worker initialization messages

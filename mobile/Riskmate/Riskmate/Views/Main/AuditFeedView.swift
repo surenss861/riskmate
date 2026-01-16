@@ -48,7 +48,7 @@ struct AuditFeedView: View {
                     List {
                         ForEach(events) { event in
                             // Use enforcement row for blocked events
-                            if event.category == "GOVERNANCE" && (event.metadata?["blocked"] as? Bool == true || event.summary.lowercased().contains("blocked")) {
+                            if event.category == "GOVERNANCE" && (event.metadata["blocked"] == "true" || event.summary.lowercased().contains("blocked")) {
                                 EnforcementRow(event: event)
                                     .listRowBackground(Color.clear)
                                     .listRowSeparator(.hidden)
@@ -58,6 +58,49 @@ struct AuditFeedView: View {
                                         bottom: RMTheme.Spacing.xs,
                                         trailing: RMTheme.Spacing.md
                                     ))
+                                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                        Button {
+                                            copyEventId(event.id)
+                                        } label: {
+                                            Label("Copy ID", systemImage: "doc.on.doc")
+                                        }
+                                        .tint(RMTheme.Colors.accent)
+                                        
+                                        Button {
+                                            exportEvent(event)
+                                        } label: {
+                                            Label("Export", systemImage: "square.and.arrow.up")
+                                        }
+                                        .tint(RMTheme.Colors.categoryAccess)
+                                    }
+                                    .contextMenu {
+                                        Button {
+                                            copyEventId(event.id)
+                                        } label: {
+                                            Label("Copy Event ID", systemImage: "doc.on.doc")
+                                        }
+                                        
+                                        Button {
+                                            exportEvent(event)
+                                        } label: {
+                                            Label("Export", systemImage: "square.and.arrow.up")
+                                        }
+                                        
+                                        Divider()
+                                        
+                                        Button {
+                                            selectedEvent = event
+                                            showingDetail = true
+                                        } label: {
+                                            Label("View Details", systemImage: "eye")
+                                        }
+                                    }
+                                    .onTapGesture {
+                                        let generator = UIImpactFeedbackGenerator(style: .light)
+                                        generator.impactOccurred()
+                                        selectedEvent = event
+                                        showingDetail = true
+                                    }
                             } else {
                                 RMAuditRow(event: event)
                                     .listRowBackground(Color.clear)
@@ -68,50 +111,50 @@ struct AuditFeedView: View {
                                         bottom: RMTheme.Spacing.xs,
                                         trailing: RMTheme.Spacing.md
                                     ))
-                            }
-                                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                    Button {
-                                        copyEventId(event.id)
-                                    } label: {
-                                        Label("Copy ID", systemImage: "doc.on.doc")
+                                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                        Button {
+                                            copyEventId(event.id)
+                                        } label: {
+                                            Label("Copy ID", systemImage: "doc.on.doc")
+                                        }
+                                        .tint(RMTheme.Colors.accent)
+                                        
+                                        Button {
+                                            exportEvent(event)
+                                        } label: {
+                                            Label("Export", systemImage: "square.and.arrow.up")
+                                        }
+                                        .tint(RMTheme.Colors.categoryAccess)
                                     }
-                                    .tint(RMTheme.Colors.accent)
-                                    
-                                    Button {
-                                        exportEvent(event)
-                                    } label: {
-                                        Label("Export", systemImage: "square.and.arrow.up")
+                                    .contextMenu {
+                                        Button {
+                                            copyEventId(event.id)
+                                        } label: {
+                                            Label("Copy Event ID", systemImage: "doc.on.doc")
+                                        }
+                                        
+                                        Button {
+                                            exportEvent(event)
+                                        } label: {
+                                            Label("Export", systemImage: "square.and.arrow.up")
+                                        }
+                                        
+                                        Divider()
+                                        
+                                        Button {
+                                            selectedEvent = event
+                                            showingDetail = true
+                                        } label: {
+                                            Label("View Details", systemImage: "eye")
+                                        }
                                     }
-                                    .tint(RMTheme.Colors.categoryAccess)
-                                }
-                                .contextMenu {
-                                    Button {
-                                        copyEventId(event.id)
-                                    } label: {
-                                        Label("Copy Event ID", systemImage: "doc.on.doc")
-                                    }
-                                    
-                                    Button {
-                                        exportEvent(event)
-                                    } label: {
-                                        Label("Export", systemImage: "square.and.arrow.up")
-                                    }
-                                    
-                                    Divider()
-                                    
-                                    Button {
+                                    .onTapGesture {
+                                        let generator = UIImpactFeedbackGenerator(style: .light)
+                                        generator.impactOccurred()
                                         selectedEvent = event
                                         showingDetail = true
-                                    } label: {
-                                        Label("View Details", systemImage: "eye")
                                     }
-                                }
-                                .onTapGesture {
-                                    let generator = UIImpactFeedbackGenerator(style: .light)
-                                    generator.impactOccurred()
-                                    selectedEvent = event
-                                    showingDetail = true
-                                }
+                            }
                         }
                     }
                     .listStyle(.plain)
