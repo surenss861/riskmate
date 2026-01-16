@@ -97,11 +97,9 @@ class APIClient {
                     print("[APIClient] ❌ 401 Unauthorized — forcing logout")
                     
                     // Force logout and clear auth state (this triggers UI to show login)
-                    // Use MainActor.run to ensure we're on main thread (SessionManager is @MainActor)
-                    await MainActor.run {
-                        Task {
-                            await SessionManager.shared.logout()
-                        }
+                    // SessionManager is @MainActor, so we need to call logout on main actor
+                    Task { @MainActor in
+                        await SessionManager.shared.logout()
                     }
                     
                     // Don't attempt to decode 401 body - just throw and let UI handle logout state
@@ -135,15 +133,14 @@ class APIClient {
             decoder.keyDecodingStrategy = .convertFromSnakeCase
             
             // Custom date decoder to handle fractional seconds (Supabase/Node often returns these)
-            let dateFormatter = ISO8601DateFormatter()
-            dateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            
             decoder.dateDecodingStrategy = .custom { decoder in
                 let container = try decoder.singleValueContainer()
                 let dateString = try container.decode(String.self)
                 
                 // Try with fractional seconds first
-                if let date = dateFormatter.date(from: dateString) {
+                let fractionalFormatter = ISO8601DateFormatter()
+                fractionalFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+                if let date = fractionalFormatter.date(from: dateString) {
                     return date
                 }
                 
@@ -865,6 +862,7 @@ struct BackendHealthResponse: Codable {
 enum APIError: LocalizedError {
     case invalidURL
     case invalidResponse
+    case unauthorized
     case httpError(statusCode: Int, message: String)
     case networkError(category: ErrorCategory, message: String, underlyingError: URLError)
     case decodingError
@@ -875,6 +873,8 @@ enum APIError: LocalizedError {
             return "Invalid API URL"
         case .invalidResponse:
             return "Invalid response from server"
+        case .unauthorized:
+            return "Unauthorized - please log in"
         case .httpError(let statusCode, let message):
             return "\(message) (Status: \(statusCode))"
         case .networkError(_, let message, _):
