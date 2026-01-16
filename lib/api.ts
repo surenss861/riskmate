@@ -24,12 +24,41 @@ export interface ApiError {
 async function getAuthToken(): Promise<string | null> {
   if (typeof window === 'undefined') return null;
   
-  const supabase = createSupabaseBrowserClient();
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  
-  return session?.access_token || null;
+  try {
+    const supabase = createSupabaseBrowserClient();
+    const {
+      data: { session },
+      error: sessionError,
+    } = await supabase.auth.getSession();
+    
+    if (sessionError) {
+      console.error('[API] Session error:', sessionError);
+      return null;
+    }
+    
+    if (!session) {
+      console.warn('[API] No active session - user may need to log in');
+      return null;
+    }
+    
+    const token = session.access_token;
+    
+    // Verify token is not an anon token (basic check)
+    if (token && token.length < 100) {
+      console.warn('[API] Token appears invalid (too short)');
+      return null;
+    }
+    
+    // Log token info in dev (first 20 chars only for security)
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[API] Using auth token:', token ? `${token.substring(0, 20)}...` : 'none');
+    }
+    
+    return token || null;
+  } catch (error) {
+    console.error('[API] Failed to get auth token:', error);
+    return null;
+  }
 }
 
 async function apiRequest<T>(

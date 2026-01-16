@@ -47,10 +47,26 @@ export async function fetchWithIdempotency<T = any>(
   // Get auth token (use same pattern as api.ts)
   let token: string | undefined;
   if (typeof window !== 'undefined') {
-    const { createSupabaseBrowserClient } = await import('@/lib/supabase/client');
-    const supabase = createSupabaseBrowserClient();
-    const { data: { session } } = await supabase.auth.getSession();
-    token = session?.access_token || undefined;
+    try {
+      const { createSupabaseBrowserClient } = await import('@/lib/supabase/client');
+      const supabase = createSupabaseBrowserClient();
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError) {
+        console.error('[Idempotency] Session error:', sessionError);
+      } else if (!session) {
+        console.warn('[Idempotency] No active session');
+      } else {
+        token = session.access_token || undefined;
+        // Verify token is not anon token
+        if (token && token.length < 100) {
+          console.warn('[Idempotency] Token appears invalid (too short)');
+          token = undefined;
+        }
+      }
+    } catch (error) {
+      console.error('[Idempotency] Failed to get auth token:', error);
+    }
   }
 
   // Prepare headers
