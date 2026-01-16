@@ -141,8 +141,35 @@ exports.jobsRouter.get("/", auth_1.authenticate, async (req, res) => {
         // - risk_desc/risk_asc: "risk_score|created_at|id"
         // - status_asc/status_desc: DISABLED (use offset only - in-memory sort incompatible with cursor)
         const { cursor, limit: limitParamFromCursor } = authReq.query;
-        const pageNum = parseInt(page, 10);
-        const limitNum = limitParamFromCursor ? parseInt(limitParamFromCursor, 10) : (limitParamFromQuery ? parseInt(limitParamFromQuery, 10) : 20);
+        // Validate and parse pagination parameters
+        let pageNum;
+        let limitNum;
+        try {
+            pageNum = parseInt(String(page), 10);
+            if (isNaN(pageNum) || pageNum < 1) {
+                pageNum = 1;
+            }
+        }
+        catch {
+            pageNum = 1;
+        }
+        // Support both page_size and limit (page_size takes precedence for offset pagination)
+        const pageSizeParam = page_size ? parseInt(String(page_size), 10) : null;
+        const limitParam = limitParamFromCursor ? parseInt(String(limitParamFromCursor), 10) : (limitParamFromQuery ? parseInt(String(limitParamFromQuery), 10) : null);
+        try {
+            limitNum = pageSizeParam && !isNaN(pageSizeParam) && pageSizeParam > 0
+                ? pageSizeParam
+                : (limitParam && !isNaN(limitParam) && limitParam > 0
+                    ? limitParam
+                    : 20);
+            // Enforce maximum limit to prevent abuse
+            if (limitNum > 1000) {
+                limitNum = 1000;
+            }
+        }
+        catch {
+            limitNum = 20;
+        }
         // Cursor pagination is only safe for sorts that match SQL ordering
         // status_asc uses in-memory sorting, so cursor pagination would be inconsistent
         const supportsCursorPagination = !useStatusOrdering;
@@ -175,9 +202,13 @@ exports.jobsRouter.get("/", auth_1.authenticate, async (req, res) => {
             const index = statusOrder.indexOf(status);
             return index >= 0 ? index : statusOrder.length; // Unknown statuses go last
         };
+        // Base columns (always present)
+        const baseColumns = "id, client_name, job_type, location, status, risk_score, risk_level, created_at, updated_at, review_flag, flagged_at";
+        // Optional columns (may not exist if migration hasn't run)
+        const optionalColumns = "applied_template_id, applied_template_type";
         let query = supabaseClient_1.supabase
             .from("jobs")
-            .select("id, client_name, job_type, location, status, risk_score, risk_level, created_at, updated_at, applied_template_id, applied_template_type, review_flag, flagged_at")
+            .select(`${baseColumns}, ${optionalColumns}`)
             .eq("organization_id", organization_id)
             .is("deleted_at", null); // Always exclude deleted
         // Apply time_range filter
@@ -272,13 +303,27 @@ exports.jobsRouter.get("/", auth_1.authenticate, async (req, res) => {
         if (risk_level) {
             query = query.eq("risk_level", risk_level);
         }
-        let { data: jobs, error } = await query;
-        // If error is due to missing columns (migration not applied), retry without archive/delete filters
-        if (error && (error.message?.includes('archived_at') || error.message?.includes('deleted_at') || error.code === 'PGRST116')) {
-            console.warn('Archive/delete columns not found - retrying without filters (migration may not be applied yet)');
+        // Explicitly type jobs to handle both full and fallback queries
+        let jobs = null;
+        let error = null;
+        {
+            const result = await query;
+            jobs = result.data;
+            error = result.error;
+        }
+        // If error is due to missing columns (migration not applied), retry with minimal columns
+        if (error && (error.message?.includes('archived_at') ||
+            error.message?.includes('deleted_at') ||
+            error.message?.includes('applied_template_id') ||
+            error.message?.includes('applied_template_type') ||
+            error.message?.includes('review_flag') ||
+            error.message?.includes('flagged_at') ||
+            error.code === 'PGRST116')) {
+            console.warn('[JOBS] Some columns not found - retrying with minimal columns (migration may not be applied yet):', error.message);
+            // Fallback: only select columns that definitely exist (core columns only)
             let fallbackQuery = supabaseClient_1.supabase
                 .from("jobs")
-                .select("id, client_name, job_type, location, status, risk_score, risk_level, created_at, updated_at, applied_template_id, applied_template_type, review_flag, flagged_at")
+                .select("id, client_name, job_type, location, status, risk_score, risk_level, created_at, updated_at")
                 .eq("organization_id", organization_id);
             // Apply cursor or offset pagination (fallback mode - simplified)
             if (useCursor) {
@@ -485,8 +530,11 @@ exports.jobsRouter.get("/", auth_1.authenticate, async (req, res) => {
                 };
                 return {
                     ...job,
+                    // Optional fields (may not exist if migration hasn't run - use type assertion to avoid TS errors)
                     applied_template_id: job.applied_template_id ?? null,
                     applied_template_type: job.applied_template_type ?? null,
+                    review_flag: job.review_flag ?? null,
+                    flagged_at: job.flagged_at ?? null,
                     readiness_score: readiness.readiness_score,
                     readiness_basis: readiness.readiness_basis,
                     readiness_empty_reason: readiness.readiness_empty_reason,
@@ -598,8 +646,26 @@ exports.jobsRouter.get("/", auth_1.authenticate, async (req, res) => {
         });
     }
     catch (err) {
-        console.error("Jobs fetch failed:", err);
-        res.status(500).json({ message: "Failed to fetch jobs" });
+        const requestId = authReq.requestId || 'unknown';
+        const organizationId = authReq.user?.organization_id;
+        console.error("[JOBS] Fetch failed:", {
+            requestId,
+            organizationId,
+            error: err.message || String(err),
+            stack: err.stack,
+            query: authReq.query,
+        });
+        // Use structured error response
+        const { response: errorResponse, errorId } = (0, errorResponse_1.createErrorResponse)({
+            message: err.message || "Failed to fetch jobs",
+            internalMessage: err.stack || String(err),
+            code: "JOBS_FETCH_ERROR",
+            requestId,
+            statusCode: 500,
+        });
+        res.setHeader('X-Error-ID', errorId);
+        (0, errorResponse_1.logErrorForSupport)(500, "JOBS_FETCH_ERROR", requestId, organizationId, errorResponse.message, errorResponse.internal_message, errorResponse.category, errorResponse.severity, '/api/jobs');
+        res.status(500).json(errorResponse);
     }
 });
 // GET /api/jobs/:id

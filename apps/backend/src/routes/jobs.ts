@@ -192,6 +192,24 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
       return index >= 0 ? index : statusOrder.length; // Unknown statuses go last
     };
 
+    // Type for job rows - optional fields may not exist if migration hasn't run
+    type JobRow = {
+      id: string;
+      client_name: string | null;
+      job_type: string | null;
+      location: string | null;
+      status: string;
+      risk_score: number | null;
+      risk_level: string | null;
+      created_at: string;
+      updated_at: string;
+      // These may not exist pre-migration, so they MUST be optional
+      review_flag?: any;
+      flagged_at?: string | null;
+      applied_template_id?: string | null;
+      applied_template_type?: string | null;
+    };
+    
     // Base columns (always present)
     const baseColumns = "id, client_name, job_type, location, status, risk_score, risk_level, created_at, updated_at, review_flag, flagged_at";
     // Optional columns (may not exist if migration hasn't run)
@@ -301,7 +319,15 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
       query = query.eq("risk_level", risk_level);
     }
 
-    let { data: jobs, error } = await query;
+    // Explicitly type jobs to handle both full and fallback queries
+    let jobs: JobRow[] | null = null;
+    let error: any = null;
+    
+    {
+      const result = await query;
+      jobs = result.data as JobRow[] | null;
+      error = result.error;
+    }
     
     // If error is due to missing columns (migration not applied), retry with minimal columns
     if (error && (
@@ -394,7 +420,7 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
       }
       
       const fallbackResult = await fallbackQuery;
-      jobs = fallbackResult.data;
+      jobs = fallbackResult.data as JobRow[] | null;
       error = fallbackResult.error;
     }
 
