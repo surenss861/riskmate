@@ -17,6 +17,12 @@ class AuthService {
         )
     }
     
+    /// Check if token is likely a valid JWT (3 parts, reasonable length)
+    private func isLikelyJWT(_ token: String) -> Bool {
+        let parts = token.split(separator: ".")
+        return parts.count == 3 && token.count > 50
+    }
+    
     /// Get current session (if logged in)
     func getCurrentSession() async throws -> Session? {
         do {
@@ -56,27 +62,60 @@ class AuthService {
             // Validate token is not empty
             guard !token.isEmpty else {
                 print("[AuthService] ⚠️ Session exists but accessToken is empty")
-                return nil
+                throw NSError(
+                    domain: "AuthService",
+                    code: 1,
+                    userInfo: [NSLocalizedDescriptionKey: "Session exists but accessToken is empty"]
+                )
             }
             
-            // Log token info (first 20 chars only for security)
-            print("[AuthService] ✅ Session loaded, token length: \(token.count), preview: \(token.prefix(20))...")
+            // Validate JWT format
+            guard isLikelyJWT(token) else {
+                #if DEBUG
+                let preview = String(token.prefix(20))
+                print("[AuthService] ❌ Token format invalid (not JWT) - preview: \(preview)..., length: \(token.count)")
+                #endif
+                throw NSError(
+                    domain: "AuthService",
+                    code: 2,
+                    userInfo: [NSLocalizedDescriptionKey: "Token format invalid (not JWT - expected 3 dot-separated parts)"]
+                )
+            }
+            
+            // Logging (safe): only log in DEBUG builds
+            #if DEBUG
+            let preview = String(token.prefix(20))
+            print("[AuthService] ✅ Session loaded, token length: \(token.count), preview: \(preview)…")
+            #endif
             
             return token
         } catch {
-            print("[AuthService] ❌ Failed to get session: \(error.localizedDescription)")
-            return nil
+            print("[AuthService] ❌ Failed to get session/token: \(error.localizedDescription)")
+            throw error
         }
     }
     
     /// Check if user is currently authenticated
     func isAuthenticated() async -> Bool {
         do {
-            let session = try await supabase.auth.session
-            // accessToken is non-optional String, just check if not empty
-            return !session.accessToken.isEmpty
+            _ = try await supabase.auth.session
+            return true
         } catch {
             return false
+        }
+    }
+    
+    /// Ensure session is restored (call this at app startup before making API calls)
+    func ensureSessionRestored() async {
+        do {
+            _ = try await supabase.auth.session
+            #if DEBUG
+            print("[AuthService] ✅ Session restored")
+            #endif
+        } catch {
+            #if DEBUG
+            print("[AuthService] ⚠️ No session found (user not logged in)")
+            #endif
         }
     }
 }

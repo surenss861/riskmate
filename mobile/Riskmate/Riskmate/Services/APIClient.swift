@@ -46,17 +46,19 @@ class APIClient {
                 throw APIError.httpError(statusCode: 401, message: "No authentication token available - please log in")
             }
             
-            // Validate token format (should be a JWT with 3 parts)
-            let tokenParts = token.split(separator: ".")
-            if tokenParts.count != 3 {
-                print("[APIClient] ⚠️ Token format invalid (expected JWT with 3 parts, got \(tokenParts.count))")
-                print("[APIClient] Token preview: \(token.prefix(20))...")
-            }
-            
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-            print("[APIClient] ✅ Auth token attached (length: \(token.count), preview: \(token.prefix(20))...)")
+            
+            // Logging (safe): only log in DEBUG builds, never full token
+            #if DEBUG
+            let preview = String(token.prefix(20))
+            print("[APIClient] ✅ Auth token attached (length: \(token.count), preview: \(preview)…)")
+            #endif
         } catch {
             print("[APIClient] ❌ Failed to get authentication token: \(error.localizedDescription)")
+            // Re-throw AuthService errors as-is (they have better messages)
+            if let nsError = error as NSError? {
+                throw APIError.httpError(statusCode: 401, message: nsError.localizedDescription)
+            }
             throw APIError.httpError(statusCode: 401, message: "Failed to get authentication token: \(error.localizedDescription)")
         }
         
@@ -80,12 +82,27 @@ class APIClient {
             // Always log response status
             print("[APIClient] 📡 Response: \(httpResponse.statusCode) for \(method) \(path)")
             
-            if httpResponse.statusCode >= 400 {
-                let errorPreview = String(data: data, encoding: .utf8)?.prefix(200) ?? "No error body"
-                print("[APIClient] ❌ Error response body (first 200 chars): \(errorPreview)")
-            }
-            
             guard (200...299).contains(httpResponse.statusCode) else {
+                let errorPreview = String(data: data, encoding: .utf8)?.prefix(200) ?? "No error body"
+                
+                // Special handling for 401 to help debug auth issues
+                if httpResponse.statusCode == 401 {
+                    print("[APIClient] ❌ 401 Unauthorized")
+                    print("[APIClient] Error response body (first 200 chars): \(errorPreview)")
+                    
+                    let errorMessage = try? JSONDecoder().decode(APIErrorResponse.self, from: data)
+                    throw APIError.httpError(
+                        statusCode: 401,
+                        message: errorMessage?.message ?? "Unauthorized - check authentication token"
+                    )
+                }
+                
+                // Log other errors
+                if httpResponse.statusCode >= 400 {
+                    print("[APIClient] ❌ Error response (status \(httpResponse.statusCode))")
+                    print("[APIClient] Error response body (first 200 chars): \(errorPreview)")
+                }
+                
                 let errorMessage = try? JSONDecoder().decode(APIErrorResponse.self, from: data)
                 let error = APIError.httpError(
                     statusCode: httpResponse.statusCode,
