@@ -76,7 +76,7 @@ extension APIClient {
 }
 
 /// Helper for decoding flexible JSON structures
-struct AnyCodable: Decodable {
+struct AnyCodable: Codable {
     let value: Any
     
     init(from decoder: Decoder) throws {
@@ -97,5 +97,34 @@ struct AnyCodable: Decodable {
         } else {
             throw DecodingError.dataCorruptedError(in: container, debugDescription: "AnyCodable value cannot be decoded")
         }
+    }
+    
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        
+        switch value {
+        case let bool as Bool:
+            try container.encode(bool)
+        case let int as Int:
+            try container.encode(int)
+        case let double as Double:
+            try container.encode(double)
+        case let string as String:
+            try container.encode(string)
+        case let array as [Any]:
+            let codableArray = array.map { AnyCodable(value: $0) }
+            try container.encode(codableArray)
+        case let dict as [String: Any]:
+            let codableDict = dict.mapValues { AnyCodable(value: $0) }
+            try container.encode(codableDict)
+        default:
+            // Fallback: encode as string representation
+            try container.encode(String(describing: value))
+        }
+    }
+    
+    // Convenience initializer for creating AnyCodable from Any value
+    init(value: Any) {
+        self.value = value
     }
 }
