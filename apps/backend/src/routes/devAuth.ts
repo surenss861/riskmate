@@ -1,7 +1,7 @@
-import { Router } from "express";
+import { Router, type Router as ExpressRouter } from "express";
 import { createClient } from "@supabase/supabase-js";
 
-const router = Router();
+const router: ExpressRouter = Router();
 
 /**
  * GET /v1/dev/whoami?user_id=...&org_id=...

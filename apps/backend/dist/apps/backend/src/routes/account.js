@@ -26,6 +26,39 @@ exports.accountRouter.get("/", (_req, res) => {
         ]
     });
 });
+// GET /api/account/me (also available at /v1/me via v1 router)
+// Returns current authenticated user info
+exports.accountRouter.get("/me", auth_1.authenticate, async (req, res) => {
+    try {
+        const userId = req.user?.id;
+        const organizationId = req.user?.organization_id;
+        const email = req.user?.email;
+        const role = req.user?.role;
+        if (!userId || !organizationId) {
+            return res.status(401).json((0, errorResponse_1.createErrorResponse)({
+                message: "Unauthorized",
+                code: "AUTH_UNAUTHORIZED",
+                status: 401,
+            }).response);
+        }
+        res.json({
+            data: {
+                id: userId,
+                email: email,
+                organization_id: organizationId,
+                role: role,
+            },
+        });
+    }
+    catch (err) {
+        console.error("Me endpoint error:", err);
+        res.status(500).json((0, errorResponse_1.createErrorResponse)({
+            message: "Internal server error",
+            code: "INTERNAL_ERROR",
+            status: 500,
+        }).response);
+    }
+});
 // GET /api/account/organization
 // Returns organization info for the current user
 exports.accountRouter.get("/organization", auth_1.authenticate, async (req, res) => {

@@ -96,25 +96,48 @@ async function processExportQueue() {
             .rpc('claim_export_job', { p_max_concurrent: MAX_CONCURRENT_EXPORTS });
         if (!rpcError && claimedJob && claimedJob.length > 0) {
             // Successfully claimed a job via RPC
-            await processExport(claimedJob[0]);
+            const job = claimedJob[0];
+            (0, structuredLog_1.logStructured)('info', 'Claimed export job via RPC', {
+                export_id: job.id,
+                org_id: job.organization_id,
+                export_type: job.export_type,
+                work_record_id: job.work_record_id,
+            });
+            await processExport(job);
             return;
         }
         // Fallback: Manual claim with optimistic locking
-        // (Use this if RPC function doesn't exist yet)
+        // In production, RPC should always exist - fail fast if missing
+        const requireRpc = process.env.EXPORT_WORKER_REQUIRE_RPC === 'true';
         if (rpcError) {
             if (rpcError.code === '42883') {
                 // 42883 = function does not exist
-                // Log once per minute to avoid spam
-                const lastWarning = global.__exportWorkerRpcWarningTime || 0;
-                const now = Date.now();
-                if (now - lastWarning > 60000) { // 1 minute
-                    console.warn('[ExportWorker] RPC function claim_export_job not found. Using fallback. Apply migration 20251203000004_export_worker_atomic_claim.sql');
-                    global.__exportWorkerRpcWarningTime = now;
+                const errorMsg = 'RPC function claim_export_job not found. Apply migration 20251203000004_export_worker_atomic_claim.sql';
+                if (requireRpc) {
+                    // Production: Fail fast with loud error
+                    console.error('[ExportWorker] ❌ CRITICAL: RPC function missing in production!');
+                    console.error('[ExportWorker] This should never happen. Check Supabase migrations.');
+                    console.error('[ExportWorker] Error:', errorMsg);
+                    // Don't process exports if RPC is required but missing
+                    return;
+                }
+                else {
+                    // Development: Log warning once per minute
+                    const lastWarning = global.__exportWorkerRpcWarningTime || 0;
+                    const now = Date.now();
+                    if (now - lastWarning > 60000) { // 1 minute
+                        console.warn('[ExportWorker] ⚠️  RPC function not found. Using fallback. Apply migration 20251203000004_export_worker_atomic_claim.sql');
+                        global.__exportWorkerRpcWarningTime = now;
+                    }
                 }
             }
             else {
                 // Other errors are unexpected
                 console.warn('[ExportWorker] RPC claim failed, using fallback:', rpcError.message);
+                if (requireRpc) {
+                    console.error('[ExportWorker] ❌ CRITICAL: RPC call failed in production!');
+                    return;
+                }
             }
         }
         const { data: manualClaim, error: manualError } = await supabaseClient_1.supabase
@@ -143,6 +166,13 @@ async function processExportQueue() {
             // Another worker claimed it, skip
             return;
         }
+        // Successfully claimed via fallback (optimistic locking)
+        (0, structuredLog_1.logStructured)('info', 'Claimed export job via fallback (optimistic locking)', {
+            export_id: updated.id,
+            org_id: updated.organization_id,
+            export_type: updated.export_type,
+            work_record_id: updated.work_record_id,
+        });
         await processExport(updated);
     }
     catch (err) {

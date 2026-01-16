@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -40,6 +73,8 @@ const retentionWorker_1 = require("./services/retentionWorker");
 const ledgerRootWorker_1 = require("./services/ledgerRootWorker");
 const requestId_1 = require("./middleware/requestId");
 const errorResponse_1 = require("./utils/errorResponse");
+const auth_1 = require("./middleware/auth");
+const devAuth_1 = __importDefault(require("./routes/devAuth"));
 const app = (0, express_1.default)();
 // ✅ Debug: Log Railway's injected port
 console.log("[BOOT] raw PORT =", JSON.stringify(process.env.PORT));
@@ -52,17 +87,141 @@ if (!Number.isFinite(PORT)) {
 app.get("/health", (_req, res) => {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
-// Version endpoint - confirms which code is actually running
-app.get("/__version", (_req, res) => {
-    res.json({
-        commit: process.env.RAILWAY_GIT_COMMIT_SHA || "dev",
-        deploy: process.env.RAILWAY_DEPLOYMENT_ID || "local",
-        marker: "c638206 / 2D92D8D-LAZY-ADMIN-v3",
-        cors_config: {
-            allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Idempotency-Key'],
-            exposedHeaders: ['Content-Disposition', 'X-Error-ID', 'X-Request-ID'],
-        },
-    });
+// Version endpoint - confirms which code is actually running (matches /v1/health format)
+app.get("/__version", async (_req, res) => {
+    try {
+        // Determine environment (same logic as /v1/health)
+        const railwayEnv = process.env.RAILWAY_ENVIRONMENT;
+        const nodeEnv = process.env.NODE_ENV;
+        const hasRailwayDeployment = !!process.env.RAILWAY_DEPLOYMENT_ID;
+        let environment = "development";
+        if (railwayEnv) {
+            environment = railwayEnv;
+        }
+        else if (nodeEnv === "production") {
+            environment = "production";
+        }
+        else if (hasRailwayDeployment) {
+            environment = "production";
+        }
+        else if (nodeEnv) {
+            environment = nodeEnv;
+        }
+        // Try to check DB connectivity (optional)
+        let dbStatus = "unknown";
+        try {
+            const { createClient } = await Promise.resolve().then(() => __importStar(require("@supabase/supabase-js")));
+            const supabase = createClient(process.env.SUPABASE_URL || "", process.env.SUPABASE_SERVICE_ROLE_KEY || "");
+            const { error } = await supabase.from("organizations").select("id").limit(1);
+            dbStatus = error ? "error" : "ok";
+        }
+        catch {
+            dbStatus = "error";
+        }
+        res.json({
+            status: "ok",
+            timestamp: new Date().toISOString(),
+            commit: process.env.RAILWAY_GIT_COMMIT_SHA || process.env.GIT_COMMIT_SHA || "dev",
+            service: "riskmate-api",
+            version: process.env.npm_package_version || "0.1.0",
+            environment: environment,
+            deployment: process.env.RAILWAY_DEPLOYMENT_ID || "local",
+            db: dbStatus,
+            marker: "c638206 / 2D92D8D-LAZY-ADMIN-v3",
+        });
+    }
+    catch (error) {
+        res.status(500).json({
+            status: "error",
+            timestamp: new Date().toISOString(),
+            error: error.message,
+        });
+    }
+});
+// Create v1 router to wrap all API routes
+const v1Router = express_1.default.Router();
+// v1 health endpoint with build metadata (contract check)
+v1Router.get("/health", async (_req, res) => {
+    try {
+        // Try to ping Supabase to check DB connectivity (optional)
+        let dbStatus = "unknown";
+        try {
+            const { createClient } = await Promise.resolve().then(() => __importStar(require("@supabase/supabase-js")));
+            const supabase = createClient(process.env.SUPABASE_URL || "", process.env.SUPABASE_SERVICE_ROLE_KEY || "");
+            // Simple query to check DB
+            const { error } = await supabase.from("organizations").select("id").limit(1);
+            dbStatus = error ? "error" : "ok";
+        }
+        catch {
+            dbStatus = "error";
+        }
+        // Determine environment: Railway sets RAILWAY_ENVIRONMENT, or use NODE_ENV, or infer from Railway presence
+        const railwayEnv = process.env.RAILWAY_ENVIRONMENT;
+        const nodeEnv = process.env.NODE_ENV;
+        const hasRailwayDeployment = !!process.env.RAILWAY_DEPLOYMENT_ID;
+        let environment = "development";
+        if (railwayEnv) {
+            environment = railwayEnv; // Railway sets this to "production" in prod
+        }
+        else if (nodeEnv === "production") {
+            environment = "production";
+        }
+        else if (hasRailwayDeployment) {
+            // If we have Railway deployment ID but no explicit env, assume production
+            environment = "production";
+        }
+        else if (nodeEnv) {
+            environment = nodeEnv;
+        }
+        res.json({
+            status: "ok",
+            timestamp: new Date().toISOString(),
+            commit: process.env.RAILWAY_GIT_COMMIT_SHA || process.env.GIT_COMMIT_SHA || "dev",
+            service: "riskmate-api",
+            version: process.env.npm_package_version || "0.1.0",
+            environment: environment,
+            deployment: process.env.RAILWAY_DEPLOYMENT_ID || "local",
+            db: dbStatus,
+        });
+    }
+    catch (error) {
+        res.status(500).json({
+            status: "error",
+            timestamp: new Date().toISOString(),
+            error: error.message,
+        });
+    }
+});
+// Top-level /v1/me endpoint (delegates to account router)
+// This provides a cleaner API surface: /v1/me instead of /v1/account/me
+v1Router.get("/me", auth_1.authenticate, async (req, res) => {
+    try {
+        const userId = req.user?.id;
+        const organizationId = req.user?.organization_id;
+        const email = req.user?.email;
+        const role = req.user?.role;
+        if (!userId || !organizationId) {
+            return res.status(401).json({
+                message: "Unauthorized",
+                code: "AUTH_UNAUTHORIZED"
+            });
+        }
+        res.json({
+            data: {
+                id: userId,
+                email: email,
+                organization_id: organizationId,
+                role: role,
+            },
+        });
+    }
+    catch (err) {
+        console.error("Me endpoint error:", err);
+        res.status(500).json({
+            message: "Internal server error",
+            code: "INTERNAL_ERROR"
+        });
+    }
 });
 // Production allowed origins (from env var, comma-separated)
 const envAllowedOrigins = (process.env.ALLOWED_ORIGINS || "")
@@ -138,7 +297,7 @@ app.use((req, res, next) => {
 app.use(requestId_1.requestIdMiddleware);
 app.post("/api/stripe/webhook", express_1.default.raw({ type: "application/json" }), stripeWebhook_1.stripeWebhookHandler);
 app.use(express_1.default.json());
-// API Routes
+// API Routes (keep /api/* for backward compatibility)
 app.use("/api/risk", risk_1.riskRouter);
 app.use("/api/subscriptions", subscriptions_1.subscriptionsRouter);
 app.use("/api/jobs", jobs_1.jobsRouter);
@@ -156,6 +315,35 @@ app.use("/api", exports_1.exportsRouter);
 app.use("/api", verification_1.verificationRouter);
 app.use("/api/public", publicVerification_1.publicVerificationRouter);
 app.use("/api/metrics", metrics_1.metricsRouter);
+// Mount all /api routes under /v1 as well (versioned API)
+v1Router.use("/risk", risk_1.riskRouter);
+v1Router.use("/subscriptions", subscriptions_1.subscriptionsRouter);
+v1Router.use("/jobs", jobs_1.jobsRouter);
+v1Router.use("/reports", reports_1.reportsRouter);
+v1Router.use("/analytics", analytics_1.analyticsRouter);
+v1Router.use("/legal", legal_1.legalRouter);
+v1Router.use("/notifications", notifications_1.notificationsRouter);
+v1Router.use("/team", team_1.teamRouter);
+v1Router.use("/account", account_1.accountRouter);
+v1Router.use("/sites", sites_1.sitesRouter);
+v1Router.use("/audit", audit_1.auditRouter);
+v1Router.use("/executive", executive_1.executiveRouter);
+v1Router.use("/", evidence_1.evidenceRouter);
+v1Router.use("/", exports_1.exportsRouter);
+v1Router.use("/", verification_1.verificationRouter);
+v1Router.use("/public", publicVerification_1.publicVerificationRouter);
+v1Router.use("/metrics", metrics_1.metricsRouter);
+// Dev endpoints (only available when DEV_AUTH_SECRET is set)
+// MUST be mounted BEFORE app.use("/v1", v1Router) to ensure Express registers it
+if (process.env.DEV_AUTH_SECRET) {
+    v1Router.use("/dev", devAuth_1.default);
+    console.log("[BOOT] ✅ Dev auth endpoints enabled at /v1/dev/*");
+}
+else {
+    console.log("[BOOT] ⚠️ Dev auth endpoints disabled (DEV_AUTH_SECRET not set)");
+}
+// Mount v1 router (after all routes are added to v1Router)
+app.use("/v1", v1Router);
 // 404 handler
 // CORS headers are already set by cors() middleware, so this response will include them
 app.use((req, res) => {
