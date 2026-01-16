@@ -12,6 +12,7 @@ struct ExecutiveViewRedesigned: View {
     @State private var isLoading = true
     @State private var errorMessage: String?
     @State private var showEnforcementReceipts = false
+    @State private var proofPacksCount: Int = 0
     
     var body: some View {
         RMBackground()
