@@ -23,6 +23,45 @@ accountRouter.get("/", (_req, res) => {
   });
 });
 
+// GET /api/account/me (also available at /v1/me via v1 router)
+// Returns current authenticated user info
+accountRouter.get(
+  "/me",
+  authenticate as unknown as express.RequestHandler,
+  async (req: express.Request, res: express.Response) => {
+    try {
+      const userId = req.user?.id;
+      const organizationId = req.user?.organization_id;
+      const email = req.user?.email;
+      const role = req.user?.role;
+      
+      if (!userId || !organizationId) {
+        return res.status(401).json(createErrorResponse({
+          message: "Unauthorized",
+          code: "AUTH_UNAUTHORIZED",
+          status: 401,
+        }).response);
+      }
+
+      res.json({
+        data: {
+          id: userId,
+          email: email,
+          organization_id: organizationId,
+          role: role,
+        },
+      });
+    } catch (err: any) {
+      console.error("Me endpoint error:", err);
+      res.status(500).json(createErrorResponse({
+        message: "Internal server error",
+        code: "INTERNAL_ERROR",
+        status: 500,
+      }).response);
+    }
+  }
+);
+
 // GET /api/account/organization
 // Returns organization info for the current user
 accountRouter.get(
