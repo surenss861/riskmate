@@ -45,13 +45,34 @@ class AuthService {
     }
     
     /// Get access token for API requests
+    /// Always fetches fresh session to avoid stale tokens
     func getAccessToken() async throws -> String? {
         do {
             let session = try await supabase.auth.session
-            // Session is non-optional, but accessToken might be optional
-            return session.accessToken
+            
+            // Validate session exists and has token
+            guard let token = session.accessToken, !token.isEmpty else {
+                print("[AuthService] ⚠️ Session exists but accessToken is nil or empty")
+                return nil
+            }
+            
+            // Log token info (first 20 chars only for security)
+            print("[AuthService] ✅ Session loaded, token length: \(token.count), preview: \(token.prefix(20))...")
+            
+            return token
         } catch {
+            print("[AuthService] ❌ Failed to get session: \(error.localizedDescription)")
             return nil
+        }
+    }
+    
+    /// Check if user is currently authenticated
+    func isAuthenticated() async -> Bool {
+        do {
+            let session = try await supabase.auth.session
+            return session.accessToken != nil && !session.accessToken.isEmpty
+        } catch {
+            return false
         }
     }
 }

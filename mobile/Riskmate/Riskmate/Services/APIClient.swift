@@ -39,12 +39,24 @@ class APIClient {
         }
         
         // Add auth token (required for all requests)
+        // Always fetch fresh token right before request to avoid stale tokens
         do {
             guard let token = try await authService.getAccessToken() else {
-                throw APIError.httpError(statusCode: 401, message: "No authentication token available")
+                print("[APIClient] ❌ No authentication token available - user may need to log in")
+                throw APIError.httpError(statusCode: 401, message: "No authentication token available - please log in")
             }
+            
+            // Validate token format (should be a JWT with 3 parts)
+            let tokenParts = token.split(separator: ".")
+            if tokenParts.count != 3 {
+                print("[APIClient] ⚠️ Token format invalid (expected JWT with 3 parts, got \(tokenParts.count))")
+                print("[APIClient] Token preview: \(token.prefix(20))...")
+            }
+            
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            print("[APIClient] ✅ Auth token attached (length: \(token.count), preview: \(token.prefix(20))...)")
         } catch {
+            print("[APIClient] ❌ Failed to get authentication token: \(error.localizedDescription)")
             throw APIError.httpError(statusCode: 401, message: "Failed to get authentication token: \(error.localizedDescription)")
         }
         
@@ -213,6 +225,43 @@ class APIClient {
             method: "POST",
             body: body
         )
+    }
+    
+    // MARK: - Health Check API
+    
+    /// Check backend health (no auth required)
+    func checkHealth() async throws -> HealthResponse {
+        let base = baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        let fullURL = "\(base)/health"
+        
+        guard let url = URL(string: fullURL) else {
+            throw APIError.invalidURL
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.timeoutInterval = 10.0
+        
+        print("[APIClient] 🔵 GET \(fullURL) (health check, no auth)")
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+        
+        print("[APIClient] 📡 Health check response: \(httpResponse.statusCode)")
+        
+        guard (200...299).contains(httpResponse.statusCode) else {
+            throw APIError.httpError(
+                statusCode: httpResponse.statusCode,
+                message: "Health check failed with status \(httpResponse.statusCode)"
+            )
+        }
+        
+        let decoder = JSONDecoder()
+        return try decoder.decode(HealthResponse.self, from: data)
     }
     
     // MARK: - Job API
@@ -708,6 +757,17 @@ struct EvidenceResponse: Codable {
 }
 
 struct EmptyResponse: Codable {}
+
+struct HealthResponse: Codable {
+    let status: String
+    let timestamp: String?
+    let commit: String?
+    let service: String?
+    let version: String?
+    let environment: String?
+    let deployment: String?
+    let db: String?
+}
 
 // MARK: - Error Types
 
