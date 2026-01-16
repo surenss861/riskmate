@@ -36,6 +36,7 @@ import { startRetentionWorker } from "./services/retentionWorker";
 import { startLedgerRootWorker } from "./services/ledgerRootWorker";
 import { requestIdMiddleware, RequestWithId } from "./middleware/requestId";
 import { createErrorResponse, logErrorForSupport } from "./utils/errorResponse";
+import devAuthRouter from "./routes/devAuth";
 
 const app = express();
 
@@ -293,6 +294,12 @@ v1Router.use("/metrics", metricsRouter);
 
 // Mount v1 router
 app.use("/v1", v1Router);
+
+// Dev endpoints (only available when DEV_AUTH_SECRET is set)
+if (process.env.DEV_AUTH_SECRET) {
+  v1Router.use("/dev", devAuthRouter);
+  console.log("[BOOT] ✅ Dev auth endpoints enabled at /v1/dev/*");
+}
 
 // 404 handler
 // CORS headers are already set by cors() middleware, so this response will include them
