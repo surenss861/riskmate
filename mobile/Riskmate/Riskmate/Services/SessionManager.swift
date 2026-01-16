@@ -7,6 +7,7 @@ class SessionManager: ObservableObject {
     static let shared = SessionManager()
     
     @Published var isAuthenticated = false
+    @Published var isBootstrapped = false // Auth state has been checked
     @Published var currentUser: User?
     @Published var currentOrganization: Organization?
     @Published var isLoading = false
@@ -24,9 +25,11 @@ class SessionManager: ObservableObject {
     func checkSession() async {
         print("[SessionManager] Starting session check...")
         isLoading = true
+        isBootstrapped = false
         defer { 
             isLoading = false
-            print("[SessionManager] Session check complete. isAuthenticated=\(isAuthenticated), isLoading=\(isLoading)")
+            isBootstrapped = true // Mark as bootstrapped regardless of auth state
+            print("[SessionManager] Session check complete. isAuthenticated=\(isAuthenticated), isBootstrapped=\(isBootstrapped), isLoading=\(isLoading)")
         }
         
         do {

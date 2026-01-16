@@ -92,21 +92,20 @@ class APIClient {
             
             // Don't attempt to decode non-2xx responses (they're likely error pages or JSON errors)
             guard (200...299).contains(statusCode) else {
-                // Special handling for 401 to help debug auth issues
+                // Special handling for 401: force logout and set auth state
                 if statusCode == 401 {
-                    print("[APIClient] ❌ 401 Unauthorized")
-                    // Try to decode error JSON, but fall back to raw body if it fails
-                    if let errorMessage = try? JSONDecoder().decode(APIErrorResponse.self, from: data) {
-                        throw APIError.httpError(
-                            statusCode: 401,
-                            message: errorMessage.message ?? "Unauthorized - check authentication token"
-                        )
-                    } else {
-                        throw APIError.httpError(
-                            statusCode: 401,
-                            message: "Unauthorized - response was not JSON: \(bodyPreview.prefix(200))"
-                        )
+                    print("[APIClient] ❌ 401 Unauthorized — forcing logout")
+                    
+                    // Force logout and clear auth state (this triggers UI to show login)
+                    // Use MainActor.run to ensure we're on main thread (SessionManager is @MainActor)
+                    await MainActor.run {
+                        Task {
+                            await SessionManager.shared.logout()
+                        }
                     }
+                    
+                    // Don't attempt to decode 401 body - just throw and let UI handle logout state
+                    throw APIError.unauthorized
                 }
                 
                 // For other errors, log and throw
@@ -898,6 +897,8 @@ extension APIError {
         switch self {
         case .invalidURL, .invalidResponse:
             return .client
+        case .unauthorized:
+            return .auth
         case .httpError(let statusCode, _):
             return errorCategory(for: statusCode)
         case .networkError(let category, _, _):

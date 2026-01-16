@@ -37,7 +37,7 @@ struct ContentView: View {
                     )
                 )
                 .padding(RMTheme.Spacing.pagePadding)
-            } else if sessionManager.isLoading {
+            } else if sessionManager.isLoading || !sessionManager.isBootstrapped {
                 VStack(spacing: RMTheme.Spacing.lg) {
                     RMSkeletonView(width: 100, height: 100, cornerRadius: 20)
                     RMSkeletonView(width: 150, height: 20)
