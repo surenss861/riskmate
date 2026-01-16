@@ -314,7 +314,7 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
       (error as any).code === 'PGRST116'
     )) {
       console.warn('[JOBS] Some columns not found - retrying with minimal columns (migration may not be applied yet):', error.message);
-      // Fallback: only select columns that definitely exist
+      // Fallback: only select columns that definitely exist (core columns only)
       let fallbackQuery = supabase
         .from("jobs")
         .select("id, client_name, job_type, location, status, risk_score, risk_level, created_at, updated_at")
@@ -552,8 +552,11 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
         };
         return {
           ...job,
-          applied_template_id: job.applied_template_id ?? null,
-          applied_template_type: job.applied_template_type ?? null,
+          // Optional fields (may not exist if migration hasn't run - use type assertion to avoid TS errors)
+          applied_template_id: (job as any).applied_template_id ?? null,
+          applied_template_type: (job as any).applied_template_type ?? null,
+          review_flag: (job as any).review_flag ?? null,
+          flagged_at: (job as any).flagged_at ?? null,
           readiness_score: readiness.readiness_score,
           readiness_basis: readiness.readiness_basis,
           readiness_empty_reason: readiness.readiness_empty_reason,
