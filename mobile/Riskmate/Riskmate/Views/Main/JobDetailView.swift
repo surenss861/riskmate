@@ -483,8 +483,23 @@ struct HazardsTab: View {
 struct Hazard: Identifiable, Codable {
     let id: String
     let code: String
+    let name: String
     let description: String
     let severity: String
+    let status: String
+    let createdAt: String
+    let updatedAt: String
+    
+    enum CodingKeys: String, CodingKey {
+        case id
+        case code
+        case name
+        case description
+        case severity
+        case status
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+    }
 }
 
 struct HazardCard: View {

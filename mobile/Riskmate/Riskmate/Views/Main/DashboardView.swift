@@ -444,7 +444,7 @@ struct JobsAtRiskSection: View {
                 Text("Jobs at Risk")
                     .rmSectionHeader()
                 Spacer()
-                if !atRiskJobs.isEmpty {
+                if !jobs.isEmpty {
                     Button {
                         // TODO: Navigate to filtered jobs list
                     } label: {
