@@ -198,7 +198,7 @@ class APIClient {
                 print("[APIClient] ❌ Decoding error: \(decodeError)")
                 print("[APIClient] Raw response body (first 800 chars): \(bodyPreview)")
                 
-                // Provide helpful error message
+                // Build detailed error message
                 let errorDescription: String
                 switch decodeError {
                 case .typeMismatch(let type, let context):
@@ -206,14 +206,15 @@ class APIClient {
                 case .valueNotFound(let type, let context):
                     errorDescription = "Value not found: expected \(type) at \(context.codingPath.map { $0.stringValue }.joined(separator: "."))"
                 case .keyNotFound(let key, let context):
-                    errorDescription = "Key not found: \(key.stringValue) at \(context.codingPath.map { $0.stringValue }.joined(separator: "."))"
+                    errorDescription = "Key not found: '\(key.stringValue)' at \(context.codingPath.map { $0.stringValue }.joined(separator: ".")). Available keys in JSON: check raw body above."
                 case .dataCorrupted(let context):
                     errorDescription = "Data corrupted at \(context.codingPath.map { $0.stringValue }.joined(separator: ".")): \(context.debugDescription)"
                 @unknown default:
                     errorDescription = "Unknown decoding error: \(decodeError)"
                 }
                 
-                throw APIError.decodingError
+                // Throw with detailed error message instead of generic .decodingError
+                throw APIError.httpError(statusCode: 0, message: "Decoding failed: \(errorDescription)")
             }
         } catch let urlError as URLError {
             // Handle network-level errors (offline, timeout, DNS, etc.)
