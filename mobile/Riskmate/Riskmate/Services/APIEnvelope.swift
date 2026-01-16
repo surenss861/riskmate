@@ -34,13 +34,15 @@ struct APIEnvelope<T: Decodable>: Decodable {
     }
     
     /// Extract data, falling back to empty array/object if nil
-    func unwrapData<T>() -> T? where T: Collection {
-        return data as? T
+    /// Note: Uses generic C to avoid shadowing outer T
+    func unwrapData<C>() -> C? where C: Collection {
+        return data as? C
     }
     
     /// Extract data for single objects
-    func unwrapData<T>() -> T? {
-        return data as? T
+    /// Note: Uses generic V to avoid shadowing outer T
+    func unwrapData<V>() -> V? {
+        return data as? V
     }
 }
 

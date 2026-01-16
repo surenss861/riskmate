@@ -258,7 +258,7 @@ struct JobsListView: View {
                 riskLevel: selectedRiskLevel != "all" ? selectedRiskLevel : nil,
                 search: debouncedSearchText.isEmpty ? nil : debouncedSearchText
             )
-            jobs = response.data ?? [] // Defensive: ensure we never have nil data
+            jobs = response.data
             errorMessage = nil // Clear any previous error
         } catch {
             let errorDesc = error.localizedDescription

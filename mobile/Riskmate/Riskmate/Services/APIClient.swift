@@ -310,7 +310,7 @@ class APIClient {
         
         let query = "?\(queryItems.joined(separator: "&"))"
         let response: AuditEventsResponse = try await request(endpoint: "/api/audit/events\(query)")
-        return response.events.map { $0.toAuditEvent() }
+        return response.data.events.map { $0.toAuditEvent() }
     }
     
     // MARK: - Executive API
@@ -710,6 +710,10 @@ struct JobResponse: Codable {
 }
 
 struct AuditEventsResponse: Codable {
+    let data: AuditEventsData
+}
+
+struct AuditEventsData: Codable {
     let events: [AuditEventAPI]
     let stats: AuditStats?
     let pagination: AuditPagination?
