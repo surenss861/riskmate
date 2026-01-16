@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import Combine
 
 /// ViewModel for Dashboard - consolidates all API calls to prevent cancellation errors
 @MainActor
