@@ -204,9 +204,14 @@ const envAllowedOrigins = (process.env.ALLOWED_ORIGINS || "")
   .map((origin) => origin.trim())
   .filter(Boolean);
 
-// In development, allow localhost for local testing
+// Default allowed origins
+// Production: include www.riskmate.dev and riskmate.dev
+// Development: include localhost ports
 const defaultAllowedOrigins = process.env.NODE_ENV === "production" 
-  ? [] 
+  ? [
+      "https://www.riskmate.dev",
+      "https://riskmate.dev",
+    ]
   : [
       "http://localhost:3000",
       "http://localhost:3001",
