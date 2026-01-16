@@ -616,9 +616,15 @@ struct ControlCard: View {
                 .accessibilityAddTraits(.isButton)
                 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(control.description)
+                    Text(control.title ?? control.description)
                         .font(RMTheme.Typography.bodySmall)
                         .foregroundColor(RMTheme.Colors.textPrimary)
+                    
+                    if !control.description.isEmpty && control.title != nil {
+                        Text(control.description)
+                            .font(RMTheme.Typography.caption)
+                            .foregroundColor(RMTheme.Colors.textSecondary)
+                    }
                     
                     if isPendingSync {
                         HStack(spacing: 4) {

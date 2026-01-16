@@ -735,6 +735,123 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
   }
 });
 
+// GET /api/jobs/:id/hazards
+// Returns all hazards (mitigation items) for a job
+// NOTE: Must be before /:id route to match correctly
+jobsRouter.get("/:id/hazards", authenticate as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
+  const authReq = req as AuthenticatedRequest;
+  try {
+    const { organization_id } = authReq.user;
+    const jobId = req.params.id;
+
+    // Verify job belongs to organization
+    const { data: job, error: jobError } = await supabase
+      .from("jobs")
+      .select("id")
+      .eq("id", jobId)
+      .eq("organization_id", organization_id)
+      .single();
+
+    if (jobError || !job) {
+      return res.status(404).json({ message: "Job not found" });
+    }
+
+    // Fetch mitigation items (hazards/controls) for this job
+    const { data: mitigationItems, error: mitigationError } = await supabase
+      .from("mitigation_items")
+      .select("*")
+      .eq("job_id", jobId)
+      .eq("organization_id", organization_id)
+      .order("created_at", { ascending: false });
+
+    if (mitigationError) {
+      throw mitigationError;
+    }
+
+    // Transform mitigation_items to Hazard-like structure
+    const hazards = (mitigationItems || []).map((item: any) => {
+      // Try to extract a code from the title (first word before space or colon)
+      let code = "UNKNOWN";
+      if (item.title) {
+        const match = item.title.match(/^([A-Z0-9_]+)/);
+        if (match) {
+          code = match[1];
+        } else {
+          code = item.title.substring(0, 10).toUpperCase().replace(/\s+/g, '_');
+        }
+      }
+      
+      return {
+        id: item.id,
+        code: item.factor_id || item.code || code,
+        name: item.title || item.name || "Unknown Hazard",
+        description: item.description || "",
+        severity: item.severity || "medium",
+        status: item.done || item.is_completed ? "resolved" : "open",
+        created_at: item.created_at || new Date().toISOString(),
+        updated_at: item.updated_at || item.completed_at || item.created_at || new Date().toISOString(),
+      };
+    });
+
+    res.json({ data: hazards });
+  } catch (err: any) {
+    console.error("[Jobs] Hazards fetch failed:", err);
+    res.status(500).json({ message: "Failed to fetch hazards" });
+  }
+});
+
+// GET /api/jobs/:id/controls
+// Returns all controls (mitigation items) for a job
+// NOTE: Must be before /:id route to match correctly
+jobsRouter.get("/:id/controls", authenticate as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
+  const authReq = req as AuthenticatedRequest;
+  try {
+    const { organization_id } = authReq.user;
+    const jobId = req.params.id;
+
+    // Verify job belongs to organization
+    const { data: job, error: jobError } = await supabase
+      .from("jobs")
+      .select("id")
+      .eq("id", jobId)
+      .eq("organization_id", organization_id)
+      .single();
+
+    if (jobError || !job) {
+      return res.status(404).json({ message: "Job not found" });
+    }
+
+    // Fetch mitigation items (controls) for this job
+    const { data: mitigationItems, error: mitigationError } = await supabase
+      .from("mitigation_items")
+      .select("*")
+      .eq("job_id", jobId)
+      .eq("organization_id", organization_id)
+      .order("created_at", { ascending: false });
+
+    if (mitigationError) {
+      throw mitigationError;
+    }
+
+    // Transform mitigation_items to Control-like structure
+    const controls = (mitigationItems || []).map((item: any) => ({
+      id: item.id,
+      title: item.title || "Unknown Control",
+      description: item.description || "",
+      status: item.done || item.is_completed ? "Completed" : (item.blocked ? "Blocked" : "Pending"),
+      done: item.done || item.is_completed || false,
+      isCompleted: item.is_completed || item.done || false,
+      createdAt: item.created_at || new Date().toISOString(),
+      updatedAt: item.updated_at || item.completed_at || item.created_at || new Date().toISOString(),
+    }));
+
+    res.json({ data: controls });
+  } catch (err: any) {
+    console.error("[Jobs] Controls fetch failed:", err);
+    res.status(500).json({ message: "Failed to fetch controls" });
+  }
+});
+
 // GET /api/jobs/:id
 // Returns full job details with risk score and mitigation items
 jobsRouter.get("/:id", authenticate as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {

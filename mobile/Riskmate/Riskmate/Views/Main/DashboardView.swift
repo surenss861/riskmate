@@ -101,7 +101,7 @@ struct DashboardView: View {
                                 .padding(.horizontal, RMTheme.Spacing.pagePadding)
                             
                             // Recent Activity
-                            if !recentActivity.isEmpty {
+                            if !viewModel.recentActivity.isEmpty {
                                 VStack(alignment: .leading, spacing: RMTheme.Spacing.md) {
                                     HStack {
                                         Text("Recent Activity")
