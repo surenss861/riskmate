@@ -82,13 +82,25 @@ class APIClient {
             // Always log response status and content-type BEFORE attempting decode
             let statusCode = httpResponse.statusCode
             let contentType = httpResponse.value(forHTTPHeaderField: "Content-Type") ?? "nil"
+            let finalURL = httpResponse.url?.absoluteString ?? "unknown"
+            
             print("[APIClient] 📡 Response: \(statusCode) for \(method) \(path)")
+            print("[APIClient] Final URL: \(finalURL)")
             print("[APIClient] Content-Type: \(contentType)")
             
             // Log raw response body BEFORE decoding (this is the truth serum)
             let rawBody = String(data: data, encoding: .utf8) ?? "<non-utf8 data>"
-            let bodyPreview = String(rawBody.prefix(800))
-            print("[APIClient] Raw response body (first 800 chars): \(bodyPreview)")
+            let bodyPreview = String(rawBody.prefix(500))
+            print("[APIClient] Raw response body (first 500 chars): \(bodyPreview)")
+            
+            // Detect HTML responses (common cause of decode failures)
+            if contentType.contains("text/html") || rawBody.lowercased().hasPrefix("<!doctype html") || rawBody.lowercased().hasPrefix("<html") {
+                print("[APIClient] ⚠️ WARNING: Received HTML instead of JSON! This usually means:")
+                print("[APIClient]   1. Wrong base URL (using www.riskmate.dev instead of api.riskmate.dev)")
+                print("[APIClient]   2. Redirect to web page")
+                print("[APIClient]   3. Double-appended /api in URL")
+                print("[APIClient]   Current base URL: \(baseURL)")
+            }
             
             // Don't attempt to decode non-2xx responses (they're likely error pages or JSON errors)
             guard (200...299).contains(statusCode) else {
