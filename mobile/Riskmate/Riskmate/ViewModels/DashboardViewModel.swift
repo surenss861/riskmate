@@ -16,9 +16,13 @@ final class DashboardViewModel: ObservableObject {
     @Published var errorMessage: String?
     
     private var loadTask: Task<Void, Never>?
+    private var hasLoadedOnce = false
     
-    /// Load all dashboard data in parallel
+    /// Load all dashboard data in parallel (single-flight with deduplication)
     func load() {
+        // Skip if already loaded (call loadIfNeeded() on first load)
+        guard !hasLoadedOnce else { return }
+        
         // Cancel any existing load task
         loadTask?.cancel()
         
@@ -27,6 +31,10 @@ final class DashboardViewModel: ObservableObject {
             errorMessage = nil
             
             defer { isLoading = false }
+            
+            // Debounce to prevent rapid repeated calls
+            try? await Task.sleep(nanoseconds: 250_000_000) // 250ms
+            if Task.isCancelled { return }
             
             do {
                 // Load all data in parallel for better performance
@@ -98,7 +106,24 @@ final class DashboardViewModel: ObservableObject {
                 errorMessage = error.localizedDescription
                 print("[DashboardViewModel] ❌ Failed to load dashboard: \(error.localizedDescription)")
             }
+            
+            // Mark as loaded after completion
+            if !Task.isCancelled {
+                hasLoadedOnce = true
+            }
         }
+    }
+    
+    /// Load if not already loaded (call this from .task modifier)
+    func loadIfNeeded() {
+        guard !hasLoadedOnce else { return }
+        load()
+    }
+    
+    /// Force reload (resets hasLoadedOnce flag)
+    func reload() {
+        hasLoadedOnce = false
+        load()
     }
     
     /// Cancel any ongoing load task

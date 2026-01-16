@@ -55,6 +55,46 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
+// Routes debug endpoint - lists all registered routes
+app.get("/__routes", (_req, res) => {
+  const routes: string[] = [];
+
+  function walk(stack: any[], prefix = "") {
+    for (const layer of stack) {
+      if (layer.route?.path) {
+        const methods = Object.keys(layer.route.methods)
+          .filter(Boolean)
+          .map((m: string) => m.toUpperCase())
+          .join(",");
+        routes.push(`${methods} ${prefix}${layer.route.path}`);
+      } else if (layer.name === "router" && layer.handle?.stack) {
+        const routerPath = layer.regexp?.source
+          ?.replace(/\\\/\^|\$\\\/|\?\(\?\$\/\)\?|\\\/\(\?\:|\$|\\\//g, "")
+          .replace(/\\(\w+)/g, ":$1")
+          .replace(/\(\?\<\w+\>/g, "")
+          .replace(/\?/g, "") || "";
+        walk(layer.handle.stack, prefix + routerPath);
+      }
+    }
+  }
+
+  // @ts-ignore - accessing internal Express router
+  if (app._router && app._router.stack) {
+    walk(app._router.stack, "");
+  }
+
+  // Filter and sort
+  const filteredRoutes = routes
+    .filter((r) => r.includes("hazards") || r.includes("controls") || r.includes("jobs"))
+    .sort();
+
+  res.json({
+    count: routes.length,
+    jobsRoutes: filteredRoutes,
+    allRoutes: routes.sort(),
+  });
+});
+
 // Version endpoint - confirms which code is actually running (matches /v1/health format)
 app.get("/__version", async (_req, res) => {
   try {

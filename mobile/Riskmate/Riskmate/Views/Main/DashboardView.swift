@@ -43,7 +43,7 @@ struct DashboardView: View {
                                 action: RMEmptyStateAction(
                                     title: "Retry",
                                     action: {
-                                        viewModel.load()
+                                        viewModel.reload()
                                     }
                                 )
                             )
@@ -164,10 +164,10 @@ struct DashboardView: View {
                 }
             }
             .task {
-                viewModel.load()
+                viewModel.loadIfNeeded()
             }
             .refreshable {
-                viewModel.load()
+                viewModel.reload()
             }
             .onDisappear {
                 viewModel.cancel()
