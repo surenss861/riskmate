@@ -52,11 +52,13 @@ class AuthService {
     
     /// Get access token for API requests
     /// Always fetches fresh session to avoid stale tokens
+    /// Returns ONLY Supabase session.accessToken (JWT format: eyJ...xxx.yyy.zzz)
     func getAccessToken() async throws -> String? {
         do {
             let session = try await supabase.auth.session
             
             // accessToken is non-optional String in Supabase Swift
+            // This is the ONLY token we should use - it's a JWT
             let token = session.accessToken
             
             // Validate token is not empty
@@ -69,16 +71,31 @@ class AuthService {
                 )
             }
             
-            // Validate JWT format
-            guard isLikelyJWT(token) else {
+            // Validate JWT format (must be 3 dot-separated parts: header.payload.signature)
+            let parts = token.split(separator: ".")
+            guard parts.count == 3 else {
                 #if DEBUG
                 let preview = String(token.prefix(20))
-                print("[AuthService] ❌ Token format invalid (not JWT) - preview: \(preview)..., length: \(token.count)")
+                print("[AuthService] ❌ Token format invalid (not JWT) - preview: \(preview)..., length: \(token.count), parts: \(parts.count)")
+                print("[AuthService] ❌ Expected 3 dot-separated parts (header.payload.signature), got \(parts.count)")
                 #endif
                 throw NSError(
                     domain: "AuthService",
                     code: 2,
-                    userInfo: [NSLocalizedDescriptionKey: "Token format invalid (not JWT - expected 3 dot-separated parts)"]
+                    userInfo: [NSLocalizedDescriptionKey: "Token format invalid (not JWT - expected 3 dot-separated parts, got \(parts.count))"]
+                )
+            }
+            
+            // Validate token starts with JWT header (eyJ = base64 for {"alg":"HS256",...})
+            guard token.hasPrefix("eyJ") else {
+                #if DEBUG
+                let preview = String(token.prefix(20))
+                print("[AuthService] ❌ Token doesn't start with 'eyJ' (not a JWT) - preview: \(preview)...")
+                #endif
+                throw NSError(
+                    domain: "AuthService",
+                    code: 3,
+                    userInfo: [NSLocalizedDescriptionKey: "Token doesn't appear to be a JWT (should start with 'eyJ')"]
                 )
             }
             
@@ -86,6 +103,7 @@ class AuthService {
             #if DEBUG
             let preview = String(token.prefix(20))
             print("[AuthService] ✅ Session loaded, token length: \(token.count), preview: \(preview)…")
+            print("[AuthService] ✅ Token is valid JWT format (3 parts, starts with eyJ)")
             #endif
             
             return token

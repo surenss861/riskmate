@@ -228,13 +228,15 @@ class APIClient {
             
             throw APIError.networkError(category: errorCategory, message: errorMessage, underlyingError: urlError)
         } catch {
-            // Re-throw APIError as-is, wrap other errors
-            if error is APIError {
-                throw error
+            // Re-throw APIError as-is
+            if let apiError = error as? APIError {
+                throw apiError
             }
             
+            // Don't wrap unknown errors as decodingError - pass them through
+            // This allows unauthorized/network errors to surface properly
             print("[APIClient] ❌ Unexpected error: \(error.localizedDescription)")
-            throw APIError.decodingError
+            throw error
         }
     }
     
