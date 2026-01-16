@@ -785,7 +785,7 @@ struct AuditEventAPI: Codable {
         // Convert metadata from [String: AnyCodable] to [String: String]
         // Handles nested objects, arrays, null values, and primitive values
         var finalMetadata: [String: String] = [:]
-        for (key, anyCodable) in metadata {
+        for (key, anyCodable) in metadata {  // metadata is non-optional, no unwrapping needed
             // Handle null values
             if anyCodable.value is NSNull {
                 finalMetadata[key] = "null"

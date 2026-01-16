@@ -17,6 +17,7 @@
 		2117957E2F18FC2D00FDF243 /* SwiftDate in Frameworks */ = {isa = PBXBuildFile; productRef = 2117957D2F18FC2D00FDF243 /* SwiftDate */; };
 		211795802F18FC3000FDF243 /* Lottie in Frameworks */ = {isa = PBXBuildFile; productRef = 2117957F2F18FC3000FDF243 /* Lottie */; };
 		211795892F18FC4A00FDF243 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 211795882F18FC4A00FDF243 /* Supabase */; };
+		21A323112F1AECA700894D75 /* AnyCodable in Frameworks */ = {isa = PBXBuildFile; productRef = 21A323102F1AECA700894D75 /* AnyCodable */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -241,6 +242,7 @@
 				2117957C2F18FC2900FDF243 /* Kingfisher in Frameworks */,
 				211795702F18FC1A00FDF243 /* Auth in Frameworks */,
 				2117957E2F18FC2D00FDF243 /* SwiftDate in Frameworks */,
+				21A323112F1AECA700894D75 /* AnyCodable in Frameworks */,
 				211795782F18FC1A00FDF243 /* Storage in Frameworks */,
 				211795762F18FC1A00FDF243 /* Realtime in Frameworks */,
 				2117957A2F18FC2400FDF243 /* RiveRuntime in Frameworks */,
@@ -468,6 +470,7 @@
 				2117957D2F18FC2D00FDF243 /* SwiftDate */,
 				2117957F2F18FC3000FDF243 /* Lottie */,
 				211795882F18FC4A00FDF243 /* Supabase */,
+				21A323102F1AECA700894D75 /* AnyCodable */,
 			);
 			productName = Riskmate;
 			productReference = 211794A52F18213B00FDF243 /* Riskmate.app */;
@@ -558,6 +561,7 @@
 				2117956C2F18FBF300FDF243 /* XCRemoteSwiftPackageReference "lottie-ios" */,
 				2117956E2F18FC1A00FDF243 /* XCRemoteSwiftPackageReference "supabase-swift" */,
 				211796212F19002C00FDF243 /* XCRemoteSwiftPackageReference "SwiftLint" */,
+				21A3230F2F1AECA700894D75 /* XCRemoteSwiftPackageReference "AnyCodable" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 211794A62F18213B00FDF243 /* Products */;
@@ -1004,6 +1008,14 @@
 				minimumVersion = 0.63.0;
 			};
 		};
+		21A3230F2F1AECA700894D75 /* XCRemoteSwiftPackageReference "AnyCodable" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/Flight-School/AnyCodable";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.6.7;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -1056,6 +1068,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 2117956E2F18FC1A00FDF243 /* XCRemoteSwiftPackageReference "supabase-swift" */;
 			productName = Supabase;
+		};
+		21A323102F1AECA700894D75 /* AnyCodable */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 21A3230F2F1AECA700894D75 /* XCRemoteSwiftPackageReference "AnyCodable" */;
+			productName = AnyCodable;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
