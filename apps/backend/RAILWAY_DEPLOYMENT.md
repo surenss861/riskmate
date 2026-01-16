@@ -47,7 +47,10 @@ tsx src/index.ts
 - `PORT` - Automatically set by Railway (do not override)
 - `SUPABASE_URL` - Your Supabase project URL
 - `SUPABASE_SERVICE_ROLE_KEY` - Supabase service role key
-- `NODE_ENV` - Set to `production` in Railway
+
+### Recommended (for correct environment detection)
+- `NODE_ENV` - Set to `production` in Railway (or Railway will auto-set `RAILWAY_ENVIRONMENT=production`)
+- `RAILWAY_ENVIRONMENT` - Automatically set by Railway to `production` in production (used by health endpoint)
 
 ### Optional
 - `ALLOWED_ORIGINS` - Comma-separated list of allowed CORS origins

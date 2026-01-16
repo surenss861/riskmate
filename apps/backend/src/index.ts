@@ -87,13 +87,30 @@ v1Router.get("/health", async (_req, res) => {
       dbStatus = "error";
     }
 
+    // Determine environment: Railway sets RAILWAY_ENVIRONMENT, or use NODE_ENV, or infer from Railway presence
+    const railwayEnv = process.env.RAILWAY_ENVIRONMENT;
+    const nodeEnv = process.env.NODE_ENV;
+    const hasRailwayDeployment = !!process.env.RAILWAY_DEPLOYMENT_ID;
+    
+    let environment = "development";
+    if (railwayEnv) {
+      environment = railwayEnv; // Railway sets this to "production" in prod
+    } else if (nodeEnv === "production") {
+      environment = "production";
+    } else if (hasRailwayDeployment) {
+      // If we have Railway deployment ID but no explicit env, assume production
+      environment = "production";
+    } else if (nodeEnv) {
+      environment = nodeEnv;
+    }
+
     res.json({
       status: "ok",
       timestamp: new Date().toISOString(),
       commit: process.env.RAILWAY_GIT_COMMIT_SHA || process.env.GIT_COMMIT_SHA || "dev",
       service: "riskmate-api",
       version: process.env.npm_package_version || "0.1.0",
-      environment: process.env.NODE_ENV || "development",
+      environment: environment,
       deployment: process.env.RAILWAY_DEPLOYMENT_ID || "local",
       db: dbStatus,
     });
