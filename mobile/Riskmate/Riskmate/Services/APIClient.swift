@@ -157,7 +157,9 @@ class APIClient {
             
             // Only attempt decode for 2xx responses
             let decoder = JSONDecoder()
-            decoder.keyDecodingStrategy = .convertFromSnakeCase
+            // Use default key decoding strategy (no automatic snake_case conversion)
+            // We use explicit CodingKeys with snake_case mappings in all models
+            decoder.keyDecodingStrategy = .useDefaultKeys
             
             // Custom date decoder to handle fractional seconds (Supabase/Node often returns these)
             decoder.dateDecodingStrategy = .custom { decoder in
