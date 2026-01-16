@@ -732,7 +732,7 @@ struct AuditEventAPI: Codable {
     let details: String?
     let actorName: String?
     let actorRole: String?
-    let metadata: [String: String]?
+    let metadata: [String: AnyCodable]?
     let outcome: String?
     let severity: String?
     
@@ -765,11 +765,27 @@ struct AuditEventAPI: Codable {
         // Final fallback to current date
         let finalDate = date ?? Date()
         
-        // Convert metadata to [String: String] if needed
+        // Convert metadata from [String: AnyCodable] to [String: String]
+        // Handles nested objects, arrays, and primitive values
         var finalMetadata: [String: String] = [:]
         if let metadata = metadata {
-            for (key, value) in metadata {
-                finalMetadata[key] = String(describing: value)
+            for (key, anyCodable) in metadata {
+                // Handle nested objects (like "subject": {"id": "...", "type": "..."})
+                if let nestedDict = anyCodable.value as? [String: Any] {
+                    // Flatten nested dictionary keys
+                    for (nestedKey, nestedValue) in nestedDict {
+                        finalMetadata["\(key).\(nestedKey)"] = String(describing: nestedValue)
+                    }
+                    // Also keep the original key with a stringified version
+                    let dictString = nestedDict.map { "\($0.key)=\($0.value)" }.joined(separator: ", ")
+                    finalMetadata[key] = "{\(dictString)}"
+                } else if let array = anyCodable.value as? [Any] {
+                    // Handle arrays
+                    finalMetadata[key] = "[\(array.map { String(describing: $0) }.joined(separator: ", "))]"
+                } else {
+                    // Handle primitives (String, Int, Bool, etc.)
+                    finalMetadata[key] = String(describing: anyCodable.value)
+                }
             }
         }
         
