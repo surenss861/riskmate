@@ -65,7 +65,14 @@ async function processExportQueue() {
 
     if (!rpcError && claimedJob && claimedJob.length > 0) {
       // Successfully claimed a job via RPC
-      await processExport(claimedJob[0])
+      const job = claimedJob[0]
+      logStructured('info', 'Claimed export job via RPC', {
+        export_id: job.id,
+        org_id: job.organization_id,
+        export_type: job.export_type,
+        work_record_id: job.work_record_id,
+      })
+      await processExport(job)
       return
     }
 
@@ -117,6 +124,13 @@ async function processExportQueue() {
       return
     }
 
+    // Successfully claimed via fallback (optimistic locking)
+    logStructured('info', 'Claimed export job via fallback (optimistic locking)', {
+      export_id: updated.id,
+      org_id: updated.organization_id,
+      export_type: updated.export_type,
+      work_record_id: updated.work_record_id,
+    })
     await processExport(updated)
   } catch (err: any) {
     console.error('[ExportWorker] Error processing queue:', err)

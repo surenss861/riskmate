@@ -60,12 +60,12 @@ struct JobDetailView: View {
                     )
                 }
             }
-            .rmNavigationBar(title: job?.title ?? "Job Details")
+            .rmNavigationBar(title: job?.clientName ?? "Job Details")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     HStack(spacing: RMTheme.Spacing.sm) {
                         // Evidence Requirements Badge
-                        if let job = job {
+                        if job != nil {
                             RMEvidenceRequirementsBadge(
                                 required: 5, // TODO: Get from job/API
                                 uploaded: 2, // TODO: Get from evidence count
@@ -73,6 +73,7 @@ struct JobDetailView: View {
                                     selectedTab = .evidence
                                 }
                             )
+                            .id(job?.id) // Use job.id to satisfy compiler
                         }
                         
                         Menu {
@@ -96,7 +97,7 @@ struct JobDetailView: View {
             }
             .sheet(isPresented: $showPDFViewer) {
                 if let pdfURL = pdfURL {
-                    RMPDFViewerScreen(pdfURL: pdfURL)
+                    RMPDFViewerScreen(url: pdfURL)
                 }
             }
             .onAppear {
@@ -125,16 +126,14 @@ struct JobDetailView: View {
         // Mock data
         job = Job(
             id: jobId,
-            title: "Main St Electrical Installation",
-            status: "In Progress",
-            riskLevel: "High",
-            client: "ABC Construction",
+            clientName: "ABC Construction",
+            jobType: "Electrical Installation",
             location: "123 Main St",
-            dueDate: Date().addingTimeInterval(86400 * 3),
-            owner: "John Doe",
-            templateApplied: nil,
-            readinessScore: 65,
-            blockers: ["Missing evidence upload", "Controls not completed"]
+            status: "In Progress",
+            riskScore: 75,
+            riskLevel: "High",
+            createdAt: ISO8601DateFormatter().string(from: Date()),
+            updatedAt: nil
         )
     }
 }
@@ -176,26 +175,19 @@ struct OverviewTab: View {
                 StatusInfoCard(job: job)
                     .padding(.horizontal, RMTheme.Spacing.pagePadding)
                 
-                // Readiness Score
-                ReadinessScoreCard(job: job)
-                    .padding(.horizontal, RMTheme.Spacing.pagePadding)
-                
-                // Blockers (if any)
-                if !job.blockers.isEmpty {
-                    BlockersCard(blockers: job.blockers)
-                        .padding(.horizontal, RMTheme.Spacing.pagePadding)
-                }
+                // Readiness Score (if available - would need to fetch from API)
+                // Note: Job model doesn't include readinessScore, would need separate API call
                 
                 // Proof Readiness Meter
                 RMProofReadinessMeter(
                     readiness: ProofReadiness(
-                        status: job.readinessScore >= 80 ? .ready : .needsEvidence,
+                        status: .needsEvidence, // Default until we fetch readiness data
                         evidenceCount: 2, // TODO: Get from evidence
                         evidenceRequired: 5,
-                        evidenceStatus: 2 >= 5 ? .complete : (2 > 0 ? .partial : .missing),
+                        evidenceStatus: .partial, // Mock: 2 of 5 required
                         controlsCompleted: 3, // TODO: Get from controls
                         controlsRequired: 5,
-                        controlsStatus: 3 >= 5 ? .complete : (3 > 0 ? .partial : .missing),
+                        controlsStatus: .partial, // Mock: 3 of 5 required
                         needsAttestation: false
                     )
                 )
@@ -230,7 +222,7 @@ struct OverviewTab: View {
                 role: "Safety Lead",
                 timestamp: Date().addingTimeInterval(-300),
                 jobId: job.id,
-                jobTitle: job.title,
+                jobTitle: job.clientName,
                 details: ["Control": "Lockout/Tagout"]
             ),
             ActionReceipt(
@@ -241,7 +233,7 @@ struct OverviewTab: View {
                 role: "Field Worker",
                 timestamp: Date().addingTimeInterval(-1800),
                 jobId: job.id,
-                jobTitle: job.title,
+                jobTitle: job.clientName,
                 details: ["Files": "3 photos"]
             )
         ]
@@ -250,6 +242,32 @@ struct OverviewTab: View {
 
 struct RiskScoreCard: View {
     let job: Job
+    
+    private var riskScore: Int {
+        if let score = job.riskScore {
+            return score
+        }
+        // Fallback to computing from risk level
+        switch job.riskLevel {
+        case "Critical": return 95
+        case "High": return 80
+        case "Medium": return 55
+        case "Low": return 30
+        default: return 50
+        }
+    }
+    
+    private var riskLevel: String {
+        job.riskLevel ?? "Unknown"
+    }
+    
+    private var riskColor: Color {
+        switch riskScore {
+        case 0..<30: return RMTheme.Colors.categoryOperations
+        case 30..<70: return RMTheme.Colors.categoryAccess
+        default: return RMTheme.Colors.categoryGovernance
+        }
+    }
     
     var body: some View {
         RMGlassCard {
@@ -283,26 +301,6 @@ struct RiskScoreCard: View {
             }
         }
     }
-    
-    private var riskScore: Int {
-        switch job.riskLevel {
-        case "Critical": return 95
-        case "High": return 80
-        case "Medium": return 55
-        case "Low": return 30
-        default: return 50
-        }
-    }
-    
-    private var riskColor: Color {
-        switch job.riskLevel {
-        case "Critical": return RMTheme.Colors.error
-        case "High": return RMTheme.Colors.warning
-        case "Medium": return RMTheme.Colors.info
-        case "Low": return RMTheme.Colors.success
-        default: return RMTheme.Colors.textTertiary
-        }
-    }
 }
 
 struct StatusInfoCard: View {
@@ -312,14 +310,9 @@ struct StatusInfoCard: View {
         RMGlassCard {
             VStack(spacing: RMTheme.Spacing.md) {
                 InfoRow(label: "Status", value: job.status)
-                InfoRow(label: "Client", value: job.client)
+                InfoRow(label: "Client", value: job.clientName)
                 InfoRow(label: "Location", value: job.location)
-                if let dueDate = job.dueDate {
-                    InfoRow(label: "Due Date", value: formatDate(dueDate))
-                }
-                if let owner = job.owner {
-                    InfoRow(label: "Owner", value: owner)
-                }
+                // Note: dueDate and owner not in Job model - would need API extension
             }
         }
     }
@@ -349,8 +342,14 @@ struct InfoRow: View {
     }
 }
 
-struct ReadinessScoreCard: View {
-    let job: Job
+struct JobReadinessScoreCard: View {
+    let score: Int
+    
+    var readinessColor: Color {
+        if score >= 80 { return RMTheme.Colors.success }
+        if score >= 60 { return RMTheme.Colors.warning }
+        return RMTheme.Colors.error
+    }
     
     var body: some View {
         RMGlassCard {
@@ -359,7 +358,7 @@ struct ReadinessScoreCard: View {
                     Text("Readiness Score")
                         .rmSectionHeader()
                     Spacer()
-                    Text("\(job.readinessScore)%")
+                    Text("\(score)%")
                         .font(RMTheme.Typography.title)
                         .foregroundColor(readinessColor)
                 }
@@ -372,18 +371,12 @@ struct ReadinessScoreCard: View {
                         
                         RoundedRectangle(cornerRadius: 4)
                             .fill(readinessColor)
-                            .frame(width: geometry.size.width * CGFloat(job.readinessScore) / 100, height: 8)
+                            .frame(width: geometry.size.width * CGFloat(score) / 100, height: 8)
                     }
                 }
                 .frame(height: 8)
             }
         }
-    }
-    
-    private var readinessColor: Color {
-        if job.readinessScore >= 80 { return RMTheme.Colors.success }
-        if job.readinessScore >= 60 { return RMTheme.Colors.warning }
-        return RMTheme.Colors.error
     }
 }
 
@@ -530,7 +523,7 @@ struct ControlsTab: View {
                     .padding(.top, RMTheme.Spacing.xxl)
                 } else {
                     ForEach(controls) { control in
-                        ControlCard(control: control)
+                        ControlCard(control: control, jobId: jobId)
                             .padding(.horizontal, RMTheme.Spacing.pagePadding)
                     }
                 }
@@ -776,7 +769,7 @@ struct UploadStatusCard: View {
                     
                     Spacer()
                     
-                    if upload.state == .failed {
+                    if case .failed = upload.state {
                         Button {
                             Task {
                                 try? await uploadManager.retryUpload(upload)
@@ -908,86 +901,108 @@ struct ExportsTab: View {
     }
     
     var recentExports: [ExportTask] {
-        exportManager.getAllExportsForJob(jobId: jobId)
-            .filter { $0.state == .ready }
-            .prefix(5)
-            .map { $0 }
+        let allExports = exportManager.getAllExportsForJob(jobId: jobId)
+        let readyExports = allExports.filter { $0.state == .ready }
+        return Array(readyExports.prefix(5))
     }
     
-    var body: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(spacing: RMTheme.Spacing.sectionSpacing) {
-                // Integrity Surface
-                RMIntegritySurface(jobId: jobId)
+    private var scrollContent: some View {
+        VStack(spacing: RMTheme.Spacing.sectionSpacing) {
+            // Integrity Surface
+            RMIntegritySurface(jobId: jobId)
+                .padding(.horizontal, RMTheme.Spacing.pagePadding)
+            
+            // Generate Buttons
+            generateButtonsSection
+            
+            // Export Queue
+            exportQueueSection
+            
+            // Recent Exports
+            recentExportsSection
+            
+            // Last Export Quick Access
+            lastExportSection
+        }
+        .padding(.vertical, RMTheme.Spacing.lg)
+    }
+    
+    private var generateButtonsSection: some View {
+        VStack(spacing: RMTheme.Spacing.md) {
+            ExportCard(
+                title: "Risk Snapshot Report",
+                description: "Complete job documentation with hazards, controls, and evidence",
+                icon: "doc.text.fill",
+                action: {
+                    await generateExport(type: .pdf)
+                },
+                isGenerating: isGenerating(.pdf)
+            )
+            
+            ExportCard(
+                title: "Proof Pack",
+                description: "ZIP archive with all PDFs, evidence, and verification",
+                icon: "archivebox.fill",
+                action: {
+                    await generateExport(type: .proofPack)
+                },
+                isGenerating: isGenerating(.proofPack)
+            )
+        }
+        .padding(.horizontal, RMTheme.Spacing.pagePadding)
+    }
+    
+    @ViewBuilder
+    private var exportQueueSection: some View {
+        if !activeExports.isEmpty {
+            VStack(alignment: .leading, spacing: RMTheme.Spacing.md) {
+                Text("Export Queue")
+                    .rmSectionHeader()
                     .padding(.horizontal, RMTheme.Spacing.pagePadding)
                 
-                // Generate Buttons
-                VStack(spacing: RMTheme.Spacing.md) {
-                    ExportCard(
-                        title: "Risk Snapshot Report",
-                        description: "Complete job documentation with hazards, controls, and evidence",
-                        icon: "doc.text.fill",
-                        action: {
-                            await generateExport(type: .pdf)
-                        },
-                        isGenerating: isGenerating(.pdf)
-                    )
-                    
-                    ExportCard(
-                        title: "Proof Pack",
-                        description: "ZIP archive with all PDFs, evidence, and verification",
-                        icon: "archivebox.fill",
-                        action: {
-                            await generateExport(type: .proofPack)
-                        },
-                        isGenerating: isGenerating(.proofPack)
-                    )
+                ForEach(activeExports) { export in
+                    ExportStatusCard(export: export)
+                        .padding(.horizontal, RMTheme.Spacing.pagePadding)
                 }
-                .padding(.horizontal, RMTheme.Spacing.pagePadding)
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private var recentExportsSection: some View {
+        if !recentExports.isEmpty {
+            VStack(alignment: .leading, spacing: RMTheme.Spacing.md) {
+                Text("Recent Exports")
+                    .rmSectionHeader()
+                    .padding(.horizontal, RMTheme.Spacing.pagePadding)
                 
-                // Export Queue
-                if !activeExports.isEmpty {
-                    VStack(alignment: .leading, spacing: RMTheme.Spacing.md) {
-                        Text("Export Queue")
-                            .rmSectionHeader()
-                            .padding(.horizontal, RMTheme.Spacing.pagePadding)
-                        
-                        ForEach(activeExports) { export in
-                            ExportStatusCard(export: export)
-                                .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                ForEach(recentExports) { export in
+                    RecentExportCard(export: export, onView: {
+                        if let url = export.fileURL {
+                            shareURL = url
+                            showShareSheet = true
                         }
-                    }
-                }
-                
-                // Recent Exports
-                if !recentExports.isEmpty {
-                    VStack(alignment: .leading, spacing: RMTheme.Spacing.md) {
-                        Text("Recent Exports")
-                            .rmSectionHeader()
-                            .padding(.horizontal, RMTheme.Spacing.pagePadding)
-                        
-                        ForEach(recentExports) { export in
-                            RecentExportCard(export: export, onView: {
-                                if let url = export.fileURL {
-                                    shareURL = url
-                                    showShareSheet = true
-                                }
-                            })
-                            .padding(.horizontal, RMTheme.Spacing.pagePadding)
-                        }
-                    }
-                }
-                
-                // Last Export Quick Access
-                if let lastPDF = exportManager.getLastExport(jobId: jobId, type: .pdf) {
-                    LastExportCard(export: lastPDF, onView: {
-                        shareURL = lastPDF.fileURL
-                        showShareSheet = true
                     })
                     .padding(.horizontal, RMTheme.Spacing.pagePadding)
                 }
             }
-            .padding(.vertical, RMTheme.Spacing.lg)
+        }
+    }
+    
+    @ViewBuilder
+    private var lastExportSection: some View {
+        if let lastPDF = exportManager.getLastExport(jobId: jobId, type: .pdf) {
+            LastExportCard(export: lastPDF, onView: {
+                shareURL = lastPDF.fileURL
+                showShareSheet = true
+            })
+            .padding(.horizontal, RMTheme.Spacing.pagePadding)
+        }
+    }
+    
+    var body: some View {
+        ScrollView(showsIndicators: false) {
+            scrollContent
         }
         .trustToast(
             message: "Ledger recorded",
@@ -1005,12 +1020,7 @@ struct ExportsTab: View {
             Text(errorMessage)
         }
         .onChange(of: exportManager.exports) { _, _ in
-            // Check for completed exports to show receipt
-            if let export = exportManager.exports.first(where: { $0.jobId == jobId && $0.state == .ready && $0.initiatedFromForeground && $0.fileURL != nil }) {
-                completedExport = export
-                showExportReceipt = true
-                showTrustToast = true
-            }
+            checkForCompletedExport()
         }
         .sheet(isPresented: $showExportReceipt) {
             if let export = completedExport {
@@ -1020,6 +1030,14 @@ struct ExportsTab: View {
         .onAppear {
             // Request notification permission for export completion
             UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
+        }
+    }
+    
+    private func checkForCompletedExport() {
+        if let export = exportManager.exports.first(where: { $0.jobId == jobId && $0.state == .ready && $0.initiatedFromForeground && $0.fileURL != nil }) {
+            completedExport = export
+            showExportReceipt = true
+            showTrustToast = true
         }
     }
     
