@@ -167,7 +167,31 @@ class APIClient {
                 )
             }
             
-            return try decoder.decode(T.self, from: data)
+            // Attempt decode - if it fails, log raw response for debugging
+            do {
+                return try decoder.decode(T.self, from: data)
+            } catch let decodeError as DecodingError {
+                // Log decoding error with raw response for debugging
+                print("[APIClient] ❌ Decoding error: \(decodeError)")
+                print("[APIClient] Raw response body (first 800 chars): \(bodyPreview)")
+                
+                // Provide helpful error message
+                let errorDescription: String
+                switch decodeError {
+                case .typeMismatch(let type, let context):
+                    errorDescription = "Type mismatch: expected \(type) at \(context.codingPath.map { $0.stringValue }.joined(separator: "."))"
+                case .valueNotFound(let type, let context):
+                    errorDescription = "Value not found: expected \(type) at \(context.codingPath.map { $0.stringValue }.joined(separator: "."))"
+                case .keyNotFound(let key, let context):
+                    errorDescription = "Key not found: \(key.stringValue) at \(context.codingPath.map { $0.stringValue }.joined(separator: "."))"
+                case .dataCorrupted(let context):
+                    errorDescription = "Data corrupted at \(context.codingPath.map { $0.stringValue }.joined(separator: ".")): \(context.debugDescription)"
+                @unknown default:
+                    errorDescription = "Unknown decoding error: \(decodeError)"
+                }
+                
+                throw APIError.decodingError
+            }
         } catch let urlError as URLError {
             // Handle network-level errors (offline, timeout, DNS, etc.)
             let errorCategory: ErrorCategory
