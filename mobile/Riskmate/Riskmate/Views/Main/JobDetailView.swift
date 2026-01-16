@@ -589,8 +589,48 @@ struct ControlsTab: View {
 
 struct Control: Identifiable, Codable {
     let id: String
+    let title: String?
     let description: String
     let status: String
+    let done: Bool?
+    let isCompleted: Bool?
+    let createdAt: String?
+    let updatedAt: String?
+    
+    enum CodingKeys: String, CodingKey {
+        case id
+        case title
+        case description
+        case status
+        case done
+        case isCompleted
+        case createdAt
+        case updatedAt
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        title = try container.decodeIfPresent(String.self, forKey: .title)
+        description = try container.decodeIfPresent(String.self, forKey: .description) ?? ""
+        status = try container.decodeIfPresent(String.self, forKey: .status) ?? "Pending"
+        done = try container.decodeIfPresent(Bool.self, forKey: .done)
+        isCompleted = try container.decodeIfPresent(Bool.self, forKey: .isCompleted)
+        createdAt = try container.decodeIfPresent(String.self, forKey: .createdAt)
+        updatedAt = try container.decodeIfPresent(String.self, forKey: .updatedAt)
+    }
+    
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encodeIfPresent(title, forKey: .title)
+        try container.encode(description, forKey: .description)
+        try container.encode(status, forKey: .status)
+        try container.encodeIfPresent(done, forKey: .done)
+        try container.encodeIfPresent(isCompleted, forKey: .isCompleted)
+        try container.encodeIfPresent(createdAt, forKey: .createdAt)
+        try container.encodeIfPresent(updatedAt, forKey: .updatedAt)
+    }
 }
 
 struct ControlCard: View {
