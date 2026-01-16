@@ -192,9 +192,14 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
       return index >= 0 ? index : statusOrder.length; // Unknown statuses go last
     };
 
+    // Base columns (always present)
+    const baseColumns = "id, client_name, job_type, location, status, risk_score, risk_level, created_at, updated_at, review_flag, flagged_at";
+    // Optional columns (may not exist if migration hasn't run)
+    const optionalColumns = "applied_template_id, applied_template_type";
+    
     let query = supabase
       .from("jobs")
-      .select("id, client_name, job_type, location, status, risk_score, risk_level, created_at, updated_at, applied_template_id, applied_template_type, review_flag, flagged_at")
+      .select(`${baseColumns}, ${optionalColumns}`)
       .eq("organization_id", organization_id)
       .is("deleted_at", null); // Always exclude deleted
     
@@ -298,12 +303,21 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
 
     let { data: jobs, error } = await query;
     
-    // If error is due to missing columns (migration not applied), retry without archive/delete filters
-    if (error && (error.message?.includes('archived_at') || error.message?.includes('deleted_at') || (error as any).code === 'PGRST116')) {
-      console.warn('Archive/delete columns not found - retrying without filters (migration may not be applied yet)');
+    // If error is due to missing columns (migration not applied), retry with minimal columns
+    if (error && (
+      error.message?.includes('archived_at') || 
+      error.message?.includes('deleted_at') || 
+      error.message?.includes('applied_template_id') ||
+      error.message?.includes('applied_template_type') ||
+      error.message?.includes('review_flag') ||
+      error.message?.includes('flagged_at') ||
+      (error as any).code === 'PGRST116'
+    )) {
+      console.warn('[JOBS] Some columns not found - retrying with minimal columns (migration may not be applied yet):', error.message);
+      // Fallback: only select columns that definitely exist
       let fallbackQuery = supabase
         .from("jobs")
-        .select("id, client_name, job_type, location, status, risk_score, risk_level, created_at, updated_at, applied_template_id, applied_template_type, review_flag, flagged_at")
+        .select("id, client_name, job_type, location, status, risk_score, risk_level, created_at, updated_at")
         .eq("organization_id", organization_id);
       
       // Apply cursor or offset pagination (fallback mode - simplified)
