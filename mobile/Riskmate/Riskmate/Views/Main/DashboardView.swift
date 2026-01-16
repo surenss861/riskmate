@@ -335,7 +335,7 @@ struct RMActivityRow: View {
 // MARK: - Dashboard Sections
 
 struct TopHazardsSection: View {
-    @State private var hazards: [HazardPill] = []
+    let hazards: [Hazard]  // Pass hazards from ViewModel
     
     var body: some View {
         VStack(alignment: .leading, spacing: RMTheme.Spacing.md) {
@@ -353,50 +353,11 @@ struct TopHazardsSection: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: RMTheme.Spacing.sm) {
                         ForEach(hazards) { hazard in
-                            HazardPillView(hazard: hazard)
+                            HazardPillView(hazard: HazardPill(id: hazard.id, code: hazard.code, count: 1))
                         }
                     }
                 }
             }
-        }
-        .task {
-            await loadHazards()
-        }
-    }
-    
-    private func loadHazards() async {
-        // Load from jobs API and calculate top hazards
-        // TODO: Replace with dedicated /api/dashboard/top-hazards endpoint when available
-        do {
-            let jobsResponse = try await APIClient.shared.getJobs(page: 1, limit: 100)
-            let allJobs = jobsResponse.data
-            
-            // Get hazards from all jobs and count occurrences
-            var hazardCounts: [String: Int] = [:]
-            for job in allJobs {
-                do {
-                    let jobHazards = try await APIClient.shared.getHazards(jobId: job.id)
-                    for hazard in jobHazards {
-                        hazardCounts[hazard.code, default: 0] += 1
-                    }
-                } catch {
-                    // Skip jobs that fail to load hazards
-                    continue
-                }
-            }
-            
-            // Convert to HazardPill array, sorted by count
-            hazards = hazardCounts
-                .sorted { $0.value > $1.value }
-                .prefix(5)
-                .enumerated()
-                .map { index, element in
-                    HazardPill(id: "\(index)", code: element.key, count: element.value)
-                }
-        } catch {
-            print("[TopHazardsSection] ❌ Failed to load hazards: \(error.localizedDescription)")
-            // Show empty - no demo data
-            hazards = []
         }
     }
 }
