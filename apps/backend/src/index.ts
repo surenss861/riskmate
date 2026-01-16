@@ -53,17 +53,57 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
-// Version endpoint - confirms which code is actually running
-app.get("/__version", (_req, res) => {
-  res.json({
-    commit: process.env.RAILWAY_GIT_COMMIT_SHA || "dev",
-    deploy: process.env.RAILWAY_DEPLOYMENT_ID || "local",
-    marker: "c638206 / 2D92D8D-LAZY-ADMIN-v3",
-    cors_config: {
-      allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Idempotency-Key'],
-      exposedHeaders: ['Content-Disposition', 'X-Error-ID', 'X-Request-ID'],
-    },
-  });
+// Version endpoint - confirms which code is actually running (matches /v1/health format)
+app.get("/__version", async (_req, res) => {
+  try {
+    // Determine environment (same logic as /v1/health)
+    const railwayEnv = process.env.RAILWAY_ENVIRONMENT;
+    const nodeEnv = process.env.NODE_ENV;
+    const hasRailwayDeployment = !!process.env.RAILWAY_DEPLOYMENT_ID;
+    
+    let environment = "development";
+    if (railwayEnv) {
+      environment = railwayEnv;
+    } else if (nodeEnv === "production") {
+      environment = "production";
+    } else if (hasRailwayDeployment) {
+      environment = "production";
+    } else if (nodeEnv) {
+      environment = nodeEnv;
+    }
+
+    // Try to check DB connectivity (optional)
+    let dbStatus = "unknown";
+    try {
+      const { createClient } = await import("@supabase/supabase-js");
+      const supabase = createClient(
+        process.env.SUPABASE_URL || "",
+        process.env.SUPABASE_SERVICE_ROLE_KEY || ""
+      );
+      const { error } = await supabase.from("organizations").select("id").limit(1);
+      dbStatus = error ? "error" : "ok";
+    } catch {
+      dbStatus = "error";
+    }
+
+    res.json({
+      status: "ok",
+      timestamp: new Date().toISOString(),
+      commit: process.env.RAILWAY_GIT_COMMIT_SHA || process.env.GIT_COMMIT_SHA || "dev",
+      service: "riskmate-api",
+      version: process.env.npm_package_version || "0.1.0",
+      environment: environment,
+      deployment: process.env.RAILWAY_DEPLOYMENT_ID || "local",
+      db: dbStatus,
+      marker: "c638206 / 2D92D8D-LAZY-ADMIN-v3",
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      status: "error",
+      timestamp: new Date().toISOString(),
+      error: error.message,
+    });
+  }
 });
 
 // Create v1 router to wrap all API routes

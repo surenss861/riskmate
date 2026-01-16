@@ -71,6 +71,9 @@ export const authenticate = async (
     return next();
   }
 
+  // Skip auth logging for health/version endpoints (they don't require auth)
+  const isHealthEndpoint = req.path === '/health' || req.path === '/v1/health' || req.path === '/__version';
+  
   try {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -85,7 +88,10 @@ export const authenticate = async (
     // ✅ Fast fail for obviously invalid tokens (not JWT format)
     // This prevents garbage tokens like "not-a-real-token" from ever hitting Supabase
     if (!isProbablyJwt(token)) {
-      console.warn("[AUTH] Token failed JWT format check:", token.substring(0, 20) + "...");
+      // Only log JWT format errors for protected routes (not health/version endpoints)
+      if (!isHealthEndpoint) {
+        console.warn("[AUTH] Token failed JWT format check:", token.substring(0, 20) + "...");
+      }
       return res.status(401).json({ message: "Unauthorized - Invalid token format" });
     }
 
