@@ -66,6 +66,46 @@ app.get("/__version", (_req, res) => {
   });
 });
 
+// Create v1 router to wrap all API routes
+const v1Router = express.Router();
+
+// v1 health endpoint with build metadata (contract check)
+v1Router.get("/health", async (_req, res) => {
+  try {
+    // Try to ping Supabase to check DB connectivity (optional)
+    let dbStatus = "unknown";
+    try {
+      const { createClient } = await import("@supabase/supabase-js");
+      const supabase = createClient(
+        process.env.SUPABASE_URL || "",
+        process.env.SUPABASE_SERVICE_ROLE_KEY || ""
+      );
+      // Simple query to check DB
+      const { error } = await supabase.from("organizations").select("id").limit(1);
+      dbStatus = error ? "error" : "ok";
+    } catch {
+      dbStatus = "error";
+    }
+
+    res.json({
+      status: "ok",
+      timestamp: new Date().toISOString(),
+      commit: process.env.RAILWAY_GIT_COMMIT_SHA || process.env.GIT_COMMIT_SHA || "dev",
+      service: "riskmate-api",
+      version: process.env.npm_package_version || "0.1.0",
+      environment: process.env.NODE_ENV || "development",
+      deployment: process.env.RAILWAY_DEPLOYMENT_ID || "local",
+      db: dbStatus,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      status: "error",
+      timestamp: new Date().toISOString(),
+      error: error.message,
+    });
+  }
+});
+
 // Production allowed origins (from env var, comma-separated)
 const envAllowedOrigins = (process.env.ALLOWED_ORIGINS || "")
   .split(",")
@@ -156,7 +196,7 @@ app.post(
 
 app.use(express.json());
 
-// API Routes
+// API Routes (keep /api/* for backward compatibility)
 app.use("/api/risk", riskRouter);
 app.use("/api/subscriptions", subscriptionsRouter);
 app.use("/api/jobs", jobsRouter);
@@ -174,6 +214,28 @@ app.use("/api", exportsRouter);
 app.use("/api", verificationRouter);
 app.use("/api/public", publicVerificationRouter);
 app.use("/api/metrics", metricsRouter);
+
+// Mount all /api routes under /v1 as well (versioned API)
+v1Router.use("/risk", riskRouter);
+v1Router.use("/subscriptions", subscriptionsRouter);
+v1Router.use("/jobs", jobsRouter);
+v1Router.use("/reports", reportsRouter);
+v1Router.use("/analytics", analyticsRouter);
+v1Router.use("/legal", legalRouter);
+v1Router.use("/notifications", notificationsRouter);
+v1Router.use("/team", teamRouter);
+v1Router.use("/account", accountRouter);
+v1Router.use("/sites", sitesRouter);
+v1Router.use("/audit", auditRouter);
+v1Router.use("/executive", executiveRouter);
+v1Router.use("/", evidenceRouter);
+v1Router.use("/", exportsRouter);
+v1Router.use("/", verificationRouter);
+v1Router.use("/public", publicVerificationRouter);
+v1Router.use("/metrics", metricsRouter);
+
+// Mount v1 router
+app.use("/v1", v1Router);
 
 // 404 handler
 // CORS headers are already set by cors() middleware, so this response will include them

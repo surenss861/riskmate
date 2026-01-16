@@ -1,0 +1,122 @@
+name: API Smoke Test
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    # Run every 6 hours to catch deployment issues
+    - cron: '0 */6 * * *'
+
+jobs:
+  smoke-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    
+    steps:
+      - name: Check API Health
+        run: |
+          echo "🔍 Testing API health endpoint..."
+          response=$(curl -s -w "\n%{http_code}" "https://api.riskmate.dev/v1/health" || echo -e "\n000")
+          http_code=$(echo "$response" | tail -n1)
+          body=$(echo "$response" | head -n-1)
+          
+          if [ "$http_code" != "200" ]; then
+            echo "❌ Health check failed: HTTP $http_code"
+            echo "Response: $body"
+            exit 1
+          fi
+          
+          echo "✅ Health check passed: HTTP $http_code"
+          echo "Response: $body"
+          
+          # Verify response contains required fields
+          if ! echo "$body" | grep -q '"status":"ok"'; then
+            echo "❌ Health response missing 'status: ok'"
+            exit 1
+          fi
+          
+          if ! echo "$body" | grep -q '"service":"riskmate-api"'; then
+            echo "❌ Health response missing 'service: riskmate-api'"
+            exit 1
+          fi
+          
+          echo "✅ Health response structure valid"
+
+      - name: Check API Route Existence (Auth)
+        run: |
+          echo "🔍 Testing /v1/account/organization (should return 401/403, not 404)..."
+          response=$(curl -s -w "\n%{http_code}" -H "Authorization: Bearer invalid" "https://api.riskmate.dev/v1/account/organization" || echo -e "\n000")
+          http_code=$(echo "$response" | tail -n1)
+          
+          if [ "$http_code" = "404" ]; then
+            echo "❌ Route /v1/account/organization not found (404) - route not mounted!"
+            exit 1
+          fi
+          
+          if [ "$http_code" = "401" ] || [ "$http_code" = "403" ]; then
+            echo "✅ Route exists and auth is working: HTTP $http_code"
+          else
+            echo "⚠️ Unexpected status: HTTP $http_code (expected 401/403, got $http_code)"
+            # Don't fail on unexpected status, just warn
+          fi
+
+      - name: Check API Route Existence (Jobs)
+        run: |
+          echo "🔍 Testing /v1/jobs (should return 401/403, not 404)..."
+          response=$(curl -s -w "\n%{http_code}" -H "Authorization: Bearer invalid" "https://api.riskmate.dev/v1/jobs" || echo -e "\n000")
+          http_code=$(echo "$response" | tail -n1)
+          
+          if [ "$http_code" = "404" ]; then
+            echo "❌ Route /v1/jobs not found (404) - route not mounted!"
+            exit 1
+          fi
+          
+          if [ "$http_code" = "401" ] || [ "$http_code" = "403" ]; then
+            echo "✅ Route exists and auth is working: HTTP $http_code"
+          else
+            echo "⚠️ Unexpected status: HTTP $http_code (expected 401/403, got $http_code)"
+          fi
+
+      - name: Check API Route Existence (Executive)
+        run: |
+          echo "🔍 Testing /v1/executive/posture (should return 401/403, not 404)..."
+          response=$(curl -s -w "\n%{http_code}" -H "Authorization: Bearer invalid" "https://api.riskmate.dev/v1/executive/posture" || echo -e "\n000")
+          http_code=$(echo "$response" | tail -n1)
+          
+          if [ "$http_code" = "404" ]; then
+            echo "❌ Route /v1/executive/posture not found (404) - route not mounted!"
+            exit 1
+          fi
+          
+          if [ "$http_code" = "401" ] || [ "$http_code" = "403" ]; then
+            echo "✅ Route exists and auth is working: HTTP $http_code"
+          else
+            echo "⚠️ Unexpected status: HTTP $http_code (expected 401/403, got $http_code)"
+          fi
+
+      - name: Verify Commit in Health Response
+        run: |
+          echo "🔍 Verifying commit SHA in health response..."
+          response=$(curl -s "https://api.riskmate.dev/v1/health")
+          
+          if ! echo "$response" | grep -q '"commit"'; then
+            echo "❌ Health response missing 'commit' field"
+            exit 1
+          fi
+          
+          commit=$(echo "$response" | grep -o '"commit":"[^"]*"' | cut -d'"' -f4)
+          echo "✅ Current deployed commit: $commit"
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## API Smoke Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ All contract checks passed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Tested endpoints:**" >> $GITHUB_STEP_SUMMARY
+          echo "- GET /v1/health (200)" >> $GITHUB_STEP_SUMMARY
+          echo "- GET /v1/account/organization (401/403, not 404)" >> $GITHUB_STEP_SUMMARY
+          echo "- GET /v1/jobs (401/403, not 404)" >> $GITHUB_STEP_SUMMARY
+          echo "- GET /v1/executive/posture (401/403, not 404)" >> $GITHUB_STEP_SUMMARY

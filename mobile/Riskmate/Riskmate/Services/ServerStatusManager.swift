@@ -14,16 +14,17 @@ class ServerStatusManager: ObservableObject {
     private var checkTimer: Timer?
     
     private init() {
-        self.healthCheckURL = "\(AppConfig.shared.backendURL)/health"
+        // Use /v1/health for versioned health check with build metadata
+        self.healthCheckURL = "\(AppConfig.shared.backendURL)/v1/health"
         startPeriodicChecks()
     }
     
-    /// Check server health
-    func checkHealth() async {
+    /// Check server health (returns health info or nil if failed)
+    func checkHealth() async -> HealthResponse? {
         guard let url = URL(string: healthCheckURL) else {
             backendDown = true
             isOnline = false
-            return
+            return nil
         }
         
         var request = URLRequest(url: url)
@@ -31,11 +32,20 @@ class ServerStatusManager: ObservableObject {
         request.timeoutInterval = 5.0 // Fast timeout for health check
         
         do {
-            let (_, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await URLSession.shared.data(for: request)
             
             if let httpResponse = response as? HTTPURLResponse {
-                backendDown = !(200...299).contains(httpResponse.statusCode)
-                isOnline = !backendDown
+                let isHealthy = (200...299).contains(httpResponse.statusCode)
+                backendDown = !isHealthy
+                isOnline = isHealthy
+                
+                if isHealthy {
+                    // Try to decode health response
+                    if let healthData = try? JSONDecoder().decode(HealthResponse.self, from: data) {
+                        lastCheck = Date()
+                        return healthData
+                    }
+                }
             } else {
                 backendDown = true
                 isOnline = false
@@ -43,10 +53,45 @@ class ServerStatusManager: ObservableObject {
         } catch {
             backendDown = true
             isOnline = false
+            print("[ServerStatusManager] ❌ Health check failed: \(error.localizedDescription)")
         }
         
         lastCheck = Date()
+        return nil
     }
+    
+    /// Check health and throw if backend is unavailable (for startup gate)
+    func requireHealthyBackend() async throws {
+        let health = await checkHealth()
+        if health == nil {
+            throw HealthCheckError.backendUnavailable
+        }
+    }
+}
+
+// MARK: - Health Response Model
+
+struct HealthResponse: Codable {
+    let status: String
+    let timestamp: String
+    let commit: String?
+    let service: String?
+    let version: String?
+    let environment: String?
+    let deployment: String?
+    let db: String?
+}
+
+enum HealthCheckError: LocalizedError {
+    case backendUnavailable
+    
+    var errorDescription: String? {
+        switch self {
+        case .backendUnavailable:
+            return "Backend service is unavailable. Please check your connection and try again."
+        }
+    }
+}
     
     private func startPeriodicChecks() {
         // Check every 30 seconds

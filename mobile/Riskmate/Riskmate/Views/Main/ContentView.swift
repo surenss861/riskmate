@@ -2,15 +2,42 @@ import SwiftUI
 
 struct ContentView: View {
     @StateObject private var sessionManager = SessionManager.shared
+    @StateObject private var serverStatus = ServerStatusManager.shared
     @State private var selectedTab: MainTab = .operations
     @State private var selectedSidebarItem: SidebarItem? = .operations
     @State private var showOnboarding = false
+    @State private var backendHealthCheckComplete = false
+    @State private var backendHealthError: String?
     
     var body: some View {
         ZStack {
             RMBackground()
             
-            if sessionManager.isLoading {
+            // Backend health check gate (show error if backend unavailable)
+            if !backendHealthCheckComplete {
+                VStack(spacing: RMTheme.Spacing.lg) {
+                    RMSkeletonView(width: 100, height: 100, cornerRadius: 20)
+                    Text("Checking backend connection...")
+                        .font(RMTheme.Typography.body)
+                        .foregroundColor(RMTheme.Colors.textSecondary)
+                }
+            } else if let error = backendHealthError {
+                // Backend unavailable - show error with retry
+                RMEmptyState(
+                    icon: "exclamationmark.triangle.fill",
+                    title: "Backend Unavailable",
+                    message: error,
+                    action: RMEmptyStateAction(
+                        title: "Retry",
+                        action: {
+                            Task {
+                                await checkBackendHealth()
+                            }
+                        }
+                    )
+                )
+                .padding(RMTheme.Spacing.pagePadding)
+            } else if sessionManager.isLoading {
                 VStack(spacing: RMTheme.Spacing.lg) {
                     RMSkeletonView(width: 100, height: 100, cornerRadius: 20)
                     RMSkeletonView(width: 150, height: 20)
@@ -33,6 +60,14 @@ struct ContentView: View {
         }
         .preferredColorScheme(.dark)
         .task {
+            // First: Check backend health (gate)
+            await checkBackendHealth()
+            
+            // Only proceed if backend is healthy
+            guard backendHealthError == nil else {
+                return
+            }
+            
             print("[ContentView] Starting session check...")
             await sessionManager.checkSession()
             print("[ContentView] Session check complete. isAuthenticated=\(sessionManager.isAuthenticated), isLoading=\(sessionManager.isLoading)")
@@ -46,6 +81,23 @@ struct ContentView: View {
         .onAppear {
             print("[ContentView] ✅ View appeared. isAuthenticated=\(sessionManager.isAuthenticated), isLoading=\(sessionManager.isLoading)")
         }
+    }
+    
+    private func checkBackendHealth() async {
+        backendHealthCheckComplete = false
+        backendHealthError = nil
+        
+        do {
+            try await serverStatus.requireHealthyBackend()
+            backendHealthError = nil
+            print("[ContentView] ✅ Backend health check passed")
+        } catch {
+            let errorDesc = error.localizedDescription
+            backendHealthError = errorDesc
+            print("[ContentView] ❌ Backend health check failed: \(errorDesc)")
+        }
+        
+        backendHealthCheckComplete = true
     }
     
     // MARK: - iPhone Navigation (TabView)
