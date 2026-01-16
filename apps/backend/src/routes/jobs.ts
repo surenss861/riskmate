@@ -119,8 +119,38 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
     // - risk_desc/risk_asc: "risk_score|created_at|id"
     // - status_asc/status_desc: DISABLED (use offset only - in-memory sort incompatible with cursor)
     const { cursor, limit: limitParamFromCursor } = authReq.query;
-    const pageNum = parseInt(page as string, 10);
-    const limitNum = limitParamFromCursor ? parseInt(limitParamFromCursor as string, 10) : (limitParamFromQuery ? parseInt(limitParamFromQuery as string, 10) : 20);
+    
+    // Validate and parse pagination parameters
+    let pageNum: number;
+    let limitNum: number;
+    
+    try {
+      pageNum = parseInt(String(page), 10);
+      if (isNaN(pageNum) || pageNum < 1) {
+        pageNum = 1;
+      }
+    } catch {
+      pageNum = 1;
+    }
+    
+    // Support both page_size and limit (page_size takes precedence for offset pagination)
+    const pageSizeParam = page_size ? parseInt(String(page_size), 10) : null;
+    const limitParam = limitParamFromCursor ? parseInt(String(limitParamFromCursor), 10) : (limitParamFromQuery ? parseInt(String(limitParamFromQuery), 10) : null);
+    
+    try {
+      limitNum = pageSizeParam && !isNaN(pageSizeParam) && pageSizeParam > 0 
+        ? pageSizeParam 
+        : (limitParam && !isNaN(limitParam) && limitParam > 0 
+          ? limitParam 
+          : 20);
+      
+      // Enforce maximum limit to prevent abuse
+      if (limitNum > 1000) {
+        limitNum = 1000;
+      }
+    } catch {
+      limitNum = 20;
+    }
     
     // Cursor pagination is only safe for sorts that match SQL ordering
     // status_asc uses in-memory sorting, so cursor pagination would be inconsistent
@@ -635,8 +665,30 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
       }),
     });
   } catch (err: any) {
-    console.error("Jobs fetch failed:", err);
-    res.status(500).json({ message: "Failed to fetch jobs" });
+    const requestId = authReq.requestId || 'unknown';
+    const organizationId = authReq.user?.organization_id;
+    
+    console.error("[JOBS] Fetch failed:", {
+      requestId,
+      organizationId,
+      error: err.message || String(err),
+      stack: err.stack,
+      query: authReq.query,
+    });
+    
+    // Use structured error response
+    const { response: errorResponse, errorId } = createErrorResponse({
+      message: err.message || "Failed to fetch jobs",
+      internalMessage: err.stack || String(err),
+      code: "JOBS_FETCH_ERROR",
+      requestId,
+      statusCode: 500,
+    });
+    
+    res.setHeader('X-Error-ID', errorId);
+    logErrorForSupport(500, "JOBS_FETCH_ERROR", requestId, organizationId, errorResponse.message, errorResponse.internal_message, errorResponse.category, errorResponse.severity, '/api/jobs');
+    
+    res.status(500).json(errorResponse);
   }
 });
 

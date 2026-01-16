@@ -42,9 +42,42 @@ const toDateKey = (value: string) => value.slice(0, 10);
 analyticsRouter.get(
   "/mitigations",
   authenticate as unknown as express.RequestHandler,
-  requireFeature("analytics") as unknown as express.RequestHandler,
   async (req: express.Request, res: express.Response) => {
     const authReq = req as AuthenticatedRequest;
+    
+    // Soft check: return empty analytics data if plan is inactive (better UX than 402)
+    const status = authReq.user.subscriptionStatus;
+    const hasAnalytics = authReq.user.features.includes("analytics");
+    const isActive = ["active", "trialing", "free"].includes(status);
+    
+    if (!isActive || !hasAnalytics) {
+      // Return empty analytics data instead of 402 (better UX)
+      return res.json({
+        org_id: authReq.user.organization_id,
+        range_days: parseRangeDays(authReq.query.range as string | undefined),
+        completion_rate: 0,
+        avg_time_to_close_hours: 0,
+        high_risk_jobs: 0,
+        evidence_count: 0,
+        jobs_with_evidence: 0,
+        jobs_without_evidence: 0,
+        avg_time_to_first_evidence_hours: 0,
+        trend: [],
+        jobs_total: 0,
+        jobs_scored: 0,
+        jobs_with_any_evidence: 0,
+        jobs_with_photo_evidence: 0,
+        jobs_missing_required_evidence: 0,
+        required_evidence_policy: null,
+        avg_time_to_first_photo_minutes: null,
+        trend_empty_reason: 'no_jobs',
+        locked: true,
+        message: status === "none" 
+          ? "Analytics requires an active subscription"
+          : "Analytics not available on your current plan",
+      });
+    }
+    
     try {
       const orgId =
         (authReq.query.org_id as string | undefined) || authReq.user.organization_id;
