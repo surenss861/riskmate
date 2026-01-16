@@ -732,7 +732,7 @@ struct AuditEventAPI: Codable {
     let details: String?
     let actorName: String?
     let actorRole: String?
-    let metadata: [String: AnyCodable]?
+    let metadata: [String: AnyCodable]  // Non-optional with default empty dict in custom decoder
     let outcome: String?
     let severity: String?
     
