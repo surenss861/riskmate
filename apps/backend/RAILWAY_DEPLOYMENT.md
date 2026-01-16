@@ -56,6 +56,7 @@ tsx src/index.ts
 - `ALLOWED_ORIGINS` - Comma-separated list of allowed CORS origins
 - `RAILWAY_GIT_COMMIT_SHA` - Automatically set by Railway (for health checks)
 - `RAILWAY_DEPLOYMENT_ID` - Automatically set by Railway (for health checks)
+- `DEV_AUTH_SECRET` - (Optional) Secret for dev testing endpoints (`/v1/dev/*`). Only set if you need dev utilities.
 
 ## Health Check Endpoints
 
@@ -108,6 +109,46 @@ curl -H "Authorization: Bearer invalid" https://api.riskmate.dev/v1/account/orga
 **Key Rule:**
 - ✅ `401` or `403` = Route exists, auth is working
 - ❌ `404` = Route not mounted / wrong base path / wrong deploy
+
+## Testing Authenticated Endpoints
+
+### Get a Real Supabase Access Token
+
+To test authenticated endpoints, you need a real Supabase session token:
+
+**From Web App:**
+1. Log into your web app
+2. Open DevTools → Application → Local Storage
+3. Find `sb-<project-id>-auth-token` key
+4. Copy the `access_token` value from the JSON
+
+**From iOS App:**
+1. Log into the iOS app
+2. Check APIClient logs for the token (or use session storage)
+
+### Test with Real Token
+
+```bash
+# Test /v1/me endpoint (returns current user)
+curl -H "Authorization: Bearer <access_token>" \
+  https://api.riskmate.dev/v1/me
+
+# Test /v1/account/organization
+curl -H "Authorization: Bearer <access_token>" \
+  https://api.riskmate.dev/v1/account/organization
+```
+
+### Dev Testing Endpoint (Optional)
+
+If `DEV_AUTH_SECRET` is set, you can use `/v1/dev/whoami` to verify user data without auth:
+
+```bash
+# Verify user exists (bypasses auth, requires DEV_AUTH_SECRET header)
+curl -H "X-Dev-Secret: <DEV_AUTH_SECRET>" \
+  "https://api.riskmate.dev/v1/dev/whoami?user_id=<uuid>&org_id=<uuid>"
+```
+
+**Note:** This endpoint only verifies user data exists. To test full auth flow, use a real Supabase token.
 
 ## Troubleshooting
 
