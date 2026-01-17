@@ -45,17 +45,17 @@ final class DashboardViewModel: ObservableObject {
                 let allJobs = try await loadJobsOnce()
                 
                 // Load all data in parallel using cached jobs
-                // Note: Some are sync (KPIs, chart, atRisk) but we wrap them for consistency
-                async let kpisTask = Task { loadKPIs(jobs: allJobs) }
-                async let chartTask = Task { loadChartData(jobs: allJobs) }
+                // Note: Some are sync (KPIs, chart, atRisk) - call them directly on MainActor
+                async let kpisTask = Task { @MainActor in loadKPIs(jobs: allJobs) }
+                async let chartTask = Task { @MainActor in loadChartData(jobs: allJobs) }
                 async let activityTask = loadRecentActivity()
                 async let hazardsTask = loadTopHazards(jobs: allJobs)
-                async let atRiskTask = Task { loadJobsAtRisk(jobs: allJobs) }
+                async let atRiskTask = Task { @MainActor in loadJobsAtRisk(jobs: allJobs) }
                 async let missingEvidenceTask = loadMissingEvidenceJobs(jobs: allJobs)
                 
                 // Wait for all tasks (ignore cancellation errors)
                 do {
-                    kpis = try await kpisTask.value
+                    kpis = await kpisTask.value
                 } catch is CancellationError {
                     // Ignore cancellation
                 } catch {
@@ -63,7 +63,7 @@ final class DashboardViewModel: ObservableObject {
                 }
                 
                 do {
-                    chartData = try await chartTask.value
+                    chartData = await chartTask.value
                 } catch is CancellationError {
                     // Ignore cancellation
                 } catch {
@@ -87,7 +87,7 @@ final class DashboardViewModel: ObservableObject {
                 }
                 
                 do {
-                    jobsAtRisk = try await atRiskTask.value
+                    jobsAtRisk = await atRiskTask.value
                 } catch is CancellationError {
                     // Ignore cancellation
                 } catch {
