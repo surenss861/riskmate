@@ -52,7 +52,15 @@ final class DashboardViewModel: ObservableObject {
                     )
                     
                     // Convert chart data (date strings to Date objects)
+                    // ChartDataPoint is defined in RMChartCard.swift
                     chartData = summaryData.chartData.compactMap { point in
+                        // Try parsing as ISO8601 date first
+                        let formatter = ISO8601DateFormatter()
+                        formatter.formatOptions = [.withFullDate]
+                        if let date = formatter.date(from: point.date) {
+                            return ChartDataPoint(date: date, value: Double(point.value))
+                        }
+                        // Fallback: try with time component
                         if let date = ISO8601DateFormatter().date(from: point.date + "T00:00:00Z") {
                             return ChartDataPoint(date: date, value: Double(point.value))
                         }
