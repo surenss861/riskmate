@@ -131,14 +131,14 @@ struct JobsListView: View {
                                 icon: "exclamationmark.triangle.fill",
                                 title: "Failed to Load Jobs",
                                 message: errorMessage,
-                                action: RMEmptyStateAction(
-                                    title: "Retry",
-                                    action: {
-                                        Task {
-                                            await loadJobs()
+                                    action: RMEmptyStateAction(
+                                        title: "Retry",
+                                        action: {
+                                            Task {
+                                                _ = try? await jobsStore.fetch(forceRefresh: true)
+                                            }
                                         }
-                                    }
-                                )
+                                    )
                             )
                         }
                         .padding(RMTheme.Spacing.pagePadding)

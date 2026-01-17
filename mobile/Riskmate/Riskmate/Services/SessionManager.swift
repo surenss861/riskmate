@@ -33,7 +33,7 @@ class SessionManager: ObservableObject {
         }
         
         do {
-            if let session = try await authService.getCurrentSession() {
+            if try await authService.getCurrentSession() != nil {
                 // Check JWT expiration (SDK-independent)
                 if let token = try? await authService.getAccessToken(),
                    JWTExpiry.isExpired(token) {
