@@ -33,10 +33,20 @@ class SessionManager: ObservableObject {
         }
         
         do {
-            if try await authService.getCurrentSession() != nil {
-                print("[SessionManager] ✅ Found existing session")
-                isAuthenticated = true
-                await loadUserData()
+            if let session = try await authService.getCurrentSession() {
+                // Check if session is expired (Supabase Swift SDK has expiresAt property)
+                let expiresAt = session.expiresAt
+                let now = Date()
+                
+                if expiresAt < now {
+                    print("[SessionManager] ⚠️ Session found but expired (expired at \(expiresAt), now is \(now)), clearing...")
+                    await logout()
+                    isAuthenticated = false
+                } else {
+                    print("[SessionManager] ✅ Found valid session (expires at \(expiresAt))")
+                    isAuthenticated = true
+                    await loadUserData()
+                }
             } else {
                 print("[SessionManager] No existing session found")
                 isAuthenticated = false

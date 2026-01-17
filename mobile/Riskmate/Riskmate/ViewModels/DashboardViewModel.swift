@@ -18,6 +18,10 @@ final class DashboardViewModel: ObservableObject {
     private var loadTask: Task<Void, Never>?
     private var hasLoadedOnce = false
     
+    // Cache jobs response to avoid duplicate API calls
+    private var cachedJobs: [Job]?
+    private var cachedJobsTask: Task<[Job], Error>?
+    
     /// Load all dashboard data in parallel (single-flight with deduplication)
     func load() {
         // Skip if already loaded (call loadIfNeeded() on first load)
@@ -37,17 +41,21 @@ final class DashboardViewModel: ObservableObject {
             if Task.isCancelled { return }
             
             do {
-                // Load all data in parallel for better performance
-                async let kpisTask = loadKPIs()
-                async let chartTask = loadChartData()
+                // Load jobs ONCE and cache for all dashboard calculations
+                let allJobs = try await loadJobsOnce()
+                
+                // Load all data in parallel using cached jobs
+                // Note: Some are sync (KPIs, chart, atRisk) but we wrap them for consistency
+                async let kpisTask = Task { loadKPIs(jobs: allJobs) }
+                async let chartTask = Task { loadChartData(jobs: allJobs) }
                 async let activityTask = loadRecentActivity()
-                async let hazardsTask = loadTopHazards()
-                async let atRiskTask = loadJobsAtRisk()
-                async let missingEvidenceTask = loadMissingEvidenceJobs()
+                async let hazardsTask = loadTopHazards(jobs: allJobs)
+                async let atRiskTask = Task { loadJobsAtRisk(jobs: allJobs) }
+                async let missingEvidenceTask = loadMissingEvidenceJobs(jobs: allJobs)
                 
                 // Wait for all tasks (ignore cancellation errors)
                 do {
-                    kpis = try await kpisTask
+                    kpis = try await kpisTask.value
                 } catch is CancellationError {
                     // Ignore cancellation
                 } catch {
@@ -55,7 +63,7 @@ final class DashboardViewModel: ObservableObject {
                 }
                 
                 do {
-                    chartData = try await chartTask
+                    chartData = try await chartTask.value
                 } catch is CancellationError {
                     // Ignore cancellation
                 } catch {
@@ -79,7 +87,7 @@ final class DashboardViewModel: ObservableObject {
                 }
                 
                 do {
-                    jobsAtRisk = try await atRiskTask
+                    jobsAtRisk = try await atRiskTask.value
                 } catch is CancellationError {
                     // Ignore cancellation
                 } catch {
@@ -134,10 +142,39 @@ final class DashboardViewModel: ObservableObject {
     
     // MARK: - Private Load Methods
     
-    private func loadKPIs() async throws -> DashboardKPIs {
-        // Load jobs to calculate KPIs
-        let jobsResponse = try await APIClient.shared.getJobs(page: 1, limit: 100)
-        let allJobs = jobsResponse.data
+    /// Load jobs once and cache the result (prevents duplicate API calls)
+    private func loadJobsOnce() async throws -> [Job] {
+        // If we have a cached result and task is still running, wait for it
+        if let cachedTask = cachedJobsTask {
+            return try await cachedTask.value
+        }
+        
+        // If we have cached jobs, return them
+        if let cached = cachedJobs {
+            return cached
+        }
+        
+        // Start new load task
+        let task = Task<[Job], Error> {
+            let jobsResponse = try await APIClient.shared.getJobs(page: 1, limit: 100)
+            return jobsResponse.data
+        }
+        
+        cachedJobsTask = task
+        
+        do {
+            let jobs = try await task.value
+            cachedJobs = jobs
+            cachedJobsTask = nil
+            return jobs
+        } catch {
+            cachedJobsTask = nil
+            throw error
+        }
+    }
+    
+    private func loadKPIs(jobs: [Job]) -> DashboardKPIs {
+        let allJobs = jobs
         
         // Calculate jobs this week
         let calendar = Calendar.current
@@ -172,13 +209,9 @@ final class DashboardViewModel: ObservableObject {
         )
     }
     
-    private func loadChartData() async throws -> [ChartDataPoint] {
-        // Load jobs to generate chart data
-        let jobsResponse = try await APIClient.shared.getJobs(page: 1, limit: 100)
-        let allJobs = jobsResponse.data
-        
+    private func loadChartData(jobs: [Job]) -> [ChartDataPoint] {
         // Generate chart data from jobs (compliance over time)
-        return generateChartDataFromJobs(allJobs)
+        return generateChartDataFromJobs(jobs)
     }
     
     private func generateChartDataFromJobs(_ jobs: [Job]) -> [ChartDataPoint] {
@@ -215,11 +248,10 @@ final class DashboardViewModel: ObservableObject {
         return try await APIClient.shared.getAuditEvents(timeRange: "30d", limit: 10)
     }
     
-    private func loadTopHazards() async throws -> [Hazard] {
+    private func loadTopHazards(jobs: [Job]) async throws -> [Hazard] {
         // TODO: Replace with dedicated /api/dashboard/top-hazards endpoint when available
         // For now, load from jobs and aggregate
-        let jobsResponse = try await APIClient.shared.getJobs(page: 1, limit: 100)
-        let allJobs = jobsResponse.data
+        let allJobs = jobs
         
         // Get hazards from all jobs and count occurrences
         var hazardCounts: [String: Int] = [:]
@@ -254,10 +286,9 @@ final class DashboardViewModel: ObservableObject {
             }
     }
     
-    private func loadJobsAtRisk() async throws -> [Job] {
-        // Load high-risk jobs
-        let jobsResponse = try await APIClient.shared.getJobs(page: 1, limit: 100, riskLevel: "high")
-        return jobsResponse.data.filter { job in
+    private func loadJobsAtRisk(jobs: [Job]) -> [Job] {
+        // Filter high-risk jobs from cached jobs
+        return jobs.filter { job in
             if let score = job.riskScore {
                 return score >= 70
             }
@@ -265,11 +296,10 @@ final class DashboardViewModel: ObservableObject {
         }
     }
     
-    private func loadMissingEvidenceJobs() async throws -> [Job] {
+    private func loadMissingEvidenceJobs(jobs: [Job]) async throws -> [Job] {
         // TODO: Replace with dedicated /api/dashboard/missing-evidence endpoint when available
-        // For now, load jobs and check for missing evidence
-        let jobsResponse = try await APIClient.shared.getJobs(page: 1, limit: 100)
-        let allJobs = jobsResponse.data
+        // For now, check for missing evidence from cached jobs
+        let allJobs = jobs
         
         var missingEvidenceJobs: [Job] = []
         for job in allJobs.prefix(20) { // Limit for performance

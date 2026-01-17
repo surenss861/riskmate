@@ -13,7 +13,12 @@ class AuthService {
         let config = AppConfig.shared
         supabase = SupabaseClient(
             supabaseURL: URL(string: config.supabaseURL)!,
-            supabaseKey: config.supabaseAnonKey
+            supabaseKey: config.supabaseAnonKey,
+            options: SupabaseClientOptions(
+                auth: AuthClientOptions(
+                    emitLocalSessionAsInitialSession: true
+                )
+            )
         )
     }
     
