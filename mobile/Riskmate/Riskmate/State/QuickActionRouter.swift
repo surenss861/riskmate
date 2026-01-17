@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 /// Global router for quick actions (evidence capture, new job, etc.)
 /// Allows presenting sheets from anywhere in the app
