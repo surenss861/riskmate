@@ -13,9 +13,9 @@ struct OperationsView: View {
             return jobsStore.jobs
         }
         return jobsStore.jobs.filter { job in
-            (job.clientName ?? "").localizedCaseInsensitiveContains(searchQuery) ||
-            (job.location ?? "").localizedCaseInsensitiveContains(searchQuery) ||
-            (job.jobType ?? "").localizedCaseInsensitiveContains(searchQuery)
+            job.clientName.localizedCaseInsensitiveContains(searchQuery) ||
+            job.location.localizedCaseInsensitiveContains(searchQuery) ||
+            job.jobType.localizedCaseInsensitiveContains(searchQuery)
         }
     }
     
@@ -85,7 +85,7 @@ struct OperationsView: View {
                             if !activeJobs.isEmpty {
                                 VStack(alignment: .leading, spacing: RMTheme.Spacing.md) {
                                     Text("My Active Jobs")
-                                        .font(RMTheme.Typography.sectionHeader)
+                                        .rmSectionHeader()
                                         .padding(.horizontal, RMTheme.Spacing.pagePadding)
                                     
                                     VStack(spacing: RMTheme.Spacing.sm) {
