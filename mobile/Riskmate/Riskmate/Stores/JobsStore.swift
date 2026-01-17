@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 
 /// Shared store for jobs data - single source of truth with single-flight loading
 @MainActor
