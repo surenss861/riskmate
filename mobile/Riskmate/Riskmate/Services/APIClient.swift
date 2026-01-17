@@ -393,6 +393,12 @@ class APIClient {
         riskLevel: String? = nil,
         search: String? = nil
     ) async throws -> JobsListResponse {
+        #if DEBUG
+        // Debug: Print call stack to identify duplicate callers
+        print("[APIClient] 🧭 getJobs() called from:")
+        print(Thread.callStackSymbols.prefix(10).joined(separator: "\n"))
+        #endif
+        
         var queryItems: [String] = []
         queryItems.append("page=\(page)")
         queryItems.append("limit=\(limit)")
