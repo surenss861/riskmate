@@ -36,31 +36,65 @@ final class DashboardViewModel: ObservableObject {
             defer { isLoading = false }
             
             do {
-                // Load jobs ONCE and cache for all dashboard calculations
-                let allJobs = try await loadJobsOnce()
-                
-                // Load all data in parallel using cached jobs
-                async let kpisTask = Task { @MainActor in loadKPIs(jobs: allJobs) }.value
-                async let chartTask = Task { @MainActor in loadChartData(jobs: allJobs) }.value
-                async let activityTask = loadRecentActivity()
-                async let hazardsTask = loadTopHazards(jobs: allJobs)
-                async let atRiskTask = Task { @MainActor in loadJobsAtRisk(jobs: allJobs) }.value
-                async let missingEvidenceTask = loadMissingEvidenceJobs(jobs: allJobs)
-                
-                // Wait for all tasks (ignore cancellation errors)
-                kpis = await kpisTask
-                chartData = await chartTask
-                recentActivity = try await activityTask
-                topHazards = try await hazardsTask
-                jobsAtRisk = await atRiskTask
-                missingEvidenceJobs = try await missingEvidenceTask
-                
-                // Mark as loaded only on success
-                hasLoadedOnce = true
-                
-                // If we have a general error and no data loaded, set error message
-                if kpis == nil && chartData.isEmpty && recentActivity.isEmpty {
-                    errorMessage = "Failed to load dashboard data. Please try again."
+                // Try new aggregated dashboard endpoint first (eliminates N+1 queries)
+                do {
+                    let summary = try await APIClient.shared.getDashboardSummary()
+                    let summaryData = summary.data
+                    
+                    // Convert API models to view models
+                    kpis = DashboardKPIs(
+                        complianceScore: summaryData.kpis.complianceScore,
+                        complianceTrend: parseTrend(summaryData.kpis.complianceTrend),
+                        openRisks: summaryData.kpis.openRisks,
+                        risksTrend: parseTrend(summaryData.kpis.risksTrend),
+                        jobsThisWeek: summaryData.kpis.jobsThisWeek,
+                        jobsTrend: parseTrend(summaryData.kpis.jobsTrend)
+                    )
+                    
+                    // Convert chart data (date strings to Date objects)
+                    chartData = summaryData.chartData.compactMap { point in
+                        if let date = ISO8601DateFormatter().date(from: point.date + "T00:00:00Z") {
+                            return ChartDataPoint(date: date, value: Double(point.value))
+                        }
+                        return nil
+                    }
+                    
+                    jobsAtRisk = summaryData.jobsAtRisk
+                    missingEvidenceJobs = summaryData.missingEvidenceJobs
+                    
+                    // Load remaining data in parallel
+                    async let activityTask = loadRecentActivity()
+                    async let hazardsTask = loadTopHazards()
+                    
+                    recentActivity = try await activityTask
+                    topHazards = try await hazardsTask
+                    
+                    hasLoadedOnce = true
+                    return
+                } catch {
+                    // Fallback to old fan-out approach if dashboard endpoint doesn't exist (backwards compatibility)
+                    print("[DashboardViewModel] ⚠️ Dashboard summary endpoint failed, falling back to fan-out: \(error.localizedDescription)")
+                    
+                    // Load jobs ONCE and cache for all dashboard calculations
+                    let allJobs = try await loadJobsOnce()
+                    
+                    // Load all data in parallel using cached jobs
+                    async let kpisTask = Task { @MainActor in loadKPIs(jobs: allJobs) }.value
+                    async let chartTask = Task { @MainActor in loadChartData(jobs: allJobs) }.value
+                    async let activityTask = loadRecentActivity()
+                    async let hazardsTask = loadTopHazards(jobs: allJobs)
+                    async let atRiskTask = Task { @MainActor in loadJobsAtRisk(jobs: allJobs) }.value
+                    async let missingEvidenceTask = loadMissingEvidenceJobs(jobs: allJobs)
+                    
+                    // Wait for all tasks
+                    kpis = await kpisTask
+                    chartData = await chartTask
+                    recentActivity = try await activityTask
+                    topHazards = try await hazardsTask
+                    jobsAtRisk = await atRiskTask
+                    missingEvidenceJobs = try await missingEvidenceTask
+                    
+                    hasLoadedOnce = true
                 }
                 
             } catch is CancellationError {
@@ -173,42 +207,57 @@ final class DashboardViewModel: ObservableObject {
         return try await APIClient.shared.getAuditEvents(timeRange: "30d", limit: 10)
     }
     
-    private func loadTopHazards(jobs: [Job]) async throws -> [Hazard] {
-        // TODO: Replace with dedicated /api/dashboard/top-hazards endpoint when available
-        // For now, load from jobs and aggregate
-        let allJobs = jobs
-        
-        // Get hazards from all jobs and count occurrences
-        var hazardCounts: [String: Int] = [:]
-        for job in allJobs.prefix(10) { // Limit to first 10 jobs for performance
-            do {
-                let jobHazards = try await APIClient.shared.getHazards(jobId: job.id)
-                for hazard in jobHazards {
-                    hazardCounts[hazard.code, default: 0] += 1
+    private func loadTopHazards(jobs: [Job]? = nil) async throws -> [Hazard] {
+        // Try new aggregated endpoint first
+        do {
+            return try await APIClient.shared.getTopHazards()
+        } catch {
+            // Fallback to per-job aggregation if endpoint doesn't exist
+            guard let allJobs = jobs else {
+                return []
+            }
+            
+            var hazardCounts: [String: Int] = [:]
+            for job in allJobs.prefix(10) {
+                do {
+                    let jobHazards = try await APIClient.shared.getHazards(jobId: job.id)
+                    for hazard in jobHazards {
+                        hazardCounts[hazard.code, default: 0] += 1
+                    }
+                } catch {
+                    continue
                 }
-            } catch {
-                // Skip jobs that fail to load hazards
-                continue
             }
+            
+            return hazardCounts
+                .sorted { $0.value > $1.value }
+                .prefix(5)
+                .enumerated()
+                .map { index, element in
+                    Hazard(
+                        id: "\(index)",
+                        code: element.key,
+                        name: element.key,
+                        description: "",
+                        severity: "medium",
+                        status: "open",
+                        createdAt: "",
+                        updatedAt: ""
+                    )
+                }
         }
-        
-        // Convert to Hazard array, sorted by count
-        return hazardCounts
-            .sorted { $0.value > $1.value }
-            .prefix(5)
-            .enumerated()
-            .map { index, element in
-                Hazard(
-                    id: "\(index)",
-                    code: element.key,
-                    name: element.key,
-                    description: "",
-                    severity: "medium",
-                    status: "open",
-                    createdAt: "",
-                    updatedAt: ""
-                )
-            }
+    }
+    
+    /// Parse trend string to Trend enum
+    private func parseTrend(_ trend: String) -> Trend {
+        switch trend.lowercased() {
+        case "up", "increasing", "positive":
+            return .neutral // Would need amount from API
+        case "down", "decreasing", "negative":
+            return .neutral // Would need amount from API
+        default:
+            return .neutral
+        }
     }
     
     private func loadJobsAtRisk(jobs: [Job]) -> [Job] {

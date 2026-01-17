@@ -346,6 +346,20 @@ class APIClient {
         )
     }
     
+    // MARK: - Dashboard API
+    
+    /// Get dashboard summary (KPIs, jobs at risk, missing evidence, chart data)
+    /// Single endpoint to eliminate N+1 queries
+    func getDashboardSummary() async throws -> DashboardSummaryResponse {
+        return try await request(endpoint: "/api/dashboard/summary")
+    }
+    
+    /// Get top hazards (aggregated, no per-job loops)
+    func getTopHazards() async throws -> [Hazard] {
+        let response: HazardsResponse = try await request(endpoint: "/api/dashboard/top-hazards")
+        return response.data
+    }
+    
     // MARK: - Health Check API
     
     /// Check backend health (no auth required)
@@ -712,6 +726,49 @@ struct JobsPagination: Codable {
         case totalPages = "total_pages"
         case hasMore = "has_more"
     }
+}
+
+// MARK: - Dashboard API Response Models
+
+struct DashboardSummaryResponse: Codable {
+    let data: DashboardSummaryData
+}
+
+struct DashboardSummaryData: Codable {
+    let kpis: DashboardKPIsAPI
+    let jobsAtRisk: [Job]
+    let missingEvidenceJobs: [Job]
+    let chartData: [ChartDataPointAPI]
+    
+    enum CodingKeys: String, CodingKey {
+        case kpis
+        case jobsAtRisk = "jobs_at_risk"
+        case missingEvidenceJobs = "missing_evidence_jobs"
+        case chartData = "chart_data"
+    }
+}
+
+struct DashboardKPIsAPI: Codable {
+    let complianceScore: Int
+    let complianceTrend: String
+    let openRisks: Int
+    let risksTrend: String
+    let jobsThisWeek: Int
+    let jobsTrend: String
+    
+    enum CodingKeys: String, CodingKey {
+        case complianceScore = "compliance_score"
+        case complianceTrend = "compliance_trend"
+        case openRisks = "open_risks"
+        case risksTrend = "risks_trend"
+        case jobsThisWeek = "jobs_this_week"
+        case jobsTrend = "jobs_trend"
+    }
+}
+
+struct ChartDataPointAPI: Codable {
+    let date: String
+    let value: Int
 }
 
 struct JobResponse: Codable {
