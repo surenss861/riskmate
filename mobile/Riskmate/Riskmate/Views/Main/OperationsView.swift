@@ -60,7 +60,7 @@ struct OperationsView: View {
                                 
                                 Spacer()
                                 
-                                SyncChip(isSynced: serverStatus.isHealthy)
+                                SyncChip(isSynced: serverStatus.isOnline)
                             }
                             .padding(.top, RMTheme.Spacing.xl)
                             .padding(.horizontal, RMTheme.Spacing.pagePadding)
