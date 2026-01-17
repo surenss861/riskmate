@@ -24,83 +24,41 @@ final class DashboardViewModel: ObservableObject {
     
     /// Load all dashboard data in parallel (single-flight with deduplication)
     func load() {
-        // Skip if already loaded (call loadIfNeeded() on first load)
+        // Skip if already loaded
         guard !hasLoadedOnce else { return }
         
-        // Cancel any existing load task
-        loadTask?.cancel()
+        // If already loading, don't start another load (single-flight)
+        if loadTask != nil { return }
         
         loadTask = Task {
+            defer { loadTask = nil }
+            
             isLoading = true
             errorMessage = nil
-            
             defer { isLoading = false }
-            
-            // Debounce to prevent rapid repeated calls
-            try? await Task.sleep(nanoseconds: 250_000_000) // 250ms
-            if Task.isCancelled { return }
             
             do {
                 // Load jobs ONCE and cache for all dashboard calculations
                 let allJobs = try await loadJobsOnce()
                 
                 // Load all data in parallel using cached jobs
-                // Note: Some are sync (KPIs, chart, atRisk) - call them directly on MainActor
-                async let kpisTask = Task { @MainActor in loadKPIs(jobs: allJobs) }
-                async let chartTask = Task { @MainActor in loadChartData(jobs: allJobs) }
+                async let kpisTask = Task { @MainActor in loadKPIs(jobs: allJobs) }.value
+                async let chartTask = Task { @MainActor in loadChartData(jobs: allJobs) }.value
                 async let activityTask = loadRecentActivity()
                 async let hazardsTask = loadTopHazards(jobs: allJobs)
-                async let atRiskTask = Task { @MainActor in loadJobsAtRisk(jobs: allJobs) }
+                async let atRiskTask = Task { @MainActor in loadJobsAtRisk(jobs: allJobs) }.value
                 async let missingEvidenceTask = loadMissingEvidenceJobs(jobs: allJobs)
                 
                 // Wait for all tasks (ignore cancellation errors)
-                do {
-                    kpis = await kpisTask.value
-                } catch is CancellationError {
-                    // Ignore cancellation
-                } catch {
-                    print("[DashboardViewModel] ⚠️ Failed to load KPIs: \(error.localizedDescription)")
-                }
+                kpis = await kpisTask
+                chartData = await chartTask
+                recentActivity = try await activityTask
+                topHazards = try await hazardsTask
+                jobsAtRisk = await atRiskTask
+                missingEvidenceJobs = try await missingEvidenceTask
                 
-                do {
-                    chartData = await chartTask.value
-                } catch is CancellationError {
-                    // Ignore cancellation
-                } catch {
-                    print("[DashboardViewModel] ⚠️ Failed to load chart data: \(error.localizedDescription)")
-                }
-                
-                do {
-                    recentActivity = try await activityTask
-                } catch is CancellationError {
-                    // Ignore cancellation
-                } catch {
-                    print("[DashboardViewModel] ⚠️ Failed to load recent activity: \(error.localizedDescription)")
-                }
-                
-                do {
-                    topHazards = try await hazardsTask
-                } catch is CancellationError {
-                    // Ignore cancellation
-                } catch {
-                    print("[DashboardViewModel] ⚠️ Failed to load top hazards: \(error.localizedDescription)")
-                }
-                
-                do {
-                    jobsAtRisk = await atRiskTask.value
-                } catch is CancellationError {
-                    // Ignore cancellation
-                } catch {
-                    print("[DashboardViewModel] ⚠️ Failed to load jobs at risk: \(error.localizedDescription)")
-                }
-                
-                do {
-                    missingEvidenceJobs = try await missingEvidenceTask
-                } catch is CancellationError {
-                    // Ignore cancellation
-                } catch {
-                    print("[DashboardViewModel] ⚠️ Failed to load missing evidence jobs: \(error.localizedDescription)")
-                }
+                // Mark as loaded only on success
+                hasLoadedOnce = true
                 
                 // If we have a general error and no data loaded, set error message
                 if kpis == nil && chartData.isEmpty && recentActivity.isEmpty {
@@ -113,11 +71,6 @@ final class DashboardViewModel: ObservableObject {
             } catch {
                 errorMessage = error.localizedDescription
                 print("[DashboardViewModel] ❌ Failed to load dashboard: \(error.localizedDescription)")
-            }
-            
-            // Mark as loaded after completion
-            if !Task.isCancelled {
-                hasLoadedOnce = true
             }
         }
     }
@@ -143,19 +96,20 @@ final class DashboardViewModel: ObservableObject {
     // MARK: - Private Load Methods
     
     /// Load jobs once and cache the result (prevents duplicate API calls)
+    /// Uses detached task to ensure completion even if caller is cancelled
     private func loadJobsOnce() async throws -> [Job] {
-        // If we have a cached result and task is still running, wait for it
-        if let cachedTask = cachedJobsTask {
-            return try await cachedTask.value
-        }
-        
         // If we have cached jobs, return them
         if let cached = cachedJobs {
             return cached
         }
         
-        // Start new load task
-        let task = Task<[Job], Error> {
+        // If we have a task in progress, wait for it
+        if let cachedTask = cachedJobsTask {
+            return try await cachedTask.value
+        }
+        
+        // Start new detached task (cancellation-proof)
+        let task = Task.detached(priority: .userInitiated) { () throws -> [Job] in
             let jobsResponse = try await APIClient.shared.getJobs(page: 1, limit: 100)
             return jobsResponse.data
         }

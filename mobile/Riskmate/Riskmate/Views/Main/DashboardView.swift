@@ -96,8 +96,8 @@ struct DashboardView: View {
                             JobsAtRiskSection(jobs: viewModel.jobsAtRisk)
                                 .padding(.horizontal, RMTheme.Spacing.pagePadding)
                             
-                            // Missing Evidence CTA
-                            MissingEvidenceCTACard()
+                            // Missing Evidence CTA (use count from ViewModel)
+                            MissingEvidenceCTACard(missingEvidenceCount: viewModel.missingEvidenceJobs.count)
                                 .padding(.horizontal, RMTheme.Spacing.pagePadding)
                             
                             // Recent Activity
@@ -482,8 +482,7 @@ struct AtRiskJobRow: View {
 }
 
 struct MissingEvidenceCTACard: View {
-    @State private var missingEvidenceCount: Int = 0
-    @State private var isLoading = true
+    let missingEvidenceCount: Int  // Pass from ViewModel instead of loading here
     
     var body: some View {
         RMGlassCard {
@@ -500,11 +499,7 @@ struct MissingEvidenceCTACard: View {
                     .font(RMTheme.Typography.title3)
                     .foregroundColor(RMTheme.Colors.textPrimary)
                 
-                if isLoading {
-                    Text("Loading...")
-                        .font(RMTheme.Typography.bodySmall)
-                        .foregroundColor(RMTheme.Colors.textSecondary)
-                } else if missingEvidenceCount > 0 {
+                if missingEvidenceCount > 0 {
                     Text("\(missingEvidenceCount) job\(missingEvidenceCount == 1 ? "" : "s") need evidence uploads to complete readiness")
                         .font(RMTheme.Typography.bodySmall)
                         .foregroundColor(RMTheme.Colors.textSecondary)
@@ -526,35 +521,6 @@ struct MissingEvidenceCTACard: View {
                         .clipShape(RoundedRectangle(cornerRadius: RMTheme.Radius.sm))
                 }
             }
-        }
-        .task {
-            await loadMissingEvidenceCount()
-        }
-    }
-    
-    private func loadMissingEvidenceCount() async {
-        // Load jobs and check for missing evidence
-        // TODO: Replace with dedicated /api/dashboard/missing-evidence endpoint when available
-        do {
-            let jobsResponse = try await APIClient.shared.getJobs(page: 1, limit: 100)
-            let allJobs = jobsResponse.data
-            
-            var count = 0
-            for job in allJobs {
-                let evidence = try? await APIClient.shared.getEvidence(jobId: job.id)
-                // Assume jobs need at least 3 evidence items (this should come from job requirements)
-                if (evidence?.count ?? 0) < 3 {
-                    count += 1
-                }
-            }
-            
-            missingEvidenceCount = count
-            isLoading = false
-        } catch {
-            print("[MissingEvidenceCTACard] ❌ Failed to load missing evidence count: \(error.localizedDescription)")
-            // Show 0 - no demo data
-            missingEvidenceCount = 0
-            isLoading = false
         }
     }
 }

@@ -11,12 +11,16 @@ class AuthService {
     
     private init() {
         let config = AppConfig.shared
-        // Initialize Supabase client
-        // Note: emitLocalSessionAsInitialSession option may not be available in all SDK versions
-        // Session expiration is handled manually in SessionManager.checkSession()
+        // Initialize Supabase client with emitLocalSessionAsInitialSession option
+        // This prevents the "initial session emitted" warning and ensures deterministic auth state
         supabase = SupabaseClient(
             supabaseURL: URL(string: config.supabaseURL)!,
-            supabaseKey: config.supabaseAnonKey
+            supabaseKey: config.supabaseAnonKey,
+            options: SupabaseClientOptions(
+                auth: AuthOptions(
+                    emitLocalSessionAsInitialSession: true
+                )
+            )
         )
     }
     
