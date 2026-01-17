@@ -18,9 +18,7 @@ final class DashboardViewModel: ObservableObject {
     private var loadTask: Task<Void, Never>?
     private var hasLoadedOnce = false
     
-    // Cache jobs response to avoid duplicate API calls
-    private var cachedJobs: [Job]?
-    private var cachedJobsTask: Task<[Job], Error>?
+    // Use shared JobsStore for single source of truth
     
     /// Load all dashboard data in parallel (single-flight with deduplication)
     func load() {
@@ -95,36 +93,9 @@ final class DashboardViewModel: ObservableObject {
     
     // MARK: - Private Load Methods
     
-    /// Load jobs once and cache the result (prevents duplicate API calls)
-    /// Uses detached task to ensure completion even if caller is cancelled
+    /// Load jobs once using shared store (prevents duplicate API calls)
     private func loadJobsOnce() async throws -> [Job] {
-        // If we have cached jobs, return them
-        if let cached = cachedJobs {
-            return cached
-        }
-        
-        // If we have a task in progress, wait for it
-        if let cachedTask = cachedJobsTask {
-            return try await cachedTask.value
-        }
-        
-        // Start new detached task (cancellation-proof)
-        let task = Task.detached(priority: .userInitiated) { () throws -> [Job] in
-            let jobsResponse = try await APIClient.shared.getJobs(page: 1, limit: 100)
-            return jobsResponse.data
-        }
-        
-        cachedJobsTask = task
-        
-        do {
-            let jobs = try await task.value
-            cachedJobs = jobs
-            cachedJobsTask = nil
-            return jobs
-        } catch {
-            cachedJobsTask = nil
-            throw error
-        }
+        return try await JobsStore.shared.fetch(page: 1, limit: 100, forceRefresh: false)
     }
     
     private func loadKPIs(jobs: [Job]) -> DashboardKPIs {

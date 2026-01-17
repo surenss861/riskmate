@@ -3,9 +3,7 @@ import SwiftDate
 
 /// Jobs List View with search, filters, and premium interactions
 struct JobsListView: View {
-    @State private var jobs: [Job] = []
-    @State private var isLoading = true
-    @State private var errorMessage: String?
+    @StateObject private var jobsStore = JobsStore.shared
     @State private var searchText = ""
     @State private var debouncedSearchText = ""
     @State private var selectedStatus: String = "all"
@@ -13,6 +11,11 @@ struct JobsListView: View {
     @State private var selectedJob: Job?
     @State private var showingDetail = false
     @FocusState private var isSearchFocused: Bool
+    
+    // Computed properties from store
+    private var jobs: [Job] { jobsStore.jobs }
+    private var isLoading: Bool { jobsStore.isLoading }
+    private var errorMessage: String? { jobsStore.errorMessage }
     
     private var hasActiveFilters: Bool {
         selectedStatus != "all" || selectedRiskLevel != "all" || !searchText.isEmpty
@@ -220,7 +223,8 @@ struct JobsListView: View {
                 selectedStatus = filters.status
                 selectedRiskLevel = filters.riskLevel
                 
-                await loadJobs()
+                // Use shared store - will use cache if Dashboard already loaded it
+                _ = try? await jobsStore.fetch()
             }
             .onChange(of: searchText) { _, newValue in
                 // Debounce search input (200ms)
@@ -238,35 +242,16 @@ struct JobsListView: View {
                 FilterPersistence.saveJobsFilters(status: selectedStatus, riskLevel: selectedRiskLevel)
             }
             .refreshable {
-                await loadJobs()
+                // Force refresh from store
+                _ = try? await jobsStore.fetch(forceRefresh: true)
             }
             .navigationDestination(item: $selectedJob) { job in
                 JobDetailView(jobId: job.id)
             }
     }
     
-    private func loadJobs() async {
-        isLoading = true
-        errorMessage = nil
-        defer { isLoading = false }
-        
-        do {
-            let response = try await APIClient.shared.getJobs(
-                page: 1,
-                limit: 100,
-                status: selectedStatus != "all" ? selectedStatus : nil,
-                riskLevel: selectedRiskLevel != "all" ? selectedRiskLevel : nil,
-                search: debouncedSearchText.isEmpty ? nil : debouncedSearchText
-            )
-            jobs = response.data
-            errorMessage = nil // Clear any previous error
-        } catch {
-            let errorDesc = error.localizedDescription
-            print("[JobsListView] ❌ Failed to load jobs: \(errorDesc)")
-            errorMessage = errorDesc
-            jobs = [] // Clear jobs on error - never show stale data
-        }
-    }
+    // Note: loadJobs() removed - now using JobsStore.shared
+    // Filters are applied client-side via filteredJobs computed property
     
     private func copyJobId(_ id: String) {
         UIPasteboard.general.string = id

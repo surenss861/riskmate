@@ -34,12 +34,17 @@ class SessionManager: ObservableObject {
         
         do {
             if let session = try await authService.getCurrentSession() {
-                // Supabase SDK handles session expiration automatically
-                // If session exists, it's valid (SDK refreshes expired sessions)
-                // If session is truly expired, API calls will return 401 and we handle that
-                print("[SessionManager] ✅ Found existing session")
-                isAuthenticated = true
-                await loadUserData()
+                // Check JWT expiration (SDK-independent)
+                if let token = try? await authService.getAccessToken(),
+                   JWTExpiry.isExpired(token) {
+                    print("[SessionManager] ⚠️ Session found but JWT is expired, clearing...")
+                    await logout()
+                    isAuthenticated = false
+                } else {
+                    print("[SessionManager] ✅ Found valid session")
+                    isAuthenticated = true
+                    await loadUserData()
+                }
             } else {
                 print("[SessionManager] No existing session found")
                 isAuthenticated = false
