@@ -4,6 +4,7 @@ import SwiftUI
 struct RiskmateApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var sessionManager = SessionManager.shared
+    @StateObject private var quickAction = QuickActionRouter.shared
     
     init() {
         // Initialize crash reporting
@@ -44,8 +45,20 @@ struct RiskmateApp: App {
         WindowGroup {
             ContentView()
                 .environmentObject(sessionManager)
+                .environmentObject(quickAction)
                 .preferredColorScheme(.dark)
                 .background(RMTheme.Colors.background)
+                .sheet(isPresented: $quickAction.isEvidenceSheetPresented) {
+                    EvidenceCaptureSheet(
+                        jobId: quickAction.evidenceJobId,
+                        onComplete: {
+                            // Optional: refresh jobs cache after upload
+                            Task {
+                                _ = try? await JobsStore.shared.fetch(forceRefresh: true)
+                            }
+                        }
+                    )
+                }
         }
     }
 }

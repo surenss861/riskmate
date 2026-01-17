@@ -12,6 +12,7 @@ struct JobDetailView: View {
     @State private var showPDFViewer = false
     @State private var pdfURL: URL?
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var quickAction: QuickActionRouter
     
     var body: some View {
         RMBackground()
@@ -40,6 +41,34 @@ struct JobDetailView: View {
                     .padding(RMTheme.Spacing.pagePadding)
                 } else if let job = job {
                     VStack(spacing: 0) {
+                        // Prominent "Add Evidence" CTA (evidence-first hierarchy)
+                        Button {
+                            quickAction.presentEvidence(jobId: job.id)
+                        } label: {
+                            HStack(spacing: RMTheme.Spacing.sm) {
+                                Image(systemName: "camera.fill")
+                                    .font(.system(size: 16, weight: .semibold))
+                                Text("Add Evidence")
+                                    .font(RMTheme.Typography.bodyBold)
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 14, weight: .medium))
+                                    .opacity(0.6)
+                            }
+                            .foregroundColor(RMTheme.Colors.textPrimary)
+                            .padding(RMTheme.Spacing.md)
+                            .frame(maxWidth: .infinity)
+                            .background(RMTheme.Colors.accent.opacity(0.15))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(RMTheme.Colors.accent.opacity(0.3), lineWidth: 1)
+                            }
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                        }
+                        .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                        .padding(.vertical, RMTheme.Spacing.sm)
+                        .background(RMTheme.Colors.background)
+                        
                         // Tab Picker
                         Picker("Tab", selection: $selectedTab) {
                             ForEach(JobDetailTab.allCases, id: \.self) { tab in
@@ -47,7 +76,8 @@ struct JobDetailView: View {
                             }
                         }
                         .pickerStyle(.segmented)
-                        .padding(RMTheme.Spacing.pagePadding)
+                        .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                        .padding(.bottom, RMTheme.Spacing.sm)
                         .background(RMTheme.Colors.background)
                         
                         // Tab Content

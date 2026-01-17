@@ -38,10 +38,8 @@ struct ContentView: View {
                 )
                 .padding(RMTheme.Spacing.pagePadding)
             } else if sessionManager.isLoading || !sessionManager.isBootstrapped {
-                VStack(spacing: RMTheme.Spacing.lg) {
-                    RMSkeletonView(width: 100, height: 100, cornerRadius: 20)
-                    RMSkeletonView(width: 150, height: 20)
-                }
+                // Show polished splash screen during bootstrap
+                SplashView()
             } else if sessionManager.isAuthenticated {
                 // Check onboarding
                 if showOnboarding {
@@ -144,6 +142,22 @@ struct ContentView: View {
             .tag(MainTab.settings)
         }
         .tint(RMTheme.Colors.accent)
+        .overlay(alignment: .bottomTrailing) {
+            // Global FAB for quick evidence capture
+            Button {
+                QuickActionRouter.shared.presentEvidence(jobId: nil)
+            } label: {
+                Image(systemName: "camera.fill")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(.white)
+                    .frame(width: 56, height: 56)
+                    .background(RMTheme.Colors.accent)
+                    .clipShape(Circle())
+                    .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 4)
+            }
+            .padding(.trailing, 20)
+            .padding(.bottom, 100) // Above tab bar
+        }
     }
     
     // MARK: - iPad Navigation (NavigationSplitView)
