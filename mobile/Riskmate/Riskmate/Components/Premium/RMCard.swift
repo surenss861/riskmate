@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Premium card component with depth, shadow, and glass effect
+/// System-native card component with iOS Material blur
 struct RMCard<Content: View>: View {
     let content: Content
     
@@ -10,15 +10,18 @@ struct RMCard<Content: View>: View {
     
     var body: some View {
         content
-            .padding(RMTheme.Spacing.lg)
+            .padding(RMSystemTheme.Spacing.md)
             .background(
-                RoundedRectangle(cornerRadius: RMTheme.Radius.lg, style: .continuous)
-                    .fill(RMTheme.Colors.surface.opacity(0.6))
+                RoundedRectangle(cornerRadius: RMSystemTheme.Radius.lg, style: .continuous)
+                    .fill(Color.clear)
                     .overlay(
-                        RoundedRectangle(cornerRadius: RMTheme.Radius.lg, style: .continuous)
-                            .stroke(RMTheme.Colors.border, lineWidth: 1)
+                        VisualEffectBlur(style: .systemMaterial)
+                            .clipShape(RoundedRectangle(cornerRadius: RMSystemTheme.Radius.lg, style: .continuous))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: RMSystemTheme.Radius.lg, style: .continuous)
+                            .stroke(RMSystemTheme.Colors.separator, lineWidth: 0.5)
                     )
             )
-            .shadow(color: .black.opacity(0.35), radius: 18, x: 0, y: 10)
     }
 }

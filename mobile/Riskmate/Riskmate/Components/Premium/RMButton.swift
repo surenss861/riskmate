@@ -24,6 +24,7 @@ struct RMButton: View {
     
     var body: some View {
         Button {
+            Haptics.tap()
             action()
         } label: {
             HStack(spacing: 10) {
@@ -32,21 +33,21 @@ struct RMButton: View {
                         .font(.system(size: 16, weight: .semibold))
                 }
                 Text(title)
-                    .font(.system(size: 17, weight: .semibold, design: .rounded))
+                    .font(RMSystemTheme.Typography.bodyBold)
             }
             .foregroundStyle(foregroundColor)
-            .frame(maxWidth: .infinity, minHeight: 52)
+            .frame(maxWidth: .infinity, minHeight: 44) // System tap target
             .background(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                RoundedRectangle(cornerRadius: RMSystemTheme.Radius.md, style: .continuous)
                     .fill(backgroundColor)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .stroke(borderColor, lineWidth: 1)
+                        RoundedRectangle(cornerRadius: RMSystemTheme.Radius.md, style: .continuous)
+                            .stroke(borderColor, lineWidth: style == .secondary ? 0.5 : 0)
                     )
             )
             .scaleEffect(pressed ? 0.98 : 1.0)
-            .opacity(pressed ? 0.90 : 1.0)
-            .animation(.spring(response: 0.22, dampingFraction: 0.85), value: pressed)
+            .opacity(pressed ? 0.92 : 1.0)
+            .animation(.easeOut(duration: 0.2), value: pressed)
         }
         .buttonStyle(.plain)
         .pressEvents { isDown in
@@ -57,9 +58,9 @@ struct RMButton: View {
     private var foregroundColor: Color {
         switch style {
         case .primary:
-            return .black
+            return .white
         case .secondary:
-            return RMTheme.Colors.accent
+            return RMSystemTheme.Colors.accent
         case .danger:
             return .white
         }
@@ -68,11 +69,11 @@ struct RMButton: View {
     private var backgroundColor: Color {
         switch style {
         case .primary:
-            return RMTheme.Colors.accent
+            return RMSystemTheme.Colors.accent
         case .secondary:
-            return RMTheme.Colors.surface.opacity(0.6)
+            return RMSystemTheme.Colors.secondaryBackground
         case .danger:
-            return RMTheme.Colors.error.opacity(0.8)
+            return RMSystemTheme.Colors.error
         }
     }
     
@@ -81,7 +82,7 @@ struct RMButton: View {
         case .primary:
             return .clear
         case .secondary:
-            return RMTheme.Colors.border
+            return RMSystemTheme.Colors.separator
         case .danger:
             return .clear
         }

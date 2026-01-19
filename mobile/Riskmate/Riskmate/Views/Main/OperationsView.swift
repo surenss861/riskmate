@@ -49,66 +49,53 @@ struct OperationsView: View {
                         }
                     }
                 } else {
-                    // Field users get action-first dashboard (premium redesign)
+                    // Field users get action-first dashboard (system-native)
                     ScrollView(showsIndicators: false) {
-                        VStack(alignment: .leading, spacing: RMTheme.Spacing.lg) {
+                        VStack(alignment: .leading, spacing: RMSystemTheme.Spacing.lg) {
                             // Header with sync status
                             HStack {
                                 Text("Operations")
-                                    .font(.system(size: 40, weight: .bold, design: .rounded))
-                                    .foregroundStyle(RMTheme.Colors.textPrimary)
+                                    .font(RMSystemTheme.Typography.largeTitle)
+                                    .foregroundStyle(RMSystemTheme.Colors.textPrimary)
                                 
                                 Spacer()
                                 
                                 SyncChip(isSynced: serverStatus.isOnline)
                             }
-                            .padding(.top, RMTheme.Spacing.xl)
-                            .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                            .padding(.top, RMSystemTheme.Spacing.lg)
+                            .padding(.horizontal, RMSystemTheme.Spacing.pagePadding)
                             
                             // Search Bar
                             RMSearchBar(text: $searchQuery, placeholder: "Search jobs…")
-                                .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                                .padding(.horizontal, RMSystemTheme.Spacing.pagePadding)
                             
-                            // Quick Actions (Add Evidence primary, New Job secondary)
-                            HStack(spacing: RMTheme.Spacing.md) {
-                                RMButton(
-                                    title: "Add Evidence",
-                                    icon: "camera.fill",
-                                    style: .primary
-                                ) {
-                                    quickAction.presentEvidence(jobId: nil)
-                                }
-                                .frame(maxWidth: .infinity)
-                                
-                                RMButton(
-                                    title: "New Job",
-                                    icon: "plus",
-                                    style: .secondary
-                                ) {
-                                    // TODO: Route to Create Job
-                                    print("[OperationsView] TODO: Navigate to Create Job")
-                                }
-                                .frame(width: 160)
+                            // Primary Action (one dominant CTA)
+                            RMButton(
+                                title: "Add Evidence",
+                                icon: "camera.fill",
+                                style: .primary
+                            ) {
+                                quickAction.presentEvidence(jobId: nil)
                             }
-                            .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                            .padding(.horizontal, RMSystemTheme.Spacing.pagePadding)
                             
                             // My Active Jobs
                             if !activeJobs.isEmpty {
-                                VStack(alignment: .leading, spacing: RMTheme.Spacing.md) {
+                                VStack(alignment: .leading, spacing: RMSystemTheme.Spacing.md) {
                                     HStack {
                                         Text("My Active Jobs")
-                                            .font(.system(size: 22, weight: .bold, design: .rounded))
-                                            .foregroundStyle(RMTheme.Colors.textPrimary)
+                                            .font(RMSystemTheme.Typography.title3)
+                                            .foregroundStyle(RMSystemTheme.Colors.textPrimary)
                                         
                                         Spacer()
                                         
                                         Text("\(activeJobs.count)")
-                                            .font(.system(size: 16, weight: .semibold, design: .rounded))
-                                            .foregroundStyle(RMTheme.Colors.textTertiary)
+                                            .font(RMSystemTheme.Typography.subheadline)
+                                            .foregroundStyle(RMSystemTheme.Colors.textTertiary)
                                     }
-                                    .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                                    .padding(.horizontal, RMSystemTheme.Spacing.pagePadding)
                                     
-                                    VStack(spacing: RMTheme.Spacing.md) {
+                                    VStack(spacing: RMSystemTheme.Spacing.sm) {
                                         ForEach(activeJobs) { job in
                                             NavigationLink {
                                                 JobDetailView(jobId: job.id)
@@ -120,7 +107,7 @@ struct OperationsView: View {
                                             .buttonStyle(.plain)
                                         }
                                     }
-                                    .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                                    .padding(.horizontal, RMSystemTheme.Spacing.pagePadding)
                                 }
                             }
                             
@@ -133,16 +120,28 @@ struct OperationsView: View {
                                         ? "Create your first job to get started" 
                                         : "Try adjusting your search"
                                 )
-                                .padding(.vertical, RMTheme.Spacing.xxl)
-                                .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                                .padding(.vertical, RMSystemTheme.Spacing.xl)
+                                .padding(.horizontal, RMSystemTheme.Spacing.pagePadding)
                             }
                         }
-                        .padding(.bottom, 120) // Room for tab bar + FAB
+                        .padding(.bottom, 100) // Room for tab bar
                     }
-                    .background(RMTheme.Colors.background.ignoresSafeArea())
+                    .background(RMSystemTheme.Colors.background.ignoresSafeArea())
                 }
             }
             .rmNavigationBar(title: "Operations")
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        Haptics.tap()
+                        // TODO: Route to Create Job
+                        print("[OperationsView] TODO: Navigate to Create Job")
+                    } label: {
+                        Image(systemName: "plus")
+                            .foregroundStyle(RMSystemTheme.Colors.accent)
+                    }
+                }
+            }
             .task {
                 // Load jobs if needed
                 if jobsStore.jobs.isEmpty {

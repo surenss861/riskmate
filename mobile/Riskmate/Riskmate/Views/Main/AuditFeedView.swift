@@ -8,6 +8,7 @@ struct AuditFeedView: View {
     @State private var errorMessage: String?
     @State private var selectedEvent: AuditEvent?
     @State private var showingDetail = false
+    @State private var showingVerificationDetails = false
     
     var body: some View {
         RMBackground()
@@ -15,10 +16,12 @@ struct AuditFeedView: View {
                 VStack(spacing: 0) {
                     RMOfflineBanner()
                     
-                    // Verification Banner (Premium)
-                    VerificationBanner(verified: true) // TODO: Wire to actual ledger verification status
-                        .padding(.horizontal, RMTheme.Spacing.pagePadding)
-                        .padding(.top, RMTheme.Spacing.sm)
+                    // Verification Banner (System-native)
+                    VerificationBanner(verified: true) {
+                        showingVerificationDetails = true
+                    }
+                    .padding(.horizontal, RMSystemTheme.Spacing.pagePadding)
+                    .padding(.top, RMSystemTheme.Spacing.sm)
                     
                     // Saved Views as Horizontal Cards
                     SavedViewsCarousel()
@@ -121,12 +124,13 @@ struct AuditFeedView: View {
                                         showingDetail = true
                                     }
                             } else {
-                                // Premium Ledger Receipt Card
+                                // System-native Ledger Receipt Card
                                 LedgerReceiptCard(
                                     title: event.summary,
                                     subtitle: "\(event.category) • \(event.actor.isEmpty ? "System" : event.actor)",
                                     timeAgo: event.timestamp.toRelative(since: nil, dateTimeStyle: .named, unitsStyle: .short),
-                                    hashPreview: String(event.id.prefix(16)) + "..."
+                                    hashPreview: String(event.id.prefix(16)) + "...",
+                                    fullHash: event.id
                                 )
                                 .listRowBackground(Color.clear)
                                 .listRowSeparator(.hidden)
@@ -201,6 +205,9 @@ struct AuditFeedView: View {
                         .presentationDetents([.medium, .large])
                         .presentationDragIndicator(.visible)
                 }
+            }
+            .sheet(isPresented: $showingVerificationDetails) {
+                VerificationDetailsView()
             }
     }
     
