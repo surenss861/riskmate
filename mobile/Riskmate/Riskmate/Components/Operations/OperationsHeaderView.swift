@@ -30,7 +30,7 @@ struct OperationsHeaderView: View {
                 KPIChip(
                     title: "Active",
                     count: activeCount,
-                    color: .systemBlue,
+                    color: Color(.systemBlue),
                     action: { onKPITap(.active) }
                 )
                 
@@ -38,7 +38,7 @@ struct OperationsHeaderView: View {
                     KPIChip(
                         title: "High Risk",
                         count: highRiskCount,
-                        color: .systemRed,
+                        color: Color(.systemRed),
                         action: { onKPITap(.highRisk) }
                     )
                 }
@@ -47,7 +47,7 @@ struct OperationsHeaderView: View {
                     KPIChip(
                         title: "Missing Evidence",
                         count: missingEvidenceCount,
-                        color: .systemOrange,
+                        color: Color(.systemOrange),
                         action: { onKPITap(.missingEvidence) }
                     )
                 }
