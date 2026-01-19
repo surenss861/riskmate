@@ -65,7 +65,7 @@ struct VerificationDetailsView: View {
                     .padding(.vertical, RMSystemTheme.Spacing.xs)
                     
                     if let timestamp = lastAnchoredTimestamp {
-                        DetailRow(
+                        VerificationDetailRow(
                             label: "Last Anchored",
                             value: formatDate(timestamp),
                             icon: "clock.fill"
@@ -73,7 +73,7 @@ struct VerificationDetailsView: View {
                     }
                     
                     if let hash = rootHash {
-                        DetailRow(
+                        VerificationDetailRow(
                             label: "Root Hash",
                             value: hash,
                             icon: "number",
@@ -145,7 +145,7 @@ struct VerificationDetailsView: View {
 
 // MARK: - Detail Row Component
 
-private struct DetailRow: View {
+private struct VerificationDetailRow: View {
     let label: String
     let value: String
     let icon: String
