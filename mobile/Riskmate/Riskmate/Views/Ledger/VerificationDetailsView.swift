@@ -145,7 +145,7 @@ struct VerificationDetailsView: View {
 
 // MARK: - Detail Row Component
 
-struct DetailRow: View {
+private struct DetailRow: View {
     let label: String
     let value: String
     let icon: String
