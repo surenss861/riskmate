@@ -9,6 +9,12 @@ struct OperationsView: View {
     @State private var selectedView: OperationsViewType = .dashboard
     @State private var searchQuery: String = ""
     
+    private func relativeTime(_ date: Date) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return formatter.localizedString(for: date, relativeTo: Date())
+    }
+    
     var filteredJobs: [Job] {
         if searchQuery.isEmpty {
             return jobsStore.jobs
@@ -49,84 +55,128 @@ struct OperationsView: View {
                         }
                     }
                 } else {
-                    // Field users get action-first dashboard (system-native)
-                    ScrollView(showsIndicators: false) {
-                        VStack(alignment: .leading, spacing: RMSystemTheme.Spacing.lg) {
-                            // Header with sync status
-                            HStack {
-                                Text("Operations")
-                                    .font(RMSystemTheme.Typography.largeTitle)
-                                    .foregroundStyle(RMSystemTheme.Colors.textPrimary)
-                                
-                                Spacer()
-                                
-                                SyncChip(isSynced: serverStatus.isOnline)
+                    // Field users get List-native Operations (Apple-style)
+                    List {
+                            // Primary Action Section
+                            Section {
+                                RMButton(
+                                    title: "Add Evidence",
+                                    icon: "camera.fill",
+                                    style: .primary
+                                ) {
+                                    quickAction.presentEvidence(jobId: nil)
+                                }
+                                .listRowInsets(EdgeInsets(
+                                    top: RMSystemTheme.Spacing.sm,
+                                    leading: 0,
+                                    bottom: RMSystemTheme.Spacing.sm,
+                                    trailing: 0
+                                ))
+                                .listRowBackground(Color.clear)
                             }
-                            .padding(.top, RMSystemTheme.Spacing.lg)
-                            .padding(.horizontal, RMSystemTheme.Spacing.pagePadding)
                             
-                            // Search Bar
-                            RMSearchBar(text: $searchQuery, placeholder: "Search jobs…")
-                                .padding(.horizontal, RMSystemTheme.Spacing.pagePadding)
-                            
-                            // Primary Action (one dominant CTA)
-                            RMButton(
-                                title: "Add Evidence",
-                                icon: "camera.fill",
-                                style: .primary
-                            ) {
-                                quickAction.presentEvidence(jobId: nil)
-                            }
-                            .padding(.horizontal, RMSystemTheme.Spacing.pagePadding)
-                            
-                            // My Active Jobs
-                            if !activeJobs.isEmpty {
-                                VStack(alignment: .leading, spacing: RMSystemTheme.Spacing.md) {
-                                    HStack {
-                                        Text("My Active Jobs")
-                                            .font(RMSystemTheme.Typography.title3)
-                                            .foregroundStyle(RMSystemTheme.Colors.textPrimary)
-                                        
-                                        Spacer()
-                                        
-                                        Text("\(activeJobs.count)")
-                                            .font(RMSystemTheme.Typography.subheadline)
-                                            .foregroundStyle(RMSystemTheme.Colors.textTertiary)
-                                    }
-                                    .padding(.horizontal, RMSystemTheme.Spacing.pagePadding)
-                                    
-                                    VStack(spacing: RMSystemTheme.Spacing.sm) {
-                                        ForEach(activeJobs) { job in
-                                            NavigationLink {
-                                                JobDetailView(jobId: job.id)
-                                            } label: {
-                                                JobCard(job: job) {
-                                                    // Navigation handled by NavigationLink
-                                                }
+                            // Active Jobs Section
+                            if jobsStore.isLoading && activeJobs.isEmpty {
+                                Section {
+                                    ForEach(0..<3, id: \.self) { _ in
+                                        HStack(spacing: RMSystemTheme.Spacing.md) {
+                                            Circle()
+                                                .fill(RMSystemTheme.Colors.tertiaryBackground)
+                                                .frame(width: 8, height: 8)
+                                            
+                                            VStack(alignment: .leading, spacing: 4) {
+                                                RoundedRectangle(cornerRadius: 4)
+                                                    .fill(RMSystemTheme.Colors.tertiaryBackground)
+                                                    .frame(height: 16)
+                                                    .frame(maxWidth: 200)
+                                                
+                                                RoundedRectangle(cornerRadius: 4)
+                                                    .fill(RMSystemTheme.Colors.tertiaryBackground)
+                                                    .frame(height: 12)
+                                                    .frame(maxWidth: 150)
                                             }
-                                            .buttonStyle(.plain)
+                                            
+                                            Spacer()
+                                        }
+                                        .padding(.vertical, 4)
+                                    }
+                                } header: {
+                                    Text("Active Jobs")
+                                }
+                            } else if !activeJobs.isEmpty {
+                                Section {
+                                    ForEach(activeJobs) { job in
+                                        NavigationLink {
+                                            JobDetailView(jobId: job.id)
+                                        } label: {
+                                            JobRow(job: job)
+                                        }
+                                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                            Button {
+                                                Haptics.tap()
+                                                quickAction.presentEvidence(jobId: job.id)
+                                            } label: {
+                                                Label("Add Evidence", systemImage: "camera.fill")
+                                            }
+                                            .tint(RMSystemTheme.Colors.accent)
+                                            
+                                            Button {
+                                                Haptics.tap()
+                                                // TODO: Mark complete
+                                            } label: {
+                                                Label("Complete", systemImage: "checkmark.circle.fill")
+                                            }
+                                            .tint(RMSystemTheme.Colors.success)
                                         }
                                     }
-                                    .padding(.horizontal, RMSystemTheme.Spacing.pagePadding)
+                                } header: {
+                                    HStack {
+                                        Text("Active Jobs")
+                                        Spacer()
+                                        if let lastSync = jobsStore.lastSyncDate {
+                                            Text("Synced \(relativeTime(lastSync))")
+                                                .font(RMSystemTheme.Typography.caption)
+                                                .foregroundStyle(RMSystemTheme.Colors.textTertiary)
+                                        }
+                                    }
+                                } footer: {
+                                    if activeJobs.count < filteredJobs.count {
+                                        Text("Showing \(activeJobs.count) of \(filteredJobs.count) jobs")
+                                            .font(RMSystemTheme.Typography.caption)
+                                            .foregroundStyle(RMSystemTheme.Colors.textTertiary)
+                                    }
+                                }
+                            } else if !jobsStore.isLoading {
+                                Section {
+                                    VStack(spacing: RMSystemTheme.Spacing.md) {
+                                        Image(systemName: "briefcase")
+                                            .font(.system(size: 48))
+                                            .foregroundStyle(RMSystemTheme.Colors.textTertiary)
+                                        
+                                        Text(searchQuery.isEmpty ? "No Active Jobs" : "No Results")
+                                            .font(RMSystemTheme.Typography.headline)
+                                            .foregroundStyle(RMSystemTheme.Colors.textPrimary)
+                                        
+                                        Text(searchQuery.isEmpty 
+                                            ? "Create your first job to get started" 
+                                            : "Try adjusting your search")
+                                            .font(RMSystemTheme.Typography.subheadline)
+                                            .foregroundStyle(RMSystemTheme.Colors.textSecondary)
+                                            .multilineTextAlignment(.center)
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, RMSystemTheme.Spacing.xl)
+                                    .listRowInsets(EdgeInsets())
+                                    .listRowBackground(Color.clear)
                                 }
                             }
-                            
-                            // Empty State
-                            if activeJobs.isEmpty && !jobsStore.isLoading {
-                                RMEmptyState(
-                                    icon: "briefcase",
-                                    title: searchQuery.isEmpty ? "No Active Jobs" : "No Results",
-                                    message: searchQuery.isEmpty 
-                                        ? "Create your first job to get started" 
-                                        : "Try adjusting your search"
-                                )
-                                .padding(.vertical, RMSystemTheme.Spacing.xl)
-                                .padding(.horizontal, RMSystemTheme.Spacing.pagePadding)
-                            }
                         }
-                        .padding(.bottom, 100) // Room for tab bar
-                    }
-                    .background(RMSystemTheme.Colors.background.ignoresSafeArea())
+                        .listStyle(.insetGrouped)
+                        .searchable(text: $searchQuery, prompt: "Search jobs")
+                        .refreshable {
+                            Haptics.tap()
+                            _ = try? await jobsStore.fetch(forceRefresh: true)
+                        }
                 }
             }
             .rmNavigationBar(title: "Operations")

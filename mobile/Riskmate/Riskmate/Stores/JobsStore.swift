@@ -8,6 +8,7 @@ final class JobsStore: ObservableObject {
 
     @Published private(set) var jobs: [Job] = []
     @Published private(set) var isLoading: Bool = false
+    @Published private(set) var lastSyncDate: Date?
     @Published var errorMessage: String?
 
     private var fetchTask: Task<[Job], Error>?
@@ -37,6 +38,7 @@ final class JobsStore: ObservableObject {
         do {
             let result = try await task.value
             self.jobs = result
+            self.lastSyncDate = Date()
             self.fetchTask = nil
             self.isLoading = false
             return result

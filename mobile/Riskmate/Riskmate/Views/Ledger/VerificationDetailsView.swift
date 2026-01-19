@@ -6,9 +6,10 @@ struct VerificationDetailsView: View {
     @State private var showShareSheet = false
     
     // TODO: Wire to actual ledger verification data
-    let isVerified: Bool = true
-    let lastAnchoredTimestamp: Date? = Date()
-    let rootHash: String? = "0x7a3f9e2b1c4d8a6f..."
+    @State private var isVerified: Bool = true
+    @State private var lastAnchoredTimestamp: Date? = Date()
+    @State private var rootHash: String? = "0x7a3f9e2b1c4d8a6f..."
+    @State private var isAnchored: Bool = true
     
     var body: some View {
         NavigationStack {
@@ -39,6 +40,30 @@ struct VerificationDetailsView: View {
                 
                 // Details Section
                 Section {
+                    // Anchoring Status (Apple-style status message)
+                    HStack {
+                        Image(systemName: isAnchored ? "checkmark.circle.fill" : "clock.fill")
+                            .foregroundStyle(isAnchored ? RMSystemTheme.Colors.success : RMSystemTheme.Colors.warning)
+                            .font(.system(size: 16))
+                        
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(isAnchored ? "Anchored" : "Pending Anchor")
+                                .font(RMSystemTheme.Typography.headline)
+                                .foregroundStyle(RMSystemTheme.Colors.textPrimary)
+                            
+                            if let timestamp = lastAnchoredTimestamp {
+                                Text(isAnchored 
+                                    ? "Anchored \(formatRelativeTime(timestamp))" 
+                                    : "Waiting for anchor")
+                                    .font(RMSystemTheme.Typography.subheadline)
+                                    .foregroundStyle(RMSystemTheme.Colors.textSecondary)
+                            }
+                        }
+                        
+                        Spacer()
+                    }
+                    .padding(.vertical, RMSystemTheme.Spacing.xs)
+                    
                     if let timestamp = lastAnchoredTimestamp {
                         DetailRow(
                             label: "Last Anchored",
@@ -109,6 +134,12 @@ struct VerificationDetailsView: View {
         formatter.dateStyle = .medium
         formatter.timeStyle = .short
         return formatter.string(from: date)
+    }
+    
+    private func formatRelativeTime(_ date: Date) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return formatter.localizedString(for: date, relativeTo: Date())
     }
 }
 

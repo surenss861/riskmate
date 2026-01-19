@@ -64,12 +64,33 @@ struct LedgerReceiptCard: View {
                     }
                     
                     if fullHash != nil {
-                        Button {
-                            Haptics.tap()
-                            showShareSheet = true
+                        Menu {
+                            Button {
+                                Haptics.tap()
+                                showShareSheet = true
+                            } label: {
+                                Label("Share Proof", systemImage: "square.and.arrow.up")
+                            }
+                            
+                            Button {
+                                Haptics.tap()
+                                UIPasteboard.general.string = fullHash
+                                Haptics.success()
+                            } label: {
+                                Label("Copy Full Hash", systemImage: "doc.on.doc")
+                            }
+                            
+                            // TODO: Add "Verify Externally" when verifier URL is available
+                            // Button {
+                            //     if let url = URL(string: "https://verifier.riskmate.dev/\(fullHash ?? "")") {
+                            //         UIApplication.shared.open(url)
+                            //     }
+                            // } label: {
+                            //     Label("Verify Externally", systemImage: "arrow.up.right.square")
+                            // }
                         } label: {
-                            Image(systemName: "square.and.arrow.up")
-                                .font(.system(size: 12, weight: .medium))
+                            Image(systemName: "ellipsis.circle")
+                                .font(.system(size: 14, weight: .medium))
                                 .foregroundStyle(RMSystemTheme.Colors.accent)
                         }
                     }
