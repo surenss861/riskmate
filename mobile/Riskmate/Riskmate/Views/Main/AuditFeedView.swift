@@ -15,8 +15,8 @@ struct AuditFeedView: View {
                 VStack(spacing: 0) {
                     RMOfflineBanner()
                     
-                    // Integrity Surface Pinned at Top
-                    LedgerIntegritySurface()
+                    // Verification Banner (Premium)
+                    VerificationBanner(verified: true) // TODO: Wire to actual ledger verification status
                         .padding(.horizontal, RMTheme.Spacing.pagePadding)
                         .padding(.top, RMTheme.Spacing.sm)
                     
@@ -121,58 +121,64 @@ struct AuditFeedView: View {
                                         showingDetail = true
                                     }
                             } else {
-                                RMAuditRow(event: event)
-                                    .listRowBackground(Color.clear)
-                                    .listRowSeparator(.hidden)
-                                    .listRowInsets(EdgeInsets(
-                                        top: RMTheme.Spacing.xs,
-                                        leading: RMTheme.Spacing.md,
-                                        bottom: RMTheme.Spacing.xs,
-                                        trailing: RMTheme.Spacing.md
-                                    ))
-                                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                        Button {
-                                            copyEventId(event.id)
-                                        } label: {
-                                            Label("Copy ID", systemImage: "doc.on.doc")
-                                        }
-                                        .tint(RMTheme.Colors.accent)
-                                        
-                                        Button {
-                                            exportEvent(event)
-                                        } label: {
-                                            Label("Export", systemImage: "square.and.arrow.up")
-                                        }
-                                        .tint(RMTheme.Colors.categoryAccess)
+                                // Premium Ledger Receipt Card
+                                LedgerReceiptCard(
+                                    title: event.summary,
+                                    subtitle: "\(event.category) • \(event.actor.isEmpty ? "System" : event.actor)",
+                                    timeAgo: event.timestamp.toRelative(since: nil, dateTimeStyle: .named, unitsStyle: .short),
+                                    hashPreview: String(event.id.prefix(16)) + "..."
+                                )
+                                .listRowBackground(Color.clear)
+                                .listRowSeparator(.hidden)
+                                .listRowInsets(EdgeInsets(
+                                    top: RMTheme.Spacing.xs,
+                                    leading: RMTheme.Spacing.md,
+                                    bottom: RMTheme.Spacing.xs,
+                                    trailing: RMTheme.Spacing.md
+                                ))
+                                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                    Button {
+                                        copyEventId(event.id)
+                                    } label: {
+                                        Label("Copy ID", systemImage: "doc.on.doc")
                                     }
-                                    .contextMenu {
-                                        Button {
-                                            copyEventId(event.id)
-                                        } label: {
-                                            Label("Copy Event ID", systemImage: "doc.on.doc")
-                                        }
-                                        
-                                        Button {
-                                            exportEvent(event)
-                                        } label: {
-                                            Label("Export", systemImage: "square.and.arrow.up")
-                                        }
-                                        
-                                        Divider()
-                                        
-                                        Button {
-                                            selectedEvent = event
-                                            showingDetail = true
-                                        } label: {
-                                            Label("View Details", systemImage: "eye")
-                                        }
+                                    .tint(RMTheme.Colors.accent)
+                                    
+                                    Button {
+                                        exportEvent(event)
+                                    } label: {
+                                        Label("Export", systemImage: "square.and.arrow.up")
                                     }
-                                    .onTapGesture {
-                                        let generator = UIImpactFeedbackGenerator(style: .light)
-                                        generator.impactOccurred()
+                                    .tint(RMTheme.Colors.categoryAccess)
+                                }
+                                .contextMenu {
+                                    Button {
+                                        copyEventId(event.id)
+                                    } label: {
+                                        Label("Copy Event ID", systemImage: "doc.on.doc")
+                                    }
+                                    
+                                    Button {
+                                        exportEvent(event)
+                                    } label: {
+                                        Label("Export", systemImage: "square.and.arrow.up")
+                                    }
+                                    
+                                    Divider()
+                                    
+                                    Button {
                                         selectedEvent = event
                                         showingDetail = true
+                                    } label: {
+                                        Label("View Details", systemImage: "eye")
                                     }
+                                }
+                                .onTapGesture {
+                                    let generator = UIImpactFeedbackGenerator(style: .light)
+                                    generator.impactOccurred()
+                                    selectedEvent = event
+                                    showingDetail = true
+                                }
                             }
                         }
                     }

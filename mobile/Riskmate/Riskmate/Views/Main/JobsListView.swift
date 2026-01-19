@@ -8,8 +8,6 @@ struct JobsListView: View {
     @State private var debouncedSearchText = ""
     @State private var selectedStatus: String = "all"
     @State private var selectedRiskLevel: String = "all"
-    @State private var selectedJob: Job?
-    @State private var showingDetail = false
     @FocusState private var isSearchFocused: Bool
     
     // Computed properties from store
@@ -157,56 +155,55 @@ struct JobsListView: View {
                     } else {
                         List {
                             ForEach(filteredJobs) { job in
-                                RMJobRow(job: job)
-                                    .listRowBackground(Color.clear)
-                                    .listRowSeparator(.hidden)
-                                    .listRowInsets(EdgeInsets(
-                                        top: RMTheme.Spacing.xs,
-                                        leading: RMTheme.Spacing.md,
-                                        bottom: RMTheme.Spacing.xs,
-                                        trailing: RMTheme.Spacing.md
-                                    ))
-                                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                        Button {
-                                            copyJobId(job.id)
-                                        } label: {
-                                            Label("Copy ID", systemImage: "doc.on.doc")
-                                        }
-                                        .tint(RMTheme.Colors.accent)
-                                        
-                                        Button {
-                                            exportJob(job)
-                                        } label: {
-                                            Label("Export", systemImage: "square.and.arrow.up")
-                                        }
-                                        .tint(RMTheme.Colors.categoryAccess)
+                                NavigationLink(value: job) {
+                                    JobCard(job: job) {
+                                        // Navigation handled by NavigationLink
                                     }
-                                    .contextMenu {
-                                        Button {
-                                            copyJobId(job.id)
-                                        } label: {
-                                            Label("Copy Job ID", systemImage: "doc.on.doc")
-                                        }
-                                        
-                                        Button {
-                                            exportJob(job)
-                                        } label: {
-                                            Label("Export PDF", systemImage: "square.and.arrow.up")
-                                        }
-                                        
-                                        Divider()
-                                        
-                                        Button(role: .destructive) {
-                                            // TODO: Delete job
-                                        } label: {
-                                            Label("Delete", systemImage: "trash")
-                                        }
+                                }
+                                .listRowBackground(Color.clear)
+                                .listRowSeparator(.hidden)
+                                .listRowInsets(EdgeInsets(
+                                    top: RMTheme.Spacing.xs,
+                                    leading: RMTheme.Spacing.md,
+                                    bottom: RMTheme.Spacing.xs,
+                                    trailing: RMTheme.Spacing.md
+                                ))
+                                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                    Button {
+                                        copyJobId(job.id)
+                                    } label: {
+                                        Label("Copy ID", systemImage: "doc.on.doc")
                                     }
-                                    .onTapGesture {
-                                        let generator = UIImpactFeedbackGenerator(style: .light)
-                                        generator.impactOccurred()
-                                        selectedJob = job
+                                    .tint(RMTheme.Colors.accent)
+                                    
+                                    Button {
+                                        exportJob(job)
+                                    } label: {
+                                        Label("Export", systemImage: "square.and.arrow.up")
                                     }
+                                    .tint(RMTheme.Colors.categoryAccess)
+                                }
+                                .contextMenu {
+                                    Button {
+                                        copyJobId(job.id)
+                                    } label: {
+                                        Label("Copy Job ID", systemImage: "doc.on.doc")
+                                    }
+                                    
+                                    Button {
+                                        exportJob(job)
+                                    } label: {
+                                        Label("Export PDF", systemImage: "square.and.arrow.up")
+                                    }
+                                    
+                                    Divider()
+                                    
+                                    Button(role: .destructive) {
+                                        // TODO: Delete job
+                                    } label: {
+                                        Label("Delete", systemImage: "trash")
+                                    }
+                                }
                             }
                         }
                         .listStyle(.plain)
@@ -245,7 +242,7 @@ struct JobsListView: View {
                 // Force refresh from store
                 _ = try? await jobsStore.fetch(forceRefresh: true)
             }
-            .navigationDestination(item: $selectedJob) { job in
+            .navigationDestination(for: Job.self) { job in
                 JobDetailView(jobId: job.id)
             }
     }
