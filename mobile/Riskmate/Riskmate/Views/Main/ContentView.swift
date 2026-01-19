@@ -3,11 +3,18 @@ import SwiftUI
 struct ContentView: View {
     @StateObject private var sessionManager = SessionManager.shared
     @StateObject private var serverStatus = ServerStatusManager.shared
+    @AppStorage("user_role") private var userRole: String = ""
     @State private var selectedTab: MainTab = .operations
     @State private var selectedSidebarItem: SidebarItem? = .operations
     @State private var showOnboarding = false
+    @State private var showFirstRunOnboarding = false
     @State private var backendHealthCheckComplete = false
     @State private var backendHealthError: String?
+    @State private var workRecordsFilter: String? = nil
+    
+    private var isAuditor: Bool {
+        AuditorMode.isEnabled
+    }
     
     var body: some View {
         ZStack {
@@ -41,8 +48,10 @@ struct ContentView: View {
                 // Show polished splash screen during bootstrap
                 SplashView()
             } else if sessionManager.isAuthenticated {
-                // Check onboarding
-                if showOnboarding {
+                // Check first-run onboarding (shows once, before role onboarding)
+                if showFirstRunOnboarding {
+                    FirstRunOnboardingView(isPresented: $showFirstRunOnboarding)
+                } else if showOnboarding {
                     OnboardingView(isPresented: $showOnboarding)
                 } else {
                     // Device-aware navigation
@@ -72,8 +81,15 @@ struct ContentView: View {
             
             // Check if onboarding is needed
             if sessionManager.isAuthenticated {
-                let onboardingComplete = UserDefaults.standard.bool(forKey: "onboarding_complete")
-                showOnboarding = !onboardingComplete
+                // First: Check first-run onboarding (shows once, ever)
+                let firstRunComplete = UserDefaults.standard.bool(forKey: "first_run_complete")
+                showFirstRunOnboarding = !firstRunComplete
+                
+                // Then: Check role onboarding (if first-run is complete)
+                if firstRunComplete {
+                    let onboardingComplete = UserDefaults.standard.bool(forKey: "onboarding_complete")
+                    showOnboarding = !onboardingComplete
+                }
             }
         }
         .onAppear {
@@ -102,15 +118,21 @@ struct ContentView: View {
     
     private var iPhoneNavigation: some View {
         TabView(selection: $selectedTab) {
-            // Operations (Dashboard) - First tab
-            NavigationStack {
-                OperationsView()
-                    .rmNavigationBar(title: "Operations")
+            // For auditors: Start on Ledger tab
+            // For operators: Start on Operations tab
+            if !isAuditor {
+                // Operations (Dashboard) - First tab
+                NavigationStack {
+                    OperationsView(onKPINavigate: { filter in
+                        workRecordsFilter = filter
+                    })
+                        .rmNavigationBar(title: "Operations")
+                }
+                .tabItem {
+                    Label("Operations", systemImage: "briefcase.fill")
+                }
+                .tag(MainTab.operations)
             }
-            .tabItem {
-                Label("Operations", systemImage: "briefcase.fill")
-            }
-            .tag(MainTab.operations)
             
             // Ledger (Audit Feed) - Second tab
             NavigationStack {
@@ -124,13 +146,19 @@ struct ContentView: View {
             
             // Work Records (Jobs) - Third tab
             NavigationStack {
-                JobsListView()
+                JobsListView(initialFilter: workRecordsFilter)
                     .rmNavigationBar(title: "Work Records")
             }
             .tabItem {
                 Label("Work Records", systemImage: "doc.text.fill")
             }
             .tag(MainTab.workRecords)
+            .onChange(of: workRecordsFilter) { _ in
+                // Switch to Work Records tab when filter is set
+                if workRecordsFilter != nil {
+                    selectedTab = .workRecords
+                }
+            }
             
             // Settings (Account) - Fourth tab
             NavigationStack {
@@ -143,20 +171,28 @@ struct ContentView: View {
         }
         .tint(RMTheme.Colors.accent)
         .overlay(alignment: .bottomTrailing) {
-            // Global FAB for quick evidence capture
-            Button {
-                QuickActionRouter.shared.presentEvidence(jobId: nil)
-            } label: {
-                Image(systemName: "camera.fill")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundColor(.white)
-                    .frame(width: 56, height: 56)
-                    .background(RMTheme.Colors.accent)
-                    .clipShape(Circle())
-                    .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 4)
+            // Global FAB for quick evidence capture (hidden for auditors and on Operations tab)
+            if !isAuditor && selectedTab != .operations {
+                Button {
+                    QuickActionRouter.shared.presentEvidence(jobId: nil)
+                } label: {
+                    Image(systemName: "camera.fill")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(width: 56, height: 56)
+                        .background(RMTheme.Colors.accent)
+                        .clipShape(Circle())
+                        .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 4)
+                }
+                .padding(.trailing, 20)
+                .padding(.bottom, 100) // Above tab bar
             }
-            .padding(.trailing, 20)
-            .padding(.bottom, 100) // Above tab bar
+        }
+        .onAppear {
+            // Launch auditors directly into Ledger
+            if isAuditor {
+                selectedTab = .ledger
+            }
         }
     }
     

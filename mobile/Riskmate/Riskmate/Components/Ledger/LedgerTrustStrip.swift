@@ -17,12 +17,12 @@ struct LedgerTrustStrip: View {
                     .foregroundStyle(isVerified ? RMSystemTheme.Colors.success : RMSystemTheme.Colors.warning)
                 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(isVerified ? "Chain Verified" : "Verification Issue")
+                    Text(isVerified ? "Cryptographically Verified" : "Verification Issue")
                         .font(RMSystemTheme.Typography.subheadline.weight(.semibold))
                         .foregroundStyle(RMSystemTheme.Colors.textPrimary)
                     
                     if let anchored = lastAnchored {
-                        Text("Last anchored: \(relativeTime(anchored))")
+                        Text("Anchored to immutable log \(relativeTime(anchored))")
                             .font(RMSystemTheme.Typography.caption)
                             .foregroundStyle(RMSystemTheme.Colors.textSecondary)
                     } else {
@@ -30,6 +30,12 @@ struct LedgerTrustStrip: View {
                             .font(RMSystemTheme.Typography.caption)
                             .foregroundStyle(RMSystemTheme.Colors.textTertiary)
                     }
+                    
+                    // Immutability flex (subtle, confident)
+                    Text("Proofs cannot be altered once anchored.")
+                        .font(RMSystemTheme.Typography.caption2)
+                        .foregroundStyle(RMSystemTheme.Colors.textTertiary)
+                        .padding(.top, 2)
                 }
                 
                 Spacer()

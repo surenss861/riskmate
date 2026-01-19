@@ -9,6 +9,10 @@ struct OperationsView: View {
     @State private var selectedView: OperationsViewType = .dashboard
     @State private var searchQuery: String = ""
     
+    private var isAuditor: Bool {
+        AuditorMode.isEnabled
+    }
+    
     private func relativeTime(_ date: Date) -> String {
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .abbreviated
@@ -41,17 +45,25 @@ struct OperationsView: View {
         []
     }
     
+    @Environment(\.dismiss) private var dismiss
+    
+    let onKPINavigate: ((String?) -> Void)?
+    
+    init(onKPINavigate: ((String?) -> Void)? = nil) {
+        self.onKPINavigate = onKPINavigate
+    }
+    
     private func handleKPITap(_ type: KPIType) {
-        // TODO: Navigate to filtered list
+        Haptics.tap()
+        
+        // Navigate to Work Records with appropriate filter
         switch type {
         case .active:
-            searchQuery = ""
+            onKPINavigate?("active")
         case .highRisk:
-            // Filter to high risk
-            break
+            onKPINavigate?("highRisk")
         case .missingEvidence:
-            // Filter to missing evidence
-            break
+            onKPINavigate?("missingEvidence")
         }
     }
     
@@ -80,22 +92,35 @@ struct OperationsView: View {
                 } else {
                     // Field users get List-native Operations (Apple-style)
                     List {
-                            // Primary Action Section
-                            Section {
-                                RMButton(
-                                    title: "Add Evidence",
-                                    icon: "camera.fill",
-                                    style: .primary
-                                ) {
-                                    quickAction.presentEvidence(jobId: nil)
+                            // Read-only banner for auditors
+                            if isAuditor {
+                                Section {
+                                    ReadOnlyBanner()
+                                        .listRowInsets(EdgeInsets())
+                                        .listRowBackground(Color.clear)
                                 }
-                                .listRowInsets(EdgeInsets(
-                                    top: RMSystemTheme.Spacing.sm,
-                                    leading: 0,
-                                    bottom: RMSystemTheme.Spacing.sm,
-                                    trailing: 0
-                                ))
-                                .listRowBackground(Color.clear)
+                            }
+                            
+                            // Primary Action Section (hidden for auditors)
+                            if !isAuditor {
+                                Section {
+                                    RMButton(
+                                        title: "Add Evidence",
+                                        icon: "camera.fill",
+                                        style: .primary
+                                    ) {
+                                        quickAction.presentEvidence(jobId: nil)
+                                    }
+                                    // Note: Scroll-based fade for List requires custom implementation
+                                    // Keeping at full opacity for now (can be enhanced later)
+                                    .listRowInsets(EdgeInsets(
+                                        top: RMSystemTheme.Spacing.sm,
+                                        leading: 0,
+                                        bottom: RMSystemTheme.Spacing.sm,
+                                        trailing: 0
+                                    ))
+                                    .listRowBackground(Color.clear)
+                                }
                             }
                             
                             // Active Jobs Section
@@ -131,34 +156,39 @@ struct OperationsView: View {
                                     ForEach(activeJobs) { job in
                                         NavigationLink {
                                             JobDetailView(jobId: job.id)
+                                                .onAppear {
+                                                    Haptics.tap()
+                                                }
                                         } label: {
                                             JobRow(
                                                 job: job,
-                                                onAddEvidence: {
+                                                onAddEvidence: isAuditor ? nil : {
                                                     quickAction.presentEvidence(jobId: job.id)
                                                 },
-                                                onMarkComplete: {
+                                                onMarkComplete: isAuditor ? nil : {
                                                     // TODO: Mark complete
                                                     ToastCenter.shared.show("Marked complete", systemImage: "checkmark.circle", style: .success)
                                                 }
                                             )
                                         }
                                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                            Button {
-                                                Haptics.tap()
-                                                quickAction.presentEvidence(jobId: job.id)
-                                            } label: {
-                                                Label("Add Evidence", systemImage: "camera.fill")
+                                            if !isAuditor {
+                                                Button {
+                                                    Haptics.tap()
+                                                    quickAction.presentEvidence(jobId: job.id)
+                                                } label: {
+                                                    Label("Add Evidence", systemImage: "camera.fill")
+                                                }
+                                                .tint(RMSystemTheme.Colors.accent)
+                                                
+                                                Button {
+                                                    Haptics.tap()
+                                                    ToastCenter.shared.show("Marked complete", systemImage: "checkmark.circle", style: .success)
+                                                } label: {
+                                                    Label("Complete", systemImage: "checkmark.circle.fill")
+                                                }
+                                                .tint(RMSystemTheme.Colors.success)
                                             }
-                                            .tint(RMSystemTheme.Colors.accent)
-                                            
-                                            Button {
-                                                Haptics.tap()
-                                                ToastCenter.shared.show("Marked complete", systemImage: "checkmark.circle", style: .success)
-                                            } label: {
-                                                Label("Complete", systemImage: "checkmark.circle.fill")
-                                            }
-                                            .tint(RMSystemTheme.Colors.success)
                                         }
                                     }
                                 } header: {
@@ -207,18 +237,22 @@ struct OperationsView: View {
                             Haptics.tap()
                             _ = try? await jobsStore.fetch(forceRefresh: true)
                         }
+                        .scrollContentBackground(.hidden)
                 }
             }
             .rmNavigationBar(title: "Operations")
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        Haptics.tap()
-                        // TODO: Route to Create Job
-                        print("[OperationsView] TODO: Navigate to Create Job")
-                    } label: {
-                        Image(systemName: "plus")
-                            .foregroundStyle(RMSystemTheme.Colors.accent)
+                // Hide "New Job" for auditors
+                if !isAuditor {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button {
+                            Haptics.tap()
+                            // TODO: Route to Create Job
+                            print("[OperationsView] TODO: Navigate to Create Job")
+                        } label: {
+                            Image(systemName: "plus")
+                                .foregroundStyle(RMSystemTheme.Colors.accent)
+                        }
                     }
                 }
             }

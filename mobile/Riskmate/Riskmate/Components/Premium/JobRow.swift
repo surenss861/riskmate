@@ -78,13 +78,9 @@ struct JobRow: View {
                     .font(RMSystemTheme.Typography.caption)
                     .foregroundStyle(RMSystemTheme.Colors.textTertiary)
             }
-            
-            // Chevron (system standard)
-            Image(systemName: "chevron.right")
-                .foregroundStyle(RMSystemTheme.Colors.textTertiary)
-                .font(.system(size: 13, weight: .medium))
         }
-        .padding(.vertical, 4)
+        .listRowBackground(.ultraThinMaterial)
+        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
         .contextMenu {
             if let onAddEvidence = onAddEvidence {
                 Button {

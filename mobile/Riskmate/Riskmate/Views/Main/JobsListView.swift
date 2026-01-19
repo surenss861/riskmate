@@ -3,12 +3,18 @@ import SwiftDate
 
 /// Jobs List View with search, filters, and premium interactions
 struct JobsListView: View {
+    let initialFilter: String?
+    
     @StateObject private var jobsStore = JobsStore.shared
     @State private var searchText = ""
     @State private var debouncedSearchText = ""
     @State private var selectedStatus: String = "all"
     @State private var selectedRiskLevel: String = "all"
     @FocusState private var isSearchFocused: Bool
+    
+    init(initialFilter: String? = nil) {
+        self.initialFilter = initialFilter
+    }
     
     // Computed properties from store
     private var jobs: [Job] { jobsStore.jobs }
@@ -141,17 +147,24 @@ struct JobsListView: View {
                         }
                         .padding(RMTheme.Spacing.pagePadding)
                     } else if filteredJobs.isEmpty {
-                        RMSellingEmptyState(
-                            icon: "briefcase",
-                            title: searchText.isEmpty ? "No open incidents — defensibility posture is clean" : "No Results",
-                            message: searchText.isEmpty 
-                                ? "All work records are complete and audit-ready."
-                                : "Try adjusting your search or filters",
-                            ctaTitle: searchText.isEmpty ? "Create Job" : nil,
-                            ctaAction: searchText.isEmpty ? {
-                                // TODO: Navigate to create job
-                            } : nil
-                        )
+                        // Sober empty state (Apple-style)
+                        VStack(spacing: RMSystemTheme.Spacing.md) {
+                            Image(systemName: "doc.text")
+                                .font(.system(size: 48, weight: .light))
+                                .foregroundStyle(RMSystemTheme.Colors.textTertiary)
+                            
+                            Text(searchText.isEmpty ? "No matching work records" : "No Results")
+                                .font(RMSystemTheme.Typography.headline)
+                                .foregroundStyle(RMSystemTheme.Colors.textPrimary)
+                            
+                            if !searchText.isEmpty {
+                                Text("Try adjusting your search or filters")
+                                    .font(RMSystemTheme.Typography.subheadline)
+                                    .foregroundStyle(RMSystemTheme.Colors.textSecondary)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .padding(RMSystemTheme.Spacing.xl)
                     } else {
                         List {
                             ForEach(filteredJobs) { job in
@@ -214,6 +227,22 @@ struct JobsListView: View {
             }
             .rmNavigationBar(title: "Work Records")
             .syncStatusChip()
+            .onAppear {
+                // Apply initial filter if provided
+                if let filter = initialFilter {
+                    switch filter {
+                    case "active":
+                        selectedStatus = "active"
+                    case "highRisk":
+                        selectedRiskLevel = "high"
+                    case "missingEvidence":
+                        // TODO: Add missing evidence filter when backend supports it
+                        selectedStatus = "active"
+                    default:
+                        break
+                    }
+                }
+            }
             .task {
                 // Load persisted filters
                 let filters = FilterPersistence.loadJobsFilters()

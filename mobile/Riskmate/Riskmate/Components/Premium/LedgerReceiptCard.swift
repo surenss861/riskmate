@@ -8,16 +8,36 @@ struct LedgerReceiptCard: View {
     let hashPreview: String
     let fullHash: String? // Optional full hash for sharing
     let proofID: String // Stable proof identifier
+    let prevHash: String? // Previous hash for chain verification
+    let timestamp: Date // Event timestamp
+    let actorName: String? // Actor name
+    let isVerified: Bool // Chain verification status
     
     @State private var showShareSheet = false
+    @State private var showReceiptDetails = false
     
-    init(title: String, subtitle: String, timeAgo: String, hashPreview: String, fullHash: String? = nil, proofID: String? = nil) {
+    init(
+        title: String,
+        subtitle: String,
+        timeAgo: String,
+        hashPreview: String,
+        fullHash: String? = nil,
+        proofID: String? = nil,
+        prevHash: String? = nil,
+        timestamp: Date = Date(),
+        actorName: String? = nil,
+        isVerified: Bool = true
+    ) {
         self.title = title
         self.subtitle = subtitle
         self.timeAgo = timeAgo
         self.hashPreview = hashPreview
         self.fullHash = fullHash
         self.proofID = proofID ?? String(hashPreview.prefix(8)).uppercased()
+        self.prevHash = prevHash
+        self.timestamp = timestamp
+        self.actorName = actorName
+        self.isVerified = isVerified
     }
     
     var body: some View {
@@ -62,7 +82,7 @@ struct LedgerReceiptCard: View {
                             .font(.system(size: 11))
                         
                         Text(hashPreview)
-                            .font(RMSystemTheme.Typography.monospaced)
+                            .font(.system(.caption, design: .monospaced))
                             .foregroundStyle(RMSystemTheme.Colors.textTertiary)
                             .lineLimit(1)
                         
@@ -106,8 +126,23 @@ struct LedgerReceiptCard: View {
             }
         }
         .appearIn()
+        .contentShape(Rectangle())
+        .onTapGesture {
+            Haptics.tap()
+            showReceiptDetails = true
+        }
         .sheet(isPresented: $showShareSheet) {
             ShareSheet(items: [fullHash ?? hashPreview])
+        }
+        .sheet(isPresented: $showReceiptDetails) {
+            ProofReceiptDetailsView(
+                proofID: proofID,
+                hash: fullHash ?? hashPreview,
+                prevHash: prevHash,
+                timestamp: timestamp,
+                actorName: actorName,
+                isVerified: isVerified
+            )
         }
     }
 }

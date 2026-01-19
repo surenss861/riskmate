@@ -29,7 +29,8 @@ struct ToastView: View {
         .shadow(color: .black.opacity(0.2), radius: 12, x: 0, y: 4)
         .opacity(isVisible ? 1 : 0)
         .offset(y: isVisible ? 0 : 20)
-        .animation(.easeOut(duration: 0.2), value: isVisible)
+        .scaleEffect(isVisible ? 1.0 : 0.96)
+        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isVisible)
         .onAppear {
             isVisible = true
         }

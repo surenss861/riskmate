@@ -7,16 +7,22 @@ struct SplashView: View {
             RMTheme.Colors.background
                 .ignoresSafeArea()
             
-            VStack(spacing: RMTheme.Spacing.md) {
+            VStack(spacing: RMSystemTheme.Spacing.lg) {
                 // Logo/App Name
                 Text("RISK MATE")
-                    .font(.system(size: 24, weight: .heavy, design: .rounded))
+                    .font(.system(size: 28, weight: .heavy, design: .rounded))
                     .tracking(3)
-                    .foregroundColor(RMTheme.Colors.textPrimary)
+                    .foregroundStyle(RMSystemTheme.Colors.textPrimary)
+                
+                // Value prop (one line, confident)
+                Text("Immutable compliance records.")
+                    .font(RMSystemTheme.Typography.subheadline)
+                    .foregroundStyle(RMSystemTheme.Colors.textSecondary)
+                    .multilineTextAlignment(.center)
                 
                 // Loading indicator
                 ProgressView()
-                    .tint(RMTheme.Colors.accent)
+                    .tint(RMSystemTheme.Colors.accent)
                     .scaleEffect(1.2)
             }
         }

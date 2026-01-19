@@ -9,6 +9,7 @@ struct RMEvidenceCapture: View {
     
     @State private var selectedPhase: EvidencePhase = .before
     @State private var selectedType: EvidenceType = .workArea
+    @State private var showEvidenceTypeGrid = false // Collapsed by default (Apple trick)
     @State private var showCamera = false
     @State private var showPhotoPicker = false
     @State private var capturedImage: UIImage?
@@ -38,19 +39,44 @@ struct RMEvidenceCapture: View {
                                 .padding(.horizontal, RMTheme.Spacing.pagePadding)
                         }
                         
-                        // Evidence Type Selection
-                        VStack(alignment: .leading, spacing: RMTheme.Spacing.sm) {
-                            Text("Evidence Type")
-                                .rmSectionHeader()
-                                .padding(.horizontal, RMTheme.Spacing.pagePadding)
-                            
-                            EvidenceTypeGrid(selectedType: $selectedType)
-                                .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                        // Evidence Type Selection (collapsed by default - Apple trick)
+                        if showEvidenceTypeGrid {
+                            VStack(alignment: .leading, spacing: RMTheme.Spacing.sm) {
+                                Text("Evidence Type")
+                                    .rmSectionHeader()
+                                    .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                                
+                                EvidenceTypeGrid(selectedType: $selectedType)
+                                    .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                            }
+                        } else {
+                            // Show "More details" button to expand
+                            Button {
+                                withAnimation(.easeOut(duration: 0.2)) {
+                                    showEvidenceTypeGrid = true
+                                }
+                            } label: {
+                                HStack {
+                                    Text("More details")
+                                        .font(RMTheme.Typography.body)
+                                        .foregroundColor(RMTheme.Colors.accent)
+                                    Image(systemName: "chevron.down")
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundColor(RMTheme.Colors.accent)
+                                }
+                            }
+                            .padding(.horizontal, RMTheme.Spacing.pagePadding)
                         }
                         
                         // Capture Buttons
                         VStack(spacing: RMTheme.Spacing.md) {
                             Button {
+                                // Show evidence type grid after photo selection
+                                if !showEvidenceTypeGrid {
+                                    withAnimation(.easeOut(duration: 0.2)) {
+                                        showEvidenceTypeGrid = true
+                                    }
+                                }
                                 requestCameraPermission()
                             } label: {
                                 HStack {

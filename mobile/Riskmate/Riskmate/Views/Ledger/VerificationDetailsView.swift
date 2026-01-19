@@ -29,6 +29,11 @@ struct VerificationDetailsView: View {
                             Text(isVerified ? "All events are tamper-evident" : "Some events require verification")
                                 .font(RMSystemTheme.Typography.subheadline)
                                 .foregroundStyle(RMSystemTheme.Colors.textSecondary)
+                            
+                            Text("Proofs cannot be altered once anchored.")
+                                .font(RMSystemTheme.Typography.caption)
+                                .foregroundStyle(RMSystemTheme.Colors.textTertiary)
+                                .padding(.top, 2)
                         }
                         
                         Spacer()

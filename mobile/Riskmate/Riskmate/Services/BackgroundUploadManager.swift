@@ -294,7 +294,7 @@ extension BackgroundUploadManager: URLSessionTaskDelegate {
 
 // MARK: - Models
 
-struct UploadTask: Identifiable, Codable {
+struct UploadTask: Identifiable, Codable, Equatable {
     let id: String
     let jobId: String
     let fileName: String

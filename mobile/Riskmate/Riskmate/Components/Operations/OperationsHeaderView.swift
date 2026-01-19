@@ -10,19 +10,11 @@ struct OperationsHeaderView: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: RMSystemTheme.Spacing.sm) {
-            // Title + Sync Status
-            HStack {
-                Text("Operations")
-                    .font(RMSystemTheme.Typography.largeTitle)
-                    .foregroundStyle(RMSystemTheme.Colors.textPrimary)
-                
-                Spacer()
-                
-                if let lastSync = lastSync {
-                    Text("Synced \(relativeTime(lastSync))")
-                        .font(RMSystemTheme.Typography.caption)
-                        .foregroundStyle(RMSystemTheme.Colors.textTertiary)
-                }
+            // Sync Status (compact)
+            if let lastSync = lastSync {
+                Text("Synced \(relativeTime(lastSync))")
+                    .font(RMSystemTheme.Typography.caption)
+                    .foregroundStyle(RMSystemTheme.Colors.textTertiary)
             }
             
             // KPI Chips

@@ -41,10 +41,18 @@ struct JobDetailView: View {
                     .padding(RMTheme.Spacing.pagePadding)
                 } else if let job = job {
                     VStack(spacing: 0) {
-                        // Prominent "Add Evidence" CTA (evidence-first hierarchy)
-                        Button {
-                            quickAction.presentEvidence(jobId: job.id)
-                        } label: {
+                        // Read-only banner for auditors
+                        if AuditorMode.isEnabled {
+                            ReadOnlyBanner()
+                                .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                                .padding(.top, RMTheme.Spacing.md)
+                        }
+                        
+                        // Prominent "Add Evidence" CTA (evidence-first hierarchy) - hidden for auditors
+                        if !AuditorMode.isEnabled {
+                            Button {
+                                quickAction.presentEvidence(jobId: job.id)
+                            } label: {
                             HStack(spacing: RMTheme.Spacing.sm) {
                                 Image(systemName: "camera.fill")
                                     .font(.system(size: 16, weight: .semibold))

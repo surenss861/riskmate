@@ -8,6 +8,7 @@ import { buildJobReport } from "../utils/jobReport";
 import { enforceJobLimit } from "../middleware/limits";
 import { RequestWithId } from "../middleware/requestId";
 import { createErrorResponse, logErrorForSupport } from "../utils/errorResponse";
+import { requireWriteAccess } from "../middleware/requireWriteAccess";
 
 export const jobsRouter: ExpressRouter = express.Router();
 
@@ -904,7 +905,7 @@ jobsRouter.get("/:id", authenticate as unknown as express.RequestHandler, async 
 
 // POST /api/jobs
 // Creates a new job and calculates risk score
-jobsRouter.post("/", authenticate as unknown as express.RequestHandler, enforceJobLimit as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
+jobsRouter.post("/", authenticate as unknown as express.RequestHandler, requireWriteAccess as unknown as express.RequestHandler, enforceJobLimit as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
   const authReq = req as AuthenticatedRequest;
   try {
     const { organization_id, id: userId } = authReq.user;
@@ -1065,43 +1066,15 @@ jobsRouter.post("/", authenticate as unknown as express.RequestHandler, enforceJ
 
 // PATCH /api/jobs/:id
 // Updates a job and optionally recalculates risk score
-jobsRouter.patch("/:id", authenticate as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
+jobsRouter.patch("/:id", authenticate as unknown as express.RequestHandler, requireWriteAccess as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
   const authReq = req as AuthenticatedRequest;
   try {
     const jobId = authReq.params.id;
-    const { organization_id, id: userId, role } = authReq.user;
+    const { organization_id, id: userId } = authReq.user;
     const updateData = authReq.body;
     const { risk_factor_codes, ...jobUpdates } = updateData;
     let updatedRiskScore: number | null = null;
     let updatedClientName: string | null = null;
-
-    // Role-based capability: Executives are read-only
-    if (role === 'executive') {
-      // Log capability violation for audit trail
-      try {
-        await recordAuditLog({
-          organizationId: organization_id,
-          actorId: userId,
-          eventName: "auth.role_violation",
-          targetType: "job",
-          targetId: jobId,
-          metadata: {
-            role,
-            attempted_action: "update_job",
-            result: "denied",
-            reason: "Executive role is read-only",
-          },
-        });
-      } catch (auditError) {
-        // Non-fatal: log but don't fail the request
-        console.warn("Audit log failed for role violation:", auditError);
-      }
-
-      return res.status(403).json({
-        message: "Executives have read-only access",
-        code: "AUTH_ROLE_READ_ONLY",
-      });
-    }
 
     // Verify job belongs to organization
     const { data: existingJob, error: jobError } = await supabase
@@ -1239,41 +1212,13 @@ jobsRouter.patch("/:id", authenticate as unknown as express.RequestHandler, asyn
 });
 
 // PATCH /api/jobs/:id/mitigations/:mitigationId
-jobsRouter.patch("/:id/mitigations/:mitigationId", authenticate as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
+jobsRouter.patch("/:id/mitigations/:mitigationId", authenticate as unknown as express.RequestHandler, requireWriteAccess as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
   const authReq = req as AuthenticatedRequest;
   try {
     const jobId = authReq.params.id;
     const mitigationId = authReq.params.mitigationId;
-    const { organization_id, role } = authReq.user;
+    const { organization_id } = authReq.user;
     const { done } = authReq.body;
-
-    // Role-based capability: Executives are read-only
-    if (role === 'executive') {
-      // Log capability violation for audit trail
-      try {
-        await recordAuditLog({
-          organizationId: organization_id,
-          actorId: authReq.user.id,
-          eventName: "auth.role_violation",
-          targetType: "mitigation",
-          targetId: mitigationId,
-          metadata: {
-            role,
-            attempted_action: "update_mitigation",
-            result: "denied",
-            reason: "Executive role is read-only",
-          },
-        });
-      } catch (auditError) {
-        // Non-fatal: log but don't fail the request
-        console.warn("Audit log failed for role violation:", auditError);
-      }
-
-      return res.status(403).json({
-        message: "Executives have read-only access",
-        code: "AUTH_ROLE_READ_ONLY",
-      });
-    }
 
     if (typeof done !== "boolean") {
       return res.status(400).json({ message: "'done' boolean field is required" });
@@ -1462,7 +1407,7 @@ jobsRouter.get("/:id/documents", authenticate as unknown as express.RequestHandl
 
 // POST /api/jobs/:id/documents
 // Persists document metadata after upload to storage
-jobsRouter.post("/:id/documents", authenticate as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
+jobsRouter.post("/:id/documents", authenticate as unknown as express.RequestHandler, requireWriteAccess as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
   const authReq = req as AuthenticatedRequest;
   try {
     const jobId = authReq.params.id;
@@ -1603,7 +1548,7 @@ jobsRouter.get("/:id/audit", authenticate as unknown as express.RequestHandler, 
 
 // POST /api/jobs/:id/archive
 // Archives a job (soft delete, read-only, preserves for audit)
-jobsRouter.post("/:id/archive", authenticate as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
+jobsRouter.post("/:id/archive", authenticate as unknown as express.RequestHandler, requireWriteAccess as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
   const authReq = req as AuthenticatedRequest;
   try {
     const { id: userId, organization_id } = authReq.user;
@@ -1669,7 +1614,8 @@ jobsRouter.post("/:id/archive", authenticate as unknown as express.RequestHandle
 
 // PATCH /api/jobs/:id/flag
 // Flags a job for review (governance signal, not workflow)
-jobsRouter.patch("/:id/flag", authenticate as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
+// Note: Auditors cannot flag (governance signal requires write access)
+jobsRouter.patch("/:id/flag", authenticate as unknown as express.RequestHandler, requireWriteAccess as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
   const authReq = req as AuthenticatedRequest & RequestWithId;
   const requestId = authReq.requestId || 'unknown';
   try {
@@ -1820,13 +1766,13 @@ jobsRouter.patch("/:id/flag", authenticate as unknown as express.RequestHandler,
 
 // DELETE /api/jobs/:id
 // Hard deletes a job (admin-only, strict eligibility checks)
-jobsRouter.delete("/:id", authenticate as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
+jobsRouter.delete("/:id", authenticate as unknown as express.RequestHandler, requireWriteAccess as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
   const authReq = req as AuthenticatedRequest;
   try {
     const { id: userId, organization_id, role } = authReq.user;
     const jobId = authReq.params.id;
 
-    // Only owners can delete jobs
+    // Only owners can delete jobs (requireWriteAccess already blocks auditors/executives)
     if (role !== "owner") {
       const requestId = (authReq as RequestWithId).requestId || 'unknown';
       const { response: errorResponse, errorId } = createErrorResponse({
@@ -2103,7 +2049,8 @@ jobsRouter.get("/:id/signoffs", authenticate as unknown as express.RequestHandle
 
 // POST /api/jobs/:id/signoffs
 // Creates a new sign-off for a job
-jobsRouter.post("/:id/signoffs", authenticate as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
+// Note: Auditors cannot sign (read-only access)
+jobsRouter.post("/:id/signoffs", authenticate as unknown as express.RequestHandler, requireWriteAccess as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
   const authReq = req as AuthenticatedRequest & RequestWithId;
   const requestId = authReq.requestId || 'unknown';
   try {

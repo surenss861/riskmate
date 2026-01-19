@@ -9,6 +9,12 @@ struct AccountView: View {
     @State private var errorMessage = ""
     @State private var isLoading = false
     
+    private var versionString: String {
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Unknown"
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "Unknown"
+        return "\(version) (\(build))"
+    }
+    
     var body: some View {
         ZStack {
             RMBackground()
@@ -111,13 +117,29 @@ struct AccountView: View {
                         .foregroundColor(RMTheme.Colors.textPrimary)
                     }
                     .listRowBackground(RMTheme.Colors.surface.opacity(0.5))
-                    
+                }
+                
+                // Sign Out - own section, destructive style
+                Section {
                     Button("Sign Out", role: .destructive) {
                         let generator = UINotificationFeedbackGenerator()
                         generator.notificationOccurred(.warning)
                         Task {
                             await sessionManager.logout()
                         }
+                    }
+                    .listRowBackground(Color.clear)
+                }
+                
+                // Version info (auditor-friendly)
+                Section {
+                    HStack {
+                        Text("Version")
+                            .foregroundColor(RMTheme.Colors.textPrimary)
+                        Spacer()
+                        Text(versionString)
+                            .foregroundColor(RMTheme.Colors.textSecondary)
+                            .font(.system(.body, design: .monospaced))
                     }
                     .listRowBackground(RMTheme.Colors.surface.opacity(0.5))
                 }
