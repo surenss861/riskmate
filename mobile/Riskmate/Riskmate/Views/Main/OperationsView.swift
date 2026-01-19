@@ -33,7 +33,7 @@ struct OperationsView: View {
     }
     
     var highRiskJobs: [Job] {
-        filteredJobs.filter { (job.riskScore ?? 0) >= 80 }
+        filteredJobs.filter { job in (job.riskScore ?? 0) >= 80 }
     }
     
     var missingEvidenceJobs: [Job] {
