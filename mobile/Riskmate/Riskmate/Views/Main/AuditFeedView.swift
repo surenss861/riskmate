@@ -16,12 +16,14 @@ struct AuditFeedView: View {
                 VStack(spacing: 0) {
                     RMOfflineBanner()
                     
-                    // Verification Banner (System-native)
-                    VerificationBanner(verified: true) {
-                        showingVerificationDetails = true
-                    }
-                    .padding(.horizontal, RMSystemTheme.Spacing.pagePadding)
-                    .padding(.top, RMSystemTheme.Spacing.sm)
+                    // Trust Strip (always visible, unforgeable status)
+                    LedgerTrustStrip(
+                        isVerified: true, // TODO: Wire to actual verification status
+                        lastAnchored: Date(), // TODO: Wire to actual anchor timestamp
+                        onTap: {
+                            showingVerificationDetails = true
+                        }
+                    )
                     
                     // Saved Views as Horizontal Cards
                     SavedViewsCarousel()
@@ -124,13 +126,14 @@ struct AuditFeedView: View {
                                         showingDetail = true
                                     }
                             } else {
-                                // System-native Ledger Receipt Card
+                                // System-native Ledger Receipt Card (Proof Receipt)
                                 LedgerReceiptCard(
                                     title: event.summary,
                                     subtitle: "\(event.category) • \(event.actor.isEmpty ? "System" : event.actor)",
                                     timeAgo: event.timestamp.toRelative(since: nil, dateTimeStyle: .named, unitsStyle: .short),
-                                    hashPreview: String(event.id.prefix(16)) + "...",
-                                    fullHash: event.id
+                                    hashPreview: String(event.id.prefix(12)) + "...",
+                                    fullHash: event.id,
+                                    proofID: String(event.id.prefix(8)).uppercased()
                                 )
                                 .listRowBackground(Color.clear)
                                 .listRowSeparator(.hidden)

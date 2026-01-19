@@ -7,15 +7,17 @@ struct LedgerReceiptCard: View {
     let timeAgo: String
     let hashPreview: String
     let fullHash: String? // Optional full hash for sharing
+    let proofID: String // Stable proof identifier
     
     @State private var showShareSheet = false
     
-    init(title: String, subtitle: String, timeAgo: String, hashPreview: String, fullHash: String? = nil) {
+    init(title: String, subtitle: String, timeAgo: String, hashPreview: String, fullHash: String? = nil, proofID: String? = nil) {
         self.title = title
         self.subtitle = subtitle
         self.timeAgo = timeAgo
         self.hashPreview = hashPreview
         self.fullHash = fullHash
+        self.proofID = proofID ?? String(hashPreview.prefix(8)).uppercased()
     }
     
     var body: some View {
@@ -40,58 +42,63 @@ struct LedgerReceiptCard: View {
                     .font(RMSystemTheme.Typography.subheadline)
                     .foregroundStyle(RMSystemTheme.Colors.textSecondary)
                 
-                // Hash preview with actions
-                HStack(spacing: RMSystemTheme.Spacing.sm) {
-                    Image(systemName: "number")
-                        .foregroundStyle(RMSystemTheme.Colors.textTertiary)
-                        .font(.system(size: 12))
-                    
-                    Text(hashPreview)
-                        .font(RMSystemTheme.Typography.monospaced)
-                        .foregroundStyle(RMSystemTheme.Colors.textTertiary)
-                        .lineLimit(1)
-                    
-                    Spacer()
-                    
-                    Button {
-                        Haptics.tap()
-                        UIPasteboard.general.string = fullHash ?? hashPreview
-                        Haptics.success()
-                    } label: {
-                        Text("Copy")
+                // Proof ID + Hash (receipt-style)
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text("Proof ID")
+                            .font(RMSystemTheme.Typography.caption)
+                            .foregroundStyle(RMSystemTheme.Colors.textTertiary)
+                        
+                        Spacer()
+                        
+                        Text(proofID)
                             .font(RMSystemTheme.Typography.caption.weight(.semibold))
-                            .foregroundStyle(RMSystemTheme.Colors.accent)
+                            .foregroundStyle(RMSystemTheme.Colors.textSecondary)
                     }
                     
-                    if fullHash != nil {
-                        Menu {
-                            Button {
-                                Haptics.tap()
-                                showShareSheet = true
-                            } label: {
-                                Label("Share Proof", systemImage: "square.and.arrow.up")
-                            }
-                            
-                            Button {
-                                Haptics.tap()
-                                UIPasteboard.general.string = fullHash
-                                Haptics.success()
-                            } label: {
-                                Label("Copy Full Hash", systemImage: "doc.on.doc")
-                            }
-                            
-                            // TODO: Add "Verify Externally" when verifier URL is available
-                            // Button {
-                            //     if let url = URL(string: "https://verifier.riskmate.dev/\(fullHash ?? "")") {
-                            //         UIApplication.shared.open(url)
-                            //     }
-                            // } label: {
-                            //     Label("Verify Externally", systemImage: "arrow.up.right.square")
-                            // }
+                    HStack(spacing: RMSystemTheme.Spacing.xs) {
+                        Image(systemName: "number")
+                            .foregroundStyle(RMSystemTheme.Colors.textTertiary)
+                            .font(.system(size: 11))
+                        
+                        Text(hashPreview)
+                            .font(RMSystemTheme.Typography.monospaced)
+                            .foregroundStyle(RMSystemTheme.Colors.textTertiary)
+                            .lineLimit(1)
+                        
+                        Button {
+                            Haptics.tap()
+                            UIPasteboard.general.string = fullHash ?? hashPreview
+                            ToastCenter.shared.show("Copied hash", systemImage: "doc.on.doc", style: .success)
                         } label: {
-                            Image(systemName: "ellipsis.circle")
-                                .font(.system(size: 14, weight: .medium))
+                            Image(systemName: "doc.on.doc")
+                                .font(.system(size: 12, weight: .medium))
                                 .foregroundStyle(RMSystemTheme.Colors.accent)
+                        }
+                        
+                        Spacer()
+                        
+                        if fullHash != nil {
+                            Menu {
+                                Button {
+                                    Haptics.tap()
+                                    showShareSheet = true
+                                } label: {
+                                    Label("Share Proof", systemImage: "square.and.arrow.up")
+                                }
+                                
+                                Button {
+                                    Haptics.tap()
+                                    UIPasteboard.general.string = fullHash
+                                    ToastCenter.shared.show("Copied full hash", systemImage: "doc.on.doc", style: .success)
+                                } label: {
+                                    Label("Copy Full Hash", systemImage: "doc.on.doc")
+                                }
+                            } label: {
+                                Image(systemName: "ellipsis.circle")
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundStyle(RMSystemTheme.Colors.accent)
+                            }
                         }
                     }
                 }

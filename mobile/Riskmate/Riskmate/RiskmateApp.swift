@@ -43,22 +43,27 @@ struct RiskmateApp: App {
     
     var body: some Scene {
         WindowGroup {
-            ContentView()
-                .environmentObject(sessionManager)
-                .environmentObject(quickAction)
-                .preferredColorScheme(.dark)
-                .background(RMTheme.Colors.background)
-                .sheet(isPresented: $quickAction.isEvidenceSheetPresented) {
-                    EvidenceCaptureSheet(
-                        jobId: quickAction.evidenceJobId,
-                        onComplete: {
-                            // Optional: refresh jobs cache after upload
-                            Task {
-                                _ = try? await JobsStore.shared.fetch(forceRefresh: true)
+            ZStack {
+                ContentView()
+                    .environmentObject(sessionManager)
+                    .environmentObject(quickAction)
+                    .preferredColorScheme(.dark)
+                    .background(RMTheme.Colors.background)
+                    .sheet(isPresented: $quickAction.isEvidenceSheetPresented) {
+                        EvidenceCaptureSheet(
+                            jobId: quickAction.evidenceJobId,
+                            onComplete: {
+                                // Optional: refresh jobs cache after upload
+                                Task {
+                                    _ = try? await JobsStore.shared.fetch(forceRefresh: true)
+                                }
                             }
-                        }
-                    )
-                }
+                        )
+                    }
+                
+                // Global toast container
+                ToastContainer()
+            }
         }
     }
 }

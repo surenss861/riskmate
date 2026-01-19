@@ -32,6 +32,29 @@ struct OperationsView: View {
         }.prefix(6).map { $0 }
     }
     
+    var highRiskJobs: [Job] {
+        filteredJobs.filter { (job.riskScore ?? 0) >= 80 }
+    }
+    
+    var missingEvidenceJobs: [Job] {
+        // TODO: Wire to actual evidence check
+        []
+    }
+    
+    private func handleKPITap(_ type: KPIType) {
+        // TODO: Navigate to filtered list
+        switch type {
+        case .active:
+            searchQuery = ""
+        case .highRisk:
+            // Filter to high risk
+            break
+        case .missingEvidence:
+            // Filter to missing evidence
+            break
+        }
+    }
+    
     var body: some View {
         RMBackground()
             .overlay {
@@ -109,7 +132,16 @@ struct OperationsView: View {
                                         NavigationLink {
                                             JobDetailView(jobId: job.id)
                                         } label: {
-                                            JobRow(job: job)
+                                            JobRow(
+                                                job: job,
+                                                onAddEvidence: {
+                                                    quickAction.presentEvidence(jobId: job.id)
+                                                },
+                                                onMarkComplete: {
+                                                    // TODO: Mark complete
+                                                    ToastCenter.shared.show("Marked complete", systemImage: "checkmark.circle", style: .success)
+                                                }
+                                            )
                                         }
                                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                                             Button {
@@ -122,7 +154,7 @@ struct OperationsView: View {
                                             
                                             Button {
                                                 Haptics.tap()
-                                                // TODO: Mark complete
+                                                ToastCenter.shared.show("Marked complete", systemImage: "checkmark.circle", style: .success)
                                             } label: {
                                                 Label("Complete", systemImage: "checkmark.circle.fill")
                                             }
@@ -130,15 +162,13 @@ struct OperationsView: View {
                                         }
                                     }
                                 } header: {
-                                    HStack {
-                                        Text("Active Jobs")
-                                        Spacer()
-                                        if let lastSync = jobsStore.lastSyncDate {
-                                            Text("Synced \(relativeTime(lastSync))")
-                                                .font(RMSystemTheme.Typography.caption)
-                                                .foregroundStyle(RMSystemTheme.Colors.textTertiary)
-                                        }
-                                    }
+                                    OperationsHeaderView(
+                                        activeCount: activeJobs.count,
+                                        highRiskCount: highRiskJobs.count,
+                                        missingEvidenceCount: missingEvidenceJobs.count,
+                                        lastSync: jobsStore.lastSyncDate,
+                                        onKPITap: handleKPITap
+                                    )
                                 } footer: {
                                     if activeJobs.count < filteredJobs.count {
                                         Text("Showing \(activeJobs.count) of \(filteredJobs.count) jobs")
