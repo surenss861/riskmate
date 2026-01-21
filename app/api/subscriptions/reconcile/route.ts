@@ -334,7 +334,7 @@ export async function POST(request: NextRequest) {
         if (!dbSub.stripe_subscription_id) continue
 
         try {
-          const stripeSub = await stripe.subscriptions.retrieve(dbSub.stripe_subscription_id)
+          const stripeSub: Stripe.Subscription = await stripe.subscriptions.retrieve(dbSub.stripe_subscription_id)
 
           // Check for status mismatch
           const stripeStatus = stripeSub.status
@@ -352,8 +352,8 @@ export async function POST(request: NextRequest) {
               .from('subscriptions')
               .update({
                 status: normalizedStripeStatus,
-                current_period_start: new Date(stripeSub.current_period_start * 1000).toISOString(),
-                current_period_end: new Date(stripeSub.current_period_end * 1000).toISOString(),
+                current_period_start: new Date((stripeSub.current_period_start || 0) * 1000).toISOString(),
+                current_period_end: new Date((stripeSub.current_period_end || 0) * 1000).toISOString(),
               })
               .eq('id', dbSub.id)
 
