@@ -191,13 +191,16 @@
 After all tests, verify:
 
 - [ ] **No Suspense delays**: Pricing page always renders instantly
-- [ ] **Idempotency works**: Double-clicks don't create duplicate sessions
+- [ ] **Idempotency works**: Double-clicks don't create duplicate sessions (Test 9)
 - [ ] **Funnel tracking**: All events logged in console
 - [ ] **Server verification**: Thank-you page verifies from server, not client
-- [ ] **Webhook resilience**: Handles delayed webhooks gracefully
+- [ ] **Webhook resilience**: Handles delayed webhooks gracefully (Test 10)
 - [ ] **Error handling**: All error states show helpful messages
 - [ ] **Database consistency**: Subscriptions match Stripe state
 - [ ] **Plan endpoint**: `/api/me/plan` returns accurate data
+- [ ] **Stripe redirect contract**: `session_id` always present in thank-you URL
+- [ ] **DB preference**: System never locks out customers due to Stripe lag
+- [ ] **Billing mismatch handling**: Logs warnings but trusts DB for access
 
 ---
 
