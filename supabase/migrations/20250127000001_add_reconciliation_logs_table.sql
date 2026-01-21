@@ -4,11 +4,10 @@
 CREATE TABLE IF NOT EXISTS reconciliation_logs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     run_type TEXT NOT NULL, -- 'scheduled', 'manual', 'webhook_failure'
-    run_key TEXT, -- Deterministic key for idempotency (e.g., 'manual_2025-01-27_14:30', 'request_<uuid>')
     lookback_hours INTEGER NOT NULL,
     started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     completed_at TIMESTAMPTZ,
-    status TEXT NOT NULL, -- 'success', 'partial', 'error', 'running'
+    status TEXT NOT NULL, -- 'success', 'partial', 'error'
     created_count INTEGER DEFAULT 0,
     updated_count INTEGER DEFAULT 0,
     mismatch_count INTEGER DEFAULT 0,
@@ -18,6 +17,14 @@ CREATE TABLE IF NOT EXISTS reconciliation_logs (
     created_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
     metadata JSONB DEFAULT '{}'
 );
+
+-- Add run_key column if it doesn't exist (for idempotency)
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='reconciliation_logs' AND column_name='run_key') THEN
+    ALTER TABLE reconciliation_logs ADD COLUMN run_key TEXT;
+  END IF;
+END $$;
 
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_reconciliation_logs_started ON reconciliation_logs(started_at DESC);
