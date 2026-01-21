@@ -61,7 +61,6 @@ export async function POST(request: NextRequest) {
 
   // Generate request ID for correlation
   const requestId = crypto.randomUUID()
-  const startTime = Date.now()
 
   try {
     // 1. AUTH: Require RECONCILE_SECRET with constant-time comparison
