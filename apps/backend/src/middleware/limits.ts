@@ -37,7 +37,8 @@ function requireFeatureInternal(
       
       logErrorForSupport(402, code, requestId, organizationId, errorResponse.message, errorResponse.internal_message, errorResponse.category, errorResponse.severity, req.path);
       
-      return res.status(402).json(errorResponse);
+      res.status(402).json(errorResponse);
+      return;
     }
 
     if (!req.user.features.includes(feature)) {
@@ -56,7 +57,8 @@ function requireFeatureInternal(
       
       logErrorForSupport(403, "ENTITLEMENTS_FEATURE_NOT_ALLOWED", requestId, organizationId, errorResponse.message, errorResponse.internal_message, errorResponse.category, errorResponse.severity, req.path);
       
-      return res.status(403).json(errorResponse);
+      res.status(403).json(errorResponse);
+      return;
     }
     next();
 }
@@ -100,7 +102,8 @@ async function enforceJobLimitInternal(
       
       logErrorForSupport(402, code, requestId, organizationId, errorResponse.message, errorResponse.internal_message, errorResponse.category, errorResponse.severity, req.path);
       
-      return res.status(402).json(errorResponse);
+      res.status(402).json(errorResponse);
+      return;
     }
 
     const limit = req.user.jobsMonthlyLimit;
@@ -120,7 +123,8 @@ async function enforceJobLimitInternal(
       
       logErrorForSupport(403, "ENTITLEMENTS_JOB_LIMIT_REACHED", requestId, organizationId, errorResponse.message, errorResponse.internal_message, errorResponse.category, errorResponse.severity, req.path);
       
-      return res.status(403).json(errorResponse);
+      res.status(403).json(errorResponse);
+      return;
     }
 
     if (!limit) {
@@ -139,7 +143,8 @@ async function enforceJobLimitInternal(
 
     if (error) {
       console.error("Job limit check failed:", error);
-      return res.status(500).json({ message: "Failed to enforce job limit" });
+      res.status(500).json({ message: "Failed to enforce job limit" });
+      return;
     }
 
     if ((count ?? 0) >= limit) {
@@ -159,7 +164,8 @@ async function enforceJobLimitInternal(
       
       logErrorForSupport(403, "ENTITLEMENTS_JOB_LIMIT_REACHED", requestId, organizationId, errorResponse.message, errorResponse.internal_message, errorResponse.category, errorResponse.severity, req.path);
       
-      return res.status(403).json(errorResponse);
+      res.status(403).json(errorResponse);
+      return;
     }
 
     next();

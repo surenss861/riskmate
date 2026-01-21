@@ -11,7 +11,7 @@ if (process.env.NODE_ENV !== "production") {
   }
 }
 
-import express from "express";
+import express, { type Express } from "express";
 import cors from "cors";
 import { stripeWebhookHandler } from "./routes/stripeWebhook";
 import { riskRouter } from "./routes/risk";
@@ -40,7 +40,7 @@ import { createErrorResponse, logErrorForSupport } from "./utils/errorResponse";
 import { authenticate } from "./middleware/auth";
 import devAuthRouter from "./routes/devAuth";
 
-const app = express();
+const app: Express = express();
 
 // ✅ Debug: Log Railway's injected port
 console.log("[BOOT] raw PORT =", JSON.stringify(process.env.PORT));
