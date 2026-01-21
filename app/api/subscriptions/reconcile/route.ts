@@ -242,7 +242,7 @@ export async function POST(request: NextRequest) {
             // Try to create missing subscription (idempotent upsert)
             try {
               // Get Stripe subscription to get full details
-              const stripeSub = await stripe.subscriptions.retrieve(stripeSubscriptionId)
+              const stripeSub: Stripe.Subscription = await stripe.subscriptions.retrieve(stripeSubscriptionId)
               const planCode = session.metadata.plan || 'starter'
 
               // Upsert subscription (idempotent)
@@ -251,11 +251,11 @@ export async function POST(request: NextRequest) {
                 .upsert({
                   organization_id: organizationId,
                   stripe_subscription_id: stripeSubscriptionId,
-                  stripe_customer_id: stripeSub.customer as string,
+                  stripe_customer_id: typeof stripeSub.customer === 'string' ? stripeSub.customer : stripeSub.customer.id,
                   tier: planCode,
                   status: stripeSub.status === 'active' || stripeSub.status === 'trialing' ? 'active' : stripeSub.status,
-                  current_period_start: new Date(stripeSub.current_period_start * 1000).toISOString(),
-                  current_period_end: new Date(stripeSub.current_period_end * 1000).toISOString(),
+                  current_period_start: new Date((stripeSub.current_period_start || 0) * 1000).toISOString(),
+                  current_period_end: new Date((stripeSub.current_period_end || 0) * 1000).toISOString(),
                 }, {
                   onConflict: 'organization_id,stripe_subscription_id',
                 })
