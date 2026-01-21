@@ -20,6 +20,10 @@ declare global {
 export function createSupabaseBrowserClient(): SupabaseClient {
   // Return existing singleton if it exists
   if (typeof window !== 'undefined' && globalThis.__supabase__) {
+    // Hard guard: log warning in dev if somehow a second instance tries to create
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('[Supabase] ⚠️ Attempted to create second client instance - using singleton')
+    }
     return globalThis.__supabase__
   }
 
