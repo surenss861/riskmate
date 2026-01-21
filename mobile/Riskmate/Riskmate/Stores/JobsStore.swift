@@ -2,34 +2,60 @@ import Foundation
 import Combine
 
 /// Shared store for jobs data - single source of truth with single-flight loading
+/// Features: local cache-first, pagination, event-driven refresh
 @MainActor
 final class JobsStore: ObservableObject {
     static let shared = JobsStore()
 
     @Published private(set) var jobs: [Job] = []
     @Published private(set) var isLoading: Bool = false
+    @Published private(set) var isLoadingMore: Bool = false
     @Published private(set) var lastSyncDate: Date?
+    @Published private(set) var hasMore: Bool = true
     @Published var errorMessage: String?
 
     private var fetchTask: Task<[Job], Error>?
+    private var currentPage: Int = 1
+    private let pageSize: Int = 25
+    private var isInitialLoad: Bool = true
 
-    private init() {}
+    private init() {
+        // Load from cache immediately for instant launch
+        loadFromCache()
+    }
 
-    /// Single-flight fetch. If already fetching, waits. If cached, returns cached unless forceRefresh.
-    func fetch(page: Int = 1, limit: Int = 100, forceRefresh: Bool = false) async throws -> [Job] {
-        if !forceRefresh, !jobs.isEmpty {
+    /// Load jobs from local cache (instant launch)
+    private func loadFromCache() {
+        if let cached = OfflineCache.shared.getCachedJobs(), !cached.isEmpty {
+            self.jobs = cached
+            print("[JobsStore] ✅ Loaded \(cached.count) jobs from cache")
+        }
+    }
+
+    /// Initial fetch: cache-first, then refresh in background
+    /// Returns cached data immediately, then updates when network responds
+    func fetch(forceRefresh: Bool = false) async throws -> [Job] {
+        // If we have cache and not forcing refresh, return cache immediately
+        if !forceRefresh, !jobs.isEmpty, isInitialLoad {
+            isInitialLoad = false
+            // Return cached, then refresh in background
+            Task {
+                await refreshInBackground()
+            }
             return jobs
         }
 
+        // Single-flight: if already fetching, wait
         if let task = fetchTask {
             return try await task.value
         }
 
         isLoading = true
         errorMessage = nil
+        currentPage = 1
 
         let task = Task { () throws -> [Job] in
-            let resp = try await APIClient.shared.getJobs(page: page, limit: limit)
+            let resp = try await APIClient.shared.getJobs(page: currentPage, limit: pageSize)
             return resp.data
         }
 
@@ -38,7 +64,14 @@ final class JobsStore: ObservableObject {
         do {
             let result = try await task.value
             self.jobs = result
+            self.currentPage = 1
+            self.hasMore = result.count >= pageSize // If we got full page, might have more
             self.lastSyncDate = Date()
+            self.isInitialLoad = false
+            
+            // Cache for next launch
+            OfflineCache.shared.cacheJobs(result)
+            
             self.fetchTask = nil
             self.isLoading = false
             return result
@@ -50,10 +83,125 @@ final class JobsStore: ObservableObject {
         }
     }
 
+    /// Load next page (pagination)
+    func loadMore() async throws {
+        guard !isLoadingMore, hasMore else { return }
+        
+        isLoadingMore = true
+        let nextPage = currentPage + 1
+        
+        do {
+            let resp = try await APIClient.shared.getJobs(page: nextPage, limit: pageSize)
+            let newJobs = resp.data
+            
+            if newJobs.isEmpty {
+                hasMore = false
+            } else {
+                // Append to existing jobs
+                jobs.append(contentsOf: newJobs)
+                currentPage = nextPage
+                hasMore = newJobs.count >= pageSize
+                
+                // Update cache
+                OfflineCache.shared.cacheJobs(jobs)
+            }
+            
+            isLoadingMore = false
+        } catch {
+            isLoadingMore = false
+            errorMessage = error.localizedDescription
+            throw error
+        }
+    }
+
+    /// Background refresh (doesn't block UI)
+    private func refreshInBackground() async {
+        do {
+            let resp = try await APIClient.shared.getJobs(page: 1, limit: pageSize)
+            let freshJobs = resp.data
+            
+            // Only update if we got data (don't clear on network error)
+            if !freshJobs.isEmpty {
+                self.jobs = freshJobs
+                self.currentPage = 1
+                self.hasMore = freshJobs.count >= pageSize
+                self.lastSyncDate = Date()
+                
+                // Update cache
+                OfflineCache.shared.cacheJobs(freshJobs)
+                
+                print("[JobsStore] ✅ Background refresh: \(freshJobs.count) jobs")
+            }
+        } catch {
+            // Silent fail for background refresh (don't show error)
+            print("[JobsStore] ⚠️ Background refresh failed: \(error.localizedDescription)")
+        }
+    }
+
+    /// Event-driven refresh: called when push signal received
+    /// Only refreshes if the event affects jobs list
+    func refreshOnEvent(eventType: String, entityId: String? = nil) async {
+        // Only refresh if event is job-related
+        guard eventType.contains("job") || eventType == "evidence.uploaded" else {
+            return
+        }
+        
+        print("[JobsStore] 🔔 Event received: \(eventType), refreshing...")
+        
+        // Light refresh: just page 1 (don't reload all pages)
+        do {
+            let resp = try await APIClient.shared.getJobs(page: 1, limit: pageSize)
+            let freshJobs = resp.data
+            
+            if !freshJobs.isEmpty {
+                // Merge with existing (keep paginated results)
+                // If job was updated, it should be in page 1
+                let existingIds = Set(jobs.map { $0.id })
+                let freshIds = Set(freshJobs.map { $0.id })
+                
+                // Update existing jobs, add new ones
+                var updated = jobs
+                for freshJob in freshJobs {
+                    if let index = updated.firstIndex(where: { $0.id == freshJob.id }) {
+                        updated[index] = freshJob // Update existing
+                    } else if !existingIds.contains(freshJob.id) {
+                        updated.insert(freshJob, at: 0) // New job at top
+                    }
+                }
+                
+                self.jobs = updated
+                self.lastSyncDate = Date()
+                
+                // Update cache
+                OfflineCache.shared.cacheJobs(updated)
+            }
+        } catch {
+            print("[JobsStore] ⚠️ Event refresh failed: \(error.localizedDescription)")
+        }
+    }
+
+    /// Update single job (optimistic update)
+    func updateJob(_ job: Job) {
+        if let index = jobs.firstIndex(where: { $0.id == job.id }) {
+            jobs[index] = job
+            OfflineCache.shared.cacheJobs(jobs)
+        }
+    }
+
+    /// Add new job (optimistic update)
+    func addJob(_ job: Job) {
+        jobs.insert(job, at: 0)
+        OfflineCache.shared.cacheJobs(jobs)
+    }
+
     func clear() {
         jobs = []
         fetchTask = nil
         errorMessage = nil
         isLoading = false
+        isLoadingMore = false
+        currentPage = 1
+        hasMore = true
+        isInitialLoad = true
     }
 }

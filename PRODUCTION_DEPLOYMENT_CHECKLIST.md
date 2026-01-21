@@ -1,222 +1,174 @@
-# Production Deployment Checklist
+# RiskMate Production Deployment - Quick Checklist
 
-## Pre-Deployment Verification ✅
+**Use this alongside `PRODUCTION_DEPLOYMENT_GUIDE.md` for step-by-step execution.**
 
-### 1. Code Quality Checks (COMPLETED)
-- ✅ `pnpm lint` - All passing (only pre-existing warnings in unrelated files)
-- ✅ `pnpm type-check` - All TypeScript checks passing
-- ✅ `pnpm build` - Build successful, readiness page bundled correctly
+---
 
-### 2. Database Migrations (REQUIRED BEFORE DEPLOY)
+## ✅ Pre-Deployment Security
 
-**Critical migrations to apply:**
+- [ ] Rotate `test@riskmate.dev` password in Supabase Auth
+- [ ] Verify `SUPABASE_SERVICE_ROLE_KEY` is NOT in client code
+- [ ] Verify `DEV_AUTH_SECRET` is unset in production
+- [ ] Confirm no real passwords in codebase (grep for `password`, `PASSWORD`)
 
-```bash
-# Option 1: Using Supabase CLI
-supabase migration up
+---
 
-# Option 2: Manual application in Supabase SQL Editor
-# Run these in order:
-```
+## 🚂 Phase B: Backend (Railway)
 
-1. **20250124000000_add_idempotency_keys_table.sql**
-   - Creates `idempotency_keys` table with unique constraints
-   - Required for preventing duplicate readiness resolutions
-   - **Without this: 500 errors on readiness/resolve endpoints**
+### Setup
+- [ ] Create Railway project: `riskmate-production`
+- [ ] Add service: `backend-api`
+- [ ] Connect GitHub repo
+- [ ] Set root directory: `apps/backend`
+- [ ] Set build command: `pnpm install && pnpm build`
+- [ ] Set start command: `pnpm start:railway`
 
-2. **20250124000001_add_idempotency_cleanup_job.sql**
-   - Creates cleanup function for expired idempotency keys
-   - Optional: Schedule with pg_cron (see migration comments)
-   - **Without this: idempotency table grows unbounded**
+### Environment Variables
+- [ ] `NODE_ENV=production`
+- [ ] `SUPABASE_URL=...`
+- [ ] `SUPABASE_SERVICE_ROLE_KEY=...` (server-only)
+- [ ] `SUPABASE_ANON_KEY=...` (if needed)
+- [ ] `CORS_ORIGINS=https://riskmate.dev,https://www.riskmate.dev`
+- [ ] `BACKEND_URL=https://api.riskmate.dev`
+- [ ] `STRIPE_SECRET_KEY=...`
+- [ ] `STRIPE_WEBHOOK_SECRET=...`
+- [ ] `PORT=8080` (or Railway default)
+- [ ] `DEV_AUTH_SECRET=` (unset/empty)
 
-3. **20250123000000_recategorize_audit_events.sql** (if not already applied)
-   - Recategorizes audit events for ledger consistency
-   - **Check if already applied in your Supabase dashboard**
+### Domain
+- [ ] Add custom domain: `api.riskmate.dev`
+- [ ] Add DNS CNAME record in DNS provider
+- [ ] Wait for SSL certificate (5-10 minutes)
 
-**Verification Query:**
-```sql
--- Check if idempotency_keys table exists
-SELECT EXISTS (
-  SELECT FROM information_schema.tables 
-  WHERE table_schema = 'public' 
-  AND table_name = 'idempotency_keys'
-);
+### Verification
+- [ ] `curl https://api.riskmate.dev/health` → `200 OK`
+- [ ] `curl https://api.riskmate.dev/__version` → shows production
+- [ ] Authenticated read works (owner JWT)
+- [ ] Write works (owner JWT) → `201 Created`
+- [ ] Write blocked (auditor JWT) → `403 AUTH_ROLE_READ_ONLY`
 
--- Check table structure
-SELECT column_name, data_type 
-FROM information_schema.columns 
-WHERE table_name = 'idempotency_keys';
-```
+---
 
-### 3. Environment Variables (Verify in Vercel Dashboard)
+## 🌐 Phase C: Web (Vercel)
 
-**Required for readiness endpoints:**
-- `SUPABASE_URL` - Supabase project URL
-- `SUPABASE_SERVICE_ROLE_KEY` - Service role key for backend operations
-- `DATABASE_URL` - Direct database connection (if using)
-- `NODE_ENV` - Should be `production` in Vercel
+### Setup
+- [ ] Import GitHub repo to Vercel
+- [ ] Set framework: Next.js
+- [ ] Set build command: `pnpm build`
+- [ ] Set install command: `pnpm install`
 
-**Optional but recommended:**
-- Set up pg_cron extension if you want automatic cleanup:
-  ```sql
-  SELECT cron.schedule('cleanup-idempotency-keys', '0 2 * * *', 'SELECT cleanup_expired_idempotency_keys();');
-  ```
+### Environment Variables
+- [ ] `NEXT_PUBLIC_SUPABASE_URL=...`
+- [ ] `NEXT_PUBLIC_SUPABASE_ANON_KEY=...`
+- [ ] `NEXT_PUBLIC_API_URL=https://api.riskmate.dev`
+- [ ] `NEXT_PUBLIC_BACKEND_URL=https://api.riskmate.dev` (for legacy code)
+- [ ] `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=...`
+- [ ] `NODE_ENV=production`
 
-## Post-Deployment Smoke Test
+### Domains
+- [ ] Add domain: `riskmate.dev`
+- [ ] Add domain: `www.riskmate.dev`
+- [ ] Add DNS A record: `riskmate.dev → <vercel-ip>`
+- [ ] Add DNS CNAME: `www.riskmate.dev → cname.vercel-dns.com`
+- [ ] Enable redirect: `www.riskmate.dev → riskmate.dev` (301)
+- [ ] Wait for SSL certificates (5-10 minutes)
 
-### A) Readiness Page Load Test
+### Code Updates (if needed)
+- [ ] Verify all API calls use `NEXT_PUBLIC_API_URL` or `NEXT_PUBLIC_BACKEND_URL`
+- [ ] Remove/disable duplicate Next.js API routes (optional, see guide)
+- [ ] Test login flow
+- [ ] Test jobs list
+- [ ] Test job creation
 
-**URL:** `https://riskmate.vercel.app/operations/audit/readiness`
+### Verification
+- [ ] `curl -I https://www.riskmate.dev` → `301` redirect
+- [ ] `curl -I https://riskmate.dev` → `200 OK`
+- [ ] Login works
+- [ ] API calls go to `https://api.riskmate.dev` (check Network tab)
+- [ ] No CORS errors in console
+- [ ] Jobs list loads
+- [ ] Job creation works (owner)
+- [ ] Auditor mode works (read-only)
 
-**Checklist:**
-1. ✅ Page loads without errors
-2. ✅ Summary cards show counts (Audit-Ready Score, Total Items, etc.)
-3. ✅ Category tabs show counts (Evidence, Controls, Attestations, etc.)
-4. ✅ Filters update URL query params when changed
-5. ✅ Sorting works (Severity, Oldest First, Risk Score)
-6. ✅ No console errors or warnings
-7. ✅ Fix Queue sidebar opens/closes correctly
+---
 
-### B) Single Resolve Test (Idempotency Proof)
+## 📱 Phase D: iOS (App Store)
 
-**Steps:**
-1. Click "Resolve" on a readiness item (Evidence or Attestation)
-2. Fill out the modal and submit
-3. **Verify:**
-   - ✅ Toast notification appears: "Resolved — readiness updated"
-   - ✅ Item is optimistically removed from list
-   - ✅ Score updates after background refetch
-   - ✅ Request ID is visible in dev mode toast
+### Configuration
+- [ ] Update `Config.swift` or `Info.plist`:
+  - `API_BASE_URL = https://api.riskmate.dev`
+  - `SUPABASE_URL = ...`
+  - `SUPABASE_ANON_KEY = ...`
+- [ ] Set Xcode Release build config values
+- [ ] Verify Debug vs Release configs
 
-4. **Idempotency test (double-click/retry):**
-   - Submit the same request again (reload page, find same item, or use same idempotency key)
-   - **Verify:**
-     - ✅ No duplicate ledger entries
-     - ✅ Response is replayed (in dev mode: "Response replayed from cache")
-     - ✅ Status code is 200 (not 409 or error)
+### App Store Readiness
+- [ ] Verify copy claims (no "blockchain", accurate offline claims)
+- [ ] Test offline evidence capture
+- [ ] Test upload queue status
+- [ ] Test auto-upload on reconnect
+- [ ] Test auditor mode (read-only)
 
-**Check Compliance Ledger:**
-```sql
-SELECT * FROM audit_logs 
-WHERE event_name = 'readiness.resolved' 
-ORDER BY created_at DESC 
-LIMIT 5;
-```
-- Should see exactly ONE entry per resolution (not duplicates)
+### TestFlight
+- [ ] Archive build in Xcode
+- [ ] Upload to App Store Connect
+- [ ] Test on device:
+  - [ ] Login works
+  - [ ] Jobs list loads
+  - [ ] Evidence capture offline
+  - [ ] Upload syncs when online
+  - [ ] Ledger verification UI
+  - [ ] Auditor mode blocks writes
 
-### C) Bulk Resolve Test
+### App Store Submission
+- [ ] Create app in App Store Connect
+- [ ] Set bundle ID: `riskmate.Riskmate`
+- [ ] Upload screenshots (dark mode, no marketing)
+- [ ] Set description (from `APP_STORE_DESCRIPTION.md`)
+- [ ] Submit for review
 
-**Steps:**
-1. Select 3-5 items in Fix Queue
-2. Click "Bulk Resolve"
-3. **Verify:**
-   - ✅ Toast appears with success count
-   - ✅ Succeeded items removed from queue and list
-   - ✅ If failures exist: Bulk Result Modal shows failure details
-   - ✅ Failed items remain selected in queue
+---
 
-**Check Ledger:**
-```sql
-SELECT * FROM audit_logs 
-WHERE event_name = 'readiness.bulk_resolved' 
-ORDER BY created_at DESC 
-LIMIT 1;
-```
-- Should see summary metadata with successful/failed counts
+## 🔍 Final Verification
 
-### D) Permission Test (Executive Read-Only)
+### Backend
+- [ ] Health check: `200 OK`
+- [ ] Owner write: `201 Created`
+- [ ] Auditor write: `403 AUTH_ROLE_READ_ONLY`
+- [ ] CORS allows both domains
 
-**Steps:**
-1. Log in as Executive role
-2. Try to resolve a readiness item
-3. **Verify:**
-   - ✅ 403 Forbidden response
-   - ✅ Toast shows error message
-   - ✅ Ledger entry created: `auth.role_violation` event
+### Web
+- [ ] Canonical domain loads
+- [ ] www redirects (301)
+- [ ] Login works
+- [ ] API calls to Express (not Next.js routes)
+- [ ] No CORS errors
 
-**Check Ledger:**
-```sql
-SELECT * FROM audit_logs 
-WHERE event_name = 'auth.role_violation' 
-AND metadata->>'target_type' = 'readiness_item'
-ORDER BY created_at DESC 
-LIMIT 1;
-```
+### iOS
+- [ ] Points to production API
+- [ ] Offline capture works
+- [ ] Upload queue works
+- [ ] Auditor mode enforced
 
-### E) Error Handling Test
+### Supabase
+- [ ] RLS enabled on all tables
+- [ ] Storage policies locked
+- [ ] Service role key NOT in client
 
-**Test invalid requests:**
-1. Submit resolve with invalid `readiness_item_id`
-   - ✅ Should return 404 with clear error message
-   - ✅ Error includes `requestId` in response
+---
 
-2. Submit bulk resolve with >100 items
-   - ✅ Should return 400 with `BULK_LIMIT_EXCEEDED` code
-   - ✅ Error message explains limit
+## 🚨 Common Issues
 
-3. Submit resolve with missing required payload fields
-   - ✅ Should return 400 with specific validation error
-   - ✅ Error code indicates which field is missing
+**CORS errors**: Check `CORS_ORIGINS` includes both domains
 
-## Production Verification Queries
+**401 Unauthorized**: Verify JWT token, check `authenticate` middleware
 
-### Verify Idempotency Keys are Being Stored
+**403 for owner**: Check user role in database
 
-```sql
-SELECT 
-  organization_id,
-  endpoint,
-  COUNT(*) as key_count,
-  MAX(created_at) as latest_key
-FROM idempotency_keys
-WHERE created_at > NOW() - INTERVAL '1 hour'
-GROUP BY organization_id, endpoint
-ORDER BY latest_key DESC;
-```
+**API calls to `/api/*`**: Update code to use `NEXT_PUBLIC_API_URL`
 
-### Verify Readiness Resolutions in Ledger
+**www redirect doesn't work**: Check DNS CNAME, verify Vercel redirect settings
 
-```sql
-SELECT 
-  event_name,
-  metadata->>'rule_code' as rule_code,
-  metadata->>'action_type' as action_type,
-  metadata->>'readiness_item_id' as item_id,
-  created_at
-FROM audit_logs
-WHERE event_name IN ('readiness.resolved', 'readiness.bulk_resolved')
-  AND created_at > NOW() - INTERVAL '24 hours'
-ORDER BY created_at DESC;
-```
+---
 
-### Verify No Duplicate Resolutions (Idempotency Working)
-
-```sql
--- This should return 0 rows if idempotency is working correctly
-SELECT 
-  idempotency_key,
-  organization_id,
-  endpoint,
-  COUNT(*) as duplicate_count
-FROM idempotency_keys
-WHERE endpoint = '/api/audit/readiness/resolve'
-  AND created_at > NOW() - INTERVAL '24 hours'
-GROUP BY idempotency_key, organization_id, endpoint
-HAVING COUNT(*) > 1;
-```
-
-## Rollback Plan
-
-If issues are detected:
-
-1. **Code rollback:** Revert the last commit in Vercel
-2. **Database rollback:** Migrations can be rolled back if needed (use Supabase CLI)
-3. **Idempotency keys:** Table can be truncated if corrupted (keys are short-lived anyway)
-
-## Known Issues / Future Improvements
-
-- Consider adding "Recent Remediations" panel (last 10 readiness.* events)
-- Add Sentry integration with requestId tagging for error tracking
-- Consider adding rate limiting for bulk resolve endpoints
-- Monitor idempotency_keys table growth and adjust cleanup schedule if needed
-
+**Deployment complete when all checkboxes are checked.** ✅

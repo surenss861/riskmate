@@ -1,4 +1,4 @@
-import express from "express";
+import express, { type RequestHandler } from "express";
 import { AuthenticatedRequest } from "./auth";
 import { recordAuditLog } from "./audit";
 import { RequestWithId } from "./requestId";
@@ -14,11 +14,7 @@ const READ_ONLY_ROLES = new Set(["auditor", "executive"]);
  * Uses consistent error format with X-Error-ID header
  * Logs violations to audit trail
  */
-export function requireWriteAccess(
-  req: express.Request,
-  res: express.Response,
-  next: express.NextFunction
-) {
+export const requireWriteAccess: RequestHandler = (req, res, next) => {
   const authReq = req as AuthenticatedRequest & RequestWithId;
   const requestId = authReq.requestId || "unknown";
 
@@ -100,5 +96,5 @@ export function requireWriteAccess(
     return res.status(403).json(response);
   }
 
-  return next();
+  next();
 }

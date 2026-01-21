@@ -8,6 +8,7 @@ const clean = (v?: string): string => (v ?? "").trim().replace(/^['"]|['"]$/g, "
 
 let cached: SupabaseClient | null = null;
 
+// Export for test helpers
 export function getSupabaseAdmin(): SupabaseClient {
   if (cached) return cached;
 

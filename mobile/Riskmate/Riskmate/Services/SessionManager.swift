@@ -44,6 +44,11 @@ class SessionManager: ObservableObject {
                     print("[SessionManager] ✅ Found valid session")
                     isAuthenticated = true
                     await loadUserData()
+                    
+                    // Subscribe to realtime events after session restore
+                    if let orgId = currentOrganization?.id {
+                        await RealtimeEventService.shared.subscribe(organizationId: orgId)
+                    }
                 }
             } else {
                 print("[SessionManager] No existing session found")
@@ -65,6 +70,11 @@ class SessionManager: ObservableObject {
             try await authService.signIn(email: email, password: password)
             isAuthenticated = true
             await loadUserData()
+            
+            // Subscribe to realtime events after login
+            if let orgId = currentOrganization?.id {
+                await RealtimeEventService.shared.subscribe(organizationId: orgId)
+            }
         } catch {
             errorMessage = error.localizedDescription
             throw error
@@ -112,6 +122,9 @@ class SessionManager: ObservableObject {
         isLoading = true
         defer { isLoading = false }
         
+        // Unsubscribe from realtime events
+        await RealtimeEventService.shared.unsubscribe()
+        
         await authService.signOut()
         isAuthenticated = false
         currentUser = nil
@@ -124,6 +137,9 @@ class SessionManager: ObservableObject {
         do {
             let org = try await apiClient.getOrganization()
             currentOrganization = org
+            
+            // Subscribe to realtime events after org is loaded
+            await RealtimeEventService.shared.subscribe(organizationId: org.id)
         } catch {
             print("[SessionManager] Failed to load organization: \(error)")
             // Don't fail login if org load fails - user can still use app

@@ -9,6 +9,7 @@ import { enforceJobLimit } from "../middleware/limits";
 import { RequestWithId } from "../middleware/requestId";
 import { createErrorResponse, logErrorForSupport } from "../utils/errorResponse";
 import { requireWriteAccess } from "../middleware/requireWriteAccess";
+import { emitJobEvent, emitEvidenceEvent } from "../utils/realtimeEvents";
 
 export const jobsRouter: ExpressRouter = express.Router();
 
@@ -45,7 +46,7 @@ const logCursorMisuse = (organizationId: string, sortMode: string): number => {
 
 // GET /api/jobs
 // Returns paginated list of jobs for organization
-jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
+jobsRouter.get("/", authenticate, async (req: express.Request, res: express.Response) => {
   const authReq = req as AuthenticatedRequest & RequestWithId;
   const requestId = authReq.requestId || 'unknown';
   try {
@@ -742,7 +743,7 @@ jobsRouter.get("/", authenticate as unknown as express.RequestHandler, async (re
 // GET /api/jobs/:id/hazards
 // Returns all hazards (mitigation items) for a job
 // NOTE: Must be before /:id route to match correctly
-jobsRouter.get("/:id/hazards", authenticate as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
+jobsRouter.get("/:id/hazards", authenticate, async (req: express.Request, res: express.Response) => {
   const authReq = req as AuthenticatedRequest;
   try {
     const { organization_id } = authReq.user;
@@ -807,7 +808,7 @@ jobsRouter.get("/:id/hazards", authenticate as unknown as express.RequestHandler
 // GET /api/jobs/:id/controls
 // Returns all controls (mitigation items) for a job
 // NOTE: Must be before /:id route to match correctly
-jobsRouter.get("/:id/controls", authenticate as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
+jobsRouter.get("/:id/controls", authenticate, async (req: express.Request, res: express.Response) => {
   const authReq = req as AuthenticatedRequest;
   try {
     const { organization_id } = authReq.user;
@@ -858,7 +859,7 @@ jobsRouter.get("/:id/controls", authenticate as unknown as express.RequestHandle
 
 // GET /api/jobs/:id
 // Returns full job details with risk score and mitigation items
-jobsRouter.get("/:id", authenticate as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
+jobsRouter.get("/:id", authenticate, async (req: express.Request, res: express.Response) => {
   const authReq = req as AuthenticatedRequest;
   try {
     const jobId = authReq.params.id;
@@ -905,7 +906,7 @@ jobsRouter.get("/:id", authenticate as unknown as express.RequestHandler, async 
 
 // POST /api/jobs
 // Creates a new job and calculates risk score
-jobsRouter.post("/", authenticate as unknown as express.RequestHandler, requireWriteAccess as unknown as express.RequestHandler, enforceJobLimit as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
+jobsRouter.post("/", authenticate, requireWriteAccess, enforceJobLimit, async (req: express.Request, res: express.Response) => {
   const authReq = req as AuthenticatedRequest;
   try {
     const { organization_id, id: userId } = authReq.user;
@@ -1001,6 +1002,9 @@ jobsRouter.post("/", authenticate as unknown as express.RequestHandler, requireW
       },
     });
 
+    // Emit realtime event (push signal)
+    await emitJobEvent(organization_id, "job.created", job.id, userId);
+
     // Calculate risk score if risk factors provided
     let riskScoreResult = null;
     if (risk_factor_codes && risk_factor_codes.length > 0) {
@@ -1066,7 +1070,7 @@ jobsRouter.post("/", authenticate as unknown as express.RequestHandler, requireW
 
 // PATCH /api/jobs/:id
 // Updates a job and optionally recalculates risk score
-jobsRouter.patch("/:id", authenticate as unknown as express.RequestHandler, requireWriteAccess as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
+jobsRouter.patch("/:id", authenticate, requireWriteAccess, async (req: express.Request, res: express.Response) => {
   const authReq = req as AuthenticatedRequest;
   try {
     const jobId = authReq.params.id;
@@ -1183,6 +1187,9 @@ jobsRouter.patch("/:id", authenticate as unknown as express.RequestHandler, requ
       },
     });
 
+    // Emit realtime event (push signal)
+    await emitJobEvent(organization_id, "job.updated", jobId, userId);
+
     // If risk score changed, log separate event
     if (riskScoreChanged) {
       recordAuditLog({
@@ -1212,7 +1219,7 @@ jobsRouter.patch("/:id", authenticate as unknown as express.RequestHandler, requ
 });
 
 // PATCH /api/jobs/:id/mitigations/:mitigationId
-jobsRouter.patch("/:id/mitigations/:mitigationId", authenticate as unknown as express.RequestHandler, requireWriteAccess as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
+jobsRouter.patch("/:id/mitigations/:mitigationId", authenticate, requireWriteAccess, async (req: express.Request, res: express.Response) => {
   const authReq = req as AuthenticatedRequest;
   try {
     const jobId = authReq.params.id;
@@ -1309,7 +1316,7 @@ const invalidateJobReportCache = (organizationId: string, jobId: string) => {
   jobReportCache.delete(`${organizationId}:${jobId}`);
 };
 
-jobsRouter.get("/:id/full", authenticate as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
+jobsRouter.get("/:id/full", authenticate, async (req: express.Request, res: express.Response) => {
   const authReq = req as AuthenticatedRequest;
   try {
     const jobId = authReq.params.id;
@@ -1333,7 +1340,7 @@ jobsRouter.get("/:id/full", authenticate as unknown as express.RequestHandler, a
 
 // GET /api/jobs/:id/documents
 // Returns all uploaded documents for a specific job
-jobsRouter.get("/:id/documents", authenticate as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
+jobsRouter.get("/:id/documents", authenticate, async (req: express.Request, res: express.Response) => {
   const authReq = req as AuthenticatedRequest;
   try {
     const jobId = authReq.params.id;
@@ -1407,7 +1414,7 @@ jobsRouter.get("/:id/documents", authenticate as unknown as express.RequestHandl
 
 // POST /api/jobs/:id/documents
 // Persists document metadata after upload to storage
-jobsRouter.post("/:id/documents", authenticate as unknown as express.RequestHandler, requireWriteAccess as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
+jobsRouter.post("/:id/documents", authenticate, requireWriteAccess, async (req: express.Request, res: express.Response) => {
   const authReq = req as AuthenticatedRequest;
   try {
     const jobId = authReq.params.id;
@@ -1476,6 +1483,9 @@ jobsRouter.post("/:id/documents", authenticate as unknown as express.RequestHand
       },
     });
 
+    // Emit realtime event (push signal)
+    await emitEvidenceEvent(organization_id, "evidence.uploaded", inserted.id, jobId, userId);
+
     invalidateJobReportCache(organization_id, jobId);
 
     res.status(201).json({
@@ -1501,7 +1511,7 @@ jobsRouter.post("/:id/documents", authenticate as unknown as express.RequestHand
 
 // GET /api/jobs/:id/audit
 // Returns recent audit entries for a specific job
-jobsRouter.get("/:id/audit", authenticate as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
+jobsRouter.get("/:id/audit", authenticate, async (req: express.Request, res: express.Response) => {
   const authReq = req as AuthenticatedRequest;
   try {
     const jobId = authReq.params.id;
@@ -1548,7 +1558,7 @@ jobsRouter.get("/:id/audit", authenticate as unknown as express.RequestHandler, 
 
 // POST /api/jobs/:id/archive
 // Archives a job (soft delete, read-only, preserves for audit)
-jobsRouter.post("/:id/archive", authenticate as unknown as express.RequestHandler, requireWriteAccess as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
+jobsRouter.post("/:id/archive", authenticate, requireWriteAccess, async (req: express.Request, res: express.Response) => {
   const authReq = req as AuthenticatedRequest;
   try {
     const { id: userId, organization_id } = authReq.user;
@@ -1599,6 +1609,9 @@ jobsRouter.post("/:id/archive", authenticate as unknown as express.RequestHandle
       },
     });
 
+    // Emit realtime event (push signal)
+    await emitJobEvent(organization_id, "job.archived", jobId, userId);
+
     res.json({
       data: {
         id: jobId,
@@ -1615,7 +1628,7 @@ jobsRouter.post("/:id/archive", authenticate as unknown as express.RequestHandle
 // PATCH /api/jobs/:id/flag
 // Flags a job for review (governance signal, not workflow)
 // Note: Auditors cannot flag (governance signal requires write access)
-jobsRouter.patch("/:id/flag", authenticate as unknown as express.RequestHandler, requireWriteAccess as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
+jobsRouter.patch("/:id/flag", authenticate, requireWriteAccess, async (req: express.Request, res: express.Response) => {
   const authReq = req as AuthenticatedRequest & RequestWithId;
   const requestId = authReq.requestId || 'unknown';
   try {
@@ -1743,6 +1756,9 @@ jobsRouter.patch("/:id/flag", authenticate as unknown as express.RequestHandler,
       console.warn("Audit log failed for flag action:", auditError);
     }
 
+    // Emit realtime event (push signal)
+    await emitJobEvent(organization_id, "job.flagged", id, userId);
+
     res.json({
       id: updatedJob.id,
       review_flag: updatedJob.review_flag,
@@ -1766,7 +1782,7 @@ jobsRouter.patch("/:id/flag", authenticate as unknown as express.RequestHandler,
 
 // DELETE /api/jobs/:id
 // Hard deletes a job (admin-only, strict eligibility checks)
-jobsRouter.delete("/:id", authenticate as unknown as express.RequestHandler, requireWriteAccess as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
+jobsRouter.delete("/:id", authenticate, requireWriteAccess, async (req: express.Request, res: express.Response) => {
   const authReq = req as AuthenticatedRequest;
   try {
     const { id: userId, organization_id, role } = authReq.user;
@@ -1929,7 +1945,7 @@ jobsRouter.delete("/:id", authenticate as unknown as express.RequestHandler, req
 
 // POST /api/jobs/:id/proof-pack
 // Generates a proof pack PDF (Insurance, Audit, Incident, or Compliance)
-jobsRouter.post("/:id/proof-pack", authenticate as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
+jobsRouter.post("/:id/proof-pack", authenticate, async (req: express.Request, res: express.Response) => {
   const authReq = req as AuthenticatedRequest & RequestWithId;
   const requestId = authReq.requestId || 'unknown';
   try {
@@ -2016,7 +2032,7 @@ jobsRouter.post("/:id/proof-pack", authenticate as unknown as express.RequestHan
 
 // GET /api/jobs/:id/signoffs
 // Returns all sign-offs for a job
-jobsRouter.get("/:id/signoffs", authenticate as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
+jobsRouter.get("/:id/signoffs", authenticate, async (req: express.Request, res: express.Response) => {
   const authReq = req as AuthenticatedRequest & RequestWithId;
   const requestId = authReq.requestId || 'unknown';
   try {
@@ -2050,7 +2066,7 @@ jobsRouter.get("/:id/signoffs", authenticate as unknown as express.RequestHandle
 // POST /api/jobs/:id/signoffs
 // Creates a new sign-off for a job
 // Note: Auditors cannot sign (read-only access)
-jobsRouter.post("/:id/signoffs", authenticate as unknown as express.RequestHandler, requireWriteAccess as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
+jobsRouter.post("/:id/signoffs", authenticate, requireWriteAccess, async (req: express.Request, res: express.Response) => {
   const authReq = req as AuthenticatedRequest & RequestWithId;
   const requestId = authReq.requestId || 'unknown';
   try {

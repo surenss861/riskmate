@@ -79,7 +79,10 @@ struct JobRow: View {
                     .foregroundStyle(RMSystemTheme.Colors.textTertiary)
             }
         }
-        .listRowBackground(.ultraThinMaterial)
+        .listRowBackground(
+            Rectangle()
+                .fill(.ultraThinMaterial)
+        )
         .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
         .contextMenu {
             if let onAddEvidence = onAddEvidence {

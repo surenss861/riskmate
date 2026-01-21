@@ -432,15 +432,21 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
   res.status(statusCode).json(errorResponse);
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`[BOOT] Listening on 0.0.0.0:${PORT} (raw PORT=${process.env.PORT})`);
-  console.log(`🚀 RiskMate Backend API running on port ${PORT}`);
-  console.log(`📡 Health check: http://0.0.0.0:${PORT}/health`);
-  console.log(`✅ Build: ${process.env.RAILWAY_DEPLOYMENT_ID || 'local'} | Commit: ${process.env.RAILWAY_GIT_COMMIT_SHA || 'dev'}`);
-  
-  // Start background workers
-  startExportWorker();
-  startRetentionWorker();
-  startLedgerRootWorker();
-});
+// Export app for testing
+export default app;
+
+// Only start server if not in test mode
+if (process.env.NODE_ENV !== "test") {
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`[BOOT] Listening on 0.0.0.0:${PORT} (raw PORT=${process.env.PORT})`);
+    console.log(`🚀 RiskMate Backend API running on port ${PORT}`);
+    console.log(`📡 Health check: http://0.0.0.0:${PORT}/health`);
+    console.log(`✅ Build: ${process.env.RAILWAY_DEPLOYMENT_ID || 'local'} | Commit: ${process.env.RAILWAY_GIT_COMMIT_SHA || 'dev'}`);
+    
+    // Start background workers
+    startExportWorker();
+    startRetentionWorker();
+    startLedgerRootWorker();
+  });
+}
 

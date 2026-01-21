@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from "express";
+import { Request, Response, NextFunction, type RequestHandler } from "express";
 import { getSupabaseAuth } from "../lib/supabaseAuthClient";
 import { supabase } from "../lib/supabaseClient";
 import { LEGAL_VERSION } from "../utils/legal";
@@ -60,11 +60,14 @@ function isProbablyJwt(token: string): boolean {
   return token.split(".").length === 3;
 }
 
-export const authenticate = async (
+/**
+ * Internal authenticate function with typed request
+ */
+async function authenticateInternal(
   req: AuthenticatedRequest,
   res: Response,
   next: NextFunction
-) => {
+): Promise<void> {
   // ✅ IMPORTANT: Skip auth for OPTIONS preflight requests
   // CORS middleware handles OPTIONS, but this prevents 401 errors
   if (req.method === 'OPTIONS') {
@@ -263,5 +266,13 @@ export const authenticate = async (
       code: "INTERNAL_ERROR"
     });
   }
+}
+
+/**
+ * Express RequestHandler wrapper for authenticate middleware
+ * Properly typed to avoid 'as unknown as RequestHandler' casts
+ */
+export const authenticate: RequestHandler = (req, res, next) => {
+  return authenticateInternal(req as AuthenticatedRequest, res, next);
 };
 

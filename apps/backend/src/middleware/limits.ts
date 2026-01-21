@@ -1,4 +1,4 @@
-import { NextFunction, Response } from "express";
+import { NextFunction, Response, Request, type RequestHandler } from "express";
 import { supabase } from "../lib/supabaseClient";
 import { AuthenticatedRequest } from "./auth";
 import { PlanFeature } from "../auth/planRules";
@@ -7,8 +7,15 @@ import { RequestWithId } from "./requestId";
 
 const ACTIVE_STATUSES = new Set(["active", "trialing", "free"]);
 
-export function requireFeature(feature: PlanFeature) {
-  return (req: AuthenticatedRequest & RequestWithId, res: Response, next: NextFunction) => {
+/**
+ * Internal requireFeature implementation with typed request
+ */
+function requireFeatureInternal(
+  feature: PlanFeature,
+  req: AuthenticatedRequest & RequestWithId,
+  res: Response,
+  next: NextFunction
+): void {
     const requestId = req.requestId || 'unknown';
     const organizationId = req.user.organization_id;
     
@@ -52,14 +59,26 @@ export function requireFeature(feature: PlanFeature) {
       return res.status(403).json(errorResponse);
     }
     next();
+}
+
+/**
+ * Express RequestHandler wrapper for requireFeature middleware
+ * Properly typed to avoid 'as unknown as RequestHandler' casts
+ */
+export function requireFeature(feature: PlanFeature): RequestHandler {
+  return (req: Request, res: Response, next: NextFunction) => {
+    return requireFeatureInternal(feature, req as AuthenticatedRequest & RequestWithId, res, next);
   };
 }
 
-export async function enforceJobLimit(
+/**
+ * Internal enforceJobLimit implementation with typed request
+ */
+async function enforceJobLimitInternal(
   req: AuthenticatedRequest & RequestWithId,
   res: Response,
   next: NextFunction
-) {
+): Promise<void> {
   try {
     const requestId = req.requestId || 'unknown';
     const organizationId = req.user.organization_id;
@@ -149,3 +168,11 @@ export async function enforceJobLimit(
     res.status(500).json({ message: "Failed to enforce job limit" });
   }
 }
+
+/**
+ * Express RequestHandler wrapper for enforceJobLimit middleware
+ * Properly typed to avoid 'as unknown as RequestHandler' casts
+ */
+export const enforceJobLimit: RequestHandler = async (req, res, next) => {
+  return enforceJobLimitInternal(req as AuthenticatedRequest & RequestWithId, res, next);
+};

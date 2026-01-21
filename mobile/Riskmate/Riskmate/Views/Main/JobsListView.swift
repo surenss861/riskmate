@@ -20,6 +20,7 @@ struct JobsListView: View {
     private var jobs: [Job] { jobsStore.jobs }
     private var isLoading: Bool { jobsStore.isLoading }
     private var errorMessage: String? { jobsStore.errorMessage }
+    private var lastSyncDate: Date? { jobsStore.lastSyncDate }
     
     private var hasActiveFilters: Bool {
         selectedStatus != "all" || selectedRiskLevel != "all" || !searchText.isEmpty
@@ -217,6 +218,38 @@ struct JobsListView: View {
                                         Label("Delete", systemImage: "trash")
                                     }
                                 }
+                                .onAppear {
+                                    // Load more when scrolling near bottom
+                                    if job.id == filteredJobs.last?.id, jobsStore.hasMore, !jobsStore.isLoadingMore {
+                                        Task {
+                                            try? await jobsStore.loadMore()
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            // Load more indicator
+                            if jobsStore.isLoadingMore {
+                                HStack {
+                                    Spacer()
+                                    ProgressView()
+                                        .padding()
+                                    Spacer()
+                                }
+                                .listRowBackground(Color.clear)
+                            }
+                            
+                            // End of list indicator
+                            if !jobsStore.hasMore && !filteredJobs.isEmpty {
+                                HStack {
+                                    Spacer()
+                                    Text("All jobs loaded")
+                                        .font(RMTheme.Typography.caption)
+                                        .foregroundColor(RMTheme.Colors.textTertiary)
+                                        .padding()
+                                    Spacer()
+                                }
+                                .listRowBackground(Color.clear)
                             }
                         }
                         .listStyle(.plain)
@@ -249,7 +282,7 @@ struct JobsListView: View {
                 selectedStatus = filters.status
                 selectedRiskLevel = filters.riskLevel
                 
-                // Use shared store - will use cache if Dashboard already loaded it
+                // Fetch from store (cache-first: shows cached instantly, refreshes in background)
                 _ = try? await jobsStore.fetch()
             }
             .onChange(of: searchText) { _, newValue in

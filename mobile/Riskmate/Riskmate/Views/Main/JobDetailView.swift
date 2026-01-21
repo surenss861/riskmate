@@ -53,29 +53,30 @@ struct JobDetailView: View {
                             Button {
                                 quickAction.presentEvidence(jobId: job.id)
                             } label: {
-                            HStack(spacing: RMTheme.Spacing.sm) {
-                                Image(systemName: "camera.fill")
-                                    .font(.system(size: 16, weight: .semibold))
-                                Text("Add Evidence")
-                                    .font(RMTheme.Typography.bodyBold)
-                                Spacer()
-                                Image(systemName: "chevron.right")
-                                    .font(.system(size: 14, weight: .medium))
-                                    .opacity(0.6)
+                                HStack(spacing: RMTheme.Spacing.sm) {
+                                    Image(systemName: "camera.fill")
+                                        .font(.system(size: 16, weight: .semibold))
+                                    Text("Add Evidence")
+                                        .font(RMTheme.Typography.bodyBold)
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 14, weight: .medium))
+                                        .opacity(0.6)
+                                }
+                                .foregroundColor(RMTheme.Colors.textPrimary)
+                                .padding(RMTheme.Spacing.md)
+                                .frame(maxWidth: .infinity)
+                                .background(RMTheme.Colors.accent.opacity(0.15))
+                                .overlay {
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(RMTheme.Colors.accent.opacity(0.3), lineWidth: 1)
+                                }
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
                             }
-                            .foregroundColor(RMTheme.Colors.textPrimary)
-                            .padding(RMTheme.Spacing.md)
-                            .frame(maxWidth: .infinity)
-                            .background(RMTheme.Colors.accent.opacity(0.15))
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 12)
-                                    .stroke(RMTheme.Colors.accent.opacity(0.3), lineWidth: 1)
-                            }
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                            .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                            .padding(.vertical, RMTheme.Spacing.sm)
+                            .background(RMTheme.Colors.background)
                         }
-                        .padding(.horizontal, RMTheme.Spacing.pagePadding)
-                        .padding(.vertical, RMTheme.Spacing.sm)
-                        .background(RMTheme.Colors.background)
                         
                         // Tab Picker
                         Picker("Tab", selection: $selectedTab) {
@@ -159,7 +160,7 @@ struct JobDetailView: View {
                 // Request notification permission for export completion
                 UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
             }
-            .task {
+            .task(id: jobId) { // Use task(id:) to prevent re-fetch on unrelated re-renders
                 await loadJob()
             }
     }
@@ -479,6 +480,7 @@ struct HazardsTab: View {
     let jobId: String
     @State private var hazards: [Hazard] = []
     @State private var isLoading = true
+    @State private var didLoad = false // Deduplication gate
     
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -499,7 +501,9 @@ struct HazardsTab: View {
             }
             .padding(.vertical, RMTheme.Spacing.lg)
         }
-        .task {
+        .task(id: jobId) { // Use task(id:) to prevent re-fetch on unrelated re-renders
+            guard !didLoad else { return } // Deduplication gate
+            didLoad = true
             await loadHazards()
         }
     }
@@ -586,6 +590,7 @@ struct ControlsTab: View {
     let jobId: String
     @State private var controls: [Control] = []
     @State private var isLoading = true
+    @State private var didLoad = false // Deduplication gate
     
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -606,7 +611,9 @@ struct ControlsTab: View {
             }
             .padding(.vertical, RMTheme.Spacing.lg)
         }
-        .task {
+        .task(id: jobId) { // Use task(id:) to prevent re-fetch on unrelated re-renders
+            guard !didLoad else { return } // Deduplication gate
+            didLoad = true
             await loadControls()
         }
     }

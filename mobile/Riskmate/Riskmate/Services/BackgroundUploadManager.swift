@@ -73,7 +73,7 @@ class BackgroundUploadManager: NSObject, ObservableObject {
         // Generate idempotency key (hash of file data + evidenceId)
         let idempotencyKey = generateIdempotencyKey(fileData: fileData, evidenceId: evidenceId)
         
-        // Create upload task
+        // Create upload task (store file URL for retries)
         let upload = UploadTask(
             id: evidenceId,
             jobId: jobId,
@@ -81,11 +81,19 @@ class BackgroundUploadManager: NSObject, ObservableObject {
             state: .queued,
             progress: 0.0,
             createdAt: Date(),
-            idempotencyKey: idempotencyKey
+            idempotencyKey: idempotencyKey,
+            fileURL: fileURL.path
         )
         
         uploads.append(upload)
         saveUploads()
+        
+        // CRITICAL: Background URLSession cannot upload from Data/NSData
+        // Must write to disk first, then use fromFile:
+        let fileExtension = (fileName as NSString).pathExtension.isEmpty ? "dat" : (fileName as NSString).pathExtension
+        let tempFileName = "\(evidenceId)-\(UUID().uuidString).\(fileExtension)"
+        let fileURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(tempFileName)
         
         // Create multipart form data
         let boundary = UUID().uuidString
@@ -98,9 +106,18 @@ class BackgroundUploadManager: NSObject, ObservableObject {
         body.append(fileData)
         body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
         
+        // Write multipart body to disk (required for background uploads)
+        do {
+            try body.write(to: fileURL, options: .atomic)
+        } catch {
+            throw UploadError.uploadFailed("Failed to write upload file to disk: \(error.localizedDescription)")
+        }
+        
         // Create request
         let baseURL = AppConfig.shared.backendURL
         guard let url = URL(string: "\(baseURL)/api/jobs/\(jobId)/evidence/upload") else {
+            // Clean up temp file on error
+            try? FileManager.default.removeItem(at: fileURL)
             throw UploadError.invalidURL
         }
         
@@ -112,8 +129,8 @@ class BackgroundUploadManager: NSObject, ObservableObject {
         request.setValue(idempotencyKey, forHTTPHeaderField: "Idempotency-Key")
         request.timeoutInterval = 60.0 // 60 second timeout for uploads
         
-        // Create upload task
-        let task = backgroundSession.uploadTask(with: request, from: body)
+        // CRITICAL FIX: Background uploads MUST use fromFile: not from: Data
+        let task = backgroundSession.uploadTask(with: request, fromFile: fileURL)
         
         // Store mapping: taskIdentifier -> uploadId
         storeTaskMapping(taskIdentifier: task.taskIdentifier, uploadId: evidenceId)
@@ -268,6 +285,14 @@ extension BackgroundUploadManager: URLSessionTaskDelegate {
         
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
+            
+            // Clean up temp file after upload completes (success or failure)
+            if let upload = self.uploads.first(where: { $0.id == uploadId }),
+               let filePath = upload.fileURL {
+                let fileURL = URL(fileURLWithPath: filePath)
+                try? FileManager.default.removeItem(at: fileURL)
+            }
+            
             if let error = error {
                 let errorMessage = error.localizedDescription
                 self.updateUploadState(uploadId, state: .failed(errorMessage))
@@ -303,6 +328,7 @@ struct UploadTask: Identifiable, Codable, Equatable {
     let createdAt: Date
     var retryCount: Int = 0
     var idempotencyKey: String?
+    var fileURL: String? // Path to temporary file for background uploads
 }
 
 enum UploadState: Codable, Equatable {
