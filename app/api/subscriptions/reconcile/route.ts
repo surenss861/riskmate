@@ -166,10 +166,10 @@ export async function POST(request: NextRequest) {
 
     // Generate deterministic run_key for idempotency
     // Format: manual_2025-01-27_14:30 or scheduled_2025-01-27_14 or request_<uuid>
-    const now = new Date()
-    const dateStr = now.toISOString().slice(0, 10) // YYYY-MM-DD
-    const hourStr = String(now.getHours()).padStart(2, '0')
-    const minuteStr = String(now.getMinutes()).padStart(2, '0')
+    const runKeyDate = new Date()
+    const dateStr = runKeyDate.toISOString().slice(0, 10) // YYYY-MM-DD
+    const hourStr = String(runKeyDate.getHours()).padStart(2, '0')
+    const minuteStr = String(runKeyDate.getMinutes()).padStart(2, '0')
     
     let runKey: string
     if (runType === 'manual') {
