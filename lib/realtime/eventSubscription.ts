@@ -6,7 +6,6 @@
  */
 
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-import { RevalidateOptions } from "swr";
 
 // Debounce/coalesce state
 let pendingEvents: Map<string, number> = new Map();
