@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { createClient } from '@supabase/supabase-js'
+import { isAdminOrOwner, getUserRole } from '@/lib/utils/adminAuth'
 
 export const runtime = 'nodejs'
 
@@ -77,26 +78,15 @@ export async function POST(
       }
     }
 
-    // Verify user is admin or owner
-    const { data: userData, error: userError } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-
-    if (userError || !userData) {
-      return NextResponse.json(
-        { error: 'Failed to verify user role' },
-        { status: 500 }
-      )
-    }
-
-    // Only owners and admins can resolve billing alerts
-    if (!['owner', 'admin'].includes(userData.role)) {
+    // Verify user is admin or owner (consistent check)
+    const userRole = await getUserRole(supabase, user.id)
+    
+    if (!isAdminOrOwner(userRole)) {
+      const { id } = await params
       console.warn('[BillingAlerts] Non-admin attempt to resolve alert', {
         user_id: user.id,
-        role: userData.role,
-        alert_id: (await params).id,
+        role: userRole,
+        alert_id: id,
         ip,
       })
       return NextResponse.json(

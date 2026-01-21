@@ -41,6 +41,7 @@ export async function trackWebhookFailure(
         event_type: eventType,
         stripe_event_id: stripeEventId,
         error,
+        correlation_id: stripeEventId, // Use event ID as correlation
         ...metadata,
       },
     })
@@ -78,6 +79,7 @@ export async function trackReconcileDrift(
         reconciliation_log_id: reconciliationLogId,
         mismatch_count: mismatchCount,
         created_count: createdCount,
+        correlation_id: reconciliationLogId, // Use log ID as correlation
         ...metadata,
       },
     })
@@ -131,5 +133,150 @@ export async function getUnresolvedAlerts(
   } catch (err: any) {
     console.error('[BillingMonitoring] Exception getting alerts:', err?.message)
     return []
+  }
+}
+
+/**
+ * Check for monitoring conditions and create alerts
+ * 
+ * - Alert if no reconcile run in 2 hours
+ * - Alert if unresolved high severity alerts > 0 for 30+ mins
+ */
+export async function checkMonitoringConditions(): Promise<{
+  reconcileStale: boolean
+  highSeverityStale: boolean
+}> {
+  try {
+    const serviceSupabase = getServiceSupabase()
+
+    // Check 1: No reconcile run in 2 hours
+    const { data: lastReconcile } = await serviceSupabase
+      .from('reconciliation_logs')
+      .select('started_at')
+      .order('started_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    const reconcileStale = !lastReconcile || 
+      (Date.now() - new Date(lastReconcile.started_at).getTime()) > 2 * 60 * 60 * 1000
+
+    if (reconcileStale) {
+      // Check if alert already exists
+      const { data: existingAlert } = await serviceSupabase
+        .from('billing_alerts')
+        .select('id')
+        .eq('alert_type', 'reconcile_stale')
+        .eq('resolved', false)
+        .maybeSingle()
+
+      if (!existingAlert) {
+        await serviceSupabase.from('billing_alerts').insert({
+          alert_type: 'reconcile_stale',
+          severity: 'warning',
+          message: 'No reconciliation run in the last 2 hours. Check cron job configuration.',
+          metadata: {
+            last_reconcile_at: lastReconcile?.started_at || null,
+          },
+        })
+      }
+    }
+
+    // Check 2: High severity alerts unresolved for 30+ mins
+    const { data: highSeverityAlerts } = await serviceSupabase
+      .from('billing_alerts')
+      .select('id, created_at')
+      .eq('resolved', false)
+      .in('severity', ['critical', 'high'])
+      .order('created_at', { ascending: true })
+
+    const highSeverityStale = highSeverityAlerts?.some(alert => {
+      const age = Date.now() - new Date(alert.created_at).getTime()
+      return age > 30 * 60 * 1000 // 30 minutes
+    }) || false
+
+    if (highSeverityStale) {
+      // Check if alert already exists
+      const { data: existingAlert } = await serviceSupabase
+        .from('billing_alerts')
+        .select('id')
+        .eq('alert_type', 'high_severity_stale')
+        .eq('resolved', false)
+        .maybeSingle()
+
+      if (!existingAlert) {
+        const staleCount = highSeverityAlerts?.filter(alert => {
+          const age = Date.now() - new Date(alert.created_at).getTime()
+          return age > 30 * 60 * 1000
+        }).length || 0
+
+        await serviceSupabase.from('billing_alerts').insert({
+          alert_type: 'high_severity_stale',
+          severity: 'critical',
+          message: `${staleCount} high severity alert(s) unresolved for 30+ minutes`,
+          metadata: {
+            stale_count: staleCount,
+          },
+        })
+      }
+    }
+
+    return { reconcileStale, highSeverityStale }
+  } catch (err: any) {
+    console.error('[BillingMonitoring] Exception checking conditions:', err?.message)
+    return { reconcileStale: false, highSeverityStale: false }
+  }
+}
+
+/**
+ * Auto-resolve alerts that are no longer relevant
+ * 
+ * - Resolve reconcile_drift if mismatch_count becomes 0
+ * - Resolve webhook_failure if webhook succeeds on retry (would need webhook success tracking)
+ */
+export async function autoResolveAlerts(): Promise<{
+  resolved_count: number
+}> {
+  try {
+    const serviceSupabase = getServiceSupabase()
+
+    // Get unresolved reconcile_drift alerts
+    const { data: driftAlerts } = await serviceSupabase
+      .from('billing_alerts')
+      .select('id, metadata, created_at')
+      .eq('alert_type', 'reconcile_drift')
+      .eq('resolved', false)
+
+    let resolvedCount = 0
+
+    for (const alert of driftAlerts || []) {
+      const reconciliationLogId = alert.metadata?.reconciliation_log_id
+      if (!reconciliationLogId) continue
+
+      // Check latest reconciliation log
+      const { data: latestLog } = await serviceSupabase
+        .from('reconciliation_logs')
+        .select('mismatch_count, created_count')
+        .eq('id', reconciliationLogId)
+        .maybeSingle()
+
+      // If mismatch_count is 0 and created_count is 0, drift is resolved
+      if (latestLog && latestLog.mismatch_count === 0 && latestLog.created_count === 0) {
+        await serviceSupabase
+          .from('billing_alerts')
+          .update({
+            resolved: true,
+            resolved_at: new Date().toISOString(),
+            resolved_by: null, // Auto-resolved
+          })
+          .eq('id', alert.id)
+
+        resolvedCount++
+      }
+    }
+
+    return { resolved_count: resolvedCount }
+  } catch (err: any) {
+    console.error('[BillingMonitoring] Exception auto-resolving:', err?.message)
+    return { resolved_count: 0 }
   }
 }

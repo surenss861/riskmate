@@ -58,6 +58,25 @@ export function BillingAlertsPanel() {
     }
   }
 
+  const triggerReconcile = async () => {
+    try {
+      const response = await fetch('/api/admin/billing-alerts/reconcile', {
+        method: 'POST',
+      })
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to trigger reconciliation')
+      }
+      const result = await response.json()
+      alert(`Reconciliation triggered: ${result.message}`)
+      // Reload alerts after a short delay (reconcile may create new alerts)
+      setTimeout(loadAlerts, 2000)
+    } catch (err: any) {
+      console.error('Failed to trigger reconcile:', err)
+      alert('Failed to trigger reconciliation: ' + err.message)
+    }
+  }
+
   const unresolvedAlerts = alerts.filter(a => !a.resolved)
   const criticalAlerts = unresolvedAlerts.filter(a => a.severity === 'critical')
   const warningAlerts = unresolvedAlerts.filter(a => a.severity === 'warning')
@@ -106,12 +125,21 @@ export function BillingAlertsPanel() {
             </span>
           )}
         </div>
-        <button
-          onClick={loadAlerts}
-          className="text-xs text-white/60 hover:text-white transition-colors"
-        >
-          Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={triggerReconcile}
+            className="text-xs text-white/60 hover:text-white transition-colors px-2 py-1 rounded hover:bg-white/10"
+            title="Trigger reconciliation now"
+          >
+            Reconcile Now
+          </button>
+          <button
+            onClick={loadAlerts}
+            className="text-xs text-white/60 hover:text-white transition-colors"
+          >
+            Refresh
+          </button>
+        </div>
       </div>
 
       <div className="space-y-2">
