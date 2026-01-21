@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, Suspense } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import RiskMateLogo from '@/components/RiskMateLogo'
 import { ErrorModal } from '@/components/dashboard/ErrorModal'
@@ -13,27 +13,59 @@ import { terms } from '@/lib/terms'
 
 type PlanCode = 'starter' | 'pro' | 'business'
 
-function PricingContent() {
+// Track funnel events (client-side logging)
+function trackFunnelEvent(eventName: string, metadata?: Record<string, any>) {
+  console.info(`[Funnel] ${eventName}`, metadata || {})
+  // TODO: Add analytics tracking (Mixpanel, PostHog, etc.)
+}
+
+export default function PricingPage() {
   const router = useRouter()
-  const searchParams = useSearchParams()
-  const fromDemo = searchParams?.get('from') === 'demo'
+  const [fromDemo, setFromDemo] = useState(false)
   const [loading, setLoading] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [highlightedPlan, setHighlightedPlan] = useState<PlanCode | null>(fromDemo ? 'business' : null)
+  const [highlightedPlan, setHighlightedPlan] = useState<PlanCode | null>(null)
+
+  // Check URL params without Suspense (always renders)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const isDemo = params.get('from') === 'demo'
+    setFromDemo(isDemo)
+    if (isDemo) {
+      setHighlightedPlan('business')
+    }
+    
+    // Track page view
+    trackFunnelEvent('pricing_view', { from_demo: isDemo })
+  }, [])
 
   const handleCheckout = async (plan: PlanCode) => {
+    // Track plan selection
+    trackFunnelEvent('plan_selected', { plan })
+    
     setLoading(plan)
+    trackFunnelEvent('checkout_clicked', { plan })
+    
     try {
+      // Generate idempotency key (prevents duplicate sessions)
+      const idempotencyKey = `checkout_${plan}_${Date.now() - (Date.now() % 60000)}` // Round to minute
+      
       const response = await subscriptionsApi.createCheckoutSession({
         plan,
-        success_url: `${window.location.origin}/pricing/thank-you`,
+        idempotency_key: idempotencyKey,
+        success_url: `${window.location.origin}/pricing/thank-you?session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${window.location.origin}/pricing/cancelled`,
       })
+      
+      trackFunnelEvent('checkout_session_created', { plan, session_url: response.url })
+      trackFunnelEvent('checkout_redirected', { plan })
+      
       window.location.href = response.url
     } catch (err: any) {
       console.error('Failed to create checkout session:', err)
       setError(err?.message || 'API request failed')
       setLoading(null)
+      trackFunnelEvent('checkout_error', { plan, error: err?.message })
     }
   }
 
@@ -566,18 +598,5 @@ function PricingContent() {
   )
 }
 
-export default function PricingPage() {
-  return (
-    <Suspense fallback={
-      <div className="min-h-screen bg-[#050505] text-white flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-semibold mb-2">Loading pricing...</h1>
-          <p className="text-white/60">Please wait</p>
-        </div>
-      </div>
-    }>
-      <PricingContent />
-    </Suspense>
-  )
-}
+  // Rest of component (PricingContent body)
 

@@ -1,11 +1,22 @@
 'use client'
 
+import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import RiskMateLogo from '@/components/RiskMateLogo'
 
+// Track funnel events
+function trackFunnelEvent(eventName: string, metadata?: Record<string, any>) {
+  console.info(`[Funnel] ${eventName}`, metadata || {})
+  // TODO: Add analytics tracking
+}
+
 export default function CancelledPage() {
   const router = useRouter()
+
+  useEffect(() => {
+    trackFunnelEvent('checkout_return_cancel')
+  }, [])
 
   return (
     <div className="min-h-screen bg-[#050505] text-white flex items-center justify-center">

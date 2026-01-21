@@ -467,7 +467,7 @@ export const subscriptionsApi = {
     });
   },
 
-  createCheckoutSession: async (payload: { plan: 'starter' | 'pro' | 'business'; success_url?: string; cancel_url?: string }) => {
+  createCheckoutSession: async (payload: { plan: 'starter' | 'pro' | 'business'; success_url?: string; cancel_url?: string; idempotency_key?: string }) => {
     return apiRequest<{ url: string }>('/api/subscriptions/checkout', {
       method: 'POST',
       body: JSON.stringify(payload),

@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { plan, success_url, cancel_url } = await request.json()
+    const { plan, success_url, cancel_url, idempotency_key } = await request.json()
 
     if (!plan || !['starter', 'pro', 'business'].includes(plan)) {
       return NextResponse.json(
@@ -58,6 +58,14 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
+
+    // Log checkout initiation
+    console.info('[Checkout] Creating session', {
+      plan,
+      organization_id: userData.organization_id,
+      user_id: user.id,
+      idempotency_key,
+    })
 
     const stripe = getStripeClient()
 
@@ -119,8 +127,8 @@ export async function POST(request: NextRequest) {
 
     const organizationId = userData.organization_id
 
-    // Create Checkout Session
-    const session = await stripe.checkout.sessions.create({
+    // Create Checkout Session with idempotency
+    const sessionOptions: Stripe.Checkout.SessionCreateParams = {
       mode: 'subscription',
       payment_method_types: ['card'],
       line_items: [
@@ -134,8 +142,22 @@ export async function POST(request: NextRequest) {
       metadata: {
         plan,
         organization_id: organizationId,
+        user_id: user.id,
+        idempotency_key: idempotency_key || '',
       },
       client_reference_id: organizationId,
+    }
+
+    const session = await stripe.checkout.sessions.create(
+      sessionOptions,
+      idempotency_key ? { idempotencyKey: idempotency_key } : undefined
+    )
+
+    console.info('[Checkout] Session created', {
+      session_id: session.id,
+      plan,
+      organization_id: organizationId,
+      url: session.url,
     })
 
     return NextResponse.json({ url: session.url })
