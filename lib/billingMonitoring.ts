@@ -161,24 +161,37 @@ export async function checkMonitoringConditions(): Promise<{
       (Date.now() - new Date(lastReconcile.started_at).getTime()) > 2 * 60 * 60 * 1000
 
     if (reconcileStale) {
-      // Check if alert already exists
-      const { data: existingAlert } = await serviceSupabase
+      // Use upsert with alert_key to prevent duplicates
+      const alertKey = 'reconcile_stale'
+      const { error: upsertError } = await serviceSupabase
         .from('billing_alerts')
-        .select('id')
-        .eq('alert_type', 'reconcile_stale')
-        .eq('resolved', false)
-        .maybeSingle()
-
-      if (!existingAlert) {
-        await serviceSupabase.from('billing_alerts').insert({
+        .upsert({
+          alert_key: alertKey,
           alert_type: 'reconcile_stale',
           severity: 'warning',
           message: 'No reconciliation run in the last 2 hours. Check cron job configuration.',
           metadata: {
             last_reconcile_at: lastReconcile?.started_at || null,
           },
+          resolved: false, // Ensure it's unresolved
+        }, {
+          onConflict: 'alert_key',
+          ignoreDuplicates: false, // Update if exists
         })
+
+      if (upsertError) {
+        console.error('[BillingMonitoring] Failed to upsert reconcile_stale alert:', upsertError)
       }
+    } else {
+      // Condition is no longer stale - auto-resolve any existing alert
+      await serviceSupabase
+        .from('billing_alerts')
+        .update({
+          resolved: true,
+          resolved_at: new Date().toISOString(),
+        })
+        .eq('alert_key', 'reconcile_stale')
+        .eq('resolved', false)
     }
 
     // Check 2: High severity alerts unresolved for 30+ mins
@@ -195,29 +208,42 @@ export async function checkMonitoringConditions(): Promise<{
     }) || false
 
     if (highSeverityStale) {
-      // Check if alert already exists
-      const { data: existingAlert } = await serviceSupabase
+      // Use upsert with alert_key to prevent duplicates
+      const alertKey = 'high_severity_stale'
+      const staleCount = highSeverityAlerts?.filter(alert => {
+        const age = Date.now() - new Date(alert.created_at).getTime()
+        return age > 30 * 60 * 1000
+      }).length || 0
+
+      const { error: upsertError } = await serviceSupabase
         .from('billing_alerts')
-        .select('id')
-        .eq('alert_type', 'high_severity_stale')
-        .eq('resolved', false)
-        .maybeSingle()
-
-      if (!existingAlert) {
-        const staleCount = highSeverityAlerts?.filter(alert => {
-          const age = Date.now() - new Date(alert.created_at).getTime()
-          return age > 30 * 60 * 1000
-        }).length || 0
-
-        await serviceSupabase.from('billing_alerts').insert({
+        .upsert({
+          alert_key: alertKey,
           alert_type: 'high_severity_stale',
           severity: 'critical',
           message: `${staleCount} high severity alert(s) unresolved for 30+ minutes`,
           metadata: {
             stale_count: staleCount,
           },
+          resolved: false, // Ensure it's unresolved
+        }, {
+          onConflict: 'alert_key',
+          ignoreDuplicates: false, // Update if exists (updates stale_count)
         })
+
+      if (upsertError) {
+        console.error('[BillingMonitoring] Failed to upsert high_severity_stale alert:', upsertError)
       }
+    } else {
+      // Condition is no longer stale - auto-resolve any existing alert
+      await serviceSupabase
+        .from('billing_alerts')
+        .update({
+          resolved: true,
+          resolved_at: new Date().toISOString(),
+        })
+        .eq('alert_key', 'high_severity_stale')
+        .eq('resolved', false)
     }
 
     return { reconcileStale, highSeverityStale }

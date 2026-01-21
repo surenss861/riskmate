@@ -164,26 +164,97 @@ export async function POST(request: NextRequest) {
 
     const runType = searchParams.get('type') || 'scheduled' // 'scheduled', 'manual', 'webhook_failure'
 
+    // Generate deterministic run_key for idempotency
+    // Format: manual_2025-01-27_14:30 or scheduled_2025-01-27_14 or request_<uuid>
+    const now = new Date()
+    const dateStr = now.toISOString().slice(0, 10) // YYYY-MM-DD
+    const hourStr = String(now.getHours()).padStart(2, '0')
+    const minuteStr = String(now.getMinutes()).padStart(2, '0')
+    
+    let runKey: string
+    if (runType === 'manual') {
+      // Manual runs: round to minute for idempotency (prevents double-clicks)
+      runKey = `manual_${dateStr}_${hourStr}:${minuteStr}`
+    } else if (runType === 'scheduled') {
+      // Scheduled runs: round to hour (cron runs once per hour)
+      runKey = `scheduled_${dateStr}_${hourStr}`
+    } else {
+      // Other types: use request ID for uniqueness
+      runKey = `request_${requestId}`
+    }
+
     const stripe = getStripeClient()
     const since = Math.floor((Date.now() - hours * 60 * 60 * 1000) / 1000)
 
-    // Create reconciliation log entry
+    // Check if a run with this key is already in progress
     const serviceSupabase = getServiceSupabase()
+    const { data: existingRun } = await serviceSupabase
+      .from('reconciliation_logs')
+      .select('id, started_at')
+      .eq('run_key', runKey)
+      .eq('status', 'running')
+      .maybeSingle()
+
+    if (existingRun) {
+      // Run already in progress - return existing run info
+      const age = Date.now() - new Date(existingRun.started_at).getTime()
+      if (age < 10 * 60 * 1000) { // Less than 10 minutes old
+        console.warn('[Reconcile] Duplicate run detected, returning existing run', {
+          run_key: runKey,
+          existing_id: existingRun.id,
+          age_ms: age,
+        })
+        return NextResponse.json({
+          success: true,
+          message: 'Reconciliation already in progress',
+          reconciliation_log_id: existingRun.id,
+          duplicate: true,
+        })
+      } else {
+        // Stale running status - mark as error and continue
+        console.warn('[Reconcile] Stale running status detected, marking as error', {
+          run_key: runKey,
+          existing_id: existingRun.id,
+          age_ms: age,
+        })
+        await serviceSupabase
+          .from('reconciliation_logs')
+          .update({
+            status: 'error',
+            completed_at: new Date().toISOString(),
+            errors: [{ type: 'stale_run', message: 'Previous run marked as stale' }],
+          })
+          .eq('id', existingRun.id)
+      }
+    }
+
+    // Create reconciliation log entry
     const { data: logEntry, error: logError } = await serviceSupabase
       .from('reconciliation_logs')
       .insert({
         run_type: runType,
+        run_key: runKey,
         lookback_hours: hours,
         status: 'running',
         metadata: {
           ip,
           user_agent: request.headers.get('user-agent'),
+          request_id: requestId,
         },
       })
       .select()
       .single()
 
     if (logError) {
+      // If unique constraint violation, another run started between check and insert
+      if (logError.code === '23505') { // Unique violation
+        console.warn('[Reconcile] Race condition: another run started', { run_key: runKey })
+        return NextResponse.json({
+          success: true,
+          message: 'Reconciliation already in progress (race condition)',
+          duplicate: true,
+        })
+      }
       console.error('[Reconcile] Failed to create log entry:', logError)
       // Continue anyway - logging is non-critical
     } else {

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { isAdminOrOwner, getUserRole } from '@/lib/utils/adminAuth'
 import { checkMonitoringConditions, autoResolveAlerts } from '@/lib/billingMonitoring'
+import { timingSafeEqual } from 'crypto'
 
 export const runtime = 'nodejs'
 
@@ -11,6 +12,10 @@ export const runtime = 'nodejs'
  * Checks monitoring conditions and auto-resolves alerts.
  * Should be called by cron job (hourly recommended).
  * 
+ * Authentication:
+ * - Cron: Requires MONITOR_SECRET in Authorization header
+ * - Manual: Requires admin/owner role (for dashboard triggers)
+ * 
  * Checks:
  * - No reconcile run in 2 hours → alert
  * - High severity alerts unresolved for 30+ mins → alert
@@ -18,34 +23,61 @@ export const runtime = 'nodejs'
  */
 export async function POST(request: NextRequest) {
   try {
-    // Optional: Require admin auth for manual triggers
-    // For cron, this will use RECONCILE_SECRET or similar
     const authHeader = request.headers.get('authorization')
-    const reconcileSecret = process.env.RECONCILE_SECRET
+    const monitorSecret = process.env.MONITOR_SECRET || process.env.RECONCILE_SECRET // Fallback to reconcile secret if monitor secret not set
 
-    // Allow either admin auth or reconcile secret
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      const providedSecret = authHeader.split('Bearer ')[1]?.trim()
-      if (providedSecret === reconcileSecret) {
+    // Require authentication
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return NextResponse.json(
+        { error: 'Unauthorized - Missing Authorization header' },
+        { status: 401 }
+      )
+    }
+
+    const providedSecret = authHeader.split('Bearer ')[1]?.trim()
+
+    // Check if it's a cron secret (constant-time comparison)
+    if (monitorSecret) {
+      const expectedSecret = Buffer.from(monitorSecret)
+      const actualSecret = Buffer.from(providedSecret)
+
+      if (actualSecret.length === expectedSecret.length && timingSafeEqual(actualSecret, expectedSecret)) {
         // Cron job with secret - proceed
       } else {
-        // Check if it's an admin user
+        // Not a cron secret - check if it's an admin user (for manual triggers)
         const supabase = await createSupabaseServerClient()
         const { data: { user } } = await supabase.auth.getUser()
         if (user) {
           const userRole = await getUserRole(supabase, user.id)
           if (!isAdminOrOwner(userRole)) {
             return NextResponse.json(
-              { error: 'Unauthorized' },
+              { error: 'Unauthorized - Requires MONITOR_SECRET or admin role' },
               { status: 401 }
             )
           }
         } else {
           return NextResponse.json(
-            { error: 'Unauthorized' },
+            { error: 'Unauthorized - Requires MONITOR_SECRET or admin role' },
             { status: 401 }
           )
         }
+      }
+    } else {
+      // No monitor secret configured - fallback to admin auth only
+      const supabase = await createSupabaseServerClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        return NextResponse.json(
+          { error: 'Unauthorized - MONITOR_SECRET not configured, requires admin auth' },
+          { status: 401 }
+        )
+      }
+      const userRole = await getUserRole(supabase, user.id)
+      if (!isAdminOrOwner(userRole)) {
+        return NextResponse.json(
+          { error: 'Unauthorized - Requires admin role' },
+          { status: 401 }
+        )
       }
     }
 
@@ -72,4 +104,6 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     )
   }
+}
+
 }

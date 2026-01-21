@@ -4,10 +4,11 @@
 CREATE TABLE IF NOT EXISTS reconciliation_logs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     run_type TEXT NOT NULL, -- 'scheduled', 'manual', 'webhook_failure'
+    run_key TEXT, -- Deterministic key for idempotency (e.g., 'manual_2025-01-27_14:30', 'request_<uuid>')
     lookback_hours INTEGER NOT NULL,
     started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     completed_at TIMESTAMPTZ,
-    status TEXT NOT NULL, -- 'success', 'partial', 'error'
+    status TEXT NOT NULL, -- 'success', 'partial', 'error', 'running'
     created_count INTEGER DEFAULT 0,
     updated_count INTEGER DEFAULT 0,
     mismatch_count INTEGER DEFAULT 0,
@@ -21,6 +22,12 @@ CREATE TABLE IF NOT EXISTS reconciliation_logs (
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_reconciliation_logs_started ON reconciliation_logs(started_at DESC);
 CREATE INDEX IF NOT EXISTS idx_reconciliation_logs_status ON reconciliation_logs(status, started_at DESC);
+CREATE INDEX IF NOT EXISTS idx_reconciliation_logs_key ON reconciliation_logs(run_key) WHERE run_key IS NOT NULL;
+
+-- Unique constraint: only one active run per run_key (prevents duplicate runs)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_reconciliation_logs_key_running 
+ON reconciliation_logs(run_key) 
+WHERE run_key IS NOT NULL AND status = 'running';
 
 -- RLS Policies
 ALTER TABLE reconciliation_logs ENABLE ROW LEVEL SECURITY;
