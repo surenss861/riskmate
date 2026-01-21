@@ -215,7 +215,7 @@ export async function POST(request: NextRequest) {
 
     while (hasMore && processedSessions < maxSessions) {
       try {
-        const sessionList = await stripe.checkout.sessions.list({
+        const sessionList: Stripe.Response<Stripe.ApiList<Stripe.Checkout.Session>> = await stripe.checkout.sessions.list({
           created: { gte: since },
           status: 'complete',
           limit: 100,
