@@ -139,17 +139,60 @@ export function BillingAlertsPanel() {
               </div>
               <p className="text-sm text-white/80">{alert.message}</p>
               {alert.metadata?.stripe_event_id && (
-                <p className="text-xs text-white/50 mt-1">
-                  Event: {alert.metadata.stripe_event_id}
-                </p>
+                <div className="flex items-center gap-2 mt-1">
+                  <p className="text-xs text-white/50">
+                    Event: {alert.metadata.stripe_event_id}
+                  </p>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(alert.metadata.stripe_event_id)
+                      // Could add toast notification here
+                    }}
+                    className="text-xs text-white/40 hover:text-white/80 transition-colors"
+                    title="Copy event ID"
+                  >
+                    📋
+                  </button>
+                </div>
+              )}
+              {alert.metadata?.correlation_id && (
+                <div className="flex items-center gap-2 mt-1">
+                  <p className="text-xs text-white/50">
+                    Correlation: {alert.metadata.correlation_id}
+                  </p>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(alert.metadata.correlation_id)
+                    }}
+                    className="text-xs text-white/40 hover:text-white/80 transition-colors"
+                    title="Copy correlation ID"
+                  >
+                    📋
+                  </button>
+                </div>
               )}
             </div>
-            <button
-              onClick={() => markResolved(alert.id)}
-              className="text-xs text-white/60 hover:text-white transition-colors px-2 py-1 rounded hover:bg-white/10"
-            >
-              Mark Resolved
-            </button>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={() => markResolved(alert.id)}
+                className="text-xs text-white/60 hover:text-white transition-colors px-2 py-1 rounded hover:bg-white/10"
+              >
+                Mark Resolved
+              </button>
+              {(alert.metadata?.stripe_event_id || alert.metadata?.correlation_id) && (
+                <button
+                  onClick={() => {
+                    // Link to logs filtered by correlation ID
+                    const filterId = alert.metadata?.correlation_id || alert.metadata?.stripe_event_id
+                    window.open(`/operations/audit?filter=${filterId}`, '_blank')
+                  }}
+                  className="text-xs text-white/40 hover:text-white/80 transition-colors px-2 py-1 rounded hover:bg-white/5"
+                  title="View related logs"
+                >
+                  View Logs
+                </button>
+              )}
+            </div>
           </div>
         ))}
         {unresolvedAlerts.length > 5 && (
