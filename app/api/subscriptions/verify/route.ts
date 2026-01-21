@@ -82,18 +82,29 @@ export async function GET(request: NextRequest) {
       .limit(1)
       .maybeSingle()
 
-    // Determine status
+    // Determine status - CRITICAL: Prefer DB over Stripe to never lock out customers
     let status: 'active' | 'trialing' | 'pending' | 'processing' | 'inactive' = 'inactive'
     let planCode: string | null = session.metadata?.plan || null
 
-    if (session.payment_status === 'paid' && session.status === 'complete') {
-      if (subscription) {
-        status = subscription.status as any
-        planCode = subscription.tier || planCode
-      } else {
-        // Payment succeeded but subscription not yet created in DB (webhook pending)
-        status = 'processing'
+    // If DB has subscription, trust it (even if Stripe is missing/lagging)
+    if (subscription) {
+      status = subscription.status as any
+      planCode = subscription.tier || planCode
+      
+      // If DB says active but Stripe session isn't complete, log mismatch but trust DB
+      if (status === 'active' && session.status !== 'complete') {
+        console.warn('[Verify] Billing mismatch: DB active but Stripe incomplete', {
+          session_id: sessionId,
+          organization_id: organizationId,
+          db_status: status,
+          stripe_status: session.status,
+          payment_status: session.payment_status,
+        })
+        // Still return active - never lock out customer due to Stripe lag
       }
+    } else if (session.payment_status === 'paid' && session.status === 'complete') {
+      // Payment succeeded but subscription not yet created in DB (webhook pending)
+      status = 'processing'
     } else if (session.status === 'open') {
       status = 'pending'
     }

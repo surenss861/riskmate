@@ -145,6 +145,47 @@
 
 ---
 
+## 🧪 Test 9: Double-Trigger Protection (Nasty Test #1)
+
+### Steps:
+1. [ ] Navigate to `/pricing`
+2. [ ] Rapidly double-click "Start Pro →" button (within 100ms)
+3. [ ] Verify only ONE Stripe checkout session is created
+4. [ ] Check backend logs for idempotency key usage
+5. [ ] Verify only ONE redirect to Stripe occurs
+6. [ ] Check Stripe dashboard: should see only 1 session with same idempotency key
+7. [ ] Complete the single checkout session
+8. [ ] Verify subscription activates correctly (no duplicate charges)
+
+**Expected Result**: ✅ Only one session created, no duplicate charges, idempotency works
+
+**Failure Mode**: If two sessions are created, idempotency is broken
+
+---
+
+## 🧪 Test 10: Webhook Delay Simulation (Nasty Test #2)
+
+### Steps:
+1. [ ] Complete a checkout (Pro or Business)
+2. [ ] On thank-you page, immediately check status
+3. [ ] **Simulate webhook delay** (one of these):
+   - Option A: Temporarily disable webhook endpoint in Stripe dashboard
+   - Option B: Block webhook delivery (firewall/network)
+   - Option C: Just wait and observe (webhooks can be delayed naturally)
+4. [ ] Verify thank-you page shows "Processing your payment..." state
+5. [ ] Verify auto-retry happens every 3 seconds (check console/network tab)
+6. [ ] Verify retry stops after 3 attempts (maxRetries = 3)
+7. [ ] **Re-enable webhook** (or wait for natural delivery)
+8. [ ] Verify subscription eventually activates
+9. [ ] Verify thank-you page updates to "Pro Plan Activated" (or Business)
+10. [ ] Verify auto-redirect to `/operations` works
+
+**Expected Result**: ✅ Handles webhook delays gracefully, never shows false error, eventually succeeds
+
+**Failure Mode**: If page shows error before webhook arrives, or never resolves, retry logic is broken
+
+---
+
 ## 🔍 Verification Checklist
 
 After all tests, verify:

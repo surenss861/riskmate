@@ -137,8 +137,10 @@ export async function POST(request: NextRequest) {
           quantity: 1,
         },
       ],
-      success_url: success_url || `${process.env.NEXT_PUBLIC_APP_URL || 'https://riskmate.vercel.app'}/pricing/thank-you?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: cancel_url || `${process.env.NEXT_PUBLIC_APP_URL || 'https://riskmate.vercel.app'}/pricing`,
+      // CRITICAL: success_url MUST include {CHECKOUT_SESSION_ID} for verification
+      // Stripe will replace {CHECKOUT_SESSION_ID} with the actual session ID
+      success_url: success_url || `${process.env.NEXT_PUBLIC_APP_URL || 'https://riskmate.dev'}/pricing/thank-you?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: cancel_url || `${process.env.NEXT_PUBLIC_APP_URL || 'https://riskmate.dev'}/pricing/cancelled`,
       metadata: {
         plan,
         organization_id: organizationId,
