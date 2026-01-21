@@ -55,23 +55,9 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
 
     checkSession()
 
-    // Listen for auth changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session) {
-        router.push('/login')
-        setLoading(false)
-        return
-      }
-      setAuthenticated(true)
-      setLoading(false)
-      loadLegalStatus().catch(() => null)
-    })
-
-    return () => {
-      subscription.unsubscribe()
-    }
+    // Note: Auth state changes are handled globally by ensureAuthListener() in AuthProvider
+    // No need to attach another listener here (would create duplicates)
+    // The global listener will handle refresh token errors and sign-out
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router])
 
