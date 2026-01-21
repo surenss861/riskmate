@@ -27,7 +27,8 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
       // Handle refresh token errors gracefully (treat as logged out)
       if (sessionError?.message?.toLowerCase().includes('refresh token')) {
         console.warn('[ProtectedRoute] Invalid refresh token - signing out:', sessionError.message)
-        await supabase.auth.signOut()
+        // Sign out locally only (don't trigger global signout)
+        await supabase.auth.signOut({ scope: 'local' })
         router.push('/login')
         setLoading(false)
         return

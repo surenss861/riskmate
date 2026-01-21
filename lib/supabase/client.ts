@@ -1,40 +1,43 @@
-import { createBrowserClient } from '@supabase/ssr'
-import { createClient } from '@supabase/supabase-js'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+
+// Singleton pattern: prevent multiple GoTrueClient instances
+declare global {
+  // eslint-disable-next-line no-var
+  var __supabase__: SupabaseClient | undefined
+  // eslint-disable-next-line no-var
+  var __supabaseAuthListenerAttached__: boolean | undefined
+}
 
 /**
- * Creates a Supabase client for browser use with proper session persistence.
+ * Creates a singleton Supabase client for browser use.
  * 
- * Uses @supabase/ssr for Next.js App Router compatibility (handles cookies for SSR).
- * For client-side access, this ensures sessions are available via getSession().
+ * Uses globalThis caching so hot reload / route re-mounts don't create new instances.
+ * This prevents "initial session emitted" warnings and auth weirdness.
  */
-export function createSupabaseBrowserClient() {
-  // Use regular createClient for browser (supports auth options)
-  // createBrowserClient from @supabase/ssr is for SSR cookie handling, but doesn't support auth options
-  // For client-side, we use createClient with localStorage persistence
-  const client = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      auth: {
-        persistSession: true,
-        autoRefreshToken: true,
-        detectSessionInUrl: true,
-        storageKey: 'riskmate.auth',
-      },
-    }
-  )
-  
-  // Global auth state change listener: handle refresh token failures gracefully
-  if (typeof window !== 'undefined') {
-    client.auth.onAuthStateChange((event, session) => {
-      // If session becomes null unexpectedly (e.g., refresh token invalid), treat as logged out
-      if (event === 'SIGNED_OUT' || (event === 'TOKEN_REFRESHED' && !session)) {
-        // Clear any stale session state
-        console.log('[Supabase] Session cleared - user logged out');
-      }
-    });
+export function createSupabaseBrowserClient(): SupabaseClient {
+  // Return existing singleton if it exists
+  if (typeof window !== 'undefined' && globalThis.__supabase__) {
+    return globalThis.__supabase__
   }
-  
+
+  // Create new client only if it doesn't exist
+  const client = createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+      storageKey: 'riskmate.auth',
+    },
+  })
+
+  // Cache in globalThis (survives hot reloads)
+  if (typeof window !== 'undefined') {
+    globalThis.__supabase__ = client
+  }
+
   // In development, log session status for debugging
   if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
     client.auth.getSession().then(({ data: { session }, error }) => {
@@ -52,8 +55,16 @@ export function createSupabaseBrowserClient() {
       }
     });
   }
-  
+
   return client
+}
+
+/**
+ * Get the singleton Supabase client instance.
+ * Use this instead of createSupabaseBrowserClient() when you just need the client.
+ */
+export function getSupabaseClient(): SupabaseClient {
+  return createSupabaseBrowserClient()
 }
 
 /**
@@ -64,13 +75,14 @@ export function createSupabaseBrowserClient() {
  */
 export async function safeGetSession() {
   try {
-    const supabase = createSupabaseBrowserClient()
+    const supabase = getSupabaseClient()
     const { data, error } = await supabase.auth.getSession()
 
     // If refresh token is invalid, treat as logged out
     if (error?.message?.toLowerCase().includes('refresh token')) {
       console.warn('[Supabase] Invalid refresh token - signing out locally:', error.message)
-      await supabase.auth.signOut()
+      // Sign out locally only (don't trigger global signout)
+      await supabase.auth.signOut({ scope: 'local' })
       return null
     }
 

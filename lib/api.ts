@@ -29,7 +29,8 @@ async function getAuthToken(): Promise<string | null> {
     // Handle refresh token errors gracefully (treat as logged out)
     if (sessionError?.message?.toLowerCase().includes('refresh token')) {
       console.warn('[API] Invalid refresh token - signing out locally:', sessionError.message);
-      await supabase.auth.signOut();
+      // Sign out locally only (don't trigger global signout)
+      await supabase.auth.signOut({ scope: 'local' });
       return null;
     }
     
