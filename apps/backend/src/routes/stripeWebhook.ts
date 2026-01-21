@@ -162,7 +162,7 @@ export async function stripeWebhookHandler(req: Request, res: Response) {
     
     // Track webhook failure
     try {
-      const { trackWebhookFailure } = await import("../../lib/billingMonitoring");
+      const { trackWebhookFailure } = await import("../lib/billingMonitoring");
       await trackWebhookFailure(
         "unknown", // Event type unknown due to signature failure
         "unknown", // Stripe event ID unknown
@@ -206,6 +206,23 @@ export async function stripeWebhookHandler(req: Request, res: Response) {
     // 23505 = unique violation (race condition, another process already inserted)
     // Other errors are real problems
     console.error("Failed to record webhook event:", insertError);
+    
+    // Track as webhook failure
+    try {
+      const { trackWebhookFailure } = await import("../lib/billingMonitoring");
+      await trackWebhookFailure(
+        event.type,
+        event.id,
+        `Failed to record webhook event: ${insertError.message}`,
+        {
+          status_code: 500,
+          error_type: "database_insert_failed",
+          error_code: insertError.code,
+        }
+      );
+    } catch (trackErr) {
+      console.warn("Failed to track webhook failure:", trackErr);
+    }
   }
 
   try {
@@ -408,7 +425,7 @@ export async function stripeWebhookHandler(req: Request, res: Response) {
     
     // Track webhook failure
     try {
-      const { trackWebhookFailure } = await import("../../lib/billingMonitoring");
+      const { trackWebhookFailure } = await import("../lib/billingMonitoring");
       await trackWebhookFailure(
         event?.type || "unknown",
         event?.id || "unknown",
