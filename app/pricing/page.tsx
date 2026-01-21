@@ -16,7 +16,7 @@ type PlanCode = 'starter' | 'pro' | 'business'
 function PricingContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const fromDemo = searchParams.get('from') === 'demo'
+  const fromDemo = searchParams?.get('from') === 'demo'
   const [loading, setLoading] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [highlightedPlan, setHighlightedPlan] = useState<PlanCode | null>(fromDemo ? 'business' : null)
