@@ -8,9 +8,10 @@ import { createClient } from '@supabase/supabase-js'
  * For client-side access, this ensures sessions are available via getSession().
  */
 export function createSupabaseBrowserClient() {
-  // createBrowserClient from @supabase/ssr handles cookies automatically for Next.js
-  // It reads/writes to cookies which Next.js middleware can access
-  const client = createBrowserClient(
+  // Use regular createClient for browser (supports auth options)
+  // createBrowserClient from @supabase/ssr is for SSR cookie handling, but doesn't support auth options
+  // For client-side, we use createClient with localStorage persistence
+  const client = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
