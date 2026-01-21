@@ -254,8 +254,8 @@ export async function POST(request: NextRequest) {
                   stripe_customer_id: typeof stripeSub.customer === 'string' ? stripeSub.customer : stripeSub.customer.id,
                   tier: planCode,
                   status: stripeSub.status === 'active' || stripeSub.status === 'trialing' ? 'active' : stripeSub.status,
-                  current_period_start: new Date((stripeSub.current_period_start || 0) * 1000).toISOString(),
-                  current_period_end: new Date((stripeSub.current_period_end || 0) * 1000).toISOString(),
+                  current_period_start: new Date(((stripeSub as any).current_period_start || 0) * 1000).toISOString(),
+                  current_period_end: new Date(((stripeSub as any).current_period_end || 0) * 1000).toISOString(),
                 }, {
                   onConflict: 'organization_id,stripe_subscription_id',
                 })
@@ -352,8 +352,8 @@ export async function POST(request: NextRequest) {
               .from('subscriptions')
               .update({
                 status: normalizedStripeStatus,
-                current_period_start: new Date((stripeSub.current_period_start || 0) * 1000).toISOString(),
-                current_period_end: new Date((stripeSub.current_period_end || 0) * 1000).toISOString(),
+                current_period_start: new Date(((stripeSub as any).current_period_start || 0) * 1000).toISOString(),
+                current_period_end: new Date(((stripeSub as any).current_period_end || 0) * 1000).toISOString(),
               })
               .eq('id', dbSub.id)
 
