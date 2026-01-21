@@ -26,13 +26,20 @@ async function getAuthToken(): Promise<string | null> {
       error: sessionError,
     } = await supabase.auth.getSession();
     
+    // Handle refresh token errors gracefully (treat as logged out)
+    if (sessionError?.message?.toLowerCase().includes('refresh token')) {
+      console.warn('[API] Invalid refresh token - signing out locally:', sessionError.message);
+      await supabase.auth.signOut();
+      return null;
+    }
+    
     if (sessionError) {
-      console.error('[API] Session error:', sessionError);
+      console.warn('[API] Session error (non-fatal):', sessionError.message);
       return null;
     }
     
     if (!session) {
-      console.warn('[API] No active session - user may need to log in');
+      // No session is normal for public pages - don't log as error
       return null;
     }
     

@@ -21,7 +21,25 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
     const checkSession = async () => {
       const {
         data: { session },
+        error: sessionError,
       } = await supabase.auth.getSession()
+
+      // Handle refresh token errors gracefully (treat as logged out)
+      if (sessionError?.message?.toLowerCase().includes('refresh token')) {
+        console.warn('[ProtectedRoute] Invalid refresh token - signing out:', sessionError.message)
+        await supabase.auth.signOut()
+        router.push('/login')
+        setLoading(false)
+        return
+      }
+
+      // Other errors are non-fatal - continue as guest
+      if (sessionError) {
+        console.warn('[ProtectedRoute] Session error (non-fatal):', sessionError.message)
+        router.push('/login')
+        setLoading(false)
+        return
+      }
 
       if (!session) {
         router.push('/login')

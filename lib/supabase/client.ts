@@ -12,8 +12,27 @@ export function createSupabaseBrowserClient() {
   // It reads/writes to cookies which Next.js middleware can access
   const client = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+        storageKey: 'riskmate.auth',
+      },
+    }
   )
+  
+  // Global auth state change listener: handle refresh token failures gracefully
+  if (typeof window !== 'undefined') {
+    client.auth.onAuthStateChange((event, session) => {
+      // If session becomes null unexpectedly (e.g., refresh token invalid), treat as logged out
+      if (event === 'SIGNED_OUT' || (event === 'TOKEN_REFRESHED' && !session)) {
+        // Clear any stale session state
+        console.log('[Supabase] Session cleared - user logged out');
+      }
+    });
+  }
   
   // In development, log session status for debugging
   if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
@@ -34,6 +53,37 @@ export function createSupabaseBrowserClient() {
   }
   
   return client
+}
+
+/**
+ * Safe session getter that handles refresh token errors gracefully.
+ * 
+ * If refresh token is invalid (stale/cleared), signs out locally and returns null.
+ * This prevents auth errors from breaking the UI.
+ */
+export async function safeGetSession() {
+  try {
+    const supabase = createSupabaseBrowserClient()
+    const { data, error } = await supabase.auth.getSession()
+
+    // If refresh token is invalid, treat as logged out
+    if (error?.message?.toLowerCase().includes('refresh token')) {
+      console.warn('[Supabase] Invalid refresh token - signing out locally:', error.message)
+      await supabase.auth.signOut()
+      return null
+    }
+
+    // Other errors are non-fatal (e.g., network issues)
+    if (error) {
+      console.warn('[Supabase] Session error (non-fatal):', error.message)
+      return null
+    }
+
+    return data.session ?? null
+  } catch (err: any) {
+    console.error('[Supabase] Exception getting session:', err?.message)
+    return null
+  }
 }
 
 // For server-side operations with service role
