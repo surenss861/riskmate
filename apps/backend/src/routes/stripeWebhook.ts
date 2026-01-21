@@ -159,6 +159,24 @@ export async function stripeWebhookHandler(req: Request, res: Response) {
     );
   } catch (err: any) {
     console.error("Stripe webhook signature verification failed:", err?.message);
+    
+    // Track webhook failure
+    try {
+      const { trackWebhookFailure } = await import("../../lib/billingMonitoring");
+      await trackWebhookFailure(
+        "unknown", // Event type unknown due to signature failure
+        "unknown", // Stripe event ID unknown
+        `Signature verification failed: ${err?.message}`,
+        {
+          status_code: 400,
+          error_type: "signature_verification_failed",
+        }
+      );
+    } catch (trackErr) {
+      // Non-critical - log but don't fail
+      console.warn("Failed to track webhook failure:", trackErr);
+    }
+    
     return res.status(400).send(`Webhook Error: ${err?.message}`);
   }
 
@@ -387,6 +405,26 @@ export async function stripeWebhookHandler(req: Request, res: Response) {
     res.json({ received: true });
   } catch (err: any) {
     console.error("Error handling Stripe webhook:", err?.message);
+    
+    // Track webhook failure
+    try {
+      const { trackWebhookFailure } = await import("../../lib/billingMonitoring");
+      await trackWebhookFailure(
+        event?.type || "unknown",
+        event?.id || "unknown",
+        `Webhook handler error: ${err?.message}`,
+        {
+          status_code: 500,
+          error_type: "handler_error",
+          correlation_id: event?.id,
+          stack: err?.stack,
+        }
+      );
+    } catch (trackErr) {
+      // Non-critical - log but don't fail
+      console.warn("Failed to track webhook failure:", trackErr);
+    }
+    
     res.status(500).json({ message: "Webhook handler error" });
   }
 }

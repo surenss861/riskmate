@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import Stripe from 'stripe'
 import { createClient } from '@supabase/supabase-js'
+import { timingSafeEqual } from 'crypto'
 
 export const runtime = 'nodejs'
 
@@ -58,39 +59,74 @@ export async function POST(request: NextRequest) {
   const startTime = Date.now()
   let reconciliationLogId: string | null = null
 
+  // Generate request ID for correlation
+  const requestId = crypto.randomUUID()
+  const startTime = Date.now()
+
   try {
-    // 1. AUTH: Require RECONCILE_SECRET
+    // 1. AUTH: Require RECONCILE_SECRET with constant-time comparison
     const authHeader = request.headers.get('authorization')
     const reconcileSecret = process.env.RECONCILE_SECRET
 
     if (!reconcileSecret) {
-      console.error('[Reconcile] RECONCILE_SECRET not configured')
+      console.error('[Reconcile] RECONCILE_SECRET not configured', { request_id: requestId })
       return NextResponse.json(
-        { error: 'Reconciliation not configured' },
+        { error: 'Reconciliation not configured', request_id: requestId },
         { status: 503 }
       )
     }
 
+    // Reject missing/invalid Authorization format
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.warn('[Reconcile] Missing or invalid Authorization header', { request_id: requestId })
       return NextResponse.json(
-        { error: 'Unauthorized - Missing authorization header' },
+        { error: 'Unauthorized - Missing or invalid Authorization header. Expected: Authorization: Bearer <secret>', request_id: requestId },
         { status: 401 }
       )
     }
 
     const providedSecret = authHeader.split('Bearer ')[1]?.trim()
-    if (providedSecret !== reconcileSecret) {
-      console.warn('[Reconcile] Invalid reconcile secret attempted')
+    
+    // Constant-time secret comparison (prevents timing attacks)
+    if (!providedSecret || providedSecret.length !== reconcileSecret.length) {
+      // Use constant-time comparison even for length mismatch
+      // Create buffers of same length to prevent timing leaks
+      const secretBuffer = Buffer.from(reconcileSecret)
+      const providedBuffer = Buffer.alloc(secretBuffer.length)
+      Buffer.from(providedSecret || '').copy(providedBuffer, 0, 0, Math.min(providedSecret?.length || 0, secretBuffer.length))
+      timingSafeEqual(providedBuffer, secretBuffer) // Always compare, even if lengths differ
+      console.warn('[Reconcile] Invalid reconcile secret attempted (length mismatch)', { request_id: requestId })
       return NextResponse.json(
-        { error: 'Unauthorized - Invalid secret' },
+        { error: 'Unauthorized - Invalid secret', request_id: requestId },
+        { status: 401 }
+      )
+    }
+
+    // Constant-time comparison
+    const secretsMatch = timingSafeEqual(
+      Buffer.from(providedSecret),
+      Buffer.from(reconcileSecret)
+    )
+
+    if (!secretsMatch) {
+      console.warn('[Reconcile] Invalid reconcile secret attempted', { request_id: requestId })
+      return NextResponse.json(
+        { error: 'Unauthorized - Invalid secret', request_id: requestId },
         { status: 401 }
       )
     }
 
     // 2. RATE LIMIT: Per IP
-    const ip = request.headers.get('x-forwarded-for')?.split(',')[0] || 
+    const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 
                request.headers.get('x-real-ip') || 
                'unknown'
+    
+    // Log request start
+    console.info('[Reconcile] Request started', {
+      request_id: requestId,
+      ip,
+      user_agent: request.headers.get('user-agent'),
+    })
     
     const now = Date.now()
     const rateLimitKey = `reconcile:${ip}`
@@ -407,13 +443,17 @@ export async function POST(request: NextRequest) {
     }
 
     console.info('[Reconcile] Completed reconciliation', {
-      duration_ms: durationMs,
+      request_id: requestId,
+      ip,
       lookback_hours: hours,
+      run_type: runType,
+      duration_ms: durationMs,
       created_count: createdCount,
       updated_count: updatedCount,
       mismatch_count: mismatchCount,
       error_count: errors.length,
       total_issues: reconciliations.length,
+      reconciliation_log_id: reconciliationLogId,
     })
 
     return NextResponse.json({
