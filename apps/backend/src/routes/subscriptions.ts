@@ -13,9 +13,9 @@ const STRIPE_PRICE_IDS: Partial<Record<PlanCode, string | undefined>> = {
 };
 
 const STRIPE_PRODUCT_IDS: Partial<Record<PlanCode, string | undefined>> = {
-  starter: process.env.STRIPE_PRODUCT_STARTER || "prod_TOfxlypTNXZNhB",
-  pro: process.env.STRIPE_PRODUCT_PRO || "prod_TOfx6fhO40IMoF",
-  business: process.env.STRIPE_PRODUCT_BUSINESS || "prod_TOfy8NLmOTOaYl",
+  starter: process.env.STRIPE_PRODUCT_STARTER || "prod_TpcwqnpnlA9keA",
+  pro: process.env.STRIPE_PRODUCT_PRO || "prod_TpcyAbLnS5VDz7",
+  business: process.env.STRIPE_PRODUCT_BUSINESS || "prod_TpczVi0pxfQhfH",
 };
 
 async function resolveStripePriceId(stripe: any, plan: PlanCode): Promise<string> {
