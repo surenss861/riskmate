@@ -12,17 +12,47 @@ import { getSupabaseClient } from './client'
  * 
  * Call this once in your app bootstrap (e.g., root layout or auth provider).
  * Prevents duplicate listeners from React re-mounts or hot reloads.
+ * 
+ * Includes guards for:
+ * - React Strict Mode double-invocation
+ * - Hot module reload (HMR) edge cases
+ * - Listener attached to wrong client instance
  */
 export function ensureAuthListener() {
   // Only attach listener once (even across hot reloads)
   if (typeof window === 'undefined') return
-  if (globalThis.__supabaseAuthListenerAttached__) return
+  
+  // Guard 1: Already attached flag
+  if (globalThis.__supabaseAuthListenerAttached__) {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[Supabase] ensureAuthListener() called but listener already attached (Strict Mode or HMR)')
+    }
+    return
+  }
+
+  const supabase = getSupabaseClient()
+  const currentClientId = globalThis.__supabaseListenerClientId__
+
+  // Guard 2: Verify listener is attached to the active singleton
+  if (!currentClientId) {
+    console.warn('[Supabase] ⚠️ Client ID not found - listener may be attached to wrong instance')
+  }
 
   globalThis.__supabaseAuthListenerAttached__ = true
 
-  const supabase = getSupabaseClient()
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[Supabase] ✅ Auth listener attached', {
+      clientId: currentClientId,
+      timestamp: new Date().toISOString(),
+    })
+  }
 
   supabase.auth.onAuthStateChange(async (event, session) => {
+    // Guard 3: Verify this event is from the active singleton
+    if (process.env.NODE_ENV === 'development' && globalThis.__supabaseListenerClientId__ !== currentClientId) {
+      console.warn('[Supabase] ⚠️ Auth event from different client instance - possible singleton violation')
+    }
+
     // Handle refresh token errors gracefully
     if (event === 'TOKEN_REFRESHED' && !session) {
       console.warn('[Supabase] Token refresh failed - signing out locally')
@@ -36,6 +66,7 @@ export function ensureAuthListener() {
         event,
         hasSession: !!session,
         userId: session?.user?.id,
+        clientId: currentClientId,
       })
     }
   })

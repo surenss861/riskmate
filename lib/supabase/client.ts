@@ -9,6 +9,8 @@ declare global {
   var __supabase__: SupabaseClient | undefined
   // eslint-disable-next-line no-var
   var __supabaseAuthListenerAttached__: boolean | undefined
+  // eslint-disable-next-line no-var
+  var __supabaseListenerClientId__: string | undefined // Track which client the listener is attached to
 }
 
 /**
@@ -40,6 +42,8 @@ export function createSupabaseBrowserClient(): SupabaseClient {
   // Cache in globalThis (survives hot reloads)
   if (typeof window !== 'undefined') {
     globalThis.__supabase__ = client
+    // Generate a unique ID for this client instance (for listener guard)
+    globalThis.__supabaseListenerClientId__ = `client_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
   }
 
   // In development, log session status for debugging
@@ -70,6 +74,14 @@ export function createSupabaseBrowserClient(): SupabaseClient {
 export function getSupabaseClient(): SupabaseClient {
   return createSupabaseBrowserClient()
 }
+
+/**
+ * Exported singleton instance (enterprise-grade lock).
+ * 
+ * Instead of calling createSupabaseBrowserClient() everywhere, import this instance.
+ * This reduces "someone calls the factory in a weird place" risk.
+ */
+export const supabase = createSupabaseBrowserClient()
 
 /**
  * Safe session getter that handles refresh token errors gracefully.
