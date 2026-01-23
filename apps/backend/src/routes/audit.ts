@@ -2579,20 +2579,484 @@ auditRouter.post('/access/flag-suspicious', authenticate as unknown as express.R
 
 // GET /api/audit/readiness
 // Returns audit readiness items with standardized rule codes and fix actions
-// NOTE: This is a placeholder - the full implementation is in Next.js API route
-// The frontend should call the Next.js route, not this backend route
+// Supports filters: time_range, category, severity, job_id, site_id, owner_id, status
+// NOTE: Full implementation ported from Next.js API route
 auditRouter.get('/readiness', authenticate as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
   const authReq = req as AuthenticatedRequest & RequestWithId
   const requestId = authReq.requestId || 'unknown'
   
-  // This route is implemented in Next.js (app/api/audit/readiness/route.ts)
-  // The backend doesn't have the full readiness calculation logic yet
-  // Return 404 to indicate route doesn't exist here
-  return res.status(404).json({
-    message: 'Route not found. Readiness endpoint is handled by Next.js API route.',
-    code: 'ROUTE_NOT_FOUND',
-    requestId,
-  })
+  try {
+    const { organization_id } = authReq.user
+    const {
+      time_range = '30d',
+      category,
+      severity,
+      job_id,
+      site_id,
+      owner_id,
+      status,
+    } = req.query
+
+    // Calculate time cutoff
+    const now = new Date()
+    let cutoff = new Date()
+    if (time_range === '24h') {
+      cutoff.setHours(now.getHours() - 24)
+    } else if (time_range === '7d') {
+      cutoff.setDate(now.getDate() - 7)
+    } else if (time_range === '30d') {
+      cutoff.setDate(now.getDate() - 30)
+    } else if (time_range === '90d') {
+      cutoff.setDate(now.getDate() - 90)
+    }
+    // 'all' means no cutoff
+
+    const items: any[] = []
+
+    // 1. MISSING EVIDENCE (high-risk work records without documents)
+    if (!category || category === 'evidence') {
+      let evidenceQuery = supabase
+        .from('jobs')
+        .select('id, client_name, risk_score, risk_level, site_id, owner_id, created_at')
+        .eq('organization_id', organization_id)
+        .is('deleted_at', null)
+        .gt('risk_score', 50)
+
+      if (time_range !== 'all') {
+        evidenceQuery = evidenceQuery.gte('created_at', cutoff.toISOString())
+      }
+      if (job_id) {
+        evidenceQuery = evidenceQuery.eq('id', job_id as string)
+      }
+      if (site_id) {
+        evidenceQuery = evidenceQuery.eq('site_id', site_id as string)
+      }
+      if (owner_id) {
+        evidenceQuery = evidenceQuery.eq('owner_id', owner_id as string)
+      }
+
+      const { data: highRiskJobs } = await evidenceQuery
+
+      if (highRiskJobs) {
+        for (const job of highRiskJobs) {
+          const { count: docCount } = await supabase
+            .from('job_documents')
+            .select('id', { count: 'exact', head: true })
+            .eq('job_id', job.id)
+
+          if (!docCount || docCount === 0) {
+            const isCritical = (job.risk_score || 0) > 75
+            if (severity && severity !== (isCritical ? 'critical' : 'material')) {
+              continue
+            }
+
+            let ownerName: string | undefined
+            if (job.owner_id) {
+              const { data: ownerData } = await supabase
+                .from('users')
+                .select('full_name, email')
+                .eq('id', job.owner_id)
+                .single()
+              ownerName = ownerData?.full_name || ownerData?.email
+            }
+
+            items.push({
+              id: `evidence-missing-${job.id}`,
+              rule_code: isCritical ? 'EVIDENCE.MISSING.HIGH_RISK' : 'EVIDENCE.MISSING.MATERIAL',
+              rule_name: 'Missing Evidence for High-Risk Work Record',
+              category: 'evidence',
+              severity: isCritical ? 'critical' : 'material',
+              affected_type: 'work_record',
+              affected_id: job.id,
+              affected_name: job.client_name,
+              work_record_id: job.id,
+              work_record_name: job.client_name,
+              site_id: job.site_id || undefined,
+              owner_id: job.owner_id || undefined,
+              owner_name: ownerName,
+              status: 'open',
+              why_it_matters: 'High-risk work records require evidence documentation for audit defensibility and insurance compliance.',
+              fix_action_type: 'upload_evidence',
+              metadata: {
+                evidence_types: ['document', 'photo'],
+                risk_score: job.risk_score,
+              },
+              created_at: job.created_at,
+            })
+          }
+        }
+      }
+    }
+
+    // 2. MISSING ATTESTATIONS (high-risk work records without sign-offs)
+    if (!category || category === 'attestations') {
+      let attestationQuery = supabase
+        .from('jobs')
+        .select('id, client_name, risk_score, owner_id, created_at')
+        .eq('organization_id', organization_id)
+        .is('deleted_at', null)
+        .gt('risk_score', 75)
+
+      if (time_range !== 'all') {
+        attestationQuery = attestationQuery.gte('created_at', cutoff.toISOString())
+      }
+      if (job_id) {
+        attestationQuery = attestationQuery.eq('id', job_id as string)
+      }
+      if (owner_id) {
+        attestationQuery = attestationQuery.eq('owner_id', owner_id as string)
+      }
+
+      const { data: criticalJobs } = await attestationQuery
+
+      if (criticalJobs) {
+        for (const job of criticalJobs) {
+          const { count: signoffCount } = await supabase
+            .from('job_signoffs')
+            .select('id', { count: 'exact', head: true })
+            .eq('job_id', job.id)
+
+          if (!signoffCount || signoffCount === 0) {
+            if (severity && severity !== 'material') {
+              continue
+            }
+
+            let ownerName: string | undefined
+            if (job.owner_id) {
+              const { data: ownerData } = await supabase
+                .from('users')
+                .select('full_name, email')
+                .eq('id', job.owner_id)
+                .single()
+              ownerName = ownerData?.full_name || ownerData?.email
+            }
+
+            items.push({
+              id: `attestation-missing-${job.id}`,
+              rule_code: 'ATTESTATION.MISSING.HIGH_RISK',
+              rule_name: 'Missing Attestation for High-Risk Work Record',
+              category: 'attestations',
+              severity: 'material',
+              affected_type: 'attestation',
+              affected_id: job.id,
+              affected_name: job.client_name,
+              work_record_id: job.id,
+              work_record_name: job.client_name,
+              owner_id: job.owner_id || undefined,
+              owner_name: ownerName,
+              status: 'open',
+              why_it_matters: 'High-risk work records require role-based attestations to demonstrate oversight and accountability.',
+              fix_action_type: 'request_attestation',
+              created_at: job.created_at,
+            })
+          }
+        }
+      }
+    }
+
+    // 3. OVERDUE CONTROLS (mitigation items not completed)
+    if (!category || category === 'controls') {
+      let controlsQuery = supabase
+        .from('jobs')
+        .select('id, client_name, risk_score, site_id, owner_id, created_at')
+        .eq('organization_id', organization_id)
+        .is('deleted_at', null)
+        .gt('risk_score', 50)
+
+      if (time_range !== 'all') {
+        controlsQuery = controlsQuery.gte('created_at', cutoff.toISOString())
+      }
+      if (job_id) {
+        controlsQuery = controlsQuery.eq('id', job_id as string)
+      }
+      if (site_id) {
+        controlsQuery = controlsQuery.eq('site_id', site_id as string)
+      }
+      if (owner_id) {
+        controlsQuery = controlsQuery.eq('owner_id', owner_id as string)
+      }
+
+      const { data: jobsWithControls } = await controlsQuery
+
+      if (jobsWithControls) {
+        for (const job of jobsWithControls) {
+          let mitigationsQuery = supabase
+            .from('mitigation_items')
+            .select('id, title, done, is_completed, due_date, owner_id, created_at')
+            .eq('job_id', job.id)
+            .eq('done', false)
+            .eq('is_completed', false)
+
+          if (owner_id) {
+            mitigationsQuery = mitigationsQuery.eq('owner_id', owner_id as string)
+          }
+
+          const { data: incompleteControls } = await mitigationsQuery
+
+          if (incompleteControls && incompleteControls.length > 0) {
+            const today = new Date()
+            today.setHours(0, 0, 0, 0)
+
+            const overdueControls = incompleteControls.filter((ctrl: any) => {
+              if (!ctrl.due_date) return false
+              const dueDate = new Date(ctrl.due_date)
+              dueDate.setHours(0, 0, 0, 0)
+              return dueDate < today
+            })
+
+            if (overdueControls.length > 0) {
+              const isCritical = (job.risk_score || 0) > 75 || overdueControls.length > 5
+              if (severity && severity !== (isCritical ? 'critical' : 'material')) {
+                continue
+              }
+
+              const oldestDueDate = overdueControls
+                .map((c: any) => c.due_date)
+                .sort()[0]
+
+              let ownerName: string | undefined
+              const ownerIds = new Set(overdueControls.map((c: any) => c.owner_id).filter(Boolean))
+              if (ownerIds.size === 1) {
+                const ownerId = Array.from(ownerIds)[0]
+                const { data: ownerData } = await supabase
+                  .from('users')
+                  .select('full_name, email')
+                  .eq('id', ownerId)
+                  .single()
+                ownerName = ownerData?.full_name || ownerData?.email
+              }
+
+              const controlNames = overdueControls.slice(0, 3).map((c: any) => c.title || 'Untitled Control')
+
+              items.push({
+                id: `control-overdue-${job.id}`,
+                rule_code: isCritical ? 'CONTROL.OVERDUE.CRITICAL' : 'CONTROL.OVERDUE.MATERIAL',
+                rule_name: 'Overdue Controls for Work Record',
+                category: 'controls',
+                severity: isCritical ? 'critical' : 'material',
+                affected_type: 'control',
+                affected_id: job.id,
+                affected_name: `${overdueControls.length} overdue control${overdueControls.length > 1 ? 's' : ''}`,
+                work_record_id: job.id,
+                work_record_name: job.client_name,
+                site_id: job.site_id || undefined,
+                owner_id: ownerIds.size === 1 ? Array.from(ownerIds)[0] : undefined,
+                owner_name: ownerName,
+                due_date: oldestDueDate,
+                status: 'open',
+                why_it_matters: 'Overdue controls indicate incomplete risk mitigation. Auditors expect all identified controls to be completed or formally waived.',
+                fix_action_type: 'complete_controls',
+                metadata: {
+                  overdue_count: overdueControls.length,
+                  control_ids: overdueControls.map((c: any) => c.id),
+                  control_names: controlNames,
+                  risk_score: job.risk_score,
+                },
+                created_at: job.created_at,
+              })
+            }
+          }
+        }
+      }
+    }
+
+    // 4. OPEN INCIDENTS (flagged work records)
+    if (!category || category === 'incidents') {
+      let incidentsQuery = supabase
+        .from('jobs')
+        .select('id, client_name, risk_score, review_flag, flagged_at, site_id, owner_id, created_at')
+        .eq('organization_id', organization_id)
+        .is('deleted_at', null)
+        .eq('review_flag', true)
+
+      if (time_range !== 'all') {
+        incidentsQuery = incidentsQuery.gte('flagged_at', cutoff.toISOString())
+      }
+      if (job_id) {
+        incidentsQuery = incidentsQuery.eq('id', job_id as string)
+      }
+      if (site_id) {
+        incidentsQuery = incidentsQuery.eq('site_id', site_id as string)
+      }
+      if (owner_id) {
+        incidentsQuery = incidentsQuery.eq('owner_id', owner_id as string)
+      }
+
+      const { data: flaggedJobs } = await incidentsQuery
+
+      if (flaggedJobs) {
+        for (const job of flaggedJobs) {
+          const { data: jobData } = await supabase
+            .from('jobs')
+            .select('metadata')
+            .eq('id', job.id)
+            .single()
+
+          const isClosed = jobData?.metadata?.incident_closed?.closed_at
+
+          if (!isClosed) {
+            if (severity && severity !== 'critical') {
+              continue
+            }
+
+            let ownerName: string | undefined
+            if (job.owner_id) {
+              const { data: ownerData } = await supabase
+                .from('users')
+                .select('full_name, email')
+                .eq('id', job.owner_id)
+                .single()
+              ownerName = ownerData?.full_name || ownerData?.email
+            }
+
+            items.push({
+              id: `incident-open-${job.id}`,
+              rule_code: 'INCIDENT.OPEN',
+              rule_name: 'Open Incident',
+              category: 'incidents',
+              severity: 'critical',
+              affected_type: 'incident',
+              affected_id: job.id,
+              affected_name: job.client_name,
+              work_record_id: job.id,
+              work_record_name: job.client_name,
+              site_id: job.site_id || undefined,
+              owner_id: job.owner_id || undefined,
+              owner_name: ownerName,
+              status: 'open',
+              why_it_matters: 'Open incidents must be resolved with root cause analysis, corrective actions, and closure attestations before audit.',
+              fix_action_type: 'resolve_incident',
+              created_at: job.flagged_at || job.created_at,
+            })
+          }
+        }
+      }
+    }
+
+    // 5. ACCESS VIOLATIONS
+    if (!category || category === 'access') {
+      let violationsQuery = supabase
+        .from('audit_logs')
+        .select('id, event_name, job_id, created_at, summary, metadata')
+        .eq('organization_id', organization_id)
+        .eq('event_name', 'auth.role_violation')
+        .eq('category', 'governance')
+
+      if (time_range !== 'all') {
+        violationsQuery = violationsQuery.gte('created_at', cutoff.toISOString())
+      }
+      if (job_id) {
+        violationsQuery = violationsQuery.eq('job_id', job_id as string)
+      }
+
+      const { data: violations } = await violationsQuery.limit(20)
+
+      if (violations) {
+        for (const violation of violations) {
+          if (severity && severity !== 'critical') {
+            continue
+          }
+
+          items.push({
+            id: `access-violation-${violation.id}`,
+            rule_code: 'ACCESS_VIOLATION.LOGGED',
+            rule_name: 'Role Violation Attempt',
+            category: 'access',
+            severity: 'critical',
+            affected_type: 'review_item',
+            affected_id: violation.id,
+            affected_name: violation.summary || 'Unauthorized action attempt',
+            work_record_id: violation.job_id || undefined,
+            status: 'open',
+            why_it_matters: 'Role violations indicate attempted unauthorized access. These must be reviewed and documented for audit compliance.',
+            fix_action_type: 'review_item',
+            metadata: {
+              endpoint: violation.metadata?.endpoint,
+              policy_statement: violation.metadata?.policy_statement,
+            },
+            created_at: violation.created_at,
+          })
+        }
+      }
+    }
+
+    // Filter by status
+    let filteredItems = items
+    if (status) {
+      filteredItems = filteredItems.filter((item: any) => item.status === status)
+    }
+
+    // Calculate summary
+    const calculateAuditReadyScore = (items: any[]): number => {
+      if (items.length === 0) return 100
+      let penalty = 0
+      items.forEach((item: any) => {
+        if (item.severity === 'critical') {
+          penalty += 10
+        } else if (item.severity === 'material') {
+          penalty += 5
+        } else {
+          penalty += 1
+        }
+      })
+      return Math.max(0, 100 - Math.min(penalty, 100))
+    }
+
+    const estimateTimeToClear = (items: any[]): number => {
+      let totalHours = 0
+      items.forEach((item: any) => {
+        if (item.severity === 'critical') {
+          totalHours += 4
+        } else if (item.severity === 'material') {
+          totalHours += 24
+        } else {
+          totalHours += 72
+        }
+      })
+      return totalHours
+    }
+
+    const getOldestOverdueDate = (items: any[]): string | undefined => {
+      const dates = items
+        .map((item: any) => item.due_date || item.created_at)
+        .filter(Boolean)
+        .sort()
+      return dates[0]
+    }
+
+    const summary = {
+      total_items: filteredItems.length,
+      critical_blockers: filteredItems.filter((i: any) => i.severity === 'critical').length,
+      material: filteredItems.filter((i: any) => i.severity === 'material').length,
+      info: filteredItems.filter((i: any) => i.severity === 'info').length,
+      resolved: 0,
+      audit_ready_score: calculateAuditReadyScore(filteredItems),
+      estimated_time_to_clear_hours: estimateTimeToClear(filteredItems),
+      oldest_overdue_date: getOldestOverdueDate(filteredItems),
+      category_breakdown: {
+        evidence: filteredItems.filter((i: any) => i.category === 'evidence').length,
+        controls: filteredItems.filter((i: any) => i.category === 'controls').length,
+        attestations: filteredItems.filter((i: any) => i.category === 'attestations').length,
+        incidents: filteredItems.filter((i: any) => i.category === 'incidents').length,
+        access: filteredItems.filter((i: any) => i.category === 'access').length,
+      },
+    }
+
+    res.json({
+      summary,
+      items: filteredItems,
+    })
+  } catch (err: any) {
+    const { response: errorResponse, errorId } = createErrorResponse({
+      message: 'Failed to fetch audit readiness',
+      internalMessage: err?.message || String(err),
+      code: 'READINESS_ERROR',
+      requestId,
+      statusCode: 500,
+    })
+    res.setHeader('X-Error-ID', errorId)
+    res.status(500).json(errorResponse)
+  }
 })
 
 // POST /api/audit/readiness/resolve
