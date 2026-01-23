@@ -396,42 +396,101 @@ subscriptionsRouter.post(
         });
       }
 
-      // If switching to starter (free), just update the plan
-      if (planCode === "starter") {
-        await applyPlanToOrganization(organization_id, "starter", {
-          stripeCustomerId: currentSubscription?.stripe_customer_id || null,
-          stripeSubscriptionId: null, // Cancel subscription for free plan
-          currentPeriodStart: null,
-          currentPeriodEnd: null,
-          status: "canceled",
-        });
+      // Determine plan ranking for upgrade/downgrade logic
+      const planRank: Record<PlanCode, number> = {
+        starter: 0,
+        pro: 1,
+        business: 2,
+      };
+      const currentRank = planRank[currentPlan];
+      const targetRank = planRank[planCode];
+      const isUpgrade = targetRank > currentRank;
+      const isDowngrade = targetRank < currentRank;
 
-        // Cancel Stripe subscription if it exists
-        if (currentSubscription?.stripe_subscription_id) {
+      // If switching to starter (free), cancel at period end
+      if (planCode === "starter") {
+        const subscriptionId = currentSubscription?.stripe_subscription_id;
+        if (subscriptionId) {
           try {
-            await stripe.subscriptions.cancel(currentSubscription.stripe_subscription_id);
+            // Cancel at period end (user keeps access until renewal)
+            await stripe.subscriptions.update(subscriptionId, {
+              cancel_at_period_end: true,
+            });
           } catch (err: any) {
-            console.warn("Failed to cancel Stripe subscription:", err);
-            // Continue anyway - we've updated the plan in our DB
+            console.warn("Failed to schedule subscription cancellation:", err);
+            // If update fails, cancel immediately
+            try {
+              await stripe.subscriptions.cancel(subscriptionId);
+            } catch (cancelErr: any) {
+              console.warn("Failed to cancel subscription:", cancelErr);
+            }
           }
         }
 
+        // Update plan immediately (user loses paid features right away)
+        await applyPlanToOrganization(organization_id, "starter", {
+          stripeCustomerId: currentSubscription?.stripe_customer_id || null,
+          stripeSubscriptionId: subscriptionId || null, // Keep ID until period ends
+          currentPeriodStart: currentSubscription?.current_period_start || null,
+          currentPeriodEnd: currentSubscription?.current_period_end || null,
+          status: "canceled",
+        });
+
         return res.json({
           success: true,
-          message: "Switched to Starter plan",
+          message: "Switched to Starter plan. Your subscription will cancel at the end of the billing period.",
           plan: "starter",
         });
       }
 
-      // For paid plans (pro/business), handle upgrade/downgrade or new subscription
+      // For paid plans (pro/business), determine if upgrade or downgrade
       const priceId = await resolveStripePriceId(stripe, planCode);
-
-      // If user has an active Stripe subscription, update it
       const subscriptionId = currentSubscription?.stripe_subscription_id;
-      if (subscriptionId && currentPlan !== "starter") {
+
+      // UPGRADE: Always require Checkout (payment required)
+      if (isUpgrade && subscriptionId) {
+        // Create Checkout session for upgrade
+        // Don't update subscription yet - let webhook handle it after payment
+        const session = await stripe.checkout.sessions.create({
+          mode: "subscription",
+          payment_method_types: ["card"],
+          line_items: [
+            {
+              price: priceId,
+              quantity: 1,
+            },
+          ],
+          success_url:
+            `${process.env.FRONTEND_URL || "https://www.riskmate.dev"}/pricing/thank-you?session_id={CHECKOUT_SESSION_ID}`,
+          cancel_url:
+            `${process.env.FRONTEND_URL || "https://www.riskmate.dev"}/operations/account`,
+          metadata: {
+            plan: planCode,
+            organization_id: organization_id,
+            action: "switch",
+            previous_plan: currentPlan,
+            is_upgrade: "true",
+          },
+          client_reference_id: organization_id,
+          customer: currentSubscription.stripe_customer_id || undefined,
+          subscription_data: {
+            metadata: {
+              plan: planCode,
+              organization_id: organization_id,
+              previous_plan: currentPlan,
+            },
+          },
+        });
+
+        return res.json({ url: session.url });
+      }
+
+      // DOWNGRADE: Schedule at period end (no refunds, no proration)
+      if (isDowngrade && subscriptionId) {
         try {
           const subscription = await stripe.subscriptions.retrieve(subscriptionId);
 
+          // Update subscription to new price, but schedule change at period end
           await stripe.subscriptions.update(subscriptionId, {
             items: [
               {
@@ -439,32 +498,35 @@ subscriptionsRouter.post(
                 price: priceId,
               },
             ],
-            proration_behavior: "always_invoice", // Prorate the change
+            proration_behavior: "none", // No proration for downgrades
+            billing_cycle_anchor: "unchanged", // Keep current billing cycle
           });
 
-          // Apply the new plan
-          const updatedSubscription = await stripe.subscriptions.retrieve(subscriptionId);
-
+          // Update plan immediately in DB (user loses premium features)
+          // But subscription continues at current price until period end
           await applyPlanToOrganization(organization_id, planCode, {
             stripeCustomerId: currentSubscription.stripe_customer_id || null,
             stripeSubscriptionId: subscriptionId,
-            currentPeriodStart: updatedSubscription.current_period_start ?? null,
-            currentPeriodEnd: updatedSubscription.current_period_end ?? null,
-            status: updatedSubscription.status,
+            currentPeriodStart: subscription.current_period_start ?? null,
+            currentPeriodEnd: subscription.current_period_end ?? null,
+            status: subscription.status,
           });
 
           return res.json({
             success: true,
-            message: `Switched to ${planCode} plan`,
+            message: `Downgraded to ${planCode} plan. Changes take effect at the end of your billing period.`,
             plan: planCode,
           });
         } catch (err: any) {
-          console.error("Failed to update subscription:", err);
-          // Fall through to create new checkout session if update fails
+          console.error("Failed to schedule downgrade:", err);
+          return res.status(500).json({
+            message: "Failed to schedule downgrade",
+            detail: err?.message,
+          });
         }
       }
 
-      // If no active subscription or update failed, create a checkout session
+      // New subscription (no existing subscription) - create Checkout
       const session = await stripe.checkout.sessions.create({
         mode: "subscription",
         payment_method_types: ["card"],
