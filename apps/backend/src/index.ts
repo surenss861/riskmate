@@ -347,6 +347,7 @@ app.use("/api/team", teamRouter);
 app.use("/api/account", accountRouter);
 app.use("/api/sites", sitesRouter);
 app.use("/api/audit", auditRouter);
+console.log("[ROUTES] ✅ Audit router mounted at /api/audit");
 app.use("/api/executive", executiveRouter);
 app.use("/api", evidenceRouter);
 app.use("/api", exportsRouter);

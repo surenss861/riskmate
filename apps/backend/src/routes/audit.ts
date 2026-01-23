@@ -2577,6 +2577,24 @@ auditRouter.post('/access/flag-suspicious', authenticate as unknown as express.R
   }
 })
 
+// GET /api/audit/readiness
+// Returns audit readiness items with standardized rule codes and fix actions
+// NOTE: This is a placeholder - the full implementation is in Next.js API route
+// The frontend should call the Next.js route, not this backend route
+auditRouter.get('/readiness', authenticate as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
+  const authReq = req as AuthenticatedRequest & RequestWithId
+  const requestId = authReq.requestId || 'unknown'
+  
+  // This route is implemented in Next.js (app/api/audit/readiness/route.ts)
+  // The backend doesn't have the full readiness calculation logic yet
+  // Return 404 to indicate route doesn't exist here
+  return res.status(404).json({
+    message: 'Route not found. Readiness endpoint is handled by Next.js API route.',
+    code: 'ROUTE_NOT_FOUND',
+    requestId,
+  })
+})
+
 // POST /api/audit/readiness/resolve
 // Unified endpoint for resolving readiness gaps (evidence/attestation/controls/etc.)
 // Always emits readiness.resolved ledger event for audit trail
