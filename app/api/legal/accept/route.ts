@@ -178,7 +178,7 @@ export async function POST(request: NextRequest) {
       } else {
         console.log('[LEGAL_ACCEPT] User profile updated', { 
           userId: user.id.substring(0, 8),
-          orgId: organizationId.substring(0, 8)
+          orgId: organizationId!.substring(0, 8)
         })
       }
     }
