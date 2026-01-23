@@ -103,6 +103,7 @@ async function apiRequest<T>(
     
     // Special handling for 401: Check if session is actually invalid before treating as fatal
     if (response.status === 401 && typeof window !== 'undefined') {
+      const { createSupabaseBrowserClient } = await import('@/lib/supabase/client');
       const supabase = createSupabaseBrowserClient();
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       
