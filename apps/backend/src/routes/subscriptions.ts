@@ -348,3 +348,153 @@ subscriptionsRouter.post(
     }
   }
 );
+
+// POST /api/subscriptions/switch
+// Switches organization to a different plan (upgrade/downgrade)
+subscriptionsRouter.post(
+  "/switch",
+  authenticate as unknown as RequestHandler,
+  async (req: Request, res: Response) => {
+    try {
+      const { organization_id, id: userId, role: userRole } = (req as AuthenticatedRequest).user;
+
+      // Only owners and admins can switch plans
+      if (!["owner", "admin"].includes(userRole)) {
+        return res.status(403).json({ message: "Only owners and admins can change plans" });
+      }
+
+      const { plan } = req.body ?? {};
+
+      if (!plan || !["starter", "pro", "business"].includes(plan)) {
+        return res.status(400).json({ message: "Invalid plan" });
+      }
+
+      if (!process.env.STRIPE_SECRET_KEY) {
+        return res.status(500).json({ message: "Stripe secret key not configured" });
+      }
+
+      const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+      const planCode = plan as PlanCode;
+
+      // Get current subscription
+      const { data: currentSubscription } = await supabase
+        .from("subscriptions")
+        .select("tier, stripe_subscription_id, stripe_customer_id")
+        .eq("organization_id", organization_id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const currentPlan = (currentSubscription?.tier as PlanCode) || "starter";
+
+      // If switching to the same plan, return success
+      if (currentPlan === planCode) {
+        return res.json({
+          success: true,
+          message: "Already on this plan",
+          plan: planCode,
+        });
+      }
+
+      // If switching to starter (free), just update the plan
+      if (planCode === "starter") {
+        await applyPlanToOrganization(organization_id, "starter", {
+          stripeCustomerId: currentSubscription?.stripe_customer_id || null,
+          stripeSubscriptionId: null, // Cancel subscription for free plan
+          currentPeriodStart: null,
+          currentPeriodEnd: null,
+          status: "canceled",
+        });
+
+        // Cancel Stripe subscription if it exists
+        if (currentSubscription?.stripe_subscription_id) {
+          try {
+            await stripe.subscriptions.cancel(currentSubscription.stripe_subscription_id);
+          } catch (err: any) {
+            console.warn("Failed to cancel Stripe subscription:", err);
+            // Continue anyway - we've updated the plan in our DB
+          }
+        }
+
+        return res.json({
+          success: true,
+          message: "Switched to Starter plan",
+          plan: "starter",
+        });
+      }
+
+      // For paid plans (pro/business), handle upgrade/downgrade or new subscription
+      const priceId = await resolveStripePriceId(stripe, planCode);
+
+      // If user has an active Stripe subscription, update it
+      if (currentSubscription?.stripe_subscription_id && currentPlan !== "starter") {
+        try {
+          const subscription = await stripe.subscriptions.retrieve(
+            currentSubscription.stripe_subscription_id
+          );
+
+          await stripe.subscriptions.update(currentSubscription.stripe_subscription_id, {
+            items: [
+              {
+                id: subscription.items.data[0].id,
+                price: priceId,
+              },
+            ],
+            proration_behavior: "always_invoice", // Prorate the change
+          });
+
+          // Apply the new plan
+          const updatedSubscription = await stripe.subscriptions.retrieve(
+            currentSubscription.stripe_subscription_id
+          );
+
+          await applyPlanToOrganization(organization_id, planCode, {
+            stripeCustomerId: currentSubscription.stripe_customer_id || null,
+            stripeSubscriptionId: currentSubscription.stripe_subscription_id,
+            currentPeriodStart: updatedSubscription.current_period_start ?? null,
+            currentPeriodEnd: updatedSubscription.current_period_end ?? null,
+            status: updatedSubscription.status,
+          });
+
+          return res.json({
+            success: true,
+            message: `Switched to ${planCode} plan`,
+            plan: planCode,
+          });
+        } catch (err: any) {
+          console.error("Failed to update subscription:", err);
+          // Fall through to create new checkout session if update fails
+        }
+      }
+
+      // If no active subscription or update failed, create a checkout session
+      const session = await stripe.checkout.sessions.create({
+        mode: "subscription",
+        payment_method_types: ["card"],
+        line_items: [
+          {
+            price: priceId,
+            quantity: 1,
+          },
+        ],
+        success_url:
+          `${process.env.FRONTEND_URL || "https://www.riskmate.dev"}/pricing/thank-you?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url:
+          `${process.env.FRONTEND_URL || "https://www.riskmate.dev"}/operations/account`,
+        metadata: {
+          plan: planCode,
+          organization_id: organization_id,
+          action: "switch",
+          previous_plan: currentPlan,
+        },
+        client_reference_id: organization_id,
+        customer: currentSubscription?.stripe_customer_id || undefined,
+      });
+
+      return res.json({ url: session.url });
+    } catch (err: any) {
+      console.error("Plan switch error:", err);
+      res.status(500).json({ message: "Failed to switch plan", detail: err?.message });
+    }
+  }
+);
