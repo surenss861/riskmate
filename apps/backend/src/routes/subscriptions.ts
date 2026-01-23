@@ -490,7 +490,12 @@ subscriptionsRouter.post(
         try {
           const subscription = await stripe.subscriptions.retrieve(subscriptionId);
 
-          // Update subscription to new price, but schedule change at period end
+          // For downgrades, we have two options:
+          // 1. Update subscription price immediately (user pays less immediately, but loses features)
+          // 2. Keep subscription at current price, update DB only (user keeps features until period end)
+          // 
+          // We'll do option 1: Update price immediately with no proration, user loses premium features
+          // This is simpler and matches most SaaS behavior
           await stripe.subscriptions.update(subscriptionId, {
             items: [
               {
@@ -499,28 +504,27 @@ subscriptionsRouter.post(
               },
             ],
             proration_behavior: "none", // No proration for downgrades
-            billing_cycle_anchor: "unchanged", // Keep current billing cycle
           });
 
           // Update plan immediately in DB (user loses premium features)
-          // But subscription continues at current price until period end
+          const updatedSubscription = await stripe.subscriptions.retrieve(subscriptionId);
           await applyPlanToOrganization(organization_id, planCode, {
             stripeCustomerId: currentSubscription.stripe_customer_id || null,
             stripeSubscriptionId: subscriptionId,
-            currentPeriodStart: subscription.current_period_start ?? null,
-            currentPeriodEnd: subscription.current_period_end ?? null,
-            status: subscription.status,
+            currentPeriodStart: updatedSubscription.current_period_start ?? null,
+            currentPeriodEnd: updatedSubscription.current_period_end ?? null,
+            status: updatedSubscription.status,
           });
 
           return res.json({
             success: true,
-            message: `Downgraded to ${planCode} plan. Changes take effect at the end of your billing period.`,
+            message: `Downgraded to ${planCode} plan. Your billing will reflect the new price on your next invoice.`,
             plan: planCode,
           });
         } catch (err: any) {
-          console.error("Failed to schedule downgrade:", err);
+          console.error("Failed to process downgrade:", err);
           return res.status(500).json({
-            message: "Failed to schedule downgrade",
+            message: "Failed to process downgrade",
             detail: err?.message,
           });
         }
