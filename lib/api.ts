@@ -21,6 +21,58 @@ export interface ApiError {
   code?: string;
 }
 
+// Readiness API types
+export interface ReadinessItem {
+  id: string
+  rule_code: string
+  rule_name: string
+  category: 'evidence' | 'controls' | 'attestations' | 'incidents' | 'access'
+  severity: 'critical' | 'material' | 'info'
+  affected_type: 'work_record' | 'control' | 'attestation' | 'incident' | 'review_item'
+  affected_id: string
+  affected_name?: string
+  work_record_id?: string
+  work_record_name?: string
+  site_id?: string
+  site_name?: string
+  owner_id?: string
+  owner_name?: string
+  due_date?: string
+  status: 'open' | 'in_progress' | 'waived' | 'resolved'
+  why_it_matters: string
+  fix_action_type: 'upload_evidence' | 'request_attestation' | 'complete_controls' | 'resolve_incident' | 'review_item' | 'create_evidence' | 'create_control' | 'mark_resolved'
+  metadata?: any
+  created_at?: string
+  updated_at?: string
+}
+
+export interface ReadinessSummary {
+  total_items: number
+  critical_blockers: number
+  material: number
+  info: number
+  resolved: number
+  audit_ready_score: number
+  estimated_time_to_clear_hours?: number
+  oldest_overdue_date?: string
+  category_breakdown: {
+    evidence: number
+    controls: number
+    attestations: number
+    incidents: number
+    access: number
+  }
+}
+
+export interface ReadinessResponse {
+  ok: true
+  data: {
+    summary: ReadinessSummary
+    items: ReadinessItem[]
+  }
+  requestId?: string
+}
+
 async function getAuthToken(): Promise<string | null> {
   if (typeof window === 'undefined') return null;
   
