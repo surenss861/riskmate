@@ -214,7 +214,7 @@ export async function POST(request: NextRequest) {
     if (acceptError) {
       console.error('[LEGAL_ACCEPT] Legal acceptance upsert failed', { 
         userId: user.id.substring(0, 8),
-        orgId: organizationId.substring(0, 8),
+        orgId: organizationId!.substring(0, 8),
         error: acceptError.message,
         code: acceptError.code,
         details: acceptError.details,
