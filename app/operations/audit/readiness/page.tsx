@@ -221,18 +221,34 @@ export default function AuditReadinessPage() {
     setError(null)
 
     try {
-      const res = await fetch(`/api/audit/readiness?${query}`, { method: 'GET' })
-      const json = (await res.json()) as ReadinessResponse | ApiError
+      // Parse query string to get params
+      const params = new URLSearchParams(query)
+      const readinessParams: {
+        category?: 'evidence' | 'controls' | 'attestations' | 'incidents' | 'access'
+        time_range?: '24h' | '7d' | '30d' | '90d' | 'all'
+        severity?: 'critical' | 'material' | 'info'
+        status?: 'open' | 'in_progress' | 'waived' | 'resolved'
+        job_id?: string
+        site_id?: string
+        owner_id?: string
+      } = {}
+      
+      if (params.get('category')) readinessParams.category = params.get('category') as any
+      if (params.get('time_range')) readinessParams.time_range = params.get('time_range') as any
+      if (params.get('severity')) readinessParams.severity = params.get('severity') as any
+      if (params.get('status')) readinessParams.status = params.get('status') as any
+      if (params.get('job_id')) readinessParams.job_id = params.get('job_id')!
+      if (params.get('site_id')) readinessParams.site_id = params.get('site_id')!
+      if (params.get('owner_id')) readinessParams.owner_id = params.get('owner_id')!
 
-      if (!res.ok || ('ok' in json && json.ok === false)) {
-        setError(json as ApiError)
-        setData(null)
-        return
-      }
-
-      setData((json as ReadinessResponse).data)
+      const response = await auditApi.getReadiness(readinessParams)
+      setData(response.data)
     } catch (e: any) {
-      setError({ ok: false, code: 'NETWORK_ERROR', message: e?.message || 'Failed to load audit readiness. Backend server may be unreachable.' })
+      setError({ 
+        ok: false, 
+        code: e?.code || 'NETWORK_ERROR', 
+        message: e?.message || 'Failed to load audit readiness. Backend server may be unreachable.' 
+      })
       setData(null)
     } finally {
       setLoading(false)

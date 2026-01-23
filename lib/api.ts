@@ -11,6 +11,11 @@ import { BACKEND_URL } from '@/lib/config'
 // This ensures consistency and avoids hitting Next.js API routes
 const API_URL = BACKEND_URL
 
+// Debug log in development to verify API URL is set correctly
+if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+  console.log('[API] API_BASE:', API_URL)
+}
+
 export interface ApiError {
   message: string;
   code?: string;
@@ -812,6 +817,29 @@ export const executiveApi = {
 }
 
 export const auditApi = {
+  /**
+   * Get audit readiness data
+   */
+  getReadiness: async (params?: {
+    category?: 'evidence' | 'controls' | 'attestations' | 'incidents' | 'access'
+    time_range?: '24h' | '7d' | '30d' | '90d' | 'all'
+    severity?: 'critical' | 'material' | 'info'
+    status?: 'open' | 'in_progress' | 'waived' | 'resolved'
+    job_id?: string
+    site_id?: string
+    owner_id?: string
+  }) => {
+    const queryParams = new URLSearchParams()
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          queryParams.append(key, String(value))
+        }
+      })
+    }
+    return apiRequest<ReadinessResponse>(`/api/audit/readiness${queryParams.toString() ? `?${queryParams.toString()}` : ''}`)
+  },
+
   /**
    * Resolve a single readiness item
    */
