@@ -16,23 +16,57 @@ export interface OrganizationContext {
 /**
  * Get the authenticated user's organization context
  * Throws if user is not authenticated or has no organization
+ * 
+ * Supports both Authorization header (Bearer token) and cookie-based auth
  */
-export async function getOrganizationContext(): Promise<OrganizationContext> {
+export async function getOrganizationContext(request?: Request): Promise<OrganizationContext> {
   const supabase = await createSupabaseServerClient()
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  let user = null
+  let authError = null
+
+  // Try Authorization header first (client-side sends this when using localStorage)
+  if (request) {
+    const authHeader = request.headers.get('authorization')
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.substring(7)
+      const { data: { user: tokenUser }, error: tokenError } = await supabase.auth.getUser(token)
+      user = tokenUser
+      authError = tokenError
+    }
+  }
+
+  // Fallback to cookie-based auth if no header or header auth failed
+  if (!user && !authError) {
+    const { data: { user: cookieUser }, error: cookieError } = await supabase.auth.getUser()
+    user = cookieUser
+    authError = cookieError
+  }
 
   if (authError || !user) {
     throw new Error('Unauthorized: User not authenticated')
   }
 
-  const { data: userData, error: userError } = await supabase
+  // Use service role client for database queries (bypasses RLS)
+  const { createSupabaseAdminClient } = await import('@/lib/supabase/admin')
+  const serviceSupabase = createSupabaseAdminClient()
+
+  const { data: userData, error: userError } = await serviceSupabase
     .from('users')
     .select('organization_id, role')
     .eq('id', user.id)
-    .single()
+    .maybeSingle()
 
-  if (userError || !userData?.organization_id) {
+  if (userError) {
+    console.error('[getOrganizationContext] User lookup error:', {
+      userId: user.id.substring(0, 8),
+      error: userError.message,
+      code: userError.code
+    })
     throw new Error('Failed to get organization ID')
+  }
+
+  if (!userData?.organization_id) {
+    throw new Error('Failed to get organization ID: User has no organization')
   }
 
   return {
