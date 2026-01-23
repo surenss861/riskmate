@@ -102,10 +102,9 @@ export async function POST(request: NextRequest) {
     if (userData?.organization_id) {
       organizationId = userData.organization_id
       // TypeScript doesn't narrow organizationId from userData check, but we know it's non-null here
-      const orgId = organizationId
       console.log('[LEGAL_ACCEPT] Found existing org', { 
         userId: user.id.substring(0, 8), 
-        orgId: orgId.substring(0, 8)
+        orgId: organizationId!.substring(0, 8)
       })
     } else {
       // User has no organization - create a default one
