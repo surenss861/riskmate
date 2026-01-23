@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { createSupabaseAdminClient } from '@/lib/supabase/admin'
 
 export const runtime = 'nodejs'
 
@@ -20,64 +21,86 @@ function getClientIp(headers: Headers): string | undefined {
 }
 
 export async function POST(request: NextRequest) {
+  const startTime = Date.now()
+  let userId: string | null = null
+  
   try {
-    // Try to get token from Authorization header first (client-side sends this)
+    // Step 1: Verify auth token (use anon client for auth verification only)
     const authHeader = request.headers.get('authorization')
-    const supabase = await createSupabaseServerClient()
+    const authClient = await createSupabaseServerClient()
     let user = null
     let authError = null
 
     if (authHeader && authHeader.startsWith('Bearer ')) {
       const token = authHeader.substring(7)
-      // Validate token with Supabase
-      const { data: { user: tokenUser }, error: tokenError } = await supabase.auth.getUser(token)
+      const { data: { user: tokenUser }, error: tokenError } = await authClient.auth.getUser(token)
       user = tokenUser
       authError = tokenError
     } else {
       // Fallback to cookie-based auth
-      const { data: { user: cookieUser }, error: cookieError } = await supabase.auth.getUser()
+      const { data: { user: cookieUser }, error: cookieError } = await authClient.auth.getUser()
       user = cookieUser
       authError = cookieError
     }
 
     if (authError || !user) {
+      console.error('[LEGAL_ACCEPT] Auth failed', { 
+        hasHeader: !!authHeader, 
+        error: authError?.message,
+        code: authError?.code 
+      })
       return NextResponse.json(
         { 
           message: 'Your session has expired. Please refresh the page and try again.',
-          code: 'AUTH_UNAUTHORIZED'
+          code: 'AUTH_UNAUTHORIZED',
+          error: authError?.message
         },
         { status: 401 }
       )
     }
 
-    // Get user's organization_id - create default org if missing
-    const { data: userData, error: userError } = await supabase
+    userId = user.id
+
+    // Step 2: Use SERVICE ROLE client for all database operations (bypasses RLS)
+    const serviceSupabase = createSupabaseAdminClient()
+
+    // Step 3: Get or create user profile and organization
+    let organizationId: string | null = null
+
+    // Try to get existing user profile
+    const { data: userData, error: userError } = await serviceSupabase
       .from('users')
       .select('organization_id, email, full_name')
       .eq('id', user.id)
       .maybeSingle()
 
-    let organizationId: string | null = null
-
     if (userError && userError.code !== 'PGRST116') {
-      console.error('Error fetching user data:', userError)
-      // User doesn't exist in users table - create profile with default org
+      console.error('[LEGAL_ACCEPT] User lookup error', { 
+        userId: user.id.substring(0, 8), 
+        error: userError.message,
+        code: userError.code 
+      })
     }
 
     if (userData?.organization_id) {
       organizationId = userData.organization_id
+      console.log('[LEGAL_ACCEPT] Found existing org', { 
+        userId: user.id.substring(0, 8), 
+        orgId: organizationId.substring(0, 8) 
+      })
     } else {
       // User has no organization - create a default one
-      console.warn(`[Legal Accept] User ${user.id} has no organization_id - creating default org`)
-      
-      // Use service role client to create org (bypasses RLS)
-      const { createSupabaseServiceClient } = await import('@/lib/supabase/client')
-      const serviceSupabase = createSupabaseServiceClient()
+      console.warn('[LEGAL_ACCEPT] User has no org_id - creating default org', { 
+        userId: user.id.substring(0, 8),
+        hasUserData: !!userData 
+      })
       
       const orgName = userData?.full_name 
         ? `${userData.full_name}'s Organization`
         : userData?.email 
         ? `${userData.email.split('@')[0]}'s Organization`
+        : user.email
+        ? `${user.email.split('@')[0]}'s Organization`
         : 'My Organization'
       
       const { data: newOrg, error: orgError } = await serviceSupabase
@@ -92,44 +115,76 @@ export async function POST(request: NextRequest) {
         .single()
 
       if (orgError || !newOrg) {
-        console.error('Failed to create default organization:', orgError)
+        console.error('[LEGAL_ACCEPT] Org creation failed', { 
+          userId: user.id.substring(0, 8),
+          error: orgError?.message,
+          code: orgError?.code,
+          details: orgError?.details,
+          hint: orgError?.hint
+        })
         return NextResponse.json(
           { 
             message: 'Failed to set up organization. Please contact support.',
-            code: 'ORG_CREATION_FAILED'
+            code: 'ORG_CREATION_FAILED',
+            error: orgError?.message
           },
           { status: 500 }
         )
       }
 
       organizationId = newOrg.id
+      console.log('[LEGAL_ACCEPT] Created default org', { 
+        userId: user.id.substring(0, 8),
+        orgId: organizationId.substring(0, 8),
+        orgName 
+      })
 
-      // Update user with organization_id
-      const { error: updateError } = await serviceSupabase
+      // Create or update user profile with organization_id
+      const { error: upsertError } = await serviceSupabase
         .from('users')
         .upsert({
           id: user.id,
-          email: user.email,
+          email: user.email || userData?.email || null,
           organization_id: organizationId,
           role: 'owner',
           full_name: userData?.full_name || null,
         }, { onConflict: 'id' })
 
-      if (updateError) {
-        console.error('Failed to update user with organization_id:', updateError)
-        // Continue anyway - org was created
+      if (upsertError) {
+        console.error('[LEGAL_ACCEPT] User upsert failed', { 
+          userId: user.id.substring(0, 8),
+          error: upsertError.message,
+          code: upsertError.code
+        })
+        // Continue anyway - org was created successfully
+      } else {
+        console.log('[LEGAL_ACCEPT] User profile updated', { 
+          userId: user.id.substring(0, 8),
+          orgId: organizationId.substring(0, 8)
+        })
       }
     }
 
+    if (!organizationId) {
+      console.error('[LEGAL_ACCEPT] organizationId is null after all attempts', { userId: user.id.substring(0, 8) })
+      return NextResponse.json(
+        { 
+          message: 'Failed to determine organization. Please contact support.',
+          code: 'ORG_ID_MISSING'
+        },
+        { status: 500 }
+      )
+    }
+
+    // Step 4: Record legal acceptance (idempotent - can be called multiple times)
     const ipAddress = getClientIp(request.headers) || undefined
 
-    // Upsert legal acceptance
-    const { data, error } = await supabase
+    const { data, error: acceptError } = await serviceSupabase
       .from('legal_acceptances')
       .upsert(
         {
           user_id: user.id,
-          organization_id: organizationId!,
+          organization_id: organizationId,
           version: LEGAL_VERSION,
           ip_address: ipAddress ?? null,
         },
@@ -138,18 +193,29 @@ export async function POST(request: NextRequest) {
       .select('accepted_at')
       .single()
 
-    if (error) {
-      console.error('Legal acceptance upsert failed:', error)
+    if (acceptError) {
+      console.error('[LEGAL_ACCEPT] Legal acceptance upsert failed', { 
+        userId: user.id.substring(0, 8),
+        orgId: organizationId.substring(0, 8),
+        error: acceptError.message,
+        code: acceptError.code,
+        details: acceptError.details,
+        hint: acceptError.hint
+      })
       return NextResponse.json(
-        { message: 'Failed to record legal acceptance', details: error.message },
+        { 
+          message: 'Failed to record legal acceptance',
+          code: 'LEGAL_ACCEPT_FAILED',
+          error: acceptError.message
+        },
         { status: 500 }
       )
     }
 
-    // Record audit log
+    // Step 5: Record audit log (non-blocking - don't fail if this errors)
     try {
-      await supabase.from('audit_logs').insert({
-        organization_id: organizationId!,
+      await serviceSupabase.from('audit_logs').insert({
+        organization_id: organizationId,
         actor_id: user.id,
         event_name: 'legal.accepted',
         target_type: 'legal',
@@ -158,10 +224,21 @@ export async function POST(request: NextRequest) {
           ip_address: ipAddress ?? null,
         },
       })
-    } catch (auditError) {
+    } catch (auditError: any) {
       // Don't fail the request if audit log fails
-      console.warn('Failed to record audit log:', auditError)
+      console.warn('[LEGAL_ACCEPT] Audit log failed (non-fatal)', { 
+        userId: user.id.substring(0, 8),
+        error: auditError?.message 
+      })
     }
+
+    const duration = Date.now() - startTime
+    console.log('[LEGAL_ACCEPT] Success', { 
+      userId: user.id.substring(0, 8),
+      orgId: organizationId.substring(0, 8),
+      version: LEGAL_VERSION,
+      duration: `${duration}ms`
+    })
 
     return NextResponse.json({
       accepted: true,
@@ -169,9 +246,18 @@ export async function POST(request: NextRequest) {
       accepted_at: data?.accepted_at ?? new Date().toISOString(),
     })
   } catch (error: any) {
-    console.error('Legal acceptance failed:', error)
+    console.error('[LEGAL_ACCEPT] Unexpected error', { 
+      userId: userId?.substring(0, 8) || 'unknown',
+      message: error?.message,
+      stack: error?.stack,
+      name: error?.name
+    })
     return NextResponse.json(
-      { message: 'Failed to record legal acceptance' },
+      { 
+        message: 'Failed to record legal acceptance',
+        code: 'LEGAL_ACCEPT_ERROR',
+        error: error?.message || 'Unknown error'
+      },
       { status: 500 }
     )
   }
