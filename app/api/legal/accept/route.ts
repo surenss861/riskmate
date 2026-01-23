@@ -153,7 +153,7 @@ export async function POST(request: NextRequest) {
       organizationId = newOrg.id
       console.log('[LEGAL_ACCEPT] Created default org', { 
         userId: user.id.substring(0, 8),
-        orgId: organizationId.substring(0, 8),
+        orgId: organizationId!.substring(0, 8),
         orgName 
       })
 
@@ -253,7 +253,7 @@ export async function POST(request: NextRequest) {
     const duration = Date.now() - startTime
     console.log('[LEGAL_ACCEPT] Success', { 
       userId: user.id.substring(0, 8),
-      orgId: organizationId.substring(0, 8),
+      orgId: organizationId!.substring(0, 8),
       version: LEGAL_VERSION,
       duration: `${duration}ms`
     })
