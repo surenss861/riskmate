@@ -63,6 +63,18 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
 
   const loadLegalStatus = async () => {
     try {
+      // Double-check session is still valid before making API calls
+      const supabase = createSupabaseBrowserClient()
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+      
+      // If session is invalid or refresh token error, don't make API calls
+      if (sessionError?.message?.toLowerCase().includes('refresh token') || !session) {
+        console.warn('[ProtectedRoute] Session invalid when loading legal status - redirecting to login')
+        router.push('/login')
+        setLegalChecked(true)
+        return
+      }
+
       const [status, version] = await Promise.all([
         legalApi.getStatus(),
         legalApi.getVersion(),
@@ -72,15 +84,35 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
       setLegalUpdatedAt(version.updated_at)
     } catch (err: any) {
       console.error('Failed to load legal status', err)
-      // Enhanced error handling: if unauthorized, redirect to login
-      // Otherwise, show modal to allow acceptance
+      // Enhanced error handling: if unauthorized, verify session before redirecting
       if (err?.code === 'AUTH_UNAUTHORIZED' || err?.message?.includes('Unauthorized')) {
-        // Session expired - redirect to login
-        router.push('/login')
-        return
+        // Verify session is actually invalid before redirecting
+        const supabase = createSupabaseBrowserClient()
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+        
+        if (sessionError?.message?.toLowerCase().includes('refresh token')) {
+          // Refresh token is invalid - clear storage and redirect
+          console.warn('[ProtectedRoute] Refresh token invalid - clearing auth and redirecting')
+          await supabase.auth.signOut({ scope: 'local' })
+          router.push('/login')
+          return
+        }
+        
+        if (!session) {
+          // No session - redirect to login
+          router.push('/login')
+          return
+        }
+        
+        // Session is valid but API returned 401 - might be a transient error or deployment issue
+        // Don't redirect, just mark as not accepted so user can accept terms
+        // This prevents logout loops when the API is temporarily unavailable
+        console.warn('[ProtectedRoute] API returned 401 but session is valid - treating as not accepted (non-fatal)')
+        setLegalAccepted(false)
+      } else {
+        // For other errors, force modal to allow user to accept
+        setLegalAccepted(false)
       }
-      // For other errors, force modal to allow user to accept
-      setLegalAccepted(false)
     } finally {
       setLegalChecked(true)
     }
