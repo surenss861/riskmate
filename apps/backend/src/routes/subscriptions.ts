@@ -18,38 +18,76 @@ const STRIPE_PRODUCT_IDS: Partial<Record<PlanCode, string | undefined>> = {
   business: process.env.STRIPE_PRODUCT_BUSINESS || "prod_TpczVi0pxfQhfH",
 };
 
+/**
+ * Resolve Stripe Price ID for a plan
+ * 
+ * Priority:
+ * 1. STRIPE_PRICE_* env var (must be price_...)
+ * 2. Fallback to product ID lookup (slower, not recommended for production)
+ * 
+ * For production, always set STRIPE_PRICE_STARTER, STRIPE_PRICE_PRO, STRIPE_PRICE_BUSINESS
+ * to avoid Stripe API calls and ensure correct pricing.
+ */
 async function resolveStripePriceId(stripe: any, plan: PlanCode): Promise<string> {
+  // First, check for explicit price ID in env vars (preferred)
   const explicitPrice = STRIPE_PRICE_IDS[plan];
   if (explicitPrice && explicitPrice.startsWith("price_")) {
     return explicitPrice;
   }
 
-  if (explicitPrice && explicitPrice.startsWith("prod_")) {
+  // If price ID is missing, log warning and fall back to product lookup
+  if (!explicitPrice) {
+    console.warn(
+      `[Stripe] STRIPE_PRICE_${plan.toUpperCase()} not set. Falling back to product lookup (slower). ` +
+      `Set STRIPE_PRICE_${plan.toUpperCase()}=price_... in env vars for better performance.`
+    );
+  } else if (explicitPrice.startsWith("prod_")) {
+    // If someone accidentally set a product ID in price env var, treat it as product ID
+    console.warn(
+      `[Stripe] STRIPE_PRICE_${plan.toUpperCase()} contains product ID (${explicitPrice}). ` +
+      `Should be a price ID (price_...). Falling back to product lookup.`
+    );
     STRIPE_PRODUCT_IDS[plan] = explicitPrice;
   }
 
+  // Fallback: Look up price from product ID (slower, requires Stripe API call)
   const productId = STRIPE_PRODUCT_IDS[plan];
   if (!productId) {
-    throw new Error(`Stripe product ID not configured for ${plan} plan`);
+    throw new Error(
+      `Stripe price ID not configured for ${plan} plan. ` +
+      `Set STRIPE_PRICE_${plan.toUpperCase()}=price_... in environment variables.`
+    );
   }
 
+  // If product ID is actually a price ID, use it
   if (productId.startsWith("price_")) {
     return productId;
   }
 
+  // Retrieve product and get default price
   const product = await stripe.products.retrieve(productId, {
     expand: ["default_price"],
   });
 
   if (!product?.default_price) {
-    throw new Error(`Stripe product ${productId} is missing a default price`);
+    throw new Error(
+    `Stripe product ${productId} is missing a default price. ` +
+    `Set STRIPE_PRICE_${plan.toUpperCase()}=price_... directly instead.`
+    );
   }
 
-  if (typeof product.default_price === "string") {
-    return product.default_price;
+  const priceId = typeof product.default_price === "string"
+    ? product.default_price
+    : product.default_price.id;
+
+  if (!priceId || !priceId.startsWith("price_")) {
+    throw new Error(
+      `Invalid price ID resolved for ${plan} plan: ${priceId}. ` +
+      `Set STRIPE_PRICE_${plan.toUpperCase()}=price_... in environment variables.`
+    );
   }
 
-  return product.default_price.id;
+  return priceId;
 }
 
 // GET /api/subscriptions
@@ -379,7 +417,7 @@ subscriptionsRouter.post(
       // Get current subscription
       const { data: currentSubscription } = await supabase
         .from("subscriptions")
-        .select("tier, stripe_subscription_id, stripe_customer_id")
+        .select("tier, stripe_subscription_id, stripe_customer_id, current_period_start, current_period_end")
         .eq("organization_id", organization_id)
         .order("created_at", { ascending: false })
         .limit(1)
