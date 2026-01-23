@@ -50,29 +50,86 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Get user's organization_id (optional - user might not have org yet)
+    // Get user's organization_id - create default org if missing
     const { data: userData, error: userError } = await supabase
       .from('users')
-      .select('organization_id')
+      .select('organization_id, email, full_name')
       .eq('id', user.id)
       .maybeSingle()
 
-    // Handle case where user doesn't exist in users table yet
+    let organizationId: string | null = null
+
     if (userError && userError.code !== 'PGRST116') {
       console.error('Error fetching user data:', userError)
-      // Continue anyway - we can store legal acceptance without org_id
+      // User doesn't exist in users table - create profile with default org
     }
 
-    const organizationId = userData?.organization_id || null
+    if (userData?.organization_id) {
+      organizationId = userData.organization_id
+    } else {
+      // User has no organization - create a default one
+      console.warn(`[Legal Accept] User ${user.id} has no organization_id - creating default org`)
+      
+      // Use service role client to create org (bypasses RLS)
+      const { createSupabaseServiceClient } = await import('@/lib/supabase/client')
+      const serviceSupabase = createSupabaseServiceClient()
+      
+      const orgName = userData?.full_name 
+        ? `${userData.full_name}'s Organization`
+        : userData?.email 
+        ? `${userData.email.split('@')[0]}'s Organization`
+        : 'My Organization'
+      
+      const { data: newOrg, error: orgError } = await serviceSupabase
+        .from('organizations')
+        .insert({
+          name: orgName,
+          trade_type: 'other',
+          subscription_tier: 'starter',
+          subscription_status: 'trialing',
+        })
+        .select('id')
+        .single()
+
+      if (orgError || !newOrg) {
+        console.error('Failed to create default organization:', orgError)
+        return NextResponse.json(
+          { 
+            message: 'Failed to set up organization. Please contact support.',
+            code: 'ORG_CREATION_FAILED'
+          },
+          { status: 500 }
+        )
+      }
+
+      organizationId = newOrg.id
+
+      // Update user with organization_id
+      const { error: updateError } = await serviceSupabase
+        .from('users')
+        .upsert({
+          id: user.id,
+          email: user.email,
+          organization_id: organizationId,
+          role: 'owner',
+          full_name: userData?.full_name || null,
+        }, { onConflict: 'id' })
+
+      if (updateError) {
+        console.error('Failed to update user with organization_id:', updateError)
+        // Continue anyway - org was created
+      }
+    }
+
     const ipAddress = getClientIp(request.headers) || undefined
 
-    // Upsert legal acceptance (organization_id can be null for users without org)
+    // Upsert legal acceptance
     const { data, error } = await supabase
       .from('legal_acceptances')
       .upsert(
         {
           user_id: user.id,
-          organization_id: organizationId,
+          organization_id: organizationId!,
           version: LEGAL_VERSION,
           ip_address: ipAddress ?? null,
         },
@@ -89,25 +146,21 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Record audit log (only if organization_id exists)
-    if (organizationId) {
-      try {
-        await supabase.from('audit_logs').insert({
-          organization_id: organizationId,
-          actor_id: user.id,
-          event_name: 'legal.accepted',
-          target_type: 'legal',
-          metadata: {
-            version: LEGAL_VERSION,
-            ip_address: ipAddress ?? null,
-          },
-        })
-      } catch (auditError) {
-        // Don't fail the request if audit log fails
-        console.warn('Failed to record audit log:', auditError)
-      }
-    } else {
-      console.warn(`[Legal Accept] User ${user.id} accepted terms but has no organization_id - audit log skipped`)
+    // Record audit log
+    try {
+      await supabase.from('audit_logs').insert({
+        organization_id: organizationId!,
+        actor_id: user.id,
+        event_name: 'legal.accepted',
+        target_type: 'legal',
+        metadata: {
+          version: LEGAL_VERSION,
+          ip_address: ipAddress ?? null,
+        },
+      })
+    } catch (auditError) {
+      // Don't fail the request if audit log fails
+      console.warn('Failed to record audit log:', auditError)
     }
 
     return NextResponse.json({
