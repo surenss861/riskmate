@@ -36,6 +36,8 @@ export function createSupabaseBrowserClient(): SupabaseClient {
       autoRefreshToken: true,
       detectSessionInUrl: true,
       storageKey: 'riskmate.auth',
+      storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+      flowType: 'pkce',
     },
   })
 
@@ -47,19 +49,46 @@ export function createSupabaseBrowserClient(): SupabaseClient {
   }
 
   // In development, log session status for debugging
-  if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+  // Also handle invalid refresh tokens on startup
+  if (typeof window !== 'undefined') {
     client.auth.getSession().then(({ data: { session }, error }) => {
-      if (error) {
-        console.warn('[Supabase] Session error:', error);
+      // If we get a refresh token error on startup, clear stale storage
+      if (error?.message?.toLowerCase().includes('refresh token')) {
+        console.warn('[Supabase] Invalid refresh token on startup - clearing stale auth data:', error.message)
+        // Clear the auth storage
+        try {
+          localStorage.removeItem('riskmate.auth')
+          // Clear any other Supabase-related keys
+          const keysToRemove: string[] = []
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i)
+            if (key && (key.includes('supabase') || key.includes('riskmate.auth'))) {
+              keysToRemove.push(key)
+            }
+          }
+          keysToRemove.forEach(key => localStorage.removeItem(key))
+          // Sign out locally to clear any in-memory state
+          client.auth.signOut({ scope: 'local' }).catch(() => {})
+        } catch (e) {
+          console.warn('[Supabase] Failed to clear stale storage:', e)
+        }
+      } else if (error) {
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('[Supabase] Session error:', error);
+        }
       } else if (session) {
-        console.log('[Supabase] Session active:', {
-          userId: session.user.id,
-          expiresAt: new Date(session.expires_at! * 1000).toISOString(),
-          hasAccessToken: !!session.access_token,
-          tokenLength: session.access_token?.length || 0,
-        });
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[Supabase] Session active:', {
+            userId: session.user.id,
+            expiresAt: new Date(session.expires_at! * 1000).toISOString(),
+            hasAccessToken: !!session.access_token,
+            tokenLength: session.access_token?.length || 0,
+          });
+        }
       } else {
-        console.warn('[Supabase] No active session - user needs to log in');
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('[Supabase] No active session - user needs to log in');
+        }
       }
     });
   }

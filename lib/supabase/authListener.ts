@@ -60,6 +60,28 @@ export function ensureAuthListener() {
       await supabase.auth.signOut({ scope: 'local' })
     }
 
+    // Handle SIGNED_OUT events that might be caused by invalid refresh tokens
+    if (event === 'SIGNED_OUT' && !session) {
+      // Clear any stale storage
+      if (typeof window !== 'undefined') {
+        try {
+          // Clear the auth storage key
+          localStorage.removeItem('riskmate.auth')
+          // Also clear any Supabase-related keys
+          const keysToRemove: string[] = []
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i)
+            if (key && (key.includes('supabase') || key.includes('riskmate.auth'))) {
+              keysToRemove.push(key)
+            }
+          }
+          keysToRemove.forEach(key => localStorage.removeItem(key))
+        } catch (e) {
+          console.warn('[Supabase] Failed to clear storage:', e)
+        }
+      }
+    }
+
     // Log auth state changes in development
     if (process.env.NODE_ENV === 'development') {
       console.log('[Supabase] Auth state changed:', {
