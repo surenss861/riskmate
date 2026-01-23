@@ -359,7 +359,7 @@ subscriptionsRouter.post(
       const { organization_id, id: userId, role: userRole } = (req as AuthenticatedRequest).user;
 
       // Only owners and admins can switch plans
-      if (!["owner", "admin"].includes(userRole)) {
+      if (!userRole || !["owner", "admin"].includes(userRole)) {
         return res.status(403).json({ message: "Only owners and admins can change plans" });
       }
 
@@ -427,13 +427,12 @@ subscriptionsRouter.post(
       const priceId = await resolveStripePriceId(stripe, planCode);
 
       // If user has an active Stripe subscription, update it
-      if (currentSubscription?.stripe_subscription_id && currentPlan !== "starter") {
+      const subscriptionId = currentSubscription?.stripe_subscription_id;
+      if (subscriptionId && currentPlan !== "starter") {
         try {
-          const subscription = await stripe.subscriptions.retrieve(
-            currentSubscription.stripe_subscription_id
-          );
+          const subscription = await stripe.subscriptions.retrieve(subscriptionId);
 
-          await stripe.subscriptions.update(currentSubscription.stripe_subscription_id, {
+          await stripe.subscriptions.update(subscriptionId, {
             items: [
               {
                 id: subscription.items.data[0].id,
@@ -444,13 +443,11 @@ subscriptionsRouter.post(
           });
 
           // Apply the new plan
-          const updatedSubscription = await stripe.subscriptions.retrieve(
-            currentSubscription.stripe_subscription_id
-          );
+          const updatedSubscription = await stripe.subscriptions.retrieve(subscriptionId);
 
           await applyPlanToOrganization(organization_id, planCode, {
             stripeCustomerId: currentSubscription.stripe_customer_id || null,
-            stripeSubscriptionId: currentSubscription.stripe_subscription_id,
+            stripeSubscriptionId: subscriptionId,
             currentPeriodStart: updatedSubscription.current_period_start ?? null,
             currentPeriodEnd: updatedSubscription.current_period_end ?? null,
             status: updatedSubscription.status,
