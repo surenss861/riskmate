@@ -7,19 +7,22 @@ export const runtime = 'nodejs'
 /**
  * POST /api/subscriptions/track-view
  * Tracks when a user views the plan change page
+ * 
+ * Auth is optional: if user is logged in, track with user/org context.
+ * If anonymous, return 204 (no content) - tracking is best-effort only.
  */
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createSupabaseServerClient()
     const { data: { user }, error: authError } = await supabase.auth.getUser()
 
+    // Optional auth: if no user, return 204 (success but no tracking)
     if (authError || !user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
+      // Anonymous view - don't track, but don't error either
+      return new NextResponse(null, { status: 204 })
     }
 
+    // User is authenticated - proceed with tracking
     const { data: userData, error: userError } = await supabase
       .from('users')
       .select('organization_id')
@@ -27,10 +30,9 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (userError || !userData?.organization_id) {
-      return NextResponse.json(
-        { error: 'Failed to get organization ID' },
-        { status: 500 }
-      )
+      // User exists but can't get org - still return 204 (don't break the page)
+      console.warn('Failed to get organization ID for plan view tracking:', userError)
+      return new NextResponse(null, { status: 204 })
     }
 
     // Get current plan
@@ -44,13 +46,19 @@ export async function POST(request: NextRequest) {
 
     const currentPlan = subscription?.tier || null
 
-    // Track plan view
-    await trackPlanView(userData.organization_id, user.id, currentPlan)
+    // Track plan view (best-effort - don't fail if tracking fails)
+    try {
+      await trackPlanView(userData.organization_id, user.id, currentPlan)
+    } catch (trackError) {
+      // Log but don't fail the request
+      console.warn('Plan view tracking failed (non-blocking):', trackError)
+    }
 
-    return NextResponse.json({ success: true })
+    // Return 204 No Content (success, no body needed)
+    return new NextResponse(null, { status: 204 })
   } catch (error: any) {
-    console.error('Plan view tracking error:', error)
-    // Don't fail the request if tracking fails
-    return NextResponse.json({ success: false })
+    // Catch-all: don't break the page if tracking fails
+    console.error('Plan view tracking error (non-blocking):', error)
+    return new NextResponse(null, { status: 204 })
   }
 }
