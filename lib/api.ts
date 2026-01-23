@@ -101,6 +101,56 @@ async function apiRequest<T>(
       (error as any).requestId = requestId || data?.requestId;
     }
     
+    // Special handling for 401: Check if session is actually invalid before treating as fatal
+    if (response.status === 401 && typeof window !== 'undefined') {
+      const supabase = createSupabaseBrowserClient();
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      // Only treat as fatal if session is actually invalid
+      if (sessionError?.message?.toLowerCase().includes('refresh token')) {
+        console.warn('[API] 401 + invalid refresh token - session is dead, will be handled by auth listener');
+        // Don't force logout here - let auth listener handle it
+      } else if (!session) {
+        console.warn('[API] 401 + no session - user is logged out');
+        // Session is gone - this is expected, don't force logout
+      } else {
+        // Session exists but API returned 401 - might be:
+        // - Token expired but refreshable
+        // - Backend auth issue
+        // - Route-specific auth failure
+        console.warn('[API] 401 but session exists - may be transient. Endpoint:', endpoint);
+        // Try refreshing token once for GET requests
+        if (options.method === 'GET' || !options.method) {
+          try {
+            // Trigger token refresh
+            await supabase.auth.refreshSession();
+            const { data: { session: newSession } } = await supabase.auth.getSession();
+            if (newSession?.access_token) {
+              // Retry with new token
+              console.log('[API] Retrying request with refreshed token');
+              const retryResponse = await fetch(url, {
+                ...options,
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${newSession.access_token}`,
+                  ...options.headers,
+                },
+              });
+              if (retryResponse.ok) {
+                const retryContentType = retryResponse.headers.get('content-type');
+                const retryIsJson = retryContentType?.includes('application/json');
+                const retryData = retryIsJson ? await retryResponse.json() : await retryResponse.text();
+                return retryData as T;
+              }
+            }
+          } catch (refreshErr) {
+            console.warn('[API] Token refresh failed:', refreshErr);
+            // Continue to throw original 401 error
+          }
+        }
+      }
+    }
+    
     // Log failed request for debugging (only in browser)
     if (typeof window !== 'undefined') {
       import('./utils/clientRequestLogger').then(({ logFailedRequest }) => {
