@@ -174,7 +174,7 @@ subscriptionsRouter.post("/portal", authenticate as unknown as RequestHandler, a
     const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
     const session = await stripe.billingPortal.sessions.create({
       customer: subscription.stripe_customer_id,
-      return_url: `${process.env.FRONTEND_URL || "http://localhost:3000"}/account`,
+      return_url: `${process.env.FRONTEND_URL || "https://www.riskmate.dev"}/account`,
     });
 
     res.json({ url: session.url });
@@ -262,10 +262,10 @@ subscriptionsRouter.post("/checkout", async (req: Request, res: Response) => {
       },
       success_url:
         success_url ||
-        `${process.env.FRONTEND_URL || "http://localhost:3000"}/pricing/thank-you?session_id={CHECKOUT_SESSION_ID}`,
+        `${process.env.FRONTEND_URL || "https://www.riskmate.dev"}/pricing/thank-you?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url:
         cancel_url ||
-        `${process.env.FRONTEND_URL || "http://localhost:3000"}/pricing?checkout=cancelled`,
+        `${process.env.FRONTEND_URL || "https://www.riskmate.dev"}/pricing?checkout=cancelled`,
     });
 
     res.json({ url: session.url });
