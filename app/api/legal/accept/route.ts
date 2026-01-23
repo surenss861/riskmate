@@ -21,8 +21,25 @@ function getClientIp(headers: Headers): string | undefined {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createSupabaseServerClient()
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    // Try to get token from Authorization header first (client-side sends this)
+    const authHeader = request.headers.get('authorization')
+    let user = null
+    let authError = null
+
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.substring(7)
+      // Validate token with Supabase
+      const supabase = await createSupabaseServerClient()
+      const { data: { user: tokenUser }, error: tokenError } = await supabase.auth.getUser(token)
+      user = tokenUser
+      authError = tokenError
+    } else {
+      // Fallback to cookie-based auth
+      const supabase = await createSupabaseServerClient()
+      const { data: { user: cookieUser }, error: cookieError } = await supabase.auth.getUser()
+      user = cookieUser
+      authError = cookieError
+    }
 
     if (authError || !user) {
       return NextResponse.json(
@@ -33,6 +50,8 @@ export async function POST(request: NextRequest) {
         { status: 401 }
       )
     }
+
+    const supabase = await createSupabaseServerClient()
 
     // Get user's organization_id
     const { data: userData, error: userError } = await supabase
