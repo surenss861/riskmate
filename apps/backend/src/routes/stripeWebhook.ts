@@ -194,12 +194,23 @@ export async function stripeWebhookHandler(req: Request, res: Response) {
   }
 
   // Record event as processing
+  // Extract organization_id from event metadata if available
+  let organizationId: string | null = null;
+  if (event.data?.object?.metadata?.organization_id) {
+    organizationId = event.data.object.metadata.organization_id;
+  } else if (event.data?.object?.client_reference_id) {
+    organizationId = event.data.object.client_reference_id;
+  }
+
   const { error: insertError } = await supabase
     .from("stripe_webhook_events")
     .insert({
       stripe_event_id: event.id,
       event_type: event.type,
-      metadata: event.data.object,
+      livemode: event.livemode ?? false,
+      payload: event.data.object,
+      organization_id: organizationId,
+      metadata: event.data.object, // Keep for backward compatibility
     });
 
   if (insertError && insertError.code !== "23505") {
@@ -254,15 +265,18 @@ export async function stripeWebhookHandler(req: Request, res: Response) {
         });
 
         // Log billing event
+        // Note: targetId must be UUID (for internal subscription row), not Stripe ID
+        // Store Stripe subscription ID in metadata instead
         await recordAuditLog({
           organizationId,
           actorId: null, // System event
           eventName: "billing.subscription_created",
           targetType: "subscription",
-          targetId: typeof session.subscription === "string" ? session.subscription : null,
+          targetId: null, // Don't use Stripe ID (it's not a UUID)
           metadata: {
             plan,
             status,
+            stripe_subscription_id: typeof session.subscription === "string" ? session.subscription : null,
             stripe_customer_id: typeof session.customer === "string" ? session.customer : null,
             source: "stripe_webhook",
           },
@@ -301,11 +315,12 @@ export async function stripeWebhookHandler(req: Request, res: Response) {
           actorId: null, // System event
           eventName: planChanged ? "billing.plan_changed" : "billing.subscription_updated",
           targetType: "subscription",
-          targetId: typeof subscription.id === "string" ? subscription.id : null,
+          targetId: null, // Don't use Stripe ID (it's not a UUID)
           metadata: {
             plan,
             previous_plan: previousPlan,
             status: subscription.status ?? "active",
+            stripe_subscription_id: typeof subscription.id === "string" ? subscription.id : null,
             stripe_customer_id: typeof subscription.customer === "string" ? subscription.customer : null,
             source: "stripe_webhook",
           },
@@ -406,9 +421,10 @@ export async function stripeWebhookHandler(req: Request, res: Response) {
           actorId: null, // System event
           eventName: "billing.subscription_canceled",
           targetType: "subscription",
-          targetId: typeof subscription.id === "string" ? subscription.id : null,
+          targetId: null, // Don't use Stripe ID (it's not a UUID)
           metadata: {
             plan,
+            stripe_subscription_id: typeof subscription.id === "string" ? subscription.id : null,
             stripe_customer_id: typeof subscription.customer === "string" ? subscription.customer : null,
             source: "stripe_webhook",
           },

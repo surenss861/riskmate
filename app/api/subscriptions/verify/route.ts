@@ -19,19 +19,12 @@ function getStripeClient(): Stripe {
  * 
  * Verifies a Stripe checkout session and returns subscription status.
  * This is called by the thank-you page to verify the purchase.
+ * 
+ * Auth is optional: session_id is already a secure token, so we can verify
+ * via Stripe metadata without requiring user session.
  */
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createSupabaseServerClient()
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-
-    if (authError || !user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
-    }
-
     const searchParams = request.nextUrl.searchParams
     const sessionId = searchParams.get('session_id')
 
@@ -48,28 +41,42 @@ export async function GET(request: NextRequest) {
       expand: ['subscription'],
     })
 
-    // Get user's organization_id
-    const { data: userData } = await supabase
-      .from('users')
-      .select('organization_id')
-      .eq('id', user.id)
-      .single()
-
-    if (!userData?.organization_id) {
+    // Verify session is valid and paid
+    if (!session) {
       return NextResponse.json(
-        { error: 'Failed to get organization ID' },
-        { status: 500 }
+        { error: 'Invalid session' },
+        { status: 404 }
       )
     }
 
-    const organizationId = userData.organization_id
+    // Get organization_id from session metadata (set when creating checkout)
+    const organizationId = session.metadata?.organization_id || session.client_reference_id
 
-    // Verify session belongs to this organization
-    if (session.metadata?.organization_id !== organizationId) {
+    if (!organizationId) {
       return NextResponse.json(
-        { error: 'Session does not belong to this organization' },
-        { status: 403 }
+        { error: 'Session missing organization identifier' },
+        { status: 400 }
       )
+    }
+
+    // Optional: If user is authenticated, verify they belong to this org
+    const supabase = await createSupabaseServerClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    
+    if (user) {
+      const { data: userData } = await supabase
+        .from('users')
+        .select('organization_id')
+        .eq('id', user.id)
+        .single()
+
+      // If user is logged in, verify they belong to the org from session
+      if (userData?.organization_id && userData.organization_id !== organizationId) {
+        return NextResponse.json(
+          { error: 'Session does not belong to your organization' },
+          { status: 403 }
+        )
+      }
     }
 
     // Check subscription status in our database
