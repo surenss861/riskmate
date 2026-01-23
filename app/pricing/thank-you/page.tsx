@@ -1,10 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import RiskMateLogo from '@/components/RiskMateLogo'
-import { subscriptionsApi } from '@/lib/api'
 
 // Track funnel events
 function trackFunnelEvent(eventName: string, metadata?: Record<string, any>) {
@@ -21,8 +20,13 @@ export default function ThankYouPage() {
   const [planCode, setPlanCode] = useState<string | null>(null)
   const [retryCount, setRetryCount] = useState(0)
   const maxRetries = 3
+  const ranRef = useRef(false)
 
   useEffect(() => {
+    // Guard against double calls (React StrictMode in dev)
+    if (ranRef.current) return
+    ranRef.current = true
+
     const verifyPurchase = async () => {
       // Get session_id from URL (no Suspense needed)
       const params = new URLSearchParams(window.location.search)
@@ -31,24 +35,7 @@ export default function ThankYouPage() {
       trackFunnelEvent('checkout_return_success', { session_id: sessionId })
 
       if (!sessionId) {
-        // Fallback: check subscription status directly
-        try {
-          const planResponse = await fetch('/api/me/plan')
-          if (planResponse.ok) {
-            const planData = await planResponse.json()
-            if (planData.is_active) {
-              trackFunnelEvent('subscription_activated', { plan_code: planData.plan_code })
-              setStatus('active')
-              setPlanCode(planData.plan_code)
-              setTimeout(() => router.push('/operations'), 3000)
-              return
-            }
-          }
-        } catch (err) {
-          console.error('Failed to check plan status:', err)
-        }
-
-        setError('Missing session ID. If you just completed a purchase, your subscription may still be processing.')
+        setError('Missing session ID. If you just completed a purchase, your subscription may still be processing. Please check your email for confirmation.')
         setStatus('error')
         return
       }

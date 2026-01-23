@@ -365,14 +365,24 @@ subscriptionsRouter.post(
         return res.status(403).json({ message: "Session does not belong to this organization" });
       }
 
+      // Ensure we have full subscription object with period timestamps
+      if (!subscription) {
+        if (typeof session.subscription === "string") {
+          subscription = await stripe.subscriptions.retrieve(session.subscription);
+        } else {
+          throw new Error("Checkout session missing subscription");
+        }
+      }
+
+      if (!subscription.current_period_start || !subscription.current_period_end) {
+        throw new Error("Subscription missing period timestamps");
+      }
+
       await applyPlanToOrganization(organizationId, planCode, {
         stripeCustomerId: typeof session.customer === "string" ? session.customer : null,
-        stripeSubscriptionId:
-          typeof session.subscription === "string"
-            ? session.subscription
-            : subscription?.id ?? null,
-        currentPeriodStart: subscription?.current_period_start ?? null,
-        currentPeriodEnd: subscription?.current_period_end ?? null,
+        stripeSubscriptionId: subscription.id,
+        currentPeriodStart: subscription.current_period_start,
+        currentPeriodEnd: subscription.current_period_end,
       });
 
       res.json({

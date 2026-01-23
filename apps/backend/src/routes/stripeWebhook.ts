@@ -12,6 +12,17 @@ const stripeFactory = (): StripeType => {
   return require("stripe")(process.env.STRIPE_SECRET_KEY);
 };
 
+/**
+ * Convert Unix timestamp (seconds) to ISO string, or return null if invalid
+ * Stripe provides timestamps as Unix seconds (not milliseconds)
+ */
+function unixToIsoOrNull(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return new Date(n * 1000).toISOString(); // Convert seconds to milliseconds
+}
+
 export async function applyPlanToOrganization(
   organizationId: string,
   plan: PlanCode,
@@ -25,6 +36,26 @@ export async function applyPlanToOrganization(
     jobsLimitOverride?: number | null;
   }
 ) {
+  // Validate required fields for paid plans
+  if (plan !== "starter") {
+    if (!options.stripeSubscriptionId) {
+      throw new Error(
+        `Missing stripe_subscription_id for ${plan} plan. Cannot create subscription without Stripe subscription ID.`
+      );
+    }
+
+    const startIso = unixToIsoOrNull(options.currentPeriodStart);
+    const endIso = unixToIsoOrNull(options.currentPeriodEnd);
+
+    if (!startIso || !endIso) {
+      throw new Error(
+        `Missing subscription period timestamps from Stripe for ${plan} plan. ` +
+        `current_period_start: ${options.currentPeriodStart}, current_period_end: ${options.currentPeriodEnd}. ` +
+        `This usually means the subscription object was not fully retrieved from Stripe.`
+      );
+    }
+  }
+
   const limits = limitsFor(plan);
   const rawStatus = options.status?.toLowerCase() ?? "active";
   let status: string;
@@ -55,6 +86,10 @@ export async function applyPlanToOrganization(
 
   const timestamp = new Date().toISOString();
 
+  // Convert Unix timestamps to ISO strings (safe conversion)
+  const periodStartIso = unixToIsoOrNull(options.currentPeriodStart);
+  const periodEndIso = unixToIsoOrNull(options.currentPeriodEnd);
+
   const { error: orgSubError } = await supabase.from("org_subscriptions").upsert(
     {
       organization_id: organizationId,
@@ -64,12 +99,8 @@ export async function applyPlanToOrganization(
       status,
       stripe_customer_id: options.stripeCustomerId ?? null,
       stripe_subscription_id: options.stripeSubscriptionId ?? null,
-      current_period_start: options.currentPeriodStart
-        ? new Date(options.currentPeriodStart * 1000).toISOString()
-        : null,
-      current_period_end: options.currentPeriodEnd
-        ? new Date(options.currentPeriodEnd * 1000).toISOString()
-        : null,
+      current_period_start: periodStartIso,
+      current_period_end: periodEndIso,
       updated_at: timestamp,
     },
     { onConflict: "organization_id" }
@@ -77,6 +108,7 @@ export async function applyPlanToOrganization(
 
   if (orgSubError) {
     console.error("Failed to upsert org_subscriptions", orgSubError);
+    throw new Error(`Failed to update org_subscriptions: ${orgSubError.message}`);
   }
 
   const { error: orgUpdateError } = await supabase
@@ -90,6 +122,7 @@ export async function applyPlanToOrganization(
 
   if (orgUpdateError) {
     console.error("Failed to update organizations subscription tier", orgUpdateError);
+    throw new Error(`Failed to update organizations: ${orgUpdateError.message}`);
   }
 
   const subscriptionPayload: Record<string, any> = {
@@ -98,12 +131,8 @@ export async function applyPlanToOrganization(
     status,
     stripe_customer_id: options.stripeCustomerId ?? null,
     stripe_subscription_id: options.stripeSubscriptionId ?? null,
-    current_period_start: options.currentPeriodStart
-      ? new Date(options.currentPeriodStart * 1000).toISOString()
-      : null,
-    current_period_end: options.currentPeriodEnd
-      ? new Date(options.currentPeriodEnd * 1000).toISOString()
-      : null,
+    current_period_start: periodStartIso,
+    current_period_end: periodEndIso,
     updated_at: timestamp,
   };
 
@@ -113,6 +142,7 @@ export async function applyPlanToOrganization(
 
   if (subsUpsertError) {
     console.error("Failed to upsert subscriptions record", subsUpsertError);
+    throw new Error(`Failed to update subscriptions: ${subsUpsertError.message}`);
   }
 }
 
@@ -244,23 +274,55 @@ export async function stripeWebhookHandler(req: Request, res: Response) {
         const { plan, organizationId } = extractMetadataPlan(session.metadata);
         if (!plan || !organizationId) break;
 
-        let subscription = session.subscription;
-        if (typeof subscription === "string") {
-          try {
-            subscription = await stripe.subscriptions.retrieve(subscription);
-          } catch {
-            subscription = null;
-          }
+        // CRITICAL: Always retrieve the full subscription object
+        // Session.subscription may be a string ID or null, we need the full object
+        if (!session.subscription) {
+          console.error(
+            `[Webhook] checkout.session.completed missing subscription for org ${organizationId}. ` +
+            `Session ID: ${session.id}. This should not happen for subscription mode checkout.`
+          );
+          break;
         }
 
-        const status = subscription?.status ?? "active";
+        const subscriptionId =
+          typeof session.subscription === "string"
+            ? session.subscription
+            : session.subscription.id;
+
+        // Retrieve full subscription object to get period timestamps
+        let subscription: any;
+        try {
+          subscription = await stripe.subscriptions.retrieve(subscriptionId);
+        } catch (err: any) {
+          console.error(
+            `[Webhook] Failed to retrieve subscription ${subscriptionId} for org ${organizationId}:`,
+            err.message
+          );
+          // Don't break - we'll try to process with what we have, but it may fail
+          throw new Error(
+            `Failed to retrieve subscription ${subscriptionId}: ${err.message}`
+          );
+        }
+
+        // Validate we have required subscription data
+        if (!subscription.id) {
+          throw new Error(`Retrieved subscription missing ID for org ${organizationId}`);
+        }
+
+        if (!subscription.current_period_start || !subscription.current_period_end) {
+          throw new Error(
+            `Subscription ${subscription.id} missing period timestamps for org ${organizationId}`
+          );
+        }
+
+        const status = subscription.status ?? "active";
 
         await applyPlanToOrganization(organizationId, plan, {
-          stripeCustomerId: typeof session.customer === "string" ? session.customer : null,
-          stripeSubscriptionId:
-            typeof session.subscription === "string" ? session.subscription : null,
-          currentPeriodStart: subscription?.current_period_start ?? null,
-          currentPeriodEnd: subscription?.current_period_end ?? null,
+          stripeCustomerId:
+            typeof session.customer === "string" ? session.customer : subscription.customer ?? null,
+          stripeSubscriptionId: subscription.id,
+          currentPeriodStart: subscription.current_period_start,
+          currentPeriodEnd: subscription.current_period_end,
           status,
         });
 
@@ -289,6 +351,32 @@ export async function stripeWebhookHandler(req: Request, res: Response) {
         const { plan, organizationId } = extractMetadataPlan(subscription?.metadata);
         if (!plan || !organizationId) break;
 
+        // Validate subscription has required fields
+        if (!subscription.id) {
+          console.error(
+            `[Webhook] ${event.type} missing subscription ID for org ${organizationId}`
+          );
+          break;
+        }
+
+        if (!subscription.current_period_start || !subscription.current_period_end) {
+          console.error(
+            `[Webhook] ${event.type} subscription ${subscription.id} missing period timestamps for org ${organizationId}`
+          );
+          // Try to retrieve full subscription object
+          try {
+            const fullSubscription = await stripe.subscriptions.retrieve(subscription.id);
+            subscription.current_period_start = fullSubscription.current_period_start;
+            subscription.current_period_end = fullSubscription.current_period_end;
+          } catch (err: any) {
+            console.error(
+              `[Webhook] Failed to retrieve subscription ${subscription.id}:`,
+              err.message
+            );
+            break;
+          }
+        }
+
         // Get previous plan for comparison
         const { data: previousSub } = await supabase
           .from("org_subscriptions")
@@ -302,10 +390,9 @@ export async function stripeWebhookHandler(req: Request, res: Response) {
         await applyPlanToOrganization(organizationId, plan, {
           stripeCustomerId:
             typeof subscription.customer === "string" ? subscription.customer : null,
-          stripeSubscriptionId:
-            typeof subscription.id === "string" ? subscription.id : null,
-          currentPeriodStart: subscription.current_period_start ?? null,
-          currentPeriodEnd: subscription.current_period_end ?? null,
+          stripeSubscriptionId: subscription.id,
+          currentPeriodStart: subscription.current_period_start,
+          currentPeriodEnd: subscription.current_period_end,
           status: subscription.status ?? "active",
         });
 
@@ -405,6 +492,8 @@ export async function stripeWebhookHandler(req: Request, res: Response) {
         const { plan, organizationId } = extractMetadataPlan(subscription?.metadata);
         if (!plan || !organizationId) break;
 
+        // For canceled subscriptions, period timestamps may be null
+        // Use safe conversion (will return null if missing)
         await applyPlanToOrganization(organizationId, plan, {
           stripeCustomerId:
             typeof subscription.customer === "string" ? subscription.customer : null,
