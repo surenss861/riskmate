@@ -62,7 +62,24 @@ export async function POST(request: NextRequest) {
     userId = user.id
 
     // Step 2: Use SERVICE ROLE client for all database operations (bypasses RLS)
-    const serviceSupabase = createSupabaseAdminClient()
+    let serviceSupabase
+    try {
+      serviceSupabase = createSupabaseAdminClient()
+    } catch (clientError: any) {
+      console.error('[LEGAL_ACCEPT] Failed to create service role client', { 
+        error: clientError?.message,
+        hasServiceKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+        serviceKeyLength: process.env.SUPABASE_SERVICE_ROLE_KEY?.length || 0
+      })
+      return NextResponse.json(
+        { 
+          message: 'Server configuration error. Please contact support.',
+          code: 'SERVICE_CLIENT_ERROR',
+          error: clientError?.message || 'Failed to initialize database client'
+        },
+        { status: 500 }
+      )
+    }
 
     // Step 3: Get or create user profile and organization
     let organizationId: string | null = null
