@@ -556,11 +556,19 @@ subscriptionsRouter.post(
 
           // Update plan immediately in DB (user loses premium features)
           const updatedSubscription = await stripe.subscriptions.retrieve(subscriptionId);
+
+          // Validate period timestamps exist
+          if (!updatedSubscription.current_period_start || !updatedSubscription.current_period_end) {
+            throw new Error(
+              `Subscription ${subscriptionId} missing period timestamps after update`
+            );
+          }
+
           await applyPlanToOrganization(organization_id, planCode, {
             stripeCustomerId: currentSubscription.stripe_customer_id || null,
             stripeSubscriptionId: subscriptionId,
-            currentPeriodStart: updatedSubscription.current_period_start ?? null,
-            currentPeriodEnd: updatedSubscription.current_period_end ?? null,
+            currentPeriodStart: updatedSubscription.current_period_start,
+            currentPeriodEnd: updatedSubscription.current_period_end,
             status: updatedSubscription.status,
           });
 

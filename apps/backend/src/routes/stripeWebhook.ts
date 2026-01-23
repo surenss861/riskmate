@@ -449,40 +449,55 @@ export async function stripeWebhookHandler(req: Request, res: Response) {
       }
       case "invoice.payment_failed": {
         const invoice = event.data.object as any;
-        const subscription = invoice.subscription as any;
+        const subscriptionId =
+          typeof invoice.subscription === "string"
+            ? invoice.subscription
+            : invoice.subscription?.id ?? null;
+
+        if (!subscriptionId) {
+          console.warn("[Webhook] invoice.payment_failed missing subscription ID");
+          break;
+        }
+
+        // Retrieve full subscription to get period timestamps
+        let subscription: any;
+        try {
+          subscription = await stripe.subscriptions.retrieve(subscriptionId);
+        } catch (err: any) {
+          console.error(
+            `[Webhook] Failed to retrieve subscription ${subscriptionId} from invoice:`,
+            err.message
+          );
+          break;
+        }
+
         let metadataSource =
           invoice.lines?.data?.[0]?.metadata ??
           invoice.metadata ??
-          (typeof subscription === "object" ? subscription.metadata : null);
+          subscription?.metadata;
 
         let { plan, organizationId } = extractMetadataPlan(metadataSource);
-        const subscriptionId =
-          typeof subscription === "string"
-            ? subscription
-            : typeof subscription?.id === "string"
-            ? subscription.id
-            : null;
 
-        if ((!plan || !organizationId) && subscriptionId) {
-          try {
-            const subscriptionObj = await stripe.subscriptions.retrieve(subscriptionId);
-            metadataSource = subscriptionObj?.metadata ?? metadataSource;
-            const extracted = extractMetadataPlan(metadataSource);
-            plan = plan ?? extracted.plan;
-            organizationId = organizationId ?? extracted.organizationId;
-          } catch {
-            /* ignore */
-          }
+        if (!plan || !organizationId) {
+          // Try to get from subscription metadata
+          const extracted = extractMetadataPlan(subscription?.metadata);
+          plan = plan || extracted.plan;
+          organizationId = organizationId || extracted.organizationId;
         }
-        if (!plan || !organizationId) break;
+
+        if (!plan || !organizationId) {
+          console.warn(
+            `[Webhook] invoice.payment_failed missing plan or organization_id for subscription ${subscriptionId}`
+          );
+          break;
+        }
 
         await applyPlanToOrganization(organizationId, plan, {
           stripeCustomerId:
-            typeof invoice.customer === "string" ? invoice.customer : null,
-          stripeSubscriptionId:
-            typeof invoice.subscription === "string" ? invoice.subscription : null,
-          currentPeriodStart: invoice.lines?.data?.[0]?.period?.start ?? null,
-          currentPeriodEnd: invoice.lines?.data?.[0]?.period?.end ?? null,
+            typeof invoice.customer === "string" ? invoice.customer : subscription.customer ?? null,
+          stripeSubscriptionId: subscription.id,
+          currentPeriodStart: subscription.current_period_start,
+          currentPeriodEnd: subscription.current_period_end,
           status: "past_due",
         });
         break;
