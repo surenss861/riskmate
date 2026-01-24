@@ -99,7 +99,7 @@ subscriptionsRouter.get("/", authenticate as unknown as RequestHandler, async (r
     // Get plan from org_subscriptions (source of truth)
     const { data: orgSubscription, error: orgSubError } = await supabase
       .from("org_subscriptions")
-      .select("plan_code, seats_limit, jobs_limit_month")
+      .select("plan_code, seats_limit, jobs_limit_month, cancel_at_period_end")
       .eq("organization_id", organization_id)
       .maybeSingle();
 
