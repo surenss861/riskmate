@@ -430,13 +430,26 @@ export async function stripeWebhookHandler(req: Request, res: Response) {
       }
       case "invoice.payment_succeeded": {
         const invoice = event.data.object as any;
+        
+        // Log invoice structure for debugging
+        console.log("[Webhook] invoice.payment_succeeded received", {
+          invoice_id: invoice.id,
+          invoice_keys: Object.keys(invoice),
+          subscription_field: invoice.subscription,
+          subscription_type: typeof invoice.subscription,
+          lines_data: invoice.lines?.data?.[0] ? Object.keys(invoice.lines.data[0]) : null,
+        });
+
         const subscriptionId =
           typeof invoice.subscription === "string"
             ? invoice.subscription
             : invoice.subscription?.id ?? null;
 
         if (!subscriptionId) {
-          console.warn("[Webhook] invoice.payment_succeeded missing subscription ID");
+          console.error(
+            "[Webhook] invoice.payment_succeeded missing subscription ID. " +
+            `Invoice ID: ${invoice.id}, Invoice keys: ${Object.keys(invoice).join(', ')}`
+          );
           break;
         }
 

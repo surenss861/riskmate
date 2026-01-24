@@ -35,16 +35,27 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Retrieve Stripe checkout session
+    // Retrieve Stripe checkout session with expanded subscription
     const stripe = getStripeClient()
     const session = await stripe.checkout.sessions.retrieve(sessionId, {
-      expand: ['subscription'],
+      expand: ['subscription', 'subscription.latest_invoice'],
     })
 
-    // Verify session is valid and paid
+    // Log session details for debugging
+    console.log('[Verify] Session retrieved', {
+      session_id: sessionId,
+      mode: session.mode,
+      payment_status: session.payment_status,
+      status: session.status,
+      subscription: session.subscription,
+      customer: session.customer,
+      metadata: session.metadata,
+    })
+
+    // Verify session is valid
     if (!session) {
       return NextResponse.json(
-        { error: 'Invalid session' },
+        { error: 'Invalid session', state: 'failed' },
         { status: 404 }
       )
     }
@@ -54,7 +65,7 @@ export async function GET(request: NextRequest) {
 
     if (!organizationId) {
       return NextResponse.json(
-        { error: 'Session missing organization identifier' },
+        { error: 'Session missing organization identifier', state: 'failed' },
         { status: 400 }
       )
     }
@@ -73,63 +84,122 @@ export async function GET(request: NextRequest) {
       // If user is logged in, verify they belong to the org from session
       if (userData?.organization_id && userData.organization_id !== organizationId) {
         return NextResponse.json(
-          { error: 'Session does not belong to your organization' },
+          { error: 'Session does not belong to your organization', state: 'failed' },
           { status: 403 }
         )
       }
     }
 
-    // Check subscription status in our database
-    const { data: subscription } = await supabase
-      .from('subscriptions')
-      .select('*')
-      .eq('organization_id', organizationId)
-      .eq('stripe_subscription_id', session.subscription as string)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-
-    // Determine status - CRITICAL: Prefer DB over Stripe to never lock out customers
-    let status: 'active' | 'trialing' | 'pending' | 'processing' | 'inactive' = 'inactive'
-    let planCode: string | null = session.metadata?.plan || null
-
-    // If DB has subscription, trust it (even if Stripe is missing/lagging)
-    if (subscription) {
-      status = subscription.status as any
-      planCode = subscription.tier || planCode
+    // CRITICAL: If session has a subscription and payment is complete, finalize immediately
+    // Don't wait for webhooks - write to DB now
+    if (session.subscription && session.payment_status === 'paid' && session.status === 'complete') {
+      let subscription: Stripe.Subscription | null = null
       
-      // If DB says active but Stripe session isn't complete, log mismatch but trust DB
-      if (status === 'active' && session.status !== 'complete') {
-        console.warn('[Verify] Billing mismatch: DB active but Stripe incomplete', {
-          session_id: sessionId,
-          organization_id: organizationId,
-          db_status: status,
-          stripe_status: session.status,
-          payment_status: session.payment_status,
-        })
-        // Still return active - never lock out customer due to Stripe lag
+      // Get subscription object (may be expanded or just an ID)
+      if (typeof session.subscription === 'string') {
+        try {
+          subscription = await stripe.subscriptions.retrieve(session.subscription)
+        } catch (err: any) {
+          console.error('[Verify] Failed to retrieve subscription:', err)
+        }
+      } else {
+        subscription = session.subscription as Stripe.Subscription
       }
-    } else if (session.payment_status === 'paid' && session.status === 'complete') {
-      // Payment succeeded but subscription not yet created in DB (webhook pending)
-      status = 'processing'
-    } else if (session.status === 'open') {
-      status = 'pending'
+
+      if (subscription && subscription.id && subscription.current_period_start && subscription.current_period_end) {
+        // Finalize immediately - write to DB from subscription object
+        const planCode = session.metadata?.plan || subscription.metadata?.plan || null
+        
+        if (planCode) {
+          try {
+            // Import applyPlanToOrganization from lib utils
+            const { applyPlanToOrganization } = await import('@/lib/utils/applyPlan')
+            
+            await applyPlanToOrganization(organizationId, planCode as any, {
+              stripeCustomerId: typeof session.customer === 'string' ? session.customer : null,
+              stripeSubscriptionId: subscription.id,
+              currentPeriodStart: subscription.current_period_start,
+              currentPeriodEnd: subscription.current_period_end,
+              status: subscription.status || 'active',
+            })
+
+            console.log('[Verify] Finalized subscription immediately', {
+              session_id: sessionId,
+              organization_id: organizationId,
+              subscription_id: subscription.id,
+              plan_code: planCode,
+            })
+
+            return NextResponse.json({
+              state: 'complete',
+              status: subscription.status === 'trialing' ? 'trialing' : 'active',
+              plan_code: planCode,
+              session_id: sessionId,
+              subscription_id: subscription.id,
+              redirectTo: '/operations',
+            })
+          } catch (err: any) {
+            console.error('[Verify] Failed to finalize subscription:', err)
+            // Fall through to check DB
+          }
+        }
+      }
     }
 
-    console.info('[Verify] Session verified', {
+    // Check subscription status in our database
+    const subscriptionId = typeof session.subscription === 'string' 
+      ? session.subscription 
+      : (session.subscription as Stripe.Subscription)?.id
+
+    const { data: subscription } = subscriptionId ? await supabase
+      .from('org_subscriptions')
+      .select('*')
+      .eq('organization_id', organizationId)
+      .eq('stripe_subscription_id', subscriptionId)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle() : { data: null }
+
+    // Determine status
+    let status: 'active' | 'trialing' | 'pending' | 'processing' | 'inactive' = 'inactive'
+    let planCode: string | null = session.metadata?.plan || null
+    let state: 'complete' | 'processing' | 'failed' = 'processing'
+
+    // If DB has subscription, trust it
+    if (subscription) {
+      status = (subscription.status as any) || 'active'
+      planCode = subscription.plan_code || planCode
+      state = status === 'active' || status === 'trialing' ? 'complete' : 'processing'
+    } else if (session.payment_status === 'paid' && session.status === 'complete' && session.subscription) {
+      // Payment succeeded but subscription not yet in DB - still processing
+      status = 'processing'
+      state = 'processing'
+    } else if (session.status === 'open') {
+      status = 'pending'
+      state = 'processing'
+    } else {
+      state = 'failed'
+    }
+
+    console.log('[Verify] Returning state', {
       session_id: sessionId,
       organization_id: organizationId,
+      state,
       status,
       plan_code: planCode,
       has_subscription_in_db: !!subscription,
+      session_mode: session.mode,
+      session_payment_status: session.payment_status,
     })
 
     return NextResponse.json({
+      state,
       status,
       plan_code: planCode,
       session_id: sessionId,
       payment_status: session.payment_status,
-      subscription_id: session.subscription,
+      subscription_id: subscriptionId,
+      redirectTo: state === 'complete' ? '/operations' : undefined,
     })
   } catch (error: any) {
     console.error('[Verify] Error:', error)

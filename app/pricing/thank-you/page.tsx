@@ -64,7 +64,11 @@ function ThankYouContent() {
 
         const verifyData = await verifyResponse.json()
         
-        if (verifyData.status === 'active' || verifyData.status === 'trialing') {
+        // Check for new state field (complete/processing/failed) or fallback to status
+        const state = verifyData.state || (verifyData.status === 'active' || verifyData.status === 'trialing' ? 'complete' : 'processing')
+        const redirectTo = verifyData.redirectTo || '/operations'
+
+        if (state === 'complete' || verifyData.status === 'active' || verifyData.status === 'trialing') {
           // One-shot funnel log
           trackFunnelEvent('subscription_activated', { 
             plan_code: verifyData.plan_code,
@@ -76,9 +80,9 @@ function ThankYouContent() {
           // Mark as finalized and redirect after 3 seconds
           didFinalize.current = true
           timeoutRef.current = setTimeout(() => {
-            router.push('/operations')
+            router.push(redirectTo)
           }, 3000)
-        } else if (verifyData.status === 'pending' || verifyData.status === 'processing') {
+        } else if (state === 'processing' || verifyData.status === 'pending' || verifyData.status === 'processing') {
           // Webhook is still processing - retry with exponential backoff
           setStatus('processing')
           setPlanCode(verifyData.plan_code || null)
