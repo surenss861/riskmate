@@ -282,8 +282,38 @@ async function stripeWebhookHandler(req, res) {
                     throw new Error(`Subscription ${subscription.id} missing period timestamps for org ${organizationId}`);
                 }
                 const status = subscription.status ?? "active";
+                // CRITICAL: Cancel all other active subscriptions for this customer/org
+                // This prevents duplicate subscriptions from accumulating
+                const customerId = typeof session.customer === "string"
+                    ? session.customer
+                    : subscription.customer ?? null;
+                if (customerId) {
+                    try {
+                        // List all active subscriptions for this customer
+                        const allSubscriptions = await stripe.subscriptions.list({
+                            customer: customerId,
+                            status: "active",
+                            limit: 100,
+                        });
+                        // Cancel all subscriptions except the new one
+                        const cancelPromises = allSubscriptions.data
+                            .filter((sub) => sub.id !== subscription.id)
+                            .map((sub) => {
+                            console.log(`[Webhook] Canceling duplicate subscription ${sub.id} for org ${organizationId} (keeping ${subscription.id})`);
+                            return stripe.subscriptions.cancel(sub.id);
+                        });
+                        if (cancelPromises.length > 0) {
+                            await Promise.allSettled(cancelPromises);
+                            console.log(`[Webhook] Canceled ${cancelPromises.length} duplicate subscription(s) for org ${organizationId}`);
+                        }
+                    }
+                    catch (cancelErr) {
+                        // Non-fatal: log but don't fail the webhook
+                        console.error(`[Webhook] Failed to cancel duplicate subscriptions for org ${organizationId}:`, cancelErr.message);
+                    }
+                }
                 await applyPlanToOrganization(organizationId, plan, {
-                    stripeCustomerId: typeof session.customer === "string" ? session.customer : subscription.customer ?? null,
+                    stripeCustomerId: customerId,
                     stripeSubscriptionId: subscription.id,
                     currentPeriodStart: subscription.current_period_start,
                     currentPeriodEnd: subscription.current_period_end,
@@ -377,11 +407,20 @@ async function stripeWebhookHandler(req, res) {
             }
             case "invoice.payment_succeeded": {
                 const invoice = event.data.object;
+                // Log invoice structure for debugging
+                console.log("[Webhook] invoice.payment_succeeded received", {
+                    invoice_id: invoice.id,
+                    invoice_keys: Object.keys(invoice),
+                    subscription_field: invoice.subscription,
+                    subscription_type: typeof invoice.subscription,
+                    lines_data: invoice.lines?.data?.[0] ? Object.keys(invoice.lines.data[0]) : null,
+                });
                 const subscriptionId = typeof invoice.subscription === "string"
                     ? invoice.subscription
                     : invoice.subscription?.id ?? null;
                 if (!subscriptionId) {
-                    console.warn("[Webhook] invoice.payment_succeeded missing subscription ID");
+                    console.error("[Webhook] invoice.payment_succeeded missing subscription ID. " +
+                        `Invoice ID: ${invoice.id}, Invoice keys: ${Object.keys(invoice).join(', ')}`);
                     break;
                 }
                 // Retrieve full subscription to get period timestamps

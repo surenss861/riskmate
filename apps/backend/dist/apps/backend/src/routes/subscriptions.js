@@ -388,10 +388,66 @@ exports.subscriptionsRouter.post("/switch", auth_1.authenticate, async (req, res
         // For all plan changes (starter/pro/business are all paid), determine if upgrade or downgrade
         const priceId = await resolveStripePriceId(stripe, planCode);
         const subscriptionId = currentSubscription?.stripe_subscription_id;
-        // UPGRADE: Always require Checkout (payment required)
+        // UPGRADE: If org already has active subscription, update it (don't create new one)
         if (isUpgrade && subscriptionId) {
-            // Create Checkout session for upgrade
-            // Don't update subscription yet - let webhook handle it after payment
+            // CRITICAL: Don't create a new subscription if one already exists
+            // Update the existing subscription's price instead
+            try {
+                // Retrieve current subscription to get subscription item ID
+                const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+                // Update subscription price immediately (with proration for upgrades)
+                await stripe.subscriptions.update(subscriptionId, {
+                    items: [
+                        {
+                            id: subscription.items.data[0].id,
+                            price: priceId,
+                        },
+                    ],
+                    proration_behavior: "always", // Prorate upgrades
+                });
+                // CRITICAL: Always retrieve full subscription AFTER update to get fresh period timestamps
+                const updatedSubscription = await stripe.subscriptions.retrieve(subscriptionId);
+                // Validate period timestamps exist
+                if (!updatedSubscription.current_period_start || !updatedSubscription.current_period_end) {
+                    throw new Error(`Subscription ${subscriptionId} missing period timestamps after update. ` +
+                        `This should never happen for an active subscription.`);
+                }
+                // Verify the price actually changed
+                const updatedPriceId = updatedSubscription.items.data[0]?.price?.id;
+                if (updatedPriceId !== priceId) {
+                    console.error(`[Switch] Price mismatch: expected ${priceId}, got ${updatedPriceId} for subscription ${subscriptionId}`);
+                }
+                // Log Stripe update verification
+                console.log(`[Switch] Stripe subscription updated (upgrade): id=${updatedSubscription.id}, ` +
+                    `priceId=${updatedPriceId}, status=${updatedSubscription.status}`);
+                // Pass Unix seconds (not ISO strings) to applyPlanToOrganization
+                await (0, stripeWebhook_1.applyPlanToOrganization)(organization_id, planCode, {
+                    stripeCustomerId: currentSubscription.stripe_customer_id || null,
+                    stripeSubscriptionId: subscriptionId,
+                    currentPeriodStart: updatedSubscription.current_period_start, // Unix seconds
+                    currentPeriodEnd: updatedSubscription.current_period_end, // Unix seconds
+                    status: updatedSubscription.status,
+                });
+                return res.json({
+                    success: true,
+                    message: `Upgraded to ${planCode} plan. Your billing will reflect the new price immediately.`,
+                    plan: planCode,
+                    subscriptionId: updatedSubscription.id,
+                    priceId: updatedPriceId,
+                    status: updatedSubscription.status,
+                });
+            }
+            catch (err) {
+                console.error("Failed to process upgrade:", err);
+                return res.status(500).json({
+                    message: "Failed to process upgrade",
+                    detail: err?.message,
+                });
+            }
+        }
+        // UPGRADE: No existing subscription - create Checkout (new customer)
+        if (isUpgrade && !subscriptionId) {
+            // Create Checkout session for new subscription
             const session = await stripe.checkout.sessions.create({
                 mode: "subscription",
                 payment_method_types: ["card"],
@@ -411,7 +467,7 @@ exports.subscriptionsRouter.post("/switch", auth_1.authenticate, async (req, res
                     is_upgrade: "true",
                 },
                 client_reference_id: organization_id,
-                customer: currentSubscription.stripe_customer_id || undefined,
+                customer: currentSubscription?.stripe_customer_id || undefined,
                 subscription_data: {
                     metadata: {
                         plan: planCode,

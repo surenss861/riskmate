@@ -317,9 +317,48 @@ export async function stripeWebhookHandler(req: Request, res: Response) {
 
         const status = subscription.status ?? "active";
 
+        // CRITICAL: Cancel all other active subscriptions for this customer/org
+        // This prevents duplicate subscriptions from accumulating
+        const customerId = typeof session.customer === "string" 
+          ? session.customer 
+          : subscription.customer ?? null;
+
+        if (customerId) {
+          try {
+            // List all active subscriptions for this customer
+            const allSubscriptions = await stripe.subscriptions.list({
+              customer: customerId,
+              status: "active",
+              limit: 100,
+            });
+
+            // Cancel all subscriptions except the new one
+            const cancelPromises = allSubscriptions.data
+              .filter((sub: any) => sub.id !== subscription.id)
+              .map((sub: any) => {
+                console.log(
+                  `[Webhook] Canceling duplicate subscription ${sub.id} for org ${organizationId} (keeping ${subscription.id})`
+                );
+                return stripe.subscriptions.cancel(sub.id);
+              });
+
+            if (cancelPromises.length > 0) {
+              await Promise.allSettled(cancelPromises);
+              console.log(
+                `[Webhook] Canceled ${cancelPromises.length} duplicate subscription(s) for org ${organizationId}`
+              );
+            }
+          } catch (cancelErr: any) {
+            // Non-fatal: log but don't fail the webhook
+            console.error(
+              `[Webhook] Failed to cancel duplicate subscriptions for org ${organizationId}:`,
+              cancelErr.message
+            );
+          }
+        }
+
         await applyPlanToOrganization(organizationId, plan, {
-          stripeCustomerId:
-            typeof session.customer === "string" ? session.customer : subscription.customer ?? null,
+          stripeCustomerId: customerId,
           stripeSubscriptionId: subscription.id,
           currentPeriodStart: subscription.current_period_start,
           currentPeriodEnd: subscription.current_period_end,

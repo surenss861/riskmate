@@ -125,8 +125,46 @@ export async function GET(request: NextRequest) {
             // Import applyPlanToOrganization from lib utils
             const { applyPlanToOrganization } = await import('@/lib/utils/applyPlan')
             
+            // CRITICAL: Cancel all other active subscriptions for this customer
+            // This prevents duplicate subscriptions from accumulating
+            const customerId = typeof session.customer === 'string' ? session.customer : null
+            if (customerId) {
+              try {
+                // List all active subscriptions for this customer
+                const allSubscriptions = await stripe.subscriptions.list({
+                  customer: customerId,
+                  status: 'active',
+                  limit: 100,
+                })
+
+                // Cancel all subscriptions except the new one
+                const newSubscriptionId = sub.id
+                const cancelPromises = allSubscriptions.data
+                  .filter((oldSub) => oldSub.id !== newSubscriptionId)
+                  .map((oldSub) => {
+                    console.log(
+                      `[Verify] Canceling duplicate subscription ${oldSub.id} for org ${organizationId} (keeping ${newSubscriptionId})`
+                    )
+                    return stripe.subscriptions.cancel(oldSub.id)
+                  })
+
+                if (cancelPromises.length > 0) {
+                  await Promise.allSettled(cancelPromises)
+                  console.log(
+                    `[Verify] Canceled ${cancelPromises.length} duplicate subscription(s) for org ${organizationId}`
+                  )
+                }
+              } catch (cancelErr: any) {
+                // Non-fatal: log but don't fail verification
+                console.error(
+                  `[Verify] Failed to cancel duplicate subscriptions for org ${organizationId}:`,
+                  cancelErr.message
+                )
+              }
+            }
+
             await applyPlanToOrganization(organizationId, planCode as any, {
-              stripeCustomerId: typeof session.customer === 'string' ? session.customer : null,
+              stripeCustomerId: customerId,
               stripeSubscriptionId: sub.id,
               currentPeriodStart: sub.current_period_start,
               currentPeriodEnd: sub.current_period_end,
