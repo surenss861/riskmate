@@ -60,3 +60,27 @@ BEGIN
       CHECK (tier IN ('none', 'starter', 'pro', 'business'));
   END IF;
 END $$;
+
+-- Add cancel_at_period_end to org_subscriptions if it doesn't exist
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables 
+    WHERE table_schema = 'public' AND table_name = 'org_subscriptions'
+  ) THEN
+    -- Add cancel_at_period_end column if it doesn't exist
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns 
+      WHERE table_schema = 'public' 
+      AND table_name = 'org_subscriptions' 
+      AND column_name = 'cancel_at_period_end'
+    ) THEN
+      ALTER TABLE org_subscriptions
+        ADD COLUMN cancel_at_period_end BOOLEAN DEFAULT FALSE;
+      
+      CREATE INDEX IF NOT EXISTS idx_org_subscriptions_cancel_at_period_end 
+        ON org_subscriptions (cancel_at_period_end) 
+        WHERE cancel_at_period_end = true;
+    END IF;
+  END IF;
+END $$;
