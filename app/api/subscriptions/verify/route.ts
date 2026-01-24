@@ -118,7 +118,7 @@ export async function GET(request: NextRequest) {
           current_period_end: number
         }
         // Finalize immediately - write to DB from subscription object
-        const planCode = session.metadata?.plan || subscription.metadata?.plan || null
+        const planCode = session.metadata?.plan || sub.metadata?.plan || null
         
         if (planCode) {
           try {
