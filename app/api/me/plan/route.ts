@@ -63,7 +63,8 @@ export async function GET(request: NextRequest) {
     }
 
     // Prioritize org_subscriptions.plan_code, then subscriptions.tier
-    const planCode = orgSubscription?.plan_code ?? subscription?.tier ?? 'starter'
+    // Default to 'none' if no plan found (new users)
+    const planCode = orgSubscription?.plan_code ?? subscription?.tier ?? 'none'
     const status = subscription?.status ?? 'inactive'
     const isActive = status === 'active' || status === 'trialing'
 
