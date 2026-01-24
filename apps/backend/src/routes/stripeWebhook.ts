@@ -36,24 +36,88 @@ export async function applyPlanToOrganization(
     jobsLimitOverride?: number | null;
   }
 ) {
-  // Validate required fields for paid plans
-  if (plan !== "starter") {
-    if (!options.stripeSubscriptionId) {
-      throw new Error(
-        `Missing stripe_subscription_id for ${plan} plan. Cannot create subscription without Stripe subscription ID.`
-      );
+  // CRITICAL: "none" plan never requires Stripe IDs - it's an internal state only
+  if (plan === "none" || options.status === "inactive") {
+    const timestamp = new Date().toISOString();
+
+    // Update org_subscriptions to "none" state
+    const { error: orgSubError } = await supabase.from("org_subscriptions").upsert(
+      {
+        organization_id: organizationId,
+        plan_code: "none",
+        seats_limit: 0,
+        jobs_limit_month: 0,
+        status: "inactive",
+        stripe_customer_id: options.stripeCustomerId ?? null, // Keep customer ID if available (for future invoices)
+        stripe_subscription_id: null, // Clear subscription ID
+        current_period_start: null,
+        current_period_end: null,
+        cancel_at_period_end: false,
+        updated_at: timestamp,
+      },
+      { onConflict: "organization_id" }
+    );
+
+    if (orgSubError) {
+      console.error("Failed to upsert org_subscriptions (none plan):", orgSubError);
+      throw new Error(`Failed to update org_subscriptions: ${orgSubError.message}`);
     }
 
-    const startIso = unixToIsoOrNull(options.currentPeriodStart);
-    const endIso = unixToIsoOrNull(options.currentPeriodEnd);
+    // Update organizations table
+    const { error: orgUpdateError } = await supabase
+      .from("organizations")
+      .update({
+        subscription_tier: "none",
+        subscription_status: "inactive",
+        updated_at: timestamp,
+      })
+      .eq("id", organizationId);
 
-    if (!startIso || !endIso) {
-      throw new Error(
-        `Missing subscription period timestamps from Stripe for ${plan} plan. ` +
-        `current_period_start: ${options.currentPeriodStart}, current_period_end: ${options.currentPeriodEnd}. ` +
-        `This usually means the subscription object was not fully retrieved from Stripe.`
-      );
+    if (orgUpdateError) {
+      console.error("Failed to update organizations (none plan):", orgUpdateError);
+      throw new Error(`Failed to update organizations: ${orgUpdateError.message}`);
     }
+
+    // Update subscriptions table (historical record)
+    const { error: subError } = await supabase.from("subscriptions").upsert(
+      {
+        organization_id: organizationId,
+        tier: "none",
+        status: "inactive",
+        stripe_customer_id: options.stripeCustomerId ?? null,
+        stripe_subscription_id: null, // Clear subscription ID
+        current_period_start: null,
+        current_period_end: null,
+        updated_at: timestamp,
+      },
+      { onConflict: "organization_id" }
+    );
+
+    if (subError) {
+      console.error("Failed to upsert subscriptions (none plan):", subError);
+      // Non-fatal for subscriptions table
+    }
+
+    // Early return - "none" plan logic is complete
+    return;
+  }
+
+  // Validate required fields for paid plans (starter, pro, business)
+  if (!options.stripeSubscriptionId) {
+    throw new Error(
+      `Missing stripe_subscription_id for ${plan} plan. Cannot create subscription without Stripe subscription ID.`
+    );
+  }
+
+  const startIso = unixToIsoOrNull(options.currentPeriodStart);
+  const endIso = unixToIsoOrNull(options.currentPeriodEnd);
+
+  if (!startIso || !endIso) {
+    throw new Error(
+      `Missing subscription period timestamps from Stripe for ${plan} plan. ` +
+      `current_period_start: ${options.currentPeriodStart}, current_period_end: ${options.currentPeriodEnd}. ` +
+      `This usually means the subscription object was not fully retrieved from Stripe.`
+    );
   }
 
   const limits = limitsFor(plan);
