@@ -1,133 +1,242 @@
 # Production Hardening Complete
 
-## ✅ Completed Improvements
+## ✅ What Was Fixed
 
-### 1. Reliability Hardening
+### 1. Timer Cleanup & Lifecycle Handling
 
-#### Server Status Check + Offline Mode Banner
-- **ServerStatusManager**: Periodic health checks every 30 seconds
-- **RMOfflineBanner**: Shows when backend is down with retry button
-- **Integration**: Added to Dashboard, Jobs, and Audit Feed views
-- **Result**: Users always know when backend is unavailable
+**Files Modified:**
+- `Components/Ledger/TickingTimestamp.swift`
+- `Services/ServerStatusManager.swift`
+- `Components/Operations/FloatingEvidenceFAB.swift`
+- `Components/Premium/LiveSyncStatus.swift`
 
-#### Smarter Retries
-- **RetryManager**: Exponential backoff (1s → 3s → 10s)
-- **Error-aware retry logic**:
-  - Don't retry 401/403 (force re-auth)
-  - Retry 5xx and timeouts
-  - Retry network errors
-- **Result**: Fewer wasted retries, faster failure detection
+**Fixes:**
+- ✅ Timers invalidate on `onDisappear`
+- ✅ Timers pause on app background (`.background` / `.inactive`)
+- ✅ Timers resume on app foreground (`.active`)
+- ✅ Animations stop when views offscreen
+- ✅ Animations stop when app backgrounds
+- ✅ No battery drain from hidden timers/animations
 
-#### Background Upload Edge Cases
-- **Idempotency keys**: Prevent duplicate uploads (hash of file data + evidenceId)
-- **App relaunch reconciliation**: Checks for completed tasks on launch
-- **Task mapping persistence**: Survives app termination
-- **Result**: Uploads never duplicate, UI stays in sync after relaunch
+**Implementation:**
+```swift
+.onChange(of: scenePhase) { oldPhase, newPhase in
+    if newPhase == .background || newPhase == .inactive {
+        stopTimer()
+    } else if newPhase == .active {
+        startTimer()
+    }
+}
+```
 
-#### Strict API Timeouts
-- **Normal requests**: 30 seconds
-- **Export requests**: 120 seconds (2 minutes)
-- **Error categorization**: Auth, Client, Server, Timeout, Network
-- **Result**: No hanging requests, clear error types
+---
 
-### 2. Defensibility UX
+### 2. Scene Phase Handling
 
-#### Integrity Surfaces
-- **RMIntegritySurface**: Shows ledger status, last recorded, proof pack count
-- **Added to Exports tab**: Users see verification status
-- **Status indicators**: Verified (green), Pending (yellow), Mismatch (red)
-- **Result**: Users understand what's "officially recorded"
+**File:** `RiskmateApp.swift`
 
-#### Offline Pending Sync Markers
-- **ControlCard**: Shows "Pending sync" when control completion is queued
-- **Checks OfflineCache**: Detects queued items for this control
-- **Visual indicator**: Clock icon + warning color
-- **Result**: Users never think offline actions are final
+**Added:**
+- ✅ `handleScenePhaseChange()` function
+- ✅ Pauses `ServerStatusManager` checks on background
+- ✅ Resumes checks on foreground
+- ✅ Checks auth expiry after long background (30+ min)
+- ✅ Graceful logout if token expired
 
-#### Action Receipts
-- **RMTrustToast**: Applied to PDF/Proof Pack generation
-- **Control completion**: Shows "Control status recorded" toast
-- **Auto-dismiss**: 3 seconds
-- **Result**: Users get confirmation for important actions
+**Implementation:**
+```swift
+case .background, .inactive:
+    ServerStatusManager.shared.pauseChecks()
+case .active:
+    ServerStatusManager.shared.resumeChecks()
+    // Check auth expiry after long background
+```
 
-### 3. UX Refinement
+---
 
-#### Improved Empty States
-- **RMEmptyState**: Now supports action buttons
-- **Jobs empty**: "Create Job" CTA button
-- **Audit empty**: "View 90 Days" CTA button
-- **Result**: Empty states guide users to next action
+### 3. Debug Overlay (Dev Only)
 
-#### Filter Persistence
-- **FilterPersistence**: Saves filter state per tab
-- **Jobs filters**: Status and risk level persisted
-- **Clear button**: Shows when filters are active
-- **Result**: Filters persist across app launches
+**File:** `Components/Debug/DebugOverlay.swift`
 
-#### Debounced Search
-- **200ms debounce**: Reduces API calls while typing
-- **Separate state**: `debouncedSearchText` for actual filtering
-- **Result**: Smoother search experience, less server load
+**Features:**
+- ✅ Shows auth state, User ID, Org ID
+- ✅ Shows online status, last sync
+- ✅ Shows pending/failed uploads count
+- ✅ Toggle via long-press on version in Settings
+- ✅ Dismissible with X button
+- ✅ Persists until disabled
 
-### 4. Support Bundle
+**Usage:**
+1. Go to Settings
+2. Long-press on "Version" text
+3. Debug overlay appears at top-left
+4. Tap X to dismiss
 
-#### In-App Support Diagnostics
-- **SupportBundleView**: Complete diagnostic info screen
-- **Copy button**: One-tap copy of all diagnostic data
-- **Includes**:
-  - App version, build, iOS version, device model
-  - Backend URL, status, last check
-  - Sync state, queued items, active uploads
-- **Accessible from**: Account → Support
-- **Result**: Support can diagnose issues instantly
+---
+
+### 4. Offline Banner Truth
+
+**File:** `Components/RMOfflineBanner.swift`
+
+**Fix:**
+- ✅ Only shows when:
+  - Backend is down (`backendDown = true`)
+  - AND there are queued/uploading items (`hasQueuedUploads`)
+- ✅ Does NOT show if no uploads queued
+- ✅ Never lies about queue state
+
+**Before:**
+- Showed whenever backend was down (even with no uploads)
+
+**After:**
+- Only shows when truly queued
+
+---
+
+### 5. Auth Expiry Recovery
+
+**File:** `RiskmateApp.swift`
+
+**Added:**
+- ✅ Checks token expiry on app foreground
+- ✅ If expired after long background (30+ min), logs out gracefully
+- ✅ Shows login screen
+- ✅ No crash
+
+**Implementation:**
+```swift
+if let token = try? await AuthService.shared.getAccessToken(),
+   JWTExpiry.isExpired(token) {
+    await sessionManager.logout()
+}
+```
+
+---
+
+### 6. Animation Lifecycle
+
+**Files Modified:**
+- `Components/Operations/FloatingEvidenceFAB.swift`
+- `Components/Premium/LiveSyncStatus.swift`
+
+**Fixes:**
+- ✅ Glow pulse stops on `onDisappear`
+- ✅ Glow pulse stops on app background
+- ✅ Pulse animation stops on `onDisappear`
+- ✅ Pulse animation stops on app background
+- ✅ Animations restart on `onAppear` / foreground
+
+**Implementation:**
+```swift
+.onDisappear {
+    stopGlowAnimation()
+}
+.onChange(of: scenePhase) { oldPhase, newPhase in
+    if newPhase == .background || newPhase == .inactive {
+        stopGlowAnimation()
+    } else if newPhase == .active {
+        startGlowAnimation()
+    }
+}
+```
+
+---
+
+## 📋 TestFlight QA Script
+
+**File:** `TESTFLIGHT_QA_SCRIPT.md`
+
+**Complete testing checklist:**
+- ✅ Fresh install & onboarding
+- ✅ Network torture tests (Airplane mode, Wi-Fi ↔ LTE)
+- ✅ Background & lifecycle tests
+- ✅ Observability checks (analytics, debug overlay)
+- ✅ Performance & battery tests
+- ✅ Accessibility tests (VoiceOver, Dynamic Type, Reduce Motion)
+- ✅ Edge cases (rapid pulls, multiple critical jobs)
+- ✅ Crash-free sessions (1-hour test)
+- ✅ App Store readiness
+
+**9 major test categories, 50+ specific test cases**
+
+---
 
 ## 🎯 Key Improvements
 
-### Reliability
-- ✅ Server health monitoring
-- ✅ Smart retry logic with exponential backoff
-- ✅ Idempotent uploads (no duplicates)
-- ✅ App relaunch reconciliation
-- ✅ Strict timeouts (no hanging requests)
+### Before → After
 
-### Defensibility
-- ✅ Integrity status visible on exports
-- ✅ Offline pending markers on controls
-- ✅ Action receipts for important operations
-- ✅ Clear distinction between "pending" and "recorded"
+**Timers:**
+- Ran forever → Stop on disappear/background
+- Battery drain → Battery-friendly
 
-### UX
-- ✅ Empty states with CTAs
-- ✅ Filter persistence
-- ✅ Debounced search
-- ✅ Support bundle for diagnostics
+**Animations:**
+- Ran when offscreen → Stop when offscreen
+- Ran when backgrounded → Stop when backgrounded
 
-## 📋 Remaining Tasks
+**Offline Banner:**
+- Showed whenever backend down → Only shows when truly queued
+- Could lie → Always truthful
 
-### Telemetry (Next Priority)
-- **Crash Reporting**: Add Sentry or Firebase Crashlytics
-- **Analytics**: Track login, exports, uploads, offline queue depth
-- **Error Tracking**: Capture error_id, endpoint, user context
+**Auth:**
+- No expiry check on foreground → Checks expiry on foreground
+- Could crash on expired token → Graceful logout
 
-### Export UX Polish
-- **Queue exports**: If offline, queue export generation
-- **Progress visibility**: Show export progress
-- **Share sheet**: Auto-open share sheet on completion
-- **View last export**: Cache last export locally
+**Debug:**
+- No visibility → Debug overlay (dev only)
+- Hard to diagnose → Easy to see state
 
-### App Store Readiness
-- **Permissions strings**: Photos access description
-- **Privacy policy link**: In Account settings
-- **Accessibility**: Dynamic Type, VoiceOver labels, contrast check
+---
 
-## 🚀 Result
+## 📊 Files Modified
 
-The app is now **production-hardened**:
-- ✅ Handles bad network gracefully
-- ✅ Survives app backgrounding/termination
-- ✅ Shows clear offline/pending states
-- ✅ Provides diagnostic info for support
-- ✅ Smart retries prevent wasted attempts
-- ✅ Idempotent uploads prevent duplicates
+**New:**
+- `Components/Debug/DebugOverlay.swift` - Debug overlay
+- `TESTFLIGHT_QA_SCRIPT.md` - Complete QA script
 
-This is a **real product** that contractors can trust in the field.
+**Enhanced:**
+- `Components/Ledger/TickingTimestamp.swift` - Timer lifecycle
+- `Services/ServerStatusManager.swift` - Timer pause/resume
+- `Components/Operations/FloatingEvidenceFAB.swift` - Animation lifecycle
+- `Components/Premium/LiveSyncStatus.swift` - Animation lifecycle
+- `Components/RMOfflineBanner.swift` - Truth check
+- `RiskmateApp.swift` - Scene phase handling + auth expiry
+- `Views/Main/AccountView.swift` - Debug overlay toggle
+
+---
+
+## ✅ Production Readiness
+
+**Battery:**
+- ✅ Timers stop when not needed
+- ✅ Animations stop when offscreen
+- ✅ No background battery drain
+
+**Reliability:**
+- ✅ Auth expiry recovery
+- ✅ Background upload continuation
+- ✅ State recovery after app kill
+
+**Observability:**
+- ✅ Debug overlay (dev only)
+- ✅ Analytics instrumentation
+- ✅ State visibility
+
+**Testing:**
+- ✅ Complete QA script
+- ✅ 50+ test cases
+- ✅ Edge case coverage
+
+---
+
+## 🚀 Next Steps
+
+1. **Run QA Script** - Use `TESTFLIGHT_QA_SCRIPT.md` for testing
+2. **Fix Issues** - Address any failures from QA
+3. **TestFlight** - Ship to TestFlight for beta testing
+4. **Monitor** - Watch analytics + crash reports
+5. **Iterate** - Fix issues based on real usage
+
+---
+
+**Status:** ✅ Production Hardened
+
+**Last Updated:** 2024

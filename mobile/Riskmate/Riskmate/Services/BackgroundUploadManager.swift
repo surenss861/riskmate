@@ -73,6 +73,13 @@ class BackgroundUploadManager: NSObject, ObservableObject {
         // Generate idempotency key (hash of file data + evidenceId)
         let idempotencyKey = generateIdempotencyKey(fileData: fileData, evidenceId: evidenceId)
         
+        // CRITICAL: Background URLSession cannot upload from Data/NSData
+        // Must write to disk first, then use fromFile:
+        let fileExtension = (fileName as NSString).pathExtension.isEmpty ? "dat" : (fileName as NSString).pathExtension
+        let tempFileName = "\(evidenceId)-\(UUID().uuidString).\(fileExtension)"
+        let fileURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(tempFileName)
+        
         // Create upload task (store file URL for retries)
         let upload = UploadTask(
             id: evidenceId,
@@ -87,13 +94,6 @@ class BackgroundUploadManager: NSObject, ObservableObject {
         
         uploads.append(upload)
         saveUploads()
-        
-        // CRITICAL: Background URLSession cannot upload from Data/NSData
-        // Must write to disk first, then use fromFile:
-        let fileExtension = (fileName as NSString).pathExtension.isEmpty ? "dat" : (fileName as NSString).pathExtension
-        let tempFileName = "\(evidenceId)-\(UUID().uuidString).\(fileExtension)"
-        let fileURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent(tempFileName)
         
         // Create multipart form data
         let boundary = UUID().uuidString

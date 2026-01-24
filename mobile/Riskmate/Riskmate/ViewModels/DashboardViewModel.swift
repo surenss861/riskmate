@@ -137,7 +137,7 @@ final class DashboardViewModel: ObservableObject {
     
     /// Load jobs once using shared store (prevents duplicate API calls)
     private func loadJobsOnce() async throws -> [Job] {
-        return try await JobsStore.shared.fetch(page: 1, limit: 100, forceRefresh: false)
+        return try await JobsStore.shared.fetch(forceRefresh: false)
     }
     
     private func loadKPIs(jobs: [Job]) -> DashboardKPIs {

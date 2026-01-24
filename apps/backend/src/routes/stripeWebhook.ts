@@ -347,34 +347,48 @@ export async function stripeWebhookHandler(req: Request, res: Response) {
       }
       case "customer.subscription.created":
       case "customer.subscription.updated": {
-        const subscription = event.data.object as any;
-        const { plan, organizationId } = extractMetadataPlan(subscription?.metadata);
+        const eventSubscription = event.data.object as any;
+        const { plan, organizationId } = extractMetadataPlan(eventSubscription?.metadata);
         if (!plan || !organizationId) break;
 
         // Validate subscription has required fields
-        if (!subscription.id) {
+        if (!eventSubscription.id) {
           console.error(
             `[Webhook] ${event.type} missing subscription ID for org ${organizationId}`
           );
           break;
         }
 
+        // Always retrieve full subscription to ensure we have complete data
+        // Event payloads may be incomplete or stale
+        let subscription: any;
+        try {
+          subscription = await stripe.subscriptions.retrieve(eventSubscription.id);
+        } catch (err: any) {
+          console.error(
+            `[Webhook] ${event.type} failed to retrieve subscription ${eventSubscription.id} for org ${organizationId}:`,
+            err.message
+          );
+          break;
+        }
+
+        // Validate required fields exist
+        if (!subscription.id) {
+          console.error(
+            `[Webhook] ${event.type} retrieved subscription missing ID for org ${organizationId}. ` +
+            `This should never happen.`
+          );
+          break;
+        }
+
         if (!subscription.current_period_start || !subscription.current_period_end) {
           console.error(
-            `[Webhook] ${event.type} subscription ${subscription.id} missing period timestamps for org ${organizationId}`
+            `[Webhook] ${event.type} subscription ${subscription.id} missing period timestamps for org ${organizationId}. ` +
+            `Received: current_period_start=${subscription.current_period_start}, ` +
+            `current_period_end=${subscription.current_period_end}. ` +
+            `Full subscription status: ${subscription.status}`
           );
-          // Try to retrieve full subscription object
-          try {
-            const fullSubscription = await stripe.subscriptions.retrieve(subscription.id);
-            subscription.current_period_start = fullSubscription.current_period_start;
-            subscription.current_period_end = fullSubscription.current_period_end;
-          } catch (err: any) {
-            console.error(
-              `[Webhook] Failed to retrieve subscription ${subscription.id}:`,
-              err.message
-            );
-            break;
-          }
+          break;
         }
 
         // Get previous plan for comparison

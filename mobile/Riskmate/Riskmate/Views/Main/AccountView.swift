@@ -8,11 +8,24 @@ struct AccountView: View {
     @State private var showError = false
     @State private var errorMessage = ""
     @State private var isLoading = false
+    @State private var showSignOutConfirmation = false
     
     private var versionString: String {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Unknown"
         let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "Unknown"
         return "\(version) (\(build))"
+    }
+    
+    private var buildChannel: String {
+        #if DEBUG
+        return "Development"
+        #else
+        // Check if TestFlight
+        if Bundle.main.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt" {
+            return "TestFlight"
+        }
+        return "Production"
+        #endif
     }
     
     var body: some View {
@@ -22,19 +35,37 @@ struct AccountView: View {
             List {
                 if let org = sessionManager.currentOrganization {
                     Section {
-                        HStack {
-                            Text("Organization Name")
-                                .foregroundColor(RMTheme.Colors.textPrimary)
-                            Spacer()
-                            if isEditingOrgName {
-                                TextField("Organization Name", text: $editedOrgName)
-                                    .textFieldStyle(.plain)
-                                    .multilineTextAlignment(.trailing)
-                                    .foregroundColor(RMTheme.Colors.textPrimary)
-                            } else {
-                                Text(org.name)
-                                    .foregroundColor(RMTheme.Colors.textSecondary)
+                        // Organization badge/icon
+                        HStack(spacing: RMTheme.Spacing.md) {
+                            // Small org badge
+                            ZStack {
+                                Circle()
+                                    .fill(RMTheme.Colors.accent.opacity(0.2))
+                                    .frame(width: 40, height: 40)
+                                
+                                Text(String(org.name.prefix(1)).uppercased())
+                                    .font(RMTheme.Typography.title3)
+                                    .foregroundColor(RMTheme.Colors.accent)
                             }
+                            
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Organization")
+                                    .font(RMTheme.Typography.caption)
+                                    .foregroundColor(RMTheme.Colors.textTertiary)
+                                
+                                if isEditingOrgName {
+                                    TextField("Organization Name", text: $editedOrgName)
+                                        .textFieldStyle(.plain)
+                                        .foregroundColor(RMTheme.Colors.textPrimary)
+                                        .font(RMTheme.Typography.bodyBold)
+                                } else {
+                                    Text(org.name)
+                                        .foregroundColor(RMTheme.Colors.textPrimary)
+                                        .font(RMTheme.Typography.bodyBold)
+                                }
+                            }
+                            
+                            Spacer()
                         }
                         .listRowBackground(RMTheme.Colors.surface.opacity(0.5))
                         
@@ -119,29 +150,105 @@ struct AccountView: View {
                     .listRowBackground(RMTheme.Colors.surface.opacity(0.5))
                 }
                 
-                // Sign Out - own section, destructive style
+                // Production Toggles (dev/internal only)
+                #if DEBUG
                 Section {
-                    Button("Sign Out", role: .destructive) {
-                        let generator = UINotificationFeedbackGenerator()
-                        generator.notificationOccurred(.warning)
-                        Task {
-                            await sessionManager.logout()
+                    Toggle(isOn: Binding(
+                        get: { UserDefaultsManager.Production.sendDiagnostics },
+                        set: { UserDefaultsManager.Production.sendDiagnostics = $0 }
+                    )) {
+                        HStack {
+                            Image(systemName: "stethoscope")
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Send Diagnostics")
+                                    .foregroundColor(RMTheme.Colors.textPrimary)
+                                Text("Include device info in logs")
+                                    .font(RMTheme.Typography.caption)
+                                    .foregroundColor(RMTheme.Colors.textTertiary)
+                            }
                         }
                     }
-                    .listRowBackground(Color.clear)
-                }
-                
-                // Version info (auditor-friendly)
-                Section {
-                    HStack {
-                        Text("Version")
-                            .foregroundColor(RMTheme.Colors.textPrimary)
-                        Spacer()
-                        Text(versionString)
-                            .foregroundColor(RMTheme.Colors.textSecondary)
-                            .font(.system(.body, design: .monospaced))
+                    .tint(RMTheme.Colors.accent)
+                    .listRowBackground(RMTheme.Colors.surface.opacity(0.5))
+                    
+                    Button {
+                        Haptics.tap()
+                        UserDefaultsManager.Production.resetOnboardingAndCoachMarks()
+                        let generator = UINotificationFeedbackGenerator()
+                        generator.notificationOccurred(.success)
+                    } label: {
+                        HStack {
+                            Image(systemName: "arrow.counterclockwise")
+                            Text("Reset Onboarding & Coach Marks")
+                                .foregroundColor(RMTheme.Colors.accent)
+                        }
                     }
                     .listRowBackground(RMTheme.Colors.surface.opacity(0.5))
+                } header: {
+                    Text("Development")
+                        .foregroundColor(RMTheme.Colors.textSecondary)
+                }
+                #endif
+                
+                // Sign Out - own section, destructive style with confirmation
+                Section {
+                    Divider()
+                        .background(RMTheme.Colors.divider.opacity(0.3))
+                        .padding(.vertical, 4)
+                    
+                    Button("Sign Out", role: .destructive) {
+                        Haptics.warning()
+                        showSignOutConfirmation = true
+                    }
+                    .listRowBackground(Color.clear)
+                    .confirmationDialog("Sign Out", isPresented: $showSignOutConfirmation, titleVisibility: .visible) {
+                        Button("Sign Out", role: .destructive) {
+                            Haptics.warning()
+                            Task {
+                                await sessionManager.logout()
+                            }
+                        }
+                        Button("Cancel", role: .cancel) {
+                            Haptics.tap()
+                        }
+                    } message: {
+                        Text("You can sign back in anytime. Your data is securely stored.")
+                    }
+                }
+                
+                // Version info (subtle, professional)
+                Section {
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text("Version")
+                                .foregroundColor(RMTheme.Colors.textTertiary)
+                                .font(RMTheme.Typography.caption)
+                            Spacer()
+                            Text(versionString)
+                                .foregroundColor(RMTheme.Colors.textSecondary)
+                                .font(.system(.caption, design: .monospaced))
+                        }
+                        #if DEBUG
+                        .onLongPressGesture {
+                            // Long-press to enable debug overlay
+                            UserDefaults.standard.set(true, forKey: "debug_overlay_enabled")
+                            let generator = UINotificationFeedbackGenerator()
+                            generator.notificationOccurred(.success)
+                        }
+                        #endif
+                        
+                        // Build channel (Production / TestFlight)
+                        HStack {
+                            Text("Build Channel")
+                                .foregroundColor(RMTheme.Colors.textTertiary)
+                                .font(RMTheme.Typography.caption)
+                            Spacer()
+                            Text(buildChannel)
+                                .foregroundColor(RMTheme.Colors.textSecondary)
+                                .font(.system(.caption, design: .monospaced))
+                        }
+                    }
+                    .listRowBackground(RMTheme.Colors.surface.opacity(0.3))
                 }
             }
             .scrollContentBackground(.hidden)

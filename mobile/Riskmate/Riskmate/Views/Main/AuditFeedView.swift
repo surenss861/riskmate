@@ -9,6 +9,9 @@ struct AuditFeedView: View {
     @State private var selectedEvent: AuditEvent?
     @State private var showingDetail = false
     @State private var showingVerificationDetails = false
+    @State private var showingVerificationExplainer = false
+    @State private var showFirstVisitAnimation = false
+    @AppStorage("riskmate.ledger.firstVisit") private var hasSeenFirstVisit = false
     
     var body: some View {
         RMBackground()
@@ -21,9 +24,17 @@ struct AuditFeedView: View {
                         isVerified: true, // TODO: Wire to actual verification status
                         lastAnchored: Date(), // TODO: Wire to actual anchor timestamp
                         onTap: {
-                            showingVerificationDetails = true
+                            showingVerificationExplainer = true
                         }
                     )
+                    .overlay(alignment: .center) {
+                        // First-visit "holy sh*t" moment: Proof hash → anchor → lock animation
+                        if showFirstVisitAnimation && !UIAccessibility.isReduceMotionEnabled {
+                            FirstVisitAnimationView()
+                                .transition(.opacity.combined(with: .scale))
+                                .zIndex(1000) // Ensure it appears above other content
+                        }
+                    }
                     
                     // Saved Views as Horizontal Cards
                     SavedViewsCarousel()
@@ -59,8 +70,8 @@ struct AuditFeedView: View {
                     } else if events.isEmpty {
                         RMEmptyState(
                             icon: "tray",
-                            title: "No Audit Events",
-                            message: "No events in last 30 days. Try viewing 90 days or all time.",
+                            title: "First proof will appear here",
+                            message: "Every action creates an immutable ledger event. Your first proof record will show up once you create a job or add evidence.",
                             action: RMEmptyStateAction(
                                 title: "View 90 Days",
                                 action: {
@@ -198,6 +209,23 @@ struct AuditFeedView: View {
         }
         .rmNavigationBar(title: "Ledger")
         .syncStatusChip()
+        .onAppear {
+            // Show first-visit animation once
+            if !hasSeenFirstVisit && !isLoading && !events.isEmpty {
+                hasSeenFirstVisit = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                        showFirstVisitAnimation = true
+                    }
+                    // Hide after animation completes
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+                        withAnimation(.easeOut(duration: 0.3)) {
+                            showFirstVisitAnimation = false
+                        }
+                    }
+                }
+            }
+        }
         .task {
             await loadEvents()
         }
@@ -213,6 +241,9 @@ struct AuditFeedView: View {
         }
         .sheet(isPresented: $showingVerificationDetails) {
             VerificationDetailsView()
+        }
+        .sheet(isPresented: $showingVerificationExplainer) {
+            VerificationExplainerSheet()
         }
     }
     

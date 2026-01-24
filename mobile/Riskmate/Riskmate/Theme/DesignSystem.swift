@@ -4,12 +4,12 @@ import SwiftUI
 struct DesignSystem {
     // Colors
     struct Colors {
-        static let background = Color(hex: "#0A0A0A") // Minimal black
-        static let surface = Color(hex: "#121212") // Card background
-        static let accent = Color(hex: "#F97316") // Orange
-        static let accentLight = Color(hex: "#FB923C") // Light orange
+        static let background = Color(hex: "#0A0A0A", alpha: 1.0) // Minimal black
+        static let surface = Color(hex: "#121212", alpha: 1.0) // Card background
+        static let accent = Color(hex: "#F97316", alpha: 1.0) // Orange
+        static let accentLight = Color(hex: "#FB923C", alpha: 1.0) // Light orange
         static let textPrimary = Color.white
-        static let textSecondary = Color(hex: "#A1A1A1") // Muted gray
+        static let textSecondary = Color(hex: "#A1A1A1", alpha: 1.0) // Muted gray
         static let border = Color.white.opacity(0.1)
         static let error = Color.red.opacity(0.4)
         static let errorBackground = Color.red.opacity(0.1)

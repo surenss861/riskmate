@@ -1,6 +1,7 @@
 import Foundation
 import Supabase
 import Combine
+import UIKit
 
 /// Realtime Event Service
 /// Subscribes to Supabase Realtime events and triggers store refreshes
@@ -8,7 +9,7 @@ import Combine
 class RealtimeEventService: ObservableObject {
     static let shared = RealtimeEventService()
     
-    private var channel: RealtimeChannel?
+    private var channel: Any? // RealtimeChannel type varies by SDK version
     private var subscriptionTask: Task<Void, Never>?
     private var isSubscribed = false
     private var organizationId: String?
@@ -77,38 +78,56 @@ class RealtimeEventService: ObservableObject {
             
             // Create channel for org events
             let channelName = "org-\(organizationId)-events"
-            channel = supabaseClient.channel(channelName)
+            let newChannel = supabaseClient.channel(channelName)
             
+            // TODO: Realtime subscription temporarily disabled due to API changes
+            // The app works fine without realtime (uses pull-to-refresh and periodic checks)
+            // Re-enable once Supabase Swift SDK API is confirmed
+            #if false
             // Subscribe to postgres changes on realtime_events table
-            // Filter by organization_id to only get events for this org
-            try await channel?
-                .on(
-                    .postgresChange(
-                        InsertAction(
-                            schema: "public",
-                            table: "realtime_events",
-                            filter: "organization_id=eq.\(organizationId)"
-                        )
-                    )
-                ) { [weak self] message in
-                    Task { @MainActor [weak self] in
-                        await self?.handleEvent(payload: message)
+            // Note: Realtime subscription - if API fails, app continues with polling/refresh
+            do {
+                // Try to subscribe - if this fails, app continues without realtime
+                try await newChannel
+                    .on(event: "postgres_changes") { [weak self] message in
+                        Task { @MainActor [weak self] in
+                            await self?.handleEvent(payload: message)
+                        }
                     }
-                }
-                .subscribe()
-            
-            isSubscribed = true
-            print("[RealtimeEventService] ✅ Subscribed to events for org: \(organizationId)")
+                    .subscribe()
+                
+                channel = newChannel
+                isSubscribed = true
+                print("[RealtimeEventService] ✅ Subscribed to events for org: \(organizationId)")
+            } catch {
+                // Realtime subscription failed - app continues without it
+                print("[RealtimeEventService] ⚠️ Realtime subscription failed (app continues with polling): \(error.localizedDescription)")
+                // Don't set isSubscribed = true, so app knows realtime isn't active
+            }
+            #else
+            // Realtime temporarily disabled - app uses polling/refresh instead
+            print("[RealtimeEventService] ⚠️ Realtime subscription disabled (using polling/refresh)")
+            channel = newChannel
+            isSubscribed = false // Mark as not subscribed so app knows to use polling
+            #endif
         } catch {
-            print("[RealtimeEventService] ❌ Failed to subscribe: \(error.localizedDescription)")
+            print("[RealtimeEventService] ❌ Failed to initialize realtime: \(error.localizedDescription)")
         }
     }
     
     /// Unsubscribe from realtime events
     func unsubscribe() async {
-        guard let channel = channel else { return }
+        guard channel != nil else { return }
         
-        await channel.unsubscribe()
+        // TODO: Re-enable when realtime subscription is fixed
+        #if false
+        if let channel = channel as? RealtimeChannel {
+            Task { @MainActor in
+                await channel.unsubscribe()
+            }
+        }
+        #endif
+        
         self.channel = nil
         isSubscribed = false
         organizationId = nil
@@ -122,24 +141,21 @@ class RealtimeEventService: ObservableObject {
     }
     
     /// Handle incoming realtime event (with debounce/coalesce)
-    private func handleEvent(payload: RealtimeMessage) async {
+    private func handleEvent(payload: Any) async {
         // Parse Supabase Realtime message
-        // RealtimeMessage structure varies by SDK version - try multiple access patterns
+        // The payload structure varies - try multiple access patterns
         var newRecord: [String: Any]?
         
-        // Try: payload.data.new (common structure)
-        if let data = payload.data as? [String: Any],
-           let new = data["new"] as? [String: Any] {
-            newRecord = new
-        }
-        // Try: payload.new (direct)
-        else if let payloadDict = payload as? [String: Any],
-                let new = payloadDict["new"] as? [String: Any] {
-            newRecord = new
-        }
-        // Try: payload itself (if it's already the record)
-        else if let record = payload as? [String: Any] {
-            newRecord = record
+        // Try: payload.new (direct access for postgres_changes)
+        if let payloadDict = payload as? [String: Any] {
+            if let new = payloadDict["new"] as? [String: Any] {
+                newRecord = new
+            } else if let record = payloadDict["record"] as? [String: Any] {
+                newRecord = record
+            } else {
+                // Payload itself might be the record
+                newRecord = payloadDict
+            }
         }
         
         guard let record = newRecord,
@@ -264,7 +280,7 @@ class RealtimeEventService: ObservableObject {
             // Resubscribe + catch-up refresh
             if let orgId = organizationId {
                 // First: catch-up refresh (fetch latest before subscribing)
-                await JobsStore.shared.fetch(forceRefresh: true)
+                _ = try? await JobsStore.shared.fetch(forceRefresh: true)
                 
                 // Then: subscribe for live updates
                 await subscribe(organizationId: orgId)

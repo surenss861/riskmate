@@ -18,7 +18,7 @@ exports.reportsRouter = express_1.default.Router();
 const ensuredBuckets = new Set();
 const BASE_SHARE_URL = process.env.REPORT_SHARE_BASE_URL ||
     process.env.FRONTEND_URL ||
-    "http://localhost:3000";
+    "https://www.riskmate.dev";
 const SHARE_TOKEN_SECRET = process.env.REPORT_SHARE_SECRET ||
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
     "riskmate-share-secret";

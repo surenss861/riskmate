@@ -341,13 +341,15 @@ struct RiskScoreCard: View {
                     Text("\(riskScore)")
                         .font(RMTheme.Typography.title)
                         .foregroundColor(riskColor)
+                        .contentTransition(.numericText())
+                        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: riskScore)
                 }
                 
                 Text(riskLevel)
                     .font(RMTheme.Typography.bodySmall)
                     .foregroundColor(RMTheme.Colors.textSecondary)
                 
-                // Risk level indicator
+                // Risk level indicator with animation
                 GeometryReader { geometry in
                     ZStack(alignment: .leading) {
                         RoundedRectangle(cornerRadius: 4)
@@ -357,6 +359,7 @@ struct RiskScoreCard: View {
                         RoundedRectangle(cornerRadius: 4)
                             .fill(riskColor)
                             .frame(width: geometry.size.width * CGFloat(riskScore) / 100, height: 8)
+                            .animation(.spring(response: 0.5, dampingFraction: 0.8), value: riskScore)
                     }
                 }
                 .frame(height: 8)

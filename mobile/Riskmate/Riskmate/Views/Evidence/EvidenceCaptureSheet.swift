@@ -24,6 +24,11 @@ struct EvidenceCaptureSheet: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
+                // Step indicator dots (visual progress)
+                StepIndicator(currentStep: 1, totalSteps: 3)
+                    .padding(.top, RMSystemTheme.Spacing.md)
+                    .padding(.horizontal, RMSystemTheme.Spacing.md)
+                
                 // Quick capture bar at top
                 EvidenceQuickBar(selectedType: $selectedMode)
                     .padding(.top, RMSystemTheme.Spacing.sm)
@@ -75,9 +80,16 @@ struct EvidenceCaptureSheet: View {
                     if !trackedUploadIds.contains(upload.id) {
                         trackedUploadIds.insert(upload.id)
                         
-                        // Success moment: haptic + toast + dismiss
+                        // Success moment: haptic + "Anchored" toast with timestamp + dismiss
                         Haptics.success()
-                        ToastCenter.shared.show("Evidence securely attached", systemImage: "checkmark.circle.fill", style: .success)
+                        Analytics.shared.trackEvidenceCaptureCompleted()
+                        Analytics.shared.trackCapturePhotoSuccess()
+                        
+                        // Format timestamp for toast
+                        let formatter = DateFormatter()
+                        formatter.timeStyle = .short
+                        let timeString = formatter.string(from: Date())
+                        ToastCenter.shared.show("Anchored • \(timeString)", systemImage: "checkmark.seal.fill", style: .success)
                         
                         // Auto-dismiss after brief delay with background fade
                         Task {

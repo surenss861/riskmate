@@ -10,12 +10,8 @@ struct OperationsHeaderView: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: RMSystemTheme.Spacing.sm) {
-            // Sync Status (compact)
-            if let lastSync = lastSync {
-                Text("Synced \(relativeTime(lastSync))")
-                    .font(RMSystemTheme.Typography.caption)
-                    .foregroundStyle(RMSystemTheme.Colors.textTertiary)
-            }
+            // Live Sync Status (green pulse dot + "Live")
+            LiveSyncStatus(isOnline: true, lastSync: lastSync)
             
             // KPI Chips
             HStack(spacing: RMSystemTheme.Spacing.sm) {

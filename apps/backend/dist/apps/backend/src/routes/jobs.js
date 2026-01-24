@@ -46,7 +46,11 @@ const notifications_1 = require("../services/notifications");
 const jobReport_1 = require("../utils/jobReport");
 const limits_1 = require("../middleware/limits");
 const errorResponse_1 = require("../utils/errorResponse");
+const requireWriteAccess_1 = require("../middleware/requireWriteAccess");
+const realtimeEvents_1 = require("../utils/realtimeEvents");
 exports.jobsRouter = express_1.default.Router();
+// Log that jobs routes are being loaded (verification for deployment)
+console.log("[ROUTES] ✅ Jobs routes loaded (including /:id/hazards and /:id/controls)");
 // Rate-limited logging for cursor misuse (once per organization per hour)
 // This helps identify client misconfigurations without spamming logs
 const cursorMisuseLogs = new Map();
@@ -668,6 +672,111 @@ exports.jobsRouter.get("/", auth_1.authenticate, async (req, res) => {
         res.status(500).json(errorResponse);
     }
 });
+// GET /api/jobs/:id/hazards
+// Returns all hazards (mitigation items) for a job
+// NOTE: Must be before /:id route to match correctly
+exports.jobsRouter.get("/:id/hazards", auth_1.authenticate, async (req, res) => {
+    const authReq = req;
+    try {
+        const { organization_id } = authReq.user;
+        const jobId = req.params.id;
+        // Verify job belongs to organization
+        const { data: job, error: jobError } = await supabaseClient_1.supabase
+            .from("jobs")
+            .select("id")
+            .eq("id", jobId)
+            .eq("organization_id", organization_id)
+            .single();
+        if (jobError || !job) {
+            return res.status(404).json({ message: "Job not found" });
+        }
+        // Fetch mitigation items (hazards/controls) for this job
+        const { data: mitigationItems, error: mitigationError } = await supabaseClient_1.supabase
+            .from("mitigation_items")
+            .select("*")
+            .eq("job_id", jobId)
+            .eq("organization_id", organization_id)
+            .order("created_at", { ascending: false });
+        if (mitigationError) {
+            throw mitigationError;
+        }
+        // Transform mitigation_items to Hazard-like structure
+        const hazards = (mitigationItems || []).map((item) => {
+            // Try to extract a code from the title (first word before space or colon)
+            let code = "UNKNOWN";
+            if (item.title) {
+                const match = item.title.match(/^([A-Z0-9_]+)/);
+                if (match) {
+                    code = match[1];
+                }
+                else {
+                    code = item.title.substring(0, 10).toUpperCase().replace(/\s+/g, '_');
+                }
+            }
+            return {
+                id: item.id,
+                code: item.factor_id || item.code || code,
+                name: item.title || item.name || "Unknown Hazard",
+                description: item.description || "",
+                severity: item.severity || "medium",
+                status: item.done || item.is_completed ? "resolved" : "open",
+                created_at: item.created_at || new Date().toISOString(),
+                updated_at: item.updated_at || item.completed_at || item.created_at || new Date().toISOString(),
+            };
+        });
+        res.json({ data: hazards });
+    }
+    catch (err) {
+        console.error("[Jobs] Hazards fetch failed:", err);
+        res.status(500).json({ message: "Failed to fetch hazards" });
+    }
+});
+// GET /api/jobs/:id/controls
+// Returns all controls (mitigation items) for a job
+// NOTE: Must be before /:id route to match correctly
+exports.jobsRouter.get("/:id/controls", auth_1.authenticate, async (req, res) => {
+    const authReq = req;
+    try {
+        const { organization_id } = authReq.user;
+        const jobId = req.params.id;
+        // Verify job belongs to organization
+        const { data: job, error: jobError } = await supabaseClient_1.supabase
+            .from("jobs")
+            .select("id")
+            .eq("id", jobId)
+            .eq("organization_id", organization_id)
+            .single();
+        if (jobError || !job) {
+            return res.status(404).json({ message: "Job not found" });
+        }
+        // Fetch mitigation items (controls) for this job
+        const { data: mitigationItems, error: mitigationError } = await supabaseClient_1.supabase
+            .from("mitigation_items")
+            .select("*")
+            .eq("job_id", jobId)
+            .eq("organization_id", organization_id)
+            .order("created_at", { ascending: false });
+        if (mitigationError) {
+            throw mitigationError;
+        }
+        // Transform mitigation_items to Control-like structure
+        const controls = (mitigationItems || []).map((item) => ({
+            id: item.id,
+            title: item.title || "Unknown Control",
+            description: item.description || "",
+            status: item.done || item.is_completed ? "Completed" : (item.blocked ? "Blocked" : "Pending"),
+            done: item.done || item.is_completed || false,
+            isCompleted: item.is_completed || item.done || false,
+            createdAt: item.created_at || new Date().toISOString(),
+            updatedAt: item.updated_at || item.completed_at || item.created_at || new Date().toISOString(),
+        }));
+        res.json({ data: controls });
+    }
+    catch (err) {
+        console.error("[Jobs] Controls fetch failed:", err);
+        res.status(500).json({ message: "Failed to fetch controls" });
+    }
+});
 // GET /api/jobs/:id
 // Returns full job details with risk score and mitigation items
 exports.jobsRouter.get("/:id", auth_1.authenticate, async (req, res) => {
@@ -712,7 +821,7 @@ exports.jobsRouter.get("/:id", auth_1.authenticate, async (req, res) => {
 });
 // POST /api/jobs
 // Creates a new job and calculates risk score
-exports.jobsRouter.post("/", auth_1.authenticate, limits_1.enforceJobLimit, async (req, res) => {
+exports.jobsRouter.post("/", auth_1.authenticate, requireWriteAccess_1.requireWriteAccess, limits_1.enforceJobLimit, async (req, res) => {
     const authReq = req;
     try {
         const { organization_id, id: userId } = authReq.user;
@@ -788,6 +897,8 @@ exports.jobsRouter.post("/", auth_1.authenticate, limits_1.enforceJobLimit, asyn
                 risk_factor_codes: risk_factor_codes?.length ?? 0,
             },
         });
+        // Emit realtime event (push signal)
+        await (0, realtimeEvents_1.emitJobEvent)(organization_id, "job.created", job.id, userId);
         // Calculate risk score if risk factors provided
         let riskScoreResult = null;
         if (risk_factor_codes && risk_factor_codes.length > 0) {
@@ -847,42 +958,15 @@ exports.jobsRouter.post("/", auth_1.authenticate, limits_1.enforceJobLimit, asyn
 });
 // PATCH /api/jobs/:id
 // Updates a job and optionally recalculates risk score
-exports.jobsRouter.patch("/:id", auth_1.authenticate, async (req, res) => {
+exports.jobsRouter.patch("/:id", auth_1.authenticate, requireWriteAccess_1.requireWriteAccess, async (req, res) => {
     const authReq = req;
     try {
         const jobId = authReq.params.id;
-        const { organization_id, id: userId, role } = authReq.user;
+        const { organization_id, id: userId } = authReq.user;
         const updateData = authReq.body;
         const { risk_factor_codes, ...jobUpdates } = updateData;
         let updatedRiskScore = null;
         let updatedClientName = null;
-        // Role-based capability: Executives are read-only
-        if (role === 'executive') {
-            // Log capability violation for audit trail
-            try {
-                await (0, audit_1.recordAuditLog)({
-                    organizationId: organization_id,
-                    actorId: userId,
-                    eventName: "auth.role_violation",
-                    targetType: "job",
-                    targetId: jobId,
-                    metadata: {
-                        role,
-                        attempted_action: "update_job",
-                        result: "denied",
-                        reason: "Executive role is read-only",
-                    },
-                });
-            }
-            catch (auditError) {
-                // Non-fatal: log but don't fail the request
-                console.warn("Audit log failed for role violation:", auditError);
-            }
-            return res.status(403).json({
-                message: "Executives have read-only access",
-                code: "AUTH_ROLE_READ_ONLY",
-            });
-        }
         // Verify job belongs to organization
         const { data: existingJob, error: jobError } = await supabaseClient_1.supabase
             .from("jobs")
@@ -978,6 +1062,8 @@ exports.jobsRouter.patch("/:id", auth_1.authenticate, async (req, res) => {
                     : undefined,
             },
         });
+        // Emit realtime event (push signal)
+        await (0, realtimeEvents_1.emitJobEvent)(organization_id, "job.updated", jobId, userId);
         // If risk score changed, log separate event
         if (riskScoreChanged) {
             (0, audit_1.recordAuditLog)({
@@ -1005,40 +1091,13 @@ exports.jobsRouter.patch("/:id", auth_1.authenticate, async (req, res) => {
     }
 });
 // PATCH /api/jobs/:id/mitigations/:mitigationId
-exports.jobsRouter.patch("/:id/mitigations/:mitigationId", auth_1.authenticate, async (req, res) => {
+exports.jobsRouter.patch("/:id/mitigations/:mitigationId", auth_1.authenticate, requireWriteAccess_1.requireWriteAccess, async (req, res) => {
     const authReq = req;
     try {
         const jobId = authReq.params.id;
         const mitigationId = authReq.params.mitigationId;
-        const { organization_id, role } = authReq.user;
+        const { organization_id } = authReq.user;
         const { done } = authReq.body;
-        // Role-based capability: Executives are read-only
-        if (role === 'executive') {
-            // Log capability violation for audit trail
-            try {
-                await (0, audit_1.recordAuditLog)({
-                    organizationId: organization_id,
-                    actorId: authReq.user.id,
-                    eventName: "auth.role_violation",
-                    targetType: "mitigation",
-                    targetId: mitigationId,
-                    metadata: {
-                        role,
-                        attempted_action: "update_mitigation",
-                        result: "denied",
-                        reason: "Executive role is read-only",
-                    },
-                });
-            }
-            catch (auditError) {
-                // Non-fatal: log but don't fail the request
-                console.warn("Audit log failed for role violation:", auditError);
-            }
-            return res.status(403).json({
-                message: "Executives have read-only access",
-                code: "AUTH_ROLE_READ_ONLY",
-            });
-        }
         if (typeof done !== "boolean") {
             return res.status(400).json({ message: "'done' boolean field is required" });
         }
@@ -1198,7 +1257,7 @@ exports.jobsRouter.get("/:id/documents", auth_1.authenticate, async (req, res) =
 });
 // POST /api/jobs/:id/documents
 // Persists document metadata after upload to storage
-exports.jobsRouter.post("/:id/documents", auth_1.authenticate, async (req, res) => {
+exports.jobsRouter.post("/:id/documents", auth_1.authenticate, requireWriteAccess_1.requireWriteAccess, async (req, res) => {
     const authReq = req;
     try {
         const jobId = authReq.params.id;
@@ -1258,6 +1317,8 @@ exports.jobsRouter.post("/:id/documents", auth_1.authenticate, async (req, res) 
                 file_size: Math.round(parsedFileSize),
             },
         });
+        // Emit realtime event (push signal)
+        await (0, realtimeEvents_1.emitEvidenceEvent)(organization_id, "evidence.uploaded", inserted.id, jobId, userId);
         invalidateJobReportCache(organization_id, jobId);
         res.status(201).json({
             data: {
@@ -1323,7 +1384,7 @@ exports.jobsRouter.get("/:id/audit", auth_1.authenticate, async (req, res) => {
 });
 // POST /api/jobs/:id/archive
 // Archives a job (soft delete, read-only, preserves for audit)
-exports.jobsRouter.post("/:id/archive", auth_1.authenticate, async (req, res) => {
+exports.jobsRouter.post("/:id/archive", auth_1.authenticate, requireWriteAccess_1.requireWriteAccess, async (req, res) => {
     const authReq = req;
     try {
         const { id: userId, organization_id } = authReq.user;
@@ -1366,6 +1427,8 @@ exports.jobsRouter.post("/:id/archive", auth_1.authenticate, async (req, res) =>
                 previous_status: job.status,
             },
         });
+        // Emit realtime event (push signal)
+        await (0, realtimeEvents_1.emitJobEvent)(organization_id, "job.archived", jobId, userId);
         res.json({
             data: {
                 id: jobId,
@@ -1381,7 +1444,8 @@ exports.jobsRouter.post("/:id/archive", auth_1.authenticate, async (req, res) =>
 });
 // PATCH /api/jobs/:id/flag
 // Flags a job for review (governance signal, not workflow)
-exports.jobsRouter.patch("/:id/flag", auth_1.authenticate, async (req, res) => {
+// Note: Auditors cannot flag (governance signal requires write access)
+exports.jobsRouter.patch("/:id/flag", auth_1.authenticate, requireWriteAccess_1.requireWriteAccess, async (req, res) => {
     const authReq = req;
     const requestId = authReq.requestId || 'unknown';
     try {
@@ -1501,6 +1565,8 @@ exports.jobsRouter.patch("/:id/flag", auth_1.authenticate, async (req, res) => {
             // Non-fatal: log but don't fail the request
             console.warn("Audit log failed for flag action:", auditError);
         }
+        // Emit realtime event (push signal)
+        await (0, realtimeEvents_1.emitJobEvent)(organization_id, "job.flagged", id, userId);
         res.json({
             id: updatedJob.id,
             review_flag: updatedJob.review_flag,
@@ -1524,12 +1590,12 @@ exports.jobsRouter.patch("/:id/flag", auth_1.authenticate, async (req, res) => {
 });
 // DELETE /api/jobs/:id
 // Hard deletes a job (admin-only, strict eligibility checks)
-exports.jobsRouter.delete("/:id", auth_1.authenticate, async (req, res) => {
+exports.jobsRouter.delete("/:id", auth_1.authenticate, requireWriteAccess_1.requireWriteAccess, async (req, res) => {
     const authReq = req;
     try {
         const { id: userId, organization_id, role } = authReq.user;
         const jobId = authReq.params.id;
-        // Only owners can delete jobs
+        // Only owners can delete jobs (requireWriteAccess already blocks auditors/executives)
         if (role !== "owner") {
             const requestId = authReq.requestId || 'unknown';
             const { response: errorResponse, errorId } = (0, errorResponse_1.createErrorResponse)({
@@ -1769,7 +1835,8 @@ exports.jobsRouter.get("/:id/signoffs", auth_1.authenticate, async (req, res) =>
 });
 // POST /api/jobs/:id/signoffs
 // Creates a new sign-off for a job
-exports.jobsRouter.post("/:id/signoffs", auth_1.authenticate, async (req, res) => {
+// Note: Auditors cannot sign (read-only access)
+exports.jobsRouter.post("/:id/signoffs", auth_1.authenticate, requireWriteAccess_1.requireWriteAccess, async (req, res) => {
     const authReq = req;
     const requestId = authReq.requestId || 'unknown';
     try {

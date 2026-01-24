@@ -8,6 +8,11 @@ struct AuthView: View {
     @State private var password = ""
     @State private var confirmPassword = ""
     @State private var errorText: String?
+    @FocusState private var focusedField: Field?
+    
+    enum Field {
+        case email, password, confirmPassword
+    }
     
     var body: some View {
         ZStack {
@@ -28,7 +33,7 @@ struct AuthView: View {
                                     .foregroundColor(RMTheme.Colors.textPrimary)
                                 
                                 Text(isSignup ? "Start protecting every job before it starts"
-                                              : "Sign in to your RiskMate account")
+                                              : "Secure access to your compliance ledger")
                                     .font(RMTheme.Typography.body)
                                     .foregroundColor(RMTheme.Colors.textSecondary)
                             }
@@ -41,7 +46,17 @@ struct AuthView: View {
                                     icon: "envelope",
                                     isSecure: false,
                                     keyboardType: .emailAddress,
-                                    textContentType: .emailAddress
+                                    textContentType: .emailAddress,
+                                    onSubmit: {
+                                        // Auto-focus password field after email is filled
+                                        if !email.isEmpty {
+                                            focusedField = .password
+                                        }
+                                    },
+                                    focused: Binding(
+                                        get: { focusedField == .email },
+                                        set: { if $0 { focusedField = .email } else { focusedField = nil } }
+                                    )
                                 )
                                 
                                 RMAuthTextField(
@@ -50,7 +65,17 @@ struct AuthView: View {
                                     icon: "lock",
                                     isSecure: true,
                                     keyboardType: .default,
-                                    textContentType: isSignup ? .newPassword : .password
+                                    textContentType: isSignup ? .newPassword : .password,
+                                    onSubmit: {
+                                        // If both fields filled, submit
+                                        if !email.isEmpty && !password.isEmpty {
+                                            handleSubmit()
+                                        }
+                                    },
+                                    focused: Binding(
+                                        get: { focusedField == .password },
+                                        set: { if $0 { focusedField = .password } else { focusedField = nil } }
+                                    )
                                 )
                                 
                                 if isSignup {
@@ -60,7 +85,17 @@ struct AuthView: View {
                                         icon: "lock",
                                         isSecure: true,
                                         keyboardType: .default,
-                                        textContentType: .newPassword
+                                        textContentType: .newPassword,
+                                        onSubmit: {
+                                            // If all fields filled, submit
+                                            if !email.isEmpty && !password.isEmpty && !confirmPassword.isEmpty {
+                                                handleSubmit()
+                                            }
+                                        },
+                                        focused: Binding(
+                                            get: { focusedField == .confirmPassword },
+                                            set: { if $0 { focusedField = .confirmPassword } else { focusedField = nil } }
+                                        )
                                     )
                                     
                                     Text("Minimum 6 characters")
@@ -133,6 +168,12 @@ struct AuthView: View {
             .scrollDismissesKeyboard(.interactively)
         }
         .preferredColorScheme(.dark)
+        .onAppear {
+            // Auto-focus email field on appear
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                focusedField = .email
+            }
+        }
     }
     
     private func handleSubmit() {

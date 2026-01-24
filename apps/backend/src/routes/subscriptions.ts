@@ -528,6 +528,22 @@ subscriptionsRouter.post(
             );
           }
 
+          // Verify the price actually changed
+          const updatedPriceId = updatedSubscription.items.data[0]?.price?.id;
+          if (updatedPriceId !== priceId) {
+            console.error(
+              `[Switch] Price mismatch: expected ${priceId}, got ${updatedPriceId} for subscription ${subscriptionId}`
+            );
+            // Still proceed, but log the issue
+          }
+
+          // Log Stripe update verification
+          console.log(
+            `[Switch] Stripe subscription updated: id=${updatedSubscription.id}, ` +
+            `priceId=${updatedPriceId}, status=${updatedSubscription.status}, ` +
+            `cancel_at_period_end=${updatedSubscription.cancel_at_period_end}`
+          );
+
           // Pass Unix seconds (not ISO strings) to applyPlanToOrganization
           await applyPlanToOrganization(organization_id, planCode, {
             stripeCustomerId: currentSubscription.stripe_customer_id || null,
@@ -541,6 +557,11 @@ subscriptionsRouter.post(
             success: true,
             message: `Downgraded to ${planCode} plan. Your billing will reflect the new price on your next invoice.`,
             plan: planCode,
+            // Return Stripe verification details for debugging
+            subscriptionId: updatedSubscription.id,
+            priceId: updatedPriceId,
+            status: updatedSubscription.status,
+            cancel_at_period_end: updatedSubscription.cancel_at_period_end,
           });
         } catch (err: any) {
           console.error("Failed to process downgrade:", err);

@@ -19,12 +19,25 @@ struct RMPrimaryButton: View {
         } label: {
             ZStack {
                 RoundedRectangle(cornerRadius: RMTheme.Radius.md, style: .continuous)
-                    .fill(RMTheme.Colors.accent)
+                    .fill(
+                        LinearGradient(
+                            colors: [RMTheme.Colors.accent, RMTheme.Colors.accentLight],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
                     .opacity(isDisabled ? 0.5 : 1.0)
                 
                 if isLoading {
-                    ProgressView()
-                        .tint(.black)
+                    HStack(spacing: 8) {
+                        ProgressView()
+                            .tint(.black)
+                            .scaleEffect(0.9)
+                        Text("Signing in...")
+                            .font(RMTheme.Typography.bodyBold)
+                            .foregroundColor(.black)
+                            .opacity(0.8)
+                    }
                 } else {
                     Text(title)
                         .font(RMTheme.Typography.bodyBold)
@@ -32,7 +45,7 @@ struct RMPrimaryButton: View {
                 }
             }
             .frame(height: 52)
-            .scaleEffect(isPressed ? 0.98 : 1.0)
+            .scaleEffect(isPressed ? 0.96 : 1.0) // More noticeable compression
             .animation(RMTheme.Animation.springFast, value: isPressed)
         }
         .buttonStyle(.plain)

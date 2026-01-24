@@ -87,14 +87,22 @@ struct LedgerReceiptCard: View {
                             .lineLimit(1)
                         
                         Button {
-                            Haptics.tap()
+                            Haptics.success()
                             UIPasteboard.general.string = fullHash ?? hashPreview
+                            // Animated copy action (respects Reduce Motion)
+                            if !UIAccessibility.isReduceMotionEnabled {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                    // Visual feedback handled by toast
+                                }
+                            }
                             ToastCenter.shared.show("Copied hash", systemImage: "doc.on.doc", style: .success)
                         } label: {
                             Image(systemName: "doc.on.doc")
                                 .font(.system(size: 12, weight: .medium))
                                 .foregroundStyle(RMSystemTheme.Colors.accent)
                         }
+                        .accessibilityLabel("Copy hash")
+                        .accessibilityHint("Copies the proof hash to clipboard")
                         
                         Spacer()
                         

@@ -13,6 +13,19 @@ struct JobCard: View {
         return RMSystemTheme.Colors.low
     }
     
+    var riskScoreBackgroundGradient: LinearGradient {
+        let score = job.riskScore ?? 0
+        if score >= 90 {
+            return LinearGradient(colors: [Color.red.opacity(0.15), Color.red.opacity(0.05)], startPoint: .topLeading, endPoint: .bottomTrailing)
+        } else if score >= 70 {
+            return LinearGradient(colors: [Color.orange.opacity(0.15), Color.orange.opacity(0.05)], startPoint: .topLeading, endPoint: .bottomTrailing)
+        } else if score >= 40 {
+            return LinearGradient(colors: [Color.yellow.opacity(0.15), Color.yellow.opacity(0.05)], startPoint: .topLeading, endPoint: .bottomTrailing)
+        } else {
+            return LinearGradient(colors: [Color.green.opacity(0.15), Color.green.opacity(0.05)], startPoint: .topLeading, endPoint: .bottomTrailing)
+        }
+    }
+    
     var body: some View {
         RMCard {
             HStack(spacing: RMSystemTheme.Spacing.md) {
@@ -32,19 +45,41 @@ struct JobCard: View {
                         .lineLimit(1)
                     
                     StatusChip(text: job.status.uppercased())
+                    
+                    // Contextual action hint for critical jobs
+                    if (job.riskScore ?? 0) >= 90 {
+                        HStack(spacing: 4) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(RMSystemTheme.Colors.warning)
+                            Text("High risk — add proof to reduce exposure")
+                                .font(RMSystemTheme.Typography.caption2)
+                                .foregroundStyle(RMSystemTheme.Colors.textTertiary)
+                        }
+                        .padding(.top, 2)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
                 }
                 
                 Spacer()
                 
-                // Risk Score
+                // Risk Score with animation on first load
                 VStack(alignment: .trailing, spacing: 2) {
                     Text("\(job.riskScore ?? 0)")
                         .font(RMSystemTheme.Typography.title2)
                         .foregroundStyle(RMSystemTheme.Colors.textPrimary)
+                        .contentTransition(.numericText())
+                        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: job.riskScore)
                     Text("Risk")
                         .font(RMSystemTheme.Typography.caption)
                         .foregroundStyle(RMSystemTheme.Colors.textTertiary)
                 }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: RMSystemTheme.Radius.sm)
+                        .fill(riskScoreBackgroundGradient)
+                )
                 
                 // Chevron
                 Image(systemName: "chevron.right")

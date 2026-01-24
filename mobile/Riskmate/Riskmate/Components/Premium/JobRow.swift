@@ -29,12 +29,40 @@ struct JobRow: View {
         false
     }
     
+    var riskGradient: LinearGradient {
+        let level = (job.riskLevel ?? "").lowercased()
+        if level.contains("critical") {
+            return LinearGradient(colors: [Color.red, Color.red.opacity(0.6)], startPoint: .top, endPoint: .bottom)
+        } else if level.contains("high") {
+            return LinearGradient(colors: [Color.orange, Color.orange.opacity(0.6)], startPoint: .top, endPoint: .bottom)
+        } else if level.contains("medium") {
+            return LinearGradient(colors: [Color.yellow, Color.yellow.opacity(0.6)], startPoint: .top, endPoint: .bottom)
+        } else {
+            return LinearGradient(colors: [Color.green, Color.green.opacity(0.6)], startPoint: .top, endPoint: .bottom)
+        }
+    }
+    
+    var riskScoreBackgroundGradient: LinearGradient {
+        let score = job.riskScore ?? 0
+        if score >= 90 {
+            return LinearGradient(colors: [Color.red.opacity(0.15), Color.red.opacity(0.05)], startPoint: .topLeading, endPoint: .bottomTrailing)
+        } else if score >= 70 {
+            return LinearGradient(colors: [Color.orange.opacity(0.15), Color.orange.opacity(0.05)], startPoint: .topLeading, endPoint: .bottomTrailing)
+        } else if score >= 40 {
+            return LinearGradient(colors: [Color.yellow.opacity(0.15), Color.yellow.opacity(0.05)], startPoint: .topLeading, endPoint: .bottomTrailing)
+        } else {
+            return LinearGradient(colors: [Color.green.opacity(0.15), Color.green.opacity(0.05)], startPoint: .topLeading, endPoint: .bottomTrailing)
+        }
+    }
+    
+    @State private var hasAppeared = false
+    
     var body: some View {
         HStack(spacing: RMSystemTheme.Spacing.md) {
-            // Risk Badge (leading accessory)
-            Circle()
-                .fill(riskColor)
-                .frame(width: 8, height: 8)
+            // Left edge risk strip (green → yellow → red)
+            RoundedRectangle(cornerRadius: 2)
+                .fill(riskGradient)
+                .frame(width: 4)
             
             // Job Info
             VStack(alignment: .leading, spacing: 4) {
@@ -69,21 +97,38 @@ struct JobRow: View {
             
             Spacer()
             
-            // Risk Score (trailing)
+            // Risk Score (trailing) with subtle gradient background
             VStack(alignment: .trailing, spacing: 2) {
                 Text("\(job.riskScore ?? 0)")
                     .font(RMSystemTheme.Typography.title3)
                     .foregroundStyle(RMSystemTheme.Colors.textPrimary)
+                    .contentTransition(.numericText())
+                    .animation(.spring(response: 0.4, dampingFraction: 0.8), value: job.riskScore)
                 Text("Risk")
                     .font(RMSystemTheme.Typography.caption)
                     .foregroundStyle(RMSystemTheme.Colors.textTertiary)
             }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: RMSystemTheme.Radius.sm)
+                    .fill(riskScoreBackgroundGradient)
+            )
         }
         .listRowBackground(
             Rectangle()
                 .fill(.ultraThinMaterial)
         )
         .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+        .onAppear {
+            // Subtle shake on first appearance for critical risk
+            if !hasAppeared && isHighRisk && (job.riskScore ?? 0) >= 90 {
+                hasAppeared = true
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.5).repeatCount(1, autoreverses: true)) {
+                    // Shake effect handled by offset
+                }
+            }
+        }
         .contextMenu {
             if let onAddEvidence = onAddEvidence {
                 Button {

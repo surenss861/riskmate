@@ -68,6 +68,7 @@ const exports_1 = require("./routes/exports");
 const verification_1 = require("./routes/verification");
 const publicVerification_1 = require("./routes/publicVerification");
 const metrics_1 = require("./routes/metrics");
+const dashboard_1 = require("./routes/dashboard");
 const exportWorker_1 = require("./services/exportWorker");
 const retentionWorker_1 = require("./services/retentionWorker");
 const ledgerRootWorker_1 = require("./services/ledgerRootWorker");
@@ -86,6 +87,42 @@ if (!Number.isFinite(PORT)) {
 // Health check route - MUST be first (no Supabase dependency)
 app.get("/health", (_req, res) => {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
+});
+// Routes debug endpoint - lists all registered routes
+app.get("/__routes", (_req, res) => {
+    const routes = [];
+    function walk(stack, prefix = "") {
+        for (const layer of stack) {
+            if (layer.route?.path) {
+                const methods = Object.keys(layer.route.methods)
+                    .filter(Boolean)
+                    .map((m) => m.toUpperCase())
+                    .join(",");
+                routes.push(`${methods} ${prefix}${layer.route.path}`);
+            }
+            else if (layer.name === "router" && layer.handle?.stack) {
+                const routerPath = layer.regexp?.source
+                    ?.replace(/\\\/\^|\$\\\/|\?\(\?\$\/\)\?|\\\/\(\?\:|\$|\\\//g, "")
+                    .replace(/\\(\w+)/g, ":$1")
+                    .replace(/\(\?\<\w+\>/g, "")
+                    .replace(/\?/g, "") || "";
+                walk(layer.handle.stack, prefix + routerPath);
+            }
+        }
+    }
+    // @ts-ignore - accessing internal Express router
+    if (app._router && app._router.stack) {
+        walk(app._router.stack, "");
+    }
+    // Filter and sort
+    const filteredRoutes = routes
+        .filter((r) => r.includes("hazards") || r.includes("controls") || r.includes("jobs"))
+        .sort();
+    res.json({
+        count: routes.length,
+        jobsRoutes: filteredRoutes,
+        allRoutes: routes.sort(),
+    });
 });
 // Version endpoint - confirms which code is actually running (matches /v1/health format)
 app.get("/__version", async (_req, res) => {
@@ -305,6 +342,7 @@ app.use(express_1.default.json());
 // API Routes (keep /api/* for backward compatibility)
 app.use("/api/risk", risk_1.riskRouter);
 app.use("/api/subscriptions", subscriptions_1.subscriptionsRouter);
+console.log("[ROUTES] ✅ Jobs router mounted at /api/jobs");
 app.use("/api/jobs", jobs_1.jobsRouter);
 app.use("/api/reports", reports_1.reportsRouter);
 app.use("/api/analytics", analytics_1.analyticsRouter);
@@ -314,12 +352,14 @@ app.use("/api/team", team_1.teamRouter);
 app.use("/api/account", account_1.accountRouter);
 app.use("/api/sites", sites_1.sitesRouter);
 app.use("/api/audit", audit_1.auditRouter);
+console.log("[ROUTES] ✅ Audit router mounted at /api/audit");
 app.use("/api/executive", executive_1.executiveRouter);
 app.use("/api", evidence_1.evidenceRouter);
 app.use("/api", exports_1.exportsRouter);
 app.use("/api", verification_1.verificationRouter);
 app.use("/api/public", publicVerification_1.publicVerificationRouter);
 app.use("/api/metrics", metrics_1.metricsRouter);
+app.use("/api/dashboard", dashboard_1.dashboardRouter);
 // Mount all /api routes under /v1 as well (versioned API)
 v1Router.use("/risk", risk_1.riskRouter);
 v1Router.use("/subscriptions", subscriptions_1.subscriptionsRouter);
@@ -338,6 +378,7 @@ v1Router.use("/", exports_1.exportsRouter);
 v1Router.use("/", verification_1.verificationRouter);
 v1Router.use("/public", publicVerification_1.publicVerificationRouter);
 v1Router.use("/metrics", metrics_1.metricsRouter);
+v1Router.use("/dashboard", dashboard_1.dashboardRouter);
 // Dev endpoints (only available when DEV_AUTH_SECRET is set)
 // MUST be mounted BEFORE app.use("/v1", v1Router) to ensure Express registers it
 if (process.env.DEV_AUTH_SECRET) {
@@ -377,14 +418,19 @@ app.use((err, req, res, next) => {
     // This ensures 401/403/500 errors all include CORS headers
     res.status(statusCode).json(errorResponse);
 });
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`[BOOT] Listening on 0.0.0.0:${PORT} (raw PORT=${process.env.PORT})`);
-    console.log(`🚀 RiskMate Backend API running on port ${PORT}`);
-    console.log(`📡 Health check: http://0.0.0.0:${PORT}/health`);
-    console.log(`✅ Build: ${process.env.RAILWAY_DEPLOYMENT_ID || 'local'} | Commit: ${process.env.RAILWAY_GIT_COMMIT_SHA || 'dev'}`);
-    // Start background workers
-    (0, exportWorker_1.startExportWorker)();
-    (0, retentionWorker_1.startRetentionWorker)();
-    (0, ledgerRootWorker_1.startLedgerRootWorker)();
-});
+// Export app for testing
+exports.default = app;
+// Only start server if not in test mode
+if (process.env.NODE_ENV !== "test") {
+    app.listen(PORT, '0.0.0.0', () => {
+        console.log(`[BOOT] Listening on 0.0.0.0:${PORT} (raw PORT=${process.env.PORT})`);
+        console.log(`🚀 RiskMate Backend API running on port ${PORT}`);
+        console.log(`📡 Health check: http://0.0.0.0:${PORT}/health`);
+        console.log(`✅ Build: ${process.env.RAILWAY_DEPLOYMENT_ID || 'local'} | Commit: ${process.env.RAILWAY_GIT_COMMIT_SHA || 'dev'}`);
+        // Start background workers
+        (0, exportWorker_1.startExportWorker)();
+        (0, retentionWorker_1.startRetentionWorker)();
+        (0, ledgerRootWorker_1.startLedgerRootWorker)();
+    });
+}
 //# sourceMappingURL=index.js.map

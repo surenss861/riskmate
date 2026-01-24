@@ -7,6 +7,9 @@ struct RiskmateApp: App {
     @StateObject private var quickAction = QuickActionRouter.shared
     
     init() {
+        // Migrate legacy UserDefaults keys to namespaced format
+        UserDefaultsManager.migrateLegacyKeys()
+        
         // Initialize crash reporting
         _ = CrashReporting.shared
         
@@ -49,6 +52,9 @@ struct RiskmateApp: App {
                     .environmentObject(quickAction)
                     .preferredColorScheme(.dark)
                     .background(RMTheme.Colors.background)
+                    #if DEBUG
+                    .debugOverlay()
+                    #endif
                     .sheet(isPresented: $quickAction.isEvidenceSheetPresented) {
                         EvidenceCaptureSheet(
                             jobId: quickAction.evidenceJobId,
@@ -60,10 +66,44 @@ struct RiskmateApp: App {
                             }
                         )
                     }
+                    .onChange(of: scenePhase) { oldPhase, newPhase in
+                        // Handle app lifecycle
+                        handleScenePhaseChange(from: oldPhase, to: newPhase)
+                    }
                 
                 // Global toast container
                 ToastContainer()
             }
+        }
+    }
+    
+    @Environment(\.scenePhase) private var scenePhase
+    
+    private func handleScenePhaseChange(from oldPhase: ScenePhase, to newPhase: ScenePhase) {
+        switch newPhase {
+        case .background, .inactive:
+            // Pause timers and animations when app backgrounds
+            ServerStatusManager.shared.pauseChecks()
+        case .active:
+            // Resume timers and check auth when app foregrounds
+            ServerStatusManager.shared.resumeChecks()
+            
+            // Check for auth expiry after long background (30+ min)
+            Task {
+                // Small delay to let app settle
+                try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s
+                
+                // Check if session is still valid
+                if sessionManager.isAuthenticated {
+                    if let token = try? await AuthService.shared.getAccessToken(),
+                       JWTExpiry.isExpired(token) {
+                        print("[RiskmateApp] ⚠️ Token expired while backgrounded, logging out...")
+                        await sessionManager.logout()
+                    }
+                }
+            }
+        @unknown default:
+            break
         }
     }
 }

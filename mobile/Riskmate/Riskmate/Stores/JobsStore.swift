@@ -157,7 +157,7 @@ final class JobsStore: ObservableObject {
                 // Merge with existing (keep paginated results)
                 // If job was updated, it should be in page 1
                 let existingIds = Set(jobs.map { $0.id })
-                let freshIds = Set(freshJobs.map { $0.id })
+                _ = Set(freshJobs.map { $0.id }) // Track fresh IDs for potential future use
                 
                 // Update existing jobs, add new ones
                 var updated = jobs

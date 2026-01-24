@@ -11,6 +11,7 @@ struct JobsListView: View {
     @State private var selectedStatus: String = "all"
     @State private var selectedRiskLevel: String = "all"
     @FocusState private var isSearchFocused: Bool
+    @State private var isRefreshing = false
     
     init(initialFilter: String? = nil) {
         self.initialFilter = initialFilter
@@ -148,20 +149,36 @@ struct JobsListView: View {
                         }
                         .padding(RMTheme.Spacing.pagePadding)
                     } else if filteredJobs.isEmpty {
-                        // Sober empty state (Apple-style)
-                        VStack(spacing: RMSystemTheme.Spacing.md) {
-                            Image(systemName: "doc.text")
-                                .font(.system(size: 48, weight: .light))
-                                .foregroundStyle(RMSystemTheme.Colors.textTertiary)
+                        // Enhanced empty state with helpful message
+                        VStack(spacing: RMTheme.Spacing.lg) {
+                            RMEmptyState(
+                                icon: searchText.isEmpty ? "doc.text" : "magnifyingglass",
+                                title: searchText.isEmpty ? "No active jobs yet" : "No Results",
+                                message: searchText.isEmpty 
+                                    ? "Create your first job to begin compliance tracking and chain of custody. Every action is recorded as a ledger event."
+                                    : "Try adjusting your search, filters, or time range. No ledger events match your criteria.",
+                                action: searchText.isEmpty ? RMEmptyStateAction(
+                                    title: "Create Job",
+                                    action: {
+                                        // TODO: Navigate to create job
+                                        print("[JobsListView] TODO: Navigate to Create Job")
+                                    }
+                                ) : nil
+                            )
                             
-                            Text(searchText.isEmpty ? "No matching work records" : "No Results")
-                                .font(RMSystemTheme.Typography.headline)
-                                .foregroundStyle(RMSystemTheme.Colors.textPrimary)
-                            
-                            if !searchText.isEmpty {
-                                Text("Try adjusting your search or filters")
-                                    .font(RMSystemTheme.Typography.subheadline)
-                                    .foregroundStyle(RMSystemTheme.Colors.textSecondary)
+                            // "Why RiskMate exists" message on first job creation
+                            if searchText.isEmpty && jobs.isEmpty {
+                                VStack(spacing: RMTheme.Spacing.sm) {
+                                    Divider()
+                                        .background(RMTheme.Colors.divider.opacity(0.3))
+                                    
+                                    Text("RiskMate creates permanent proof so compliance is never questioned.")
+                                        .font(RMTheme.Typography.bodySmall)
+                                        .foregroundColor(RMTheme.Colors.textTertiary)
+                                        .multilineTextAlignment(.center)
+                                        .padding(.horizontal, RMTheme.Spacing.md)
+                                }
+                                .padding(.top, RMTheme.Spacing.md)
                             }
                         }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -182,8 +199,23 @@ struct JobsListView: View {
                                     bottom: RMTheme.Spacing.xs,
                                     trailing: RMTheme.Spacing.md
                                 ))
+                                .jobCardLongPressActions(
+                                    job: job,
+                                    onAddEvidence: {
+                                        // TODO: Navigate to evidence capture
+                                        print("[JobsListView] TODO: Add evidence for job \(job.id)")
+                                    },
+                                    onViewLedger: {
+                                        // TODO: Navigate to ledger filtered by job
+                                        print("[JobsListView] TODO: View ledger for job \(job.id)")
+                                    },
+                                    onExportProof: {
+                                        exportJob(job)
+                                    }
+                                )
                                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                                     Button {
+                                        Haptics.success()
                                         copyJobId(job.id)
                                     } label: {
                                         Label("Copy ID", systemImage: "doc.on.doc")
@@ -191,6 +223,7 @@ struct JobsListView: View {
                                     .tint(RMTheme.Colors.accent)
                                     
                                     Button {
+                                        Haptics.success()
                                         exportJob(job)
                                     } label: {
                                         Label("Export", systemImage: "square.and.arrow.up")
@@ -199,12 +232,14 @@ struct JobsListView: View {
                                 }
                                 .contextMenu {
                                     Button {
+                                        Haptics.success()
                                         copyJobId(job.id)
                                     } label: {
                                         Label("Copy Job ID", systemImage: "doc.on.doc")
                                     }
                                     
                                     Button {
+                                        Haptics.success()
                                         exportJob(job)
                                     } label: {
                                         Label("Export PDF", systemImage: "square.and.arrow.up")
@@ -213,6 +248,7 @@ struct JobsListView: View {
                                     Divider()
                                     
                                     Button(role: .destructive) {
+                                        Haptics.warning()
                                         // TODO: Delete job
                                     } label: {
                                         Label("Delete", systemImage: "trash")
@@ -300,8 +336,7 @@ struct JobsListView: View {
             .onChange(of: selectedRiskLevel) { _, _ in
                 FilterPersistence.saveJobsFilters(status: selectedStatus, riskLevel: selectedRiskLevel)
             }
-            .refreshable {
-                // Force refresh from store
+            .anchoringRefresh(isRefreshing: $isRefreshing) {
                 _ = try? await jobsStore.fetch(forceRefresh: true)
             }
             .navigationDestination(for: Job.self) { job in
@@ -313,12 +348,14 @@ struct JobsListView: View {
     // Filters are applied client-side via filteredJobs computed property
     
     private func copyJobId(_ id: String) {
+        Haptics.success()
         UIPasteboard.general.string = id
         let generator = UINotificationFeedbackGenerator()
         generator.notificationOccurred(.success)
     }
     
     private func exportJob(_ job: Job) {
+        Haptics.success()
         // TODO: Implement export
         let generator = UINotificationFeedbackGenerator()
         generator.notificationOccurred(.success)
@@ -482,8 +519,17 @@ struct FilterPill: View {
             .clipShape(Capsule())
             .overlay {
                 Capsule()
-                    .stroke(value == "all" ? RMTheme.Colors.border : RMTheme.Colors.accent.opacity(0.5), lineWidth: 1)
+                    .stroke(
+                        value == "all" ? RMTheme.Colors.border : RMTheme.Colors.accent.opacity(0.6),
+                        lineWidth: value == "all" ? 1 : 1.5
+                    )
             }
+            .shadow(
+                color: value != "all" ? RMTheme.Colors.accent.opacity(0.3) : Color.clear,
+                radius: value != "all" ? 6 : 0
+            )
+            .scaleEffect(value != "all" ? 1.02 : 1.0)
+            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: value)
         }
     }
 }

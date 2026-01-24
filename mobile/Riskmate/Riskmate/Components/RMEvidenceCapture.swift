@@ -15,6 +15,7 @@ struct RMEvidenceCapture: View {
     @State private var capturedImage: UIImage?
     @State private var showPermissionAlert = false
     @State private var permissionType: PermissionType = .camera
+    @State private var hasCapturedPhoto = false // Progressive disclosure: show metadata after photo
     
     @StateObject private var uploadManager = BackgroundUploadManager.shared
     
@@ -25,70 +26,83 @@ struct RMEvidenceCapture: View {
                 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: RMTheme.Spacing.sectionSpacing) {
-                        // Permission Primer
+                        // Permission Primer (always visible)
                         PermissionPrimerCard()
                             .padding(.horizontal, RMTheme.Spacing.pagePadding)
                         
-                        // Phase Selection
-                        VStack(alignment: .leading, spacing: RMTheme.Spacing.sm) {
-                            Text("When was this captured?")
-                                .rmSectionHeader()
-                                .padding(.horizontal, RMTheme.Spacing.pagePadding)
-                            
-                            PhaseSelector(selectedPhase: $selectedPhase)
-                                .padding(.horizontal, RMTheme.Spacing.pagePadding)
-                        }
-                        
-                        // Evidence Type Selection (collapsed by default - Apple trick)
-                        if showEvidenceTypeGrid {
+                        // Progressive disclosure: Show metadata only after photo is captured
+                        if hasCapturedPhoto {
+                            // Phase Selection - auto-expand after photo capture
                             VStack(alignment: .leading, spacing: RMTheme.Spacing.sm) {
-                                Text("Evidence Type")
+                                Text("When was this captured?")
                                     .rmSectionHeader()
                                     .padding(.horizontal, RMTheme.Spacing.pagePadding)
                                 
-                                EvidenceTypeGrid(selectedType: $selectedType)
+                                PhaseSelector(selectedPhase: $selectedPhase)
                                     .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                                    .transition(.move(edge: .top).combined(with: .opacity))
                             }
-                        } else {
-                            // Show "More details" button to expand
-                            Button {
-                                withAnimation(.easeOut(duration: 0.2)) {
-                                    showEvidenceTypeGrid = true
+                            
+                            // Evidence Type Selection - reveal after phase selection
+                            if showEvidenceTypeGrid {
+                                VStack(alignment: .leading, spacing: RMTheme.Spacing.sm) {
+                                    Text("Evidence Type")
+                                        .rmSectionHeader()
+                                        .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                                    
+                                    EvidenceTypeGrid(selectedType: $selectedType)
+                                        .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                                        .transition(.move(edge: .top).combined(with: .opacity))
                                 }
-                            } label: {
-                                HStack {
-                                    Text("More details")
-                                        .font(RMTheme.Typography.body)
-                                        .foregroundColor(RMTheme.Colors.accent)
-                                    Image(systemName: "chevron.down")
-                                        .font(.system(size: 12, weight: .medium))
-                                        .foregroundColor(RMTheme.Colors.accent)
-                                }
-                            }
-                            .padding(.horizontal, RMTheme.Spacing.pagePadding)
-                        }
-                        
-                        // Capture Buttons
-                        VStack(spacing: RMTheme.Spacing.md) {
-                            Button {
-                                // Show evidence type grid after photo selection
-                                if !showEvidenceTypeGrid {
-                                    withAnimation(.easeOut(duration: 0.2)) {
+                            } else {
+                                // Show "More details" button to expand
+                                Button {
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                                         showEvidenceTypeGrid = true
                                     }
+                                } label: {
+                                    HStack {
+                                        Text("More details")
+                                            .font(RMTheme.Typography.body)
+                                            .foregroundColor(RMTheme.Colors.accent)
+                                        Image(systemName: "chevron.down")
+                                            .font(.system(size: 12, weight: .medium))
+                                            .foregroundColor(RMTheme.Colors.accent)
+                                    }
                                 }
+                                .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                                .transition(.opacity)
+                            }
+                        }
+                        
+                        // Capture Buttons - Primary CTA first (camera-first approach)
+                        VStack(spacing: RMTheme.Spacing.md) {
+                            Button {
                                 requestCameraPermission()
                             } label: {
-                                HStack {
+                                HStack(spacing: 12) {
                                     Image(systemName: "camera.fill")
+                                        .font(.system(size: 20, weight: .semibold))
                                     Text("Capture Photo")
+                                        .font(RMTheme.Typography.bodyBold)
                                 }
-                                .font(RMTheme.Typography.bodySmallBold)
                                 .foregroundColor(.black)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, RMTheme.Spacing.md)
-                                .background(RMTheme.Colors.accent)
+                                .background(
+                                    LinearGradient(
+                                        colors: [RMTheme.Colors.accent, RMTheme.Colors.accent.opacity(0.8)],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
                                 .clipShape(RoundedRectangle(cornerRadius: RMTheme.Radius.sm))
+                                .shadow(
+                                    color: RMTheme.Colors.accent.opacity(0.3),
+                                    radius: 12,
+                                    x: 0,
+                                    y: 4
+                                )
                             }
                             
                             Button {
@@ -113,22 +127,36 @@ struct RMEvidenceCapture: View {
             }
             .rmNavigationBar(title: "Capture Evidence")
             .sheet(isPresented: $showCamera) {
-                CameraView(capturedImage: $capturedImage)
+                CameraView(capturedImage: $capturedImage, onCapture: {
+                    // Mark photo as captured to trigger progressive disclosure
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                        hasCapturedPhoto = true
+                    }
+                })
             }
             .sheet(isPresented: $showPhotoPicker) {
                 PhotoPickerView(
                     jobId: jobId,
                     phase: selectedPhase,
-                    type: selectedType
+                    type: selectedType,
+                    onCapture: {
+                        // Mark photo as captured to trigger progressive disclosure
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                            hasCapturedPhoto = true
+                        }
+                    }
                 )
             }
             .alert("Permission Required", isPresented: $showPermissionAlert) {
-                Button("Settings") {
+                Button("Open Settings") {
+                    RiskMateDesignSystem.Haptics.tap()
                     if let url = URL(string: UIApplication.openSettingsURLString) {
                         UIApplication.shared.open(url)
                     }
                 }
-                Button("Cancel", role: .cancel) { }
+                Button("Cancel", role: .cancel) {
+                    RiskMateDesignSystem.Haptics.tap()
+                }
             } message: {
                 Text(permissionMessage)
             }
@@ -318,6 +346,7 @@ struct EvidenceTypeGrid: View {
 
 struct CameraView: UIViewControllerRepresentable {
     @Binding var capturedImage: UIImage?
+    let onCapture: () -> Void
     @Environment(\.dismiss) private var dismiss
     
     func makeUIViewController(context: Context) -> UIImagePickerController {
@@ -343,6 +372,7 @@ struct CameraView: UIViewControllerRepresentable {
         func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
             if let image = info[.originalImage] as? UIImage {
                 parent.capturedImage = image
+                parent.onCapture() // Trigger progressive disclosure
             }
             parent.dismiss()
         }
@@ -357,6 +387,7 @@ struct PhotoPickerView: View {
     let jobId: String
     let phase: EvidencePhase
     let type: EvidenceType
+    let onCapture: () -> Void
     @Environment(\.dismiss) private var dismiss
     
     @State private var selectedItems: [PhotosPickerItem] = []
@@ -396,6 +427,10 @@ struct PhotoPickerView: View {
                                         fileName: fileName,
                                         mimeType: mimeType
                                     )
+                                    // Trigger progressive disclosure after first photo
+                                    DispatchQueue.main.async {
+                                        onCapture()
+                                    }
                                 } catch {
                                     print("Failed to upload evidence: \(error)")
                                 }

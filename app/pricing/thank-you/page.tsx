@@ -1,12 +1,18 @@
 'use client'
 
-import React, { useEffect, useState, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import React, { useEffect, useState, useRef, useMemo } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
 import RiskMateLogo from '@/components/RiskMateLogo'
 
-// Track funnel events
+// Track funnel events (one-shot guard)
+const funnelLogRef: Record<string, boolean> = {}
 function trackFunnelEvent(eventName: string, metadata?: Record<string, any>) {
+  const key = `${eventName}_${JSON.stringify(metadata)}`
+  if (funnelLogRef[key]) {
+    return // Already logged
+  }
+  funnelLogRef[key] = true
   console.info(`[Funnel] ${eventName}`, metadata || {})
   // TODO: Add analytics tracking
 }
@@ -15,34 +21,37 @@ type VerificationStatus = 'loading' | 'active' | 'processing' | 'error'
 
 export default function ThankYouPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [status, setStatus] = useState<VerificationStatus>('loading')
   const [error, setError] = useState<string | null>(null)
   const [planCode, setPlanCode] = useState<string | null>(null)
   const [retryCount, setRetryCount] = useState(0)
   const maxRetries = 3
-  const ranRef = useRef(false)
+  const didFinalize = useRef(false)
   const timeoutRef = useRef<NodeJS.Timeout | null>(null)
 
+  // Extract sessionId as a stable string (not object)
+  const sessionId = useMemo(() => {
+    return searchParams.get('session_id') ?? ''
+  }, [searchParams])
+
   useEffect(() => {
-    // Guard against double calls (React StrictMode in dev + service worker cache)
-    if (ranRef.current) {
-      console.log('[ThankYou] Already ran verification, skipping duplicate call')
+    // Hard one-shot guard - if we already finalized (redirected), don't run again
+    if (didFinalize.current) {
       return
     }
-    ranRef.current = true
+
+    // If no sessionId, error immediately
+    if (!sessionId) {
+      setError('Missing session ID. If you just completed a purchase, your subscription may still be processing. Please check your email for confirmation.')
+      setStatus('error')
+      return
+    }
+
+    // One-shot funnel log
+    trackFunnelEvent('checkout_return_success', { session_id: sessionId })
 
     const verifyPurchase = async () => {
-      // Get session_id from URL (no Suspense needed)
-      const params = new URLSearchParams(window.location.search)
-      const sessionId = params.get('session_id')
-
-      if (!sessionId) {
-        setError('Missing session ID. If you just completed a purchase, your subscription may still be processing. Please check your email for confirmation.')
-        setStatus('error')
-        return
-      }
-
-      trackFunnelEvent('checkout_return_success', { session_id: sessionId })
 
       // Verify session with backend (optional auth, works without login)
       try {
@@ -56,14 +65,19 @@ export default function ThankYouPage() {
         const verifyData = await verifyResponse.json()
         
         if (verifyData.status === 'active' || verifyData.status === 'trialing') {
+          // One-shot funnel log
           trackFunnelEvent('subscription_activated', { 
             plan_code: verifyData.plan_code,
             session_id: sessionId,
           })
           setStatus('active')
           setPlanCode(verifyData.plan_code)
-          // Redirect after 3 seconds
-          timeoutRef.current = setTimeout(() => router.push('/operations'), 3000)
+          
+          // Mark as finalized and redirect after 3 seconds
+          didFinalize.current = true
+          timeoutRef.current = setTimeout(() => {
+            router.push('/operations')
+          }, 3000)
         } else if (verifyData.status === 'pending' || verifyData.status === 'processing') {
           // Webhook is still processing - retry with exponential backoff
           setStatus('processing')
@@ -99,7 +113,7 @@ export default function ThankYouPage() {
         clearTimeout(timeoutRef.current)
       }
     }
-  }, [router]) // Remove retryCount from deps to prevent re-running on retry
+  }, [sessionId, router]) // Only depend on sessionId (string) and router, not retryCount
 
   return (
     <div className="min-h-screen bg-[#050505] text-white flex items-center justify-center">

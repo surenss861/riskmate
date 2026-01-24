@@ -1,4 +1,6 @@
 import Foundation
+import Network
+import UIKit
 
 /// Minimal analytics tracking for business-critical events
 /// Privacy-safe: counts + timestamps, not content
@@ -89,18 +91,108 @@ class Analytics {
         ])
     }
     
+    // MARK: - Onboarding Events
+    
+    func trackOnboardingCompleted() {
+        trackEvent("onboarding_completed")
+    }
+    
+    // MARK: - Evidence Capture Events
+    
+    func trackEvidenceCaptureStarted() {
+        trackEvent("evidence_capture_started")
+    }
+    
+    func trackEvidenceCaptureCompleted() {
+        trackEvent("evidence_capture_completed")
+    }
+    
+    // MARK: - Banner Events
+    
+    func trackCriticalBannerShown(jobId: String) {
+        trackEvent("critical_banner_shown", metadata: ["job_id": jobId])
+    }
+    
+    func trackCriticalBannerClicked(jobId: String) {
+        trackEvent("critical_banner_clicked", metadata: ["job_id": jobId])
+    }
+    
+    // MARK: - Long-Press Actions
+    
+    func trackLongPressActionsUsed(action: String, jobId: String) {
+        trackEvent("long_press_actions_used", metadata: [
+            "action": action,
+            "job_id": jobId
+        ])
+    }
+    
+    // MARK: - Refresh Events
+    
+    func trackRefreshTriggered() {
+        trackEvent("refresh_triggered")
+    }
+    
+    func trackRefreshDuration(ms: Int) {
+        trackEvent("refresh_duration_ms", metadata: ["duration_ms": String(ms)])
+    }
+    
+    // MARK: - Verification Events
+    
+    func trackVerificationExplainerOpened() {
+        trackEvent("verification_explainer_opened")
+    }
+    
+    // MARK: - Evidence Actions
+    
+    func trackAddEvidenceTapped() {
+        trackEvent("add_evidence_tapped")
+    }
+    
+    func trackCapturePhotoSuccess() {
+        trackEvent("capture_photo_success")
+    }
+    
     // MARK: - Private
     
     private func trackEvent(_ name: String, metadata: [String: String]? = nil) {
+        var eventMetadata = metadata ?? [:]
+        
+        // Add diagnostics if enabled
+        if UserDefaultsManager.Production.sendDiagnostics {
+            eventMetadata["device_model"] = UIDevice.current.model
+            eventMetadata["ios_version"] = UIDevice.current.systemVersion
+            if let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String {
+                eventMetadata["app_version"] = version
+            }
+            if let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String {
+                eventMetadata["app_build"] = build
+            }
+            
+            // Network type (simplified - check current path)
+            let monitor = NWPathMonitor()
+            let path = monitor.currentPath
+            if path.status == .satisfied {
+                if path.usesInterfaceType(.wifi) {
+                    eventMetadata["network_type"] = "wifi"
+                } else if path.usesInterfaceType(.cellular) {
+                    eventMetadata["network_type"] = "cellular"
+                } else {
+                    eventMetadata["network_type"] = "other"
+                }
+            } else {
+                eventMetadata["network_type"] = "none"
+            }
+        }
+        
         let _: [String: Any] = [
             "name": name,
             "timestamp": ISO8601DateFormatter().string(from: Date()),
-            "metadata": metadata ?? [:]
+            "metadata": eventMetadata
         ]
         
         // Log for now (replace with actual analytics service)
         #if DEBUG
-        print("[Analytics] \(name)", metadata ?? "")
+        print("[Analytics] \(name)", eventMetadata)
         #endif
         
         // TODO: Send to analytics service (PostHog, Mixpanel, etc.)

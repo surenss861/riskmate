@@ -37,7 +37,10 @@ async function loadPlanForOrganization(organizationId) {
 function isProbablyJwt(token) {
     return token.split(".").length === 3;
 }
-const authenticate = async (req, res, next) => {
+/**
+ * Internal authenticate function with typed request
+ */
+async function authenticateInternal(req, res, next) {
     // ✅ IMPORTANT: Skip auth for OPTIONS preflight requests
     // CORS middleware handles OPTIONS, but this prevents 401 errors
     if (req.method === 'OPTIONS') {
@@ -48,11 +51,13 @@ const authenticate = async (req, res, next) => {
     try {
         const authHeader = req.headers.authorization;
         if (!authHeader || !authHeader.startsWith("Bearer ")) {
-            return res.status(401).json({ message: "Unauthorized - No token provided" });
+            res.status(401).json({ message: "Unauthorized - No token provided" });
+            return;
         }
         const token = authHeader.split("Bearer ")[1]?.trim();
         if (!token) {
-            return res.status(401).json({ message: "Unauthorized - Invalid token format" });
+            res.status(401).json({ message: "Unauthorized - Invalid token format" });
+            return;
         }
         // ✅ Fast fail for obviously invalid tokens (not JWT format)
         // This prevents garbage tokens like "not-a-real-token" from ever hitting Supabase
@@ -61,7 +66,8 @@ const authenticate = async (req, res, next) => {
             if (!isHealthEndpoint) {
                 console.warn("[AUTH] Token failed JWT format check:", token.substring(0, 20) + "...");
             }
-            return res.status(401).json({ message: "Unauthorized - Invalid token format" });
+            res.status(401).json({ message: "Unauthorized - Invalid token format" });
+            return;
         }
         // Use anon client for auth validation (not service role - more resilient)
         // Wrap getUser in try-catch to handle exceptions
@@ -79,18 +85,21 @@ const authenticate = async (req, res, next) => {
             const errorMsg = getUserError?.message || String(getUserError || "");
             if (errorMsg.includes("[env]") || errorMsg.includes("SUPABASE_URL") || errorMsg.includes("Invalid supabase") || errorMsg.includes("Missing")) {
                 console.error("[AUTH] Supabase auth client init failed in getUser:", errorMsg);
-                return res.status(500).json({
+                res.status(500).json({
                     message: "Backend configuration error",
                     code: "BACKEND_CONFIG_ERROR",
                     hint: "Server environment variables are misconfigured. Please contact support."
                 });
+                return;
             }
             // Otherwise, it's an invalid token - treat as 401
             console.warn("[AUTH] getUser exception (invalid token):", errorMsg);
-            return res.status(401).json({ message: "Unauthorized - Invalid token" });
+            res.status(401).json({ message: "Unauthorized - Invalid token" });
+            return;
         }
         if (authError || !authData?.user) {
-            return res.status(401).json({ message: "Unauthorized - Invalid token" });
+            res.status(401).json({ message: "Unauthorized - Invalid token" });
+            return;
         }
         const userId = authData.user.id;
         const { data: userRecord, error: userError } = await supabaseClient_1.supabase
@@ -101,31 +110,35 @@ const authenticate = async (req, res, next) => {
         // Handle missing user record gracefully (return 403, not 500)
         if (userError) {
             console.error("[AUTH] Database error fetching user:", userError);
-            return res.status(500).json({
+            res.status(500).json({
                 message: "Internal server error",
                 code: "DATABASE_ERROR",
                 hint: "Failed to fetch user record from database"
             });
+            return;
         }
         if (!userRecord) {
             // User exists in Supabase Auth but not in public.users table
             // This is a provisioning issue, not an auth failure
-            return res.status(403).json({
+            res.status(403).json({
                 message: "Account not provisioned",
                 code: "USER_NOT_PROVISIONED",
                 hint: "User account exists but has not been fully set up. Please contact support."
             });
+            return;
         }
         if (!userRecord.organization_id) {
             // User exists but has no organization_id
-            return res.status(403).json({
+            res.status(403).json({
                 message: "No organization assigned",
                 code: "NO_ORGANIZATION",
                 hint: "User account is missing organization assignment. Please contact support."
             });
+            return;
         }
         if (userRecord.archived_at) {
-            return res.status(403).json({ message: "Account disabled" });
+            res.status(403).json({ message: "Account disabled" });
+            return;
         }
         const organizationId = userRecord.organization_id;
         const email = userRecord.email ?? authData.user.email ?? undefined;
@@ -148,11 +161,12 @@ const authenticate = async (req, res, next) => {
         const legalAccepted = Boolean(legalAcceptance?.accepted_at);
         const path = req.originalUrl || req.url;
         if (!legalAccepted && !path.startsWith("/api/legal")) {
-            return res.status(428).json({
+            res.status(428).json({
                 message: "Legal terms not accepted",
                 code: "LEGAL_ACCEPTANCE_REQUIRED",
                 version: legal_1.LEGAL_VERSION,
             });
+            return;
         }
         req.user = {
             id: userId,
@@ -188,11 +202,12 @@ const authenticate = async (req, res, next) => {
             errorString.includes("your_supabase_project_url");
         if (isEnvError) {
             console.error("[AUTH] Detected env config error, returning 500");
-            return res.status(500).json({
+            res.status(500).json({
                 message: "Backend configuration error",
                 code: "BACKEND_CONFIG_ERROR",
                 hint: "Server environment variables are misconfigured. Please contact support."
             });
+            return;
         }
         // If it's a known auth-related error (token validation), return 401
         const isAuthError = errorMessage.includes("token") ||
@@ -202,15 +217,24 @@ const authenticate = async (req, res, next) => {
             errorMessage.includes("jwt");
         if (isAuthError) {
             console.error("[AUTH] Detected auth/token error, returning 401");
-            return res.status(401).json({ message: "Unauthorized - Invalid token" });
+            res.status(401).json({ message: "Unauthorized - Invalid token" });
+            return;
         }
         // Otherwise, it's a real server error
         console.error("[AUTH] Unknown error type, returning 500");
-        return res.status(500).json({
+        res.status(500).json({
             message: "Internal server error",
             code: "INTERNAL_ERROR"
         });
+        return;
     }
+}
+/**
+ * Express RequestHandler wrapper for authenticate middleware
+ * Properly typed to avoid 'as unknown as RequestHandler' casts
+ */
+const authenticate = (req, res, next) => {
+    return authenticateInternal(req, res, next);
 };
 exports.authenticate = authenticate;
 //# sourceMappingURL=auth.js.map

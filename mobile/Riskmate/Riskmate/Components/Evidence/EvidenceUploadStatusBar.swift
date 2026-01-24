@@ -203,13 +203,13 @@ struct EvidenceUploadStatusBar: View {
     }
     
     private func retryFailedUploads() {
-        guard let jobId = jobId else { return }
+        guard jobId != nil else { return }
         
         Haptics.tap()
         
         // Retry all failed uploads for this job
         Task {
-            for upload in failedUploads {
+            for _ in failedUploads {
                 // TODO: Implement retry in BackgroundUploadManager
                 // await uploadManager.retryUpload(upload.id)
             }

@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from "express";
+import { Request, type RequestHandler } from "express";
 import { PlanCode } from "../auth/planRules";
 export interface AuthenticatedUser {
     id: string;
@@ -17,5 +17,9 @@ export interface AuthenticatedUser {
 export interface AuthenticatedRequest extends Request {
     user: AuthenticatedUser;
 }
-export declare const authenticate: (req: AuthenticatedRequest, res: Response, next: NextFunction) => Promise<void | Response<any, Record<string, any>>>;
+/**
+ * Express RequestHandler wrapper for authenticate middleware
+ * Properly typed to avoid 'as unknown as RequestHandler' casts
+ */
+export declare const authenticate: RequestHandler;
 //# sourceMappingURL=auth.d.ts.map

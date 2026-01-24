@@ -12,9 +12,29 @@ struct LedgerTrustStrip: View {
             onTap()
         } label: {
             HStack(spacing: RMSystemTheme.Spacing.sm) {
-                Image(systemName: isVerified ? "checkmark.seal.fill" : "exclamationmark.triangle.fill")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(isVerified ? RMSystemTheme.Colors.success : RMSystemTheme.Colors.warning)
+                // Animated checkmark loop (very subtle, respects Reduce Motion)
+                ZStack {
+                    if isVerified {
+                        Group {
+                            if UIAccessibility.isReduceMotionEnabled {
+                                Image(systemName: "checkmark.seal.fill")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundStyle(RMSystemTheme.Colors.success)
+                            } else {
+                                Image(systemName: "checkmark.seal.fill")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundStyle(RMSystemTheme.Colors.success)
+                                    .symbolEffect(.pulse, options: .repeating.speed(0.5))
+                            }
+                        }
+                    } else {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(RMSystemTheme.Colors.warning)
+                    }
+                }
+                .accessibilityLabel(isVerified ? "Verified" : "Verification issue")
+                .accessibilityHint("Tap to view verification details")
                 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(isVerified ? "Cryptographically Verified" : "Verification Issue")
@@ -22,7 +42,8 @@ struct LedgerTrustStrip: View {
                         .foregroundStyle(RMSystemTheme.Colors.textPrimary)
                     
                     if let anchored = lastAnchored {
-                        Text("Anchored to immutable log \(relativeTime(anchored))")
+                        // Ticking timestamp (updates once on open)
+                        TickingTimestamp(date: anchored)
                             .font(RMSystemTheme.Typography.caption)
                             .foregroundStyle(RMSystemTheme.Colors.textSecondary)
                     } else {
@@ -36,6 +57,16 @@ struct LedgerTrustStrip: View {
                         .font(RMSystemTheme.Typography.caption2)
                         .foregroundStyle(RMSystemTheme.Colors.textTertiary)
                         .padding(.top, 2)
+                    
+                    // Micro pulse on successful sync (very subtle, respects Reduce Motion)
+                    if isVerified && !UIAccessibility.isReduceMotionEnabled {
+                        Circle()
+                            .fill(RMSystemTheme.Colors.success.opacity(0.3))
+                            .frame(width: 4, height: 4)
+                            .padding(.top, 4)
+                            .symbolEffect(.pulse, options: .repeating.speed(2.0))
+                            .accessibilityHidden(true) // Decorative
+                    }
                 }
                 
                 Spacer()

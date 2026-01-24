@@ -69,15 +69,39 @@ class ServerStatusManager: ObservableObject {
     }
     
     private func startPeriodicChecks() {
+        // Invalidate existing timer first
+        stopPeriodicChecks()
+        
         // Check every 30 seconds
         checkTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 await self?.checkHealth()
             }
         }
+        // Add to common run loop mode
+        if let timer = checkTimer {
+            RunLoop.current.add(timer, forMode: .common)
+        }
+    }
+    
+    private func stopPeriodicChecks() {
+        checkTimer?.invalidate()
+        checkTimer = nil
+    }
+    
+    /// Stop checks when app backgrounds (saves battery)
+    func pauseChecks() {
+        stopPeriodicChecks()
+    }
+    
+    /// Resume checks when app foregrounds
+    func resumeChecks() {
+        startPeriodicChecks()
     }
     
     deinit {
+        // Note: deinit cannot be async, but timer cleanup is safe to call synchronously
+        // The timer will be invalidated when the object is deallocated anyway
         checkTimer?.invalidate()
     }
 }

@@ -48,11 +48,14 @@ struct ContentView: View {
                 // Show polished splash screen during bootstrap
                 SplashView()
             } else if sessionManager.isAuthenticated {
-                // Check first-run onboarding (shows once, before role onboarding)
-                if showFirstRunOnboarding {
-                    FirstRunOnboardingView(isPresented: $showFirstRunOnboarding)
-                } else if showOnboarding {
-                    OnboardingView(isPresented: $showOnboarding)
+                // Check trust onboarding (per-user if available, otherwise per-device)
+                let userId = sessionManager.currentUser?.id ?? ""
+                let hasSeenOnboarding = userId.isEmpty
+                    ? UserDefaultsManager.Onboarding.hasSeenDeviceOnboarding()
+                    : UserDefaultsManager.Onboarding.hasSeenOnboarding(userId: userId)
+                
+                if !hasSeenOnboarding {
+                    TrustOnboardingView(isPresented: .constant(true))
                 } else {
                     // Device-aware navigation
                     if UIDevice.current.userInterfaceIdiom == .pad {
@@ -79,18 +82,7 @@ struct ContentView: View {
             await sessionManager.checkSession()
             print("[ContentView] Session check complete. isAuthenticated=\(sessionManager.isAuthenticated), isLoading=\(sessionManager.isLoading)")
             
-            // Check if onboarding is needed
-            if sessionManager.isAuthenticated {
-                // First: Check first-run onboarding (shows once, ever)
-                let firstRunComplete = UserDefaults.standard.bool(forKey: "first_run_complete")
-                showFirstRunOnboarding = !firstRunComplete
-                
-                // Then: Check role onboarding (if first-run is complete)
-                if firstRunComplete {
-                    let onboardingComplete = UserDefaults.standard.bool(forKey: "onboarding_complete")
-                    showOnboarding = !onboardingComplete
-                }
-            }
+            // Trust onboarding is handled in view body above
         }
         .onAppear {
             print("[ContentView] ✅ View appeared. isAuthenticated=\(sessionManager.isAuthenticated), isLoading=\(sessionManager.isLoading)")

@@ -8,6 +8,7 @@ console.log("[SUPABASE_CLIENT] MARKER: 2D92D8D-LAZY-ADMIN-v3");
 const supabase_js_1 = require("@supabase/supabase-js");
 const clean = (v) => (v ?? "").trim().replace(/^['"]|['"]$/g, "");
 let cached = null;
+// Export for test helpers
 function getSupabaseAdmin() {
     if (cached)
         return cached;

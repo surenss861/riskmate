@@ -33,8 +33,8 @@ function limitsFor(plan) {
     }
 }
 exports.STRIPE_PLAN_MAP = {
-    'prod_TOfxlypTNXZNhB': 'starter', // Starter – $29/mo
-    'prod_TOfx6fhO40IMoF': 'pro', // Pro – $59/mo
-    'prod_TOfy8NLmOTOaYl': 'business', // Business – $129/mo
+    'prod_TpcwqnpnlA9keA': 'starter', // Starter
+    'prod_TpcyAbLnS5VDz7': 'pro', // Pro
+    'prod_TpczVi0pxfQhfH': 'business', // Business
 };
 //# sourceMappingURL=planRules.js.map
