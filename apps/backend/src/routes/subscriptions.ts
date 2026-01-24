@@ -687,8 +687,7 @@ subscriptionsRouter.post(
   authenticate as unknown as RequestHandler,
   async (req: Request, res: Response) => {
     try {
-      const { organization_id } = (req as AuthenticatedRequest).user;
-      const { userRole } = (req as AuthenticatedRequest).user;
+      const { organization_id, role: userRole } = (req as AuthenticatedRequest).user;
 
       if (!userRole || !["owner", "admin"].includes(userRole)) {
         return res.status(403).json({ message: "Only owners and admins can cancel plans" });
@@ -753,8 +752,7 @@ subscriptionsRouter.post(
   authenticate as unknown as RequestHandler,
   async (req: Request, res: Response) => {
     try {
-      const { organization_id } = (req as AuthenticatedRequest).user;
-      const { userRole } = (req as AuthenticatedRequest).user;
+      const { organization_id, role: userRole } = (req as AuthenticatedRequest).user;
 
       if (!userRole || !["owner", "admin"].includes(userRole)) {
         return res.status(403).json({ message: "Only owners and admins can resume plans" });
