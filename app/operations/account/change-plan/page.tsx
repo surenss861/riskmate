@@ -70,8 +70,12 @@ export default function ChangePlanPage() {
   const router = useRouter()
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const [currentPlan, setCurrentPlan] = useState<PlanCode | null>(null)
+  const [currentPlan, setCurrentPlan] = useState<PlanCode | 'none' | null>(null)
+  const [cancelAtPeriodEnd, setCancelAtPeriodEnd] = useState<boolean>(false)
+  const [currentPeriodEnd, setCurrentPeriodEnd] = useState<string | null>(null)
   const [switching, setSwitching] = useState<PlanCode | null>(null)
+  const [canceling, setCanceling] = useState(false)
+  const [resuming, setResuming] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -82,8 +86,10 @@ export default function ChangePlanPage() {
         setUser(user)
 
         const subscriptionResponse = await subscriptionsApi.get()
-        const tier = subscriptionResponse.data?.tier as PlanCode | null
-        setCurrentPlan(tier || 'starter')
+        const tier = subscriptionResponse.data?.tier as PlanCode | 'none' | null
+        setCurrentPlan(tier || 'none')
+        setCancelAtPeriodEnd(subscriptionResponse.data?.cancel_at_period_end ?? false)
+        setCurrentPeriodEnd(subscriptionResponse.data?.current_period_end ?? null)
 
         // Track plan view in backend
         try {
@@ -115,7 +121,7 @@ export default function ChangePlanPage() {
 
     try {
       // If switching to starter (free), confirm cancellation
-      if (plan === 'starter' && currentPlan !== 'starter') {
+      if (plan === 'starter' && currentPlan !== 'starter' && currentPlan !== 'none') {
         if (!confirm('Switch to Starter (free) plan? Your subscription will be cancelled and you\'ll lose access to paid features.')) {
           setSwitching(null)
           return
@@ -140,6 +146,49 @@ export default function ChangePlanPage() {
     }
   }
 
+  const handleCancel = async () => {
+    if (!confirm('Are you sure you want to cancel your subscription? You will keep access until the end of your billing period.')) {
+      return
+    }
+
+    setCanceling(true)
+    setError(null)
+
+    try {
+      await subscriptionsApi.cancel()
+      // Reload subscription data
+      const subscriptionResponse = await subscriptionsApi.get()
+      setCancelAtPeriodEnd(subscriptionResponse.data?.cancel_at_period_end ?? false)
+      setCurrentPeriodEnd(subscriptionResponse.data?.current_period_end ?? null)
+    } catch (err: any) {
+      console.error('Failed to cancel subscription:', err)
+      setError(err?.message || 'Failed to cancel subscription')
+    } finally {
+      setCanceling(false)
+    }
+  }
+
+  const handleResume = async () => {
+    setResuming(true)
+    setError(null)
+
+    try {
+      await subscriptionsApi.resume()
+      // Reload subscription data
+      const subscriptionResponse = await subscriptionsApi.get()
+      setCancelAtPeriodEnd(subscriptionResponse.data?.cancel_at_period_end ?? false)
+      setCurrentPeriodEnd(subscriptionResponse.data?.current_period_end ?? null)
+    } catch (err: any) {
+      console.error('Failed to resume subscription:', err)
+      setError(err?.message || 'Failed to resume subscription')
+    } finally {
+      setResuming(false)
+    }
+  }
+
+  const canCancel = currentPlan && currentPlan !== 'none' && !cancelAtPeriodEnd
+  const canResume = currentPlan && currentPlan !== 'none' && cancelAtPeriodEnd
+
   if (loading) {
     return (
       <ProtectedRoute>
@@ -162,15 +211,69 @@ export default function ChangePlanPage() {
           <PageSection>
             <PageHeader
               title="Change Plan"
-              subtitle={currentPlan ? `You're currently on the ${PLANS.find(p => p.code === currentPlan)?.name} plan.` : 'Select a plan that works for you.'}
+              subtitle={
+                currentPlan === 'none' || !currentPlan
+                  ? 'Select a plan that works for you.'
+                  : cancelAtPeriodEnd && currentPeriodEnd
+                  ? `You're currently on the ${PLANS.find(p => p.code === currentPlan)?.name} plan. Cancels on ${new Date(currentPeriodEnd).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}.`
+                  : `You're currently on the ${PLANS.find(p => p.code === currentPlan)?.name} plan.`
+              }
             />
           </PageSection>
 
-          <PageSection>
-            <div className="grid md:grid-cols-3 gap-6">
-              {PLANS.map((plan) => {
-                const isCurrent = plan.code === currentPlan
-                const isSwitching = switching === plan.code
+          {/* Cancel/Resume buttons - show above plan cards */}
+          {(canCancel || canResume) && (
+            <PageSection>
+              <div className="flex gap-3 justify-center">
+                {canCancel && (
+                  <Button
+                    variant="secondary"
+                    onClick={handleCancel}
+                    disabled={canceling || resuming}
+                    className="text-red-400 hover:text-red-300 border-red-400/50 hover:border-red-300/50"
+                  >
+                    {canceling ? 'Canceling...' : 'Cancel Plan'}
+                  </Button>
+                )}
+                {canResume && (
+                  <Button
+                    variant="primary"
+                    onClick={handleResume}
+                    disabled={canceling || resuming}
+                  >
+                    {resuming ? 'Resuming...' : 'Resume Plan'}
+                  </Button>
+                )}
+              </div>
+            </PageSection>
+          )}
+
+          {/* No Plan Card */}
+          {(!currentPlan || currentPlan === 'none') && (
+            <PageSection>
+              <GlassCard className="p-8 text-center">
+                <h3 className="text-2xl font-semibold mb-2 text-white">No plan</h3>
+                <p className="text-white/70 mb-6">
+                  Start with Starter to unlock audits, exports, and compliance packs.
+                </p>
+                <Button
+                  variant="primary"
+                  onClick={() => handleSwitchPlan('starter')}
+                  disabled={switching !== null}
+                >
+                  {switching === 'starter' ? 'Starting...' : 'Choose Starter Plan'}
+                </Button>
+              </GlassCard>
+            </PageSection>
+          )}
+
+          {/* Plan Cards - only show if user has a plan */}
+          {currentPlan && currentPlan !== 'none' && (
+            <PageSection>
+              <div className="grid md:grid-cols-3 gap-6">
+                {PLANS.map((plan) => {
+                  const isCurrent = plan.code === currentPlan
+                  const isSwitching = switching === plan.code
 
                 return (
                   <GlassCard
@@ -238,8 +341,9 @@ export default function ChangePlanPage() {
                   </GlassCard>
                 )
               })}
-            </div>
-          </PageSection>
+              </div>
+            </PageSection>
+          )}
         </AppShell>
 
         <ErrorModal
