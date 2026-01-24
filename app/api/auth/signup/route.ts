@@ -62,14 +62,15 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Create organization
+    // Create organization with "No plan" default
+    // Plan will be set when user subscribes via Stripe
     const { data: orgData, error: orgError } = await supabase
       .from('organizations')
       .insert({
         name: organization_name || `${full_name || email}'s Organization`,
         trade_type: trade_type || 'other',
-        subscription_tier: 'starter',
-        subscription_status: 'trialing',
+        subscription_tier: 'none', // No plan until Stripe subscription
+        subscription_status: 'inactive', // Inactive until subscription
       })
       .select()
       .single()

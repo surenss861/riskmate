@@ -1,4 +1,4 @@
-export type PlanCode = 'starter' | 'pro' | 'business'
+export type PlanCode = 'none' | 'starter' | 'pro' | 'business'
 
 export interface PlanLimits {
   seats: number | null
@@ -7,6 +7,11 @@ export interface PlanLimits {
 
 export function limitsFor(plan: PlanCode): PlanLimits {
   switch (plan) {
+    case 'none':
+      return {
+        seats: 0,
+        jobsMonthly: 0, // No plan: no access
+      }
     case 'starter':
       return {
         seats: 1,

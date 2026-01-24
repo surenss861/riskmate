@@ -403,7 +403,7 @@ exports.subscriptionsRouter.post("/switch", auth_1.authenticate, async (req, res
                             price: priceId,
                         },
                     ],
-                    proration_behavior: "always", // Prorate upgrades
+                    proration_behavior: "create_prorations", // Valid Stripe value: create prorations for upgrades
                 });
                 // CRITICAL: Always retrieve full subscription AFTER update to get fresh period timestamps
                 const updatedSubscription = await stripe.subscriptions.retrieve(subscriptionId);

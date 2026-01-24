@@ -126,8 +126,8 @@ export async function POST(request: NextRequest) {
         .insert({
           name: orgName,
           trade_type: 'other',
-          subscription_tier: 'starter',
-          subscription_status: 'trialing',
+          subscription_tier: 'none', // No plan until Stripe subscription
+          subscription_status: 'inactive', // Inactive until subscription
         })
         .select('id')
         .single()
