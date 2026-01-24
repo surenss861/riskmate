@@ -845,26 +845,36 @@ subscriptionsRouter.post(
         return res.status(403).json({ message: "Only owners and admins can cancel plans" });
       }
 
+      // Get current subscription from org_subscriptions (source of truth)
+      const { data: orgSub } = await supabase
+        .from("org_subscriptions")
+        .select("plan_code, status, stripe_subscription_id, stripe_customer_id")
+        .eq("organization_id", organization_id)
+        .maybeSingle();
+
+      // CRITICAL: Early return if no active subscription to cancel
+      // "none" plan should never touch Stripe
+      if (
+        !orgSub?.stripe_subscription_id ||
+        orgSub.plan_code === "none" ||
+        orgSub.status === "inactive"
+      ) {
+        // Nothing to cancel - this is a clean success (idempotent no-op)
+        return res.json({
+          success: true,
+          ok: true,
+          noop: true,
+          reason: "no_active_subscription",
+          message: "No active subscription to cancel",
+        });
+      }
+
       if (!process.env.STRIPE_SECRET_KEY) {
         return res.status(500).json({ message: "Stripe secret key not configured" });
       }
 
       const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
-
-      // Get current subscription
-      const { data: currentSubscription } = await supabase
-        .from("subscriptions")
-        .select("tier, stripe_subscription_id, stripe_customer_id")
-        .eq("organization_id", organization_id)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      const subscriptionId = currentSubscription?.stripe_subscription_id;
-
-      if (!subscriptionId) {
-        return res.status(404).json({ message: "No active subscription found" });
-      }
+      const subscriptionId = orgSub.stripe_subscription_id;
 
       // CRITICAL: Retrieve subscription from Stripe first to check status
       const subscription = await stripe.subscriptions.retrieve(subscriptionId);
