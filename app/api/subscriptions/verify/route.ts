@@ -106,7 +106,17 @@ export async function GET(request: NextRequest) {
         subscription = session.subscription as Stripe.Subscription
       }
 
-      if (subscription && subscription.id && subscription.current_period_start && subscription.current_period_end) {
+      // Type guard: ensure subscription has required properties
+      const hasRequiredFields = subscription && 
+        subscription.id && 
+        typeof (subscription as any).current_period_start === 'number' &&
+        typeof (subscription as any).current_period_end === 'number'
+
+      if (hasRequiredFields) {
+        const sub = subscription as Stripe.Subscription & {
+          current_period_start: number
+          current_period_end: number
+        }
         // Finalize immediately - write to DB from subscription object
         const planCode = session.metadata?.plan || subscription.metadata?.plan || null
         
@@ -117,25 +127,25 @@ export async function GET(request: NextRequest) {
             
             await applyPlanToOrganization(organizationId, planCode as any, {
               stripeCustomerId: typeof session.customer === 'string' ? session.customer : null,
-              stripeSubscriptionId: subscription.id,
-              currentPeriodStart: subscription.current_period_start,
-              currentPeriodEnd: subscription.current_period_end,
-              status: subscription.status || 'active',
+              stripeSubscriptionId: sub.id,
+              currentPeriodStart: sub.current_period_start,
+              currentPeriodEnd: sub.current_period_end,
+              status: sub.status || 'active',
             })
 
             console.log('[Verify] Finalized subscription immediately', {
               session_id: sessionId,
               organization_id: organizationId,
-              subscription_id: subscription.id,
+              subscription_id: sub.id,
               plan_code: planCode,
             })
 
             return NextResponse.json({
               state: 'complete',
-              status: subscription.status === 'trialing' ? 'trialing' : 'active',
+              status: sub.status === 'trialing' ? 'trialing' : 'active',
               plan_code: planCode,
               session_id: sessionId,
-              subscription_id: subscription.id,
+              subscription_id: sub.id,
               redirectTo: '/operations',
             })
           } catch (err: any) {
