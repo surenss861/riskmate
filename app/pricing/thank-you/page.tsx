@@ -21,10 +21,14 @@ export default function ThankYouPage() {
   const [retryCount, setRetryCount] = useState(0)
   const maxRetries = 3
   const ranRef = useRef(false)
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
-    // Guard against double calls (React StrictMode in dev)
-    if (ranRef.current) return
+    // Guard against double calls (React StrictMode in dev + service worker cache)
+    if (ranRef.current) {
+      console.log('[ThankYou] Already ran verification, skipping duplicate call')
+      return
+    }
     ranRef.current = true
 
     const verifyPurchase = async () => {
@@ -32,20 +36,21 @@ export default function ThankYouPage() {
       const params = new URLSearchParams(window.location.search)
       const sessionId = params.get('session_id')
 
-      trackFunnelEvent('checkout_return_success', { session_id: sessionId })
-
       if (!sessionId) {
         setError('Missing session ID. If you just completed a purchase, your subscription may still be processing. Please check your email for confirmation.')
         setStatus('error')
         return
       }
 
-      // Verify session with backend
+      trackFunnelEvent('checkout_return_success', { session_id: sessionId })
+
+      // Verify session with backend (optional auth, works without login)
       try {
         const verifyResponse = await fetch(`/api/subscriptions/verify?session_id=${sessionId}`)
         
         if (!verifyResponse.ok) {
-          throw new Error('Failed to verify session')
+          const errorData = await verifyResponse.json().catch(() => ({}))
+          throw new Error(errorData.error || 'Failed to verify session')
         }
 
         const verifyData = await verifyResponse.json()
@@ -57,18 +62,20 @@ export default function ThankYouPage() {
           })
           setStatus('active')
           setPlanCode(verifyData.plan_code)
-          setTimeout(() => router.push('/operations'), 3000)
+          // Redirect after 3 seconds
+          timeoutRef.current = setTimeout(() => router.push('/operations'), 3000)
         } else if (verifyData.status === 'pending' || verifyData.status === 'processing') {
-          // Webhook is still processing
+          // Webhook is still processing - retry with exponential backoff
           setStatus('processing')
           setPlanCode(verifyData.plan_code || null)
           
-          // Auto-retry after 3 seconds (up to maxRetries)
+          // Auto-retry with exponential backoff (3s, 6s, 9s)
           if (retryCount < maxRetries) {
-            setTimeout(() => {
+            const delay = 3000 * (retryCount + 1) // 3s, 6s, 9s
+            timeoutRef.current = setTimeout(() => {
               setRetryCount(prev => prev + 1)
               verifyPurchase() // Retry
-            }, 3000)
+            }, delay)
           } else {
             // Max retries reached, show pending state
             setError('Your payment is processing. This may take a few minutes. You\'ll receive an email when your subscription is activated.')
@@ -85,7 +92,14 @@ export default function ThankYouPage() {
     }
 
     verifyPurchase()
-  }, [router, retryCount])
+
+    // Cleanup timeout on unmount
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current)
+      }
+    }
+  }, [router]) // Remove retryCount from deps to prevent re-running on retry
 
   return (
     <div className="min-h-screen bg-[#050505] text-white flex items-center justify-center">

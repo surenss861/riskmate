@@ -378,11 +378,12 @@ subscriptionsRouter.post(
         throw new Error("Subscription missing period timestamps");
       }
 
+      // Pass Unix seconds (not ISO strings) to applyPlanToOrganization
       await applyPlanToOrganization(organizationId, planCode, {
         stripeCustomerId: typeof session.customer === "string" ? session.customer : null,
         stripeSubscriptionId: subscription.id,
-        currentPeriodStart: subscription.current_period_start,
-        currentPeriodEnd: subscription.current_period_end,
+        currentPeriodStart: subscription.current_period_start, // Unix seconds from Stripe
+        currentPeriodEnd: subscription.current_period_end, // Unix seconds from Stripe
       });
 
       res.json({
@@ -445,6 +446,8 @@ subscriptionsRouter.post(
       }
 
       // Determine plan ranking for upgrade/downgrade logic
+      // NOTE: All tiers (starter/pro/business) are PAID plans
+      // Starter = $29, Pro = $59, Business = $129
       const planRank: Record<PlanCode, number> = {
         starter: 0,
         pro: 1,
@@ -455,43 +458,7 @@ subscriptionsRouter.post(
       const isUpgrade = targetRank > currentRank;
       const isDowngrade = targetRank < currentRank;
 
-      // If switching to starter (free), cancel at period end
-      if (planCode === "starter") {
-        const subscriptionId = currentSubscription?.stripe_subscription_id;
-        if (subscriptionId) {
-          try {
-            // Cancel at period end (user keeps access until renewal)
-            await stripe.subscriptions.update(subscriptionId, {
-              cancel_at_period_end: true,
-            });
-          } catch (err: any) {
-            console.warn("Failed to schedule subscription cancellation:", err);
-            // If update fails, cancel immediately
-            try {
-              await stripe.subscriptions.cancel(subscriptionId);
-            } catch (cancelErr: any) {
-              console.warn("Failed to cancel subscription:", cancelErr);
-            }
-          }
-        }
-
-        // Update plan immediately (user loses paid features right away)
-        await applyPlanToOrganization(organization_id, "starter", {
-          stripeCustomerId: currentSubscription?.stripe_customer_id || null,
-          stripeSubscriptionId: subscriptionId || null, // Keep ID until period ends
-          currentPeriodStart: currentSubscription?.current_period_start || null,
-          currentPeriodEnd: currentSubscription?.current_period_end || null,
-          status: "canceled",
-        });
-
-        return res.json({
-          success: true,
-          message: "Switched to Starter plan. Your subscription will cancel at the end of the billing period.",
-          plan: "starter",
-        });
-      }
-
-      // For paid plans (pro/business), determine if upgrade or downgrade
+      // For all plan changes (starter/pro/business are all paid), determine if upgrade or downgrade
       const priceId = await resolveStripePriceId(stripe, planCode);
       const subscriptionId = currentSubscription?.stripe_subscription_id;
 
@@ -533,17 +500,13 @@ subscriptionsRouter.post(
         return res.json({ url: session.url });
       }
 
-      // DOWNGRADE: Schedule at period end (no refunds, no proration)
+      // DOWNGRADE: Update immediately with no proration (all tiers are paid)
       if (isDowngrade && subscriptionId) {
         try {
+          // Retrieve current subscription to get subscription item ID
           const subscription = await stripe.subscriptions.retrieve(subscriptionId);
 
-          // For downgrades, we have two options:
-          // 1. Update subscription price immediately (user pays less immediately, but loses features)
-          // 2. Keep subscription at current price, update DB only (user keeps features until period end)
-          // 
-          // We'll do option 1: Update price immediately with no proration, user loses premium features
-          // This is simpler and matches most SaaS behavior
+          // Update subscription price immediately (no proration for downgrades)
           await stripe.subscriptions.update(subscriptionId, {
             items: [
               {
@@ -554,21 +517,23 @@ subscriptionsRouter.post(
             proration_behavior: "none", // No proration for downgrades
           });
 
-          // Update plan immediately in DB (user loses premium features)
+          // CRITICAL: Always retrieve full subscription AFTER update to get fresh period timestamps
           const updatedSubscription = await stripe.subscriptions.retrieve(subscriptionId);
 
-          // Validate period timestamps exist
+          // Validate period timestamps exist (they should always exist for active subscriptions)
           if (!updatedSubscription.current_period_start || !updatedSubscription.current_period_end) {
             throw new Error(
-              `Subscription ${subscriptionId} missing period timestamps after update`
+              `Subscription ${subscriptionId} missing period timestamps after update. ` +
+              `This should never happen for an active subscription.`
             );
           }
 
+          // Pass Unix seconds (not ISO strings) to applyPlanToOrganization
           await applyPlanToOrganization(organization_id, planCode, {
             stripeCustomerId: currentSubscription.stripe_customer_id || null,
             stripeSubscriptionId: subscriptionId,
-            currentPeriodStart: updatedSubscription.current_period_start,
-            currentPeriodEnd: updatedSubscription.current_period_end,
+            currentPeriodStart: updatedSubscription.current_period_start, // Unix seconds
+            currentPeriodEnd: updatedSubscription.current_period_end, // Unix seconds
             status: updatedSubscription.status,
           });
 
