@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
     // Get plan from org_subscriptions (source of truth)
     const { data: orgSubscription, error: orgSubError } = await supabase
       .from('org_subscriptions')
-      .select('plan_code, seats_limit, jobs_limit_month')
+      .select('plan_code, seats_limit, jobs_limit_month, cancel_at_period_end')
       .eq('organization_id', organization_id)
       .maybeSingle()
 
@@ -46,11 +46,14 @@ export async function GET(request: NextRequest) {
     // Get subscription for billing period and Stripe info
     const { data: subscription, error: subError } = await supabase
       .from('subscriptions')
-      .select('*')
+      .select('*, cancel_at_period_end')
       .eq('organization_id', organization_id)
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle()
+    
+    // Get cancel_at_period_end from subscription or org_subscriptions
+    const cancelAtPeriodEnd = subscription?.cancel_at_period_end ?? orgSubscription?.cancel_at_period_end ?? false
 
     if (subError && subError.code !== 'PGRST116') {
       throw subError
@@ -112,6 +115,7 @@ export async function GET(request: NextRequest) {
         status: normalizedStatus,
         current_period_start: subscription?.current_period_start || null,
         current_period_end: subscription?.current_period_end || null,
+        cancel_at_period_end: cancelAtPeriodEnd,
         stripe_subscription_id: subscription?.stripe_subscription_id || null,
         stripe_customer_id: subscription?.stripe_customer_id || null,
         usage,

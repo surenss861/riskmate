@@ -567,6 +567,7 @@ export const subscriptionsApi = {
         status: string | null;
         current_period_start: string | null;
         current_period_end: string | null;
+        cancel_at_period_end: boolean | null;
         stripe_subscription_id: string | null;
         stripe_customer_id: string | null;
         usage: number | null;
@@ -600,6 +601,28 @@ export const subscriptionsApi = {
     return apiRequest<{ success: boolean; message?: string; plan?: string; url?: string }>('/api/subscriptions/switch', {
       method: 'POST',
       body: JSON.stringify({ plan }),
+    });
+  },
+
+  cancel: async () => {
+    return apiRequest<{ 
+      success: boolean; 
+      message: string; 
+      cancel_at_period_end: boolean;
+      current_period_end: number;
+    }>('/api/subscriptions/cancel', {
+      method: 'POST',
+    });
+  },
+
+  resume: async () => {
+    return apiRequest<{ 
+      success: boolean; 
+      message: string; 
+      cancel_at_period_end: boolean;
+      current_period_end: number;
+    }>('/api/subscriptions/resume', {
+      method: 'POST',
     });
   },
 };
@@ -783,6 +806,7 @@ export const accountApi = {
         stripe_subscription_id: string | null;
         current_period_start: string | null;
         current_period_end: string | null;
+        cancel_at_period_end: boolean | null;
         renewal_date: string | null;
         seats_used: number;
         seats_limit: number | null;

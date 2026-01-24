@@ -4,6 +4,12 @@ exports.STRIPE_PLAN_MAP = void 0;
 exports.limitsFor = limitsFor;
 function limitsFor(plan) {
     switch (plan) {
+        case 'none':
+            return {
+                seats: 0,
+                jobsMonthly: 0,
+                features: [] // No plan: no features
+            };
         case 'starter':
             return {
                 seats: 1,

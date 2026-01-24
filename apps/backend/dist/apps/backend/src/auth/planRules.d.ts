@@ -1,4 +1,4 @@
-export type PlanCode = 'starter' | 'pro' | 'business';
+export type PlanCode = 'none' | 'starter' | 'pro' | 'business';
 export type PlanFeature = 'share_links' | 'branded_pdfs' | 'notifications' | 'analytics' | 'permit_pack' | 'audit_logs' | 'priority_support';
 export interface PlanLimits {
     seats: number | null;

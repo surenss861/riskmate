@@ -364,7 +364,7 @@ exports.subscriptionsRouter.post("/switch", auth_1.authenticate, async (req, res
             .order("created_at", { ascending: false })
             .limit(1)
             .maybeSingle();
-        const currentPlan = currentSubscription?.tier || "starter";
+        const currentPlan = currentSubscription?.tier || "none";
         // If switching to the same plan, return success
         if (currentPlan === planCode) {
             return res.json({
@@ -374,17 +374,23 @@ exports.subscriptionsRouter.post("/switch", auth_1.authenticate, async (req, res
             });
         }
         // Determine plan ranking for upgrade/downgrade logic
-        // NOTE: All tiers (starter/pro/business) are PAID plans
+        // NOTE: 'none' is not a paid plan, all others (starter/pro/business) are PAID
         // Starter = $29, Pro = $59, Business = $129
         const planRank = {
+            none: -1, // No plan (lowest)
             starter: 0,
             pro: 1,
             business: 2,
         };
-        const currentRank = planRank[currentPlan];
-        const targetRank = planRank[planCode];
+        const currentRank = planRank[currentPlan] ?? -1;
+        const targetRank = planRank[planCode] ?? -1;
         const isUpgrade = targetRank > currentRank;
         const isDowngrade = targetRank < currentRank;
+        // If current plan is 'none', always treat as upgrade (new subscription)
+        if (currentPlan === "none") {
+            // No existing subscription, create Checkout session
+            // This will be handled by the "New subscription" path below
+        }
         // For all plan changes (starter/pro/business are all paid), determine if upgrade or downgrade
         const priceId = await resolveStripePriceId(stripe, planCode);
         const subscriptionId = currentSubscription?.stripe_subscription_id;
@@ -563,6 +569,110 @@ exports.subscriptionsRouter.post("/switch", auth_1.authenticate, async (req, res
     catch (err) {
         console.error("Plan switch error:", err);
         res.status(500).json({ message: "Failed to switch plan", detail: err?.message });
+    }
+});
+// POST /api/subscriptions/cancel
+// Cancels subscription at period end (user keeps access until renewal)
+exports.subscriptionsRouter.post("/cancel", auth_1.authenticate, async (req, res) => {
+    try {
+        const { organization_id } = req.user;
+        const { userRole } = req.user;
+        if (!userRole || !["owner", "admin"].includes(userRole)) {
+            return res.status(403).json({ message: "Only owners and admins can cancel plans" });
+        }
+        if (!process.env.STRIPE_SECRET_KEY) {
+            return res.status(500).json({ message: "Stripe secret key not configured" });
+        }
+        const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+        // Get current subscription
+        const { data: currentSubscription } = await supabaseClient_1.supabase
+            .from("subscriptions")
+            .select("tier, stripe_subscription_id, stripe_customer_id")
+            .eq("organization_id", organization_id)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+        const subscriptionId = currentSubscription?.stripe_subscription_id;
+        if (!subscriptionId) {
+            return res.status(404).json({ message: "No active subscription found" });
+        }
+        // Schedule cancellation at period end
+        const subscription = await stripe.subscriptions.update(subscriptionId, {
+            cancel_at_period_end: true,
+        });
+        // Update DB to reflect cancellation scheduled
+        const { error: updateError } = await supabaseClient_1.supabase
+            .from("org_subscriptions")
+            .update({
+            status: subscription.cancel_at_period_end ? "canceled" : "active",
+            updated_at: new Date().toISOString(),
+        })
+            .eq("organization_id", organization_id);
+        if (updateError) {
+            console.error("Failed to update org_subscriptions:", updateError);
+        }
+        return res.json({
+            success: true,
+            message: "Subscription will cancel at the end of the billing period",
+            cancel_at_period_end: subscription.cancel_at_period_end,
+            current_period_end: subscription.current_period_end,
+        });
+    }
+    catch (err) {
+        console.error("Cancel subscription error:", err);
+        res.status(500).json({ message: "Failed to cancel subscription", detail: err?.message });
+    }
+});
+// POST /api/subscriptions/resume
+// Resumes a scheduled cancellation
+exports.subscriptionsRouter.post("/resume", auth_1.authenticate, async (req, res) => {
+    try {
+        const { organization_id } = req.user;
+        const { userRole } = req.user;
+        if (!userRole || !["owner", "admin"].includes(userRole)) {
+            return res.status(403).json({ message: "Only owners and admins can resume plans" });
+        }
+        if (!process.env.STRIPE_SECRET_KEY) {
+            return res.status(500).json({ message: "Stripe secret key not configured" });
+        }
+        const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+        // Get current subscription
+        const { data: currentSubscription } = await supabaseClient_1.supabase
+            .from("subscriptions")
+            .select("tier, stripe_subscription_id, stripe_customer_id")
+            .eq("organization_id", organization_id)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+        const subscriptionId = currentSubscription?.stripe_subscription_id;
+        if (!subscriptionId) {
+            return res.status(404).json({ message: "No active subscription found" });
+        }
+        // Resume subscription (remove cancellation)
+        const subscription = await stripe.subscriptions.update(subscriptionId, {
+            cancel_at_period_end: false,
+        });
+        // Update DB to reflect active status
+        const { error: updateError } = await supabaseClient_1.supabase
+            .from("org_subscriptions")
+            .update({
+            status: "active",
+            updated_at: new Date().toISOString(),
+        })
+            .eq("organization_id", organization_id);
+        if (updateError) {
+            console.error("Failed to update org_subscriptions:", updateError);
+        }
+        return res.json({
+            success: true,
+            message: "Subscription resumed successfully",
+            cancel_at_period_end: subscription.cancel_at_period_end,
+            current_period_end: subscription.current_period_end,
+        });
+    }
+    catch (err) {
+        console.error("Resume subscription error:", err);
+        res.status(500).json({ message: "Failed to resume subscription", detail: err?.message });
     }
 });
 //# sourceMappingURL=subscriptions.js.map

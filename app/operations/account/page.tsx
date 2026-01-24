@@ -589,36 +589,68 @@ export default function AccountPage() {
 
                   {billing ? (
                     <div className="space-y-6">
-                      <div className="grid grid-cols-2 gap-6 pb-4 border-b border-white/10">
-                  <div>
-                          <label className="block text-xs font-medium text-white/60 mb-2 uppercase tracking-wide">
-                            Current Plan
-                          </label>
-                          <div className="text-white font-semibold">
-                            {billing.tier ? billing.tier.toUpperCase() : 'No Plan'}
-                          </div>
-                  </div>
-                    <div>
-                          <label className="block text-xs font-medium text-white/60 mb-2 uppercase tracking-wide">
-                            Status
-                          </label>
-                          <div className="text-white">{formatStatus(billing.status)}</div>
+                      {/* No Plan Card */}
+                      {(!billing.tier || billing.tier === 'none') ? (
+                        <div className="p-6 bg-white/5 border border-white/10 rounded-xl">
+                          <h3 className="text-lg font-semibold mb-2 text-white">No plan</h3>
+                          <p className="text-sm text-white/70 mb-4">
+                            Start with Starter to unlock audits, exports, and compliance packs.
+                          </p>
+                          <Link href="/pricing">
+                            <Button variant="primary">
+                              Choose a plan
+                            </Button>
+                          </Link>
                         </div>
-                      </div>
+                      ) : (
+                        <>
+                          <div className="grid grid-cols-2 gap-6 pb-4 border-b border-white/10">
+                            <div>
+                              <label className="block text-xs font-medium text-white/60 mb-2 uppercase tracking-wide">
+                                Current Plan
+                              </label>
+                              <div className="text-white font-semibold">
+                                {billing.tier.toUpperCase()}
+                              </div>
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-white/60 mb-2 uppercase tracking-wide">
+                                Status
+                              </label>
+                              <div className="text-white">{formatStatus(billing.status)}</div>
+                            </div>
+                          </div>
 
-                      {billing.renewal_date && (
-                        <div className="pb-4 border-b border-white/10">
-                          <label className="block text-xs font-medium text-white/60 mb-2 uppercase tracking-wide">
-                            Next Renewal
-                          </label>
-                      <div className="text-white">
-                            {new Date(billing.renewal_date).toLocaleDateString('en-US', {
-                              month: 'long',
-                              day: 'numeric',
-                              year: 'numeric',
-                            })}
-                          </div>
-                        </div>
+                          {billing.cancel_at_period_end && billing.current_period_end && (
+                            <div className="pb-4 border-b border-white/10">
+                              <label className="block text-xs font-medium text-white/60 mb-2 uppercase tracking-wide">
+                                Cancellation
+                              </label>
+                              <div className="text-[#F97316] font-semibold">
+                                Cancels on {new Date(billing.current_period_end).toLocaleDateString('en-US', {
+                                  month: 'long',
+                                  day: 'numeric',
+                                  year: 'numeric',
+                                })}
+                              </div>
+                            </div>
+                          )}
+
+                          {billing.renewal_date && !billing.cancel_at_period_end && (
+                            <div className="pb-4 border-b border-white/10">
+                              <label className="block text-xs font-medium text-white/60 mb-2 uppercase tracking-wide">
+                                Next Renewal
+                              </label>
+                              <div className="text-white">
+                                {new Date(billing.renewal_date).toLocaleDateString('en-US', {
+                                  month: 'long',
+                                  day: 'numeric',
+                                  year: 'numeric',
+                                })}
+                              </div>
+                            </div>
+                          )}
+                        </>
                       )}
 
                       {billing.seats_limit !== null && (
@@ -643,28 +675,78 @@ export default function AccountPage() {
                     </div>
                   )}
 
-                      <div className="flex gap-3 pt-2">
-                    <Link href="/operations/account/change-plan">
-                      <Button variant="primary">
-                        Change Plan
-                      </Button>
-                    </Link>
-                        {billing.stripe_customer_id && (
-                      <Button
-                        variant="secondary"
-                        onClick={async () => {
-                          try {
-                            const response = await subscriptionsApi.createPortalSession()
-                            window.location.href = response.url
-                          } catch (err: any) {
-                            setError(err?.message || 'Failed to open billing portal')
-                          }
-                        }}
-                      >
-                            View Invoices
-                      </Button>
-                    )}
-                  </div>
+                      {/* Action buttons - only show for paid plans */}
+                      {billing.tier && billing.tier !== 'none' && (
+                        <div className="flex gap-3 pt-2">
+                          <Link href="/operations/account/change-plan">
+                            <Button variant="primary">
+                              Change Plan
+                            </Button>
+                          </Link>
+                          {billing.cancel_at_period_end ? (
+                            <Button
+                              variant="secondary"
+                              onClick={async () => {
+                                try {
+                                  setUpdating(true)
+                                  await subscriptionsApi.resume()
+                                  // Reload billing data
+                                  const billingData = await accountApi.getBilling()
+                                  setBilling(billingData.data)
+                                  setError(null)
+                                } catch (err: any) {
+                                  setError(err?.message || 'Failed to resume subscription')
+                                } finally {
+                                  setUpdating(false)
+                                }
+                              }}
+                              disabled={updating}
+                            >
+                              {updating ? 'Resuming...' : 'Resume Plan'}
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="secondary"
+                              onClick={async () => {
+                                if (!confirm('Are you sure you want to cancel your subscription? You will keep access until the end of your billing period.')) {
+                                  return
+                                }
+                                try {
+                                  setUpdating(true)
+                                  await subscriptionsApi.cancel()
+                                  // Reload billing data
+                                  const billingData = await accountApi.getBilling()
+                                  setBilling(billingData.data)
+                                  setError(null)
+                                } catch (err: any) {
+                                  setError(err?.message || 'Failed to cancel subscription')
+                                } finally {
+                                  setUpdating(false)
+                                }
+                              }}
+                              disabled={updating}
+                              className="text-red-400 hover:text-red-300 border-red-400/50 hover:border-red-300/50"
+                            >
+                              {updating ? 'Canceling...' : 'Cancel Plan'}
+                            </Button>
+                          )}
+                          {billing.stripe_customer_id && (
+                            <Button
+                              variant="secondary"
+                              onClick={async () => {
+                                try {
+                                  const response = await subscriptionsApi.createPortalSession()
+                                  window.location.href = response.url
+                                } catch (err: any) {
+                                  setError(err?.message || 'Failed to open billing portal')
+                                }
+                              }}
+                            >
+                              View Invoices
+                            </Button>
+                          )}
+                        </div>
+                      )}
                 </div>
                   ) : subscription ? (
                     <div className="space-y-6">
