@@ -434,7 +434,7 @@ subscriptionsRouter.post(
         .limit(1)
         .maybeSingle();
 
-      const currentPlan = (currentSubscription?.tier as PlanCode) || "starter";
+      const currentPlan = (currentSubscription?.tier as PlanCode) || "none";
 
       // If switching to the same plan, return success
       if (currentPlan === planCode) {
@@ -446,17 +446,24 @@ subscriptionsRouter.post(
       }
 
       // Determine plan ranking for upgrade/downgrade logic
-      // NOTE: All tiers (starter/pro/business) are PAID plans
+      // NOTE: 'none' is not a paid plan, all others (starter/pro/business) are PAID
       // Starter = $29, Pro = $59, Business = $129
       const planRank: Record<PlanCode, number> = {
+        none: -1, // No plan (lowest)
         starter: 0,
         pro: 1,
         business: 2,
       };
-      const currentRank = planRank[currentPlan];
-      const targetRank = planRank[planCode];
+      const currentRank = planRank[currentPlan] ?? -1;
+      const targetRank = planRank[planCode] ?? -1;
       const isUpgrade = targetRank > currentRank;
       const isDowngrade = targetRank < currentRank;
+      
+      // If current plan is 'none', always treat as upgrade (new subscription)
+      if (currentPlan === "none") {
+        // No existing subscription, create Checkout session
+        // This will be handled by the "New subscription" path below
+      }
 
       // For all plan changes (starter/pro/business are all paid), determine if upgrade or downgrade
       const priceId = await resolveStripePriceId(stripe, planCode);
