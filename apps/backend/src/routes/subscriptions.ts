@@ -353,7 +353,7 @@ subscriptionsRouter.post(
         return res.status(400).json({ message: "Session missing organization identifier" });
       }
 
-      const subscription =
+      let subscription =
         typeof session.subscription === "object"
           ? session.subscription
           : session.subscription
