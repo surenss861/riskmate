@@ -478,7 +478,7 @@ subscriptionsRouter.post(
                 price: priceId,
               },
             ],
-            proration_behavior: "always", // Prorate upgrades
+            proration_behavior: "create_prorations", // Valid Stripe value: create prorations for upgrades
           });
 
           // CRITICAL: Always retrieve full subscription AFTER update to get fresh period timestamps
