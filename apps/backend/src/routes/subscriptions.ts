@@ -917,6 +917,17 @@ subscriptionsRouter.post(
         })
         .eq("organization_id", organization_id);
 
+      // Also update subscriptions table
+      if (subscriptionId) {
+        await supabase
+          .from("subscriptions")
+          .update({
+            cancel_at_period_end: true,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("stripe_subscription_id", subscriptionId);
+      }
+
       if (updateError) {
         console.error("Failed to update org_subscriptions:", updateError);
       }
@@ -1000,9 +1011,21 @@ subscriptionsRouter.post(
         .from("org_subscriptions")
         .update({
           status: "active",
+          cancel_at_period_end: false,
           updated_at: new Date().toISOString(),
         })
         .eq("organization_id", organization_id);
+
+      // Also update subscriptions table
+      if (subscriptionId) {
+        await supabase
+          .from("subscriptions")
+          .update({
+            cancel_at_period_end: false,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("stripe_subscription_id", subscriptionId);
+      }
 
       if (updateError) {
         console.error("Failed to update org_subscriptions:", updateError);
