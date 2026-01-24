@@ -4,7 +4,7 @@
  * Basic offline caching for RiskMate PWA functionality.
  */
 
-const CACHE_NAME = 'riskmate-v1'
+const CACHE_NAME = 'riskmate-v2' // Bump version to clear old cache
 const urlsToCache = [
   '/',
   '/operations',
@@ -61,8 +61,10 @@ self.addEventListener('install', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url)
   
-  // Never cache or intercept API routes and external requests
+  // Never cache or intercept API routes, external requests, or checkout/thank-you pages
   if (url.pathname.startsWith('/api/') || 
+      url.pathname.startsWith('/pricing/thank-you') ||
+      url.pathname.startsWith('/pricing/cancelled') ||
       url.hostname.includes('supabase.co') ||
       url.hostname.includes('posthog.com') ||
       url.hostname.includes('stripe.com')) {
