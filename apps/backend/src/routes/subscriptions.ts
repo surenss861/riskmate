@@ -877,7 +877,7 @@ subscriptionsRouter.post(
         );
         
         await applyPlanToOrganization(organization_id, "none", {
-          stripeCustomerId: currentSubscription?.stripe_customer_id || null,
+          stripeCustomerId: orgSub?.stripe_customer_id || null,
           stripeSubscriptionId: null, // Clear subscription ID
           currentPeriodStart: null,
           currentPeriodEnd: null,
