@@ -4,6 +4,7 @@ struct ContentView: View {
     @StateObject private var sessionManager = SessionManager.shared
     @StateObject private var serverStatus = ServerStatusManager.shared
     @AppStorage("user_role") private var userRole: String = ""
+    // Initialize tab based on role - default to Operations, will be adjusted in onAppear if needed
     @State private var selectedTab: MainTab = .operations
     @State private var selectedSidebarItem: SidebarItem? = .operations
     @State private var showOnboarding = false
@@ -176,9 +177,9 @@ struct ContentView: View {
                 .padding(.bottom, 100) // Above tab bar
             }
         }
-        .onAppear {
-            // For auditors: Start on Ledger tab
-            // For operators: Start on Operations tab (default)
+        .task {
+            // Set initial tab based on role (deterministic, runs once)
+            // Auditors start on Ledger, operators start on Operations
             if isAuditor {
                 selectedTab = .ledger
             } else {
