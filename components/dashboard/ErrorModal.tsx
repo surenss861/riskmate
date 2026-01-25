@@ -4,6 +4,8 @@ import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { modalStyles, buttonStyles, spacing, shadows } from '@/lib/styles/design-system'
 
+type ModalVariant = 'error' | 'success' | 'info' | 'warning'
+
 interface ErrorModalProps {
   isOpen: boolean
   title?: string
@@ -14,6 +16,7 @@ interface ErrorModalProps {
   showBackButton?: boolean
   onBack?: () => void
   backLabel?: string
+  variant?: ModalVariant
 }
 
 export function ErrorModal({
@@ -26,8 +29,41 @@ export function ErrorModal({
   showBackButton = false,
   onBack,
   backLabel = 'Back to Jobs',
+  variant = 'error',
 }: ErrorModalProps) {
   const [retrying, setRetrying] = useState(false)
+  
+  // Variant styles
+  const variantStyles = {
+    error: {
+      border: 'border-red-500/30',
+      iconBg: 'bg-red-500/20',
+      iconColor: 'text-red-400',
+      iconPath: 'M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
+    },
+    success: {
+      border: 'border-green-500/30',
+      iconBg: 'bg-green-500/20',
+      iconColor: 'text-green-400',
+      iconPath: 'M5 13l4 4L19 7',
+    },
+    info: {
+      border: 'border-blue-500/30',
+      iconBg: 'bg-blue-500/20',
+      iconColor: 'text-blue-400',
+      iconPath: 'M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
+    },
+    warning: {
+      border: 'border-yellow-500/30',
+      iconBg: 'bg-yellow-500/20',
+      iconColor: 'text-yellow-400',
+      iconPath: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z',
+    },
+  }
+  
+  const styles = variantStyles[variant]
+  const defaultTitle = variant === 'error' ? 'Something went wrong' : variant === 'success' ? 'Success' : variant === 'info' ? 'Information' : 'Warning'
+  
   return (
     <AnimatePresence>
       {isOpen && (
@@ -48,13 +84,13 @@ export function ErrorModal({
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               onClick={(e) => e.stopPropagation()}
-              className={`${modalStyles.container} border-red-500/30 max-w-md w-full ${shadows.raised} pointer-events-auto`}
+              className={`${modalStyles.container} ${styles.border} max-w-md w-full ${shadows.raised} pointer-events-auto`}
             >
-              {/* Error Icon */}
+              {/* Icon */}
               <div className={`flex justify-center ${spacing.relaxed}`}>
-                <div className="w-16 h-16 rounded-full bg-red-500/20 flex items-center justify-center">
+                <div className={`w-16 h-16 rounded-full ${styles.iconBg} flex items-center justify-center`}>
                   <svg
-                    className="w-8 h-8 text-red-400"
+                    className={`w-8 h-8 ${styles.iconColor}`}
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -63,7 +99,7 @@ export function ErrorModal({
                       strokeLinecap="round"
                       strokeLinejoin="round"
                       strokeWidth={2}
-                      d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                      d={styles.iconPath}
                     />
                   </svg>
                 </div>
@@ -71,7 +107,7 @@ export function ErrorModal({
 
               {/* Title */}
               <h3 className={`${modalStyles.title} text-center ${spacing.normal}`}>
-                {title}
+                {title || defaultTitle}
               </h3>
 
               {/* Message */}

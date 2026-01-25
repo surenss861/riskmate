@@ -77,6 +77,7 @@ export default function ChangePlanPage() {
   const [canceling, setCanceling] = useState(false)
   const [resuming, setResuming] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [errorVariant, setErrorVariant] = useState<'error' | 'success' | 'info' | 'warning'>('error')
 
   useEffect(() => {
     const loadData = async () => {
@@ -134,16 +135,40 @@ export default function ChangePlanPage() {
       const checkoutUrl = response.url || (response as any).checkout_url
       
       if (checkoutUrl) {
-        // Redirect to Stripe checkout
+        // Redirect to Stripe checkout - CRITICAL: return immediately to prevent any other navigation
         window.location.href = checkoutUrl
-        return // Important: return early to prevent navigation below
-      } else if (response.success) {
-        // Plan switched successfully (e.g., immediate downgrade)
-        // Redirect to account page (it will reload subscription data)
-        router.push('/operations/account')
-      } else {
-        throw new Error('Failed to switch plan')
+        return
       }
+      
+      // Handle alreadyScheduled case (info, not error)
+      if ((response as any).alreadyScheduled) {
+        const periodEnd = (response as any).current_period_end
+        const cancelDate = periodEnd 
+          ? new Date(periodEnd * 1000).toLocaleDateString('en-US', {
+              month: 'long',
+              day: 'numeric',
+              year: 'numeric',
+            })
+          : 'the end of your billing period'
+        setErrorVariant('info')
+        setError(`Cancellation is already scheduled. Your plan will end on ${cancelDate}.`)
+        setTimeout(() => {
+          setError(null)
+          setErrorVariant('error')
+        }, 5000)
+        setSwitching(null)
+        return
+      }
+      
+      // Plan switched successfully (e.g., immediate downgrade)
+      if (response.success) {
+        // Redirect to thank-you page to show success state
+        router.push(`/pricing/thank-you?plan=${plan}&success=true`)
+        return
+      }
+      
+      // Real error case
+      throw new Error(response.message || 'Failed to switch plan')
     } catch (err: any) {
       console.error('Failed to switch plan:', err)
       setError('Couldn\'t switch your plan. Your current plan is still active — try again in a moment.')
@@ -162,13 +187,30 @@ export default function ChangePlanPage() {
     try {
       const cancelResponse = await subscriptionsApi.cancel()
       
-      // Handle noop case (already canceled or no subscription)
+      // Handle noop case (already canceled or no subscription) - info, not error
       if (cancelResponse.noop || cancelResponse.alreadyCanceled) {
+        setErrorVariant('info')
         setError('No active subscription to cancel')
-        setTimeout(() => setError(null), 3000)
+        setTimeout(() => {
+          setError(null)
+          setErrorVariant('error')
+        }, 3000)
       } else if (cancelResponse.alreadyScheduled) {
-        setError('Cancellation is already scheduled')
-        setTimeout(() => setError(null), 3000)
+        // Info state: cancellation already scheduled
+        const periodEnd = cancelResponse.current_period_end
+        const cancelDate = periodEnd
+          ? new Date(periodEnd * 1000).toLocaleDateString('en-US', {
+              month: 'long',
+              day: 'numeric',
+              year: 'numeric',
+            })
+          : 'the end of your billing period'
+        setErrorVariant('info')
+        setError(`Cancellation is already scheduled. Your subscription will end on ${cancelDate}.`)
+        setTimeout(() => {
+          setError(null)
+          setErrorVariant('error')
+        }, 5000)
       } else if (cancelResponse.current_period_end) {
         // Success - show cancellation date
         const cancelDate = new Date(cancelResponse.current_period_end * 1000).toLocaleDateString('en-US', {
@@ -176,11 +218,20 @@ export default function ChangePlanPage() {
           day: 'numeric',
           year: 'numeric',
         })
-        setError(`Cancellation scheduled for ${cancelDate}`)
-        setTimeout(() => setError(null), 5000)
+        setErrorVariant('success')
+        setError(`Cancellation scheduled for ${cancelDate}. You'll keep access until then.`)
+        setTimeout(() => {
+          setError(null)
+          setErrorVariant('error')
+        }, 5000)
       } else {
-        // Clear error after 3 seconds for other success cases
-        setTimeout(() => setError(null), 3000)
+        // Success case without period end
+        setErrorVariant('success')
+        setError('Cancellation scheduled successfully')
+        setTimeout(() => {
+          setError(null)
+          setErrorVariant('error')
+        }, 3000)
       }
       
       // Reload subscription data to update UI
@@ -199,17 +250,27 @@ export default function ChangePlanPage() {
   const handleResume = async () => {
     setResuming(true)
     setError(null)
+    setErrorVariant('error')
 
     try {
       const resumeResponse = await subscriptionsApi.resume()
       
-      // Handle noop case
+      // Handle noop case (already resumed or no subscription) - info, not error
       if (resumeResponse.noop || resumeResponse.alreadyResumed) {
+        setErrorVariant('info')
         setError('Subscription is already active')
-        setTimeout(() => setError(null), 3000)
-      } else {
-        setError('Subscription resumed successfully')
-        setTimeout(() => setError(null), 5000)
+        setTimeout(() => {
+          setError(null)
+          setErrorVariant('error')
+        }, 3000)
+      } else if (resumeResponse.success) {
+        // Success state
+        setErrorVariant('success')
+        setError('Subscription resumed successfully. Your plan will continue as normal.')
+        setTimeout(() => {
+          setError(null)
+          setErrorVariant('error')
+        }, 3000)
       }
       
       // Reload subscription data to update UI
@@ -219,6 +280,7 @@ export default function ChangePlanPage() {
       setCurrentPlan(subscriptionResponse.data?.tier as PlanCode | 'none' | null)
     } catch (err: any) {
       console.error('Failed to resume subscription:', err)
+      setErrorVariant('error')
       setError(err?.message || 'Failed to resume subscription')
     } finally {
       setResuming(false)
@@ -400,9 +462,21 @@ export default function ChangePlanPage() {
 
         <ErrorModal
           isOpen={error !== null}
-          title="Plan Switch Error"
+          title={
+            errorVariant === 'success' 
+              ? 'Success' 
+              : errorVariant === 'info' 
+              ? 'Information' 
+              : errorVariant === 'warning'
+              ? 'Warning'
+              : 'Plan Switch Error'
+          }
           message={error || ''}
-          onClose={() => setError(null)}
+          onClose={() => {
+            setError(null)
+            setErrorVariant('error')
+          }}
+          variant={errorVariant}
         />
       </AppBackground>
     </ProtectedRoute>
