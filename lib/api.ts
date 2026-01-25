@@ -604,17 +604,19 @@ export const subscriptionsApi = {
     });
   },
 
-  cancel: async () => {
+  cancel: async (mode: 'immediate' | 'period_end' = 'immediate') => {
     return apiRequest<{ 
       success: boolean; 
       message: string; 
       cancel_at_period_end: boolean;
-      current_period_end: number;
+      current_period_end?: number;
       noop?: boolean;
       alreadyCanceled?: boolean;
       alreadyScheduled?: boolean;
+      canceled_immediately?: boolean;
     }>('/api/subscriptions/cancel', {
       method: 'POST',
+      body: JSON.stringify({ mode }),
     });
   },
 

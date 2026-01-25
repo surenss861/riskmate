@@ -177,15 +177,18 @@ export default function ChangePlanPage() {
   }
 
   const handleCancel = async () => {
-    if (!confirm('Are you sure you want to cancel your subscription? You will keep access until the end of your billing period.')) {
+    // Immediate cancellation confirmation - no refund, access ends now
+    if (!confirm('Cancel immediately? You\'ll lose access now. No refunds are issued.')) {
       return
     }
 
     setCanceling(true)
     setError(null)
+    setErrorVariant('error')
 
     try {
-      const cancelResponse = await subscriptionsApi.cancel()
+      // Cancel immediately (default mode)
+      const cancelResponse = await subscriptionsApi.cancel('immediate')
       
       // Handle noop case (already canceled or no subscription) - info, not error
       if (cancelResponse.noop || cancelResponse.alreadyCanceled) {
@@ -211,8 +214,16 @@ export default function ChangePlanPage() {
           setError(null)
           setErrorVariant('error')
         }, 5000)
+      } else if (cancelResponse.canceled_immediately) {
+        // Immediate cancellation success
+        setErrorVariant('success')
+        setError('Subscription canceled. Access has ended immediately.')
+        setTimeout(() => {
+          setError(null)
+          setErrorVariant('error')
+        }, 5000)
       } else if (cancelResponse.current_period_end) {
-        // Success - show cancellation date
+        // Scheduled cancellation (shouldn't happen with immediate mode, but handle it)
         const cancelDate = new Date(cancelResponse.current_period_end * 1000).toLocaleDateString('en-US', {
           month: 'long',
           day: 'numeric',
@@ -224,10 +235,10 @@ export default function ChangePlanPage() {
           setError(null)
           setErrorVariant('error')
         }, 5000)
-      } else {
-        // Success case without period end
+      } else if (cancelResponse.success) {
+        // Generic success case
         setErrorVariant('success')
-        setError('Cancellation scheduled successfully')
+        setError('Subscription canceled successfully')
         setTimeout(() => {
           setError(null)
           setErrorVariant('error')

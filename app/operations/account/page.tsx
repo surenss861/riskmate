@@ -739,35 +739,29 @@ export default function AccountPage() {
                             <Button
                               variant="secondary"
                               onClick={async () => {
-                                if (!confirm('Are you sure you want to cancel your subscription? You will keep access until the end of your billing period.')) {
+                                if (!confirm('Cancel immediately? You\'ll lose access now. No refunds are issued.')) {
                                   return
                                 }
                                 try {
                                   setUpdating(true)
                                   setError(null)
-                                  const cancelResponse = await subscriptionsApi.cancel()
+                                  // Cancel immediately (default mode)
+                                  const cancelResponse = await subscriptionsApi.cancel('immediate')
                                   
                                   // Handle noop case (already canceled or no subscription)
                                   if (cancelResponse.noop || cancelResponse.alreadyCanceled) {
                                     setError('No active subscription to cancel')
                                     // Still reload to sync state
+                                  } else if (cancelResponse.canceled_immediately) {
+                                    // Immediate cancellation success
+                                    setError('Subscription canceled. Access has ended immediately.')
+                                    setTimeout(() => setError(null), 5000)
                                   } else if (cancelResponse.alreadyScheduled) {
                                     setError('Cancellation is already scheduled')
-                                  } else {
-                                    // Success - show cancellation date if available
-                                    if (cancelResponse.current_period_end) {
-                                      const cancelDate = new Date(cancelResponse.current_period_end * 1000).toLocaleDateString('en-US', {
-                                        month: 'long',
-                                        day: 'numeric',
-                                        year: 'numeric',
-                                      })
-                                      setError(`Cancellation scheduled for ${cancelDate}`)
-                                      // Clear success message after 5 seconds
-                                      setTimeout(() => setError(null), 5000)
-                                    } else {
-                                      // Clear any existing error after 3 seconds
-                                      setTimeout(() => setError(null), 3000)
-                                    }
+                                  } else if (cancelResponse.success) {
+                                    // Generic success
+                                    setError('Subscription canceled successfully')
+                                    setTimeout(() => setError(null), 3000)
                                   }
                                   
                                   // Reload billing data to update UI

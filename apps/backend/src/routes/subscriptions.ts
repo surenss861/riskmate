@@ -838,7 +838,7 @@ subscriptionsRouter.post(
 );
 
 // POST /api/subscriptions/cancel
-// Cancels subscription at period end (user keeps access until renewal)
+// Cancels subscription immediately or at period end based on mode
 subscriptionsRouter.post(
   "/cancel",
   authenticate as unknown as RequestHandler,
@@ -849,6 +849,9 @@ subscriptionsRouter.post(
       if (!userRole || !["owner", "admin"].includes(userRole)) {
         return res.status(403).json({ message: "Only owners and admins can cancel plans" });
       }
+
+      const { mode = "immediate" } = req.body ?? {}; // Default to immediate cancellation
+      const cancelMode = mode === "period_end" ? "period_end" : "immediate";
 
       // Get current subscription from org_subscriptions (source of truth)
       const { data: orgSub } = await supabase
@@ -907,6 +910,32 @@ subscriptionsRouter.post(
         });
       }
 
+      // IMMEDIATE CANCELLATION MODE
+      if (cancelMode === "immediate") {
+        // Cancel immediately - no refund, no proration, access ends now
+        await stripe.subscriptions.cancel(subscriptionId, {
+          prorate: false,
+          invoice_now: false,
+        });
+
+        // Update DB immediately to "none" / "inactive"
+        await applyPlanToOrganization(organization_id, "none", {
+          stripeCustomerId: orgSub.stripe_customer_id || null, // Keep customer ID for audit
+          stripeSubscriptionId: null, // Clear subscription ID
+          currentPeriodStart: null,
+          currentPeriodEnd: null,
+          status: "inactive",
+        });
+
+        return res.json({
+          success: true,
+          message: "Subscription canceled immediately. Access has ended.",
+          canceled_immediately: true,
+          cancel_at_period_end: false,
+        });
+      }
+
+      // PERIOD_END CANCELLATION MODE (scheduled cancellation)
       // Handle already scheduled cancellation (idempotent)
       if (subscription.cancel_at_period_end === true) {
         return res.json({
