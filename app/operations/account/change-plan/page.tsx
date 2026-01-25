@@ -139,8 +139,7 @@ export default function ChangePlanPage() {
         return // Important: return early to prevent navigation below
       } else if (response.success) {
         // Plan switched successfully (e.g., immediate downgrade)
-        // Reload subscription data and redirect
-        await loadSubscription()
+        // Redirect to account page (it will reload subscription data)
         router.push('/operations/account')
       } else {
         throw new Error('Failed to switch plan')
