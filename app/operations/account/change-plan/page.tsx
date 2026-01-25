@@ -130,11 +130,17 @@ export default function ChangePlanPage() {
 
       const response = await subscriptionsApi.switchPlan(plan)
       
-      if (response.url) {
+      // Check for checkout URL (backend may return 'url' or 'checkout_url')
+      const checkoutUrl = response.url || (response as any).checkout_url
+      
+      if (checkoutUrl) {
         // Redirect to Stripe checkout
-        window.location.href = response.url
+        window.location.href = checkoutUrl
+        return // Important: return early to prevent navigation below
       } else if (response.success) {
-        // Plan switched successfully (e.g., to free)
+        // Plan switched successfully (e.g., immediate downgrade)
+        // Reload subscription data and redirect
+        await loadSubscription()
         router.push('/operations/account')
       } else {
         throw new Error('Failed to switch plan')

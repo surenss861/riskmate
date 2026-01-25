@@ -676,7 +676,12 @@ subscriptionsRouter.post(
           },
         });
 
-        return res.json({ url: session.url });
+        return res.json({ 
+          success: true,
+          url: session.url,
+          checkout_url: session.url,
+          message: `Redirecting to checkout for ${planCode} plan.`,
+        });
       }
 
       // DOWNGRADE: Update immediately with no proration (all tiers are paid)
