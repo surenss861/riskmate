@@ -155,11 +155,28 @@ export default function ChangePlanPage() {
     setError(null)
 
     try {
-      await subscriptionsApi.cancel()
-      // Reload subscription data
+      const cancelResponse = await subscriptionsApi.cancel()
+      
+      // Handle noop case (already canceled or no subscription)
+      if (cancelResponse.noop || cancelResponse.alreadyCanceled) {
+        setError('No active subscription to cancel')
+      } else if (cancelResponse.alreadyScheduled) {
+        setError('Cancellation is already scheduled')
+      } else if (cancelResponse.current_period_end) {
+        // Success - show cancellation date
+        const cancelDate = new Date(cancelResponse.current_period_end * 1000).toLocaleDateString('en-US', {
+          month: 'long',
+          day: 'numeric',
+          year: 'numeric',
+        })
+        setError(`Cancellation scheduled for ${cancelDate}`)
+      }
+      
+      // Reload subscription data to update UI
       const subscriptionResponse = await subscriptionsApi.get()
       setCancelAtPeriodEnd(subscriptionResponse.data?.cancel_at_period_end ?? false)
       setCurrentPeriodEnd(subscriptionResponse.data?.current_period_end ?? null)
+      setCurrentPlan(subscriptionResponse.data?.tier as PlanCode | 'none' | null)
     } catch (err: any) {
       console.error('Failed to cancel subscription:', err)
       setError(err?.message || 'Failed to cancel subscription')
@@ -173,11 +190,20 @@ export default function ChangePlanPage() {
     setError(null)
 
     try {
-      await subscriptionsApi.resume()
-      // Reload subscription data
+      const resumeResponse = await subscriptionsApi.resume()
+      
+      // Handle noop case
+      if (resumeResponse.noop || resumeResponse.alreadyResumed) {
+        setError('Subscription is already active')
+      } else {
+        setError('Subscription resumed successfully')
+      }
+      
+      // Reload subscription data to update UI
       const subscriptionResponse = await subscriptionsApi.get()
       setCancelAtPeriodEnd(subscriptionResponse.data?.cancel_at_period_end ?? false)
       setCurrentPeriodEnd(subscriptionResponse.data?.current_period_end ?? null)
+      setCurrentPlan(subscriptionResponse.data?.tier as PlanCode | 'none' | null)
     } catch (err: any) {
       console.error('Failed to resume subscription:', err)
       setError(err?.message || 'Failed to resume subscription')
@@ -224,26 +250,39 @@ export default function ChangePlanPage() {
           {/* Cancel/Resume buttons - show above plan cards */}
           {(canCancel || canResume) && (
             <PageSection>
-              <div className="flex gap-3 justify-center">
-                {canCancel && (
-                  <Button
-                    variant="secondary"
-                    onClick={handleCancel}
-                    disabled={canceling || resuming}
-                    className="text-red-400 hover:text-red-300 border-red-400/50 hover:border-red-300/50"
-                  >
-                    {canceling ? 'Canceling...' : 'Cancel Plan'}
-                  </Button>
+              <div className="space-y-4">
+                {/* Show error/success message */}
+                {error && (
+                  <div className={`p-4 rounded-lg border ${
+                    error.includes('successfully') || error.includes('scheduled')
+                      ? 'bg-green-500/10 border-green-500/50 text-green-400'
+                      : 'bg-red-500/10 border-red-500/50 text-red-400'
+                  }`}>
+                    <p className="text-sm text-center">{error}</p>
+                  </div>
                 )}
-                {canResume && (
-                  <Button
-                    variant="primary"
-                    onClick={handleResume}
-                    disabled={canceling || resuming}
-                  >
-                    {resuming ? 'Resuming...' : 'Resume Plan'}
-                  </Button>
-                )}
+                
+                <div className="flex gap-3 justify-center">
+                  {canCancel && (
+                    <Button
+                      variant="secondary"
+                      onClick={handleCancel}
+                      disabled={canceling || resuming}
+                      className="text-red-400 hover:text-red-300 border-red-400/50 hover:border-red-300/50"
+                    >
+                      {canceling ? 'Canceling...' : 'Cancel Plan'}
+                    </Button>
+                  )}
+                  {canResume && (
+                    <Button
+                      variant="primary"
+                      onClick={handleResume}
+                      disabled={canceling || resuming}
+                    >
+                      {resuming ? 'Resuming...' : 'Resume Plan'}
+                    </Button>
+                  )}
+                </div>
               </div>
             </PageSection>
           )}

@@ -589,6 +589,17 @@ export default function AccountPage() {
 
                   {billing ? (
                     <div className="space-y-6">
+                      {/* Show error message if present */}
+                      {error && (
+                        <div className={`p-4 rounded-lg border ${
+                          error.includes('successfully') || error.includes('scheduled')
+                            ? 'bg-green-500/10 border-green-500/50 text-green-400'
+                            : 'bg-red-500/10 border-red-500/50 text-red-400'
+                        }`}>
+                          <p className="text-sm">{error}</p>
+                        </div>
+                      )}
+                      
                       {/* No Plan Card */}
                       {(!billing.tier || billing.tier === 'none') ? (
                         <div className="p-6 bg-white/5 border border-white/10 rounded-xl">
@@ -689,12 +700,30 @@ export default function AccountPage() {
                               onClick={async () => {
                                 try {
                                   setUpdating(true)
-                                  await subscriptionsApi.resume()
-                                  // Reload billing data
+                                  setError(null)
+                                  const resumeResponse = await subscriptionsApi.resume()
+                                  
+                                  // Handle noop case
+                                  if (resumeResponse.noop || resumeResponse.alreadyResumed) {
+                                    setError('Subscription is already active')
+                                  } else {
+                                    setError('Subscription resumed successfully')
+                                  }
+                                  
+                                  // Reload billing data to update UI
                                   const billingData = await accountApi.getBilling()
                                   setBilling(billingData.data)
-                                  setError(null)
+                                  
+                                  // Also reload subscription data
+                                  try {
+                                    const subscriptionResponse = await subscriptionsApi.get()
+                                    setSubscription(subscriptionResponse.data)
+                                  } catch (subErr) {
+                                    // Non-fatal
+                                    console.warn('Failed to reload subscription:', subErr)
+                                  }
                                 } catch (err: any) {
+                                  console.error('Resume subscription error:', err)
                                   setError(err?.message || 'Failed to resume subscription')
                                 } finally {
                                   setUpdating(false)
@@ -713,12 +742,41 @@ export default function AccountPage() {
                                 }
                                 try {
                                   setUpdating(true)
-                                  await subscriptionsApi.cancel()
-                                  // Reload billing data
+                                  setError(null)
+                                  const cancelResponse = await subscriptionsApi.cancel()
+                                  
+                                  // Handle noop case (already canceled or no subscription)
+                                  if (cancelResponse.noop || cancelResponse.alreadyCanceled) {
+                                    setError('No active subscription to cancel')
+                                    // Still reload to sync state
+                                  } else if (cancelResponse.alreadyScheduled) {
+                                    setError('Cancellation is already scheduled')
+                                  } else {
+                                    // Success - show cancellation date if available
+                                    if (cancelResponse.current_period_end) {
+                                      const cancelDate = new Date(cancelResponse.current_period_end * 1000).toLocaleDateString('en-US', {
+                                        month: 'long',
+                                        day: 'numeric',
+                                        year: 'numeric',
+                                      })
+                                      setError(`Cancellation scheduled for ${cancelDate}`)
+                                    }
+                                  }
+                                  
+                                  // Reload billing data to update UI
                                   const billingData = await accountApi.getBilling()
                                   setBilling(billingData.data)
-                                  setError(null)
+                                  
+                                  // Also reload subscription data
+                                  try {
+                                    const subscriptionResponse = await subscriptionsApi.get()
+                                    setSubscription(subscriptionResponse.data)
+                                  } catch (subErr) {
+                                    // Non-fatal
+                                    console.warn('Failed to reload subscription:', subErr)
+                                  }
                                 } catch (err: any) {
+                                  console.error('Cancel subscription error:', err)
                                   setError(err?.message || 'Failed to cancel subscription')
                                 } finally {
                                   setUpdating(false)
