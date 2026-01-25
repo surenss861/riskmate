@@ -110,21 +110,17 @@ struct ContentView: View {
     
     private var iPhoneNavigation: some View {
         TabView(selection: $selectedTab) {
-            // For auditors: Start on Ledger tab
-            // For operators: Start on Operations tab
-            if !isAuditor {
-                // Operations (Dashboard) - First tab
-                NavigationStack {
-                    OperationsView(onKPINavigate: { filter in
-                        workRecordsFilter = filter
-                    })
-                        .rmNavigationBar(title: "Operations")
-                }
-                .tabItem {
-                    Label("Operations", systemImage: "briefcase.fill")
-                }
-                .tag(MainTab.operations)
+            // Operations (Dashboard) - First tab (always visible)
+            NavigationStack {
+                OperationsView(onKPINavigate: { filter in
+                    workRecordsFilter = filter
+                })
+                    .rmNavigationBar(title: "Operations")
             }
+            .tabItem {
+                Label("Operations", systemImage: "briefcase.fill")
+            }
+            .tag(MainTab.operations)
             
             // Ledger (Audit Feed) - Second tab
             NavigationStack {
@@ -181,9 +177,12 @@ struct ContentView: View {
             }
         }
         .onAppear {
-            // Launch auditors directly into Ledger
+            // For auditors: Start on Ledger tab
+            // For operators: Start on Operations tab (default)
             if isAuditor {
                 selectedTab = .ledger
+            } else {
+                selectedTab = .operations
             }
         }
     }
