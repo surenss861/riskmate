@@ -9,6 +9,9 @@ struct AccountView: View {
     @State private var errorMessage = ""
     @State private var isLoading = false
     @State private var showSignOutConfirmation = false
+    @State private var showDeleteAccountConfirmation = false
+    @State private var deleteConfirmationText = ""
+    @State private var isDeletingAccount = false
     
     private var versionString: String {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Unknown"
@@ -216,6 +219,22 @@ struct AccountView: View {
                     }
                 }
                 
+                // Delete Account - separate section, most destructive action
+                Section {
+                    Button("Delete Account", role: .destructive) {
+                        Haptics.warning()
+                        showDeleteAccountConfirmation = true
+                    }
+                    .listRowBackground(Color.clear)
+                    .disabled(isDeletingAccount)
+                } header: {
+                    Text("Danger Zone")
+                        .foregroundColor(RMTheme.Colors.textSecondary)
+                } footer: {
+                    Text("Deleting your account will permanently remove all your data. This action cannot be undone.")
+                        .foregroundColor(RMTheme.Colors.textTertiary)
+                }
+                
                 // Version info (subtle, professional)
                 Section {
                     VStack(alignment: .leading, spacing: 4) {
@@ -262,6 +281,17 @@ struct AccountView: View {
             } message: {
                 Text(errorMessage)
             }
+            .sheet(isPresented: $showDeleteAccountConfirmation) {
+                DeleteAccountSheet(
+                    isPresented: $showDeleteAccountConfirmation,
+                    onConfirm: {
+                        Task {
+                            await deleteAccount()
+                        }
+                    },
+                    isDeleting: isDeletingAccount
+                )
+            }
         }
         .rmNavigationBar(title: "Settings")
         .preferredColorScheme(.dark)
@@ -279,6 +309,22 @@ struct AccountView: View {
                 showError = true
             }
             isLoading = false
+        }
+    }
+    
+    private func deleteAccount() async {
+        isDeletingAccount = true
+        Haptics.warning()
+        
+        do {
+            let response = try await APIClient.shared.deactivateAccount(confirmation: "DELETE")
+            // Account deletion successful - sign out user
+            await sessionManager.logout()
+            // Show success message (optional, since we're logging out)
+        } catch {
+            errorMessage = error.localizedDescription
+            showError = true
+            isDeletingAccount = false
         }
     }
 }

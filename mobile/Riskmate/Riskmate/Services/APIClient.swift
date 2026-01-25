@@ -279,6 +279,21 @@ class APIClient {
         return response.data
     }
     
+    /// Deactivate account (delete account)
+    func deactivateAccount(confirmation: String, reason: String? = nil) async throws -> DeactivateAccountResponse {
+        var bodyDict: [String: Any] = ["confirmation": confirmation]
+        if let reason = reason {
+            bodyDict["reason"] = reason
+        }
+        let body = try JSONSerialization.data(withJSONObject: bodyDict)
+        let response: DeactivateAccountResponse = try await request(
+            endpoint: "/api/account/deactivate",
+            method: "POST",
+            body: body
+        )
+        return response
+    }
+    
     // MARK: - Readiness API
     
     /// Get audit readiness data

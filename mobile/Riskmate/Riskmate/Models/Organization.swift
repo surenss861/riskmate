@@ -16,3 +16,8 @@ struct OrganizationResponse: Codable {
     let data: Organization
     let message: String?
 }
+
+struct DeactivateAccountResponse: Codable {
+    let message: String
+    let retention_days: Int
+}
