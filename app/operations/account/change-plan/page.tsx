@@ -160,8 +160,10 @@ export default function ChangePlanPage() {
       // Handle noop case (already canceled or no subscription)
       if (cancelResponse.noop || cancelResponse.alreadyCanceled) {
         setError('No active subscription to cancel')
+        setTimeout(() => setError(null), 3000)
       } else if (cancelResponse.alreadyScheduled) {
         setError('Cancellation is already scheduled')
+        setTimeout(() => setError(null), 3000)
       } else if (cancelResponse.current_period_end) {
         // Success - show cancellation date
         const cancelDate = new Date(cancelResponse.current_period_end * 1000).toLocaleDateString('en-US', {
@@ -170,6 +172,10 @@ export default function ChangePlanPage() {
           year: 'numeric',
         })
         setError(`Cancellation scheduled for ${cancelDate}`)
+        setTimeout(() => setError(null), 5000)
+      } else {
+        // Clear error after 3 seconds for other success cases
+        setTimeout(() => setError(null), 3000)
       }
       
       // Reload subscription data to update UI
@@ -195,8 +201,10 @@ export default function ChangePlanPage() {
       // Handle noop case
       if (resumeResponse.noop || resumeResponse.alreadyResumed) {
         setError('Subscription is already active')
+        setTimeout(() => setError(null), 3000)
       } else {
         setError('Subscription resumed successfully')
+        setTimeout(() => setError(null), 5000)
       }
       
       // Reload subscription data to update UI

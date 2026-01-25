@@ -706,8 +706,10 @@ export default function AccountPage() {
                                   // Handle noop case
                                   if (resumeResponse.noop || resumeResponse.alreadyResumed) {
                                     setError('Subscription is already active')
+                                    setTimeout(() => setError(null), 3000)
                                   } else {
                                     setError('Subscription resumed successfully')
+                                    setTimeout(() => setError(null), 5000)
                                   }
                                   
                                   // Reload billing data to update UI
@@ -760,6 +762,11 @@ export default function AccountPage() {
                                         year: 'numeric',
                                       })
                                       setError(`Cancellation scheduled for ${cancelDate}`)
+                                      // Clear success message after 5 seconds
+                                      setTimeout(() => setError(null), 5000)
+                                    } else {
+                                      // Clear any existing error after 3 seconds
+                                      setTimeout(() => setError(null), 3000)
                                     }
                                   }
                                   
