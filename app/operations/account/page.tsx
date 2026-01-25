@@ -607,7 +607,7 @@ export default function AccountPage() {
                           <p className="text-sm text-white/70 mb-4">
                             Start with Starter to unlock audits, exports, and compliance packs.
                           </p>
-                          <Link href="/pricing">
+                          <Link href="/operations/account/change-plan">
                             <Button variant="primary">
                               Choose a plan
                             </Button>
@@ -837,9 +837,9 @@ export default function AccountPage() {
                   <p className="text-white/60">No active subscription</p>
                     <Button
                       variant="primary"
-                      onClick={() => router.push('/pricing')}
+                      onClick={() => router.push('/operations/account/change-plan')}
                     >
-                      View Pricing Plans
+                      Choose a plan
                     </Button>
                 </div>
               )}

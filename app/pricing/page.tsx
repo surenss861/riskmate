@@ -175,10 +175,10 @@ export default function PricingPage() {
               </li>
             </ul>
             <button
-              onClick={() => router.push('/signup')}
+              onClick={() => handleCheckout('starter')}
               className="w-full px-6 py-3 border border-white/10 rounded-lg hover:bg-white/5 transition-colors font-semibold"
             >
-              Start Free
+              Start Starter →
             </button>
           </motion.div>
 
