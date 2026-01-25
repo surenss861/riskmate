@@ -610,6 +610,9 @@ export const subscriptionsApi = {
       message: string; 
       cancel_at_period_end: boolean;
       current_period_end: number;
+      noop?: boolean;
+      alreadyCanceled?: boolean;
+      alreadyScheduled?: boolean;
     }>('/api/subscriptions/cancel', {
       method: 'POST',
     });
@@ -621,6 +624,8 @@ export const subscriptionsApi = {
       message: string; 
       cancel_at_period_end: boolean;
       current_period_end: number;
+      noop?: boolean;
+      alreadyResumed?: boolean;
     }>('/api/subscriptions/resume', {
       method: 'POST',
     });
