@@ -299,6 +299,41 @@ class APIClient {
         return try await request(endpoint: "/api/account/entitlements")
     }
     
+    /// Log event to backend (unified event logging for iOS ↔ web parity)
+    /// Both iOS and web call this to ensure all actions are tracked in audit_logs
+    func logEvent(
+        eventType: String,
+        entityType: String,
+        entityId: String? = nil,
+        metadata: [String: Any]? = nil
+    ) async throws -> EventLogResponse {
+        var bodyDict: [String: Any] = [
+            "event_type": eventType,
+            "entity_type": entityType,
+            "client": "ios",
+        ]
+        
+        if let entityId = entityId {
+            bodyDict["entity_id"] = entityId
+        }
+        
+        if let metadata = metadata {
+            bodyDict["metadata"] = metadata
+        }
+        
+        // Add app version if available
+        if let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String {
+            bodyDict["app_version"] = version
+        }
+        
+        let body = try JSONSerialization.data(withJSONObject: bodyDict)
+        return try await request(
+            endpoint: "/api/audit/events",
+            method: "POST",
+            body: body
+        )
+    }
+    
     // MARK: - Readiness API
     
     /// Get audit readiness data

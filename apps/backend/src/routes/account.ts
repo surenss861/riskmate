@@ -14,6 +14,7 @@ accountRouter.get("/", (_req, res) => {
     endpoints: [
       "GET /api/account/me",
       "GET /api/account/entitlements",
+      "POST /api/audit/events (unified event logging)",
       "GET /api/account/organization",
       "PATCH /api/account/profile",
       "PATCH /api/account/organization",

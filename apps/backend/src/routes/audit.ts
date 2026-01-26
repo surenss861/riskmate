@@ -379,6 +379,95 @@ async function generateAttestationsCSV(
 // GET /api/audit/events
 // Returns filtered, enriched audit events with stats
 // Uses unified filter logic (same as exports/readiness) for consistency
+// POST /api/audit/events (or /api/ledger/events)
+// Unified event logging endpoint for iOS and web
+// Both clients call this to log meaningful actions (job create, proof anchor, export, etc.)
+auditRouter.post('/events', authenticate as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
+  try {
+    const authReq = req as AuthenticatedRequest & RequestWithId
+    const { organization_id, id: actorId, role: actorRole } = authReq.user
+    const requestId = authReq.requestId || 'unknown'
+
+    const {
+      event_type,
+      entity_type,
+      entity_id,
+      metadata = {},
+      client = 'web', // 'ios' or 'web'
+      app_version,
+      device_id,
+    } = req.body
+
+    if (!event_type || !entity_type) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields: event_type, entity_type',
+      })
+    }
+
+    // Map entity_type to AuditTargetType
+    const targetTypeMap: Record<string, string> = {
+      job: 'job',
+      proof: 'proof_pack',
+      export: 'export',
+      evidence: 'evidence',
+      subscription: 'subscription',
+      user: 'user',
+      organization: 'organization',
+      site: 'site',
+      mitigation: 'mitigation',
+      document: 'document',
+      report: 'report',
+      legal: 'legal',
+      system: 'system',
+      signoff: 'signoff',
+    }
+
+    const targetType = targetTypeMap[entity_type] || 'system'
+
+    // Enrich metadata with client info
+    const enrichedMetadata = {
+      ...metadata,
+      client,
+      ...(app_version && { app_version }),
+      ...(device_id && { device_id }),
+      request_id: requestId,
+    }
+
+    // Log the event
+    const result = await recordAuditLog({
+      organizationId: organization_id,
+      actorId: actorId || null,
+      eventName: event_type,
+      targetType: targetType as any,
+      targetId: entity_id || null,
+      metadata: enrichedMetadata,
+    })
+
+    if (result.error) {
+      console.error('[Event Log] Failed to log event:', result.error)
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to log event',
+        error: result.error.message,
+      })
+    }
+
+    res.json({
+      success: true,
+      event_id: result.data?.id,
+      message: 'Event logged successfully',
+    })
+  } catch (err: any) {
+    console.error('[Event Log] Error:', err)
+    res.status(500).json({
+      success: false,
+      message: 'Failed to log event',
+      error: err?.message || String(err),
+    })
+  }
+})
+
 auditRouter.get('/events', authenticate as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
   const authReq = req as AuthenticatedRequest & RequestWithId
   const requestId = authReq.requestId || 'unknown'

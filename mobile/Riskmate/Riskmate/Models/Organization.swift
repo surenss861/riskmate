@@ -61,3 +61,9 @@ struct EntitlementsFlags: Codable {
     let legal_accepted: Bool
     let must_reset_password: Bool
 }
+
+struct EventLogResponse: Codable {
+    let success: Bool
+    let event_id: String?
+    let message: String?
+}
