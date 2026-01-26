@@ -227,7 +227,7 @@ struct OperationsView: View {
             }
             .refreshable {
                 // Refresh both jobs and entitlements on pull-to-refresh
-                await jobsStore.refresh()
+                _ = try? await jobsStore.fetch(forceRefresh: true)
                 await entitlements.refresh(force: true)
             }
             .task {
@@ -240,7 +240,7 @@ struct OperationsView: View {
                 checkForCriticalRisk()
             }
             .onAppear {
-                if userRole == "executive" && selectedView == .dashboard {
+                if entitlements.entitlements?.role.lowercased() == "executive" && selectedView == .dashboard {
                     selectedView = .defensibility
                 }
             }
