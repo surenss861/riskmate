@@ -24,6 +24,10 @@ export interface AuditLogEntry {
   targetType: AuditTargetType;
   targetId?: string | null;
   metadata?: Record<string, unknown>;
+  // Client metadata (extracted from request headers/body)
+  client?: string; // 'ios' | 'web'
+  appVersion?: string;
+  deviceId?: string;
 }
 
 const MAX_METADATA_SIZE = 8000;
@@ -98,9 +102,38 @@ export type AuditWriteResult = {
   error: { message: string } | null
 }
 
+/**
+ * Extract client metadata from request (for audit logging)
+ * Looks for client, app_version, device_id in headers or body
+ */
+export function extractClientMetadata(req?: any): { client?: string; appVersion?: string; deviceId?: string } {
+  if (!req) return {};
+  
+  // Check headers first (iOS/web clients may send these)
+  const client = req.headers?.['x-client'] || req.headers?.['client'] || req.body?.client;
+  const appVersion = req.headers?.['x-app-version'] || req.headers?.['app-version'] || req.body?.app_version;
+  const deviceId = req.headers?.['x-device-id'] || req.headers?.['device-id'] || req.body?.device_id;
+  
+  return {
+    client: client || 'web', // Default to 'web' if not specified
+    appVersion,
+    deviceId,
+  };
+}
+
 export async function recordAuditLog(entry: AuditLogEntry): Promise<AuditWriteResult> {
   try {
-    const payload = truncateMetadata(entry.metadata);
+    // Merge client metadata into payload
+    const clientMetadata = {
+      ...(entry.client && { client: entry.client }),
+      ...(entry.appVersion && { app_version: entry.appVersion }),
+      ...(entry.deviceId && { device_id: entry.deviceId }),
+    };
+    
+    const payload = truncateMetadata({
+      ...entry.metadata,
+      ...clientMetadata,
+    });
     
     // Extract action from event name (e.g., "job.created" -> "job.create")
     const action = entry.eventName.replace(/\.(created|updated|deleted|flagged|unflagged)$/, (match) => {

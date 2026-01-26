@@ -453,6 +453,11 @@ auditRouter.post('/events', authenticate as unknown as express.RequestHandler, a
       })
     }
 
+    // CRITICAL: Prevent caching of audit log writes
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private')
+    res.setHeader('Pragma', 'no-cache')
+    res.setHeader('Expires', '0')
+    
     res.json({
       success: true,
       event_id: result.data?.id,
@@ -460,6 +465,8 @@ auditRouter.post('/events', authenticate as unknown as express.RequestHandler, a
     })
   } catch (err: any) {
     console.error('[Event Log] Error:', err)
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private')
+    res.setHeader('Pragma', 'no-cache')
     res.status(500).json({
       success: false,
       message: 'Failed to log event',
@@ -676,6 +683,14 @@ auditRouter.get('/events', authenticate as unknown as express.RequestHandler, as
     const nextCursor = finalEvents.length > 0 
       ? finalEvents[finalEvents.length - 1].created_at 
       : null
+
+    // CRITICAL: Prevent caching of audit log reads (no 304 responses)
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private')
+    res.setHeader('Pragma', 'no-cache')
+    res.setHeader('Expires', '0')
+    // Explicitly disable ETag to prevent 304 responses
+    res.removeHeader('ETag')
+    res.removeHeader('Last-Modified')
 
     res.json({
       data: {

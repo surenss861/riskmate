@@ -1,7 +1,7 @@
 import express, { type Router as ExpressRouter } from "express";
 import { supabase } from "../lib/supabaseClient";
 import { authenticate, AuthenticatedRequest } from "../middleware/auth";
-import { recordAuditLog } from "../middleware/audit";
+import { recordAuditLog, extractClientMetadata } from "../middleware/audit";
 import { calculateRiskScore, generateMitigationItems } from "../utils/riskScoring";
 import { notifyHighRiskJob } from "../services/notifications";
 import { buildJobReport } from "../utils/jobReport";
@@ -987,7 +987,10 @@ jobsRouter.post("/", authenticate, requireWriteAccess, enforceJobLimit, async (r
       return res.status(500).json({ message: "Failed to create job" });
     }
 
-    recordAuditLog({
+    // Extract client metadata from request
+    const clientMetadata = extractClientMetadata(req);
+    
+    await recordAuditLog({
       organizationId: organization_id,
       actorId: userId,
       eventName: "job.created",
@@ -1000,6 +1003,7 @@ jobsRouter.post("/", authenticate, requireWriteAccess, enforceJobLimit, async (r
         start_date,
         risk_factor_codes: risk_factor_codes?.length ?? 0,
       },
+      ...clientMetadata,
     });
 
     // Emit realtime event (push signal)
@@ -1172,8 +1176,11 @@ jobsRouter.patch("/:id", authenticate, requireWriteAccess, async (req: express.R
     const newRiskScore = updatedJob.risk_score
     const riskScoreChanged = oldRiskScore !== newRiskScore
 
+    // Extract client metadata from request
+    const clientMetadata = extractClientMetadata(req);
+    
     // Log job update
-    recordAuditLog({
+    await recordAuditLog({
       organizationId: organization_id,
       actorId: userId,
       eventName: "job.updated",
@@ -1185,6 +1192,7 @@ jobsRouter.patch("/:id", authenticate, requireWriteAccess, async (req: express.R
           ? risk_factor_codes.length
           : undefined,
       },
+      ...clientMetadata,
     });
 
     // Emit realtime event (push signal)
@@ -1192,12 +1200,13 @@ jobsRouter.patch("/:id", authenticate, requireWriteAccess, async (req: express.R
 
     // If risk score changed, log separate event
     if (riskScoreChanged) {
-      recordAuditLog({
+      await recordAuditLog({
         organizationId: organization_id,
         actorId: userId,
         eventName: "job.risk_score_changed",
         targetType: "job",
         targetId: jobId,
+        ...clientMetadata,
         metadata: {
           old_risk_score: oldRiskScore,
           new_risk_score: newRiskScore,
@@ -1269,12 +1278,16 @@ jobsRouter.patch("/:id/mitigations/:mitigationId", authenticate, requireWriteAcc
       return res.status(404).json({ message: "Mitigation item not found" });
     }
 
-    recordAuditLog({
+    // Extract client metadata from request
+    const clientMetadata = extractClientMetadata(req);
+    
+    await recordAuditLog({
       organizationId: organization_id,
       actorId: authReq.user.id,
       eventName: done ? "mitigation.completed" : "mitigation.reopened",
       targetType: "mitigation",
       targetId: mitigationId,
+      ...clientMetadata,
       metadata: {
         job_id: jobId,
         done,
@@ -1468,12 +1481,16 @@ jobsRouter.post("/:id/documents", authenticate, requireWriteAccess, async (req: 
       .from("documents")
       .createSignedUrl(inserted.file_path, 60 * 10);
 
-    recordAuditLog({
+    // Extract client metadata from request
+    const clientMetadata = extractClientMetadata(req);
+    
+    await recordAuditLog({
       organizationId: organization_id,
       actorId: userId,
       eventName: "document.uploaded",
       targetType: "document",
       targetId: inserted.id,
+      ...clientMetadata,
       metadata: {
         job_id: jobId,
         name,
@@ -1598,12 +1615,16 @@ jobsRouter.post("/:id/archive", authenticate, requireWriteAccess, async (req: ex
     }
 
     // Log archive event
+    // Extract client metadata from request
+    const clientMetadata = extractClientMetadata(req);
+    
     await recordAuditLog({
       organizationId: organization_id,
       actorId: userId,
       eventName: "job.archived",
       targetType: "job",
       targetId: jobId,
+      ...clientMetadata,
       metadata: {
         previous_status: job.status,
       },
@@ -1641,12 +1662,16 @@ jobsRouter.patch("/:id/flag", authenticate, requireWriteAccess, async (req: expr
     if (role === 'member' || role === 'executive') {
       // Log capability violation for audit trail
       try {
+        // Extract client metadata from request
+        const clientMetadata = extractClientMetadata(req);
+        
         await recordAuditLog({
           organizationId: organization_id,
           actorId: userId,
           eventName: "auth.role_violation",
           targetType: "job",
           targetId: id,
+          ...clientMetadata,
           metadata: {
             role,
             attempted_action: "flag_job",
@@ -1733,12 +1758,16 @@ jobsRouter.patch("/:id/flag", authenticate, requireWriteAccess, async (req: expr
         .eq("id", id)
         .single()
 
+      // Extract client metadata from request
+      const clientMetadata = extractClientMetadata(req);
+      
       await recordAuditLog({
         organizationId: organization_id,
         actorId: userId,
         eventName: updateData.review_flag ? "job.flagged_for_review" : "job.unflagged",
         targetType: "job",
         targetId: id,
+        ...clientMetadata,
         metadata: {
           flagged: updateData.review_flag,
           flagged_at: updateData.flagged_at,
@@ -1918,6 +1947,9 @@ jobsRouter.delete("/:id", authenticate, requireWriteAccess, async (req: express.
       throw deleteError;
     }
 
+    // Extract client metadata from request
+    const clientMetadata = extractClientMetadata(req);
+    
     // Log deletion event
     await recordAuditLog({
       organizationId: organization_id,
@@ -1929,6 +1961,7 @@ jobsRouter.delete("/:id", authenticate, requireWriteAccess, async (req: express.
         previous_status: job.status,
         deletion_reason: "admin_hard_delete",
       },
+      ...clientMetadata,
     });
 
     res.json({
@@ -1995,12 +2028,16 @@ jobsRouter.post("/:id/proof-pack", authenticate, async (req: express.Request, re
     const pdfBase64 = pdfBuffer.toString("base64");
 
     // Log audit event
+    // Extract client metadata from request
+    const clientMetadata = extractClientMetadata(req);
+    
     await recordAuditLog({
       organizationId: organization_id,
       actorId: userId,
       eventName: `proof_pack.${pack_type}_generated`,
       targetType: "proof_pack",
       targetId: jobId,
+      ...clientMetadata,
       metadata: {
         pack_type,
         job_id: jobId,
@@ -2131,12 +2168,16 @@ jobsRouter.post("/:id/signoffs", authenticate, requireWriteAccess, async (req: e
 
     if (error) throw error;
 
+    // Extract client metadata from request
+    const clientMetadata = extractClientMetadata(req);
+    
     await recordAuditLog({
       organizationId: organization_id,
       actorId: userId,
       eventName: "job.signoff_created",
       targetType: "signoff",
       targetId: data.id,
+      ...clientMetadata,
       metadata: {
         job_id: jobId,
         signoff_type,
