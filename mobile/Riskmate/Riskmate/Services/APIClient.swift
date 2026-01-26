@@ -508,6 +508,8 @@ class APIClient {
                 entityId: response.data.id,
                 metadata: ["job_id": response.data.id]
             )
+            // Refresh entitlements after job creation (in case limits changed)
+            await EntitlementsManager.shared.refresh()
         }
         
         return response.data
@@ -530,6 +532,8 @@ class APIClient {
                 entityId: response.data.id,
                 metadata: ["job_id": response.data.id]
             )
+            // Refresh entitlements after job update
+            await EntitlementsManager.shared.refresh()
         }
         
         return response.data
@@ -549,6 +553,8 @@ class APIClient {
                 entityType: "job",
                 entityId: jobId
             )
+            // Refresh entitlements after job deletion
+            await EntitlementsManager.shared.refresh()
         }
     }
     

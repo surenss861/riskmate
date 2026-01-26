@@ -1,17 +1,8 @@
 import Foundation
 import Combine
 
-/// Entitlements model matching backend response
-struct Entitlements: Codable {
-    let organization_id: String
-    let user_id: String
-    let role: String
-    let plan_code: String
-    let status: String
-    let limits: EntitlementsLimits
-    let features: [String]
-    let flags: EntitlementsFlags
-}
+// Entitlements types are defined in Organization.swift (EntitlementsData, EntitlementsLimits, etc.)
+// This file uses those types
 
 /// Single source of truth for user entitlements (plan, limits, features)
 /// Replaces UserDefaults/AuditorMode gating with server-driven truth
@@ -19,7 +10,7 @@ struct Entitlements: Codable {
 final class EntitlementsManager: ObservableObject {
     static let shared = EntitlementsManager()
     
-    @Published private(set) var entitlements: Entitlements?
+    @Published private(set) var entitlements: EntitlementsData?
     @Published private(set) var isLoading: Bool = false
     @Published private(set) var lastError: String?
     
@@ -91,6 +82,11 @@ final class EntitlementsManager: ObservableObject {
             return (nil, 0, nil)
         }
         return (seats.limit, seats.used, seats.available)
+    }
+    
+    /// Get current entitlements data (for debug views)
+    func getEntitlements() -> EntitlementsData? {
+        return entitlements
     }
     
     // MARK: - Status Checks
