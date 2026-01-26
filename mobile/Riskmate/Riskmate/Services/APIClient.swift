@@ -499,6 +499,17 @@ class APIClient {
             method: "POST",
             body: body
         )
+        
+        // Log event for iOS ↔ web parity
+        Task {
+            try? await logEvent(
+                eventType: "job.created",
+                entityType: "job",
+                entityId: response.data.id,
+                metadata: ["client_name": response.data.client_name ?? ""]
+            )
+        }
+        
         return response.data
     }
     
@@ -510,6 +521,17 @@ class APIClient {
             method: "PATCH",
             body: body
         )
+        
+        // Log event for iOS ↔ web parity
+        Task {
+            try? await logEvent(
+                eventType: "job.updated",
+                entityType: "job",
+                entityId: response.data.id,
+                metadata: ["client_name": response.data.client_name ?? ""]
+            )
+        }
+        
         return response.data
     }
     
@@ -519,6 +541,15 @@ class APIClient {
             endpoint: "/api/jobs/\(jobId)",
             method: "DELETE"
         )
+        
+        // Log event for iOS ↔ web parity
+        Task {
+            try? await logEvent(
+                eventType: "job.deleted",
+                entityType: "job",
+                entityId: jobId
+            )
+        }
     }
     
     // MARK: - Evidence API
