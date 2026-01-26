@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabaseClient'
 import { authenticate, AuthenticatedRequest } from '../middleware/auth'
 import { RequestWithId } from '../middleware/requestId'
 import { createErrorResponse, logErrorForSupport } from '../utils/errorResponse'
-import { recordAuditLog } from '../middleware/audit'
+import { recordAuditLog, extractClientMetadata } from '../middleware/audit'
 import { getIdempotencyKey } from '../utils/idempotency'
 import { uploadRateLimiter } from '../middleware/rateLimiter'
 import { logWithRequest } from '../utils/structuredLog'
@@ -387,6 +387,9 @@ evidenceRouter.post(
       // Set ledger_written flag to prevent trigger double-logging
       await supabase.rpc('set_ledger_written')
 
+      // Extract client metadata from request
+      const clientMetadata = extractClientMetadata(req);
+      
       // Write ledger entry (evidence.sealed)
       await recordAuditLog({
         organizationId: organization_id,
@@ -407,6 +410,8 @@ evidenceRouter.post(
           evidence_type: metadata.evidence_type,
           tag: metadata.evidence_type,
           captured_at: metadata.captured_at,
+        },
+        ...clientMetadata,
         },
       })
 
