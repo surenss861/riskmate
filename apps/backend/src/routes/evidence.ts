@@ -412,7 +412,6 @@ evidenceRouter.post(
           captured_at: metadata.captured_at,
         },
         ...clientMetadata,
-        },
       })
 
       // Create signed URL for download
