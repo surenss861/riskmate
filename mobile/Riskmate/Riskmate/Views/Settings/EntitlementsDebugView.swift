@@ -136,5 +136,6 @@ private struct EntitlementsDebugRow: View {
                 .textSelection(.enabled)
         }
     }
+}
 
 // Entitlements types are defined in APIClient.swift
