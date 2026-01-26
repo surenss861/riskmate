@@ -41,11 +41,11 @@ struct EntitlementsData: Codable {
 }
 
 struct EntitlementsLimits: Codable {
-    let seats: SeatsInfo
+    let seats: EntitlementsSeatsInfo
     let jobs_monthly: JobsMonthlyInfo
 }
 
-struct SeatsInfo: Codable {
+struct EntitlementsSeatsInfo: Codable {
     let limit: Int?
     let used: Int
     let available: Int?
