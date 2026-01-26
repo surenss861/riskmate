@@ -15,6 +15,8 @@ export interface AuthenticatedUser {
   jobsMonthlyLimit: number | null;
   features: string[];
   subscriptionStatus: string;
+  cancelAtPeriodEnd?: boolean;
+  currentPeriodEnd?: string | null;
     legalAccepted: boolean;
     legalAcceptedAt?: string | null;
 }
@@ -26,25 +28,26 @@ export interface AuthenticatedRequest extends Request {
 async function loadPlanForOrganization(organizationId: string) {
   const { data } = await supabase
     .from("org_subscriptions")
-    .select("plan_code, seats_limit, jobs_limit_month")
+    .select("plan_code, status, seats_limit, jobs_limit_month, cancel_at_period_end, current_period_end")
     .eq("organization_id", organizationId)
     .maybeSingle();
 
-  if (!data?.plan_code) {
+  if (!data?.plan_code || data.plan_code === "none" || data.status === "inactive") {
     return {
-      planCode: "starter" as PlanCode,
-      status: "none",
+      planCode: "none" as PlanCode,
+      status: "inactive",
       seatsLimit: 0,
       jobsMonthlyLimit: 0,
       features: [],
+      cancelAtPeriodEnd: false,
+      currentPeriodEnd: null,
     };
   }
 
   const planCode = data.plan_code as PlanCode;
   const limits = limitsFor(planCode);
-  // Default to active if status column doesn't exist yet
-  const status = "active";
-  const isActive = true;
+  const status = data.status || "active";
+  const isActive = status === "active" || status === "trialing";
 
   return {
     planCode,
@@ -52,6 +55,8 @@ async function loadPlanForOrganization(organizationId: string) {
     seatsLimit: isActive ? data.seats_limit ?? limits.seats ?? null : 0,
     jobsMonthlyLimit: isActive ? data.jobs_limit_month ?? limits.jobsMonthly ?? null : 0,
     features: isActive ? limits.features : [],
+    cancelAtPeriodEnd: data.cancel_at_period_end ?? false,
+    currentPeriodEnd: data.current_period_end ?? null,
   };
 }
 
@@ -223,6 +228,8 @@ async function authenticateInternal(
       jobsMonthlyLimit,
       features,
       subscriptionStatus,
+      cancelAtPeriodEnd: planInfo.cancelAtPeriodEnd ?? false,
+      currentPeriodEnd: planInfo.currentPeriodEnd ?? null,
       legalAccepted,
       legalAcceptedAt: legalAcceptance?.accepted_at ?? null,
     };

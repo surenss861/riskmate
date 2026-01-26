@@ -21,3 +21,43 @@ struct DeactivateAccountResponse: Codable {
     let message: String
     let retention_days: Int
 }
+
+// MARK: - Entitlements (single source of truth for iOS ↔ web parity)
+
+struct EntitlementsResponse: Codable {
+    let ok: Bool
+    let data: EntitlementsData
+}
+
+struct EntitlementsData: Codable {
+    let organization_id: String
+    let user_id: String
+    let role: String
+    let plan_code: String
+    let status: String
+    let limits: EntitlementsLimits
+    let features: [String]
+    let flags: EntitlementsFlags
+}
+
+struct EntitlementsLimits: Codable {
+    let seats: SeatsInfo
+    let jobs_monthly: JobsMonthlyInfo
+}
+
+struct SeatsInfo: Codable {
+    let limit: Int?
+    let used: Int
+    let available: Int?
+}
+
+struct JobsMonthlyInfo: Codable {
+    let limit: Int?
+}
+
+struct EntitlementsFlags: Codable {
+    let cancel_at_period_end: Bool
+    let current_period_end: String?
+    let legal_accepted: Bool
+    let must_reset_password: Bool
+}

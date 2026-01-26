@@ -151,6 +151,19 @@ struct AccountView: View {
                         .foregroundColor(RMTheme.Colors.textPrimary)
                     }
                     .listRowBackground(RMTheme.Colors.surface.opacity(0.5))
+                    
+                    #if DEBUG
+                    NavigationLink {
+                        EntitlementsDebugView()
+                    } label: {
+                        HStack {
+                            Image(systemName: "info.circle.fill")
+                            Text("Entitlements Debug")
+                        }
+                        .foregroundColor(RMTheme.Colors.textPrimary)
+                    }
+                    .listRowBackground(RMTheme.Colors.surface.opacity(0.5))
+                    #endif
                 }
                 
                 // Production Toggles (dev/internal only)
@@ -249,10 +262,8 @@ struct AccountView: View {
                         }
                         #if DEBUG
                         .onLongPressGesture {
-                            // Long-press to enable debug overlay
-                            UserDefaults.standard.set(true, forKey: "debug_overlay_enabled")
-                            let generator = UINotificationFeedbackGenerator()
-                            generator.notificationOccurred(.success)
+                            // Long-press to show entitlements debug
+                            // This will be handled by navigation link below
                         }
                         #endif
                         

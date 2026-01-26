@@ -294,6 +294,11 @@ class APIClient {
         return response
     }
     
+    /// Get entitlements (single source of truth for plan, limits, features)
+    func getEntitlements() async throws -> EntitlementsResponse {
+        return try await request(endpoint: "/api/account/entitlements")
+    }
+    
     // MARK: - Readiness API
     
     /// Get audit readiness data

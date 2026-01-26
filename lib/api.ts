@@ -840,6 +840,36 @@ export const accountApi = {
       body: JSON.stringify({ confirmation, reason, transfer_to_user_id }),
     });
   },
+
+  getEntitlements: async () => {
+    return apiRequest<{
+      ok: boolean;
+      data: {
+        organization_id: string;
+        user_id: string;
+        role: string;
+        plan_code: 'none' | 'starter' | 'pro' | 'business';
+        status: string;
+        limits: {
+          seats: {
+            limit: number | null;
+            used: number;
+            available: number | null;
+          };
+          jobs_monthly: {
+            limit: number | null;
+          };
+        };
+        features: string[];
+        flags: {
+          cancel_at_period_end: boolean;
+          current_period_end: string | null;
+          legal_accepted: boolean;
+          must_reset_password: boolean;
+        };
+      };
+    }>('/api/account/entitlements');
+  },
 };
 
 export const executiveApi = {
