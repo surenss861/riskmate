@@ -42,14 +42,14 @@ struct JobDetailView: View {
                 } else if let job = job {
                     VStack(spacing: 0) {
                         // Read-only banner for auditors
-                        if AuditorMode.isEnabled {
+                        if EntitlementsManager.shared.isAuditor() {
                             ReadOnlyBanner()
                                 .padding(.horizontal, RMTheme.Spacing.pagePadding)
                                 .padding(.top, RMTheme.Spacing.md)
                         }
                         
                         // Prominent "Add Evidence" CTA (evidence-first hierarchy) - hidden for auditors
-                        if !AuditorMode.isEnabled {
+                        if !EntitlementsManager.shared.isAuditor() {
                             Button {
                                 quickAction.presentEvidence(jobId: job.id)
                             } label: {

@@ -4,8 +4,8 @@ import SwiftUI
 struct OperationsView: View {
     @StateObject private var jobsStore = JobsStore.shared
     @StateObject private var serverStatus = ServerStatusManager.shared
+    @StateObject private var entitlements = EntitlementsManager.shared
     @EnvironmentObject private var quickAction: QuickActionRouter
-    @AppStorage("user_role") private var userRole: String = ""
     @State private var selectedView: OperationsViewType = .dashboard
     @State private var searchQuery: String = ""
     @State private var isRefreshing = false
@@ -13,7 +13,7 @@ struct OperationsView: View {
     @State private var criticalJob: Job? = nil
     
     private var isAuditor: Bool {
-        AuditorMode.isEnabled
+        entitlements.isAuditor()
     }
     
     private func relativeTime(_ date: Date) -> String {
@@ -201,7 +201,7 @@ struct OperationsView: View {
     var body: some View {
         RMBackground()
             .overlay {
-                if userRole == "executive" {
+                if entitlements.entitlements?.role.lowercased() == "executive" {
                     executiveContent
                 } else {
                     fieldOperationsContent
@@ -220,6 +220,15 @@ struct OperationsView: View {
                         }
                     }
                 }
+            }
+            .task {
+                // Refresh entitlements on view load
+                await entitlements.refresh()
+            }
+            .refreshable {
+                // Refresh both jobs and entitlements on pull-to-refresh
+                await jobsStore.refresh()
+                await entitlements.refresh(force: true)
             }
             .task {
                 if jobsStore.jobs.isEmpty {

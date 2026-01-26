@@ -34,6 +34,8 @@ class SessionManager: ObservableObject {
         
         do {
             if try await authService.getCurrentSession() != nil {
+                // Refresh entitlements after successful session check
+                await EntitlementsManager.shared.refresh(force: true)
                 // Check JWT expiration (SDK-independent)
                 if let token = try? await authService.getAccessToken(),
                    JWTExpiry.isExpired(token) {
@@ -70,6 +72,9 @@ class SessionManager: ObservableObject {
             try await authService.signIn(email: email, password: password)
             isAuthenticated = true
             await loadUserData()
+            
+            // Refresh entitlements after login
+            await EntitlementsManager.shared.refresh(force: true)
             
             // Subscribe to realtime events after login
             if let orgId = currentOrganization?.id {

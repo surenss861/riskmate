@@ -3,7 +3,7 @@ import SwiftUI
 struct ContentView: View {
     @StateObject private var sessionManager = SessionManager.shared
     @StateObject private var serverStatus = ServerStatusManager.shared
-    @AppStorage("user_role") private var userRole: String = ""
+    @StateObject private var entitlements = EntitlementsManager.shared
     // Initialize tab based on role - default to Operations, will be adjusted in onAppear if needed
     @State private var selectedTab: MainTab = .operations
     @State private var selectedSidebarItem: SidebarItem? = .operations
@@ -14,7 +14,7 @@ struct ContentView: View {
     @State private var workRecordsFilter: String? = nil
     
     private var isAuditor: Bool {
-        AuditorMode.isEnabled
+        entitlements.isAuditor()
     }
     
     var body: some View {
@@ -82,6 +82,11 @@ struct ContentView: View {
             print("[ContentView] Starting session check...")
             await sessionManager.checkSession()
             print("[ContentView] Session check complete. isAuthenticated=\(sessionManager.isAuthenticated), isLoading=\(sessionManager.isLoading)")
+            
+            // Load entitlements after authentication
+            if sessionManager.isAuthenticated {
+                await entitlements.refresh(force: true)
+            }
             
             // Trust onboarding is handled in view body above
         }
@@ -161,7 +166,7 @@ struct ContentView: View {
         .tint(RMTheme.Colors.accent)
         .overlay(alignment: .bottomTrailing) {
             // Global FAB for quick evidence capture (hidden for auditors and on Operations tab)
-            if !isAuditor && selectedTab != .operations {
+            if !entitlements.isAuditor() && selectedTab != .operations {
                 Button {
                     QuickActionRouter.shared.presentEvidence(jobId: nil)
                 } label: {
@@ -180,7 +185,7 @@ struct ContentView: View {
         .task {
             // Set initial tab based on role (deterministic, runs once)
             // Auditors start on Ledger, operators start on Operations
-            if isAuditor {
+            if entitlements.isAuditor() {
                 selectedTab = .ledger
             } else {
                 selectedTab = .operations

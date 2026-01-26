@@ -301,6 +301,22 @@ extension BackgroundUploadManager: URLSessionTaskDelegate {
             } else {
                 self.updateUploadState(uploadId, state: .synced)
                 Analytics.shared.trackEvidenceUploadSucceeded(evidenceId: uploadId)
+                
+                // Log event for iOS ↔ web parity
+                Task {
+                    try? await APIClient.shared.logEvent(
+                        eventType: "evidence.uploaded",
+                        entityType: "evidence",
+                        entityId: uploadId,
+                        metadata: [
+                            "evidence_id": uploadId,
+                            "job_id": upload.jobId ?? ""
+                        ]
+                    )
+                }
+                
+                // Refresh entitlements after evidence upload (in case limits changed)
+                await EntitlementsManager.shared.refresh()
             }
         }
     }

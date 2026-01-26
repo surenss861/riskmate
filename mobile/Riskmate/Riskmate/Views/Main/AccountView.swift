@@ -163,6 +163,17 @@ struct AccountView: View {
                         .foregroundColor(RMTheme.Colors.textPrimary)
                     }
                     .listRowBackground(RMTheme.Colors.surface.opacity(0.5))
+                    
+                    NavigationLink {
+                        EnvironmentDebugView()
+                    } label: {
+                        HStack {
+                            Image(systemName: "server.rack")
+                            Text("Environment Debug")
+                        }
+                        .foregroundColor(RMTheme.Colors.textPrimary)
+                    }
+                    .listRowBackground(RMTheme.Colors.surface.opacity(0.5))
                     #endif
                 }
                 

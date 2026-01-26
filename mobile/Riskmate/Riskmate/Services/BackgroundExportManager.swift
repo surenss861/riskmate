@@ -94,6 +94,23 @@ class BackgroundExportManager: NSObject, ObservableObject {
             // Track success
             Analytics.shared.trackExportSucceeded(jobId: export.jobId, type: export.type.rawValue)
             
+            // Log event for iOS ↔ web parity
+            Task {
+                try? await APIClient.shared.logEvent(
+                    eventType: "export.generated",
+                    entityType: "export",
+                    entityId: export.id,
+                    metadata: [
+                        "job_id": export.jobId,
+                        "type": export.type.rawValue,
+                        "export_id": export.id
+                    ]
+                )
+            }
+            
+            // Refresh entitlements after export (in case limits changed)
+            await EntitlementsManager.shared.refresh()
+            
             // Auto-share if initiated from foreground
             if export.initiatedFromForeground {
                 await triggerShare(export: export, fileURL: permanentURL)
