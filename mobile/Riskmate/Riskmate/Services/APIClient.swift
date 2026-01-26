@@ -506,7 +506,7 @@ class APIClient {
                 eventType: "job.created",
                 entityType: "job",
                 entityId: response.data.id,
-                metadata: ["client_name": response.data.client_name ?? ""]
+                metadata: ["job_id": response.data.id]
             )
         }
         
@@ -528,7 +528,7 @@ class APIClient {
                 eventType: "job.updated",
                 entityType: "job",
                 entityId: response.data.id,
-                metadata: ["client_name": response.data.client_name ?? ""]
+                metadata: ["job_id": response.data.id]
             )
         }
         
