@@ -29,27 +29,27 @@ struct EntitlementsDebugView: View {
             } else if let data = entitlements?.data {
                 List {
                     Section("Organization") {
-                        DebugRow(label: "Organization ID", value: data.organization_id)
-                        DebugRow(label: "User ID", value: data.user_id)
-                        DebugRow(label: "Role", value: data.role)
+                        EntitlementsDebugRow(label: "Organization ID", value: data.organization_id)
+                        EntitlementsDebugRow(label: "User ID", value: data.user_id)
+                        EntitlementsDebugRow(label: "Role", value: data.role)
                     }
                     
                     Section("Subscription") {
-                        DebugRow(label: "Plan Code", value: data.plan_code)
-                        DebugRow(label: "Status", value: data.status)
-                        DebugRow(label: "Cancel at Period End", value: data.flags.cancel_at_period_end ? "Yes" : "No")
+                        EntitlementsDebugRow(label: "Plan Code", value: data.plan_code)
+                        EntitlementsDebugRow(label: "Status", value: data.status)
+                        EntitlementsDebugRow(label: "Cancel at Period End", value: data.flags.cancel_at_period_end ? "Yes" : "No")
                         if let periodEnd = data.flags.current_period_end {
-                            DebugRow(label: "Current Period End", value: formatDate(periodEnd))
+                            EntitlementsDebugRow(label: "Current Period End", value: formatDate(periodEnd))
                         } else {
-                            DebugRow(label: "Current Period End", value: "None")
+                            EntitlementsDebugRow(label: "Current Period End", value: "None")
                         }
                     }
                     
                     Section("Limits") {
-                        DebugRow(label: "Seats Limit", value: formatLimit(data.limits.seats.limit))
-                        DebugRow(label: "Seats Used", value: "\(data.limits.seats.used)")
-                        DebugRow(label: "Seats Available", value: formatLimit(data.limits.seats.available))
-                        DebugRow(label: "Jobs Monthly Limit", value: formatLimit(data.limits.jobs_monthly.limit))
+                        EntitlementsDebugRow(label: "Seats Limit", value: formatLimit(data.limits.seats.limit))
+                        EntitlementsDebugRow(label: "Seats Used", value: "\(data.limits.seats.used)")
+                        EntitlementsDebugRow(label: "Seats Available", value: formatLimit(data.limits.seats.available))
+                        EntitlementsDebugRow(label: "Jobs Monthly Limit", value: formatLimit(data.limits.jobs_monthly.limit))
                     }
                     
                     Section("Features") {
@@ -70,8 +70,8 @@ struct EntitlementsDebugView: View {
                     }
                     
                     Section("Flags") {
-                        DebugRow(label: "Legal Accepted", value: data.flags.legal_accepted ? "Yes" : "No")
-                        DebugRow(label: "Must Reset Password", value: data.flags.must_reset_password ? "Yes" : "No")
+                        EntitlementsDebugRow(label: "Legal Accepted", value: data.flags.legal_accepted ? "Yes" : "No")
+                        EntitlementsDebugRow(label: "Must Reset Password", value: data.flags.must_reset_password ? "Yes" : "No")
                     }
                 }
                 .scrollContentBackground(.hidden)
@@ -120,7 +120,7 @@ struct EntitlementsDebugView: View {
     }
 }
 
-private struct DebugRow: View {
+private struct EntitlementsDebugRow: View {
     let label: String
     let value: String
     
@@ -136,6 +136,5 @@ private struct DebugRow: View {
                 .textSelection(.enabled)
         }
     }
-}
 
 // Entitlements types are defined in APIClient.swift
