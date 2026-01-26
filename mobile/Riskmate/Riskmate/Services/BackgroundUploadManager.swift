@@ -283,11 +283,15 @@ extension BackgroundUploadManager: URLSessionTaskDelegate {
     nonisolated func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
         guard let uploadId = getUploadId(for: task.taskIdentifier) else { return }
         
-        DispatchQueue.main.async { [weak self] in
+        Task { @MainActor [weak self] in
             guard let self = self else { return }
             
+            // Get upload info before cleanup
+            let upload = self.uploads.first(where: { $0.id == uploadId })
+            let jobId = upload?.jobId ?? ""
+            
             // Clean up temp file after upload completes (success or failure)
-            if let upload = self.uploads.first(where: { $0.id == uploadId }),
+            if let upload = upload,
                let filePath = upload.fileURL {
                 let fileURL = URL(fileURLWithPath: filePath)
                 try? FileManager.default.removeItem(at: fileURL)
@@ -310,7 +314,7 @@ extension BackgroundUploadManager: URLSessionTaskDelegate {
                         entityId: uploadId,
                         metadata: [
                             "evidence_id": uploadId,
-                            "job_id": upload.jobId ?? ""
+                            "job_id": jobId
                         ]
                     )
                 }
