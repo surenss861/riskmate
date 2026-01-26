@@ -120,7 +120,7 @@ struct EntitlementsDebugView: View {
     }
 }
 
-private struct EntitlementsDebugRow: View {
+struct EntitlementsDebugRow: View {
     let label: String
     let value: String
     
