@@ -883,7 +883,9 @@ exports.jobsRouter.post("/", auth_1.authenticate, requireWriteAccess_1.requireWr
             console.error("Job creation failed:", jobError);
             return res.status(500).json({ message: "Failed to create job" });
         }
-        (0, audit_1.recordAuditLog)({
+        // Extract client metadata from request
+        const clientMetadata = (0, audit_1.extractClientMetadata)(req);
+        await (0, audit_1.recordAuditLog)({
             organizationId: organization_id,
             actorId: userId,
             eventName: "job.created",
@@ -896,6 +898,7 @@ exports.jobsRouter.post("/", auth_1.authenticate, requireWriteAccess_1.requireWr
                 start_date,
                 risk_factor_codes: risk_factor_codes?.length ?? 0,
             },
+            ...clientMetadata,
         });
         // Emit realtime event (push signal)
         await (0, realtimeEvents_1.emitJobEvent)(organization_id, "job.created", job.id, userId);
@@ -1048,8 +1051,10 @@ exports.jobsRouter.patch("/:id", auth_1.authenticate, requireWriteAccess_1.requi
         const oldRiskScore = existingJob.risk_score;
         const newRiskScore = updatedJob.risk_score;
         const riskScoreChanged = oldRiskScore !== newRiskScore;
+        // Extract client metadata from request
+        const clientMetadata = (0, audit_1.extractClientMetadata)(req);
         // Log job update
-        (0, audit_1.recordAuditLog)({
+        await (0, audit_1.recordAuditLog)({
             organizationId: organization_id,
             actorId: userId,
             eventName: "job.updated",
@@ -1061,17 +1066,19 @@ exports.jobsRouter.patch("/:id", auth_1.authenticate, requireWriteAccess_1.requi
                     ? risk_factor_codes.length
                     : undefined,
             },
+            ...clientMetadata,
         });
         // Emit realtime event (push signal)
         await (0, realtimeEvents_1.emitJobEvent)(organization_id, "job.updated", jobId, userId);
         // If risk score changed, log separate event
         if (riskScoreChanged) {
-            (0, audit_1.recordAuditLog)({
+            await (0, audit_1.recordAuditLog)({
                 organizationId: organization_id,
                 actorId: userId,
                 eventName: "job.risk_score_changed",
                 targetType: "job",
                 targetId: jobId,
+                ...clientMetadata,
                 metadata: {
                     old_risk_score: oldRiskScore,
                     new_risk_score: newRiskScore,
@@ -1132,12 +1139,15 @@ exports.jobsRouter.patch("/:id/mitigations/:mitigationId", auth_1.authenticate, 
         if (!updatedItem) {
             return res.status(404).json({ message: "Mitigation item not found" });
         }
-        (0, audit_1.recordAuditLog)({
+        // Extract client metadata from request
+        const clientMetadata = (0, audit_1.extractClientMetadata)(req);
+        await (0, audit_1.recordAuditLog)({
             organizationId: organization_id,
             actorId: authReq.user.id,
             eventName: done ? "mitigation.completed" : "mitigation.reopened",
             targetType: "mitigation",
             targetId: mitigationId,
+            ...clientMetadata,
             metadata: {
                 job_id: jobId,
                 done,
@@ -1303,12 +1313,15 @@ exports.jobsRouter.post("/:id/documents", auth_1.authenticate, requireWriteAcces
         const { data: signed } = await supabaseClient_1.supabase.storage
             .from("documents")
             .createSignedUrl(inserted.file_path, 60 * 10);
-        (0, audit_1.recordAuditLog)({
+        // Extract client metadata from request
+        const clientMetadata = (0, audit_1.extractClientMetadata)(req);
+        await (0, audit_1.recordAuditLog)({
             organizationId: organization_id,
             actorId: userId,
             eventName: "document.uploaded",
             targetType: "document",
             targetId: inserted.id,
+            ...clientMetadata,
             metadata: {
                 job_id: jobId,
                 name,
@@ -1417,12 +1430,15 @@ exports.jobsRouter.post("/:id/archive", auth_1.authenticate, requireWriteAccess_
             throw updateError;
         }
         // Log archive event
+        // Extract client metadata from request
+        const clientMetadata = (0, audit_1.extractClientMetadata)(req);
         await (0, audit_1.recordAuditLog)({
             organizationId: organization_id,
             actorId: userId,
             eventName: "job.archived",
             targetType: "job",
             targetId: jobId,
+            ...clientMetadata,
             metadata: {
                 previous_status: job.status,
             },
@@ -1457,12 +1473,15 @@ exports.jobsRouter.patch("/:id/flag", auth_1.authenticate, requireWriteAccess_1.
         if (role === 'member' || role === 'executive') {
             // Log capability violation for audit trail
             try {
+                // Extract client metadata from request
+                const clientMetadata = (0, audit_1.extractClientMetadata)(req);
                 await (0, audit_1.recordAuditLog)({
                     organizationId: organization_id,
                     actorId: userId,
                     eventName: "auth.role_violation",
                     targetType: "job",
                     targetId: id,
+                    ...clientMetadata,
                     metadata: {
                         role,
                         attempted_action: "flag_job",
@@ -1542,12 +1561,15 @@ exports.jobsRouter.patch("/:id/flag", auth_1.authenticate, requireWriteAccess_1.
                 .select("client_name, risk_score, risk_level, status")
                 .eq("id", id)
                 .single();
+            // Extract client metadata from request
+            const clientMetadata = (0, audit_1.extractClientMetadata)(req);
             await (0, audit_1.recordAuditLog)({
                 organizationId: organization_id,
                 actorId: userId,
                 eventName: updateData.review_flag ? "job.flagged_for_review" : "job.unflagged",
                 targetType: "job",
                 targetId: id,
+                ...clientMetadata,
                 metadata: {
                     flagged: updateData.review_flag,
                     flagged_at: updateData.flagged_at,
@@ -1703,6 +1725,8 @@ exports.jobsRouter.delete("/:id", auth_1.authenticate, requireWriteAccess_1.requ
         if (deleteError) {
             throw deleteError;
         }
+        // Extract client metadata from request
+        const clientMetadata = (0, audit_1.extractClientMetadata)(req);
         // Log deletion event
         await (0, audit_1.recordAuditLog)({
             organizationId: organization_id,
@@ -1714,6 +1738,7 @@ exports.jobsRouter.delete("/:id", auth_1.authenticate, requireWriteAccess_1.requ
                 previous_status: job.status,
                 deletion_reason: "admin_hard_delete",
             },
+            ...clientMetadata,
         });
         res.json({
             data: {
@@ -1768,12 +1793,15 @@ exports.jobsRouter.post("/:id/proof-pack", auth_1.authenticate, async (req, res)
         reportData.audit || []);
         const pdfBase64 = pdfBuffer.toString("base64");
         // Log audit event
+        // Extract client metadata from request
+        const clientMetadata = (0, audit_1.extractClientMetadata)(req);
         await (0, audit_1.recordAuditLog)({
             organizationId: organization_id,
             actorId: userId,
             eventName: `proof_pack.${pack_type}_generated`,
             targetType: "proof_pack",
             targetId: jobId,
+            ...clientMetadata,
             metadata: {
                 pack_type,
                 job_id: jobId,
@@ -1894,12 +1922,15 @@ exports.jobsRouter.post("/:id/signoffs", auth_1.authenticate, requireWriteAccess
             .single();
         if (error)
             throw error;
+        // Extract client metadata from request
+        const clientMetadata = (0, audit_1.extractClientMetadata)(req);
         await (0, audit_1.recordAuditLog)({
             organizationId: organization_id,
             actorId: userId,
             eventName: "job.signoff_created",
             targetType: "signoff",
             targetId: data.id,
+            ...clientMetadata,
             metadata: {
                 job_id: jobId,
                 signoff_type,

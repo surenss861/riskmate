@@ -16,6 +16,9 @@ exports.accountRouter.get("/", (_req, res) => {
         ok: true,
         message: "Account API is available",
         endpoints: [
+            "GET /api/account/me",
+            "GET /api/account/entitlements",
+            "POST /api/audit/events (unified event logging)",
             "GET /api/account/organization",
             "PATCH /api/account/profile",
             "PATCH /api/account/organization",
@@ -25,6 +28,63 @@ exports.accountRouter.get("/", (_req, res) => {
             "POST /api/account/deactivate"
         ]
     });
+});
+// GET /api/me/entitlements
+// Returns canonical entitlements for current user (single source of truth)
+// Used by both iOS and web to determine plan, limits, and features
+exports.accountRouter.get("/entitlements", auth_1.authenticate, async (req, res) => {
+    try {
+        const user = req.user;
+        if (!user) {
+            return res.status(401).json((0, errorResponse_1.createErrorResponse)({
+                message: "Unauthorized",
+                code: "AUTH_UNAUTHORIZED",
+                status: 401,
+            }).response);
+        }
+        // Get seat usage count
+        const { count: seatsUsed } = await supabaseClient_1.supabase
+            .from("users")
+            .select("*", { count: "exact", head: true })
+            .eq("organization_id", user.organization_id)
+            .is("archived_at", null);
+        res.json({
+            ok: true,
+            data: {
+                organization_id: user.organization_id,
+                user_id: user.id,
+                role: user.role || "member",
+                plan_code: user.plan,
+                status: user.subscriptionStatus,
+                limits: {
+                    seats: {
+                        limit: user.seatsLimit,
+                        used: seatsUsed || 0,
+                        available: user.seatsLimit !== null ? Math.max(0, user.seatsLimit - (seatsUsed || 0)) : null,
+                    },
+                    jobs_monthly: {
+                        limit: user.jobsMonthlyLimit,
+                        // Note: current usage would need to be calculated from jobs table
+                    },
+                },
+                features: user.features || [],
+                flags: {
+                    cancel_at_period_end: user.cancelAtPeriodEnd || false,
+                    current_period_end: user.currentPeriodEnd || null,
+                    legal_accepted: user.legalAccepted || false,
+                    must_reset_password: user.mustResetPassword || false,
+                },
+            },
+        });
+    }
+    catch (err) {
+        console.error("Entitlements error:", err);
+        res.status(500).json((0, errorResponse_1.createErrorResponse)({
+            message: "Failed to load entitlements",
+            code: "ENTITLEMENTS_ERROR",
+            status: 500,
+        }).response);
+    }
 });
 // GET /api/account/me (also available at /v1/me via v1 router)
 // Returns current authenticated user info

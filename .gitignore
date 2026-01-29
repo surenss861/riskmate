@@ -52,3 +52,6 @@ next-env.d.ts
 # Supabase
 .supabase/
 *.local
+
+# iOS Xcode build artifacts (custom DerivedData in repo)
+mobile/Riskmate/.xcode-build/

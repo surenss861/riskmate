@@ -11,6 +11,8 @@ export interface AuthenticatedUser {
     jobsMonthlyLimit: number | null;
     features: string[];
     subscriptionStatus: string;
+    cancelAtPeriodEnd?: boolean;
+    currentPeriodEnd?: string | null;
     legalAccepted: boolean;
     legalAcceptedAt?: string | null;
 }

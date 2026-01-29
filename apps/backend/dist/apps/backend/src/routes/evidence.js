@@ -340,6 +340,8 @@ exports.evidenceRouter.post('/jobs/:id/evidence/upload', auth_1.authenticate, ra
         }
         // Set ledger_written flag to prevent trigger double-logging
         await supabaseClient_1.supabase.rpc('set_ledger_written');
+        // Extract client metadata from request
+        const clientMetadata = (0, audit_1.extractClientMetadata)(req);
         // Write ledger entry (evidence.sealed)
         await (0, audit_1.recordAuditLog)({
             organizationId: organization_id,
@@ -361,6 +363,7 @@ exports.evidenceRouter.post('/jobs/:id/evidence/upload', auth_1.authenticate, ra
                 tag: metadata.evidence_type,
                 captured_at: metadata.captured_at,
             },
+            ...clientMetadata,
         });
         // Create signed URL for download
         const { data: signedUrlData } = await supabaseClient_1.supabase.storage

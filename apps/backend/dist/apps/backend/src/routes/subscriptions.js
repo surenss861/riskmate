@@ -81,7 +81,7 @@ exports.subscriptionsRouter.get("/", auth_1.authenticate, async (req, res) => {
         // Get plan from org_subscriptions (source of truth)
         const { data: orgSubscription, error: orgSubError } = await supabaseClient_1.supabase
             .from("org_subscriptions")
-            .select("plan_code, seats_limit, jobs_limit_month")
+            .select("plan_code, seats_limit, jobs_limit_month, cancel_at_period_end")
             .eq("organization_id", organization_id)
             .maybeSingle();
         if (orgSubError && orgSubError.code !== "PGRST116") {
@@ -98,6 +98,41 @@ exports.subscriptionsRouter.get("/", auth_1.authenticate, async (req, res) => {
             .maybeSingle();
         if (subError && subError.code !== "PGRST116") {
             throw subError;
+        }
+        // CRITICAL: Reconcile DB with Stripe if subscription exists
+        // If Stripe says canceled, update DB to match
+        if (subscription?.stripe_subscription_id && process.env.STRIPE_SECRET_KEY) {
+            try {
+                const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+                const stripeSub = await stripe.subscriptions.retrieve(subscription.stripe_subscription_id);
+                // If Stripe says canceled but DB doesn't, sync DB
+                if (stripeSub.status === "canceled" && subscription.status !== "inactive" && subscription.tier !== "none") {
+                    console.log(`[Reconcile] Stripe subscription ${subscription.stripe_subscription_id} is canceled. ` +
+                        `Updating DB to match (org ${organization_id}).`);
+                    await (0, stripeWebhook_1.applyPlanToOrganization)(organization_id, "none", {
+                        stripeCustomerId: subscription.stripe_customer_id || null,
+                        stripeSubscriptionId: null, // Clear subscription ID
+                        currentPeriodStart: null,
+                        currentPeriodEnd: null,
+                        status: "inactive",
+                    });
+                    // Reload subscription after sync
+                    const { data: syncedSubscription } = await supabaseClient_1.supabase
+                        .from("subscriptions")
+                        .select("*")
+                        .eq("organization_id", organization_id)
+                        .order("created_at", { ascending: false })
+                        .limit(1)
+                        .maybeSingle();
+                    if (syncedSubscription) {
+                        Object.assign(subscription, syncedSubscription);
+                    }
+                }
+            }
+            catch (reconcileErr) {
+                // Non-fatal: log but don't fail the request
+                console.warn("[Reconcile] Failed to reconcile with Stripe:", reconcileErr.message);
+            }
         }
         // Load organization record for fallback metadata
         const { data: org } = await supabaseClient_1.supabase
@@ -141,6 +176,8 @@ exports.subscriptionsRouter.get("/", auth_1.authenticate, async (req, res) => {
         // Show usage if there's a tier (plan), otherwise null
         const usage = tier ? (count ?? 0) : null;
         const resetDate = tier ? subscription?.current_period_end || null : null;
+        // Get cancel_at_period_end from subscription or org_subscriptions
+        const cancelAtPeriodEnd = subscription?.cancel_at_period_end ?? orgSubscription?.cancel_at_period_end ?? false;
         res.json({
             data: {
                 id: subscription?.id,
@@ -149,6 +186,7 @@ exports.subscriptionsRouter.get("/", auth_1.authenticate, async (req, res) => {
                 status: normalizedStatus,
                 current_period_start: subscription?.current_period_start || null,
                 current_period_end: subscription?.current_period_end || null,
+                cancel_at_period_end: cancelAtPeriodEnd,
                 stripe_subscription_id: subscription?.stripe_subscription_id || null,
                 stripe_customer_id: subscription?.stripe_customer_id || null,
                 usage,
@@ -396,11 +434,58 @@ exports.subscriptionsRouter.post("/switch", auth_1.authenticate, async (req, res
         const subscriptionId = currentSubscription?.stripe_subscription_id;
         // UPGRADE: If org already has active subscription, update it (don't create new one)
         if (isUpgrade && subscriptionId) {
-            // CRITICAL: Don't create a new subscription if one already exists
-            // Update the existing subscription's price instead
+            // CRITICAL: Check if subscription is canceled - if so, must create new Checkout
             try {
-                // Retrieve current subscription to get subscription item ID
+                // Retrieve current subscription to check status
                 const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+                // If subscription is canceled, cannot update it - must create new subscription
+                if (subscription.status === "canceled") {
+                    console.log(`[Switch] Subscription ${subscriptionId} is canceled. Creating new Checkout session.`);
+                    // Create new Checkout session for new subscription
+                    const session = await stripe.checkout.sessions.create({
+                        mode: "subscription",
+                        payment_method_types: ["card"],
+                        line_items: [
+                            {
+                                price: priceId,
+                                quantity: 1,
+                            },
+                        ],
+                        success_url: `${process.env.FRONTEND_URL || "https://www.riskmate.dev"}/pricing/thank-you?session_id={CHECKOUT_SESSION_ID}`,
+                        cancel_url: `${process.env.FRONTEND_URL || "https://www.riskmate.dev"}/operations/account/change-plan`,
+                        metadata: {
+                            plan: planCode,
+                            organization_id: organization_id,
+                            action: "switch",
+                            previous_plan: currentPlan,
+                            is_upgrade: "true",
+                            reason: "subscription_canceled",
+                        },
+                        client_reference_id: organization_id,
+                        customer: currentSubscription?.stripe_customer_id || undefined,
+                        subscription_data: {
+                            metadata: {
+                                plan: planCode,
+                                organization_id: organization_id,
+                                previous_plan: currentPlan,
+                            },
+                        },
+                    });
+                    return res.json({
+                        success: true,
+                        url: session.url,
+                        checkout_url: session.url,
+                        reason: "subscription_canceled",
+                        message: "Your previous subscription was canceled. Please complete checkout to start a new subscription.",
+                    });
+                }
+                // If cancellation is scheduled, allow switching (Stripe usually allows this)
+                // But you could also force resume first if you want simpler logic
+                if (subscription.cancel_at_period_end === true) {
+                    console.log(`[Switch] Subscription ${subscriptionId} has cancellation scheduled. Allowing switch.`);
+                    // Continue with normal update flow below
+                }
+                // Retrieve subscription item ID for update
                 // Update subscription price immediately (with proration for upgrades)
                 await stripe.subscriptions.update(subscriptionId, {
                     items: [
@@ -482,13 +567,59 @@ exports.subscriptionsRouter.post("/switch", auth_1.authenticate, async (req, res
                     },
                 },
             });
-            return res.json({ url: session.url });
+            return res.json({
+                success: true,
+                url: session.url,
+                checkout_url: session.url,
+                message: `Redirecting to checkout for ${planCode} plan.`,
+            });
         }
         // DOWNGRADE: Update immediately with no proration (all tiers are paid)
         if (isDowngrade && subscriptionId) {
             try {
-                // Retrieve current subscription to get subscription item ID
+                // CRITICAL: Check if subscription is canceled - if so, must create new Checkout
                 const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+                // If subscription is canceled, cannot update it - must create new subscription
+                if (subscription.status === "canceled") {
+                    console.log(`[Switch] Subscription ${subscriptionId} is canceled. Creating new Checkout session.`);
+                    // Create new Checkout session for new subscription
+                    const session = await stripe.checkout.sessions.create({
+                        mode: "subscription",
+                        payment_method_types: ["card"],
+                        line_items: [
+                            {
+                                price: priceId,
+                                quantity: 1,
+                            },
+                        ],
+                        success_url: `${process.env.FRONTEND_URL || "https://www.riskmate.dev"}/pricing/thank-you?session_id={CHECKOUT_SESSION_ID}`,
+                        cancel_url: `${process.env.FRONTEND_URL || "https://www.riskmate.dev"}/operations/account/change-plan`,
+                        metadata: {
+                            plan: planCode,
+                            organization_id: organization_id,
+                            action: "switch",
+                            previous_plan: currentPlan,
+                            reason: "subscription_canceled",
+                        },
+                        client_reference_id: organization_id,
+                        customer: currentSubscription?.stripe_customer_id || undefined,
+                        subscription_data: {
+                            metadata: {
+                                plan: planCode,
+                                organization_id: organization_id,
+                                previous_plan: currentPlan,
+                            },
+                        },
+                    });
+                    return res.json({
+                        success: true,
+                        url: session.url,
+                        checkout_url: session.url,
+                        reason: "subscription_canceled",
+                        message: "Your previous subscription was canceled. Please complete checkout to start a new subscription.",
+                    });
+                }
+                // Retrieve subscription item ID for update
                 // Update subscription price immediately (no proration for downgrades)
                 await stripe.subscriptions.update(subscriptionId, {
                     items: [
@@ -572,50 +703,123 @@ exports.subscriptionsRouter.post("/switch", auth_1.authenticate, async (req, res
     }
 });
 // POST /api/subscriptions/cancel
-// Cancels subscription at period end (user keeps access until renewal)
+// Cancels subscription immediately or at period end based on mode
 exports.subscriptionsRouter.post("/cancel", auth_1.authenticate, async (req, res) => {
     try {
-        const { organization_id } = req.user;
-        const { userRole } = req.user;
+        const { organization_id, role: userRole } = req.user;
         if (!userRole || !["owner", "admin"].includes(userRole)) {
             return res.status(403).json({ message: "Only owners and admins can cancel plans" });
+        }
+        const { mode = "immediate" } = req.body ?? {}; // Default to immediate cancellation
+        const cancelMode = mode === "period_end" ? "period_end" : "immediate";
+        // Get current subscription from org_subscriptions (source of truth)
+        const { data: orgSub } = await supabaseClient_1.supabase
+            .from("org_subscriptions")
+            .select("plan_code, status, stripe_subscription_id, stripe_customer_id")
+            .eq("organization_id", organization_id)
+            .maybeSingle();
+        // CRITICAL: Early return if no active subscription to cancel
+        // "none" plan should never touch Stripe
+        if (!orgSub?.stripe_subscription_id ||
+            orgSub.plan_code === "none" ||
+            orgSub.status === "inactive") {
+            // Nothing to cancel - this is a clean success (idempotent no-op)
+            return res.json({
+                success: true,
+                ok: true,
+                noop: true,
+                reason: "no_active_subscription",
+                message: "No active subscription to cancel",
+            });
         }
         if (!process.env.STRIPE_SECRET_KEY) {
             return res.status(500).json({ message: "Stripe secret key not configured" });
         }
         const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
-        // Get current subscription
-        const { data: currentSubscription } = await supabaseClient_1.supabase
-            .from("subscriptions")
-            .select("tier, stripe_subscription_id, stripe_customer_id")
-            .eq("organization_id", organization_id)
-            .order("created_at", { ascending: false })
-            .limit(1)
-            .maybeSingle();
-        const subscriptionId = currentSubscription?.stripe_subscription_id;
-        if (!subscriptionId) {
-            return res.status(404).json({ message: "No active subscription found" });
+        const subscriptionId = orgSub.stripe_subscription_id;
+        // CRITICAL: Retrieve subscription from Stripe first to check status
+        const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+        // Handle already canceled subscription (idempotent)
+        if (subscription.status === "canceled") {
+            // Subscription is already canceled - update DB to reflect reality
+            console.log(`[Cancel] Subscription ${subscriptionId} is already canceled. Updating DB to match.`);
+            await (0, stripeWebhook_1.applyPlanToOrganization)(organization_id, "none", {
+                stripeCustomerId: orgSub.stripe_customer_id || null,
+                stripeSubscriptionId: null, // Clear subscription ID
+                currentPeriodStart: null,
+                currentPeriodEnd: null,
+                status: "inactive",
+            });
+            return res.json({
+                success: true,
+                message: "Subscription is already canceled",
+                alreadyCanceled: true,
+                cancel_at_period_end: false,
+            });
+        }
+        // IMMEDIATE CANCELLATION MODE
+        if (cancelMode === "immediate") {
+            // Cancel immediately - no refund, no proration, access ends now
+            await stripe.subscriptions.cancel(subscriptionId, {
+                prorate: false,
+                invoice_now: false,
+            });
+            // Update DB immediately to "none" / "inactive"
+            await (0, stripeWebhook_1.applyPlanToOrganization)(organization_id, "none", {
+                stripeCustomerId: orgSub.stripe_customer_id || null, // Keep customer ID for audit
+                stripeSubscriptionId: null, // Clear subscription ID
+                currentPeriodStart: null,
+                currentPeriodEnd: null,
+                status: "inactive",
+            });
+            return res.json({
+                success: true,
+                message: "Subscription canceled immediately. Access has ended.",
+                canceled_immediately: true,
+                cancel_at_period_end: false,
+            });
+        }
+        // PERIOD_END CANCELLATION MODE (scheduled cancellation)
+        // Handle already scheduled cancellation (idempotent)
+        if (subscription.cancel_at_period_end === true) {
+            return res.json({
+                success: true,
+                message: "Cancellation is already scheduled",
+                alreadyScheduled: true,
+                cancel_at_period_end: true,
+                current_period_end: subscription.current_period_end,
+            });
         }
         // Schedule cancellation at period end
-        const subscription = await stripe.subscriptions.update(subscriptionId, {
+        const updatedSubscription = await stripe.subscriptions.update(subscriptionId, {
             cancel_at_period_end: true,
         });
-        // Update DB to reflect cancellation scheduled
+        // Update DB to reflect cancellation scheduled (keep status as active until period ends)
         const { error: updateError } = await supabaseClient_1.supabase
             .from("org_subscriptions")
             .update({
-            status: subscription.cancel_at_period_end ? "canceled" : "active",
+            cancel_at_period_end: true,
             updated_at: new Date().toISOString(),
         })
             .eq("organization_id", organization_id);
+        // Also update subscriptions table
+        if (subscriptionId) {
+            await supabaseClient_1.supabase
+                .from("subscriptions")
+                .update({
+                cancel_at_period_end: true,
+                updated_at: new Date().toISOString(),
+            })
+                .eq("stripe_subscription_id", subscriptionId);
+        }
         if (updateError) {
             console.error("Failed to update org_subscriptions:", updateError);
         }
         return res.json({
             success: true,
             message: "Subscription will cancel at the end of the billing period",
-            cancel_at_period_end: subscription.cancel_at_period_end,
-            current_period_end: subscription.current_period_end,
+            cancel_at_period_end: updatedSubscription.cancel_at_period_end,
+            current_period_end: updatedSubscription.current_period_end,
         });
     }
     catch (err) {
@@ -627,8 +831,7 @@ exports.subscriptionsRouter.post("/cancel", auth_1.authenticate, async (req, res
 // Resumes a scheduled cancellation
 exports.subscriptionsRouter.post("/resume", auth_1.authenticate, async (req, res) => {
     try {
-        const { organization_id } = req.user;
-        const { userRole } = req.user;
+        const { organization_id, role: userRole } = req.user;
         if (!userRole || !["owner", "admin"].includes(userRole)) {
             return res.status(403).json({ message: "Only owners and admins can resume plans" });
         }
@@ -648,8 +851,27 @@ exports.subscriptionsRouter.post("/resume", auth_1.authenticate, async (req, res
         if (!subscriptionId) {
             return res.status(404).json({ message: "No active subscription found" });
         }
+        // CRITICAL: Retrieve subscription from Stripe first to check status
+        const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+        // Handle already canceled subscription (cannot resume)
+        if (subscription.status === "canceled") {
+            return res.status(400).json({
+                message: "Cannot resume a canceled subscription. Please create a new subscription.",
+                alreadyCanceled: true,
+            });
+        }
+        // Handle already resumed (idempotent)
+        if (subscription.cancel_at_period_end === false) {
+            return res.json({
+                success: true,
+                message: "Subscription is already active (not scheduled for cancellation)",
+                alreadyResumed: true,
+                cancel_at_period_end: false,
+                current_period_end: subscription.current_period_end,
+            });
+        }
         // Resume subscription (remove cancellation)
-        const subscription = await stripe.subscriptions.update(subscriptionId, {
+        const updatedSubscription = await stripe.subscriptions.update(subscriptionId, {
             cancel_at_period_end: false,
         });
         // Update DB to reflect active status
@@ -657,9 +879,20 @@ exports.subscriptionsRouter.post("/resume", auth_1.authenticate, async (req, res
             .from("org_subscriptions")
             .update({
             status: "active",
+            cancel_at_period_end: false,
             updated_at: new Date().toISOString(),
         })
             .eq("organization_id", organization_id);
+        // Also update subscriptions table
+        if (subscriptionId) {
+            await supabaseClient_1.supabase
+                .from("subscriptions")
+                .update({
+                cancel_at_period_end: false,
+                updated_at: new Date().toISOString(),
+            })
+                .eq("stripe_subscription_id", subscriptionId);
+        }
         if (updateError) {
             console.error("Failed to update org_subscriptions:", updateError);
         }

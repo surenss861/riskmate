@@ -355,6 +355,86 @@ async function generateAttestationsCSV(organizationId, userId, exportId, jobId, 
 // GET /api/audit/events
 // Returns filtered, enriched audit events with stats
 // Uses unified filter logic (same as exports/readiness) for consistency
+// POST /api/audit/events (or /api/ledger/events)
+// Unified event logging endpoint for iOS and web
+// Both clients call this to log meaningful actions (job create, proof anchor, export, etc.)
+exports.auditRouter.post('/events', auth_1.authenticate, async (req, res) => {
+    try {
+        const authReq = req;
+        const { organization_id, id: actorId, role: actorRole } = authReq.user;
+        const requestId = authReq.requestId || 'unknown';
+        const { event_type, entity_type, entity_id, metadata = {}, client = 'web', // 'ios' or 'web'
+        app_version, device_id, } = req.body;
+        if (!event_type || !entity_type) {
+            return res.status(400).json({
+                success: false,
+                message: 'Missing required fields: event_type, entity_type',
+            });
+        }
+        // Map entity_type to AuditTargetType
+        const targetTypeMap = {
+            job: 'job',
+            proof: 'proof_pack',
+            export: 'export',
+            evidence: 'evidence',
+            subscription: 'subscription',
+            user: 'user',
+            organization: 'organization',
+            site: 'site',
+            mitigation: 'mitigation',
+            document: 'document',
+            report: 'report',
+            legal: 'legal',
+            system: 'system',
+            signoff: 'signoff',
+        };
+        const targetType = targetTypeMap[entity_type] || 'system';
+        // Enrich metadata with client info
+        const enrichedMetadata = {
+            ...metadata,
+            client,
+            ...(app_version && { app_version }),
+            ...(device_id && { device_id }),
+            request_id: requestId,
+        };
+        // Log the event
+        const result = await (0, audit_1.recordAuditLog)({
+            organizationId: organization_id,
+            actorId: actorId || null,
+            eventName: event_type,
+            targetType: targetType,
+            targetId: entity_id || null,
+            metadata: enrichedMetadata,
+        });
+        if (result.error) {
+            console.error('[Event Log] Failed to log event:', result.error);
+            return res.status(500).json({
+                success: false,
+                message: 'Failed to log event',
+                error: result.error.message,
+            });
+        }
+        // CRITICAL: Prevent caching of audit log writes
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+        res.json({
+            success: true,
+            event_id: result.data?.id,
+            message: 'Event logged successfully',
+        });
+    }
+    catch (err) {
+        console.error('[Event Log] Error:', err);
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+        res.setHeader('Pragma', 'no-cache');
+        res.status(500).json({
+            success: false,
+            message: 'Failed to log event',
+            error: err?.message || String(err),
+        });
+    }
+});
 exports.auditRouter.get('/events', auth_1.authenticate, async (req, res) => {
     const authReq = req;
     const requestId = authReq.requestId || 'unknown';
@@ -533,6 +613,13 @@ exports.auditRouter.get('/events', auth_1.authenticate, async (req, res) => {
         const nextCursor = finalEvents.length > 0
             ? finalEvents[finalEvents.length - 1].created_at
             : null;
+        // CRITICAL: Prevent caching of audit log reads (no 304 responses)
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+        // Explicitly disable ETag to prevent 304 responses
+        res.removeHeader('ETag');
+        res.removeHeader('Last-Modified');
         res.json({
             data: {
                 events: finalEvents,

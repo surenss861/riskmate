@@ -6,6 +6,9 @@ export interface AuditLogEntry {
     targetType: AuditTargetType;
     targetId?: string | null;
     metadata?: Record<string, unknown>;
+    client?: string;
+    appVersion?: string;
+    deviceId?: string;
 }
 export type AuditWriteResult = {
     data: {
@@ -14,6 +17,15 @@ export type AuditWriteResult = {
     error: {
         message: string;
     } | null;
+};
+/**
+ * Extract client metadata from request (for audit logging)
+ * Looks for client, app_version, device_id in headers or body
+ */
+export declare function extractClientMetadata(req?: any): {
+    client?: string;
+    appVersion?: string;
+    deviceId?: string;
 };
 export declare function recordAuditLog(entry: AuditLogEntry): Promise<AuditWriteResult>;
 //# sourceMappingURL=audit.d.ts.map

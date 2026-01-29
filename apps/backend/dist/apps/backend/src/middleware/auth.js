@@ -8,29 +8,32 @@ const planRules_1 = require("../auth/planRules");
 async function loadPlanForOrganization(organizationId) {
     const { data } = await supabaseClient_1.supabase
         .from("org_subscriptions")
-        .select("plan_code, seats_limit, jobs_limit_month")
+        .select("plan_code, status, seats_limit, jobs_limit_month, cancel_at_period_end, current_period_end")
         .eq("organization_id", organizationId)
         .maybeSingle();
-    if (!data?.plan_code) {
+    if (!data?.plan_code || data.plan_code === "none" || data.status === "inactive") {
         return {
-            planCode: "starter",
-            status: "none",
+            planCode: "none",
+            status: "inactive",
             seatsLimit: 0,
             jobsMonthlyLimit: 0,
             features: [],
+            cancelAtPeriodEnd: false,
+            currentPeriodEnd: null,
         };
     }
     const planCode = data.plan_code;
     const limits = (0, planRules_1.limitsFor)(planCode);
-    // Default to active if status column doesn't exist yet
-    const status = "active";
-    const isActive = true;
+    const status = data.status || "active";
+    const isActive = status === "active" || status === "trialing";
     return {
         planCode,
         status,
         seatsLimit: isActive ? data.seats_limit ?? limits.seats ?? null : 0,
         jobsMonthlyLimit: isActive ? data.jobs_limit_month ?? limits.jobsMonthly ?? null : 0,
         features: isActive ? limits.features : [],
+        cancelAtPeriodEnd: data.cancel_at_period_end ?? false,
+        currentPeriodEnd: data.current_period_end ?? null,
     };
 }
 // Helper to check if a string looks like a JWT (3 dot-separated parts)
@@ -179,6 +182,8 @@ async function authenticateInternal(req, res, next) {
             jobsMonthlyLimit,
             features,
             subscriptionStatus,
+            cancelAtPeriodEnd: planInfo.cancelAtPeriodEnd ?? false,
+            currentPeriodEnd: planInfo.currentPeriodEnd ?? null,
             legalAccepted,
             legalAcceptedAt: legalAcceptance?.accepted_at ?? null,
         };

@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.extractClientMetadata = extractClientMetadata;
 exports.recordAuditLog = recordAuditLog;
 const supabaseClient_1 = require("../lib/supabaseClient");
 const executive_1 = require("../routes/executive");
@@ -70,9 +71,35 @@ function isMaterialEvent(eventName, severity) {
         return true;
     return false;
 }
+/**
+ * Extract client metadata from request (for audit logging)
+ * Looks for client, app_version, device_id in headers or body
+ */
+function extractClientMetadata(req) {
+    if (!req)
+        return {};
+    // Check headers first (iOS/web clients may send these)
+    const client = req.headers?.['x-client'] || req.headers?.['client'] || req.body?.client;
+    const appVersion = req.headers?.['x-app-version'] || req.headers?.['app-version'] || req.body?.app_version;
+    const deviceId = req.headers?.['x-device-id'] || req.headers?.['device-id'] || req.body?.device_id;
+    return {
+        client: client || 'web', // Default to 'web' if not specified
+        appVersion,
+        deviceId,
+    };
+}
 async function recordAuditLog(entry) {
     try {
-        const payload = truncateMetadata(entry.metadata);
+        // Merge client metadata into payload
+        const clientMetadata = {
+            ...(entry.client && { client: entry.client }),
+            ...(entry.appVersion && { app_version: entry.appVersion }),
+            ...(entry.deviceId && { device_id: entry.deviceId }),
+        };
+        const payload = truncateMetadata({
+            ...entry.metadata,
+            ...clientMetadata,
+        });
         // Extract action from event name (e.g., "job.created" -> "job.create")
         const action = entry.eventName.replace(/\.(created|updated|deleted|flagged|unflagged)$/, (match) => {
             if (match.includes('created'))
