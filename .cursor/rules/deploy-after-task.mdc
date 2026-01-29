@@ -1,0 +1,36 @@
+---
+description: At the end of every task, deploy to GitHub, Vercel, and Railway
+alwaysApply: true
+---
+
+# Deploy at End of Every Task
+
+After completing any task, **always run deploy** so the user gets updates on GitHub, Vercel, and Railway.
+
+## Steps (run in order)
+
+1. **Stage and commit**
+   - `git add -A`
+   - If there are staged changes: `git commit -m "<short description of what was done>"`
+
+2. **Push to GitHub**
+   - `git push origin main`
+   - This triggers Vercel and Railway if the repo is connected in their dashboards.
+
+3. **Vercel production deploy** (from repo root)
+   - `npx vercel --prod`
+
+4. **Railway deploy** (backend)
+   - From repo root: `(cd apps/backend && npx railway up --detach)` or `(cd apps/backend && railway up --detach)` if CLI is installed.
+
+## One-command option
+
+From repo root:
+```bash
+./scripts/deploy.sh "Your commit message"
+```
+
+## If push or deploy fails
+
+- If `git push` fails (e.g. auth/network), tell the user: "Push failed from this environment. Run locally: `./scripts/deploy.sh 'message'` or `git push origin main` then trigger Vercel/Railway from their dashboards."
+- Do not skip the deploy step; attempt it every time.
