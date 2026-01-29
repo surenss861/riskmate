@@ -33,4 +33,4 @@ This script does (in order):
   **"Deploy couldn’t run from here (network/auth). Run locally: `./scripts/deploy.sh 'Your message'`"**  
   and mention that Vercel/Railway will deploy automatically after a successful push if the repo is connected.
 - **Vercel/Railway CLI fails**: Tell the user to push and then trigger deploy from Vercel/Railway dashboards or run the CLI on their machine.
-- Do **not** skip the deploy step; attempt it every time, then tell the user to run it locally if it failed.
+- This environment cannot reach GitHub; deploy only happens when the user runs `git push origin main` on their machine. Tell them one line: **"Push to deploy: `git push origin main`"**

@@ -708,43 +708,77 @@ async function generateExecutiveBrief(
 
 /**
  * Build a specific, actionable failure_reason for the UI (trust moment).
- * Used when an export fails so users see "Missing 2 evidence items" instead of "Export generation failed".
+ * Rule order: user-fixable blockers first, then infra errors, then default.
  */
 async function getFailureReason(exportJob: any, err: any): Promise<string> {
   const { id, work_record_id: jobId, export_type, organization_id } = exportJob
   const msg = (err?.message || String(err)).toLowerCase()
 
-  // Storage / network timeouts
-  if (msg.includes('timeout') || msg.includes('etimedout') || msg.includes('econnreset')) {
-    return 'Upload timed out. Check your internet connection and retry.'
-  }
-
-  // PDF / generation errors → ask user to contact support with export ID
-  if (msg.includes('pdf') || msg.includes('generation') || msg.includes('enotype')) {
-    return `Report generation failed. Contact support with export ID: ${id}`
-  }
-
-  // Proof pack: try to explain using evidence/job data
+  // 1. User-fixable blockers FIRST (proof_pack)
   if (export_type === 'proof_pack' && jobId) {
     try {
       const evidenceRequired = 5
-      const { count: evidenceCount } = await supabase
-        .from('evidence')
-        .select('*', { count: 'exact', head: true })
-        .eq('organization_id', organization_id)
-        .eq('work_record_id', jobId)
-
-      const actual = evidenceCount ?? 0
+      const actual = await countEvidence(organization_id, jobId)
       if (actual < evidenceRequired) {
         const missing = evidenceRequired - actual
         return `Missing ${missing} evidence item${missing === 1 ? '' : 's'}. Upload photos before generating proof pack.`
       }
+      const hazardsCount = await countHazards(jobId)
+      if (hazardsCount === 0) {
+        return 'No hazards configured. Add hazards in web app before generating report.'
+      }
+      const incompleteControls = await countIncompleteControls(jobId)
+      if (incompleteControls > 0) {
+        return `${incompleteControls} control${incompleteControls === 1 ? '' : 's'} not completed. Mark them complete or skip them.`
+      }
     } catch (_) {
-      // Ignore; fall through to generic
+      // Ignore; fall through to infra/default
     }
   }
 
+  // 2. Infrastructure errors (actionable but not user-fixable)
+  if (msg.includes('timeout') || msg.includes('etimedout') || msg.includes('econnreset')) {
+    return 'Upload timed out. Check your internet connection and retry.'
+  }
+  if (msg.includes('pdf') || msg.includes('generation') || msg.includes('enotype')) {
+    return `Report generation failed. Contact support with export ID: ${id}`
+  }
+  if (msg.includes('storage') || msg.includes('upload')) {
+    return 'Storage upload failed. Retry or contact support.'
+  }
+
   return `Export failed. Tap retry or contact support with export ID: ${id}`
+}
+
+async function countEvidence(orgId: string, workRecordId: string): Promise<number> {
+  const { count } = await supabase
+    .from('evidence')
+    .select('*', { count: 'exact', head: true })
+    .eq('organization_id', orgId)
+    .eq('work_record_id', workRecordId)
+  return count ?? 0
+}
+
+async function countHazards(jobId: string): Promise<number> {
+  try {
+    const { count } = await supabase
+      .from('hazards')
+      .select('*', { count: 'exact', head: true })
+      .eq('job_id', jobId)
+    return count ?? 0
+  } catch {
+    return 0
+  }
+}
+
+async function countIncompleteControls(jobId: string): Promise<number> {
+  const { count } = await supabase
+    .from('mitigation_items')
+    .select('*', { count: 'exact', head: true })
+    .eq('job_id', jobId)
+    .eq('is_completed', false)
+    .is('deleted_at', null)
+  return count ?? 0
 }
 
 /**

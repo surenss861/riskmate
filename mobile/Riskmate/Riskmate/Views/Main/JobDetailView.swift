@@ -1329,6 +1329,7 @@ struct EvidenceCard: View {
 
 struct ExportsTab: View {
     let jobId: String
+    @EnvironmentObject private var quickAction: QuickActionRouter
     @StateObject private var exportManager = BackgroundExportManager.shared
     @State private var showShareSheet = false
     @State private var shareURL: URL?
@@ -1486,15 +1487,25 @@ struct ExportsTab: View {
         }
         .sheet(isPresented: $showFailedExportSheet) {
             if let export = failedExport {
-                FailedExportSheet(export: export, onRetry: {
-                    showFailedExportSheet = false
-                    Task {
-                        await generateExport(type: export.type)
+                FailedExportSheet(
+                    export: export,
+                    onRetry: {
+                        showFailedExportSheet = false
+                        Task {
+                            await generateExport(type: export.type)
+                        }
+                    },
+                    onCopyID: {
+                        UIPasteboard.general.string = export.id
+                        ToastCenter.shared.show("Export ID Copied", systemImage: "doc.on.doc", style: .success)
+                    },
+                    onAddEvidence: {
+                        showFailedExportSheet = false
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                            quickAction.presentEvidence(jobId: jobId)
+                        }
                     }
-                }, onCopyID: {
-                    UIPasteboard.general.string = export.id
-                    ToastCenter.shared.show("Export ID Copied", systemImage: "doc.on.doc", style: .success)
-                })
+                )
                 .presentationDetents([.medium])
             }
         }
@@ -1737,11 +1748,13 @@ struct LastExportCard: View {
 
 // ShareSheet moved to Components/UIKit/ShareSheet.swift
 
-/// Sheet shown when tapping a failed export - shows error + Retry + Copy ID
+/// Sheet shown when tapping a failed export - shows failure reason + smart CTAs (Add Evidence, Retry, Contact Support).
 struct FailedExportSheet: View {
     let export: ExportTask
     let onRetry: () -> Void
     let onCopyID: () -> Void
+    /// When non-nil and failure reason suggests missing evidence, show "Add Evidence" CTA.
+    var onAddEvidence: (() -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
     
     private var errorReason: String {
@@ -1749,6 +1762,13 @@ struct FailedExportSheet: View {
             return reason
         }
         return "Unknown error"
+    }
+    
+    /// Show "Add Evidence" when reason indicates user-fixable evidence gap (missing evidence, upload photos).
+    private var showAddEvidenceCTA: Bool {
+        guard onAddEvidence != nil else { return false }
+        let lower = errorReason.lowercased()
+        return lower.contains("evidence") || lower.contains("missing") || lower.contains("upload")
     }
     
     var body: some View {
@@ -1773,6 +1793,28 @@ struct FailedExportSheet: View {
                 Spacer()
                 
                 VStack(spacing: RMTheme.Spacing.md) {
+                    // Add Evidence (user-fixable first)
+                    if showAddEvidenceCTA, let onAddEvidence = onAddEvidence {
+                        Button {
+                            Haptics.impact(.medium)
+                            dismiss()
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                                onAddEvidence()
+                            }
+                        } label: {
+                            HStack {
+                                Image(systemName: "camera.fill")
+                                Text("Add Evidence")
+                                    .font(RMTheme.Typography.bodyBold)
+                            }
+                            .foregroundColor(.black)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, RMTheme.Spacing.md)
+                            .background(RMTheme.Colors.accent)
+                            .clipShape(RoundedRectangle(cornerRadius: RMTheme.Radius.sm))
+                        }
+                    }
+                    
                     // Retry button
                     Button {
                         Haptics.impact(.medium)
@@ -1786,11 +1828,11 @@ struct FailedExportSheet: View {
                         .foregroundColor(.black)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, RMTheme.Spacing.md)
-                        .background(RMTheme.Colors.accent)
+                        .background(showAddEvidenceCTA ? RMTheme.Colors.accent.opacity(0.2) : RMTheme.Colors.accent)
                         .clipShape(RoundedRectangle(cornerRadius: RMTheme.Radius.sm))
                     }
                     
-                    // Copy ID button
+                    // Copy ID
                     Button {
                         Haptics.tap()
                         onCopyID()
@@ -1798,6 +1840,22 @@ struct FailedExportSheet: View {
                         Label("Copy Export ID", systemImage: "doc.on.doc")
                             .font(RMTheme.Typography.bodySmall)
                             .foregroundColor(RMTheme.Colors.accent)
+                    }
+                    
+                    // Contact Support (mailto + copy ID)
+                    Button {
+                        Haptics.tap()
+                        onCopyID()
+                        let subject = "Export Failed"
+                        let body = "Export ID: \(export.id)"
+                        let encoded = "mailto:support@riskmate.dev?subject=\(subject.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? subject)&body=\(body.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? body)"
+                        if let url = URL(string: encoded) {
+                            UIApplication.shared.open(url)
+                        }
+                    } label: {
+                        Label("Contact Support", systemImage: "envelope")
+                            .font(RMTheme.Typography.bodySmall)
+                            .foregroundColor(RMTheme.Colors.textSecondary)
                     }
                 }
                 .padding(.horizontal, RMTheme.Spacing.pagePadding)

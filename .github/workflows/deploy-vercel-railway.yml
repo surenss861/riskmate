@@ -1,0 +1,69 @@
+# Deploy to Vercel (web) and Railway (backend) on every push to main.
+# Requires GitHub repo to have network; run from your machine: git push origin main
+#
+# One-time setup: Add these secrets in GitHub → Settings → Secrets and variables → Actions
+#   - VERCEL_TOKEN (from vercel.com/account/tokens)
+#   - VERCEL_ORG_ID (from .vercel/project.json or Vercel dashboard)
+#   - VERCEL_PROJECT_ID (from .vercel/project.json or Vercel dashboard)
+#   - RAILWAY_TOKEN (from railway.app/account/tokens, or use Railway GitHub integration instead)
+#
+# If you use Vercel/Railway GitHub integration (repo connected in their dashboards),
+# you can leave this workflow as a backup or remove it — push to main will already deploy.
+
+name: Deploy to Vercel and Railway
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install root dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Deploy to Vercel (production)
+        if: ${{ vars.VERCEL_TOKEN != '' || secrets.VERCEL_TOKEN != '' }}
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          npx vercel --prod --token "$VERCEL_TOKEN" --yes
+        continue-on-error: true
+
+      - name: Deploy backend to Railway
+        if: ${{ vars.RAILWAY_TOKEN != '' || secrets.RAILWAY_TOKEN != '' }}
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          pnpm add -g @railway/cli 2>/dev/null || npm install -g @railway/cli
+          cd apps/backend && railway up --detach
+        continue-on-error: true
+
+      - name: Deploy summary
+        if: always()
+        run: |
+          echo "## Deploy (Vercel + Railway)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Triggered by push to \`main\`. If Vercel/Railway are connected to this repo in their dashboards, they also deploy on push." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**To deploy:** Push from your machine: \`git push origin main\`" >> $GITHUB_STEP_SUMMARY

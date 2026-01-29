@@ -2,6 +2,18 @@
 
 This guide helps you apply all database migrations to ensure web, iOS, and backend share the same schema.
 
+## Where do migrations run?
+
+**Migrations do not run automatically in CI.** You must apply them manually or as part of your release checklist.
+
+| Environment | How migrations run |
+|-------------|---------------------|
+| **Local / dev** | Supabase Dashboard SQL Editor, or `supabase db push` from your machine |
+| **Production** | **Manual**: run each migration in Supabase Dashboard → SQL Editor, or `supabase link` + `supabase db push` from a machine with Supabase CLI |
+| **CI** | Not run by default. If you add a CI step, use `supabase db push` with a project ref and service role key in secrets |
+
+**Why this matters:** 90% of "it works locally but prod is broken" in this stack = migrations not applied in production. Before each production deploy, confirm the migration list below is applied in your Supabase project (Dashboard → SQL Editor → run any missing file).
+
 ## 🎯 Quick Start
 
 ### Option 1: Supabase Dashboard (Easiest)
@@ -11,12 +23,14 @@ This guide helps you apply all database migrations to ensure web, iOS, and backe
 3. Navigate to **SQL Editor**
 4. Run each migration file in order (copy/paste the entire file contents)
 
-**Migration Order:**
-1. `supabase/migrations/20251203000000_database_hardening_ledger_compliance.sql`
-2. `supabase/migrations/20251203000001_ledger_trigger_safety_net.sql`
-3. `supabase/migrations/20251203000002_fix_ledger_chain_of_custody.sql`
-4. `supabase/migrations/20251203000003_fix_evidence_lifecycle.sql`
-5. `supabase/migrations/20251203000004_export_worker_atomic_claim.sql` ⚠️ **Required for export worker**
+**Migration Order (by filename timestamp):**
+1. `supabase/migrations/20250126000002_add_exports_failure_reason.sql` – export failure_reason column
+2. `supabase/migrations/20250201000000_performance_indexes.sql` – jobs/evidence/exports indexes
+3. `supabase/migrations/20251203000000_database_hardening_ledger_compliance.sql`
+4. `supabase/migrations/20251203000001_ledger_trigger_safety_net.sql`
+5. `supabase/migrations/20251203000002_fix_ledger_chain_of_custody.sql`
+6. `supabase/migrations/20251203000003_fix_evidence_lifecycle.sql`
+7. `supabase/migrations/20251203000004_export_worker_atomic_claim.sql` ⚠️ **Required for export worker**
 
 ### Option 2: Supabase CLI
 
@@ -126,6 +140,8 @@ You should see all 10 tables listed.
 
 ## 📋 Migration Checklist
 
+- [ ] `20250126000002_add_exports_failure_reason.sql` - Export failure_reason (user-facing)
+- [ ] `20250201000000_performance_indexes.sql` - Performance indexes (jobs, evidence, exports)
 - [ ] `20251203000000_database_hardening_ledger_compliance.sql` - Base schema
 - [ ] `20251203000001_ledger_trigger_safety_net.sql` - Ledger triggers
 - [ ] `20251203000002_fix_ledger_chain_of_custody.sql` - Chain of custody

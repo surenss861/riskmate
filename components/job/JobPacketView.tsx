@@ -2,11 +2,21 @@
 
 import { useState, useRef } from 'react'
 import { motion } from 'framer-motion'
-import { Download, FileText, Shield, CheckCircle, Clock, User, Flag, Upload, X, Image as ImageIcon, ExternalLink } from 'lucide-react'
+import { Download, FileText, Shield, CheckCircle, Clock, User, Flag, Upload, X, Image as ImageIcon, ExternalLink, Loader2 } from 'lucide-react'
 import { cardStyles, buttonStyles, typography } from '@/lib/styles/design-system'
 import { jobsApi } from '@/lib/api'
 import { useRouter } from 'next/navigation'
 import { TrustReceiptStrip, IntegrityBadge, EnforcementBanner, EmptyState } from '@/components/shared'
+
+type UploadTaskStatus = 'uploading' | 'success' | 'failed'
+
+interface UploadTask {
+  id: string
+  file: File
+  status: UploadTaskStatus
+  progress: number
+  error?: string
+}
 
 interface Attachment {
   id: string
@@ -74,7 +84,56 @@ export function JobPacketView({
   const [selectedPack, setSelectedPack] = useState<'insurance' | 'audit' | 'incident' | 'compliance' | null>(null)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
+  const [uploadQueue, setUploadQueue] = useState<UploadTask[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const runUpload = async (task: UploadTask) => {
+    if (task.status !== 'uploading') return
+    const fileType = task.file.type.startsWith('image/') ? 'photo' :
+      task.file.name.includes('permit') ? 'permit' :
+      task.file.name.includes('inspection') ? 'inspection' : 'document'
+    try {
+      await jobsApi.uploadDocument(job.id, task.file, {
+        name: task.file.name,
+        type: fileType,
+        description: `Uploaded for ${selectedPack || 'job'} packet`,
+      })
+      setUploadQueue((prev) =>
+        prev.map((t) => (t.id === task.id ? { ...t, status: 'success' as const, progress: 100 } : t))
+      )
+      onAttachmentUploaded?.()
+      setTimeout(() => {
+        setUploadQueue((prev) => prev.filter((t) => t.id !== task.id))
+      }, 2000)
+    } catch (err: any) {
+      setUploadQueue((prev) =>
+        prev.map((t) =>
+          t.id === task.id
+            ? { ...t, status: 'failed' as const, error: err?.message || 'Upload failed' }
+            : t
+        )
+      )
+    } finally {
+      setUploadQueue((prev) => {
+        const othersStillUploading = prev.some((t) => t.id !== task.id && t.status === 'uploading')
+        if (!othersStillUploading) setTimeout(() => setUploading(false), 0)
+        return prev
+      })
+    }
+  }
+
+  const retryUpload = (taskId: string) => {
+    setUploadQueue((prev) => {
+      const task = prev.find((t) => t.id === taskId)
+      if (!task) return prev
+      const updated = prev.map((t) =>
+        t.id === taskId ? { ...t, status: 'uploading' as const, progress: 0, error: undefined } : t
+      )
+      setTimeout(() => runUpload({ ...task, status: 'uploading', progress: 0 }), 0)
+      return updated
+    })
+    setUploadError(null)
+  }
 
   // Determine packet purpose based on job state
   const getPacketPurpose = () => {
@@ -381,44 +440,77 @@ export function JobPacketView({
               const files = Array.from(e.target.files || [])
               if (files.length === 0) return
 
-              setUploading(true)
               setUploadError(null)
-
-              try {
-                for (const file of files) {
-                  const fileType = file.type.startsWith('image/') ? 'photo' : 
-                                  file.name.includes('permit') ? 'permit' :
-                                  file.name.includes('inspection') ? 'inspection' : 'document'
-                  
-                  await jobsApi.uploadDocument(job.id, file, {
-                    name: file.name,
-                    type: fileType,
-                    description: `Uploaded for ${selectedPack || 'job'} packet`,
-                  })
-                }
-                onAttachmentUploaded?.()
-                if (fileInputRef.current) {
-                  fileInputRef.current.value = ''
-                }
-              } catch (err: any) {
-                setUploadError(err.message || 'Upload failed')
-              } finally {
-                setUploading(false)
+              setUploading(true)
+              const newTasks: UploadTask[] = files.map((file) => ({
+                id: `${job.id}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+                file,
+                status: 'uploading' as const,
+                progress: 0,
+              }))
+              setUploadQueue((prev) => [...prev, ...newTasks])
+              if (fileInputRef.current) {
+                fileInputRef.current.value = ''
               }
+              setTimeout(() => {
+                newTasks.forEach((t) => runUpload(t))
+              }, 0)
             }}
           />
+          {uploadQueue.length > 0 && (
+            <div className="mb-4 space-y-2">
+              {uploadQueue.map((task) => (
+                <div
+                  key={task.id}
+                  className="flex items-center gap-3 p-3 rounded-lg border border-white/10 bg-white/5"
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-white/90 truncate">{task.file.name}</p>
+                    {task.status === 'uploading' && (
+                      <div className="mt-1 h-1.5 rounded-full bg-white/10 overflow-hidden">
+                        <div
+                          className="h-full bg-[#F97316] animate-pulse"
+                          style={{ width: '40%' }}
+                        />
+                      </div>
+                    )}
+                    {task.status === 'failed' && task.error && (
+                      <p className="text-xs text-red-400 mt-1">{task.error}</p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {task.status === 'uploading' && (
+                      <Loader2 className="w-4 h-4 text-white/60 animate-spin" />
+                    )}
+                    {task.status === 'success' && (
+                      <CheckCircle className="w-5 h-5 text-green-500" />
+                    )}
+                    {task.status === 'failed' && (
+                      <button
+                        type="button"
+                        onClick={() => retryUpload(task.id)}
+                        className="text-xs font-medium text-[#F97316] hover:text-[#ea580c]"
+                      >
+                        Retry
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
           {uploadError && (
             <div className="mb-4 p-3 bg-red-500/20 border border-red-500/30 rounded-lg text-sm text-red-400">
               {uploadError}
             </div>
           )}
-          {attachments.length === 0 ? (
+          {attachments.length === 0 && uploadQueue.length === 0 ? (
             <div className="p-6 bg-white/5 rounded-lg border border-dashed border-white/10 text-center">
               <FileText className="w-8 h-8 text-white/40 mx-auto mb-2" />
               <p className="text-sm text-white/60 mb-2">Upload permit / photo / inspection</p>
               <p className="text-xs text-white/40">Supports images, PDFs, and documents</p>
             </div>
-          ) : (
+          ) : attachments.length > 0 ? (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {attachments.map((attachment) => (
                 <div
@@ -442,7 +534,7 @@ export function JobPacketView({
                 </div>
               ))}
             </div>
-          )}
+          ) : null}
         </section>
 
         {/* Attestations (Role-based) - Sealed Records */}

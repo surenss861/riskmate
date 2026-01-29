@@ -1,18 +1,24 @@
 -- Performance indexes for common query patterns (Week 5-6 caching pass).
--- All indexes use IF NOT EXISTS so the migration is safe to re-run.
+-- Jobs list query: WHERE organization_id = ? AND deleted_at IS NULL [AND status = ?] ORDER BY created_at DESC
+-- So indexes include created_at and use partial WHERE deleted_at IS NULL.
 
--- Jobs (list, filters, dashboard)
-CREATE INDEX IF NOT EXISTS idx_jobs_org_status
-  ON jobs(organization_id, status);
+-- Jobs: drop old indexes that don't match sort, then create optimal ones
+DROP INDEX IF EXISTS idx_jobs_org_status;
+DROP INDEX IF EXISTS idx_jobs_org_created;
+
+CREATE INDEX IF NOT EXISTS idx_jobs_org_status_created
+  ON jobs(organization_id, status, created_at DESC)
+  WHERE deleted_at IS NULL;
 
 CREATE INDEX IF NOT EXISTS idx_jobs_org_created
-  ON jobs(organization_id, created_at DESC);
+  ON jobs(organization_id, created_at DESC)
+  WHERE deleted_at IS NULL;
 
 CREATE INDEX IF NOT EXISTS idx_jobs_org_risk_level
   ON jobs(organization_id, risk_level)
-  WHERE risk_level IS NOT NULL;
+  WHERE risk_level IS NOT NULL AND deleted_at IS NULL;
 
--- Mitigation items (job detail checklist)
+-- Mitigation items (job detail checklist). Table has no deleted_at; index by job_id and completion.
 CREATE INDEX IF NOT EXISTS idx_mitigation_items_job
   ON mitigation_items(job_id);
 
