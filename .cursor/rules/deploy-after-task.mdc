@@ -1,11 +1,11 @@
 ---
-description: At the end of every task, deploy to GitHub, Vercel, and Railway
+description: Redeploy at the end of every task, every single time (GitHub, Vercel, Railway)
 alwaysApply: true
 ---
 
-# Deploy at End of Every Task
+# Redeploy at End of Every Task — Every Single Time
 
-**You MUST run deploy at the end of EVERY task.** No exceptions.
+**You MUST redeploy at the end of EVERY task. Every single time. No exceptions.**
 
 ## Checklist (before you say "done")
 

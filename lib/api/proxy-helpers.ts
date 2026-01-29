@@ -15,6 +15,19 @@ if (process.env.NODE_ENV === 'production' && !process.env.BACKEND_URL) {
   console.error('[Proxy]   4. Backend must be deployed separately (Fly.io / Render / Railway / etc.)')
 }
 
+/** Server-side client metadata for proxy requests (audit headers). */
+function getClientMetadata(): { client: string; appVersion: string; deviceId: string } {
+  const appVersion =
+    process.env.NEXT_PUBLIC_APP_VERSION ||
+    process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA?.substring(0, 7) ||
+    'unknown'
+  return {
+    client: 'web',
+    appVersion,
+    deviceId: 'server',
+  }
+}
+
 export async function getSessionToken(request?: NextRequest): Promise<string | null> {
   // First, try to get token from Authorization header (sent by frontend)
   if (request) {
