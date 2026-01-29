@@ -147,14 +147,27 @@ struct ExportHistorySheet: View {
         case "failed":
             selectedFailedExport = export
         case "ready":
-            if let urlString = export.downloadUrl, let url = URL(string: urlString) {
-                UIApplication.shared.open(url)
+            if let urlString = export.downloadUrl {
+                openDownloadUrl(urlString)
             }
         default:
             break
         }
     }
 
+    private func openDownloadUrl(_ urlString: String) {
+        guard let url = URL(string: urlString) else {
+            ToastCenter.shared.show("Invalid download link", systemImage: "exclamationmark.triangle", style: .error)
+            return
+        }
+        UIApplication.shared.open(url) { ok in
+            if !ok {
+                ToastCenter.shared.show("Couldn't open link", systemImage: "exclamationmark.triangle", style: .error)
+            }
+        }
+    }
+
+    @MainActor
     private func loadExports() async {
         loading = true
         error = nil
@@ -168,6 +181,7 @@ struct ExportHistorySheet: View {
         loading = false
     }
 
+    @MainActor
     private func retryExport(_ export: Export) async {
         let type: ExportType = (export.exportType == "proof_pack") ? .proofPack : .pdf
         do {

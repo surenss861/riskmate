@@ -815,7 +815,7 @@ struct EvidenceListResponse: Codable {
     let data: [EvidenceItem]
 }
 
-struct Export: Codable, Identifiable {
+struct Export: Codable, Identifiable, Equatable {
     let id: String
     let exportType: String
     let state: String

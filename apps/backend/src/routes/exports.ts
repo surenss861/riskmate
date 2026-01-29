@@ -417,6 +417,7 @@ exportsRouter.get(
         return res.status(500).json(errorResponse)
       }
 
+      // Signed URLs are generated per request only; never stored in DB.
       const exports = await Promise.all(
         (rows || []).map(async (row: any) => {
           let download_url: string | null = null
