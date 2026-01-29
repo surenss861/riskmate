@@ -364,6 +364,97 @@ exportsRouter.post(
   }
 )
 
+// GET /api/jobs/:id/exports
+// List exports for a job (export history)
+exportsRouter.get(
+  '/jobs/:id/exports',
+  authenticate as unknown as express.RequestHandler,
+  async (req: express.Request, res: express.Response) => {
+    const authReq = req as AuthenticatedRequest & RequestWithId
+    const requestId = authReq.requestId || 'unknown'
+
+    try {
+      const { organization_id } = authReq.user
+      const jobId = req.params.id
+
+      const { data: job, error: jobError } = await supabase
+        .from('jobs')
+        .select('id, organization_id')
+        .eq('id', jobId)
+        .eq('organization_id', organization_id)
+        .single()
+
+      if (jobError || !job) {
+        const { response: errorResponse, errorId } = createErrorResponse({
+          message: 'Job not found',
+          internalMessage: `Job ${jobId} not found for org ${organization_id}`,
+          code: 'JOB_NOT_FOUND',
+          requestId,
+          statusCode: 404,
+        })
+        res.setHeader('X-Error-ID', errorId)
+        return res.status(404).json(errorResponse)
+      }
+
+      const { data: rows, error: fetchError } = await supabase
+        .from('exports')
+        .select('id, export_type, state, failure_reason, created_at, completed_at, storage_path')
+        .eq('organization_id', organization_id)
+        .eq('work_record_id', jobId)
+        .order('created_at', { ascending: false })
+        .limit(100)
+
+      if (fetchError) {
+        const { response: errorResponse, errorId } = createErrorResponse({
+          message: 'Failed to load export history',
+          internalMessage: fetchError.message || String(fetchError),
+          code: 'DATABASE_ERROR',
+          requestId,
+          statusCode: 500,
+        })
+        res.setHeader('X-Error-ID', errorId)
+        logErrorForSupport(500, 'DATABASE_ERROR', requestId, organization_id, errorResponse.message, errorResponse.internal_message, 'operations', 'error', '/api/jobs/:id/exports')
+        return res.status(500).json(errorResponse)
+      }
+
+      const exports = await Promise.all(
+        (rows || []).map(async (row: any) => {
+          let download_url: string | null = null
+          if (row.state === 'ready' && row.storage_path) {
+            const { data: signed } = await supabase.storage
+              .from('exports')
+              .createSignedUrl(row.storage_path, 60 * 60 * 24 * 7)
+            download_url = signed?.signedUrl ?? null
+          }
+          return {
+            id: row.id,
+            export_type: row.export_type,
+            state: row.state,
+            failure_reason: row.failure_reason ?? null,
+            created_at: row.created_at,
+            completed_at: row.completed_at ?? null,
+            download_url,
+          }
+        })
+      )
+
+      res.json({ data: exports })
+    } catch (err: any) {
+      console.error('[Export History] Error:', err)
+      const { response: errorResponse, errorId } = createErrorResponse({
+        message: 'Failed to load export history',
+        internalMessage: err?.message || String(err),
+        code: 'EXPORT_HISTORY_ERROR',
+        requestId,
+        statusCode: 500,
+      })
+      res.setHeader('X-Error-ID', errorId)
+      logErrorForSupport(500, 'EXPORT_HISTORY_ERROR', requestId, authReq.user?.organization_id, errorResponse.message, errorResponse.internal_message, 'operations', 'error', '/api/jobs/:id/exports')
+      res.status(500).json(errorResponse)
+    }
+  }
+)
+
 // GET /api/exports/:id
 // Poll export status
 exportsRouter.get(

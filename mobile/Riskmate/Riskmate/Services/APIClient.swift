@@ -664,6 +664,24 @@ class APIClient {
         )
         return response.data
     }
+
+    /// List exports for a job (export history)
+    func getExports(jobId: String) async throws -> [Export] {
+        let response: ExportsListResponse = try await request(
+            endpoint: "/api/jobs/\(jobId)/exports"
+        )
+        return response.data
+    }
+
+    /// Create a new export (PDF or Proof Pack). Used for retry from export history.
+    func createExport(jobId: String, type: ExportType) async throws {
+        let path: String
+        switch type {
+        case .pdf: path = "/api/jobs/\(jobId)/export/pdf"
+        case .proofPack: path = "/api/jobs/\(jobId)/export/proof-pack"
+        }
+        let _: CreateExportResponse = try await request(endpoint: path, method: "POST")
+    }
     
     /// Generate Risk Snapshot PDF
     func generateRiskSnapshot(jobId: String) async throws -> URL {
@@ -795,6 +813,37 @@ class APIClient {
 
 struct EvidenceListResponse: Codable {
     let data: [EvidenceItem]
+}
+
+struct Export: Codable, Identifiable {
+    let id: String
+    let exportType: String
+    let state: String
+    let failureReason: String?
+    let createdAt: Date
+    let completedAt: Date?
+    let downloadUrl: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case exportType = "export_type"
+        case state
+        case failureReason = "failure_reason"
+        case createdAt = "created_at"
+        case completedAt = "completed_at"
+        case downloadUrl = "download_url"
+    }
+}
+
+struct ExportsListResponse: Codable {
+    let data: [Export]
+}
+
+struct CreateExportResponse: Codable {
+    let data: CreateExportData
+    struct CreateExportData: Codable {
+        let id: String
+    }
 }
 
 struct HazardsResponse: Codable {

@@ -12,6 +12,8 @@ struct JobDetailView: View {
     @State private var showPDFViewer = false
     @State private var pdfURL: URL?
     @State private var showExportProofSheet = false
+    @State private var showExportHistory = false
+    @State private var hasFailedExport = false
     @State private var hazardsCount: Int = 0
     @State private var controlsCount: Int = 0
     @State private var isLoadingHazards = false
@@ -131,13 +133,27 @@ struct JobDetailView: View {
                         }
                         Button {
                             Haptics.tap()
+                            showExportHistory = true
+                        } label: {
+                            Label("Export History", systemImage: "clock.arrow.circlepath")
+                        }
+                        Button {
+                            Haptics.tap()
                             WebAppURL.openWebApp()
                         } label: {
                             Label("Open in Web App", systemImage: "globe")
                         }
                     } label: {
-                        Image(systemName: "ellipsis.circle")
-                            .foregroundColor(RMTheme.Colors.textSecondary)
+                        ZStack(alignment: .topTrailing) {
+                            Image(systemName: "ellipsis.circle")
+                                .foregroundColor(RMTheme.Colors.textSecondary)
+                            if hasFailedExport {
+                                Circle()
+                                    .fill(Color.orange)
+                                    .frame(width: 8, height: 8)
+                                    .offset(x: 4, y: -4)
+                            }
+                        }
                     }
                     .accessibilityLabel("More actions for this job")
                 }
@@ -150,6 +166,15 @@ struct JobDetailView: View {
                     evidenceRequired: evidenceRequiredForExport,
                     useProvidedCount: true
                 )
+            }
+            .sheet(isPresented: $showExportHistory) {
+                ExportHistorySheet(jobId: jobId)
+                    .environmentObject(quickAction)
+            }
+            .onChange(of: showExportHistory) { _, isShowing in
+                if !isShowing {
+                    Task { await checkForFailedExports() }
+                }
             }
             .onChange(of: selectedTab) { _, _ in
                 // Light haptic on tab change
@@ -172,6 +197,18 @@ struct JobDetailView: View {
                 await loadHazardsAndControlsCount()
                 await loadEvidenceCountForExport()
             }
+            .task(id: jobId) {
+                await checkForFailedExports()
+            }
+    }
+
+    private func checkForFailedExports() async {
+        do {
+            let list = try await APIClient.shared.getExports(jobId: jobId)
+            hasFailedExport = list.contains { $0.state.lowercased() == "failed" }
+        } catch {
+            hasFailedExport = false
+        }
     }
     
     @ViewBuilder
