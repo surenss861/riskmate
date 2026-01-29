@@ -5,32 +5,32 @@ alwaysApply: true
 
 # Deploy at End of Every Task
 
-After completing any task, **always run deploy** so the user gets updates on GitHub, Vercel, and Railway.
+**You MUST run deploy at the end of EVERY task.** No exceptions.
 
-## Steps (run in order)
+## Checklist (before you say "done")
 
-1. **Stage and commit**
-   - `git add -A`
-   - If there are staged changes: `git commit -m "<short description of what was done>"`
+- [ ] I ran `./scripts/deploy.sh "Short description of changes"` from the repo root.
+- [ ] If it failed (e.g. "Could not resolve host", auth error): I told the user to run the same command locally.
 
-2. **Push to GitHub**
-   - `git push origin main`
-   - This triggers Vercel and Railway if the repo is connected in their dashboards.
+## What to run
 
-3. **Vercel production deploy** (from repo root)
-   - `npx vercel --prod`
+From repo root (e.g. `"coding projects/riskmate"`):
 
-4. **Railway deploy** (backend)
-   - From repo root: `(cd apps/backend && npx railway up --detach)` or `(cd apps/backend && railway up --detach)` if CLI is installed.
-
-## One-command option
-
-From repo root:
 ```bash
-./scripts/deploy.sh "Your commit message"
+./scripts/deploy.sh "Brief description of what was done"
 ```
 
-## If push or deploy fails
+This script does (in order):
 
-- If `git push` fails (e.g. auth/network), tell the user: "Push failed from this environment. Run locally: `./scripts/deploy.sh 'message'` or `git push origin main` then trigger Vercel/Railway from their dashboards."
-- Do not skip the deploy step; attempt it every time.
+1. `git add -A` and `git commit -m "..."` (if there are changes)
+2. `git push origin main` → GitHub (and triggers Vercel/Railway if repo is connected)
+3. `npx vercel --prod` → Vercel production
+4. `(cd apps/backend && railway up --detach)` (or `npx railway up --detach`) → Railway backend
+
+## If push or deploy fails in this environment
+
+- **Push fails** (e.g. "Could not resolve host: github.com", "Permission denied"): Tell the user exactly:  
+  **"Deploy couldn’t run from here (network/auth). Run locally: `./scripts/deploy.sh 'Your message'`"**  
+  and mention that Vercel/Railway will deploy automatically after a successful push if the repo is connected.
+- **Vercel/Railway CLI fails**: Tell the user to push and then trigger deploy from Vercel/Railway dashboards or run the CLI on their machine.
+- Do **not** skip the deploy step; attempt it every time, then tell the user to run it locally if it failed.
