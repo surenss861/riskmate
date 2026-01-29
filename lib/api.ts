@@ -73,6 +73,41 @@ export interface ReadinessResponse {
   requestId?: string
 }
 
+/**
+ * Get stable device ID (localStorage UUID, generates if missing)
+ */
+function getStableDeviceId(): string {
+  if (typeof window === 'undefined') return 'server';
+  
+  const key = 'riskmate_device_id';
+  let deviceId = localStorage.getItem(key);
+  
+  if (!deviceId) {
+    deviceId = crypto.randomUUID();
+    localStorage.setItem(key, deviceId);
+  }
+  
+  return deviceId;
+}
+
+/**
+ * Get client metadata for audit logging
+ */
+function getClientMetadata(): { client: string; appVersion: string; deviceId: string } {
+  const deviceId = getStableDeviceId();
+  
+  // Get app version from env or git sha (fallback to 'unknown')
+  const appVersion = process.env.NEXT_PUBLIC_APP_VERSION || 
+                     process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA?.substring(0, 7) || 
+                     'unknown';
+  
+  return {
+    client: 'web',
+    appVersion,
+    deviceId,
+  };
+}
+
 async function getAuthToken(): Promise<string | null> {
   if (typeof window === 'undefined') return null;
   

@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Operations header with KPI chips - Apple Home style
+/// Operations header with unified status bar - Apple Home style
 struct OperationsHeaderView: View {
     let activeCount: Int
     let highRiskCount: Int
@@ -9,37 +9,48 @@ struct OperationsHeaderView: View {
     let onKPITap: (KPIType) -> Void
     
     var body: some View {
-        VStack(alignment: .leading, spacing: RMSystemTheme.Spacing.sm) {
-            // Live Sync Status (green pulse dot + "Live")
-            LiveSyncStatus(isOnline: true, lastSync: lastSync)
-            
-            // KPI Chips
-            HStack(spacing: RMSystemTheme.Spacing.sm) {
-                KPIChip(
-                    title: "Active",
-                    count: activeCount,
-                    color: Color(.systemBlue),
-                    action: { onKPITap(.active) }
-                )
-                
-                if highRiskCount > 0 {
-                    KPIChip(
-                        title: "High Risk",
-                        count: highRiskCount,
-                        color: Color(.systemRed),
-                        action: { onKPITap(.highRisk) }
-                    )
-                }
-                
-                if missingEvidenceCount > 0 {
-                    KPIChip(
-                        title: "Missing Evidence",
-                        count: missingEvidenceCount,
-                        color: Color(.systemOrange),
-                        action: { onKPITap(.missingEvidence) }
-                    )
-                }
+        // Unified status bar: Live • Active (n) • High Risk (n)
+        HStack(spacing: RMSystemTheme.Spacing.sm) {
+            // Live indicator (compact)
+            HStack(spacing: 4) {
+                Circle()
+                    .fill(Color.green)
+                    .frame(width: 6, height: 6)
+                Text("Live")
+                    .font(RMSystemTheme.Typography.caption.weight(.medium))
+                    .foregroundStyle(RMSystemTheme.Colors.textSecondary)
             }
+            
+            Text("•")
+                .foregroundStyle(RMSystemTheme.Colors.separator)
+            
+            // Active chip (always shown)
+            KPIChip(
+                title: "Active",
+                count: activeCount,
+                color: Color(.systemBlue),
+                action: { onKPITap(.active) }
+            )
+            
+            if highRiskCount > 0 {
+                KPIChip(
+                    title: "High Risk",
+                    count: highRiskCount,
+                    color: Color(.systemRed),
+                    action: { onKPITap(.highRisk) }
+                )
+            }
+            
+            if missingEvidenceCount > 0 {
+                KPIChip(
+                    title: "Needs Evidence",
+                    count: missingEvidenceCount,
+                    color: Color(.systemOrange),
+                    action: { onKPITap(.missingEvidence) }
+                )
+            }
+            
+            Spacer()
         }
         .padding(.vertical, RMSystemTheme.Spacing.xs)
     }

@@ -117,11 +117,17 @@ export async function proxyToBackend(
       controller.abort()
     }, requestTimeout)
 
+    // Get client metadata (consistent across all requests)
+    const clientMetadata = getClientMetadata();
+    
     const fetchOptions: RequestInit = {
       method,
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${sessionToken}`,
+        'x-client': clientMetadata.client,
+        'x-app-version': clientMetadata.appVersion,
+        'x-device-id': clientMetadata.deviceId,
       },
       cache: 'no-store',
       signal: controller.signal, // Enable timeout/abort

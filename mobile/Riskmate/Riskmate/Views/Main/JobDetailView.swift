@@ -2,7 +2,7 @@ import SwiftUI
 import PDFKit
 import UserNotifications
 
-/// Job Detail screen with tabs: Overview, Hazards, Controls, Evidence, Exports
+/// Job Detail screen: Overview + Evidence always; Hazards/Controls only when content exists. No Exports tab.
 struct JobDetailView: View {
     let jobId: String
     @State private var selectedTab: JobDetailTab = .overview
@@ -11,8 +11,28 @@ struct JobDetailView: View {
     @State private var errorMessage: String?
     @State private var showPDFViewer = false
     @State private var pdfURL: URL?
+    @State private var showExportProofSheet = false
+    @State private var hazardsCount: Int = 0
+    @State private var controlsCount: Int = 0
+    @State private var isLoadingHazards = false
+    @State private var isLoadingControls = false
+    @State private var evidenceCountForExport: Int = 0
+    @State private var evidenceRequiredForExport: Int = 5
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var quickAction: QuickActionRouter
+    
+    /// Tabs to show: Overview + Evidence always; Hazards/Controls only when API returns count > 0
+    private var visibleTabs: [JobDetailTab] {
+        [.overview]
+        + (hazardsCount > 0 ? [.hazards] : [])
+        + (controlsCount > 0 ? [.controls] : [])
+        + [.evidence]
+    }
+    
+    /// Single source of truth: validate selection when counts or loading state change. Only reset when loading finished and count is 0 (no jank during load).
+    private var tabValidationKey: TabValidationKey {
+        TabValidationKey(h: hazardsCount, c: controlsCount, loadingH: isLoadingHazards, loadingC: isLoadingControls)
+    }
     
     var body: some View {
         RMBackground()
@@ -48,63 +68,34 @@ struct JobDetailView: View {
                                 .padding(.top, RMTheme.Spacing.md)
                         }
                         
-                        // Prominent "Add Evidence" CTA (evidence-first hierarchy) - hidden for auditors
-                        if !EntitlementsManager.shared.isAuditor() {
-                            Button {
-                                quickAction.presentEvidence(jobId: job.id)
-                            } label: {
-                                HStack(spacing: RMTheme.Spacing.sm) {
-                                    Image(systemName: "camera.fill")
-                                        .font(.system(size: 16, weight: .semibold))
-                                    Text("Add Evidence")
-                                        .font(RMTheme.Typography.bodyBold)
-                                    Spacer()
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 14, weight: .medium))
-                                        .opacity(0.6)
-                                }
-                                .foregroundColor(RMTheme.Colors.textPrimary)
-                                .padding(RMTheme.Spacing.md)
-                                .frame(maxWidth: .infinity)
-                                .background(RMTheme.Colors.accent.opacity(0.15))
-                                .overlay {
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .stroke(RMTheme.Colors.accent.opacity(0.3), lineWidth: 1)
-                                }
-                                .clipShape(RoundedRectangle(cornerRadius: 12))
-                            }
-                            .padding(.horizontal, RMTheme.Spacing.pagePadding)
-                            .padding(.vertical, RMTheme.Spacing.sm)
-                            .background(RMTheme.Colors.background)
-                        }
-                        
-                        // Tab Picker
-                        Picker("Tab", selection: $selectedTab) {
-                            ForEach(JobDetailTab.allCases, id: \.self) { tab in
+                        // Sticky segmented control (only visible tabs; no Exports)
+                        Picker("Job sections", selection: $selectedTab) {
+                            ForEach(visibleTabs, id: \.self) { tab in
                                 Text(tab.title).tag(tab)
                             }
                         }
                         .pickerStyle(.segmented)
+                        .accessibilityLabel("Job sections")
+                        .accessibilityHint("Tabs: \(visibleTabs.map(\.title).joined(separator: ", "))")
                         .padding(.horizontal, RMTheme.Spacing.pagePadding)
-                        .padding(.bottom, RMTheme.Spacing.sm)
+                        .padding(.vertical, RMTheme.Spacing.sm)
                         .background(RMTheme.Colors.background)
+                        .onChange(of: tabValidationKey) { _, _ in
+                            if selectedTab == .hazards && !isLoadingHazards && hazardsCount == 0 {
+                                selectedTab = .overview
+                            } else if selectedTab == .controls && !isLoadingControls && controlsCount == 0 {
+                                selectedTab = .overview
+                            } else if !visibleTabs.contains(selectedTab) {
+                                selectedTab = .overview
+                            }
+                        }
                         
-                        // Tab Content
+                        // Tab Content (only visible tabs)
                         TabView(selection: $selectedTab) {
-                            OverviewTab(job: job)
-                                .tag(JobDetailTab.overview)
-                            
-                            HazardsTab(jobId: jobId)
-                                .tag(JobDetailTab.hazards)
-                            
-                            ControlsTab(jobId: jobId)
-                                .tag(JobDetailTab.controls)
-                            
-                            EvidenceTab(jobId: jobId)
-                                .tag(JobDetailTab.evidence)
-                            
-                            ExportsTab(jobId: jobId)
-                            .tag(JobDetailTab.exports)
+                            ForEach(visibleTabs, id: \.self) { tab in
+                                tabContent(for: tab, job: job)
+                                    .tag(tab)
+                            }
                         }
                         .tabViewStyle(.page(indexDisplayMode: .never))
                     }
@@ -119,37 +110,50 @@ struct JobDetailView: View {
             .rmNavigationBar(title: job?.clientName ?? "Job Details")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    HStack(spacing: RMTheme.Spacing.sm) {
-                        // Evidence Requirements Badge
-                        if job != nil {
-                            RMEvidenceRequirementsBadge(
-                                required: 5, // TODO: Get from job/API
-                                uploaded: 2, // TODO: Get from evidence count
-                                onTap: {
-                                    selectedTab = .evidence
-                                }
-                            )
-                            .id(job?.id) // Use job.id to satisfy compiler
-                        }
-                        
-                        Menu {
-                            Button {
-                                // TODO: Share job
-                            } label: {
-                                Label("Share", systemImage: "square.and.arrow.up")
-                            }
-                            
-                            Button(role: .destructive) {
-                                // TODO: Delete job
-                            } label: {
-                                Label("Delete", systemImage: "trash")
-                            }
+                    Menu {
+                        Button {
+                            Haptics.tap()
+                            quickAction.requestSwitchToLedger()
                         } label: {
-                            Image(systemName: "ellipsis.circle")
-                                .foregroundColor(RMTheme.Colors.textSecondary)
+                            Label("View Ledger", systemImage: "book.closed")
                         }
+                        Button {
+                            Haptics.tap()
+                            quickAction.requestSwitchToWorkRecords(filter: nil)
+                        } label: {
+                            Label("View Work Records", systemImage: "list.bullet.rectangle")
+                        }
+                        Button {
+                            Haptics.tap()
+                            showExportProofSheet = true
+                        } label: {
+                            Label("Export", systemImage: "square.and.arrow.up")
+                        }
+                        Button {
+                            Haptics.tap()
+                            WebAppURL.openWebApp()
+                        } label: {
+                            Label("Open in Web App", systemImage: "globe")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                            .foregroundColor(RMTheme.Colors.textSecondary)
                     }
+                    .accessibilityLabel("More actions for this job")
                 }
+            }
+            .sheet(isPresented: $showExportProofSheet) {
+                ExportProofSheet(
+                    jobId: jobId,
+                    isPresented: $showExportProofSheet,
+                    evidenceCount: evidenceCountForExport,
+                    evidenceRequired: evidenceRequiredForExport,
+                    useProvidedCount: true
+                )
+            }
+            .onChange(of: selectedTab) { _, _ in
+                // Light haptic on tab change
+                Haptics.tap()
             }
             .sheet(isPresented: $showPDFViewer) {
                 if let pdfURL = pdfURL {
@@ -163,6 +167,55 @@ struct JobDetailView: View {
             .task(id: jobId) { // Use task(id:) to prevent re-fetch on unrelated re-renders
                 await loadJob()
             }
+            .task(id: job?.id) {
+                guard job != nil else { return }
+                await loadHazardsAndControlsCount()
+                await loadEvidenceCountForExport()
+            }
+    }
+    
+    @ViewBuilder
+    private func tabContent(for tab: JobDetailTab, job: Job?) -> some View {
+        if let job = job {
+            switch tab {
+            case .overview:
+                OverviewTab(job: job, showManagedOnWebCard: hazardsCount == 0 && controlsCount == 0)
+            case .hazards:
+                HazardsTab(jobId: jobId)
+            case .controls:
+                ControlsTab(jobId: jobId)
+            case .evidence:
+                EvidenceTab(jobId: jobId)
+            }
+        }
+    }
+    
+    private func loadHazardsAndControlsCount() async {
+        isLoadingHazards = true
+        isLoadingControls = true
+        defer {
+            isLoadingHazards = false
+            isLoadingControls = false
+        }
+        do {
+            async let hazards = APIClient.shared.getHazards(jobId: jobId)
+            async let controls = APIClient.shared.getControls(jobId: jobId)
+            let (h, c) = try await (hazards, controls)
+            hazardsCount = h.count
+            controlsCount = c.count
+        } catch {
+            hazardsCount = 0
+            controlsCount = 0
+        }
+    }
+    
+    private func loadEvidenceCountForExport() async {
+        do {
+            let evidence = try await APIClient.shared.getEvidence(jobId: jobId)
+            evidenceCountForExport = evidence.count
+        } catch {
+            evidenceCountForExport = 0
+        }
     }
     
     private func loadJob() async {
@@ -185,6 +238,14 @@ struct JobDetailView: View {
     }
 }
 
+/// Equatable key for onChange; tuples cannot conform to Equatable.
+private struct TabValidationKey: Equatable {
+    let h: Int
+    let c: Int
+    let loadingH: Bool
+    let loadingC: Bool
+}
+
 // MARK: - Tabs
 
 enum JobDetailTab: String, CaseIterable {
@@ -192,7 +253,6 @@ enum JobDetailTab: String, CaseIterable {
     case hazards
     case controls
     case evidence
-    case exports
     
     var title: String {
         switch self {
@@ -200,7 +260,6 @@ enum JobDetailTab: String, CaseIterable {
         case .hazards: return "Hazards"
         case .controls: return "Controls"
         case .evidence: return "Evidence"
-        case .exports: return "Exports"
         }
     }
 }
@@ -209,11 +268,64 @@ enum JobDetailTab: String, CaseIterable {
 
 struct OverviewTab: View {
     let job: Job
+    var showManagedOnWebCard: Bool = false
     @State private var recentReceipts: [ActionReceipt] = []
+    @State private var evidenceCount: Int = 0
+    @State private var evidenceRequired: Int = 5
+    @EnvironmentObject private var quickAction: QuickActionRouter
     
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: RMTheme.Spacing.sectionSpacing) {
+                // Managed on Web card when Hazards + Controls are both empty (hide those tabs)
+                if showManagedOnWebCard {
+                    ManagedOnWebCard(
+                        onOpenWebApp: { WebAppURL.openWebApp() },
+                        onViewWorkRecords: { quickAction.requestSwitchToWorkRecords(filter: nil) }
+                    )
+                    .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                }
+                
+                // Add Evidence CTA at top (scrolls with content; keeps header clean)
+                if !EntitlementsManager.shared.isAuditor() {
+                    Button {
+                        Haptics.tap()
+                        quickAction.presentEvidence(jobId: job.id)
+                    } label: {
+                        HStack(spacing: RMTheme.Spacing.sm) {
+                            Image(systemName: "camera.fill")
+                                .font(.system(size: 16, weight: .semibold))
+                            Text("Add Evidence")
+                                .font(RMTheme.Typography.bodyBold)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 14, weight: .medium))
+                                .opacity(0.6)
+                        }
+                        .foregroundColor(RMTheme.Colors.textPrimary)
+                        .padding(RMTheme.Spacing.md)
+                        .frame(maxWidth: .infinity)
+                        .background(RMTheme.Colors.accent.opacity(0.15))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(RMTheme.Colors.accent.opacity(0.3), lineWidth: 1)
+                        }
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                    }
+                    .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                }
+                
+                // Next Step card: status + secondary "Add evidence" link (primary CTA is the top row)
+                NextStepCard(
+                    showPrimaryAction: !EntitlementsManager.shared.isAuditor(),
+                    evidenceCount: evidenceCount,
+                    evidenceRequired: evidenceRequired,
+                    onAddEvidence: { quickAction.presentEvidence(jobId: job.id) },
+                    onViewWorkRecords: { quickAction.requestSwitchToWorkRecords(filter: nil) },
+                    onViewLedger: { quickAction.requestSwitchToLedger() }
+                )
+                .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                
                 // Risk Score Card
                 RiskScoreCard(job: job)
                     .padding(.horizontal, RMTheme.Spacing.pagePadding)
@@ -255,6 +367,17 @@ struct OverviewTab: View {
         }
         .task {
             await loadRecentReceipts()
+            await loadEvidenceCount()
+        }
+    }
+    
+    private func loadEvidenceCount() async {
+        do {
+            let evidence = try await APIClient.shared.getEvidence(jobId: job.id)
+            evidenceCount = evidence.count
+        } catch {
+            // Keep default
+            evidenceCount = 0
         }
     }
     
@@ -298,6 +421,121 @@ struct OverviewTab: View {
         } catch {
             print("[OverviewTab] ❌ Failed to load recent receipts: \(error.localizedDescription)")
             recentReceipts = [] // Show empty - no demo data
+        }
+    }
+}
+
+/// Single card when Hazards & Controls are both empty: "Managed in Web App" + actions
+struct ManagedOnWebCard: View {
+    let onOpenWebApp: () -> Void
+    let onViewWorkRecords: () -> Void
+    
+    var body: some View {
+        RMGlassCard {
+            VStack(alignment: .leading, spacing: RMTheme.Spacing.md) {
+                HStack {
+                    Image(systemName: "globe")
+                        .foregroundColor(RMTheme.Colors.accent)
+                    Text("Managed in Web App")
+                        .rmSectionHeader()
+                }
+                Text("Hazards and Controls are configured in the Web App. Evidence you add here attaches automatically.")
+                    .font(RMTheme.Typography.bodySmall)
+                    .foregroundColor(RMTheme.Colors.textSecondary)
+                HStack(spacing: RMTheme.Spacing.md) {
+                    Button(action: onOpenWebApp) {
+                        Label("Open in Web App", systemImage: "globe")
+                            .font(RMTheme.Typography.bodySmallBold)
+                            .foregroundColor(RMTheme.Colors.accent)
+                    }
+                    Button(action: onViewWorkRecords) {
+                        Label("View Work Records", systemImage: "list.bullet.rectangle")
+                            .font(RMTheme.Typography.bodySmallBold)
+                            .foregroundColor(RMTheme.Colors.accent)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Command-center "Next Step" card: one primary action + secondary links
+struct NextStepCard: View {
+    var showPrimaryAction: Bool = true
+    var evidenceCount: Int = 0
+    var evidenceRequired: Int = 5
+    let onAddEvidence: () -> Void
+    let onViewWorkRecords: () -> Void
+    let onViewLedger: () -> Void
+    
+    private var remaining: Int {
+        max(0, evidenceRequired - evidenceCount)
+    }
+    
+    private var isComplete: Bool {
+        evidenceCount >= evidenceRequired
+    }
+    
+    private var statusMessage: String {
+        if !showPrimaryAction {
+            return "View work records and ledger from the menu."
+        }
+        if isComplete {
+            return "Evidence complete. Ready to export Proof Pack."
+        }
+        return "Add \(remaining) evidence item\(remaining == 1 ? "" : "s") to unlock Proof Pack export."
+    }
+    
+    var body: some View {
+        RMGlassCard {
+            VStack(alignment: .leading, spacing: RMTheme.Spacing.md) {
+                HStack {
+                    Image(systemName: isComplete ? "checkmark.circle.fill" : "arrow.triangle.turn.up.right.diamond.fill")
+                        .foregroundColor(isComplete ? RMTheme.Colors.success : RMTheme.Colors.accent)
+                    Text(isComplete ? "Ready" : "Next Step")
+                        .rmSectionHeader()
+                    Spacer()
+                    // Evidence badge inline
+                    if showPrimaryAction {
+                        Text("\(evidenceCount)/\(evidenceRequired)")
+                            .font(RMTheme.Typography.captionBold)
+                            .foregroundColor(isComplete ? RMTheme.Colors.success : RMTheme.Colors.accent)
+                            .padding(.horizontal, RMTheme.Spacing.sm)
+                            .padding(.vertical, 4)
+                            .background((isComplete ? RMTheme.Colors.success : RMTheme.Colors.accent).opacity(0.15))
+                            .clipShape(Capsule())
+                    }
+                }
+                Text(statusMessage)
+                    .font(RMTheme.Typography.bodySmall)
+                    .foregroundColor(RMTheme.Colors.textSecondary)
+                VStack(spacing: RMTheme.Spacing.sm) {
+                    if showPrimaryAction && !isComplete {
+                        Button(action: onAddEvidence) {
+                            HStack(spacing: RMTheme.Spacing.xs) {
+                                Image(systemName: "camera.fill")
+                                    .font(RMTheme.Typography.caption)
+                                Text("Add evidence")
+                                    .font(RMTheme.Typography.bodySmall)
+                            }
+                            .foregroundColor(RMTheme.Colors.accent)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    HStack(spacing: RMTheme.Spacing.md) {
+                        Button(action: onViewWorkRecords) {
+                            Label("Work Records", systemImage: "list.bullet.rectangle")
+                                .font(RMTheme.Typography.bodySmall)
+                                .foregroundColor(RMTheme.Colors.accent)
+                        }
+                        Button(action: onViewLedger) {
+                            Label("Ledger", systemImage: "book.closed")
+                                .font(RMTheme.Typography.bodySmall)
+                                .foregroundColor(RMTheme.Colors.accent)
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -484,16 +722,37 @@ struct HazardsTab: View {
     @State private var hazards: [Hazard] = []
     @State private var isLoading = true
     @State private var didLoad = false // Deduplication gate
+    @EnvironmentObject private var quickAction: QuickActionRouter
     
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: RMTheme.Spacing.sectionSpacing) {
                 if hazards.isEmpty {
-                    RMEmptyState(
-                        icon: "exclamationmark.triangle",
-                        title: "No Hazards",
-                        message: "Add hazards to assess job risks"
-                    )
+                    VStack(spacing: RMTheme.Spacing.md) {
+                        RMEmptyState(
+                            icon: "exclamationmark.triangle",
+                            title: "No Hazards",
+                            message: "Hazards are configured on the web. Evidence added here will attach to controls automatically."
+                        )
+                        HStack(spacing: RMTheme.Spacing.lg) {
+                            Button {
+                                Haptics.tap()
+                                quickAction.requestSwitchToWorkRecords(filter: nil)
+                            } label: {
+                                Label("View Work Records", systemImage: "list.bullet.rectangle")
+                                    .font(RMTheme.Typography.bodySmallBold)
+                                    .foregroundColor(RMTheme.Colors.accent)
+                            }
+                            Button {
+                                Haptics.tap()
+                                WebAppURL.openWebApp()
+                            } label: {
+                                Label("Open in Web App", systemImage: "globe")
+                                    .font(RMTheme.Typography.bodySmallBold)
+                                    .foregroundColor(RMTheme.Colors.accent)
+                            }
+                        }
+                    }
                     .padding(.top, RMTheme.Spacing.xxl)
                 } else {
                     ForEach(hazards) { hazard in
@@ -594,16 +853,37 @@ struct ControlsTab: View {
     @State private var controls: [Control] = []
     @State private var isLoading = true
     @State private var didLoad = false // Deduplication gate
+    @EnvironmentObject private var quickAction: QuickActionRouter
     
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: RMTheme.Spacing.sectionSpacing) {
                 if controls.isEmpty {
-                    RMEmptyState(
-                        icon: "checkmark.shield",
-                        title: "No Controls",
-                        message: "Controls will appear here based on selected hazards"
-                    )
+                    VStack(spacing: RMTheme.Spacing.md) {
+                        RMEmptyState(
+                            icon: "checkmark.shield",
+                            title: "No Controls",
+                            message: "Controls are derived from hazards on the web. Evidence added here will attach to controls automatically."
+                        )
+                        HStack(spacing: RMTheme.Spacing.lg) {
+                            Button {
+                                Haptics.tap()
+                                quickAction.requestSwitchToWorkRecords(filter: nil)
+                            } label: {
+                                Label("View Work Records", systemImage: "list.bullet.rectangle")
+                                    .font(RMTheme.Typography.bodySmallBold)
+                                    .foregroundColor(RMTheme.Colors.accent)
+                            }
+                            Button {
+                                Haptics.tap()
+                                WebAppURL.openWebApp()
+                            } label: {
+                                Label("Open in Web App", systemImage: "globe")
+                                    .font(RMTheme.Typography.bodySmallBold)
+                                    .foregroundColor(RMTheme.Colors.accent)
+                            }
+                        }
+                    }
                     .padding(.top, RMTheme.Spacing.xxl)
                 } else {
                     ForEach(controls) { control in
@@ -805,30 +1085,29 @@ struct EvidenceTab: View {
     @State private var showImagePicker = false
     
     var body: some View {
+        let activeUploads = uploadManager.uploads.filter { $0.jobId == jobId }
         ScrollView(showsIndicators: false) {
             VStack(spacing: RMTheme.Spacing.sectionSpacing) {
-                // Upload button
-                Button {
-                    showImagePicker = true
-                } label: {
-                    HStack {
-                        Image(systemName: "plus.circle.fill")
-                        Text("Add Evidence")
+                // Evidence section header + Add Evidence (same label/icon in empty and non-empty)
+                HStack {
+                    Text("Evidence")
+                        .rmSectionHeader()
+                    Spacer()
+                    Button {
+                        Haptics.tap()
+                        showImagePicker = true
+                    } label: {
+                        Label("Add Evidence", systemImage: "camera.fill")
+                            .font(RMTheme.Typography.bodySmallBold)
+                            .foregroundColor(RMTheme.Colors.accent)
                     }
-                    .font(RMTheme.Typography.bodyBold)
-                    .foregroundColor(.black)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, RMTheme.Spacing.md)
-                    .background(RMTheme.Colors.accent)
-                    .clipShape(RoundedRectangle(cornerRadius: RMTheme.Radius.sm))
                 }
                 .padding(.horizontal, RMTheme.Spacing.pagePadding)
                 
-                // Active uploads
-                let activeUploads = uploadManager.uploads.filter { $0.jobId == jobId }
+                // Active uploads (Uploading… with progress, Failed — Tap to retry, Uploaded)
                 if !activeUploads.isEmpty {
                     VStack(alignment: .leading, spacing: RMTheme.Spacing.sm) {
-                        Text("Uploading")
+                        Text("Uploads")
                             .rmSectionHeader()
                             .padding(.horizontal, RMTheme.Spacing.pagePadding)
                         
@@ -839,14 +1118,23 @@ struct EvidenceTab: View {
                     }
                 }
                 
-                // Synced evidence
+                // Synced evidence or empty state
                 if evidence.isEmpty && activeUploads.isEmpty {
                     RMEmptyState(
                         icon: "photo",
                         title: "No Evidence",
                         message: "Upload photos and documents to complete readiness"
                     )
-                    .padding(.top, RMTheme.Spacing.xxl)
+                    .padding(.top, RMTheme.Spacing.lg)
+                    Button {
+                        Haptics.tap()
+                        showImagePicker = true
+                    } label: {
+                        Label("Add Evidence", systemImage: "camera.fill")
+                            .font(RMTheme.Typography.bodySmallBold)
+                            .foregroundColor(RMTheme.Colors.accent)
+                    }
+                    .padding(.top, RMTheme.Spacing.sm)
                 } else {
                     ForEach(evidence) { item in
                         EvidenceCard(item: item)
@@ -907,6 +1195,7 @@ struct UploadStatusCard: View {
                     
                     if case .failed = upload.state {
                         Button {
+                            Haptics.tap()
                             Task {
                                 try? await uploadManager.retryUpload(upload)
                             }
@@ -935,7 +1224,16 @@ struct UploadStatusCard: View {
                 
                 Text(statusText)
                     .font(RMTheme.Typography.caption)
-                    .foregroundColor(RMTheme.Colors.textSecondary)
+                    .foregroundColor(statusColor)
+            }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if case .failed = upload.state {
+                Haptics.tap()
+                Task {
+                    try? await uploadManager.retryUpload(upload)
+                }
             }
         }
     }
@@ -958,16 +1256,24 @@ struct UploadStatusCard: View {
         }
     }
     
+    private var statusColor: Color {
+        switch upload.state {
+        case .queued, .uploading: return RMTheme.Colors.textSecondary
+        case .synced: return RMTheme.Colors.success
+        case .failed: return RMTheme.Colors.error
+        }
+    }
+    
     private var statusText: String {
         switch upload.state {
         case .queued:
             return "Queued"
         case .uploading:
-            return "Uploading... \(Int(upload.progress * 100))%"
+            return "Uploading… \(Int(upload.progress * 100))%"
         case .synced:
-            return "Synced"
-        case .failed(let error):
-            return "Failed: \(error)"
+            return "Uploaded"
+        case .failed:
+            return "Failed — Tap to retry"
         }
     }
 }
@@ -1031,15 +1337,17 @@ struct ExportsTab: View {
     @State private var showTrustToast = false
     @State private var completedExport: ExportTask?
     @State private var showExportReceipt = false
+    @State private var failedExport: ExportTask?
+    @State private var showFailedExportSheet = false
     
     var activeExports: [ExportTask] {
         exportManager.exports.filter { $0.jobId == jobId && ($0.state == .queued || $0.state == .preparing || $0.state == .downloading) }
     }
     
+    /// Recent exports (all states) for history + trust; tap → share when ready
     var recentExports: [ExportTask] {
         let allExports = exportManager.getAllExportsForJob(jobId: jobId)
-        let readyExports = allExports.filter { $0.state == .ready }
-        return Array(readyExports.prefix(5))
+        return Array(allExports.prefix(10))
     }
     
     private var scrollContent: some View {
@@ -1106,19 +1414,32 @@ struct ExportsTab: View {
     
     @ViewBuilder
     private var recentExportsSection: some View {
-        if !recentExports.isEmpty {
-            VStack(alignment: .leading, spacing: RMTheme.Spacing.md) {
-                Text("Recent Exports")
-                    .rmSectionHeader()
+        VStack(alignment: .leading, spacing: RMTheme.Spacing.md) {
+            Text("Recent Exports")
+                .rmSectionHeader()
+                .padding(.horizontal, RMTheme.Spacing.pagePadding)
+            
+            if recentExports.isEmpty {
+                Text("Proof Packs and PDFs will appear here after you generate them.")
+                    .font(RMTheme.Typography.bodySmall)
+                    .foregroundColor(RMTheme.Colors.textSecondary)
                     .padding(.horizontal, RMTheme.Spacing.pagePadding)
-                
+                    .padding(.vertical, RMTheme.Spacing.md)
+            } else {
                 ForEach(recentExports) { export in
-                    RecentExportCard(export: export, onView: {
-                        if let url = export.fileURL {
-                            shareURL = url
-                            showShareSheet = true
+                    RecentExportCard(
+                        export: export,
+                        onView: {
+                            if case .ready = export.state, let url = export.fileURL {
+                                shareURL = url
+                                showShareSheet = true
+                            }
+                        },
+                        onFailed: {
+                            failedExport = export
+                            showFailedExportSheet = true
                         }
-                    })
+                    )
                     .padding(.horizontal, RMTheme.Spacing.pagePadding)
                 }
             }
@@ -1161,6 +1482,20 @@ struct ExportsTab: View {
         .sheet(isPresented: $showExportReceipt) {
             if let export = completedExport {
                 ExportReceiptView(export: export)
+            }
+        }
+        .sheet(isPresented: $showFailedExportSheet) {
+            if let export = failedExport {
+                FailedExportSheet(export: export, onRetry: {
+                    showFailedExportSheet = false
+                    Task {
+                        await generateExport(type: export.type)
+                    }
+                }, onCopyID: {
+                    UIPasteboard.general.string = export.id
+                    ToastCenter.shared.show("Export ID Copied", systemImage: "doc.on.doc", style: .success)
+                })
+                .presentationDetents([.medium])
             }
         }
         .onAppear {
@@ -1271,12 +1606,41 @@ struct ExportStatusCard: View {
 struct RecentExportCard: View {
     let export: ExportTask
     let onView: () -> Void
+    var onFailed: (() -> Void)? = nil
+    
+    private var statusLabel: String {
+        switch export.state {
+        case .queued: return "Queued"
+        case .preparing: return "Processing"
+        case .downloading: return "Downloading"
+        case .ready: return "Ready"
+        case .failed: return "Failed"
+        }
+    }
+    
+    private var statusColor: Color {
+        switch export.state {
+        case .queued, .preparing, .downloading: return RMTheme.Colors.textTertiary
+        case .ready: return RMTheme.Colors.success
+        case .failed: return RMTheme.Colors.error
+        }
+    }
+    
+    private var isFailed: Bool {
+        if case .failed = export.state { return true }
+        return false
+    }
+    
+    private var isReady: Bool {
+        if case .ready = export.state { return export.fileURL != nil }
+        return false
+    }
     
     var body: some View {
         RMGlassCard {
             HStack {
                 Image(systemName: export.type == .pdf ? "doc.text.fill" : "archivebox.fill")
-                    .foregroundColor(RMTheme.Colors.accent)
+                    .foregroundColor(isFailed ? RMTheme.Colors.error : RMTheme.Colors.accent)
                     .font(.system(size: 20))
                 
                 VStack(alignment: .leading, spacing: 2) {
@@ -1284,19 +1648,37 @@ struct RecentExportCard: View {
                         .font(RMTheme.Typography.bodySmallBold)
                         .foregroundColor(RMTheme.Colors.textPrimary)
                     
-                    Text(formatDate(export.createdAt))
-                        .font(RMTheme.Typography.caption)
-                        .foregroundColor(RMTheme.Colors.textSecondary)
+                    HStack(spacing: RMTheme.Spacing.sm) {
+                        Text(formatDate(export.createdAt))
+                            .font(RMTheme.Typography.caption)
+                            .foregroundColor(RMTheme.Colors.textSecondary)
+                        Text("•")
+                            .foregroundColor(RMTheme.Colors.textTertiary)
+                        Text(statusLabel)
+                            .font(RMTheme.Typography.caption)
+                            .foregroundColor(statusColor)
+                    }
                 }
                 
                 Spacer()
                 
-                Button {
-                    onView()
-                } label: {
-                    Text("View")
-                        .font(RMTheme.Typography.bodySmallBold)
-                        .foregroundColor(RMTheme.Colors.accent)
+                if isReady {
+                    Button {
+                        onView()
+                    } label: {
+                        Text("View")
+                            .font(RMTheme.Typography.bodySmallBold)
+                            .foregroundColor(RMTheme.Colors.accent)
+                    }
+                } else if isFailed {
+                    Button {
+                        Haptics.tap()
+                        onFailed?()
+                    } label: {
+                        Text("Details")
+                            .font(RMTheme.Typography.bodySmallBold)
+                            .foregroundColor(RMTheme.Colors.error)
+                    }
                 }
             }
         }
@@ -1355,30 +1737,112 @@ struct LastExportCard: View {
 
 // ShareSheet moved to Components/UIKit/ShareSheet.swift
 
+/// Sheet shown when tapping a failed export - shows error + Retry + Copy ID
+struct FailedExportSheet: View {
+    let export: ExportTask
+    let onRetry: () -> Void
+    let onCopyID: () -> Void
+    @Environment(\.dismiss) private var dismiss
+    
+    private var errorReason: String {
+        if case .failed(let reason) = export.state {
+            return reason
+        }
+        return "Unknown error"
+    }
+    
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: RMTheme.Spacing.lg) {
+                // Error icon
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 48))
+                    .foregroundColor(RMTheme.Colors.error)
+                    .padding(.top, RMTheme.Spacing.xl)
+                
+                Text("Export Failed")
+                    .font(RMTheme.Typography.title)
+                    .foregroundColor(RMTheme.Colors.textPrimary)
+                
+                Text(errorReason)
+                    .font(RMTheme.Typography.bodySmall)
+                    .foregroundColor(RMTheme.Colors.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, RMTheme.Spacing.lg)
+                
+                Spacer()
+                
+                VStack(spacing: RMTheme.Spacing.md) {
+                    // Retry button
+                    Button {
+                        Haptics.impact(.medium)
+                        onRetry()
+                    } label: {
+                        HStack {
+                            Image(systemName: "arrow.clockwise")
+                            Text("Try Again")
+                                .font(RMTheme.Typography.bodyBold)
+                        }
+                        .foregroundColor(.black)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, RMTheme.Spacing.md)
+                        .background(RMTheme.Colors.accent)
+                        .clipShape(RoundedRectangle(cornerRadius: RMTheme.Radius.sm))
+                    }
+                    
+                    // Copy ID button
+                    Button {
+                        Haptics.tap()
+                        onCopyID()
+                    } label: {
+                        Label("Copy Export ID", systemImage: "doc.on.doc")
+                            .font(RMTheme.Typography.bodySmall)
+                            .foregroundColor(RMTheme.Colors.accent)
+                    }
+                }
+                .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                .padding(.bottom, RMTheme.Spacing.xl)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(RMTheme.Colors.background)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+}
+
 struct ExportCard: View {
     let title: String
     let description: String
     let icon: String
     let action: () async -> Void
     let isGenerating: Bool
+    var disabled: Bool = false
     
     var body: some View {
         RMGlassCard {
             VStack(alignment: .leading, spacing: RMTheme.Spacing.md) {
                 HStack {
                     Image(systemName: icon)
-                        .foregroundColor(RMTheme.Colors.accent)
+                        .foregroundColor(disabled ? RMTheme.Colors.textTertiary : RMTheme.Colors.accent)
                         .font(.system(size: 24))
                     
                     Text(title)
                         .rmSectionHeader()
+                        .foregroundColor(disabled ? RMTheme.Colors.textTertiary : RMTheme.Colors.textPrimary)
                     
                     Spacer()
                 }
                 
                 Text(description)
                     .font(RMTheme.Typography.bodySmall)
-                    .foregroundColor(RMTheme.Colors.textSecondary)
+                    .foregroundColor(disabled ? RMTheme.Colors.textTertiary : RMTheme.Colors.textSecondary)
                 
                 Button {
                     Task {
@@ -1403,13 +1867,14 @@ struct ExportCard: View {
                             .foregroundColor(.black)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, RMTheme.Spacing.sm)
-                            .background(RMTheme.Colors.accent)
+                            .background(disabled ? RMTheme.Colors.inputFill : RMTheme.Colors.accent)
                             .clipShape(RoundedRectangle(cornerRadius: RMTheme.Radius.sm))
                     }
                 }
-                .disabled(isGenerating)
+                .disabled(isGenerating || disabled)
             }
         }
+        .opacity(disabled ? 0.8 : 1)
     }
 }
 
@@ -1417,4 +1882,5 @@ struct ExportCard: View {
     NavigationStack {
         JobDetailView(jobId: "1")
     }
+    .environmentObject(QuickActionRouter.shared)
 }

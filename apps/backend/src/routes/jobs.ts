@@ -14,7 +14,7 @@ import { emitJobEvent, emitEvidenceEvent } from "../utils/realtimeEvents";
 export const jobsRouter: ExpressRouter = express.Router();
 
 // Log that jobs routes are being loaded (verification for deployment)
-console.log("[ROUTES] ✅ Jobs routes loaded (including /:id/hazards and /:id/controls)");
+console.log("[ROUTES] ✅ Jobs routes loaded (including /:id/hazards, /:id/controls, /:id/permit-packs)");
 
 // Rate-limited logging for cursor misuse (once per organization per hour)
 // This helps identify client misconfigurations without spamming logs
@@ -854,6 +854,73 @@ jobsRouter.get("/:id/controls", authenticate, async (req: express.Request, res: 
   } catch (err: any) {
     console.error("[Jobs] Controls fetch failed:", err);
     res.status(500).json({ message: "Failed to fetch controls" });
+  }
+});
+
+// GET /api/jobs/:id/permit-packs
+// Returns list of generated permit packs / proof packs for this job (web parity: no 404)
+jobsRouter.get("/:id/permit-packs", authenticate, async (req: express.Request, res: express.Response) => {
+  const authReq = req as AuthenticatedRequest;
+  try {
+    const jobId = authReq.params.id;
+    const { organization_id } = authReq.user;
+
+    // Verify job belongs to organization
+    const { data: job, error: jobError } = await supabase
+      .from("jobs")
+      .select("id, organization_id")
+      .eq("id", jobId)
+      .eq("organization_id", organization_id)
+      .single();
+
+    if (jobError || !job) {
+      return res.status(404).json({ message: "Job not found" });
+    }
+
+    // Proof packs are tracked in exports (work_record_id = job id, export_type = proof_pack, state = ready)
+    const { data: exports, error: exportsError } = await supabase
+      .from("exports")
+      .select("id, storage_path, completed_at, created_by")
+      .eq("work_record_id", jobId)
+      .eq("organization_id", organization_id)
+      .eq("export_type", "proof_pack")
+      .eq("state", "ready")
+      .not("storage_path", "is", null)
+      .order("completed_at", { ascending: false });
+
+    if (exportsError) {
+      console.error("[Jobs] Permit-packs fetch failed:", exportsError);
+      return res.status(500).json({ message: "Failed to fetch permit packs" });
+    }
+
+    const packs = (exports || []).map((exp, idx) => ({
+      id: exp.id,
+      version: (exports?.length ?? 0) - idx,
+      file_path: exp.storage_path ?? "",
+      generated_at: exp.completed_at ?? "",
+      generated_by: exp.created_by ?? null,
+      downloadUrl: null as string | null,
+    }));
+
+    // Generate signed URLs for each pack
+    const packsWithUrls = await Promise.all(
+      packs.map(async (pack) => {
+        if (!pack.file_path) return { ...pack, downloadUrl: null };
+        try {
+          const { data: signed } = await supabase.storage
+            .from("exports")
+            .createSignedUrl(pack.file_path, 60 * 60);
+          return { ...pack, downloadUrl: signed?.signedUrl ?? null };
+        } catch {
+          return { ...pack, downloadUrl: null };
+        }
+      })
+    );
+
+    res.json({ data: packsWithUrls });
+  } catch (err: any) {
+    console.error("[Jobs] Permit-packs failed:", err);
+    res.status(500).json({ message: "Failed to fetch permit packs" });
   }
 });
 

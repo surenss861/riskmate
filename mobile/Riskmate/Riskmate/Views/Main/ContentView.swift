@@ -1,10 +1,11 @@
 import SwiftUI
+import Combine
 
 struct ContentView: View {
     @StateObject private var sessionManager = SessionManager.shared
     @StateObject private var serverStatus = ServerStatusManager.shared
     @StateObject private var entitlements = EntitlementsManager.shared
-    // Initialize tab based on role - default to Operations, will be adjusted in onAppear if needed
+    @EnvironmentObject private var quickAction: QuickActionRouter
     @State private var selectedTab: MainTab = .operations
     @State private var selectedSidebarItem: SidebarItem? = .operations
     @State private var showOnboarding = false
@@ -119,7 +120,7 @@ struct ContentView: View {
             // Operations (Dashboard) - First tab (always visible)
             NavigationStack {
                 OperationsView(onKPINavigate: { filter in
-                    workRecordsFilter = filter
+                    quickAction.requestSwitchToWorkRecords(filter: filter)
                 })
                     .rmNavigationBar(title: "Operations")
             }
@@ -147,12 +148,6 @@ struct ContentView: View {
                 Label("Work Records", systemImage: "doc.text.fill")
             }
             .tag(MainTab.workRecords)
-            .onChange(of: workRecordsFilter) { _ in
-                // Switch to Work Records tab when filter is set
-                if workRecordsFilter != nil {
-                    selectedTab = .workRecords
-                }
-            }
             
             // Settings (Account) - Fourth tab
             NavigationStack {
@@ -164,11 +159,16 @@ struct ContentView: View {
             .tag(MainTab.settings)
         }
         .tint(RMTheme.Colors.accent)
+        .onReceive(quickAction.$requestedTab.compactMap { $0 }) { _ in
+            guard let (tab, filter) = quickAction.consumeTabRequest() else { return }
+            workRecordsFilter = filter
+            selectedTab = tab
+        }
         .overlay(alignment: .bottomTrailing) {
             // Global FAB for quick evidence capture (hidden for auditors and on Operations tab)
             if !entitlements.isAuditor() && selectedTab != .operations {
                 Button {
-                    QuickActionRouter.shared.presentEvidence(jobId: nil)
+                    quickAction.presentEvidence(jobId: nil)
                 } label: {
                     Image(systemName: "camera.fill")
                         .font(.system(size: 20, weight: .bold))
@@ -210,7 +210,9 @@ struct ContentView: View {
                     }
                 case .operations:
                     NavigationStack {
-                        OperationsView()
+                        OperationsView(onKPINavigate: { filter in
+                            quickAction.requestSwitchToWorkRecords(filter: filter)
+                        })
                             .rmNavigationBar(title: "Operations")
                     }
                 case .readiness:
@@ -223,7 +225,7 @@ struct ContentView: View {
                     }
                 case .jobs:
                     NavigationStack {
-                        JobsListView()
+                        JobsListView(initialFilter: workRecordsFilter)
                             .rmNavigationBar(title: "Work Records")
                     }
                 case .audit:
@@ -247,6 +249,16 @@ struct ContentView: View {
             }
         }
         .navigationSplitViewStyle(.balanced)
+        .onReceive(quickAction.$requestedTab.compactMap { $0 }) { _ in
+            guard let (tab, filter) = quickAction.consumeTabRequest() else { return }
+            workRecordsFilter = filter
+            switch tab {
+            case .ledger: selectedSidebarItem = .audit
+            case .workRecords: selectedSidebarItem = .jobs
+            case .operations: selectedSidebarItem = .operations
+            case .settings: selectedSidebarItem = .account
+            }
+        }
     }
 }
 
@@ -374,4 +386,5 @@ enum SidebarItem: String, Hashable {
 
 #Preview {
     ContentView()
+        .environmentObject(QuickActionRouter.shared)
 }

@@ -68,13 +68,13 @@ struct EvidenceCaptureSheet: View {
                 return false
             }.map { $0.id })
         }
-        .onChange(of: selectedMode) { newMode in
+        .onChange(of: selectedMode) {
             // Persist last used mode
-            lastModeRaw = newMode.rawValue
+            lastModeRaw = selectedMode.rawValue
         }
-        .onChange(of: uploadManager.uploads) { uploads in
+        .onChange(of: uploadManager.uploads) { oldUploads, newUploads in
             // Watch for newly synced uploads
-            for upload in uploads {
+            for upload in newUploads {
                 if case .synced = upload.state {
                     // If this is a new synced upload we haven't tracked
                     if !trackedUploadIds.contains(upload.id) {

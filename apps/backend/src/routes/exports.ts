@@ -45,6 +45,33 @@ exportsRouter.post(
         return res.status(404).json(errorResponse)
       }
 
+      // Idempotent: if an export is already queued/processing for (jobId, type), return it
+      const { data: existingInProgress } = await supabase
+        .from('exports')
+        .select('id, export_type, state, progress, created_at, started_at, completed_at')
+        .eq('organization_id', organization_id)
+        .eq('work_record_id', jobId)
+        .eq('export_type', export_type)
+        .in('state', ['queued', 'preparing', 'generating', 'uploading'])
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (existingInProgress) {
+        res.setHeader('X-Export-In-Progress', 'true')
+        return res.status(200).json({
+          data: {
+            id: existingInProgress.id,
+            export_type: existingInProgress.export_type,
+            state: existingInProgress.state,
+            progress: existingInProgress.progress,
+            created_at: existingInProgress.created_at,
+            started_at: existingInProgress.started_at,
+            completed_at: existingInProgress.completed_at,
+          },
+        })
+      }
+
       // Get idempotency key (optional but recommended)
       const idempotencyKey = getIdempotencyKey(req) || req.body?.idempotency_key || crypto.randomUUID()
 
@@ -200,6 +227,33 @@ exportsRouter.post(
         })
         res.setHeader('X-Error-ID', errorId)
         return res.status(404).json(errorResponse)
+      }
+
+      // Idempotent: if an export is already queued/processing for (jobId, proof_pack), return it
+      const { data: existingInProgressProof } = await supabase
+        .from('exports')
+        .select('id, export_type, state, progress, created_at, started_at, completed_at')
+        .eq('organization_id', organization_id)
+        .eq('work_record_id', jobId)
+        .eq('export_type', 'proof_pack')
+        .in('state', ['queued', 'preparing', 'generating', 'uploading'])
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (existingInProgressProof) {
+        res.setHeader('X-Export-In-Progress', 'true')
+        return res.status(200).json({
+          data: {
+            id: existingInProgressProof.id,
+            export_type: existingInProgressProof.export_type,
+            state: existingInProgressProof.state,
+            progress: existingInProgressProof.progress,
+            created_at: existingInProgressProof.created_at,
+            started_at: existingInProgressProof.started_at,
+            completed_at: existingInProgressProof.completed_at,
+          },
+        })
       }
 
       // Get idempotency key
@@ -365,6 +419,7 @@ exportsRouter.get(
           error_code: exportJob.error_code,
           error_id: exportJob.error_id,
           error_message: exportJob.error_message,
+          failure_reason: (exportJob as any).failure_reason ?? exportJob.error_message ?? null,
           created_at: exportJob.created_at,
           started_at: exportJob.started_at,
           completed_at: exportJob.completed_at,

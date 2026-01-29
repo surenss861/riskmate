@@ -339,7 +339,7 @@ struct AccountView: View {
         Haptics.warning()
         
         do {
-            let response = try await APIClient.shared.deactivateAccount(confirmation: "DELETE")
+            _ = try await APIClient.shared.deactivateAccount(confirmation: "DELETE")
             // Account deletion successful - sign out user
             await sessionManager.logout()
             // Show success message (optional, since we're logging out)

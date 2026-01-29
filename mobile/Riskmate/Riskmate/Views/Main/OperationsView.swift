@@ -11,6 +11,9 @@ struct OperationsView: View {
     @State private var isRefreshing = false
     @State private var showCriticalBanner: Bool = false
     @State private var criticalJob: Job? = nil
+    @State private var showExportProofSheet = false
+    @State private var exportProofJobId: String? = nil
+    @State private var showJobPickerSheet = false
     
     private var isAuditor: Bool {
         entitlements.isAuditor()
@@ -128,8 +131,11 @@ struct OperationsView: View {
                         onMarkComplete: {
                             ToastCenter.shared.show("Marked complete", systemImage: "checkmark.circle", style: .success)
                         },
-                        onViewLedger: { print("[OperationsView] TODO: Navigate to Ledger for job \(job.id)") },
-                        onExportProof: { print("[OperationsView] TODO: Export proof for job \(job.id)") }
+                        onViewLedger: { quickAction.requestSwitchToLedger() },
+                        onExportProof: {
+                            exportProofJobId = job.id
+                            showExportProofSheet = true
+                        }
                     )
                 }
             } header: {
@@ -151,8 +157,7 @@ struct OperationsView: View {
             Section {
                 OperationsEmptySection(
                     searchQuery: searchQuery,
-                    jobsEmpty: jobsStore.jobs.isEmpty,
-                    onCreateJob: { print("[OperationsView] TODO: Navigate to Create Job") }
+                    jobsEmpty: jobsStore.jobs.isEmpty
                 )
             }
         }
@@ -191,10 +196,20 @@ struct OperationsView: View {
         .overlay(alignment: .bottomTrailing) {
             if !isAuditor {
                 FloatingEvidenceFAB {
-                    quickAction.presentEvidence(jobId: nil)
+                    // Show job picker sheet first (evidence needs a job context)
+                    showJobPickerSheet = true
                 }
                 .padding(RMSystemTheme.Spacing.lg)
             }
+        }
+        .sheet(isPresented: $showJobPickerSheet) {
+            JobPickerSheet(jobs: activeJobs, onSelect: { job in
+                showJobPickerSheet = false
+                quickAction.presentEvidence(jobId: job.id)
+            }, onCancel: {
+                showJobPickerSheet = false
+            })
+            .presentationDetents([.medium])
         }
     }
 
@@ -208,19 +223,6 @@ struct OperationsView: View {
                 }
             }
             .rmNavigationBar(title: "Operations")
-            .toolbar {
-                if !isAuditor {
-                    ToolbarItem(placement: .navigationBarTrailing) {
-                        Button {
-                            Haptics.tap()
-                            print("[OperationsView] TODO: Navigate to Create Job")
-                        } label: {
-                            Image(systemName: "plus")
-                                .foregroundStyle(RMSystemTheme.Colors.accent)
-                        }
-                    }
-                }
-            }
             .task {
                 // Refresh entitlements on view load
                 await entitlements.refresh()
@@ -242,6 +244,11 @@ struct OperationsView: View {
             .onAppear {
                 if entitlements.entitlements?.role.lowercased() == "executive" && selectedView == .dashboard {
                     selectedView = .defensibility
+                }
+            }
+            .sheet(isPresented: $showExportProofSheet, onDismiss: { exportProofJobId = nil }) {
+                if let id = exportProofJobId {
+                    ExportProofSheet(jobId: id, isPresented: $showExportProofSheet)
                 }
             }
     }
@@ -323,7 +330,6 @@ private struct OperationsJobRow: View {
 private struct OperationsEmptySection: View {
     let searchQuery: String
     let jobsEmpty: Bool
-    let onCreateJob: () -> Void
 
     var body: some View {
         VStack(spacing: RMSystemTheme.Spacing.lg) {
@@ -331,12 +337,22 @@ private struct OperationsEmptySection: View {
                 icon: searchQuery.isEmpty ? "briefcase" : "magnifyingglass",
                 title: searchQuery.isEmpty ? "No active jobs yet" : "No Results",
                 message: searchQuery.isEmpty
-                    ? "Create your first job to begin compliance tracking. Every action is recorded as a ledger event."
-                    : "Try adjusting your search or filters. No ledger events match your criteria.",
-                action: searchQuery.isEmpty ? RMEmptyStateAction(title: "Create Job", action: onCreateJob) : nil
+                    ? "Job creation is available on the web app. Use the Ledger and Work Records tabs to view and add evidence to existing jobs."
+                    : "Try adjusting your search or filters. No jobs match your criteria.",
+                action: nil
             )
             if searchQuery.isEmpty && jobsEmpty {
-                VStack(spacing: RMSystemTheme.Spacing.sm) {
+                VStack(spacing: RMSystemTheme.Spacing.md) {
+                    // Open Web App link button
+                    Button {
+                        Haptics.tap()
+                        WebAppURL.openWebApp()
+                    } label: {
+                        Label("Open Web App", systemImage: "globe")
+                            .font(RMSystemTheme.Typography.bodyBold)
+                            .foregroundStyle(RMSystemTheme.Colors.accent)
+                    }
+                    
                     Divider()
                         .background(RMSystemTheme.Colors.separator.opacity(0.3))
                     Text("RiskMate creates permanent proof so compliance is never questioned.")
@@ -358,7 +374,72 @@ enum OperationsViewType {
     case defensibility
 }
 
+/// Mini sheet to pick a job for evidence capture (shown when FAB is tapped from list)
+private struct JobPickerSheet: View {
+    let jobs: [Job]
+    let onSelect: (Job) -> Void
+    let onCancel: () -> Void
+    
+    var body: some View {
+        NavigationStack {
+            List {
+                if jobs.isEmpty {
+                    Text("No active jobs available.")
+                        .font(RMSystemTheme.Typography.body)
+                        .foregroundStyle(RMSystemTheme.Colors.textSecondary)
+                        .listRowBackground(Color.clear)
+                } else {
+                    ForEach(jobs) { job in
+                        Button {
+                            Haptics.tap()
+                            onSelect(job)
+                        } label: {
+                            HStack(spacing: RMSystemTheme.Spacing.md) {
+                                Circle()
+                                    .fill(riskColor(for: job))
+                                    .frame(width: 8, height: 8)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(job.clientName.isEmpty ? "Untitled Job" : job.clientName)
+                                        .font(RMSystemTheme.Typography.headline)
+                                        .foregroundStyle(RMSystemTheme.Colors.textPrimary)
+                                    Text(job.location)
+                                        .font(RMSystemTheme.Typography.subheadline)
+                                        .foregroundStyle(RMSystemTheme.Colors.textSecondary)
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundStyle(RMSystemTheme.Colors.textTertiary)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .listStyle(.insetGrouped)
+            .navigationTitle("Pick a Job")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        Haptics.tap()
+                        onCancel()
+                    }
+                }
+            }
+        }
+    }
+    
+    private func riskColor(for job: Job) -> Color {
+        let level = (job.riskLevel ?? "").lowercased()
+        if level.contains("critical") { return RMSystemTheme.Colors.critical }
+        if level.contains("high") { return RMSystemTheme.Colors.high }
+        if level.contains("medium") { return RMSystemTheme.Colors.medium }
+        return RMSystemTheme.Colors.low
+    }
+}
 
 #Preview {
     OperationsView()
+        .environmentObject(QuickActionRouter.shared)
 }

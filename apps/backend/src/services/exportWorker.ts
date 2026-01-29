@@ -11,7 +11,7 @@
  */
 
 import { supabase } from '../lib/supabaseClient'
-import { recordAuditLog } from '../middleware/audit'
+import { recordAuditLog, extractClientMetadata } from '../middleware/audit'
 import { logStructured } from '../utils/structuredLog'
 import archiver from 'archiver'
 import crypto from 'crypto'
@@ -288,7 +288,14 @@ async function processExport(exportJob: any) {
       error: err?.message || String(err),
     })
 
-    // Update state to 'failed' (or keep as 'queued' if not poison pill for retry)
+    // Specific, actionable failure_reason for UI (trust moment)
+    let failureReason: string
+    try {
+      failureReason = await getFailureReason(exportJob, err)
+    } catch (_) {
+      failureReason = `Export failed. Tap retry or contact support with export ID: ${id}`
+    }
+
     const errorId = crypto.randomUUID()
     await supabase
       .from('exports')
@@ -298,6 +305,7 @@ async function processExport(exportJob: any) {
         error_code: 'EXPORT_GENERATION_FAILED',
         error_id: errorId,
         error_message: err?.message || String(err),
+        failure_reason: failureReason, // Human-readable for iOS/UI
       })
       .eq('id', id)
 
@@ -696,6 +704,47 @@ async function generateExecutiveBrief(
     manifestHash,
     manifest,
   }
+}
+
+/**
+ * Build a specific, actionable failure_reason for the UI (trust moment).
+ * Used when an export fails so users see "Missing 2 evidence items" instead of "Export generation failed".
+ */
+async function getFailureReason(exportJob: any, err: any): Promise<string> {
+  const { id, work_record_id: jobId, export_type, organization_id } = exportJob
+  const msg = (err?.message || String(err)).toLowerCase()
+
+  // Storage / network timeouts
+  if (msg.includes('timeout') || msg.includes('etimedout') || msg.includes('econnreset')) {
+    return 'Upload timed out. Check your internet connection and retry.'
+  }
+
+  // PDF / generation errors → ask user to contact support with export ID
+  if (msg.includes('pdf') || msg.includes('generation') || msg.includes('enotype')) {
+    return `Report generation failed. Contact support with export ID: ${id}`
+  }
+
+  // Proof pack: try to explain using evidence/job data
+  if (export_type === 'proof_pack' && jobId) {
+    try {
+      const evidenceRequired = 5
+      const { count: evidenceCount } = await supabase
+        .from('evidence')
+        .select('*', { count: 'exact', head: true })
+        .eq('organization_id', organization_id)
+        .eq('work_record_id', jobId)
+
+      const actual = evidenceCount ?? 0
+      if (actual < evidenceRequired) {
+        const missing = evidenceRequired - actual
+        return `Missing ${missing} evidence item${missing === 1 ? '' : 's'}. Upload photos before generating proof pack.`
+      }
+    } catch (_) {
+      // Ignore; fall through to generic
+    }
+  }
+
+  return `Export failed. Tap retry or contact support with export ID: ${id}`
 }
 
 /**

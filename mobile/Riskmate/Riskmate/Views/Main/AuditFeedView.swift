@@ -71,13 +71,8 @@ struct AuditFeedView: View {
                         RMEmptyState(
                             icon: "tray",
                             title: "First proof will appear here",
-                            message: "Every action creates an immutable ledger event. Your first proof record will show up once you create a job or add evidence.",
-                            action: RMEmptyStateAction(
-                                title: "View 90 Days",
-                                action: {
-                                    // TODO: Change time range filter
-                                }
-                            )
+                            message: "Every action creates an immutable ledger event. Your first proof record will show up once you add evidence to a job from Operations or Work Records.",
+                            action: nil
                         )
                     } else {
                         List {
@@ -101,13 +96,6 @@ struct AuditFeedView: View {
                                                 Label("Copy ID", systemImage: "doc.on.doc")
                                             }
                                             .tint(RMTheme.Colors.accent)
-                                            
-                                            Button {
-                                                exportEvent(event)
-                                            } label: {
-                                                Label("Export", systemImage: "square.and.arrow.up")
-                                            }
-                                            .tint(RMTheme.Colors.categoryAccess)
                                         }
                                         .contextMenu {
                                             Button {
@@ -115,15 +103,7 @@ struct AuditFeedView: View {
                                             } label: {
                                                 Label("Copy Event ID", systemImage: "doc.on.doc")
                                             }
-                                            
-                                            Button {
-                                                exportEvent(event)
-                                            } label: {
-                                                Label("Export", systemImage: "square.and.arrow.up")
-                                            }
-                                            
                                             Divider()
-                                            
                                             Button {
                                                 selectedEvent = event
                                                 showingDetail = true
@@ -162,13 +142,6 @@ struct AuditFeedView: View {
                                             Label("Copy ID", systemImage: "doc.on.doc")
                                         }
                                         .tint(Color(.systemBlue))
-                                        
-                                        Button {
-                                            exportEvent(event)
-                                        } label: {
-                                            Label("Export", systemImage: "square.and.arrow.up")
-                                        }
-                                        .tint(RMTheme.Colors.categoryAccess)
                                     }
                                     .contextMenu {
                                         Button {
@@ -176,15 +149,7 @@ struct AuditFeedView: View {
                                         } label: {
                                             Label("Copy Event ID", systemImage: "doc.on.doc")
                                         }
-                                        
-                                        Button {
-                                            exportEvent(event)
-                                        } label: {
-                                            Label("Export", systemImage: "square.and.arrow.up")
-                                        }
-                                        
                                         Divider()
-                                        
                                         Button {
                                             selectedEvent = event
                                             showingDetail = true
@@ -267,14 +232,10 @@ struct AuditFeedView: View {
         UIPasteboard.general.string = id
         UINotificationFeedbackGenerator().notificationOccurred(.success)
     }
-    
-    private func exportEvent(_ event: AuditEvent) {
-        // TODO: Implement export
-        UINotificationFeedbackGenerator().notificationOccurred(.success)
-    }
 }
 
 // MARK: - Audit Row Component
+
 
 struct RMAuditRow: View {
     let event: AuditEvent

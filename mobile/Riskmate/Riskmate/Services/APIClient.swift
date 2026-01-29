@@ -12,6 +12,43 @@ class APIClient {
         self.authService = AuthService.shared
     }
     
+    /// Get stable device ID (Keychain-stored UUID, fallback to identifierForVendor)
+    private func getStableDeviceID() -> String {
+        let keychainKey = "com.riskmate.device_id"
+        
+        // Try to read from Keychain first
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: keychainKey,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        
+        if status == errSecSuccess,
+           let data = result as? Data,
+           let deviceId = String(data: data, encoding: .utf8) {
+            return deviceId
+        }
+        
+        // Generate new UUID and store in Keychain
+        let newDeviceId = UUID().uuidString
+        let storeQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: keychainKey,
+            kSecValueData as String: newDeviceId.data(using: .utf8)!
+        ]
+        
+        // Delete any existing item first
+        SecItemDelete(storeQuery as CFDictionary)
+        // Store new device ID
+        SecItemAdd(storeQuery as CFDictionary, nil)
+        
+        return newDeviceId
+    }
+    
     /// Make authenticated API request
     private func request<T: Decodable>(
         endpoint: String,
@@ -30,6 +67,19 @@ class APIClient {
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        // Set client metadata headers (consistent across all requests)
+        request.setValue("ios", forHTTPHeaderField: "x-client")
+        
+        // Get app version from bundle
+        if let shortVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String,
+           let buildNumber = Bundle.main.infoDictionary?["CFBundleVersion"] as? String {
+            request.setValue("\(shortVersion)(\(buildNumber))", forHTTPHeaderField: "x-app-version")
+        }
+        
+        // Get stable device ID (use Keychain-stored UUID, fallback to identifierForVendor)
+        let deviceId = getStableDeviceID()
+        request.setValue(deviceId, forHTTPHeaderField: "x-device-id")
         
         // Set timeout based on operation type
         if endpoint.contains("export") {
@@ -502,7 +552,7 @@ class APIClient {
         
         // Log event for iOS ↔ web parity
         Task {
-            try? await logEvent(
+            _ = try? await logEvent(
                 eventType: "job.created",
                 entityType: "job",
                 entityId: response.data.id,
@@ -526,7 +576,7 @@ class APIClient {
         
         // Log event for iOS ↔ web parity
         Task {
-            try? await logEvent(
+            _ = try? await logEvent(
                 eventType: "job.updated",
                 entityType: "job",
                 entityId: response.data.id,
@@ -548,7 +598,7 @@ class APIClient {
         
         // Log event for iOS ↔ web parity
         Task {
-            try? await logEvent(
+            _ = try? await logEvent(
                 eventType: "job.deleted",
                 entityType: "job",
                 entityId: jobId

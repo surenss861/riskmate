@@ -104,30 +104,30 @@ export type AuditWriteResult = {
 
 /**
  * Extract client metadata from request (for audit logging)
- * Looks for client, app_version, device_id in headers or body
+ * Looks for client, app_version, device_id in headers or body.
+ * Defaults to 'unknown' when header exists but value missing so audit rows are never missing these.
  */
-export function extractClientMetadata(req?: any): { client?: string; appVersion?: string; deviceId?: string } {
-  if (!req) return {};
+export function extractClientMetadata(req?: any): { client: string; appVersion: string; deviceId: string } {
+  if (!req) return { client: 'unknown', appVersion: 'unknown', deviceId: 'unknown' };
   
-  // Check headers first (iOS/web clients may send these)
-  const client = req.headers?.['x-client'] || req.headers?.['client'] || req.body?.client;
-  const appVersion = req.headers?.['x-app-version'] || req.headers?.['app-version'] || req.body?.app_version;
-  const deviceId = req.headers?.['x-device-id'] || req.headers?.['device-id'] || req.body?.device_id;
+  const client = req.headers?.['x-client'] || req.headers?.['client'] || req.body?.client || 'web';
+  const appVersion = req.headers?.['x-app-version'] || req.headers?.['app-version'] || req.body?.app_version || 'unknown';
+  const deviceId = req.headers?.['x-device-id'] || req.headers?.['device-id'] || req.body?.device_id || 'unknown';
   
   return {
-    client: client || 'web', // Default to 'web' if not specified
-    appVersion,
-    deviceId,
+    client: client || 'web',
+    appVersion: appVersion || 'unknown',
+    deviceId: deviceId || 'unknown',
   };
 }
 
 export async function recordAuditLog(entry: AuditLogEntry): Promise<AuditWriteResult> {
   try {
-    // Merge client metadata into payload
+    // Always attach client, app_version, device_id (default 'unknown' when missing)
     const clientMetadata = {
-      ...(entry.client && { client: entry.client }),
-      ...(entry.appVersion && { app_version: entry.appVersion }),
-      ...(entry.deviceId && { device_id: entry.deviceId }),
+      client: entry.client ?? 'unknown',
+      app_version: entry.appVersion ?? 'unknown',
+      device_id: entry.deviceId ?? 'unknown',
     };
     
     const payload = truncateMetadata({

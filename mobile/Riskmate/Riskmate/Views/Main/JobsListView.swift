@@ -6,16 +6,22 @@ struct JobsListView: View {
     let initialFilter: String?
     
     @StateObject private var jobsStore = JobsStore.shared
+    @StateObject private var entitlements = EntitlementsManager.shared
+    @EnvironmentObject private var quickAction: QuickActionRouter
     @State private var searchText = ""
     @State private var debouncedSearchText = ""
     @State private var selectedStatus: String = "all"
     @State private var selectedRiskLevel: String = "all"
     @FocusState private var isSearchFocused: Bool
     @State private var isRefreshing = false
+    @State private var showExportProofSheet = false
+    @State private var exportProofJobId: String? = nil
     
     init(initialFilter: String? = nil) {
         self.initialFilter = initialFilter
     }
+    
+    private var isAuditor: Bool { entitlements.isAuditor() }
     
     // Computed properties from store
     private var jobs: [Job] { jobsStore.jobs }
@@ -149,29 +155,19 @@ struct JobsListView: View {
                         }
                         .padding(RMTheme.Spacing.pagePadding)
                     } else if filteredJobs.isEmpty {
-                        // Enhanced empty state with helpful message
                         VStack(spacing: RMTheme.Spacing.lg) {
                             RMEmptyState(
                                 icon: searchText.isEmpty ? "doc.text" : "magnifyingglass",
                                 title: searchText.isEmpty ? "No active jobs yet" : "No Results",
-                                message: searchText.isEmpty 
-                                    ? "Create your first job to begin compliance tracking and chain of custody. Every action is recorded as a ledger event."
-                                    : "Try adjusting your search, filters, or time range. No ledger events match your criteria.",
-                                action: searchText.isEmpty ? RMEmptyStateAction(
-                                    title: "Create Job",
-                                    action: {
-                                        // TODO: Navigate to create job
-                                        print("[JobsListView] TODO: Navigate to Create Job")
-                                    }
-                                ) : nil
+                                message: searchText.isEmpty
+                                    ? "Job creation is available on the web app. Use the Ledger and Operations tabs to view and add evidence to existing jobs."
+                                    : "Try adjusting your search, filters, or time range. No jobs match your criteria.",
+                                action: nil
                             )
-                            
-                            // "Why RiskMate exists" message on first job creation
                             if searchText.isEmpty && jobs.isEmpty {
                                 VStack(spacing: RMTheme.Spacing.sm) {
                                     Divider()
                                         .background(RMTheme.Colors.divider.opacity(0.3))
-                                    
                                     Text("RiskMate creates permanent proof so compliance is never questioned.")
                                         .font(RMTheme.Typography.bodySmall)
                                         .foregroundColor(RMTheme.Colors.textTertiary)
@@ -201,17 +197,9 @@ struct JobsListView: View {
                                 ))
                                 .jobCardLongPressActions(
                                     job: job,
-                                    onAddEvidence: {
-                                        // TODO: Navigate to evidence capture
-                                        print("[JobsListView] TODO: Add evidence for job \(job.id)")
-                                    },
-                                    onViewLedger: {
-                                        // TODO: Navigate to ledger filtered by job
-                                        print("[JobsListView] TODO: View ledger for job \(job.id)")
-                                    },
-                                    onExportProof: {
-                                        exportJob(job)
-                                    }
+                                    onAddEvidence: isAuditor ? nil : { quickAction.presentEvidence(jobId: job.id) },
+                                    onViewLedger: { quickAction.requestSwitchToLedger() },
+                                    onExportProof: { presentExportSheet(for: job) }
                                 )
                                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                                     Button {
@@ -224,7 +212,7 @@ struct JobsListView: View {
                                     
                                     Button {
                                         Haptics.success()
-                                        exportJob(job)
+                                        presentExportSheet(for: job)
                                     } label: {
                                         Label("Export", systemImage: "square.and.arrow.up")
                                     }
@@ -237,21 +225,11 @@ struct JobsListView: View {
                                     } label: {
                                         Label("Copy Job ID", systemImage: "doc.on.doc")
                                     }
-                                    
                                     Button {
                                         Haptics.success()
-                                        exportJob(job)
+                                        presentExportSheet(for: job)
                                     } label: {
                                         Label("Export PDF", systemImage: "square.and.arrow.up")
-                                    }
-                                    
-                                    Divider()
-                                    
-                                    Button(role: .destructive) {
-                                        Haptics.warning()
-                                        // TODO: Delete job
-                                    } label: {
-                                        Label("Delete", systemImage: "trash")
                                     }
                                 }
                                 .onAppear {
@@ -342,6 +320,16 @@ struct JobsListView: View {
             .navigationDestination(for: Job.self) { job in
                 JobDetailView(jobId: job.id)
             }
+            .sheet(isPresented: $showExportProofSheet, onDismiss: { exportProofJobId = nil }) {
+                if let id = exportProofJobId {
+                    ExportProofSheet(jobId: id, isPresented: $showExportProofSheet)
+                }
+            }
+    }
+    
+    private func presentExportSheet(for job: Job) {
+        exportProofJobId = job.id
+        showExportProofSheet = true
     }
     
     // Note: loadJobs() removed - now using JobsStore.shared
@@ -350,13 +338,6 @@ struct JobsListView: View {
     private func copyJobId(_ id: String) {
         Haptics.success()
         UIPasteboard.general.string = id
-        let generator = UINotificationFeedbackGenerator()
-        generator.notificationOccurred(.success)
-    }
-    
-    private func exportJob(_ job: Job) {
-        Haptics.success()
-        // TODO: Implement export
         let generator = UINotificationFeedbackGenerator()
         generator.notificationOccurred(.success)
     }
