@@ -17,3 +17,7 @@ struct ShareSheet: UIViewControllerRepresentable {
     
     func updateUIViewController(_ vc: UIActivityViewController, context: Context) {}
 }
+
+extension URL: @retroactive Identifiable {
+    public var id: String { absoluteString }
+}

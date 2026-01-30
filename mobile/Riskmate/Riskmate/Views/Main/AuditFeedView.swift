@@ -8,6 +8,7 @@ struct AuditFeedView: View {
     @State private var errorMessage: String?
     @State private var selectedEvent: AuditEvent?
     @State private var showingDetail = false
+    @State private var exportURL: URL?
     @State private var showingVerificationDetails = false
     @State private var showingVerificationExplainer = false
     @State private var showFirstVisitAnimation = false
@@ -173,6 +174,36 @@ struct AuditFeedView: View {
             }
         }
         .rmNavigationBar(title: "Ledger")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Button {
+                        Haptics.tap()
+                        showingVerificationExplainer = true
+                    } label: {
+                        Label("What is Verified?", systemImage: "questionmark.circle")
+                    }
+                    Button {
+                        Haptics.tap()
+                        exportURL = try? AuditExporter.exportJSON(events: events)
+                    } label: {
+                        Label("Export JSON", systemImage: "curlybraces")
+                    }
+                    .disabled(events.isEmpty)
+                    Button {
+                        Haptics.tap()
+                        exportURL = try? AuditExporter.exportCSV(events: events)
+                    } label: {
+                        Label("Export CSV", systemImage: "tablecells")
+                    }
+                    .disabled(events.isEmpty)
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .font(.system(size: 20))
+                        .foregroundColor(RMTheme.Colors.textSecondary)
+                }
+            }
+        }
         .syncStatusChip()
         .onAppear {
             // Show first-visit animation once
@@ -199,10 +230,14 @@ struct AuditFeedView: View {
         }
         .sheet(isPresented: $showingDetail) {
             if let event = selectedEvent {
-                RMAuditDetailSheet(event: event)
+                ProofDetailSheet(event: event)
                     .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)
             }
+        }
+        .sheet(item: $exportURL) { url in
+            ShareSheet(items: [url])
+                .onDisappear { exportURL = nil }
         }
         .sheet(isPresented: $showingVerificationDetails) {
             VerificationDetailsView()
