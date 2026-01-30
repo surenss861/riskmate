@@ -11,6 +11,7 @@ struct ExportHistorySheet: View {
     @State private var loading = true
     @State private var error: String?
     @State private var selectedFailedExport: Export?
+    @State private var loadToken = UUID()
 
     var body: some View {
         NavigationStack {
@@ -150,6 +151,8 @@ struct ExportHistorySheet: View {
             if let urlString = export.downloadUrl {
                 openDownloadUrl(urlString)
             }
+        case "queued", "preparing", "generating", "uploading":
+            ToastCenter.shared.show("Export is generating. Check back in a moment.", systemImage: "arrow.triangle.2.circlepath", style: .info)
         default:
             break
         }
@@ -169,16 +172,21 @@ struct ExportHistorySheet: View {
 
     @MainActor
     private func loadExports() async {
+        let token = UUID()
+        loadToken = token
         loading = true
         error = nil
         do {
-            let list = try await APIClient.shared.getExports(jobId: jobId)
-            exports = list.sorted { $0.createdAt > $1.createdAt }
-        } catch let e {
-            error = e.localizedDescription
+            let fetched = try await APIClient.shared.getExports(jobId: jobId)
+            if Task.isCancelled || loadToken != token { return }
+            exports = fetched.sorted { $0.createdAt > $1.createdAt }
+            loading = false
+        } catch {
+            if Task.isCancelled || loadToken != token { return }
+            self.error = error.localizedDescription
             exports = []
+            loading = false
         }
-        loading = false
     }
 
     @MainActor
@@ -186,9 +194,12 @@ struct ExportHistorySheet: View {
         let type: ExportType = (export.exportType == "proof_pack") ? .proofPack : .pdf
         do {
             try await APIClient.shared.createExport(jobId: jobId, type: type)
+            if Task.isCancelled { return }
             await loadExports()
+            if Task.isCancelled { return }
             ToastCenter.shared.show("Export retrying…", systemImage: "arrow.clockwise", style: .success)
         } catch {
+            if Task.isCancelled { return }
             ToastCenter.shared.show("Failed to retry export", systemImage: "exclamationmark.triangle", style: .error)
         }
     }
