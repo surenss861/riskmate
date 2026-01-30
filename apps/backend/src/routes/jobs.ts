@@ -461,11 +461,21 @@ jobsRouter.get("/", authenticate, async (req: express.Request, res: express.Resp
         .from('documents')
         .select('job_id')
         .in('job_id', jobIds);
-      
-      // Group by job_id
-      const mitigationsByJob: Record<string, { total: number; completed: number }> = {};
+
+      // evidence_count = uploaded + processed documents only (excludes pending uploads).
+      // When we add upload queue UI, pending can be shown separately so meta row stays authoritative.
+      const evidenceCountByJob: Record<string, number> = {};
       const documentsByJob: Record<string, boolean> = {};
-      
+      documents?.forEach((doc: any) => {
+        documentsByJob[doc.job_id] = true;
+        evidenceCountByJob[doc.job_id] = (evidenceCountByJob[doc.job_id] || 0) + 1;
+      });
+
+      // Default evidence required; can be made per-job-type or org policy later (e.g. job.evidence_required or org setting).
+      const EVIDENCE_REQUIRED_DEFAULT = parseInt(process.env.EVIDENCE_REQUIRED_DEFAULT || '5', 10) || 5;
+
+      // Group by job_id. Controls completed = done || is_completed (N/A can count as complete when we add that flag).
+      const mitigationsByJob: Record<string, { total: number; completed: number }> = {};
       mitigationItems?.forEach((item: any) => {
         if (!mitigationsByJob[item.job_id]) {
           mitigationsByJob[item.job_id] = { total: 0, completed: 0 };
@@ -475,14 +485,6 @@ jobsRouter.get("/", authenticate, async (req: express.Request, res: express.Resp
           mitigationsByJob[item.job_id].completed++;
         }
       });
-      
-      const evidenceCountByJob: Record<string, number> = {};
-      documents?.forEach((doc: any) => {
-        documentsByJob[doc.job_id] = true;
-        evidenceCountByJob[doc.job_id] = (evidenceCountByJob[doc.job_id] || 0) + 1;
-      });
-
-      const EVIDENCE_REQUIRED = 5;
 
       // Calculate readiness_score (0-100) and blockers_count per job
       jobIds.forEach((jobId: string) => {
@@ -524,7 +526,7 @@ jobsRouter.get("/", authenticate, async (req: express.Request, res: express.Resp
           missing_evidence,
           pending_attestations,
           evidence_count: evidenceCount,
-          evidence_required: EVIDENCE_REQUIRED,
+          evidence_required: EVIDENCE_REQUIRED_DEFAULT,
           controls_completed: mitigations_complete,
           controls_total: mitigations_total,
         };

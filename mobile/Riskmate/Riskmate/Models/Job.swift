@@ -54,16 +54,31 @@ struct Job: Identifiable, Codable, Hashable {
 }
 
 extension Job {
-    /// "Evidence 0/5 • Controls 3/5" when API provides counts; nil otherwise. Use in Operations list for at-a-glance status.
+    /// "Evidence 0/5 • Controls 3/5" when API provides counts; nil otherwise. Hide Controls 0/0 and Evidence when required is 0.
     var metaString: String? {
         var parts: [String] = []
-        if let ec = evidenceCount, let er = evidenceRequired {
+        if let er = evidenceRequired, er > 0 {
+            let ec = evidenceCount ?? 0
             parts.append("Evidence \(ec)/\(er)")
         }
-        if let cc = controlsCompleted, let ct = controlsTotal {
+        if let ct = controlsTotal, ct > 0 {
+            let cc = controlsCompleted ?? 0
             parts.append("Controls \(cc)/\(ct)")
         }
         return parts.isEmpty ? nil : parts.joined(separator: " • ")
+    }
+
+    /// True when all shown meta dimensions are complete (evidence and controls if present). Used for meta row color: orange when incomplete, secondary when complete.
+    var isMetaComplete: Bool {
+        let evidenceComplete: Bool = {
+            guard let er = evidenceRequired, er > 0 else { return true }
+            return (evidenceCount ?? 0) >= er
+        }()
+        let controlsComplete: Bool = {
+            guard let ct = controlsTotal, ct > 0 else { return true }
+            return (controlsCompleted ?? 0) >= ct
+        }()
+        return evidenceComplete && controlsComplete
     }
 }
 

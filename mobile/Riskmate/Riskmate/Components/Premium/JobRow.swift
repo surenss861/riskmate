@@ -94,11 +94,11 @@ struct JobRow: View {
                     }
                 }
                 
-                // Meta row: evidence/controls when API provides them (at-a-glance "what to fix")
+                // Meta row: evidence/controls when API provides them. Orange = needs attention, secondary = complete.
                 if let meta = job.metaString {
                     Text(meta)
                         .font(RMSystemTheme.Typography.caption)
-                        .foregroundStyle(RMTheme.Colors.accent)
+                        .foregroundStyle(job.isMetaComplete ? RMSystemTheme.Colors.textSecondary : RMTheme.Colors.accent)
                         .lineLimit(1)
                 }
             }
