@@ -211,12 +211,20 @@ struct JobDetailView: View {
         }
     }
     
+    /// Used by OverviewTab pull-to-refresh to reload job, counts, and failed-export badge.
+    private func refreshJobDetail() async {
+        await loadJob()
+        await loadHazardsAndControlsCount()
+        await loadEvidenceCountForExport()
+        await checkForFailedExports()
+    }
+    
     @ViewBuilder
     private func tabContent(for tab: JobDetailTab, job: Job?) -> some View {
         if let job = job {
             switch tab {
             case .overview:
-                OverviewTab(job: job, showManagedOnWebCard: hazardsCount == 0 && controlsCount == 0)
+                OverviewTab(job: job, showManagedOnWebCard: hazardsCount == 0 && controlsCount == 0, onRefresh: { await refreshJobDetail() })
             case .hazards:
                 HazardsTab(jobId: jobId)
             case .controls:
@@ -306,6 +314,7 @@ enum JobDetailTab: String, CaseIterable {
 struct OverviewTab: View {
     let job: Job
     var showManagedOnWebCard: Bool = false
+    var onRefresh: (() async -> Void)? = nil
     @State private var recentReceipts: [ActionReceipt] = []
     @State private var evidenceCount: Int = 0
     @State private var evidenceRequired: Int = 5
@@ -402,6 +411,11 @@ struct OverviewTab: View {
             }
             .padding(.vertical, RMTheme.Spacing.lg)
         }
+        .refreshable {
+            await onRefresh?()
+            await loadRecentReceipts()
+            await loadEvidenceCount()
+        }
         .task {
             await loadRecentReceipts()
             await loadEvidenceCount()
@@ -496,7 +510,7 @@ struct ManagedOnWebCard: View {
     }
 }
 
-/// Command-center "Next Step" card: one primary action + secondary links
+/// Command-center "Next Step" card: one primary action + secondary links. Whole card is tappable when incomplete.
 struct NextStepCard: View {
     var showPrimaryAction: Bool = true
     var evidenceCount: Int = 0
@@ -523,7 +537,7 @@ struct NextStepCard: View {
         return "Add \(remaining) evidence item\(remaining == 1 ? "" : "s") to unlock Proof Pack export."
     }
     
-    var body: some View {
+    private var cardContent: some View {
         RMGlassCard {
             VStack(alignment: .leading, spacing: RMTheme.Spacing.md) {
                 HStack {
@@ -573,6 +587,20 @@ struct NextStepCard: View {
                     }
                 }
             }
+        }
+    }
+    
+    var body: some View {
+        if showPrimaryAction && !isComplete {
+            Button {
+                Haptics.tap()
+                onAddEvidence()
+            } label: {
+                cardContent
+            }
+            .buttonStyle(.plain)
+        } else {
+            cardContent
         }
     }
 }
