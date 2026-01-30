@@ -93,6 +93,14 @@ struct JobRow: View {
                             .foregroundStyle(RMSystemTheme.Colors.warning)
                     }
                 }
+                
+                // Meta row: evidence/controls when API provides them (at-a-glance "what to fix")
+                if let meta = job.metaString {
+                    Text(meta)
+                        .font(RMSystemTheme.Typography.caption)
+                        .foregroundStyle(RMTheme.Colors.accent)
+                        .lineLimit(1)
+                }
             }
             
             Spacer()

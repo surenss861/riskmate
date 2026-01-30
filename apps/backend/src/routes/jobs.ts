@@ -442,6 +442,10 @@ jobsRouter.get("/", authenticate, async (req: express.Request, res: express.Resp
       blockers_count: number; 
       missing_evidence: boolean; 
       pending_attestations: number;
+      evidence_count: number;
+      evidence_required: number;
+      controls_completed: number;
+      controls_total: number;
     }> = {};
     
     if (jobIds.length > 0 && (useReadinessOrdering || useBlockersOrdering || !useCursor)) {
@@ -472,14 +476,19 @@ jobsRouter.get("/", authenticate, async (req: express.Request, res: express.Resp
         }
       });
       
+      const evidenceCountByJob: Record<string, number> = {};
       documents?.forEach((doc: any) => {
         documentsByJob[doc.job_id] = true;
+        evidenceCountByJob[doc.job_id] = (evidenceCountByJob[doc.job_id] || 0) + 1;
       });
-      
+
+      const EVIDENCE_REQUIRED = 5;
+
       // Calculate readiness_score (0-100) and blockers_count per job
       jobIds.forEach((jobId: string) => {
         const mitigation = mitigationsByJob[jobId] || { total: 0, completed: 0 };
         const hasEvidence = documentsByJob[jobId] || false;
+        const evidenceCount = evidenceCountByJob[jobId] || 0;
         
         // Explicit readiness calculation with audit-defensible fields
         const mitigations_total = mitigation.total;
@@ -514,6 +523,10 @@ jobsRouter.get("/", authenticate, async (req: express.Request, res: express.Resp
           blockers_count,
           missing_evidence,
           pending_attestations,
+          evidence_count: evidenceCount,
+          evidence_required: EVIDENCE_REQUIRED,
+          controls_completed: mitigations_complete,
+          controls_total: mitigations_total,
         };
       });
     }
@@ -580,6 +593,10 @@ jobsRouter.get("/", authenticate, async (req: express.Request, res: express.Resp
           blockers_count: 0,
           missing_evidence: false,
           pending_attestations: 0,
+          evidence_count: 0,
+          evidence_required: 5,
+          controls_completed: 0,
+          controls_total: 0,
         };
         return {
           ...job,
@@ -596,6 +613,11 @@ jobsRouter.get("/", authenticate, async (req: express.Request, res: express.Resp
           blockers_count: readiness.blockers_count,
           missing_evidence: readiness.missing_evidence,
           pending_attestations: readiness.pending_attestations,
+          // iOS Operations meta row: "Evidence 0/5 • Controls 3/5"
+          evidence_count: readiness.evidence_count,
+          evidence_required: readiness.evidence_required,
+          controls_completed: readiness.controls_completed,
+          controls_total: readiness.controls_total,
         };
       });
     }
