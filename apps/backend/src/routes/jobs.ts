@@ -471,8 +471,9 @@ jobsRouter.get("/", authenticate, async (req: express.Request, res: express.Resp
         evidenceCountByJob[doc.job_id] = (evidenceCountByJob[doc.job_id] || 0) + 1;
       });
 
-      // Default evidence required; can be made per-job-type or org policy later (e.g. job.evidence_required or org setting).
-      const EVIDENCE_REQUIRED_DEFAULT = parseInt(process.env.EVIDENCE_REQUIRED_DEFAULT || '5', 10) || 5;
+      // Default evidence required; can be made per-job-type or org policy later. Fail-safe parse: missing/invalid/empty => 5; allow 1+ only (use >= 0 if you ever want global "no evidence required").
+      const parsed = Number.parseInt(process.env.EVIDENCE_REQUIRED_DEFAULT ?? '', 10);
+      const EVIDENCE_REQUIRED_DEFAULT = Number.isFinite(parsed) && parsed >= 1 ? parsed : 5;
 
       // Group by job_id. Controls completed = done || is_completed (N/A can count as complete when we add that flag).
       const mitigationsByJob: Record<string, { total: number; completed: number }> = {};

@@ -54,16 +54,18 @@ struct Job: Identifiable, Codable, Hashable {
 }
 
 extension Job {
-    /// "Evidence 0/5 • Controls 3/5" when API provides counts; nil otherwise. Hide Controls 0/0 and Evidence when required is 0.
+    /// "Evidence 0/5 • Controls 3/5" when API provides counts; nil otherwise. Hide Controls 0/0 and Evidence when required is 0. Clamp display so we never show 6/5 or negatives.
     var metaString: String? {
         var parts: [String] = []
         if let er = evidenceRequired, er > 0 {
-            let ec = evidenceCount ?? 0
-            parts.append("Evidence \(ec)/\(er)")
+            let safeRequired = max(0, er)
+            let safeCount = min(max(0, evidenceCount ?? 0), safeRequired)
+            parts.append("Evidence \(safeCount)/\(safeRequired)")
         }
         if let ct = controlsTotal, ct > 0 {
-            let cc = controlsCompleted ?? 0
-            parts.append("Controls \(cc)/\(ct)")
+            let safeTotal = max(0, ct)
+            let safeCompleted = min(max(0, controlsCompleted ?? 0), safeTotal)
+            parts.append("Controls \(safeCompleted)/\(safeTotal)")
         }
         return parts.isEmpty ? nil : parts.joined(separator: " • ")
     }
