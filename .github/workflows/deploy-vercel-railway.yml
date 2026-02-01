@@ -41,20 +41,26 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Deploy to Vercel (production)
-        if: ${{ secrets.VERCEL_TOKEN != '' }}
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: |
+          if [ -z "$VERCEL_TOKEN" ]; then
+            echo "⚠️ VERCEL_TOKEN not set, skipping Vercel deploy"
+            exit 0
+          fi
           npx vercel --prod --token "$VERCEL_TOKEN" --yes
         continue-on-error: true
 
       - name: Deploy backend to Railway
-        if: ${{ secrets.RAILWAY_TOKEN != '' }}
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: |
+          if [ -z "$RAILWAY_TOKEN" ]; then
+            echo "⚠️ RAILWAY_TOKEN not set, skipping Railway deploy"
+            exit 0
+          fi
           pnpm add -g @railway/cli 2>/dev/null || npm install -g @railway/cli
           cd apps/backend && railway up --detach
         continue-on-error: true
