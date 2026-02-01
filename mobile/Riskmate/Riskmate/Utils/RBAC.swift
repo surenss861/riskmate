@@ -35,6 +35,15 @@ struct RBAC {
         }
     }
 
+    /// Can export ledger org-wide (no scope required). Safety Lead must use scoped export only.
+    var canExportLedgerOrgWide: Bool {
+        switch role {
+        case "executive", "admin", "owner": return true
+        case "member", "safety_lead": return false
+        default: return false
+        }
+    }
+
     /// Can approve readiness / mark "insurance-ready".
     var canApproveReadiness: Bool {
         switch role {

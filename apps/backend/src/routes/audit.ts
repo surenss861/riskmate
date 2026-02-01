@@ -1,6 +1,7 @@
 import express, { type Router as ExpressRouter } from 'express'
 import { supabase } from '../lib/supabaseClient'
 import { authenticate, AuthenticatedRequest } from '../middleware/auth'
+import { requireRole, safetyLeadMustHaveScope } from '../middleware/rbac'
 import { RequestWithId } from '../middleware/requestId'
 import { createErrorResponse, logErrorForSupport } from '../utils/errorResponse'
 import { recordAuditLog } from '../middleware/audit'
@@ -750,13 +751,13 @@ auditRouter.get('/events', authenticate as unknown as express.RequestHandler, as
 })
 
 // POST /api/audit/export
-// Generates exportable PDF/CSV/JSON for compliance
-auditRouter.post('/export', authenticate as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
+// Generates exportable PDF/CSV/JSON for compliance. Safety Lead must provide scope (job_id, date range, or category).
+auditRouter.post('/export', authenticate as unknown as express.RequestHandler, requireRole('safety_lead'), async (req: express.Request, res: express.Response) => {
   const authReq = req as AuthenticatedRequest & RequestWithId
   const requestId = authReq.requestId || 'unknown'
   
   try {
-    const { organization_id, id: userId } = authReq.user
+    const { organization_id, id: userId, role } = authReq.user
     const {
       format = 'pdf',
       category,
@@ -771,6 +772,15 @@ auditRouter.post('/export', authenticate as unknown as express.RequestHandler, a
       view,
       export_type, // 'ledger' | 'controls' | 'attestations'
     } = req.body
+
+    // Safety Lead must provide at least one scope filter (org-wide export not allowed)
+    if (role === 'safety_lead' && !safetyLeadMustHaveScope({ job_id, start_date, end_date, category })) {
+      return res.status(403).json({
+        message: 'Safety Leads must filter exports by job, date range, or category',
+        code: 'EXPORT_SCOPE_REQUIRED',
+        required_filters: ['job_id', 'start_date + end_date', 'category'],
+      })
+    }
 
     // Fetch events using same logic as GET /events
     const eventsResponse = await fetch(`${req.protocol}://${req.get('host')}/api/audit/events?${new URLSearchParams({

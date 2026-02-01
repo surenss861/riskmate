@@ -56,8 +56,12 @@ function getCategoryFromEventName(eventName: string): 'governance' | 'operations
     return 'governance'
   }
   
-  // Access/security events (logins, role changes, team/account management)
-  if (eventName.includes('access.') || eventName.includes('security.') || eventName.includes('role_change') || 
+  // Role changes → governance (immutable audit trail for who changed whom)
+  if (eventName === 'user_role_changed' || eventName.includes('user_role_changed')) {
+    return 'governance'
+  }
+  // Access/security events (logins, team/account management)
+  if (eventName.includes('access.') || eventName.includes('security.') ||
       eventName.includes('login') || eventName.includes('team.') || eventName.includes('account.')) {
     return 'access'
   }

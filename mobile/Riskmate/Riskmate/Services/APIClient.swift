@@ -1,6 +1,6 @@
 import Foundation
 
-/// API client for RiskMate backend
+/// API client for Riskmate backend
 class APIClient {
     static let shared = APIClient()
     
@@ -447,6 +447,26 @@ class APIClient {
         let _: EmptyResponse = try await request(
             endpoint: "/api/team/invite",
             method: "POST",
+            body: body
+        )
+    }
+
+    /// Change a team member's role (Admin+). Logs user_role_changed to audit. Backend enforces only Owner can set Owner.
+    func changeUserRole(userId: String, newRole: TeamRole, reason: String?) async throws {
+        struct ChangeRoleRequest: Encodable {
+            let new_role: String
+            let reason: String?
+        }
+        struct ChangeRoleResponse: Codable {
+            let message: String?
+            let user_id: String?
+            let old_role: String?
+            let new_role: String?
+        }
+        let body = try JSONEncoder().encode(ChangeRoleRequest(new_role: newRole.rawValue, reason: reason))
+        let _: ChangeRoleResponse = try await request(
+            endpoint: "/api/team/member/\(userId)/role",
+            method: "PATCH",
             body: body
         )
     }

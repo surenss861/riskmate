@@ -2,9 +2,9 @@ import express, { type Router as ExpressRouter } from "express";
 import crypto from "crypto";
 import { supabase } from "../lib/supabaseClient";
 import { authenticate, AuthenticatedRequest } from "../middleware/auth";
-import { canInviteRole, onlyOwnerCanSetOwner } from "../middleware/rbac";
+import { canInviteRole, onlyOwnerCanSetOwner, requireRole } from "../middleware/rbac";
 import { limitsFor } from "../auth/planRules";
-import { recordAuditLog } from "../middleware/audit";
+import { recordAuditLog, extractClientMetadata } from "../middleware/audit";
 
 export const teamRouter: ExpressRouter = express.Router();
 
@@ -128,7 +128,7 @@ teamRouter.get("/", async (req: express.Request, res: express.Response) => {
   }
 });
 
-teamRouter.post("/invite", async (req: express.Request, res: express.Response) => {
+teamRouter.post("/invite", requireRole("safety_lead") as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
   const authReq = req as AuthenticatedRequest;
   try {
     const { email, role = "member" } = authReq.body ?? {};
@@ -305,13 +305,9 @@ teamRouter.post("/invite", async (req: express.Request, res: express.Response) =
   }
 });
 
-teamRouter.delete("/invite/:id", async (req: express.Request, res: express.Response) => {
+teamRouter.delete("/invite/:id", requireRole("admin") as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
   const authReq = req as AuthenticatedRequest;
   try {
-    if (!["owner", "admin"].includes(authReq.user.role ?? "")) {
-      return res.status(403).json({ message: "Only admins can revoke invites" });
-    }
-
     const { data: inviteRow, error: inviteFetchError } = await supabase
       .from("organization_invites")
       .select("user_id, email")
@@ -368,13 +364,9 @@ teamRouter.delete("/invite/:id", async (req: express.Request, res: express.Respo
   }
 });
 
-teamRouter.delete("/member/:id", async (req: express.Request, res: express.Response) => {
+teamRouter.delete("/member/:id", requireRole("admin") as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
   const authReq = req as AuthenticatedRequest;
   try {
-    if (!["owner", "admin"].includes(authReq.user.role ?? "")) {
-      return res.status(403).json({ message: "Only owners and admins can remove teammates" });
-    }
-
     if (authReq.user.id === authReq.params.id) {
       return res.status(400).json({ message: "You cannot remove yourself." });
     }
@@ -521,6 +513,114 @@ teamRouter.delete("/member/:id", async (req: express.Request, res: express.Respo
   } catch (error: any) {
     console.error("Member removal failed:", error);
     res.status(500).json({ message: "Failed to remove teammate" });
+  }
+});
+
+// PATCH /api/team/member/:id/role — change user role (Admin+). Only Owner can set Owner. Logs user_role_changed to audit.
+teamRouter.patch("/member/:id/role", requireRole("admin") as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
+  const authReq = req as AuthenticatedRequest;
+  try {
+    const targetUserId = req.params.id;
+    const { new_role: newRole, reason } = req.body ?? {};
+
+    if (!ALLOWED_ROLES.has(newRole)) {
+      return res.status(400).json({ message: "Invalid role" });
+    }
+
+    if (!onlyOwnerCanSetOwner(authReq.user.role, newRole)) {
+      return res.status(403).json({ message: "Only owners can promote to owner" });
+    }
+
+    if (authReq.user.role === "admin" && !["member", "safety_lead", "executive"].includes(newRole)) {
+      return res.status(403).json({ message: "Admins can only set roles: member, safety_lead, executive" });
+    }
+
+    const { data: targetUser, error: fetchError } = await supabase
+      .from("users")
+      .select("id, role, organization_id")
+      .eq("id", targetUserId)
+      .maybeSingle();
+
+    if (fetchError || !targetUser) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    if (targetUser.organization_id !== authReq.user.organization_id) {
+      return res.status(403).json({ message: "User not in your organization" });
+    }
+
+    const oldRole = targetUser.role ?? "member";
+    if (oldRole === newRole) {
+      return res.status(200).json({ message: "Role unchanged", role: oldRole });
+    }
+
+    // Last-admin protection: cannot demote the last admin
+    if (oldRole === "admin") {
+      let adminCountQuery = supabase
+        .from("users")
+        .select("id", { count: "exact", head: true })
+        .eq("organization_id", authReq.user.organization_id)
+        .eq("role", "admin");
+      try {
+        adminCountQuery = adminCountQuery.eq("account_status", "active");
+      } catch {
+        adminCountQuery = adminCountQuery.is("archived_at", null);
+      }
+      const { count: adminCount } = await adminCountQuery;
+      if ((adminCount ?? 0) <= 1) {
+        return res.status(400).json({
+          message: "Cannot change role of the last admin. Promote another user to admin first.",
+        });
+      }
+    }
+
+    const { error: updateError } = await supabase
+      .from("users")
+      .update({ role: newRole, updated_at: new Date().toISOString() })
+      .eq("id", targetUserId)
+      .eq("organization_id", authReq.user.organization_id);
+
+    if (updateError) {
+      throw updateError;
+    }
+
+    const clientMeta = extractClientMetadata(req);
+    await recordAuditLog({
+      organizationId: authReq.user.organization_id,
+      actorId: authReq.user.id,
+      eventName: "user_role_changed",
+      targetType: "user",
+      targetId: targetUserId,
+      metadata: {
+        old_role: oldRole,
+        new_role: newRole,
+        actor_role: authReq.user.role ?? "member",
+        reason: reason ?? null,
+      },
+      client: clientMeta.client,
+      appVersion: clientMeta.appVersion,
+      deviceId: clientMeta.deviceId,
+    });
+
+    await logTeamEvent(
+      authReq.user.organization_id,
+      authReq.user.id,
+      "role_changed",
+      "team.role_changed",
+      targetUserId,
+      null,
+      { old_role: oldRole, new_role: newRole, reason: reason ?? null }
+    );
+
+    res.json({
+      message: "Role updated",
+      user_id: targetUserId,
+      old_role: oldRole,
+      new_role: newRole,
+    });
+  } catch (error: any) {
+    console.error("Role change failed:", error);
+    res.status(500).json({ message: "Failed to change role" });
   }
 });
 

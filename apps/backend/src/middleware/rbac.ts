@@ -16,6 +16,15 @@ import { AuthenticatedRequest } from './auth'
 
 export type AppRole = 'owner' | 'admin' | 'executive' | 'safety_lead' | 'member'
 
+/** Single source of truth for role strings (DB, backend, iOS must match) */
+export const ROLES = {
+  MEMBER: 'member',
+  SAFETY_LEAD: 'safety_lead',
+  EXECUTIVE: 'executive',
+  ADMIN: 'admin',
+  OWNER: 'owner',
+} as const
+
 /** Hierarchy for "at least X" checks (higher number = more power) */
 export const ROLE_HIERARCHY: Record<AppRole, number> = {
   owner: 5,
@@ -73,6 +82,15 @@ export function canInviteRole(actorRole: string | undefined, targetRole: string)
 export function onlyOwnerCanSetOwner(actorRole: string | undefined, targetRole: string): boolean {
   if (targetRole?.toLowerCase() !== 'owner') return true
   return toAppRole(actorRole) === 'owner'
+}
+
+/**
+ * Safety Lead must provide at least one scope filter (job_id, date range, or category).
+ * Executive/Admin/Owner can export org-wide.
+ */
+export function safetyLeadMustHaveScope(filters: { job_id?: string; start_date?: string; end_date?: string; category?: string }): boolean {
+  const { job_id, start_date, end_date, category } = filters
+  return !!(job_id || (start_date && end_date) || category)
 }
 
 /**
