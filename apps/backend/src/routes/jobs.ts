@@ -5,7 +5,7 @@ import { recordAuditLog, extractClientMetadata } from "../middleware/audit";
 import { calculateRiskScore, generateMitigationItems } from "../utils/riskScoring";
 import { notifyHighRiskJob } from "../services/notifications";
 import { buildJobReport } from "../utils/jobReport";
-import { enforceJobLimit } from "../middleware/limits";
+import { enforceJobLimit, requireFeature } from "../middleware/limits";
 import { RequestWithId } from "../middleware/requestId";
 import { createErrorResponse, logErrorForSupport } from "../utils/errorResponse";
 import { requireWriteAccess } from "../middleware/requireWriteAccess";
@@ -880,6 +880,13 @@ jobsRouter.get("/:id/controls", authenticate, async (req: express.Request, res: 
     console.error("[Jobs] Controls fetch failed:", err);
     res.status(500).json({ message: "Failed to fetch controls" });
   }
+});
+
+// POST /api/jobs/:id/permit-pack
+// Alias for web client compatibility: redirects to /api/reports/permit-pack/:jobId
+jobsRouter.post("/:id/permit-pack", authenticate as unknown as express.RequestHandler, requireFeature("permit_pack") as unknown as express.RequestHandler, (req: express.Request, res: express.Response) => {
+  const base = `${req.protocol}://${req.get("host")}`;
+  res.redirect(308, `${base}/api/reports/permit-pack/${req.params.id}`);
 });
 
 // GET /api/jobs/:id/permit-packs
