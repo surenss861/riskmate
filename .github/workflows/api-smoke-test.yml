@@ -80,12 +80,12 @@ jobs:
 
       - name: Check API Route Existence (Executive)
         run: |
-          echo "🔍 Testing /v1/executive/posture (should return 401/403, not 404)..."
-          response=$(curl -s -w "\n%{http_code}" -H "Authorization: Bearer invalid" "https://api.riskmate.dev/v1/executive/posture" || echo -e "\n000")
+          echo "🔍 Testing /v1/executive/risk-posture (should return 401/403, not 404)..."
+          response=$(curl -s -w "\n%{http_code}" -H "Authorization: Bearer invalid" "https://api.riskmate.dev/v1/executive/risk-posture" || echo -e "\n000")
           http_code=$(echo "$response" | tail -n1)
           
           if [ "$http_code" = "404" ]; then
-            echo "❌ Route /v1/executive/posture not found (404) - route not mounted!"
+            echo "❌ Route /v1/executive/risk-posture not found (404) - route not mounted!"
             exit 1
           fi
           
@@ -119,4 +119,4 @@ jobs:
           echo "- GET /v1/health (200)" >> $GITHUB_STEP_SUMMARY
           echo "- GET /v1/account/organization (401/403, not 404)" >> $GITHUB_STEP_SUMMARY
           echo "- GET /v1/jobs (401/403, not 404)" >> $GITHUB_STEP_SUMMARY
-          echo "- GET /v1/executive/posture (401/403, not 404)" >> $GITHUB_STEP_SUMMARY
+          echo "- GET /v1/executive/risk-posture (401/403, not 404)" >> $GITHUB_STEP_SUMMARY
