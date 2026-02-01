@@ -135,7 +135,7 @@ verificationRouter.get(
         while (currentEvent.prev_hash && depth < maxChainDepth) {
           const { data: prev } = await supabase
             .from('audit_logs')
-            .select('hash, prev_hash, ledger_seq')
+            .select('hash, prev_hash, ledger_seq, actor_id, event_name, target_type, target_id, metadata, created_at')
             .eq('organization_id', organization_id)
             .eq('hash', currentEvent.prev_hash)
             .maybeSingle()
@@ -150,17 +150,16 @@ verificationRouter.get(
             prev.prev_hash,
             prev.ledger_seq || 0,
             organization_id,
-            prev.actor_id, // Use prev event's actor
-            prev.event_name, // Use prev event's name
+            prev.actor_id,
+            prev.event_name,
             prev.target_type,
             prev.target_id,
             prev.metadata,
             prev.created_at
           )
 
-          // Note: We can't fully verify prev event without fetching its full record
-          // For now, just check that prev_hash exists and points to a valid event
-          currentEvent = prev as any
+          // Advance to prev for next iteration
+          currentEvent = prev
           depth++
         }
 
