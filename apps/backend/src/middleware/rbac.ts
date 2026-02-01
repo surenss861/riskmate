@@ -11,8 +11,7 @@
  * - Owner = god mode (billing, org ownership, deletions, role grants)
  */
 
-import { Request, Response, NextFunction } from 'express'
-import { AuthenticatedRequest } from './auth'
+import type { RequestHandler } from 'express'
 
 export type AppRole = 'owner' | 'admin' | 'executive' | 'safety_lead' | 'member'
 
@@ -96,16 +95,15 @@ export function safetyLeadMustHaveScope(filters: { job_id?: string; start_date?:
 /**
  * Express middleware: require the current user to have at least minRole.
  * Use after authenticate. Sends 401 if no user, 403 if insufficient role.
- * Typed with Request so Express accepts it; user is set by auth middleware.
+ * Returns RequestHandler so Express overloads match (no route casts needed).
  */
-export function requireRole(minRole: AppRole) {
-  return (req: Request, res: Response, next: NextFunction) => {
-    const authReq = req as AuthenticatedRequest
-    if (!authReq.user) {
+export function requireRole(minRole: AppRole): RequestHandler {
+  return (req, res, next) => {
+    const role = req.user?.role
+    if (!role) {
       res.status(401).json({ message: 'Unauthorized', code: 'UNAUTHORIZED' })
       return
     }
-    const role = authReq.user.role
     if (!hasRoleAtLeast(role, minRole)) {
       res.status(403).json({
         message: 'Insufficient permissions',

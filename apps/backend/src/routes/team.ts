@@ -128,7 +128,7 @@ teamRouter.get("/", async (req: express.Request, res: express.Response) => {
   }
 });
 
-teamRouter.post("/invite", requireRole("safety_lead") as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
+teamRouter.post("/invite", requireRole("safety_lead"), async (req: express.Request, res: express.Response) => {
   const authReq = req as AuthenticatedRequest;
   try {
     const { email, role = "member" } = authReq.body ?? {};
@@ -305,7 +305,7 @@ teamRouter.post("/invite", requireRole("safety_lead") as unknown as express.Requ
   }
 });
 
-teamRouter.delete("/invite/:id", requireRole("admin") as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
+teamRouter.delete("/invite/:id", requireRole("admin"), async (req: express.Request, res: express.Response) => {
   const authReq = req as AuthenticatedRequest;
   try {
     const { data: inviteRow, error: inviteFetchError } = await supabase
@@ -364,7 +364,7 @@ teamRouter.delete("/invite/:id", requireRole("admin") as unknown as express.Requ
   }
 });
 
-teamRouter.delete("/member/:id", requireRole("admin") as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
+teamRouter.delete("/member/:id", requireRole("admin"), async (req: express.Request, res: express.Response) => {
   const authReq = req as AuthenticatedRequest;
   try {
     if (authReq.user.id === authReq.params.id) {
@@ -517,7 +517,7 @@ teamRouter.delete("/member/:id", requireRole("admin") as unknown as express.Requ
 });
 
 // PATCH /api/team/member/:id/role — change user role (Admin+). Only Owner can set Owner. Logs user_role_changed to audit.
-teamRouter.patch("/member/:id/role", requireRole("admin") as unknown as express.RequestHandler, async (req: express.Request, res: express.Response) => {
+teamRouter.patch("/member/:id/role", requireRole("admin"), async (req: express.Request, res: express.Response) => {
   const authReq = req as AuthenticatedRequest;
   try {
     const targetUserId = req.params.id;
