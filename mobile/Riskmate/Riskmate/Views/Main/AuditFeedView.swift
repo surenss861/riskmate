@@ -3,6 +3,7 @@ import SwiftDate
 
 /// Audit feed with native list, category pills, and detail sheets
 struct AuditFeedView: View {
+    @StateObject private var entitlements = EntitlementsManager.shared
     @State private var events: [AuditEvent] = []
     @State private var isLoading = true
     @State private var errorMessage: String?
@@ -13,6 +14,8 @@ struct AuditFeedView: View {
     @State private var showingVerificationExplainer = false
     @State private var showFirstVisitAnimation = false
     @AppStorage("riskmate.ledger.firstVisit") private var hasSeenFirstVisit = false
+
+    private var rbac: RBAC { RBAC(role: entitlements.entitlements?.role) }
     
     var body: some View {
         RMBackground()
@@ -169,6 +172,9 @@ struct AuditFeedView: View {
                         }
                         .listStyle(.insetGrouped)
                         .scrollContentBackground(.hidden)
+                        .refreshable {
+                            await loadEvents()
+                        }
                     }
                 }
             }
@@ -183,20 +189,22 @@ struct AuditFeedView: View {
                     } label: {
                         Label("What is Verified?", systemImage: "questionmark.circle")
                     }
-                    Button {
-                        Haptics.tap()
-                        exportURL = try? AuditExporter.exportJSON(events: events)
-                    } label: {
-                        Label("Export JSON", systemImage: "curlybraces")
+                    if rbac.canExportLedger {
+                        Button {
+                            Haptics.tap()
+                            exportURL = try? AuditExporter.exportJSON(events: events)
+                        } label: {
+                            Label("Export JSON", systemImage: "curlybraces")
+                        }
+                        .disabled(events.isEmpty)
+                        Button {
+                            Haptics.tap()
+                            exportURL = try? AuditExporter.exportCSV(events: events)
+                        } label: {
+                            Label("Export CSV", systemImage: "tablecells")
+                        }
+                        .disabled(events.isEmpty)
                     }
-                    .disabled(events.isEmpty)
-                    Button {
-                        Haptics.tap()
-                        exportURL = try? AuditExporter.exportCSV(events: events)
-                    } label: {
-                        Label("Export CSV", systemImage: "tablecells")
-                    }
-                    .disabled(events.isEmpty)
                 } label: {
                     Image(systemName: "ellipsis.circle")
                         .font(.system(size: 20))
@@ -225,9 +233,6 @@ struct AuditFeedView: View {
         .task {
             await loadEvents()
         }
-        .refreshable {
-            await loadEvents()
-        }
         .sheet(isPresented: $showingDetail) {
             if let event = selectedEvent {
                 ProofDetailSheet(event: event)
@@ -235,9 +240,8 @@ struct AuditFeedView: View {
                     .presentationDragIndicator(.visible)
             }
         }
-        .sheet(item: $exportURL) { url in
+        .sheet(item: $exportURL, onDismiss: { exportURL = nil }) { url in
             ShareSheet(items: [url])
-                .onDisappear { exportURL = nil }
         }
         .sheet(isPresented: $showingVerificationDetails) {
             VerificationDetailsView()

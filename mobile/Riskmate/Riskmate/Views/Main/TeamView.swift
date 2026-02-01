@@ -53,6 +53,7 @@ struct TeamView: View {
                                 InviteFormCard(
                                     email: $inviteEmail,
                                     role: $inviteRole,
+                                    allowedRoles: RBAC(role: data.currentUserRole).inviteableRoles,
                                     onInvite: {
                                         await sendInvite(email: inviteEmail, role: inviteRole)
                                     }
@@ -129,10 +130,17 @@ struct TeamView: View {
             .refreshable {
                 await loadTeam()
             }
+            .onChange(of: teamData?.currentUserRole) { _, newRole in
+                guard let r = newRole, RBAC(role: r).canInvite else { return }
+                let allowed = RBAC(role: r).inviteableRoles
+                if !allowed.isEmpty && !allowed.contains(inviteRole) {
+                    inviteRole = allowed.first ?? .member
+                }
+            }
     }
     
     private func canInvite(_ role: String) -> Bool {
-        return role == "owner" || role == "admin"
+        RBAC(role: role).canInvite
     }
     
     private func loadTeam() async {
@@ -259,10 +267,17 @@ struct SeatsInfoCard: View {
 struct InviteFormCard: View {
     @Binding var email: String
     @Binding var role: TeamRole
+    /// When set, only these roles are shown (e.g. Safety Lead sees only Member). Nil = all roles.
+    var allowedRoles: [TeamRole]? = nil
     let onInvite: () async -> Void
-    
+
     @State private var isInviting = false
-    
+
+    private var rolesForPicker: [TeamRole] {
+        guard let allowed = allowedRoles, !allowed.isEmpty else { return Array(TeamRole.allCases) }
+        return allowed
+    }
+
     var body: some View {
         RMGlassCard {
             VStack(spacing: RMTheme.Spacing.md) {
@@ -270,7 +285,7 @@ struct InviteFormCard: View {
                     .font(RMTheme.Typography.title3)
                     .foregroundColor(RMTheme.Colors.textPrimary)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                
+
                 VStack(spacing: RMTheme.Spacing.sm) {
                     TextField("Email", text: $email)
                         .textContentType(.emailAddress)
@@ -280,10 +295,10 @@ struct InviteFormCard: View {
                         .background(RMTheme.Colors.inputFill)
                         .cornerRadius(RMTheme.Radius.sm)
                         .foregroundColor(RMTheme.Colors.textPrimary)
-                    
+
                     Picker("Role", selection: $role) {
-                        ForEach(TeamRole.allCases, id: \.self) { role in
-                            Text(role.displayName).tag(role)
+                        ForEach(rolesForPicker, id: \.self) { r in
+                            Text(r.displayName).tag(r)
                         }
                     }
                     .pickerStyle(.menu)

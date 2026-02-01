@@ -2,6 +2,7 @@ import express, { type Router as ExpressRouter } from "express";
 import crypto from "crypto";
 import { supabase } from "../lib/supabaseClient";
 import { authenticate, AuthenticatedRequest } from "../middleware/auth";
+import { canInviteRole, onlyOwnerCanSetOwner } from "../middleware/rbac";
 import { limitsFor } from "../auth/planRules";
 import { recordAuditLog } from "../middleware/audit";
 
@@ -140,8 +141,14 @@ teamRouter.post("/invite", async (req: express.Request, res: express.Response) =
       return res.status(400).json({ message: "Invalid role selection" });
     }
 
-    if (!["owner", "admin"].includes(authReq.user.role ?? "")) {
-      return res.status(403).json({ message: "Only admins can invite teammates" });
+    if (!onlyOwnerCanSetOwner(authReq.user.role, role)) {
+      return res.status(403).json({ message: "Only owners can invite or create owners" });
+    }
+
+    if (!canInviteRole(authReq.user.role, role)) {
+      return res.status(403).json({
+        message: "You cannot invite this role. Owners can invite anyone; admins can invite member, safety lead, executive; safety leads can invite members only.",
+      });
     }
 
     if (authReq.user.subscriptionStatus === "past_due" || authReq.user.subscriptionStatus === "canceled") {
@@ -393,6 +400,26 @@ teamRouter.delete("/member/:id", async (req: express.Request, res: express.Respo
 
     if (!targetMember) {
       return res.status(404).json({ message: "Teammate not found" });
+    }
+
+    // Last-admin protection: cannot remove the last admin
+    if (targetMember.role === "admin") {
+      let adminCountQuery = supabase
+        .from("users")
+        .select("id", { count: "exact", head: true })
+        .eq("organization_id", authReq.user.organization_id)
+        .eq("role", "admin");
+      try {
+        adminCountQuery = adminCountQuery.eq("account_status", "active");
+      } catch {
+        adminCountQuery = adminCountQuery.is("archived_at", null);
+      }
+      const { count: adminCount, error: adminCountError } = await adminCountQuery;
+      if (!adminCountError && (adminCount ?? 0) <= 1) {
+        return res.status(400).json({
+          message: "Cannot remove the last admin. Promote another user to admin first or transfer ownership.",
+        });
+      }
     }
 
     // Prevent removing owners (only owners can remove other owners, and only if there are multiple)

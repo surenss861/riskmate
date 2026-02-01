@@ -29,8 +29,13 @@ struct JobCard: View {
     var body: some View {
         RMCard {
             HStack(spacing: RMSystemTheme.Spacing.md) {
-                // Risk Pill
-                RiskPill(text: (job.riskLevel ?? "RISK").uppercased(), color: riskColor)
+                // Risk Pill + Compliance Badge (external compliance view)
+                VStack(alignment: .leading, spacing: 8) {
+                    RiskPill(text: (job.riskLevel ?? "RISK").uppercased(), color: riskColor)
+                    if let status = job.complianceStatusOptional {
+                        ComplianceBadge(status: status)
+                    }
+                }
                 
                 // Job Info
                 VStack(alignment: .leading, spacing: 4) {
@@ -128,5 +133,58 @@ struct StatusChip: View {
                 Capsule()
                     .fill(RMSystemTheme.Colors.tertiaryBackground)
             )
+    }
+}
+
+// MARK: - Compliance Badge (Work Records / external view)
+
+/// Compliance status for Work Records: one-glance signal for insurance/GCs.
+enum ComplianceStatus {
+    case compliant
+    case attention
+    case nonCompliant
+
+    var icon: String {
+        switch self {
+        case .compliant: return "checkmark.circle.fill"
+        case .attention: return "exclamationmark.triangle.fill"
+        case .nonCompliant: return "xmark.circle.fill"
+        }
+    }
+
+    var displayText: String {
+        switch self {
+        case .compliant: return "Compliant"
+        case .attention: return "Attention"
+        case .nonCompliant: return "Non-Compliant"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .compliant: return RMTheme.Colors.success
+        case .attention: return RMTheme.Colors.warning
+        case .nonCompliant: return RMTheme.Colors.error
+        }
+    }
+}
+
+/// Badge shown on Work Records rows for external compliance view.
+struct ComplianceBadge: View {
+    let status: ComplianceStatus
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: status.icon)
+                .font(RMSystemTheme.Typography.caption2)
+            Text(status.displayText)
+                .font(RMSystemTheme.Typography.caption2)
+                .fontWeight(.medium)
+        }
+        .foregroundStyle(status.color)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(status.color.opacity(0.15))
+        .clipShape(Capsule())
     }
 }

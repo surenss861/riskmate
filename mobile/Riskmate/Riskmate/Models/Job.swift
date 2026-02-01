@@ -82,6 +82,27 @@ extension Job {
         }()
         return evidenceComplete && controlsComplete
     }
+
+    /// Compliance status for Work Records (external view). Compliant = evidence + controls met; Attention = some progress; Non-Compliant = none. When readiness fields are nil (no API data), treated as compliant; nil counts treated as 0.
+    var complianceStatus: ComplianceStatus {
+        complianceStatusOptional ?? .compliant
+    }
+
+    /// Nil when readiness data is missing (no badge). Use this to avoid showing "Non-Compliant" for jobs with no evidence/control data.
+    var complianceStatusOptional: ComplianceStatus? {
+        guard evidenceRequired != nil || controlsTotal != nil else {
+            return nil
+        }
+        let evidenceComplete = (evidenceRequired ?? 0) <= 0 || (evidenceCount ?? 0) >= (evidenceRequired ?? 0)
+        let controlsComplete = (controlsTotal ?? 0) <= 0 || (controlsCompleted ?? 0) >= (controlsTotal ?? 0)
+        if evidenceComplete && controlsComplete {
+            return .compliant
+        }
+        if (evidenceCount ?? 0) > 0 || (controlsCompleted ?? 0) > 0 {
+            return .attention
+        }
+        return .nonCompliant
+    }
 }
 
 struct JobsResponse: Codable {
