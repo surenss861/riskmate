@@ -45,6 +45,7 @@ class OfflineCache: ObservableObject {
         let data: Data
         let createdAt: Date
         var retryCount: Int = 0
+        var lastRetryAt: Date? = nil // Track last retry for exponential backoff
         
         // For matching queued items to UI elements
         var itemId: String? // The ID of the item being synced (control.id, hazard.id, etc.)
@@ -177,18 +178,30 @@ class OfflineCache: ObservableObject {
         var failedItems: [QueuedItem] = []
         
         for item in queuedItems {
+            // Exponential backoff: skip if retried too recently
+            if let lastRetry = item.lastRetryAt {
+                let backoffSeconds = pow(2.0, Double(item.retryCount)) // 1s, 2s, 4s
+                let nextRetryTime = lastRetry.addingTimeInterval(backoffSeconds)
+                if Date() < nextRetryTime {
+                    failedItems.append(item) // Still in backoff period
+                    continue
+                }
+            }
+            
             do {
                 try await processQueuedItem(item)
                 removeQueuedItem(item)
             } catch {
                 var updatedItem = item
                 updatedItem.retryCount += 1
+                updatedItem.lastRetryAt = Date()
                 
                 if updatedItem.retryCount < 3 {
                     failedItems.append(updatedItem)
                 } else {
                     // Max retries reached, remove from queue
                     print("[OfflineCache] Max retries reached for item \(item.id)")
+                    Analytics.shared.trackOfflineSyncFailed(itemType: item.type.rawValue, error: "max_retries")
                 }
             }
         }

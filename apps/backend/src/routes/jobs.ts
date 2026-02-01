@@ -609,11 +609,11 @@ jobsRouter.get("/", authenticate, async (req: express.Request, res: express.Resp
         };
         return {
           ...job,
-          // Optional fields (may not exist if migration hasn't run - use type assertion to avoid TS errors)
-          applied_template_id: (job as any).applied_template_id ?? null,
-          applied_template_type: (job as any).applied_template_type ?? null,
-          review_flag: (job as any).review_flag ?? null,
-          flagged_at: (job as any).flagged_at ?? null,
+          // Optional fields properly typed (may not exist if migration hasn't run)
+          applied_template_id: job.applied_template_id ?? null,
+          applied_template_type: job.applied_template_type ?? null,
+          review_flag: job.review_flag ?? null,
+          flagged_at: job.flagged_at ?? null,
           readiness_score: readiness.readiness_score,
           readiness_basis: readiness.readiness_basis,
           readiness_empty_reason: readiness.readiness_empty_reason,
@@ -1409,11 +1409,13 @@ jobsRouter.patch("/:id/mitigations/:mitigationId", authenticate, requireWriteAcc
   }
 });
 
+// LRU Cache with size limit for job reports
 type CachedJobReport = {
   data: any;
   expiresAt: number;
 };
 
+const MAX_CACHE_SIZE = 1000; // Limit to 1000 entries
 const jobReportCache = new Map<string, CachedJobReport>();
 const JOB_REPORT_TTL_MS = 60 * 1000;
 
@@ -1428,6 +1430,11 @@ const getCachedJobReport = (key: string) => {
 };
 
 const setCachedJobReport = (key: string, data: any) => {
+  // Implement simple LRU: if cache is full, delete oldest entry
+  if (jobReportCache.size >= MAX_CACHE_SIZE) {
+    const firstKey = jobReportCache.keys().next().value;
+    if (firstKey) jobReportCache.delete(firstKey);
+  }
   jobReportCache.set(key, { data, expiresAt: Date.now() + JOB_REPORT_TTL_MS });
 };
 

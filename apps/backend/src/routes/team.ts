@@ -159,7 +159,17 @@ teamRouter.post("/invite", requireRole("safety_lead"), async (req: express.Reque
     }
 
     const organizationId = authReq.user.organization_id;
+    // Validate and normalize email
     const normalizedEmail = email.trim().toLowerCase();
+    
+    // Basic email format validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(normalizedEmail)) {
+      return res.status(400).json({ 
+        message: "Invalid email format",
+        code: "INVALID_EMAIL"
+      });
+    }
 
     // Try to filter by account_status, fallback to archived_at if column doesn't exist
     let memberCountQuery = supabase

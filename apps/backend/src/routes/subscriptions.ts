@@ -198,6 +198,12 @@ subscriptionsRouter.get("/", authenticate as unknown as RequestHandler, async (r
       ? new Date(subscription.current_period_start)
       : new Date(); // If no subscription, use current month
 
+    // Validate periodStart is a valid date
+    if (isNaN(periodStart.getTime())) {
+      console.error('[Subscriptions] Invalid periodStart:', subscription?.current_period_start);
+      throw new Error('Invalid subscription period start date');
+    }
+
     const { count, error: countError } = await supabase
       .from("jobs")
       .select("*", { count: "exact", head: true })

@@ -271,7 +271,7 @@ export async function stripeWebhookHandler(req: Request, res: Response) {
       console.warn("Failed to track webhook failure:", trackErr);
     }
     
-    return res.status(400).send(`Webhook Error: ${err?.message}`);
+    return res.status(401).send(`Webhook Error: ${err?.message}`);
   }
 
   // Idempotency check: skip if already processed
