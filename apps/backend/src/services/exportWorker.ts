@@ -102,8 +102,10 @@ async function processExportQueue() {
           }
         }
       } else {
-        // Other errors are unexpected
-        console.warn('[ExportWorker] RPC claim failed, using fallback:', rpcError.message)
+        // Other errors (e.g. 500/HTML from Cloudflare when RPC is unreachable) — use fallback
+        const msg = rpcError.message || String(rpcError)
+        const shortMsg = msg.length > 200 ? msg.slice(0, 200) + '…' : msg
+        console.warn('[ExportWorker] RPC claim failed, using fallback:', shortMsg)
         if (requireRpc) {
           console.error('[ExportWorker] ❌ CRITICAL: RPC call failed in production!')
           return

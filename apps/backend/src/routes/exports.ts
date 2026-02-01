@@ -132,6 +132,8 @@ exportsRouter.post(
       })
 
       if (insertError) {
+        // Log actual DB error for debugging (e.g. missing table/columns in production)
+        console.error('[exports] INSERT exports failed:', insertError.code, insertError.message, { jobId, organization_id, export_type })
         // Check for unique constraint violation (idempotency race condition)
         if (insertError.code === '23505') {
           const { data: existing } = await supabase
@@ -166,6 +168,20 @@ exportsRouter.post(
         })
         res.setHeader('X-Error-ID', errorId)
         logErrorForSupport(500, 'DATABASE_ERROR', requestId, organization_id, errorResponse.message, errorResponse.internal_message, 'operations', 'error', '/api/jobs/:id/export/pdf')
+        return res.status(500).json(errorResponse)
+      }
+
+      // Defensive: Supabase can succeed with null data in edge cases
+      if (!exportJob) {
+        console.error('[exports] INSERT succeeded but no row returned', { jobId, organization_id, export_type })
+        const { response: errorResponse, errorId } = createErrorResponse({
+          message: 'Failed to create export job',
+          internalMessage: 'Export record created but response missing',
+          code: 'DATABASE_ERROR',
+          requestId,
+          statusCode: 500,
+        })
+        res.setHeader('X-Error-ID', errorId)
         return res.status(500).json(errorResponse)
       }
 
@@ -303,6 +319,7 @@ exportsRouter.post(
         .single()
 
       if (insertError) {
+        console.error('[exports] INSERT exports (proof_pack) failed:', insertError.code, insertError.message, { jobId, organization_id })
         if (insertError.code === '23505') {
           const { data: existing } = await supabase
             .from('exports')
@@ -336,6 +353,19 @@ exportsRouter.post(
         })
         res.setHeader('X-Error-ID', errorId)
         logErrorForSupport(500, 'DATABASE_ERROR', requestId, organization_id, errorResponse.message, errorResponse.internal_message, 'operations', 'error', '/api/jobs/:id/export/proof-pack')
+        return res.status(500).json(errorResponse)
+      }
+
+      if (!exportJob) {
+        console.error('[exports] INSERT (proof_pack) succeeded but no row returned', { jobId, organization_id })
+        const { response: errorResponse, errorId } = createErrorResponse({
+          message: 'Failed to create export job',
+          internalMessage: 'Export record created but response missing',
+          code: 'DATABASE_ERROR',
+          requestId,
+          statusCode: 500,
+        })
+        res.setHeader('X-Error-ID', errorId)
         return res.status(500).json(errorResponse)
       }
 

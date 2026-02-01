@@ -31,6 +31,7 @@ This guide helps you apply all database migrations to ensure web, iOS, and backe
 5. `supabase/migrations/20251203000002_fix_ledger_chain_of_custody.sql`
 6. `supabase/migrations/20251203000003_fix_evidence_lifecycle.sql`
 7. `supabase/migrations/20251203000004_export_worker_atomic_claim.sql` ⚠️ **Required for export worker**
+8. `supabase/migrations/20251203000005_production_hardening.sql` ⚠️ **Required for exports** (adds `request_id`, `verification_token`, `failure_count` to `exports`)
 
 ### Option 2: Supabase CLI
 
@@ -136,6 +137,16 @@ You should see all 10 tables listed.
 - Make sure you're using the SQL Editor (has admin permissions)
 - Don't run migrations via API or with anon key
 
+### "Failed to create export job" / DATABASE_ERROR (iOS or web export)
+
+**Cause:** The `exports` table is missing or missing columns the backend expects. The backend inserts `request_id`, `verification_token`, `idempotency_key`, `filters`, `created_by`, `requested_by`, `requested_at` (and base columns). If migration `20251203000005_production_hardening.sql` was not applied, `request_id` and `verification_token` columns are missing and the INSERT fails.
+
+**Solution:**
+1. In Supabase SQL Editor, run: `SELECT column_name FROM information_schema.columns WHERE table_name = 'exports' ORDER BY ordinal_position;` (or use Table Editor) and confirm the table has columns: `request_id`, `verification_token`, `idempotency_key`, `failure_count`, plus base columns from `20251203000000_database_hardening_ledger_compliance.sql`.
+2. If the table is missing, run in order: `20251203000000_database_hardening_ledger_compliance.sql`, then `20251203000002_fix_ledger_chain_of_custody.sql` (adds `idempotency_key`), then `20251203000005_production_hardening.sql` (adds `request_id`, `verification_token`, `failure_count`).
+3. If the table exists but columns are missing, run only `20251203000005_production_hardening.sql` (it uses `ADD COLUMN IF NOT EXISTS`).
+4. Restart the Railway backend and retry export from iOS or web.
+
 ---
 
 ## 📋 Migration Checklist
@@ -147,6 +158,7 @@ You should see all 10 tables listed.
 - [ ] `20251203000002_fix_ledger_chain_of_custody.sql` - Chain of custody
 - [ ] `20251203000003_fix_evidence_lifecycle.sql` - Evidence table
 - [ ] `20251203000004_export_worker_atomic_claim.sql` - Export worker RPC
+- [ ] `20251203000005_production_hardening.sql` - Exports request_id, verification_token, failure_count
 - [ ] Verified `claim_export_job` function exists
 - [ ] Refreshed PostgREST schema cache
 - [ ] Restarted Railway backend
