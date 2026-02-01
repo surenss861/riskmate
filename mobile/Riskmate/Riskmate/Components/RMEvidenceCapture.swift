@@ -149,13 +149,13 @@ struct RMEvidenceCapture: View {
             }
             .alert("Permission Required", isPresented: $showPermissionAlert) {
                 Button("Open Settings") {
-                    RiskMateDesignSystem.Haptics.tap()
+                    RiskmateDesignSystem.Haptics.tap()
                     if let url = URL(string: UIApplication.openSettingsURLString) {
                         UIApplication.shared.open(url)
                     }
                 }
                 Button("Cancel", role: .cancel) {
-                    RiskMateDesignSystem.Haptics.tap()
+                    RiskmateDesignSystem.Haptics.tap()
                 }
             } message: {
                 Text(permissionMessage)
@@ -166,9 +166,9 @@ struct RMEvidenceCapture: View {
     private var permissionMessage: String {
         switch permissionType {
         case .camera:
-            return "RiskMate needs camera access to capture evidence photos. We only use photos you choose and store them securely per organization."
+            return "Riskmate needs camera access to capture evidence photos. We only use photos you choose and store them securely per organization."
         case .photoLibrary:
-            return "RiskMate needs photo library access to select evidence photos. We only use photos you choose and store them securely per organization."
+            return "Riskmate needs photo library access to select evidence photos. We only use photos you choose and store them securely per organization."
         }
     }
     

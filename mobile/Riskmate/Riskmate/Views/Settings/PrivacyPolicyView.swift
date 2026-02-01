@@ -18,7 +18,7 @@ struct PrivacyPolicyView: View {
                             SectionView(
                                 title: "Information We Collect",
                                 content: """
-                                RiskMate collects information necessary to provide our audit and compliance services:
+                                Riskmate collects information necessary to provide our audit and compliance services:
                                 
                                 • Account information (email, organization name)
                                 • Job and project data (hazards, controls, evidence)

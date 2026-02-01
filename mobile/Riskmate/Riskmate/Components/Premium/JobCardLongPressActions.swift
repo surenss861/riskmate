@@ -14,7 +14,7 @@ struct JobCardLongPressActions: ViewModifier {
             .contextMenu {
                 if let onAddEvidence = onAddEvidence {
                     Button {
-                        RiskMateDesignSystem.Haptics.impact()
+                        RiskmateDesignSystem.Haptics.impact()
                         Analytics.shared.trackLongPressActionsUsed(action: "add_evidence", jobId: job.id)
                         onAddEvidence()
                     } label: {
@@ -24,7 +24,7 @@ struct JobCardLongPressActions: ViewModifier {
                 
                 if let onViewLedger = onViewLedger {
                     Button {
-                        RiskMateDesignSystem.Haptics.tap()
+                        RiskmateDesignSystem.Haptics.tap()
                         Analytics.shared.trackLongPressActionsUsed(action: "view_ledger", jobId: job.id)
                         onViewLedger()
                     } label: {
@@ -34,7 +34,7 @@ struct JobCardLongPressActions: ViewModifier {
                 
                 if let onExportProof = onExportProof {
                     Button {
-                        RiskMateDesignSystem.Haptics.success()
+                        RiskmateDesignSystem.Haptics.success()
                         Analytics.shared.trackLongPressActionsUsed(action: "export_proof", jobId: job.id)
                         onExportProof()
                     } label: {
@@ -47,7 +47,7 @@ struct JobCardLongPressActions: ViewModifier {
             .simultaneousGesture(
                 LongPressGesture(minimumDuration: 0.5)
                     .onEnded { _ in
-                        RiskMateDesignSystem.Haptics.impact(.medium)
+                        RiskmateDesignSystem.Haptics.impact(.medium)
                     }
             )
     }

@@ -355,7 +355,7 @@ private struct OperationsEmptySection: View {
                     
                     Divider()
                         .background(RMSystemTheme.Colors.separator.opacity(0.3))
-                    Text("RiskMate creates permanent proof so compliance is never questioned.")
+                    Text("Riskmate creates permanent proof so compliance is never questioned.")
                         .font(RMSystemTheme.Typography.footnote)
                         .foregroundColor(RMSystemTheme.Colors.textTertiary)
                         .multilineTextAlignment(.center)

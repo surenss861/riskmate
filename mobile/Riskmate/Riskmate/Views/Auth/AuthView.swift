@@ -24,7 +24,7 @@ struct AuthView: View {
                     
                     RMGlassCard {
                         VStack(spacing: 16) {
-                            RiskMateLogo(size: .large, showText: true)
+                            RiskmateLogo(size: .large, showText: true)
                                 .padding(.bottom, 2)
                             
                             VStack(spacing: RMTheme.Spacing.xs) {

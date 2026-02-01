@@ -168,7 +168,7 @@ struct JobsListView: View {
                                 VStack(spacing: RMTheme.Spacing.sm) {
                                     Divider()
                                         .background(RMTheme.Colors.divider.opacity(0.3))
-                                    Text("RiskMate creates permanent proof so compliance is never questioned.")
+                                    Text("Riskmate creates permanent proof so compliance is never questioned.")
                                         .font(RMTheme.Typography.bodySmall)
                                         .foregroundColor(RMTheme.Colors.textTertiary)
                                         .multilineTextAlignment(.center)

@@ -90,7 +90,7 @@ extension View {
 // MARK: - Navigation Styling
 
 extension View {
-    /// Configure navigation bar for RiskMate style
+    /// Configure navigation bar for Riskmate style
     func rmNavigationBar(title: String) -> some View {
         self
             .navigationTitle(title)
@@ -104,7 +104,7 @@ extension View {
 // MARK: - List Styling
 
 extension View {
-    /// RiskMate list row style
+    /// Riskmate list row style
     func rmListRow() -> some View {
         self
             .listRowBackground(RMTheme.Colors.surface.opacity(0.5))

@@ -649,18 +649,23 @@ accountRouter.post(
         }).response);
       }
 
-      // If owner, check if there are other active users
+      // If owner, check if there are other active users (with transaction safety)
       if (user.role === "owner") {
-        const { count: activeUsers } = await supabase
+        // Double-check count to ensure accuracy
+        const { data: activeUsersData, count: activeUsers, error: countError } = await supabase
           .from("users")
-          .select("*", { count: "exact", head: true })
+          .select("id", { count: "exact" })
           .eq("organization_id", user.organization_id)
           .eq("account_status", "active")
           .neq("id", userId);
 
+        if (countError) {
+          throw new Error(`Failed to verify active users: ${countError.message}`);
+        }
+
         if (activeUsers && activeUsers > 0) {
           return res.status(400).json(createErrorResponse({
-            message: "Cannot deactivate account: you are the organization owner and there are other active users. Please transfer ownership first.",
+            message: `Cannot deactivate account: you are the organization owner and there are ${activeUsers} other active user(s). Please transfer ownership first.`,
             code: "ACCOUNT_OWNER_CANNOT_DELETE",
             status: 400,
           }).response);

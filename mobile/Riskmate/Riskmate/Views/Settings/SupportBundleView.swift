@@ -85,7 +85,7 @@ struct SupportBundleView: View {
     
     private func copySupportBundle() {
         var bundle = """
-        RiskMate Support Bundle
+        Riskmate Support Bundle
         ======================
         
         App Info:

@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// RiskMate Design System - Single source of truth for all design tokens
+/// Riskmate Design System - Single source of truth for all design tokens
 /// Matches web brand while feeling native iOS
 struct RMTheme {
     // MARK: - Colors

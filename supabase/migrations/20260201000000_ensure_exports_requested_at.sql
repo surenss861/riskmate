@@ -1,7 +1,11 @@
--- Ensure exports table has requested_at (PGRST204 fix when column missing from schema)
--- Safe to run: ADD COLUMN IF NOT EXISTS
-ALTER TABLE exports
-ADD COLUMN IF NOT EXISTS requested_at TIMESTAMPTZ;
+-- Add missing column with default
+ALTER TABLE exports 
+ADD COLUMN IF NOT EXISTS requested_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
 
--- Backfill any nulls with created_at for existing rows
-UPDATE exports SET requested_at = created_at WHERE requested_at IS NULL;
+-- Backfill existing records (use created_at for historical data)
+UPDATE exports 
+SET requested_at = created_at 
+WHERE requested_at IS NULL;
+
+-- Add index for performance (requested_at is frequently queried)
+CREATE INDEX IF NOT EXISTS idx_exports_requested_at ON exports(requested_at DESC);

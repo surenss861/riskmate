@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// RiskMate primary button - keep orange, add press feel + haptic
+/// Riskmate primary button - keep orange, add press feel + haptic
 struct RMPrimaryButton: View {
     let title: String
     var isLoading: Bool = false

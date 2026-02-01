@@ -1,7 +1,7 @@
 import Foundation
 import Combine
 
-/// Offline caching service for RiskMate
+/// Offline caching service for Riskmate
 /// Handles local storage, sync queue, and background uploads
 @MainActor
 class OfflineCache: ObservableObject {
@@ -18,7 +18,7 @@ class OfflineCache: ObservableObject {
     private init() {
         let fileManager = FileManager.default
         let cacheDir = fileManager.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-        cacheDirectory = cacheDir.appendingPathComponent("RiskMate", isDirectory: true)
+        cacheDirectory = cacheDir.appendingPathComponent("Riskmate", isDirectory: true)
         queueFile = cacheDirectory.appendingPathComponent("sync-queue.json")
         
         // Create cache directory if needed
@@ -276,5 +276,27 @@ struct AuditEvent: Identifiable, Codable {
     let timestamp: Date
     var details: String = ""
     var actor: String = ""
+    /// String-keyed for safe decode + render; API stringifies values in toAuditEvent().
     var metadata: [String: String] = [:]
+}
+
+extension AuditEvent {
+    /// Record hash from API; fall back to id for display if missing.
+    var recordHash: String? {
+        metadataString("hash") ?? metadataString("record_hash")
+    }
+    var previousHash: String? {
+        metadataString("previous_hash")
+    }
+    var signature: String? {
+        metadataString("signature")
+    }
+    var txHash: String? {
+        metadataString("tx_hash") ?? metadataString("anchor_tx")
+    }
+
+    /// Safe read from metadata for decode + render. API stringifies primitives in toAuditEvent() so we only need String here.
+    private func metadataString(_ key: String) -> String? {
+        metadata[key]
+    }
 }

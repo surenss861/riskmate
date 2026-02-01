@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// RiskMate Design System - matches web app exactly
+/// Riskmate Design System - matches web app exactly
 struct DesignSystem {
     // Colors
     struct Colors {

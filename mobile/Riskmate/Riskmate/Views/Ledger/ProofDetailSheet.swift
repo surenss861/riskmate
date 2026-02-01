@@ -82,11 +82,11 @@ private struct CryptoProofCard: View {
                     .foregroundColor(RMTheme.Colors.textPrimary)
             }
             ProofField(label: "Proof ID", value: event.id, copyable: true)
-            ProofField(label: "Record Hash", value: event.id, copyable: true, monospace: true)
-            if let prev = event.metadata["previous_hash"], !prev.isEmpty {
+            ProofField(label: "Record Hash", value: event.recordHash ?? event.id, copyable: true, monospace: true)
+            if let prev = event.previousHash, !prev.isEmpty {
                 ProofField(label: "Links to", value: prev, copyable: true, monospace: true)
             }
-            if let sig = event.metadata["signature"], !sig.isEmpty {
+            if let sig = event.signature, !sig.isEmpty {
                 ProofField(label: "Digital Signature", value: sig, copyable: true, monospace: true)
             }
             Text("This proof is cryptographically anchored and cannot be altered.")
@@ -178,7 +178,7 @@ private struct VerificationCard: View {
             Text("Anchored \(event.timestamp.formatted(date: .abbreviated, time: .shortened))")
                 .font(RMTheme.Typography.caption)
                 .foregroundColor(RMTheme.Colors.textSecondary)
-            if let txHash = event.metadata["tx_hash"], !txHash.isEmpty {
+            if let txHash = event.txHash, !txHash.isEmpty {
                 ProofField(label: "Anchor Reference", value: txHash, copyable: true, monospace: true)
             }
         }

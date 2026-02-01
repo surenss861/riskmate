@@ -219,14 +219,19 @@ struct ExportProofSheet: View {
     }
     
     private func generateExport(type: ExportType) async {
+        print("🐛 [ExportProofSheet] Export tapped — jobId: \(jobId), type: \(type.rawValue)")
         do {
+            print("🐛 [ExportProofSheet] Calling exportManager.export...")
             try await exportManager.export(
                 jobId: jobId,
                 type: type,
                 initiatedFromForeground: true
             )
+            print("🐛 [ExportProofSheet] Export created successfully")
         } catch {
-            errorMessage = error.localizedDescription
+            print("🐛 [ExportProofSheet] Export FAILED: \(error)")
+            print("🐛 [ExportProofSheet] Error details: \(error.localizedDescription)")
+            errorMessage = ExportErrorMessages.friendlyMessage(for: error)
             showError = true
         }
     }

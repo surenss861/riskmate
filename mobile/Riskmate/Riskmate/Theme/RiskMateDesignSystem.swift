@@ -1,10 +1,10 @@
 import SwiftUI
 import UIKit
 
-/// RiskMate Design System - Single source of truth for all design tokens
+/// Riskmate Design System - Single source of truth for all design tokens
 /// Consolidates brand (RMTheme) and system-native (RMSystemTheme) patterns
 /// Use this for all new components to maintain consistency
-struct RiskMateDesignSystem {
+struct RiskmateDesignSystem {
     
     // MARK: - Colors
     
@@ -248,13 +248,13 @@ struct RiskMateDesignSystem {
 // MARK: - View Extensions
 
 extension View {
-    /// Apply RiskMate shadow style
-    func riskMateShadow(_ style: RiskMateDesignSystem.ShadowStyle) -> some View {
+    /// Apply Riskmate shadow style
+    func riskmateShadow(_ style: RiskmateDesignSystem.ShadowStyle) -> some View {
         self.shadow(color: style.color, radius: style.radius, x: style.x, y: style.y)
     }
     
-    /// Apply RiskMate blur material
-    func riskMateMaterial(_ style: RiskMateDesignSystem.MaterialStyle) -> some View {
+    /// Apply Riskmate blur material
+    func riskmateMaterial(_ style: RiskmateDesignSystem.MaterialStyle) -> some View {
         self.background(style.swiftUIMaterial)
     }
 }

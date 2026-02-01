@@ -649,12 +649,15 @@ auditRouter.get('/events', authenticate as unknown as express.RequestHandler, as
             .single()
           if (siteData) {
             enriched.site_name = siteData.name
-            // Update audit log with site name (fire and forget)
+            // Update audit log with site name (with error handling)
             supabase
               .from('audit_logs')
               .update({ site_name: siteData.name })
               .eq('id', event.id)
-              .then(() => {}) // Fire and forget
+              .then(() => {})
+              .catch((err) => {
+                console.error('[Audit] Failed to enrich site_name for event:', event.id, err)
+              })
           }
         }
 

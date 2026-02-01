@@ -11,26 +11,26 @@ struct CriticalRiskBanner: View {
     var body: some View {
         if isVisible {
             VStack(spacing: 0) {
-                HStack(spacing: RiskMateDesignSystem.Spacing.md) {
+                HStack(spacing: RiskmateDesignSystem.Spacing.md) {
                     // Warning icon
                     ZStack {
                         Circle()
-                            .fill(RiskMateDesignSystem.Colors.riskCritical.opacity(0.2))
+                            .fill(RiskmateDesignSystem.Colors.riskCritical.opacity(0.2))
                             .frame(width: 40, height: 40)
                         
                         Image(systemName: "exclamationmark.triangle.fill")
                             .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(RiskMateDesignSystem.Colors.riskCritical)
+                            .foregroundColor(RiskmateDesignSystem.Colors.riskCritical)
                     }
                     
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Critical risk detected")
-                            .font(RiskMateDesignSystem.Typography.bodyBold)
-                            .foregroundColor(RiskMateDesignSystem.Colors.textPrimary)
+                            .font(RiskmateDesignSystem.Typography.bodyBold)
+                            .foregroundColor(RiskmateDesignSystem.Colors.textPrimary)
                         
                         Text("Add proof now to protect \(jobName)")
-                            .font(RiskMateDesignSystem.Typography.bodySmall)
-                            .foregroundColor(RiskMateDesignSystem.Colors.textSecondary)
+                            .font(RiskmateDesignSystem.Typography.bodySmall)
+                            .foregroundColor(RiskmateDesignSystem.Colors.textSecondary)
                     }
                     
                     Spacer()
@@ -41,18 +41,18 @@ struct CriticalRiskBanner: View {
                     } label: {
                         Image(systemName: "xmark")
                             .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(RiskMateDesignSystem.Colors.textTertiary)
+                            .foregroundColor(RiskmateDesignSystem.Colors.textTertiary)
                             .frame(width: 28, height: 28)
-                            .background(RiskMateDesignSystem.Colors.surface.opacity(0.5))
+                            .background(RiskmateDesignSystem.Colors.surface.opacity(0.5))
                             .clipShape(Circle())
                     }
                 }
-                .padding(RiskMateDesignSystem.Spacing.md)
+                .padding(RiskmateDesignSystem.Spacing.md)
                 .background(
                     LinearGradient(
                         colors: [
-                            RiskMateDesignSystem.Colors.riskCritical.opacity(0.15),
-                            RiskMateDesignSystem.Colors.riskCritical.opacity(0.05)
+                            RiskmateDesignSystem.Colors.riskCritical.opacity(0.15),
+                            RiskmateDesignSystem.Colors.riskCritical.opacity(0.05)
                         ],
                         startPoint: .leading,
                         endPoint: .trailing
@@ -61,31 +61,31 @@ struct CriticalRiskBanner: View {
                 .overlay(
                     Rectangle()
                         .frame(height: 2)
-                        .foregroundColor(RiskMateDesignSystem.Colors.riskCritical),
+                        .foregroundColor(RiskmateDesignSystem.Colors.riskCritical),
                     alignment: .top
                 )
                 
                 // Action button
                 Button {
-                    RiskMateDesignSystem.Haptics.impact()
+                    RiskmateDesignSystem.Haptics.impact()
                     onAddProof()
                     dismiss()
                 } label: {
                     Text("Add Proof Now")
-                        .font(RiskMateDesignSystem.Typography.bodyBold)
+                        .font(RiskmateDesignSystem.Typography.bodyBold)
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, RiskMateDesignSystem.Spacing.md)
-                        .background(RiskMateDesignSystem.Colors.riskCritical)
+                        .padding(.vertical, RiskmateDesignSystem.Spacing.md)
+                        .background(RiskmateDesignSystem.Colors.riskCritical)
                 }
             }
-            .clipShape(RoundedRectangle(cornerRadius: RiskMateDesignSystem.Radius.md))
-            .riskMateShadow(RiskMateDesignSystem.Shadow.card)
-            .padding(.horizontal, RiskMateDesignSystem.Spacing.pagePadding)
-            .padding(.top, RiskMateDesignSystem.Spacing.sm)
+            .clipShape(RoundedRectangle(cornerRadius: RiskmateDesignSystem.Radius.md))
+            .riskmateShadow(RiskmateDesignSystem.Shadow.card)
+            .padding(.horizontal, RiskmateDesignSystem.Spacing.pagePadding)
+            .padding(.top, RiskmateDesignSystem.Spacing.sm)
             .transition(.move(edge: .top).combined(with: .opacity))
             .onAppear {
-                withAnimation(RiskMateDesignSystem.Motion.spring) {
+                withAnimation(RiskmateDesignSystem.Motion.spring) {
                     isVisible = true
                 }
             }
@@ -93,8 +93,8 @@ struct CriticalRiskBanner: View {
     }
     
     private func dismiss() {
-        RiskMateDesignSystem.Haptics.tap()
-        withAnimation(RiskMateDesignSystem.Motion.spring) {
+        RiskmateDesignSystem.Haptics.tap()
+        withAnimation(RiskmateDesignSystem.Motion.spring) {
             isVisible = false
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {

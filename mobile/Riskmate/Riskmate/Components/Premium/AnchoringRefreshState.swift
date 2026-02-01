@@ -7,18 +7,18 @@ struct AnchoringRefreshState: View {
     
     var body: some View {
         if isRefreshing {
-            HStack(spacing: RiskMateDesignSystem.Spacing.sm) {
+            HStack(spacing: RiskmateDesignSystem.Spacing.sm) {
                 ProgressView()
-                    .tint(RiskMateDesignSystem.Colors.accent)
+                    .tint(RiskmateDesignSystem.Colors.accent)
                     .accessibilityLabel("Anchoring")
                 
                 Text("Anchoring...")
-                    .font(RiskMateDesignSystem.Typography.bodySmall)
-                    .foregroundColor(RiskMateDesignSystem.Colors.textSecondary)
+                    .font(RiskmateDesignSystem.Typography.bodySmall)
+                    .foregroundColor(RiskmateDesignSystem.Colors.textSecondary)
             }
-            .padding(RiskMateDesignSystem.Spacing.md)
+            .padding(RiskmateDesignSystem.Spacing.md)
             .frame(maxWidth: .infinity)
-            .background(RiskMateDesignSystem.Colors.surface.opacity(0.5))
+            .background(RiskmateDesignSystem.Colors.surface.opacity(0.5))
             .accessibilityElement(children: .combine)
             .accessibilityLabel("Anchoring ledger records")
         }
@@ -37,7 +37,7 @@ struct AnchoringRefreshModifier: ViewModifier {
                 let startTime = Date()
                 refreshStartTime = startTime
                 isRefreshing = true
-                RiskMateDesignSystem.Haptics.tap()
+                RiskmateDesignSystem.Haptics.tap()
                 Analytics.shared.trackRefreshTriggered()
                 
                 await onRefresh()

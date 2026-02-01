@@ -52,7 +52,7 @@ struct CoachMark: View {
                 }
                 .opacity(opacity)
                 .onAppear {
-                    withAnimation(RiskMateDesignSystem.Motion.spring) {
+                    withAnimation(RiskmateDesignSystem.Motion.spring) {
                         opacity = 1
                     }
                 }
@@ -61,43 +61,43 @@ struct CoachMark: View {
     }
     
     private var tooltip: some View {
-        VStack(alignment: .leading, spacing: RiskMateDesignSystem.Spacing.sm) {
+        VStack(alignment: .leading, spacing: RiskmateDesignSystem.Spacing.sm) {
             Text(title)
-                .font(RiskMateDesignSystem.Typography.bodyBold)
-                .foregroundColor(RiskMateDesignSystem.Colors.textPrimary)
+                .font(RiskmateDesignSystem.Typography.bodyBold)
+                .foregroundColor(RiskmateDesignSystem.Colors.textPrimary)
                 .accessibilityAddTraits(.isHeader)
             
             Text(message)
-                .font(RiskMateDesignSystem.Typography.bodySmall)
-                .foregroundColor(RiskMateDesignSystem.Colors.textSecondary)
+                .font(RiskmateDesignSystem.Typography.bodySmall)
+                .foregroundColor(RiskmateDesignSystem.Colors.textSecondary)
             
             Button {
                 dismiss()
             } label: {
                 Text("Got it")
-                    .font(RiskMateDesignSystem.Typography.bodySmallBold)
+                    .font(RiskmateDesignSystem.Typography.bodySmallBold)
                     .foregroundColor(.black)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, RiskMateDesignSystem.Spacing.sm)
-                    .background(RiskMateDesignSystem.Colors.accent)
-                    .clipShape(RoundedRectangle(cornerRadius: RiskMateDesignSystem.Radius.sm))
+                    .padding(.vertical, RiskmateDesignSystem.Spacing.sm)
+                    .background(RiskmateDesignSystem.Colors.accent)
+                    .clipShape(RoundedRectangle(cornerRadius: RiskmateDesignSystem.Radius.sm))
             }
             .accessibilityLabel("Got it")
             .accessibilityHint("Dismisses this tip")
-            .padding(.top, RiskMateDesignSystem.Spacing.xs)
+            .padding(.top, RiskmateDesignSystem.Spacing.xs)
         }
-        .padding(RiskMateDesignSystem.Spacing.md)
+        .padding(RiskmateDesignSystem.Spacing.md)
         .frame(width: 280)
-        .background(RiskMateDesignSystem.Colors.surface)
-        .clipShape(RoundedRectangle(cornerRadius: RiskMateDesignSystem.Radius.md))
-        .riskMateShadow(RiskMateDesignSystem.Shadow.card)
+        .background(RiskmateDesignSystem.Colors.surface)
+        .clipShape(RoundedRectangle(cornerRadius: RiskmateDesignSystem.Radius.md))
+        .riskmateShadow(RiskmateDesignSystem.Shadow.card)
         .accessibilityElement(children: .combine) // VoiceOver reads as single element
         .accessibilityLabel("\(title). \(message)")
     }
     
     private func dismiss() {
-        RiskMateDesignSystem.Haptics.tap()
-        withAnimation(RiskMateDesignSystem.Motion.spring) {
+        RiskmateDesignSystem.Haptics.tap()
+        withAnimation(RiskmateDesignSystem.Motion.spring) {
             opacity = 0
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {

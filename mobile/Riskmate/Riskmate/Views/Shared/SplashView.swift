@@ -9,7 +9,7 @@ struct SplashView: View {
             
             VStack(spacing: RMSystemTheme.Spacing.lg) {
                 // Logo/App Name
-                Text("RISK MATE")
+                Text("RISKMATE")
                     .font(.system(size: 28, weight: .heavy, design: .rounded))
                     .tracking(3)
                     .foregroundStyle(RMSystemTheme.Colors.textPrimary)

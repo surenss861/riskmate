@@ -7,7 +7,8 @@ enum AuditExporter {
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         encoder.dateEncodingStrategy = .iso8601
         let data = try encoder.encode(events)
-        let filename = "riskmate-audit-\(isoDate()).json"
+        let iso = Date().ISO8601Format().replacingOccurrences(of: ":", with: "-")
+        let filename = "riskmate-audit-\(iso).json"
         return try writeTempFile(data: data, filename: filename)
     }
 
@@ -29,14 +30,9 @@ enum AuditExporter {
         guard let data = csvString.data(using: .utf8) else {
             throw AuditExportError.encodingFailed
         }
-        let filename = "riskmate-audit-\(isoDate()).csv"
+        let iso = Date().ISO8601Format().replacingOccurrences(of: ":", with: "-")
+        let filename = "riskmate-audit-\(iso).csv"
         return try writeTempFile(data: data, filename: filename)
-    }
-
-    private static func isoDate() -> String {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withFullDate, .withTime]
-        return formatter.string(from: Date()).replacingOccurrences(of: ":", with: "-")
     }
 
     private static func writeTempFile(data: Data, filename: String) throws -> URL {

@@ -334,7 +334,7 @@ struct SidebarView: View {
             }
         }
         .listStyle(.sidebar)
-        .navigationTitle("RiskMate")
+        .navigationTitle("Riskmate")
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbarBackground(RMTheme.Colors.background, for: .navigationBar)
         .onAppear {

@@ -8,14 +8,14 @@ struct LongPressHint: View {
     
     var body: some View {
         if isVisible && !UserDefaultsManager.Tips.hasSeenLongPressHint() {
-            HStack(spacing: RiskMateDesignSystem.Spacing.sm) {
+            HStack(spacing: RiskmateDesignSystem.Spacing.sm) {
                 Image(systemName: "hand.tap.fill")
                     .font(.system(size: 14))
-                    .foregroundColor(RiskMateDesignSystem.Colors.accent)
+                    .foregroundColor(RiskmateDesignSystem.Colors.accent)
                 
                 Text("Tip: Long-press a job for quick actions")
-                    .font(RiskMateDesignSystem.Typography.caption)
-                    .foregroundColor(RiskMateDesignSystem.Colors.textSecondary)
+                    .font(RiskmateDesignSystem.Typography.caption)
+                    .foregroundColor(RiskmateDesignSystem.Colors.textSecondary)
                 
                 Spacer()
                 
@@ -24,18 +24,18 @@ struct LongPressHint: View {
                 } label: {
                     Image(systemName: "xmark")
                         .font(.system(size: 12))
-                        .foregroundColor(RiskMateDesignSystem.Colors.textTertiary)
+                        .foregroundColor(RiskmateDesignSystem.Colors.textTertiary)
                 }
             }
-            .padding(.horizontal, RiskMateDesignSystem.Spacing.md)
-            .padding(.vertical, RiskMateDesignSystem.Spacing.sm)
-            .background(RiskMateDesignSystem.Colors.surface.opacity(0.7))
-            .clipShape(RoundedRectangle(cornerRadius: RiskMateDesignSystem.Radius.sm))
-            .padding(.horizontal, RiskMateDesignSystem.Spacing.pagePadding)
-            .padding(.top, RiskMateDesignSystem.Spacing.sm)
+            .padding(.horizontal, RiskmateDesignSystem.Spacing.md)
+            .padding(.vertical, RiskmateDesignSystem.Spacing.sm)
+            .background(RiskmateDesignSystem.Colors.surface.opacity(0.7))
+            .clipShape(RoundedRectangle(cornerRadius: RiskmateDesignSystem.Radius.sm))
+            .padding(.horizontal, RiskmateDesignSystem.Spacing.pagePadding)
+            .padding(.top, RiskmateDesignSystem.Spacing.sm)
             .transition(.move(edge: .top).combined(with: .opacity))
             .onAppear {
-                withAnimation(RiskMateDesignSystem.Motion.spring) {
+                withAnimation(RiskmateDesignSystem.Motion.spring) {
                     isVisible = true
                 }
             }
@@ -45,9 +45,9 @@ struct LongPressHint: View {
     }
     
     private func dismiss() {
-        RiskMateDesignSystem.Haptics.tap()
+        RiskmateDesignSystem.Haptics.tap()
         UserDefaultsManager.Tips.markLongPressHintSeen()
-        withAnimation(RiskMateDesignSystem.Motion.spring) {
+        withAnimation(RiskmateDesignSystem.Motion.spring) {
             isVisible = false
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {

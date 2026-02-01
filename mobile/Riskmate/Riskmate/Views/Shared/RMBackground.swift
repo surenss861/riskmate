@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// RiskMate background - flat, premium, subtle vignette (no gradient glow)
+/// Riskmate background - flat, premium, subtle vignette (no gradient glow)
 struct RMBackground: View {
     var body: some View {
         ZStack {

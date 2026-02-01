@@ -1,7 +1,7 @@
 import SwiftUI
 import Charts
 
-/// Premium chart card with RiskMate styling
+/// Premium chart card with Riskmate styling
 struct RMChartCard: View {
     let data: [ChartDataPoint]
     @State private var animated = false

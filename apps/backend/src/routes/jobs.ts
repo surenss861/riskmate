@@ -234,8 +234,14 @@ jobsRouter.get("/", authenticate, async (req: express.Request, res: express.Resp
     // Apply search filter (q parameter - search job name, address, or ID)
     if (q && typeof q === 'string' && q.trim()) {
       const searchTerm = q.trim();
+      // Validate searchTerm to prevent injection (alphanumeric, spaces, hyphens, underscores only)
+      if (!/^[a-zA-Z0-9\s\-_]+$/.test(searchTerm)) {
+        return res.status(400).json({ message: 'Invalid search term format' });
+      }
+      // Escape special characters for LIKE query
+      const escapedTerm = searchTerm.replace(/[%_]/g, '\\$&');
       // Search in client_name, location, or id (case-insensitive partial match)
-      query = query.or(`client_name.ilike.%${searchTerm}%,location.ilike.%${searchTerm}%,id.eq.${searchTerm}`);
+      query = query.or(`client_name.ilike.%${escapedTerm}%,location.ilike.%${escapedTerm}%,id.eq.${escapedTerm}`);
     }
     
     // Cursor-based pagination (per-sort cursor keys for consistency)
@@ -934,8 +940,8 @@ jobsRouter.get("/:id/permit-packs", authenticate, async (req: express.Request, r
       downloadUrl: null as string | null,
     }));
 
-    // Generate signed URLs for each pack
-    const packsWithUrls = await Promise.all(
+    // Generate signed URLs for each pack (use Promise.allSettled for error resilience)
+    const packsWithUrls = await Promise.allSettled(
       packs.map(async (pack) => {
         if (!pack.file_path) return { ...pack, downloadUrl: null };
         try {
@@ -943,11 +949,12 @@ jobsRouter.get("/:id/permit-packs", authenticate, async (req: express.Request, r
             .from("exports")
             .createSignedUrl(pack.file_path, 60 * 60);
           return { ...pack, downloadUrl: signed?.signedUrl ?? null };
-        } catch {
+        } catch (err) {
+          console.error("[Jobs] Failed to generate signed URL for pack:", pack.id, err);
           return { ...pack, downloadUrl: null };
         }
       })
-    );
+    ).then(results => results.map(r => r.status === 'fulfilled' ? r.value : { id: '', version: 0, file_path: '', generated_at: '', generated_by: null, downloadUrl: null }));
 
     res.json({ data: packsWithUrls });
   } catch (err: any) {

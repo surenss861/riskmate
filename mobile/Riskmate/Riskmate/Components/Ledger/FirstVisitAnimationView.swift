@@ -24,18 +24,18 @@ struct FirstVisitAnimationView: View {
             Color.black.opacity(0.6)
                 .ignoresSafeArea()
             
-            VStack(spacing: RiskMateDesignSystem.Spacing.lg) {
+            VStack(spacing: RiskmateDesignSystem.Spacing.lg) {
                 // Proof hash → anchor → lock sequence
                 ZStack {
                     // Hash (first)
                     if animationPhase == .hash || animationPhase == .anchor || animationPhase == .lock {
-                        VStack(spacing: RiskMateDesignSystem.Spacing.sm) {
+                        VStack(spacing: RiskmateDesignSystem.Spacing.sm) {
                             Image(systemName: "number")
                                 .font(.system(size: 40, weight: .bold))
-                                .foregroundStyle(RiskMateDesignSystem.Colors.accent)
+                                .foregroundStyle(RiskmateDesignSystem.Colors.accent)
                             Text("Proof Hash")
-                                .font(RiskMateDesignSystem.Typography.caption)
-                                .foregroundStyle(RiskMateDesignSystem.Colors.textSecondary)
+                                .font(RiskmateDesignSystem.Typography.caption)
+                                .foregroundStyle(RiskmateDesignSystem.Colors.textSecondary)
                         }
                         .opacity(hashOpacity)
                         .scaleEffect(hashScale)
@@ -43,13 +43,13 @@ struct FirstVisitAnimationView: View {
                     
                     // Anchor (second)
                     if animationPhase == .anchor || animationPhase == .lock {
-                        VStack(spacing: RiskMateDesignSystem.Spacing.sm) {
+                        VStack(spacing: RiskmateDesignSystem.Spacing.sm) {
                             Image(systemName: "link")
                                 .font(.system(size: 40, weight: .bold))
-                                .foregroundStyle(RiskMateDesignSystem.Colors.accent)
+                                .foregroundStyle(RiskmateDesignSystem.Colors.accent)
                             Text("Anchored")
-                                .font(RiskMateDesignSystem.Typography.caption)
-                                .foregroundStyle(RiskMateDesignSystem.Colors.textSecondary)
+                                .font(RiskmateDesignSystem.Typography.caption)
+                                .foregroundStyle(RiskmateDesignSystem.Colors.textSecondary)
                         }
                         .opacity(anchorOpacity)
                         .scaleEffect(anchorScale)
@@ -57,13 +57,13 @@ struct FirstVisitAnimationView: View {
                     
                     // Lock (third)
                     if animationPhase == .lock {
-                        VStack(spacing: RiskMateDesignSystem.Spacing.sm) {
+                        VStack(spacing: RiskmateDesignSystem.Spacing.sm) {
                             Image(systemName: "lock.shield.fill")
                                 .font(.system(size: 40, weight: .bold))
-                                .foregroundStyle(RiskMateDesignSystem.Colors.success)
+                                .foregroundStyle(RiskmateDesignSystem.Colors.success)
                             Text("Immutable")
-                                .font(RiskMateDesignSystem.Typography.caption)
-                                .foregroundStyle(RiskMateDesignSystem.Colors.textSecondary)
+                                .font(RiskmateDesignSystem.Typography.caption)
+                                .foregroundStyle(RiskmateDesignSystem.Colors.textSecondary)
                         }
                         .opacity(lockOpacity)
                         .scaleEffect(lockScale)
@@ -73,18 +73,18 @@ struct FirstVisitAnimationView: View {
                 
                 // Trust statement
                 Text("This is serious infrastructure, not a tool.")
-                    .font(RiskMateDesignSystem.Typography.bodyBold)
-                    .foregroundStyle(RiskMateDesignSystem.Colors.textPrimary)
+                    .font(RiskmateDesignSystem.Typography.bodyBold)
+                    .foregroundStyle(RiskmateDesignSystem.Colors.textPrimary)
                     .multilineTextAlignment(.center)
                     .opacity(lockOpacity)
             }
-            .padding(RiskMateDesignSystem.Spacing.xl)
+            .padding(RiskmateDesignSystem.Spacing.xl)
             .background(
-                RoundedRectangle(cornerRadius: RiskMateDesignSystem.Radius.lg)
-                    .fill(RiskMateDesignSystem.Colors.surface)
+                RoundedRectangle(cornerRadius: RiskmateDesignSystem.Radius.lg)
+                    .fill(RiskmateDesignSystem.Colors.surface)
                     .shadow(color: .black.opacity(0.3), radius: 20, x: 0, y: 10)
             )
-            .padding(RiskMateDesignSystem.Spacing.pagePadding)
+            .padding(RiskmateDesignSystem.Spacing.pagePadding)
         }
         .onAppear {
             startAnimation()

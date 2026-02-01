@@ -145,17 +145,17 @@ verificationRouter.get(
             break
           }
 
-          // Verify this prev event's hash
+          // Verify this prev event's hash using its own fields (not current event's fields)
           const prevExpectedHash = computeLedgerHash(
             prev.prev_hash,
             prev.ledger_seq || 0,
             organization_id,
-            currentEvent.actor_id, // Use current event's actor for consistency
-            currentEvent.event_name, // This should match, but we're just checking hash computation
-            currentEvent.target_type,
-            currentEvent.target_id,
-            currentEvent.metadata,
-            currentEvent.created_at
+            prev.actor_id, // Use prev event's actor
+            prev.event_name, // Use prev event's name
+            prev.target_type,
+            prev.target_id,
+            prev.metadata,
+            prev.created_at
           )
 
           // Note: We can't fully verify prev event without fetching its full record

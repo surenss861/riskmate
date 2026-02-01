@@ -29,7 +29,7 @@ struct TrustOnboardingView: View {
     
     var body: some View {
         ZStack {
-            RiskMateDesignSystem.Colors.background
+            RiskmateDesignSystem.Colors.background
                 .ignoresSafeArea()
             
             VStack(spacing: 0) {
@@ -44,28 +44,28 @@ struct TrustOnboardingView: View {
                 .indexViewStyle(.page(backgroundDisplayMode: .always))
                 
                 // Navigation
-                HStack(spacing: RiskMateDesignSystem.Spacing.md) {
+                HStack(spacing: RiskmateDesignSystem.Spacing.md) {
                     if currentPage > 0 {
                         Button {
-                            RiskMateDesignSystem.Haptics.tap()
-                            withAnimation(RiskMateDesignSystem.Motion.spring) {
+                            RiskmateDesignSystem.Haptics.tap()
+                            withAnimation(RiskmateDesignSystem.Motion.spring) {
                                 currentPage -= 1
                             }
                         } label: {
                             Text("Back")
-                                .font(RiskMateDesignSystem.Typography.bodyBold)
-                                .foregroundColor(RiskMateDesignSystem.Colors.textSecondary)
+                                .font(RiskmateDesignSystem.Typography.bodyBold)
+                                .foregroundColor(RiskmateDesignSystem.Colors.textSecondary)
                                 .frame(maxWidth: .infinity)
-                                .padding(.vertical, RiskMateDesignSystem.Spacing.md)
-                                .background(RiskMateDesignSystem.Colors.surface.opacity(0.5))
-                                .clipShape(RoundedRectangle(cornerRadius: RiskMateDesignSystem.Radius.sm))
+                                .padding(.vertical, RiskmateDesignSystem.Spacing.md)
+                                .background(RiskmateDesignSystem.Colors.surface.opacity(0.5))
+                                .clipShape(RoundedRectangle(cornerRadius: RiskmateDesignSystem.Radius.sm))
                         }
                     }
                     
                     Button {
                         if currentPage < pages.count - 1 {
-                            RiskMateDesignSystem.Haptics.impact()
-                            withAnimation(RiskMateDesignSystem.Motion.spring) {
+                            RiskmateDesignSystem.Haptics.impact()
+                            withAnimation(RiskmateDesignSystem.Motion.spring) {
                                 currentPage += 1
                             }
                         } else {
@@ -73,32 +73,32 @@ struct TrustOnboardingView: View {
                         }
                     } label: {
                         Text(currentPage < pages.count - 1 ? "Next" : "Get Started")
-                            .font(RiskMateDesignSystem.Typography.bodyBold)
+                            .font(RiskmateDesignSystem.Typography.bodyBold)
                             .foregroundColor(.black)
                             .frame(maxWidth: .infinity)
-                            .padding(.vertical, RiskMateDesignSystem.Spacing.md)
+                            .padding(.vertical, RiskmateDesignSystem.Spacing.md)
                             .background(
                                 LinearGradient(
                                     colors: [
-                                        RiskMateDesignSystem.Colors.accent,
-                                        RiskMateDesignSystem.Colors.accentLight
+                                        RiskmateDesignSystem.Colors.accent,
+                                        RiskmateDesignSystem.Colors.accentLight
                                     ],
                                     startPoint: .leading,
                                     endPoint: .trailing
                                 )
                             )
-                            .clipShape(RoundedRectangle(cornerRadius: RiskMateDesignSystem.Radius.sm))
+                            .clipShape(RoundedRectangle(cornerRadius: RiskmateDesignSystem.Radius.sm))
                     }
                 }
-                .padding(.horizontal, RiskMateDesignSystem.Spacing.pagePadding)
-                .padding(.bottom, RiskMateDesignSystem.Spacing.lg)
+                .padding(.horizontal, RiskmateDesignSystem.Spacing.pagePadding)
+                .padding(.bottom, RiskmateDesignSystem.Spacing.lg)
             }
         }
         .preferredColorScheme(.dark)
     }
     
     private func completeOnboarding() {
-        RiskMateDesignSystem.Haptics.success()
+        RiskmateDesignSystem.Haptics.success()
         
         // Get userId if available, otherwise use device-level
         if let userId = SessionManager.shared.currentUser?.id {
@@ -110,7 +110,7 @@ struct TrustOnboardingView: View {
         // Track analytics
         Analytics.shared.trackOnboardingCompleted()
         
-        withAnimation(RiskMateDesignSystem.Motion.spring) {
+        withAnimation(RiskmateDesignSystem.Motion.spring) {
             isPresented = false
         }
     }
@@ -127,46 +127,46 @@ struct TrustOnboardingPageView: View {
     let page: OnboardingPageData
     
     var body: some View {
-        VStack(spacing: RiskMateDesignSystem.Spacing.xl) {
+        VStack(spacing: RiskmateDesignSystem.Spacing.xl) {
             Spacer()
             
             // Icon
             ZStack {
                 Circle()
-                    .fill(RiskMateDesignSystem.Colors.accent.opacity(0.15))
+                    .fill(RiskmateDesignSystem.Colors.accent.opacity(0.15))
                     .frame(width: 120, height: 120)
                 
                 Image(systemName: page.icon)
                     .font(.system(size: 50, weight: .semibold))
-                    .foregroundColor(RiskMateDesignSystem.Colors.accent)
+                    .foregroundColor(RiskmateDesignSystem.Colors.accent)
             }
-            .padding(.bottom, RiskMateDesignSystem.Spacing.lg)
+            .padding(.bottom, RiskmateDesignSystem.Spacing.lg)
             
             // Title
             Text(page.title)
-                .font(RiskMateDesignSystem.Typography.headingLarge)
-                .foregroundColor(RiskMateDesignSystem.Colors.textPrimary)
+                .font(RiskmateDesignSystem.Typography.headingLarge)
+                .foregroundColor(RiskmateDesignSystem.Colors.textPrimary)
                 .multilineTextAlignment(.center)
-                .padding(.horizontal, RiskMateDesignSystem.Spacing.pagePadding)
+                .padding(.horizontal, RiskmateDesignSystem.Spacing.pagePadding)
             
             // Description
             Text(page.description)
-                .font(RiskMateDesignSystem.Typography.body)
-                .foregroundColor(RiskMateDesignSystem.Colors.textSecondary)
+                .font(RiskmateDesignSystem.Typography.body)
+                .foregroundColor(RiskmateDesignSystem.Colors.textSecondary)
                 .multilineTextAlignment(.center)
                 .lineSpacing(4)
-                .padding(.horizontal, RiskMateDesignSystem.Spacing.pagePadding)
+                .padding(.horizontal, RiskmateDesignSystem.Spacing.pagePadding)
             
             // Diagram placeholder (can be replaced with actual diagrams)
             if page.diagram == "ledger_diagram" {
                 LedgerDiagramView()
-                    .padding(.top, RiskMateDesignSystem.Spacing.lg)
+                    .padding(.top, RiskmateDesignSystem.Spacing.lg)
             } else if page.diagram == "capture_flow" {
                 CaptureFlowDiagramView()
-                    .padding(.top, RiskMateDesignSystem.Spacing.lg)
+                    .padding(.top, RiskmateDesignSystem.Spacing.lg)
             } else if page.diagram == "roles_diagram" {
                 RolesDiagramView()
-                    .padding(.top, RiskMateDesignSystem.Spacing.lg)
+                    .padding(.top, RiskmateDesignSystem.Spacing.lg)
             }
             
             Spacer()
@@ -178,147 +178,147 @@ struct TrustOnboardingPageView: View {
 
 struct LedgerDiagramView: View {
     var body: some View {
-        VStack(spacing: RiskMateDesignSystem.Spacing.md) {
-            HStack(spacing: RiskMateDesignSystem.Spacing.sm) {
+        VStack(spacing: RiskmateDesignSystem.Spacing.md) {
+            HStack(spacing: RiskmateDesignSystem.Spacing.sm) {
                 // Proof record
-                VStack(spacing: RiskMateDesignSystem.Spacing.xs) {
-                    RoundedRectangle(cornerRadius: RiskMateDesignSystem.Radius.sm)
-                        .fill(RiskMateDesignSystem.Colors.surface)
+                VStack(spacing: RiskmateDesignSystem.Spacing.xs) {
+                    RoundedRectangle(cornerRadius: RiskmateDesignSystem.Radius.sm)
+                        .fill(RiskmateDesignSystem.Colors.surface)
                         .frame(width: 60, height: 40)
                         .overlay(
                             Image(systemName: "lock.fill")
                                 .font(.system(size: 16))
-                                .foregroundColor(RiskMateDesignSystem.Colors.accent)
+                                .foregroundColor(RiskmateDesignSystem.Colors.accent)
                         )
                     
                     Text("Proof")
-                        .font(RiskMateDesignSystem.Typography.caption)
-                        .foregroundColor(RiskMateDesignSystem.Colors.textTertiary)
+                        .font(RiskmateDesignSystem.Typography.caption)
+                        .foregroundColor(RiskmateDesignSystem.Colors.textTertiary)
                 }
                 
                 Image(systemName: "arrow.right")
-                    .foregroundColor(RiskMateDesignSystem.Colors.textTertiary)
+                    .foregroundColor(RiskmateDesignSystem.Colors.textTertiary)
                 
                 // Anchor
-                VStack(spacing: RiskMateDesignSystem.Spacing.xs) {
-                    RoundedRectangle(cornerRadius: RiskMateDesignSystem.Radius.sm)
-                        .fill(RiskMateDesignSystem.Colors.accent.opacity(0.2))
+                VStack(spacing: RiskmateDesignSystem.Spacing.xs) {
+                    RoundedRectangle(cornerRadius: RiskmateDesignSystem.Radius.sm)
+                        .fill(RiskmateDesignSystem.Colors.accent.opacity(0.2))
                         .frame(width: 60, height: 40)
                         .overlay(
                             Image(systemName: "link")
                                 .font(.system(size: 16))
-                                .foregroundColor(RiskMateDesignSystem.Colors.accent)
+                                .foregroundColor(RiskmateDesignSystem.Colors.accent)
                         )
                     
                     Text("Anchored")
-                        .font(RiskMateDesignSystem.Typography.caption)
-                        .foregroundColor(RiskMateDesignSystem.Colors.textTertiary)
+                        .font(RiskmateDesignSystem.Typography.caption)
+                        .foregroundColor(RiskmateDesignSystem.Colors.textTertiary)
                 }
                 
                 Image(systemName: "arrow.right")
-                    .foregroundColor(RiskMateDesignSystem.Colors.textTertiary)
+                    .foregroundColor(RiskmateDesignSystem.Colors.textTertiary)
                 
                 // Immutable
-                VStack(spacing: RiskMateDesignSystem.Spacing.xs) {
-                    RoundedRectangle(cornerRadius: RiskMateDesignSystem.Radius.sm)
-                        .fill(RiskMateDesignSystem.Colors.success.opacity(0.2))
+                VStack(spacing: RiskmateDesignSystem.Spacing.xs) {
+                    RoundedRectangle(cornerRadius: RiskmateDesignSystem.Radius.sm)
+                        .fill(RiskmateDesignSystem.Colors.success.opacity(0.2))
                         .frame(width: 60, height: 40)
                         .overlay(
                             Image(systemName: "checkmark.seal.fill")
                                 .font(.system(size: 16))
-                                .foregroundColor(RiskMateDesignSystem.Colors.success)
+                                .foregroundColor(RiskmateDesignSystem.Colors.success)
                         )
                     
                     Text("Immutable")
-                        .font(RiskMateDesignSystem.Typography.caption)
-                        .foregroundColor(RiskMateDesignSystem.Colors.textTertiary)
+                        .font(RiskmateDesignSystem.Typography.caption)
+                        .foregroundColor(RiskmateDesignSystem.Colors.textTertiary)
                 }
             }
             
             Text("Proofs cannot be altered once anchored")
-                .font(RiskMateDesignSystem.Typography.caption)
-                .foregroundColor(RiskMateDesignSystem.Colors.textTertiary)
-                .padding(.top, RiskMateDesignSystem.Spacing.xs)
+                .font(RiskmateDesignSystem.Typography.caption)
+                .foregroundColor(RiskmateDesignSystem.Colors.textTertiary)
+                .padding(.top, RiskmateDesignSystem.Spacing.xs)
         }
-        .padding(RiskMateDesignSystem.Spacing.lg)
-        .background(RiskMateDesignSystem.Colors.surface.opacity(0.5))
-        .clipShape(RoundedRectangle(cornerRadius: RiskMateDesignSystem.Radius.md))
+        .padding(RiskmateDesignSystem.Spacing.lg)
+        .background(RiskmateDesignSystem.Colors.surface.opacity(0.5))
+        .clipShape(RoundedRectangle(cornerRadius: RiskmateDesignSystem.Radius.md))
     }
 }
 
 struct CaptureFlowDiagramView: View {
     var body: some View {
-        VStack(spacing: RiskMateDesignSystem.Spacing.md) {
-            HStack(spacing: RiskMateDesignSystem.Spacing.sm) {
+        VStack(spacing: RiskmateDesignSystem.Spacing.md) {
+            HStack(spacing: RiskmateDesignSystem.Spacing.sm) {
                 // Photo
-                VStack(spacing: RiskMateDesignSystem.Spacing.xs) {
-                    RoundedRectangle(cornerRadius: RiskMateDesignSystem.Radius.sm)
-                        .fill(RiskMateDesignSystem.Colors.surface)
+                VStack(spacing: RiskmateDesignSystem.Spacing.xs) {
+                    RoundedRectangle(cornerRadius: RiskmateDesignSystem.Radius.sm)
+                        .fill(RiskmateDesignSystem.Colors.surface)
                         .frame(width: 50, height: 50)
                         .overlay(
                             Image(systemName: "camera.fill")
-                                .foregroundColor(RiskMateDesignSystem.Colors.accent)
+                                .foregroundColor(RiskmateDesignSystem.Colors.accent)
                         )
                     
                     Text("Photo")
-                        .font(RiskMateDesignSystem.Typography.caption)
-                        .foregroundColor(RiskMateDesignSystem.Colors.textTertiary)
+                        .font(RiskmateDesignSystem.Typography.caption)
+                        .foregroundColor(RiskmateDesignSystem.Colors.textTertiary)
                 }
                 
                 Image(systemName: "arrow.right")
-                    .foregroundColor(RiskMateDesignSystem.Colors.textTertiary)
+                    .foregroundColor(RiskmateDesignSystem.Colors.textTertiary)
                 
                 // Type
-                VStack(spacing: RiskMateDesignSystem.Spacing.xs) {
-                    RoundedRectangle(cornerRadius: RiskMateDesignSystem.Radius.sm)
-                        .fill(RiskMateDesignSystem.Colors.surface)
+                VStack(spacing: RiskmateDesignSystem.Spacing.xs) {
+                    RoundedRectangle(cornerRadius: RiskmateDesignSystem.Radius.sm)
+                        .fill(RiskmateDesignSystem.Colors.surface)
                         .frame(width: 50, height: 50)
                         .overlay(
                             Image(systemName: "tag.fill")
-                                .foregroundColor(RiskMateDesignSystem.Colors.accent)
+                                .foregroundColor(RiskmateDesignSystem.Colors.accent)
                         )
                     
                     Text("Type")
-                        .font(RiskMateDesignSystem.Typography.caption)
-                        .foregroundColor(RiskMateDesignSystem.Colors.textTertiary)
+                        .font(RiskmateDesignSystem.Typography.caption)
+                        .foregroundColor(RiskmateDesignSystem.Colors.textTertiary)
                 }
                 
                 Image(systemName: "arrow.right")
-                    .foregroundColor(RiskMateDesignSystem.Colors.textTertiary)
+                    .foregroundColor(RiskmateDesignSystem.Colors.textTertiary)
                 
                 // Anchor
-                VStack(spacing: RiskMateDesignSystem.Spacing.xs) {
-                    RoundedRectangle(cornerRadius: RiskMateDesignSystem.Radius.sm)
-                        .fill(RiskMateDesignSystem.Colors.accent.opacity(0.2))
+                VStack(spacing: RiskmateDesignSystem.Spacing.xs) {
+                    RoundedRectangle(cornerRadius: RiskmateDesignSystem.Radius.sm)
+                        .fill(RiskmateDesignSystem.Colors.accent.opacity(0.2))
                         .frame(width: 50, height: 50)
                         .overlay(
                             Image(systemName: "link")
-                                .foregroundColor(RiskMateDesignSystem.Colors.accent)
+                                .foregroundColor(RiskmateDesignSystem.Colors.accent)
                         )
                     
                     Text("Anchor")
-                        .font(RiskMateDesignSystem.Typography.caption)
-                        .foregroundColor(RiskMateDesignSystem.Colors.textTertiary)
+                        .font(RiskmateDesignSystem.Typography.caption)
+                        .foregroundColor(RiskmateDesignSystem.Colors.textTertiary)
                 }
             }
             
             Text("Automatic ledger entry")
-                .font(RiskMateDesignSystem.Typography.caption)
-                .foregroundColor(RiskMateDesignSystem.Colors.textTertiary)
-                .padding(.top, RiskMateDesignSystem.Spacing.xs)
+                .font(RiskmateDesignSystem.Typography.caption)
+                .foregroundColor(RiskmateDesignSystem.Colors.textTertiary)
+                .padding(.top, RiskmateDesignSystem.Spacing.xs)
         }
-        .padding(RiskMateDesignSystem.Spacing.lg)
-        .background(RiskMateDesignSystem.Colors.surface.opacity(0.5))
-        .clipShape(RoundedRectangle(cornerRadius: RiskMateDesignSystem.Radius.md))
+        .padding(RiskmateDesignSystem.Spacing.lg)
+        .background(RiskmateDesignSystem.Colors.surface.opacity(0.5))
+        .clipShape(RoundedRectangle(cornerRadius: RiskmateDesignSystem.Radius.md))
     }
 }
 
 struct RolesDiagramView: View {
     var body: some View {
-        VStack(spacing: RiskMateDesignSystem.Spacing.md) {
-            HStack(spacing: RiskMateDesignSystem.Spacing.sm) {
+        VStack(spacing: RiskmateDesignSystem.Spacing.md) {
+            HStack(spacing: RiskmateDesignSystem.Spacing.sm) {
                 // Write roles
-                VStack(spacing: RiskMateDesignSystem.Spacing.xs) {
+                VStack(spacing: RiskmateDesignSystem.Spacing.xs) {
                     HStack(spacing: 4) {
                         Image(systemName: "person.fill")
                             .font(.system(size: 12))
@@ -327,16 +327,16 @@ struct RolesDiagramView: View {
                         Image(systemName: "person.fill")
                             .font(.system(size: 12))
                     }
-                    .foregroundColor(RiskMateDesignSystem.Colors.accent)
+                    .foregroundColor(RiskmateDesignSystem.Colors.accent)
                     
                     Text("Owner, Admin, Worker")
-                        .font(RiskMateDesignSystem.Typography.caption)
-                        .foregroundColor(RiskMateDesignSystem.Colors.textTertiary)
+                        .font(RiskmateDesignSystem.Typography.caption)
+                        .foregroundColor(RiskmateDesignSystem.Colors.textTertiary)
                         .multilineTextAlignment(.center)
                     
                     Text("Read + Write")
-                        .font(RiskMateDesignSystem.Typography.caption2)
-                        .foregroundColor(RiskMateDesignSystem.Colors.success)
+                        .font(RiskmateDesignSystem.Typography.caption2)
+                        .foregroundColor(RiskmateDesignSystem.Colors.success)
                         .padding(.top, 2)
                 }
                 
@@ -344,30 +344,30 @@ struct RolesDiagramView: View {
                     .frame(height: 40)
                 
                 // Read-only role
-                VStack(spacing: RiskMateDesignSystem.Spacing.xs) {
+                VStack(spacing: RiskmateDesignSystem.Spacing.xs) {
                     Image(systemName: "eye.fill")
                         .font(.system(size: 16))
-                        .foregroundColor(RiskMateDesignSystem.Colors.textTertiary)
+                        .foregroundColor(RiskmateDesignSystem.Colors.textTertiary)
                     
                     Text("Auditor")
-                        .font(RiskMateDesignSystem.Typography.caption)
-                        .foregroundColor(RiskMateDesignSystem.Colors.textTertiary)
+                        .font(RiskmateDesignSystem.Typography.caption)
+                        .foregroundColor(RiskmateDesignSystem.Colors.textTertiary)
                     
                     Text("Read Only")
-                        .font(RiskMateDesignSystem.Typography.caption2)
-                        .foregroundColor(RiskMateDesignSystem.Colors.textTertiary)
+                        .font(RiskmateDesignSystem.Typography.caption2)
+                        .foregroundColor(RiskmateDesignSystem.Colors.textTertiary)
                         .padding(.top, 2)
                 }
             }
             
             Text("Auditors can view but not modify proofs")
-                .font(RiskMateDesignSystem.Typography.caption)
-                .foregroundColor(RiskMateDesignSystem.Colors.textTertiary)
-                .padding(.top, RiskMateDesignSystem.Spacing.xs)
+                .font(RiskmateDesignSystem.Typography.caption)
+                .foregroundColor(RiskmateDesignSystem.Colors.textTertiary)
+                .padding(.top, RiskmateDesignSystem.Spacing.xs)
         }
-        .padding(RiskMateDesignSystem.Spacing.lg)
-        .background(RiskMateDesignSystem.Colors.surface.opacity(0.5))
-        .clipShape(RoundedRectangle(cornerRadius: RiskMateDesignSystem.Radius.md))
+        .padding(RiskmateDesignSystem.Spacing.lg)
+        .background(RiskmateDesignSystem.Colors.surface.opacity(0.5))
+        .clipShape(RoundedRectangle(cornerRadius: RiskmateDesignSystem.Radius.md))
     }
 }
 

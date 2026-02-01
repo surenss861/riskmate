@@ -45,6 +45,10 @@ const nextConfig = {
   },
   async headers() {
     return [
+      // Revalidate HTML after deploys so users don't get ChunkLoadError (404 on old chunk hashes)
+      { source: '/', headers: [{ key: 'Cache-Control', value: 'public, max-age=0, must-revalidate' }] },
+      { source: '/operations', headers: [{ key: 'Cache-Control', value: 'public, max-age=0, must-revalidate' }] },
+      { source: '/operations/:path*', headers: [{ key: 'Cache-Control', value: 'public, max-age=0, must-revalidate' }] },
       {
         source: '/demo',
         headers: [

@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct RiskMateLogo: View {
+struct RiskmateLogo: View {
     var size: LogoSize = .large
     var showText: Bool = true
     
@@ -18,7 +18,7 @@ struct RiskMateLogo: View {
     
     var body: some View {
         if showText {
-            Text("RiskMate")
+            Text("Riskmate")
                 .font(.system(size: size.fontSize, weight: .bold, design: .default))
                 .foregroundStyle(
                     LinearGradient(
@@ -36,9 +36,9 @@ struct RiskMateLogo: View {
 
 #Preview {
     VStack(spacing: 20) {
-        RiskMateLogo(size: .small)
-        RiskMateLogo(size: .medium)
-        RiskMateLogo(size: .large)
+        RiskmateLogo(size: .small)
+        RiskmateLogo(size: .medium)
+        RiskmateLogo(size: .large)
     }
     .padding()
     .background(DesignSystem.Colors.background)

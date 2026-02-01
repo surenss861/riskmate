@@ -8,28 +8,28 @@ struct VerificationExplainerSheet: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: RiskMateDesignSystem.Spacing.lg) {
+                VStack(alignment: .leading, spacing: RiskmateDesignSystem.Spacing.lg) {
                     // Icon
                     ZStack {
                         Circle()
-                            .fill(RiskMateDesignSystem.Colors.success.opacity(0.15))
+                            .fill(RiskmateDesignSystem.Colors.success.opacity(0.15))
                             .frame(width: 80, height: 80)
                         
                         Image(systemName: "checkmark.seal.fill")
                             .font(.system(size: 40, weight: .semibold))
-                            .foregroundColor(RiskMateDesignSystem.Colors.success)
+                            .foregroundColor(RiskmateDesignSystem.Colors.success)
                     }
                     .frame(maxWidth: .infinity)
-                    .padding(.top, RiskMateDesignSystem.Spacing.lg)
+                    .padding(.top, RiskmateDesignSystem.Spacing.lg)
                     
                     // Title
                     Text("What does Verified mean?")
-                        .font(RiskMateDesignSystem.Typography.title2)
-                        .foregroundColor(RiskMateDesignSystem.Colors.textPrimary)
+                        .font(RiskmateDesignSystem.Typography.title2)
+                        .foregroundColor(RiskmateDesignSystem.Colors.textPrimary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     
                     // Explanation
-                    VStack(alignment: .leading, spacing: RiskMateDesignSystem.Spacing.md) {
+                    VStack(alignment: .leading, spacing: RiskmateDesignSystem.Spacing.md) {
                         ExplanationPoint(
                             icon: "lock.shield.fill",
                             title: "Cryptographically Anchored",
@@ -50,23 +50,23 @@ struct VerificationExplainerSheet: View {
                     }
                     
                     // Trust statement
-                    VStack(alignment: .leading, spacing: RiskMateDesignSystem.Spacing.sm) {
+                    VStack(alignment: .leading, spacing: RiskmateDesignSystem.Spacing.sm) {
                         Text("This is serious infrastructure, not a tool.")
-                            .font(RiskMateDesignSystem.Typography.bodyBold)
-                            .foregroundColor(RiskMateDesignSystem.Colors.textPrimary)
+                            .font(RiskmateDesignSystem.Typography.bodyBold)
+                            .foregroundColor(RiskmateDesignSystem.Colors.textPrimary)
                         
                         Text("Every action creates an immutable proof record that can be verified independently.")
-                            .font(RiskMateDesignSystem.Typography.bodySmall)
-                            .foregroundColor(RiskMateDesignSystem.Colors.textSecondary)
+                            .font(RiskmateDesignSystem.Typography.bodySmall)
+                            .foregroundColor(RiskmateDesignSystem.Colors.textSecondary)
                     }
-                    .padding(RiskMateDesignSystem.Spacing.md)
-                    .background(RiskMateDesignSystem.Colors.surface.opacity(0.5))
-                    .clipShape(RoundedRectangle(cornerRadius: RiskMateDesignSystem.Radius.md))
-                    .padding(.top, RiskMateDesignSystem.Spacing.sm)
+                    .padding(RiskmateDesignSystem.Spacing.md)
+                    .background(RiskmateDesignSystem.Colors.surface.opacity(0.5))
+                    .clipShape(RoundedRectangle(cornerRadius: RiskmateDesignSystem.Radius.md))
+                    .padding(.top, RiskmateDesignSystem.Spacing.sm)
                 }
-                .padding(RiskMateDesignSystem.Spacing.pagePadding)
+                .padding(RiskmateDesignSystem.Spacing.pagePadding)
             }
-            .background(RiskMateDesignSystem.Colors.background)
+            .background(RiskmateDesignSystem.Colors.background)
             .navigationTitle("Verification")
             .navigationBarTitleDisplayMode(.inline)
             .onAppear {
@@ -75,10 +75,10 @@ struct VerificationExplainerSheet: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Done") {
-                        RiskMateDesignSystem.Haptics.tap()
+                        RiskmateDesignSystem.Haptics.tap()
                         dismiss()
                     }
-                    .foregroundColor(RiskMateDesignSystem.Colors.accent)
+                    .foregroundColor(RiskmateDesignSystem.Colors.accent)
                 }
             }
         }
@@ -91,20 +91,20 @@ struct ExplanationPoint: View {
     let description: String
     
     var body: some View {
-        HStack(alignment: .top, spacing: RiskMateDesignSystem.Spacing.md) {
+        HStack(alignment: .top, spacing: RiskmateDesignSystem.Spacing.md) {
             Image(systemName: icon)
                 .font(.system(size: 20, weight: .semibold))
-                .foregroundColor(RiskMateDesignSystem.Colors.accent)
+                .foregroundColor(RiskmateDesignSystem.Colors.accent)
                 .frame(width: 32)
             
-            VStack(alignment: .leading, spacing: RiskMateDesignSystem.Spacing.xs) {
+            VStack(alignment: .leading, spacing: RiskmateDesignSystem.Spacing.xs) {
                 Text(title)
-                    .font(RiskMateDesignSystem.Typography.bodyBold)
-                    .foregroundColor(RiskMateDesignSystem.Colors.textPrimary)
+                    .font(RiskmateDesignSystem.Typography.bodyBold)
+                    .foregroundColor(RiskmateDesignSystem.Colors.textPrimary)
                 
                 Text(description)
-                    .font(RiskMateDesignSystem.Typography.bodySmall)
-                    .foregroundColor(RiskMateDesignSystem.Colors.textSecondary)
+                    .font(RiskmateDesignSystem.Typography.bodySmall)
+                    .foregroundColor(RiskmateDesignSystem.Colors.textSecondary)
             }
         }
     }

@@ -115,15 +115,17 @@ struct JobDetailView: View {
                     Menu {
                         Button {
                             Haptics.tap()
-                            quickAction.requestSwitchToLedger()
+                            dismiss()
+                            quickAction.requestSwitchToWorkRecords(filter: nil)
                         } label: {
-                            Label("View Ledger", systemImage: "book.closed")
+                            Label("View Work Records", systemImage: "doc.text.fill")
                         }
                         Button {
                             Haptics.tap()
-                            quickAction.requestSwitchToWorkRecords(filter: nil)
+                            dismiss()
+                            quickAction.requestSwitchToLedger()
                         } label: {
-                            Label("View Work Records", systemImage: "list.bullet.rectangle")
+                            Label("View Ledger", systemImage: "list.bullet.rectangle")
                         }
                         Button {
                             Haptics.tap()
@@ -139,7 +141,7 @@ struct JobDetailView: View {
                         }
                         Button {
                             Haptics.tap()
-                            WebAppURL.openWebApp()
+                            WebAppURL.openWebApp(jobId: jobId)
                         } label: {
                             Label("Open in Web App", systemImage: "globe")
                         }
@@ -326,7 +328,7 @@ struct OverviewTab: View {
                 // Managed on Web card when Hazards + Controls are both empty (hide those tabs)
                 if showManagedOnWebCard {
                     ManagedOnWebCard(
-                        onOpenWebApp: { WebAppURL.openWebApp() },
+                        onOpenWebApp: { WebAppURL.openWebApp(jobId: jobId) },
                         onViewWorkRecords: { quickAction.requestSwitchToWorkRecords(filter: nil) }
                     )
                     .padding(.horizontal, RMTheme.Spacing.pagePadding)
@@ -500,7 +502,7 @@ struct ManagedOnWebCard: View {
                             .foregroundColor(RMTheme.Colors.accent)
                     }
                     Button(action: onViewWorkRecords) {
-                        Label("View Work Records", systemImage: "list.bullet.rectangle")
+                        Label("View Work Records", systemImage: "doc.text.fill")
                             .font(RMTheme.Typography.bodySmallBold)
                             .foregroundColor(RMTheme.Colors.accent)
                     }
@@ -804,13 +806,13 @@ struct HazardsTab: View {
                                 Haptics.tap()
                                 quickAction.requestSwitchToWorkRecords(filter: nil)
                             } label: {
-                                Label("View Work Records", systemImage: "list.bullet.rectangle")
+                                Label("View Work Records", systemImage: "doc.text.fill")
                                     .font(RMTheme.Typography.bodySmallBold)
                                     .foregroundColor(RMTheme.Colors.accent)
                             }
                             Button {
                                 Haptics.tap()
-                                WebAppURL.openWebApp()
+                                WebAppURL.openWebApp(jobId: jobId)
                             } label: {
                                 Label("Open in Web App", systemImage: "globe")
                                     .font(RMTheme.Typography.bodySmallBold)
@@ -935,13 +937,13 @@ struct ControlsTab: View {
                                 Haptics.tap()
                                 quickAction.requestSwitchToWorkRecords(filter: nil)
                             } label: {
-                                Label("View Work Records", systemImage: "list.bullet.rectangle")
+                                Label("View Work Records", systemImage: "doc.text.fill")
                                     .font(RMTheme.Typography.bodySmallBold)
                                     .foregroundColor(RMTheme.Colors.accent)
                             }
                             Button {
                                 Haptics.tap()
-                                WebAppURL.openWebApp()
+                                WebAppURL.openWebApp(jobId: jobId)
                             } label: {
                                 Label("Open in Web App", systemImage: "globe")
                                     .font(RMTheme.Typography.bodySmallBold)
@@ -1600,7 +1602,7 @@ struct ExportsTab: View {
                 initiatedFromForeground: true
             )
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = ExportErrorMessages.friendlyMessage(for: error)
             showError = true
         }
     }

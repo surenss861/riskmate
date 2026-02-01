@@ -18,7 +18,7 @@ class BackgroundExportManager: NSObject, ObservableObject {
     private override init() {
         let fileManager = FileManager.default
         let supportDir = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        exportsDirectory = supportDir.appendingPathComponent("RiskMate/Exports", isDirectory: true)
+        exportsDirectory = supportDir.appendingPathComponent("Riskmate/Exports", isDirectory: true)
         
         super.init()
         
@@ -65,7 +65,7 @@ class BackgroundExportManager: NSObject, ObservableObject {
     }
     
     private func startExport(_ export: ExportTask) async {
-        updateExportState(export.id, state: .preparing)
+        await updateExportState(export.id, state: .preparing)
         
         do {
             // Generate export (this may take time on server)
@@ -78,7 +78,7 @@ class BackgroundExportManager: NSObject, ObservableObject {
             }
             
             // Move to permanent location
-            let permanentURL = saveExportFile(
+            let permanentURL = try saveExportFile(
                 sourceURL: fileURL,
                 jobId: export.jobId,
                 type: export.type,
@@ -88,8 +88,8 @@ class BackgroundExportManager: NSObject, ObservableObject {
             // Update last export for this job
             saveLastExport(jobId: export.jobId, type: export.type, url: permanentURL)
             
-            // Update state
-            updateExportState(export.id, state: .ready, fileURL: permanentURL)
+            // Update state (on main actor for thread safety)
+            await updateExportState(export.id, state: .ready, fileURL: permanentURL)
             
             // Track success
             Analytics.shared.trackExportSucceeded(jobId: export.jobId, type: export.type.rawValue)
@@ -121,19 +121,28 @@ class BackgroundExportManager: NSObject, ObservableObject {
             
         } catch {
             let errorMessage = error.localizedDescription
-            updateExportState(export.id, state: .failed(errorMessage))
+            await updateExportState(export.id, state: .failed(errorMessage))
             Analytics.shared.trackExportFailed(jobId: export.jobId, type: export.type.rawValue, error: errorMessage)
             CrashReporting.shared.captureError(error)
         }
     }
     
-    private func saveExportFile(sourceURL: URL, jobId: String, type: ExportType, exportId: String) -> URL {
+    private func saveExportFile(sourceURL: URL, jobId: String, type: ExportType, exportId: String) throws -> URL {
         let fileExtension = type == .pdf ? "pdf" : "zip"
         let fileName = "\(type.rawValue)-\(jobId)-\(exportId).\(fileExtension)"
         let destinationURL = exportsDirectory.appendingPathComponent(fileName)
         
-        // Copy file to permanent location
-        try? FileManager.default.copyItem(at: sourceURL, to: destinationURL)
+        // Copy file to permanent location - handle errors explicitly
+        do {
+            // Remove existing file if it exists
+            if FileManager.default.fileExists(atPath: destinationURL.path) {
+                try FileManager.default.removeItem(at: destinationURL)
+            }
+            try FileManager.default.copyItem(at: sourceURL, to: destinationURL)
+        } catch {
+            print("[BackgroundExportManager] Failed to save export file: \(error.localizedDescription)")
+            throw error
+        }
         
         return destinationURL
     }
@@ -165,6 +174,7 @@ class BackgroundExportManager: NSObject, ObservableObject {
     
     // MARK: - State Management
     
+    @MainActor
     private func updateExportState(_ exportId: String, state: ExportState, fileURL: URL? = nil, progress: Double? = nil) {
         if let index = exports.firstIndex(where: { $0.id == exportId }) {
             exports[index].state = state

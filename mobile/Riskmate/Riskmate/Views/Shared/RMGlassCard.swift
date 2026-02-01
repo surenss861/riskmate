@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// RiskMate glass card - iOS material + web sharpness (hybrid)
+/// Riskmate glass card - iOS material + web sharpness (hybrid)
 struct RMGlassCard<Content: View>: View {
     let content: Content
     

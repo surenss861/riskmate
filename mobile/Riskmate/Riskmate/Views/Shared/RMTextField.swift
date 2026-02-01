@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// RiskMate text field - clean iOS feel (still matches web brightness)
+/// Riskmate text field - clean iOS feel (still matches web brightness)
 struct RMTextField: View {
     let title: String
     @Binding var text: String

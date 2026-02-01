@@ -144,8 +144,8 @@ You should see all 10 tables listed.
 
 **Solution:**
 1. In Supabase SQL Editor, run: `SELECT column_name FROM information_schema.columns WHERE table_name = 'exports' ORDER BY ordinal_position;` (or use Table Editor) and confirm the table has columns: `request_id`, `verification_token`, `idempotency_key`, `failure_count`, `requested_at`, plus base columns from `20251203000000_database_hardening_ledger_compliance.sql`.
-2. **Quick fix for PGRST204 (missing requested_at):** Run `20260201000000_ensure_exports_requested_at.sql` or: `ALTER TABLE exports ADD COLUMN IF NOT EXISTS requested_at TIMESTAMPTZ;`
-3. If the table is missing, run in order: `20251203000000_database_hardening_ledger_compliance.sql`, then `20251203000002_fix_ledger_chain_of_custody.sql` (adds `idempotency_key`), then `20251203000005_production_hardening.sql` (adds `request_id`, `verification_token`, `failure_count`), then `20260201000000_ensure_exports_requested_at.sql`.
+2. **Quick fix for PGRST204 (missing requested_at):** Run `20260201000000_ensure_exports_requested_at.sql` (which also adds an index) or manually: `ALTER TABLE exports ADD COLUMN IF NOT EXISTS requested_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP; CREATE INDEX IF NOT EXISTS idx_exports_requested_at ON exports(requested_at DESC);`
+3. If the table is missing, run in order: `20251203000000_database_hardening_ledger_compliance.sql`, then `20251203000002_fix_ledger_chain_of_custody.sql` (adds `idempotency_key` unique constraint), then `20251203000005_production_hardening.sql` (adds `request_id`, `verification_token`, `failure_count`), then `20260201000000_ensure_exports_requested_at.sql`.
 4. If the table exists but columns are missing, run `20251203000005_production_hardening.sql` and `20260201000000_ensure_exports_requested_at.sql` (both use `ADD COLUMN IF NOT EXISTS`).
 5. If using PostgREST/Supabase schema cache, refresh: `SELECT pg_notify('pgrst', 'reload schema');` then restart the Railway backend.
 6. Retry export from iOS or web.

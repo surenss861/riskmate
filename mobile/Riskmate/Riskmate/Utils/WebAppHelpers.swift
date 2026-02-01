@@ -3,12 +3,22 @@ import UIKit
 
 /// Canonical web app URL for "Open in Web App" actions.
 enum WebAppURL {
-    static let appURL = URL(string: "https://app.riskmate.com")!
+    static let baseURL: URL = {
+        guard let url = URL(string: "https://riskmate.dev") else {
+            fatalError("Invalid base URL for web app")
+        }
+        return url
+    }()
 
-    /// Opens the web app URL. Shows "Couldn't open link" toast on failure.
-    /// Uses completion handler so the toast is always dispatched on main; avoids background-thread UI updates.
-    static func openWebApp() {
-        UIApplication.shared.open(appURL, options: [:]) { success in
+    /// URL for a specific job. Use when opening from Job Detail.
+    static func jobURL(jobId: String) -> URL {
+        baseURL.appendingPathComponent("jobs").appendingPathComponent(jobId)
+    }
+
+    /// Opens the web app URL, optionally for a specific job. Shows "Couldn't open link" toast on failure.
+    static func openWebApp(jobId: String? = nil) {
+        let url = jobId.map { jobURL(jobId: $0) } ?? baseURL
+        UIApplication.shared.open(url, options: [:]) { success in
             guard !success else { return }
             DispatchQueue.main.async {
                 ToastCenter.shared.show(

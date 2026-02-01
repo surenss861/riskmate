@@ -9,7 +9,7 @@ struct OnboardingView: View {
     let pages = [
         OnboardingPage(
             title: "Protect Every Job Before It Starts",
-            description: "RiskMate helps contractors document hazards, controls, and evidence to create audit-ready proof packs.",
+            description: "Riskmate helps contractors document hazards, controls, and evidence to create audit-ready proof packs.",
             icon: "shield.checkered",
             color: .orange
         ),

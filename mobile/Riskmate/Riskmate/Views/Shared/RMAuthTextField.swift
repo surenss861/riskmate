@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// RiskMate auth text field - dark, native, focus ring, icon, reveal toggle
+/// Riskmate auth text field - dark, native, focus ring, icon, reveal toggle
 struct RMAuthTextField: View {
     let title: String
     @Binding var text: String

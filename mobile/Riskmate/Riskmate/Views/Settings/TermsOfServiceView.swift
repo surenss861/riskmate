@@ -18,14 +18,14 @@ struct TermsOfServiceView: View {
                             SectionView(
                                 title: "Acceptance of Terms",
                                 content: """
-                                By using RiskMate, you agree to these Terms of Service. If you do not agree, please do not use the service.
+                                By using Riskmate, you agree to these Terms of Service. If you do not agree, please do not use the service.
                                 """
                             )
                             
                             SectionView(
                                 title: "Service Description",
                                 content: """
-                                RiskMate provides audit-ready compliance documentation and proof pack generation for contractors and organizations. We help you document hazards, controls, and evidence to create defensible audit trails.
+                                Riskmate provides audit-ready compliance documentation and proof pack generation for contractors and organizations. We help you document hazards, controls, and evidence to create defensible audit trails.
                                 """
                             )
                             
@@ -44,7 +44,7 @@ struct TermsOfServiceView: View {
                             SectionView(
                                 title: "Data Integrity",
                                 content: """
-                                RiskMate maintains ledger integrity and chain-of-custody records. You acknowledge that:
+                                Riskmate maintains ledger integrity and chain-of-custody records. You acknowledge that:
                                 
                                 • All actions are recorded and cannot be deleted
                                 • Export integrity is verified through cryptographic hashes
@@ -55,7 +55,7 @@ struct TermsOfServiceView: View {
                             SectionView(
                                 title: "Limitation of Liability",
                                 content: """
-                                RiskMate is provided "as is" without warranties. We are not liable for:
+                                Riskmate is provided "as is" without warranties. We are not liable for:
                                 
                                 • Decisions made based on exported documentation
                                 • Compliance failures or regulatory violations
