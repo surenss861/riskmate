@@ -18,17 +18,10 @@ struct RiskmateApp: App {
         // Make it sequential to avoid race conditions
         #if DEBUG
         Task {
-            // Step 1: Clear Supabase session
+            // Force logout on launch (dev only) so session doesn't persist between runs
             await AuthService.shared.signOut()
-            print("[RiskmateApp] 🧹 DEBUG: Cleared Supabase session")
-            
-            // Step 2: Clear session manager state
             await SessionManager.shared.logout()
-            print("[RiskmateApp] 🧹 DEBUG: Cleared SessionManager state")
-            
-            // Step 3: Restore session (will be empty after signOut, so user starts logged out)
             await AuthService.shared.ensureSessionRestored()
-            print("[RiskmateApp] 🧹 DEBUG: Session restore complete (should be empty)")
         }
         #else
         // Production: Restore Supabase session early (before any API calls)
