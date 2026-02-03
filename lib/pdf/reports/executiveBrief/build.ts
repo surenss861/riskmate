@@ -176,12 +176,12 @@ export async function buildExecutiveBriefPDF(
       },
       bufferPages: true,
       info: {
-        Title: `RiskMate Executive Brief - ${organizationName}`,
-        Author: 'RiskMate',
+        Title: `Riskmate Executive Brief - ${organizationName}`,
+        Author: 'Riskmate',
         Subject: 'Executive Risk Posture Summary',
         Keywords: `risk, governance, compliance, ${organizationName}`,
-        Creator: 'RiskMate Platform',
-        Producer: 'RiskMate PDF Generator',
+        Creator: 'Riskmate Platform',
+        Producer: 'Riskmate PDF Generator',
       },
     })
 

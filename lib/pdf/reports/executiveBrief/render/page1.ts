@@ -92,7 +92,7 @@ export function renderPage1(
   
   // Content inside header band
   const headerContentY = headerBandY + 50
-  const sanitizedTitle = renderFunctions.sanitizeText('RiskMate Executive Brief')
+  const sanitizedTitle = renderFunctions.sanitizeText('Riskmate Executive Brief')
   
   // CRITICAL: Format org name consistently - always "Org: <Name>" or "Org: <short-id>"
   // Route should always pass a valid org name or org ID short form (e.g., "Org c111f4ed")

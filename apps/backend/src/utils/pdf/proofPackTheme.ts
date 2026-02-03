@@ -44,7 +44,7 @@ interface TableOptions {
  * Shared PDF theme for all proof pack PDFs
  */
 
-// Draw consistent header with RiskMate branding
+// Draw consistent header with Riskmate branding
 export function drawHeader(doc: PDFKit.PDFDocument, options: HeaderOptions): void {
   const margin = STYLES.spacing.pageMargin
   doc.y = margin

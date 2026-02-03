@@ -181,7 +181,7 @@ export async function generateExecutiveBriefPDF(
       doc.switchToPage(i)
       doc.fontSize(8).font('Helvetica-Oblique')
       doc.text(
-        `RiskMate Executive Brief | Generated ${new Date(brief.generated_at).toLocaleDateString()} | Page ${i + 1} of ${pageCount}`,
+        `Riskmate Executive Brief | Generated ${new Date(brief.generated_at).toLocaleDateString()} | Page ${i + 1} of ${pageCount}`,
         50,
         doc.page.height - 30,
         { align: 'center', width: doc.page.width - 100 }

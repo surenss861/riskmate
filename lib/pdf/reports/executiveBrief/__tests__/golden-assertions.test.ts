@@ -72,10 +72,10 @@ describe('Executive Brief PDF - Golden Assertions', () => {
     }
   })
   
-  it('should have "RiskMate Executive Brief" header', async () => {
+  it('should have "Riskmate Executive Brief" header', async () => {
     const result = await buildExecutiveBriefPDFForTests(input)
     const text = await extractTextFromPDF(result.buffer)
-    expect(text).toContain('RiskMate Executive Brief')
+    expect(text).toContain('Riskmate Executive Brief')
   })
 
   it('should always include "Decision requested:" on Page 1 (non-negotiable for board credibility)', async () => {

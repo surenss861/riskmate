@@ -119,7 +119,7 @@ export function renderSignaturesAndCompliance(
     .text('Compliance Statement', margin, complianceY);
 
   const complianceText =
-    'This report was generated through RiskMate and includes all safety, hazard, and control ' +
+    'This report was generated through Riskmate and includes all safety, hazard, and control ' +
     'documentation submitted by the assigned crew. All data is timestamped and stored securely. ' +
     'This documentation serves as evidence of compliance with safety protocols and regulatory requirements.';
 

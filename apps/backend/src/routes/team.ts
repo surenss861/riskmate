@@ -230,7 +230,7 @@ teamRouter.post("/invite", requireRole("safety_lead"), async (req: express.Reque
       if (createUserError?.message?.includes("already registered")) {
         return res
           .status(409)
-          .json({ message: "That email already has a RiskMate account." });
+          .json({ message: "That email already has a Riskmate account." });
       }
       throw createUserError;
     }

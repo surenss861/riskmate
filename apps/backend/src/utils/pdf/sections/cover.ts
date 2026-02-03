@@ -40,7 +40,7 @@ export function renderCoverPage(
     .fillColor(STYLES.colors.accent)
     .fontSize(20)
     .font(STYLES.fonts.header)
-    .text('RiskMate', margin, headerY, {
+    .text('Riskmate', margin, headerY, {
       width: 120,
       lineBreak: false,
     });

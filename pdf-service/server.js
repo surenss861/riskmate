@@ -155,7 +155,7 @@ app.post('/generate', authenticate, async (req, res) => {
     const metadata = await page.evaluate(() => {
       const body = document.body
       return {
-        organizationName: body.getAttribute('data-organization-name') || 'RiskMate',
+        organizationName: body.getAttribute('data-organization-name') || 'Riskmate',
         packetTitle: body.getAttribute('data-packet-title') || 'Report',
         jobId: body.getAttribute('data-job-id') || '',
         runId: body.getAttribute('data-run-id') || '',

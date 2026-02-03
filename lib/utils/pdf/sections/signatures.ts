@@ -32,7 +32,7 @@ export function renderSignaturesAndCompliance(
     .fillColor(STYLES.colors.secondaryText)
     .fontSize(9)
     .font(STYLES.fonts.body)
-    .text('Prepared by RiskMate', margin, doc.y)
+    .text('Prepared by Riskmate', margin, doc.y)
     .text(`Document ID: ${job.id.substring(0, 8).toUpperCase()}`, margin, doc.y + 12);
 
   doc.moveDown(2);
@@ -151,7 +151,7 @@ export function renderSignaturesAndCompliance(
   doc.moveDown(0.8);
 
   const complianceText =
-    'This report was generated through RiskMate and includes all safety, hazard, and control ' +
+    'This report was generated through Riskmate and includes all safety, hazard, and control ' +
     'documentation submitted by the assigned crew. All data is timestamped and stored securely. ' +
     'This documentation serves as evidence of compliance with safety protocols and regulatory requirements.';
 

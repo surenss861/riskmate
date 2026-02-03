@@ -90,7 +90,7 @@ export async function generatePermitPack(
   )
 
   filesToAdd.push({
-    path: 'RiskMate_Report.pdf',
+    path: 'Riskmate_Report.pdf',
     content: pdfBuffer,
   })
 

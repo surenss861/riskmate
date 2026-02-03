@@ -41,7 +41,7 @@ export async function stampPdf(input: Buffer, opts: StampOptions = {}): Promise<
 
     // --- Watermark (only on content pages, not cover) ---
     if (!isCoverPage) {
-      const watermarkText = opts.draft ? 'DRAFT' : (opts.brand ?? 'RiskMate');
+      const watermarkText = opts.draft ? 'DRAFT' : (opts.brand ?? 'Riskmate');
       const wmSize = opts.draft ? 72 : 64;
       const centerX = width / 2;
       const centerY = height / 2;
@@ -72,7 +72,7 @@ export async function stampPdf(input: Buffer, opts: StampOptions = {}): Promise<
       const headerY = height - 36;
 
       // Left: Brand name (small)
-      page.drawText(opts.brand ?? 'RiskMate', {
+      page.drawText(opts.brand ?? 'Riskmate', {
         x: marginX,
         y: headerY,
         size: 9,

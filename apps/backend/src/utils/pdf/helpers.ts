@@ -12,7 +12,7 @@ export function addWatermark(doc: PDFKit.PDFDocument) {
 
   doc
     .opacity(0.05)
-    .text('RiskMate', doc.page.width / 2, doc.page.height / 2, {
+    .text('Riskmate', doc.page.width / 2, doc.page.height / 2, {
       align: 'center',
       width: 200,
       lineBreak: false,
@@ -217,7 +217,7 @@ export function addFooterInline(
     .fillColor(STYLES.colors.accent)
     .fontSize(10)
     .font(STYLES.fonts.header)
-    .text('RiskMate', margin, footerY + 8, {
+    .text('Riskmate', margin, footerY + 8, {
       width: 100,
       lineBreak: false,
     });

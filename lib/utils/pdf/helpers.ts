@@ -43,7 +43,7 @@ export function drawHeaderFooterAndWatermark(
     .fillColor(STYLES.colors.accent)
     .fontSize(10)
     .font(STYLES.fonts.header)
-    .text('RiskMate', marginX, footerY + 8, {
+    .text('Riskmate', marginX, footerY + 8, {
       width: 240,
       lineBreak: false,
     });
@@ -115,7 +115,7 @@ export function drawHeaderFooterAndWatermark(
       .fillColor(STYLES.colors.watermark)
       .fontSize(72)
       .font(STYLES.fonts.light)
-      .text('RiskMate', centerX - 100, centerY - 36, { // x offset to center (approx half text width)
+      .text('Riskmate', centerX - 100, centerY - 36, { // x offset to center (approx half text width)
         width: 200,
         lineBreak: false,
       });

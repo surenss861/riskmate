@@ -69,7 +69,7 @@ export async function generateLedgerExportPDF(options: LedgerExportOptions): Pro
       // Header Block
       doc.fontSize(20)
       safeFont('Helvetica-Bold', () => {
-        doc.text('RiskMate Compliance Ledger Export', { align: 'center' })
+        doc.text('Riskmate Compliance Ledger Export', { align: 'center' })
       })
       doc.moveDown(0.5)
       
