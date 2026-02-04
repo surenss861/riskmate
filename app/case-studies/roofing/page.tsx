@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import RiskMateLogo from '@/components/RiskMateLogo'
+import RiskmateLogo from '@/components/RiskmateLogo'
 import Link from 'next/link'
 
 export default function RoofingCaseStudyPage() {
@@ -14,7 +14,7 @@ export default function RoofingCaseStudyPage() {
       <header className="border-b border-white/10 px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <Link href="/">
-            <RiskMateLogo size="md" showText />
+            <RiskmateLogo size="md" showText />
           </Link>
           <div className="flex items-center gap-4">
             <button
@@ -45,7 +45,7 @@ export default function RoofingCaseStudyPage() {
             Roofing Contractor Case Study
           </div>
           <h1 className="text-5xl font-bold mb-6 font-display">
-            How a Roofing Company Uses RiskMate for High-Rise Repairs
+            How a Roofing Company Uses Riskmate for High-Rise Repairs
           </h1>
           <p className="text-xl text-[#A1A1A1] max-w-3xl mx-auto">
             See how Hector&apos;s roofing company documents fall protection, weather hazards, and permit compliance for commercial roof repairs—all in one place.
@@ -63,7 +63,7 @@ export default function RoofingCaseStudyPage() {
           <h2 className="text-3xl font-bold mb-6">The Challenge</h2>
           <div className="bg-[#121212] rounded-xl border border-white/10 p-8">
             <p className="text-lg text-white/80 leading-relaxed mb-4">
-              Hector runs a 12-person roofing company specializing in commercial flat roofs. Before RiskMate:
+              Hector runs a 12-person roofing company specializing in commercial flat roofs. Before Riskmate:
             </p>
             <ul className="space-y-3 text-white/70">
               <li className="flex items-start gap-3">
@@ -193,12 +193,12 @@ export default function RoofingCaseStudyPage() {
           transition={{ duration: 0.6 }}
           className="mb-16"
         >
-          <h2 className="text-3xl font-bold mb-6">How RiskMate Solved It</h2>
+          <h2 className="text-3xl font-bold mb-6">How Riskmate Solved It</h2>
           <div className="grid md:grid-cols-3 gap-6">
             {[
               {
                 step: 'Before the job',
-                action: 'Hector documents fall protection setup, weather conditions, and permit requirements. RiskMate calculates risk score of 85 (CRITICAL) and generates 15 required safety controls.',
+                action: 'Hector documents fall protection setup, weather conditions, and permit requirements. Riskmate calculates risk score of 85 (CRITICAL) and generates 15 required safety controls.',
                 time: '8 minutes',
               },
               {
@@ -297,7 +297,7 @@ export default function RoofingCaseStudyPage() {
         >
           <h2 className="text-3xl font-bold mb-4 font-display">Ready to streamline your roofing documentation?</h2>
           <p className="text-[#A1A1A1] mb-8 max-w-2xl mx-auto">
-            Join roofing companies across Canada who use RiskMate to create professional permit packs and compliance documentation.
+            Join roofing companies across Canada who use Riskmate to create professional permit packs and compliance documentation.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <button

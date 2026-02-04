@@ -146,7 +146,7 @@ export async function POST(request: NextRequest) {
     if (createUserError || !createdUser?.user) {
       if (createUserError?.message?.includes('already registered')) {
         return NextResponse.json(
-          { message: 'That email already has a RiskMate account.' },
+          { message: 'That email already has a Riskmate account.' },
           { status: 409 }
         )
       }

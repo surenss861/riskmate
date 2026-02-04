@@ -835,7 +835,7 @@ executiveRouter.post('/alerts/check', async (req: express.Request, res: express.
             const delta = m.deltas?.high_risk_jobs || 0
             return delta >= 3 && timeRange !== 'all' // Only alert on deltas for time-bounded ranges
           },
-          subject: (m) => `RiskMate — High-Risk Jobs Increased by ${m.deltas?.high_risk_jobs || 0}`,
+          subject: (m) => `Riskmate — High-Risk Jobs Increased by ${m.deltas?.high_risk_jobs || 0}`,
           body: (m, orgName) => {
             const delta = m.deltas?.high_risk_jobs || 0
             const current = m.high_risk_jobs || 0

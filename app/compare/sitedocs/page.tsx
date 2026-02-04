@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import RiskMateLogo from '@/components/RiskMateLogo'
+import RiskmateLogo from '@/components/RiskmateLogo'
 import Link from 'next/link'
 
 export default function SiteDocsComparisonPage() {
@@ -14,7 +14,7 @@ export default function SiteDocsComparisonPage() {
       <header className="border-b border-white/10 px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <Link href="/">
-            <RiskMateLogo size="md" showText />
+            <RiskmateLogo size="md" showText />
           </Link>
           <div className="flex items-center gap-4">
             <button
@@ -39,10 +39,10 @@ export default function SiteDocsComparisonPage() {
             Comparison
           </div>
           <h1 className="text-5xl font-bold mb-6 font-display">
-            RiskMate vs SiteDocs
+            Riskmate vs SiteDocs
           </h1>
           <p className="text-xl text-[#A1A1A1] max-w-3xl mx-auto">
-            Why contractors choose RiskMate over SiteDocs for streamlined job documentation and compliance reporting.
+            Why contractors choose Riskmate over SiteDocs for streamlined job documentation and compliance reporting.
           </p>
         </motion.div>
 
@@ -59,7 +59,7 @@ export default function SiteDocsComparisonPage() {
               <thead>
                 <tr className="border-b border-white/10">
                   <th className="pb-4 pr-8 font-semibold">Feature</th>
-                  <th className="pb-4 px-8 font-semibold text-center">RiskMate</th>
+                  <th className="pb-4 px-8 font-semibold text-center">Riskmate</th>
                   <th className="pb-4 px-8 font-semibold text-center">SiteDocs</th>
                 </tr>
               </thead>
@@ -87,7 +87,7 @@ export default function SiteDocsComparisonPage() {
           </div>
         </motion.section>
 
-        {/* Why RiskMate */}
+        {/* Why Riskmate */}
         <motion.section
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -95,28 +95,28 @@ export default function SiteDocsComparisonPage() {
           transition={{ duration: 0.6 }}
           className="mb-16"
         >
-          <h2 className="text-3xl font-bold mb-6">Why Contractors Choose RiskMate</h2>
+          <h2 className="text-3xl font-bold mb-6">Why Contractors Choose Riskmate</h2>
           <div className="space-y-6">
             {[
               {
                 title: 'Job-Centric, Not Document-Centric',
-                description: 'RiskMate organizes everything around jobs (before, during, after). SiteDocs is document-focused, which means you\'re managing files instead of jobs. RiskMate matches how contractors actually think and work.',
+                description: 'Riskmate organizes everything around jobs (before, during, after). SiteDocs is document-focused, which means you\'re managing files instead of jobs. Riskmate matches how contractors actually think and work.',
               },
               {
                 title: 'Automatic Risk Scoring',
-                description: 'RiskMate automatically calculates risk scores based on hazards. SiteDocs requires manual risk assessment. RiskMate saves time and ensures consistency across all jobs.',
+                description: 'Riskmate automatically calculates risk scores based on hazards. SiteDocs requires manual risk assessment. Riskmate saves time and ensures consistency across all jobs.',
               },
               {
                 title: 'Better Pricing Model',
-                description: 'RiskMate charges per business ($29-129/month), not per user. SiteDocs charges $49-149 per user per month. For a 5-person team, that\'s $245-745/month vs RiskMate\'s $59/month (Pro plan).',
+                description: 'Riskmate charges per business ($29-129/month), not per user. SiteDocs charges $49-149 per user per month. For a 5-person team, that\'s $245-745/month vs Riskmate\'s $59/month (Pro plan).',
               },
               {
                 title: 'Faster Setup',
-                description: 'RiskMate works immediately—no configuration needed. SiteDocs requires setting up document templates, workflows, and user permissions. RiskMate gets you documenting jobs in 5 minutes.',
+                description: 'Riskmate works immediately—no configuration needed. SiteDocs requires setting up document templates, workflows, and user permissions. Riskmate gets you documenting jobs in 5 minutes.',
               },
               {
                 title: 'Purpose-Built for Service Contractors',
-                description: 'RiskMate is built specifically for electrical, roofing, HVAC, and renovation contractors. SiteDocs is a general construction document management tool. RiskMate understands your specific workflow.',
+                description: 'Riskmate is built specifically for electrical, roofing, HVAC, and renovation contractors. SiteDocs is a general construction document management tool. Riskmate understands your specific workflow.',
               },
             ].map((item, index) => (
               <div key={index} className="p-6 bg-[#121212] rounded-xl border border-white/10">
@@ -135,9 +135,9 @@ export default function SiteDocsComparisonPage() {
           transition={{ duration: 0.6 }}
           className="text-center bg-[#121212] rounded-xl border border-white/10 p-12"
         >
-          <h2 className="text-3xl font-bold mb-4 font-display">Ready to try RiskMate?</h2>
+          <h2 className="text-3xl font-bold mb-4 font-display">Ready to try Riskmate?</h2>
           <p className="text-[#A1A1A1] mb-8 max-w-2xl mx-auto">
-            See why contractors choose RiskMate over SiteDocs for job-specific safety documentation.
+            See why contractors choose Riskmate over SiteDocs for job-specific safety documentation.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <button

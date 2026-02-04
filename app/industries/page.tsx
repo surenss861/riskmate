@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import RiskMateLogo from '@/components/RiskMateLogo'
+import RiskmateLogo from '@/components/RiskmateLogo'
 import { operationPresets } from '@/lib/demo/demoData'
 
 export default function IndustriesPage() {
@@ -57,7 +57,7 @@ export default function IndustriesPage() {
       <nav className="fixed top-0 left-0 w-full z-50 backdrop-blur-xl border-b border-white/10 bg-black/60">
         <div className="max-w-7xl mx-auto flex items-center justify-between py-5 px-6">
           <button onClick={() => router.push('/')} className="flex items-center gap-3">
-            <RiskMateLogo size="sm" showText={true} />
+            <RiskmateLogo size="sm" showText={true} />
           </button>
           <div className="flex items-center gap-4">
             <button
@@ -164,7 +164,7 @@ export default function IndustriesPage() {
             viewport={{ once: true }}
             transition={{ duration: 0.6 }}
           >
-            <h2 className="text-3xl font-bold mb-4">Ready to see RiskMate for your industry?</h2>
+            <h2 className="text-3xl font-bold mb-4">Ready to see Riskmate for your industry?</h2>
             <p className="text-white/60 mb-8">Try the interactive demo configured for your vertical.</p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <button

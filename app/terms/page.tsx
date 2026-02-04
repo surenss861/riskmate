@@ -37,13 +37,13 @@ export default function TermsPage() {
           >
             <Image 
               src="/riskmatefinal.png" 
-              alt="RiskMate" 
+              alt="Riskmate" 
               width={28} 
               height={28}
               className="h-7 w-auto"
               priority
             />
-            <span className="text-white/90 font-medium tracking-wide text-sm">RiskMate</span>
+            <span className="text-white/90 font-medium tracking-wide text-sm">Riskmate</span>
           </motion.div>
           <div className="flex items-center gap-4">
             <button
@@ -68,14 +68,14 @@ export default function TermsPage() {
           <section>
             <h2 className="text-2xl font-semibold mb-4">1. Acceptance of Terms</h2>
             <p className="text-[#A1A1A1]">
-              By accessing or using RiskMate (&quot;the Service&quot;), you agree to be bound by these Terms of Service. 
+              By accessing or using Riskmate (&quot;the Service&quot;), you agree to be bound by these Terms of Service. 
               If you do not agree, you may not use the Service.
             </p>
           </section>
 
           <section>
             <h2 className="text-2xl font-semibold mb-4">2. Use of Service</h2>
-            <p className="text-[#A1A1A1] mb-4">To use RiskMate, you must:</p>
+            <p className="text-[#A1A1A1] mb-4">To use Riskmate, you must:</p>
             <ul className="list-disc list-inside space-y-2 text-[#A1A1A1] ml-4">
               <li>Be at least 18 years of age</li>
               <li>Provide accurate and complete information when creating an account</li>
@@ -84,7 +84,7 @@ export default function TermsPage() {
             </ul>
             <p className="text-[#A1A1A1] mt-4 mb-4">You agree not to:</p>
             <ul className="list-disc list-inside space-y-2 text-[#A1A1A1] ml-4">
-              <li>Misuse, reverse engineer, or attempt to extract the source code of RiskMate</li>
+              <li>Misuse, reverse engineer, or attempt to extract the source code of Riskmate</li>
               <li>Use the Service to violate any laws or regulations</li>
               <li>Interfere with or disrupt the Service or servers</li>
               <li>Impersonate others or provide false information</li>
@@ -96,7 +96,7 @@ export default function TermsPage() {
             <h2 className="text-2xl font-semibold mb-4">3. Account & Access</h2>
             <p className="text-[#A1A1A1] mb-4">
               You are responsible for maintaining the confidentiality of your account credentials. 
-              RiskMate uses Supabase for authentication and account management.
+              Riskmate uses Supabase for authentication and account management.
             </p>
             <p className="text-[#A1A1A1]">
               You are responsible for all activities that occur under your account. Notify us immediately 
@@ -107,7 +107,7 @@ export default function TermsPage() {
           <section>
             <h2 className="text-2xl font-semibold mb-4">4. Payment & Billing</h2>
             <p className="text-[#A1A1A1] mb-4">
-              RiskMate offers subscription plans processed through Stripe or Whop:
+              Riskmate offers subscription plans processed through Stripe or Whop:
             </p>
             <ul className="list-disc list-inside space-y-2 text-[#A1A1A1] ml-4">
               <li><strong className="text-white">Subscriptions:</strong> Automatically renew monthly unless cancelled</li>
@@ -118,7 +118,7 @@ export default function TermsPage() {
             <div className="mt-6 p-4 bg-[#121212] rounded-lg border border-white/10">
               <h3 className="text-lg font-semibold mb-2 text-white">No Refunds</h3>
               <p className="text-[#A1A1A1] mb-2">
-                All payments made to RiskMate are non-refundable.
+                All payments made to Riskmate are non-refundable.
               </p>
               <p className="text-[#A1A1A1] mb-2">
                 Subscriptions automatically renew unless cancelled before the renewal date.
@@ -132,39 +132,39 @@ export default function TermsPage() {
           <section>
             <h2 className="text-2xl font-semibold mb-4">5. Intellectual Property</h2>
             <p className="text-[#A1A1A1] mb-4">
-              RiskMate and its content (including software, design, logos, and documentation) are owned by RiskMate 
+              Riskmate and its content (including software, design, logos, and documentation) are owned by Riskmate 
               and protected by copyright and trademark laws.
             </p>
             <p className="text-[#A1A1A1]">
-              You retain ownership of all data and reports you upload or generate using RiskMate. 
-              By using the Service, you grant RiskMate a license to store and process your data solely to provide the Service.
+              You retain ownership of all data and reports you upload or generate using Riskmate. 
+              By using the Service, you grant Riskmate a license to store and process your data solely to provide the Service.
             </p>
           </section>
 
           <section>
             <h2 className="text-2xl font-semibold mb-4">6. Risk Assessment Disclaimers</h2>
             <p className="text-[#A1A1A1] mb-4">
-              <strong className="text-white">Important:</strong> RiskMate generates risk assessment reports based on user-provided information and automated analysis. 
+              <strong className="text-white">Important:</strong> Riskmate generates risk assessment reports based on user-provided information and automated analysis. 
               These reports are intended solely for informational purposes and should not be relied upon for regulatory compliance, safety certification, or insurance coverage.
             </p>
             <ul className="list-disc list-inside space-y-2 text-[#A1A1A1] ml-4">
-              <li>RiskMate reports do not replace professional safety inspections, certifications, or legal advice</li>
-              <li>Users are solely responsible for verifying the accuracy of their inputs and for any actions or outcomes based on RiskMate reports</li>
-              <li>RiskMate does not guarantee safety outcomes or compliance with regulations</li>
-              <li>You assume all responsibility for decisions made based on RiskMate reports</li>
+              <li>Riskmate reports do not replace professional safety inspections, certifications, or legal advice</li>
+              <li>Users are solely responsible for verifying the accuracy of their inputs and for any actions or outcomes based on Riskmate reports</li>
+              <li>Riskmate does not guarantee safety outcomes or compliance with regulations</li>
+              <li>You assume all responsibility for decisions made based on Riskmate reports</li>
             </ul>
           </section>
 
           <section>
             <h2 className="text-2xl font-semibold mb-4">7. Insurance and Injury Disclaimer</h2>
             <p className="text-[#A1A1A1] mb-4">
-              RiskMate does not provide insurance coverage, safety certifications, or guarantees of injury prevention.
+              Riskmate does not provide insurance coverage, safety certifications, or guarantees of injury prevention.
             </p>
             <p className="text-[#A1A1A1] mb-4">
               The Service and its risk reports are informational tools only and do not replace professional safety audits, inspections, or legally required insurance documentation.
             </p>
             <p className="text-[#A1A1A1]">
-              RiskMate, its owners, and affiliates are not responsible for any injury, loss, damage, or insurance claim arising from use or reliance on the Service or its reports.
+              Riskmate, its owners, and affiliates are not responsible for any injury, loss, damage, or insurance claim arising from use or reliance on the Service or its reports.
             </p>
           </section>
 
@@ -174,7 +174,7 @@ export default function TermsPage() {
               To the maximum extent permitted by law:
             </p>
             <ul className="list-disc list-inside space-y-2 text-[#A1A1A1] ml-4">
-              <li>RiskMate is provided &quot;as is&quot; without warranties of any kind</li>
+              <li>Riskmate is provided &quot;as is&quot; without warranties of any kind</li>
               <li>We are not liable for indirect, incidental, or consequential damages</li>
               <li>Our total liability is limited to the amount you paid in the 12 months preceding a claim</li>
               <li>We are not responsible for third-party services (Supabase, Stripe, Whop) or their failures</li>
@@ -184,7 +184,7 @@ export default function TermsPage() {
           <section>
             <h2 className="text-2xl font-semibold mb-4">9. Third-Party Integrations</h2>
             <p className="text-[#A1A1A1] mb-4">
-              RiskMate uses the following third-party services:
+              Riskmate uses the following third-party services:
             </p>
             <ul className="list-disc list-inside space-y-2 text-[#A1A1A1] ml-4">
               <li><strong className="text-white">Supabase:</strong> Database, authentication, and storage (subject to Supabase&apos;s terms)</li>
@@ -199,7 +199,7 @@ export default function TermsPage() {
           <section>
             <h2 className="text-2xl font-semibold mb-4">10. Termination</h2>
             <p className="text-[#A1A1A1] mb-4">
-              We may suspend or terminate your access to RiskMate if:
+              We may suspend or terminate your access to Riskmate if:
             </p>
             <ul className="list-disc list-inside space-y-2 text-[#A1A1A1] ml-4">
               <li>You violate these Terms of Service</li>

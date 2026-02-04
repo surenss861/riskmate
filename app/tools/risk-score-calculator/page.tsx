@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import RiskMateLogo from '@/components/RiskMateLogo'
+import RiskmateLogo from '@/components/RiskmateLogo'
 import Link from 'next/link'
 
 export default function RiskScoreCalculatorPage() {
@@ -104,7 +104,7 @@ export default function RiskScoreCalculatorPage() {
       <header className="border-b border-white/10 px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <Link href="/">
-            <RiskMateLogo size="md" showText />
+            <RiskmateLogo size="md" showText />
           </Link>
           <div className="flex items-center gap-4">
             <button
@@ -127,7 +127,7 @@ export default function RiskScoreCalculatorPage() {
         >
           <h1 className="text-5xl font-bold mb-4 font-display">Risk Score Calculator</h1>
           <p className="text-xl text-[#A1A1A1] max-w-3xl mx-auto">
-            Estimate your job&apos;s risk score by selecting the hazards present. This calculator uses the same algorithm as RiskMate.
+            Estimate your job&apos;s risk score by selecting the hazards present. This calculator uses the same algorithm as Riskmate.
           </p>
         </motion.div>
 
@@ -223,7 +223,7 @@ export default function RiskScoreCalculatorPage() {
 
                 <div className="p-4 bg-[#F97316]/10 rounded-lg border border-[#F97316]/20">
                   <p className="text-sm text-white/80">
-                    <strong>In RiskMate:</strong> This score is calculated automatically when you document hazards. RiskMate also generates a mitigation checklist based on your risk factors.
+                    <strong>In Riskmate:</strong> This score is calculated automatically when you document hazards. Riskmate also generates a mitigation checklist based on your risk factors.
                   </p>
                 </div>
               </div>
@@ -240,7 +240,7 @@ export default function RiskScoreCalculatorPage() {
         >
           <h2 className="text-3xl font-bold mb-4 font-display">Get Automatic Risk Scoring</h2>
           <p className="text-[#A1A1A1] mb-8 max-w-2xl mx-auto">
-            RiskMate automatically calculates risk scores and generates mitigation checklists for every job. No manual calculation needed.
+            Riskmate automatically calculates risk scores and generates mitigation checklists for every job. No manual calculation needed.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <button

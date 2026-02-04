@@ -3,7 +3,7 @@
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import RiskMateLogo from '@/components/RiskMateLogo'
+import RiskmateLogo from '@/components/RiskmateLogo'
 
 // Track funnel events
 function trackFunnelEvent(eventName: string, metadata?: Record<string, any>) {
@@ -26,7 +26,7 @@ export default function CancelledPage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
         >
-          <RiskMateLogo size="lg" showText className="mb-8" />
+          <RiskmateLogo size="lg" showText className="mb-8" />
           
           <div className="text-6xl mb-6">ℹ️</div>
           <h1 className="text-4xl font-bold mb-4">Checkout Cancelled</h1>

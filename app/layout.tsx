@@ -13,7 +13,7 @@ const playfair = Playfair_Display({
 })
 
 export const metadata: Metadata = {
-  title: 'RiskMate - Protect Every Job Before It Starts',
+  title: 'Riskmate - Protect Every Job Before It Starts',
   description: 'Instant risk scoring, auto-mitigation checklists, and shareable PDF reports for service contractors. Built for speed, not bureaucracy.',
   icons: {
     icon: [

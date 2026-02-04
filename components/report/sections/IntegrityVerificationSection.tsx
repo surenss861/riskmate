@@ -111,7 +111,7 @@ export function IntegrityVerificationSection({ data }: IntegrityVerificationSect
             color: pdfTheme.colors.muted,
             marginTop: pdfTheme.spacing.textGap
           }}>
-            Scan to verify this document on RiskMate
+            Scan to verify this document on Riskmate
           </div>
           {data.verificationUrl && (
             <div style={{ 

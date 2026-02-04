@@ -1,5 +1,5 @@
 /**
- * API client for RiskMate backend
+ * API client for Riskmate backend
  */
 
 import { JobReportData } from '@/types/report'

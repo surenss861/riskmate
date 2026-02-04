@@ -63,7 +63,7 @@ export function TemplateUpgradeModal({ isOpen, onClose, currentCount, limit }: T
               <Check size={18} className="text-[#F97316] mt-0.5 flex-shrink-0" />
               <div>
                 <p className="text-sm font-medium text-white">Advanced Features</p>
-                <p className="text-xs text-white/50">Unlock all RiskMate features for your team</p>
+                <p className="text-xs text-white/50">Unlock all Riskmate features for your team</p>
               </div>
             </div>
             <div className="flex items-start gap-3">

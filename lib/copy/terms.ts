@@ -1,7 +1,7 @@
 /**
  * Defensibility Terminology Dictionary
  * 
- * Centralizes all user-facing terminology for RiskMate's "Defensibility OS" positioning.
+ * Centralizes all user-facing terminology for Riskmate's "Defensibility OS" positioning.
  * This ensures consistent language across the entire product and prevents drift.
  * 
  * IMPORTANT: These are DISPLAY strings only. Do NOT use for:

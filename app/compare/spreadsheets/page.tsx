@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import RiskMateLogo from '@/components/RiskMateLogo'
+import RiskmateLogo from '@/components/RiskmateLogo'
 import Link from 'next/link'
 
 export default function SpreadsheetsComparisonPage() {
@@ -14,7 +14,7 @@ export default function SpreadsheetsComparisonPage() {
       <header className="border-b border-white/10 px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <Link href="/">
-            <RiskMateLogo size="md" showText />
+            <RiskmateLogo size="md" showText />
           </Link>
           <div className="flex items-center gap-4">
             <button
@@ -39,10 +39,10 @@ export default function SpreadsheetsComparisonPage() {
             Comparison
           </div>
           <h1 className="text-5xl font-bold mb-6 font-display">
-            RiskMate vs Spreadsheets
+            Riskmate vs Spreadsheets
           </h1>
           <p className="text-xl text-[#A1A1A1] max-w-3xl mx-auto">
-            Why contractors switch from Excel/Google Sheets to RiskMate for job documentation and compliance reporting.
+            Why contractors switch from Excel/Google Sheets to Riskmate for job documentation and compliance reporting.
           </p>
         </motion.div>
 
@@ -84,7 +84,7 @@ export default function SpreadsheetsComparisonPage() {
           transition={{ duration: 0.6 }}
           className="mb-16"
         >
-          <h2 className="text-3xl font-bold mb-6">Spreadsheets vs RiskMate</h2>
+          <h2 className="text-3xl font-bold mb-6">Spreadsheets vs Riskmate</h2>
           <div className="space-y-6">
             {[
               {
@@ -131,7 +131,7 @@ export default function SpreadsheetsComparisonPage() {
                     <p className="text-sm text-white/60">{item.spreadsheet}</p>
                   </div>
                   <div>
-                    <div className="text-sm text-green-400 font-medium mb-2">RiskMate</div>
+                    <div className="text-sm text-green-400 font-medium mb-2">Riskmate</div>
                     <p className="text-sm text-white/80">{item.riskmate}</p>
                   </div>
                 </div>
@@ -153,7 +153,7 @@ export default function SpreadsheetsComparisonPage() {
             {[
               {
                 title: 'Purpose-Built for Jobs',
-                description: 'RiskMate understands job workflows (before, during, after). Spreadsheets are generic tools that require you to build everything from scratch.',
+                description: 'Riskmate understands job workflows (before, during, after). Spreadsheets are generic tools that require you to build everything from scratch.',
               },
               {
                 title: 'Automatic Everything',
@@ -161,11 +161,11 @@ export default function SpreadsheetsComparisonPage() {
               },
               {
                 title: 'Professional Output',
-                description: 'RiskMate generates branded, audit-ready PDFs. Spreadsheet exports look unprofessional and require manual formatting.',
+                description: 'Riskmate generates branded, audit-ready PDFs. Spreadsheet exports look unprofessional and require manual formatting.',
               },
               {
                 title: 'Mobile-Friendly',
-                description: 'RiskMate works great on phones (app coming soon). Spreadsheet apps are clunky for on-site documentation.',
+                description: 'Riskmate works great on phones (app coming soon). Spreadsheet apps are clunky for on-site documentation.',
               },
             ].map((item, index) => (
               <div key={index} className="p-6 bg-[#121212] rounded-xl border border-white/10">
@@ -186,7 +186,7 @@ export default function SpreadsheetsComparisonPage() {
         >
           <h2 className="text-3xl font-bold mb-4 font-display">Ready to upgrade from spreadsheets?</h2>
           <p className="text-[#A1A1A1] mb-8 max-w-2xl mx-auto">
-            Join contractors who switched from Excel/Google Sheets to RiskMate for professional job documentation.
+            Join contractors who switched from Excel/Google Sheets to Riskmate for professional job documentation.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <button

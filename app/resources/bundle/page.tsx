@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import RiskMateLogo from '@/components/RiskMateLogo'
+import RiskmateLogo from '@/components/RiskmateLogo'
 import Link from 'next/link'
 
 export default function ContractorBundlePage() {
@@ -54,7 +54,7 @@ export default function ContractorBundlePage() {
     {
       id: 'sample-pdf',
       title: 'Sample Risk Snapshot PDF',
-      description: 'See what a professional RiskMate report looks like. This is a real example from a commercial HVAC installation.',
+      description: 'See what a professional Riskmate report looks like. This is a real example from a commercial HVAC installation.',
       format: 'PDF',
       size: '4.5 MB',
       icon: '📄',
@@ -87,7 +87,7 @@ export default function ContractorBundlePage() {
       <header className="border-b border-white/10 px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <Link href="/">
-            <RiskMateLogo size="md" showText />
+            <RiskmateLogo size="md" showText />
           </Link>
           <div className="flex items-center gap-4">
             <button
@@ -249,7 +249,7 @@ export default function ContractorBundlePage() {
         >
           <h2 className="text-3xl font-bold mb-4 font-display">Ready to Automate Your Safety Documentation?</h2>
           <p className="text-[#A1A1A1] mb-8 max-w-2xl mx-auto">
-            These templates are great, but RiskMate automates everything. Generate professional reports in seconds, not hours.
+            These templates are great, but Riskmate automates everything. Generate professional reports in seconds, not hours.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <button

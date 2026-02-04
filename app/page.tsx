@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { motion } from 'framer-motion'
 import ScrollToTop from '@/components/ScrollToTop'
-import RiskMateLogo from '@/components/RiskMateLogo'
+import RiskmateLogo from '@/components/RiskmateLogo'
 import { SampleReportModal } from '@/components/marketing'
 import { 
   EventChip, 
@@ -79,7 +79,7 @@ export default function HomePage() {
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.4 }}
             >
-              <RiskMateLogo size="sm" showText={true} />
+              <RiskmateLogo size="sm" showText={true} />
             </motion.div>
             <div className="hidden md:flex items-center gap-6 min-w-0 flex-wrap justify-end">
               <button
@@ -502,7 +502,7 @@ export default function HomePage() {
             viewport={{ once: true }}
             transition={{ duration: 0.6, delay: 0.1 }}
           >
-            One simple comparison that shows why RiskMate is different
+            One simple comparison that shows why Riskmate is different
           </motion.p>
           <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
             <motion.div
@@ -539,7 +539,7 @@ export default function HomePage() {
               viewport={{ once: true }}
               transition={{ duration: 0.6, delay: 0.3 }}
             >
-              <h3 className="text-2xl font-semibold text-green-400 mb-4">RiskMate</h3>
+              <h3 className="text-2xl font-semibold text-green-400 mb-4">Riskmate</h3>
               <div className="space-y-3 text-white/70">
                 <div className="flex items-start gap-2">
                   <span className="text-green-400 text-xl">→</span>
@@ -567,11 +567,11 @@ export default function HomePage() {
             viewport={{ once: true }}
             transition={{ duration: 0.6, delay: 0.4 }}
           >
-            Checklists capture data. RiskMate produces defensible proof.
+            Checklists capture data. Riskmate produces defensible proof.
           </motion.p>
         </section>
 
-        {/* What RiskMate Is (and Is Not) Section */}
+        {/* What Riskmate Is (and Is Not) Section */}
         <section className="max-w-6xl mx-auto px-6 py-20">
           <motion.h2
             className="text-4xl font-bold text-center mb-4 font-display"
@@ -580,7 +580,7 @@ export default function HomePage() {
             viewport={{ once: true }}
             transition={{ duration: 0.6 }}
           >
-            What RiskMate Is
+            What Riskmate Is
           </motion.h2>
           <motion.p
             className="text-[#A1A1A1] text-center mb-8 max-w-2xl mx-auto"
@@ -589,7 +589,7 @@ export default function HomePage() {
             viewport={{ once: true }}
             transition={{ duration: 0.6, delay: 0.1 }}
           >
-            RiskMate is a <strong className="text-white">system of record for operational risk</strong> in high-liability field operations.
+            Riskmate is a <strong className="text-white">system of record for operational risk</strong> in high-liability field operations.
           </motion.p>
           <motion.div
             className="grid md:grid-cols-2 gap-6 mb-12"
@@ -624,7 +624,7 @@ export default function HomePage() {
             viewport={{ once: true }}
             transition={{ duration: 0.6, delay: 0.3 }}
           >
-            What RiskMate Replaces
+            What Riskmate Replaces
           </motion.h3>
           <motion.p
             className="text-[#A1A1A1] text-center mb-12 max-w-2xl mx-auto"
@@ -633,7 +633,7 @@ export default function HomePage() {
             viewport={{ once: true }}
             transition={{ duration: 0.6, delay: 0.4 }}
           >
-            Stop juggling multiple tools and messy workflows. Here&apos;s what disappears when you use RiskMate.
+            Stop juggling multiple tools and messy workflows. Here&apos;s what disappears when you use Riskmate.
           </motion.p>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {[
@@ -681,7 +681,7 @@ export default function HomePage() {
             >
               <h2 className="text-4xl font-bold mb-4 font-display">Capture evidence on-site</h2>
               <p className="text-xl text-[#A1A1A1] mb-6">
-                The RiskMate mobile app lets you document jobs from anywhere—even without internet.
+                The Riskmate mobile app lets you document jobs from anywhere—even without internet.
               </p>
               <ul className="space-y-4 mb-8">
                 <li className="flex items-start gap-3">
@@ -758,13 +758,13 @@ export default function HomePage() {
           >
             <h2 className="text-4xl font-bold mb-4 font-display">Built with real contractors</h2>
             <p className="text-[#A1A1A1] max-w-2xl mx-auto">
-              RiskMate was built with feedback from dozens of electricians, roofers, HVAC technicians, and renovators during beta testing.
+              Riskmate was built with feedback from dozens of electricians, roofers, HVAC technicians, and renovators during beta testing.
             </p>
           </motion.div>
           <div className="grid md:grid-cols-3 gap-6">
             {[
               {
-                quote: 'RiskMate cut my reporting time in half. Clients love the professional PDFs.',
+                quote: 'Riskmate cut my reporting time in half. Clients love the professional PDFs.',
                 author: 'James L.',
                 role: 'Electrical Contractor',
               },
@@ -817,9 +817,9 @@ export default function HomePage() {
             viewport={{ once: true }}
             transition={{ duration: 0.6 }}
           >
-            <h2 className="text-4xl font-bold mb-4 font-display">See RiskMate in Action</h2>
+            <h2 className="text-4xl font-bold mb-4 font-display">See Riskmate in Action</h2>
             <p className="text-[#A1A1A1] max-w-2xl mx-auto">
-              Real examples of how contractors use RiskMate for their specific trade. See sample jobs, hazards, mitigations, and reports.
+              Real examples of how contractors use Riskmate for their specific trade. See sample jobs, hazards, mitigations, and reports.
             </p>
           </motion.div>
           <div className="grid md:grid-cols-3 gap-6">
@@ -896,14 +896,14 @@ export default function HomePage() {
             viewport={{ once: true }}
             transition={{ duration: 0.6 }}
           >
-            <h2 className="text-4xl font-bold mb-4 font-display">How RiskMate Compares</h2>
+            <h2 className="text-4xl font-bold mb-4 font-display">How Riskmate Compares</h2>
             <p className="text-[#A1A1A1] max-w-2xl mx-auto">
-              See how RiskMate stacks up against other solutions contractors use for safety documentation.
+              See how Riskmate stacks up against other solutions contractors use for safety documentation.
             </p>
           </motion.div>
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
             {[
-              { title: 'vs SafetyCulture', link: '/compare/safetyculture', description: 'Why contractors choose RiskMate' },
+              { title: 'vs SafetyCulture', link: '/compare/safetyculture', description: 'Why contractors choose Riskmate' },
               { title: 'vs SiteDocs', link: '/compare/sitedocs', description: 'Job-centric vs document-centric' },
               { title: 'vs Pen & Paper', link: '/compare/pen-and-paper', description: 'Digital vs traditional' },
               { title: 'vs Spreadsheets', link: '/compare/spreadsheets', description: 'Purpose-built vs generic' },
@@ -965,7 +965,7 @@ export default function HomePage() {
               },
               {
                 title: 'Time Saved',
-                description: 'See how much time RiskMate saves',
+                description: 'See how much time Riskmate saves',
                 link: '/tools/time-saved',
                 icon: '⏱️',
               },
@@ -1110,7 +1110,7 @@ export default function HomePage() {
             viewport={{ once: true }}
             transition={{ duration: 0.6 }}
           >
-            Who RiskMate Is For
+            Who Riskmate Is For
           </motion.h2>
           <motion.p
             className="text-[#A1A1A1] text-center mb-12 max-w-2xl mx-auto"
@@ -1393,7 +1393,7 @@ export default function HomePage() {
             viewport={{ once: true }}
             transition={{ duration: 0.6 }}
           >
-            <h2 className="text-4xl font-bold mb-6 font-display">Why RiskMate Exists</h2>
+            <h2 className="text-4xl font-bold mb-6 font-display">Why Riskmate Exists</h2>
             <div className="bg-[#121212] rounded-xl border border-white/10 p-8 text-left">
               <p className="text-lg text-white/80 leading-relaxed mb-4">
                 After talking to dozens of contractors across Canada, one thing was consistent:
@@ -1405,7 +1405,7 @@ export default function HomePage() {
                 Electricians were taking photos in iMessage, losing them, then scrambling to recreate reports when clients asked. Roofers were filling out paper forms that got lost or damaged. HVAC crews were using Google Drive folders that no one could find.
               </p>
               <p className="text-lg text-white/80 leading-relaxed">
-                <strong className="text-white">RiskMate fixes that.</strong> One clean dashboard. Everything timestamped. Audit-ready reports in one click. No more lost paperwork, no more scrambling, no more liability gaps.
+                <strong className="text-white">Riskmate fixes that.</strong> One clean dashboard. Everything timestamped. Audit-ready reports in one click. No more lost paperwork, no more scrambling, no more liability gaps.
               </p>
               <div className="mt-8 pt-8 border-t border-white/10">
                 <p className="text-sm text-[#A1A1A1]">
@@ -1419,7 +1419,7 @@ export default function HomePage() {
         {/* Footer - Minimal */}
         <footer className="border-t border-white/5 px-6 py-8">
           <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-[#A1A1A1]">
-            <div>Built in North America • © RiskMate 2025</div>
+            <div>Built in North America • © Riskmate 2025</div>
             <div className="flex gap-6 flex-wrap justify-center">
               <button
                 onClick={() => router.push('/demo')}

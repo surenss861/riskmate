@@ -94,7 +94,7 @@ export default function ResetPasswordPage() {
           <div className="flex items-center justify-center mb-8">
             <Image
               src="/riskmatefinal.png"
-              alt="RiskMate"
+              alt="Riskmate"
               width={120}
               height={48}
               className="h-10 w-auto"

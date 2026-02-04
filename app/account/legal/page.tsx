@@ -6,26 +6,26 @@ const sections = [
   {
     title: '1. Purpose',
     body: [
-      'RiskMate helps field crews identify, mitigate, and document jobsite risks. These terms govern how you access the platform and how we handle your data.',
+      'Riskmate helps field crews identify, mitigate, and document jobsite risks. These terms govern how you access the platform and how we handle your data.',
     ],
   },
   {
     title: '2. Data Ownership',
     body: [
-      'You retain ownership of all job records, photos, reports, and analytics generated through RiskMate. We store this data securely and never sell it to third parties.',
+      'You retain ownership of all job records, photos, reports, and analytics generated through Riskmate. We store this data securely and never sell it to third parties.',
     ],
   },
   {
     title: '3. Acceptable Use',
     body: [
-      'Do not upload unlawful content or use RiskMate to harass or mislead others.',
+      'Do not upload unlawful content or use Riskmate to harass or mislead others.',
       'Keep login credentials secure. You are responsible for activity that occurs under your account.',
     ],
   },
   {
     title: '4. Compliance & Audit',
     body: [
-      'RiskMate records an immutable audit trail for critical actions. This helps your organization meet OSHA, insurance, and contractual obligations.',
+      'Riskmate records an immutable audit trail for critical actions. This helps your organization meet OSHA, insurance, and contractual obligations.',
     ],
   },
   {
@@ -38,7 +38,7 @@ const sections = [
   {
     title: '6. Availability',
     body: [
-      'RiskMate is provided “as is.” We strive for high uptime but may perform emergency maintenance without notice.',
+      'Riskmate is provided “as is.” We strive for high uptime but may perform emergency maintenance without notice.',
     ],
   },
   {
@@ -61,7 +61,7 @@ export default function LegalPage() {
       <header className="border-b border-white/10 bg-black/30 backdrop-blur">
         <div className="mx-auto flex max-w-4xl items-center justify-between px-6 py-6">
           <div>
-            <h1 className="text-3xl font-semibold">RiskMate Terms &amp; Privacy</h1>
+            <h1 className="text-3xl font-semibold">Riskmate Terms &amp; Privacy</h1>
             <p className="text-sm text-[#9FA6BE]">Version 2025-12 • Effective December 1, 2025</p>
           </div>
           <Link
@@ -87,7 +87,7 @@ export default function LegalPage() {
 
         <footer className="mt-12 rounded-3xl border border-white/10 bg-[#0C0D16] p-6 text-sm text-[#9FA6BE]">
           <p>
-            By continuing to use RiskMate, you agree to these terms. We may update this document
+            By continuing to use Riskmate, you agree to these terms. We may update this document
             periodically. If we make material changes, we will notify account owners via email
             and prompt for re-acceptance at login.
           </p>

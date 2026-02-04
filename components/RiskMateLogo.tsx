@@ -42,7 +42,7 @@ export default function RiskMateLogo({
         backgroundClip: 'text',
       }}
     >
-      RiskMate
+      Riskmate
     </span>
   )
 

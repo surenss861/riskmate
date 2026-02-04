@@ -10,7 +10,7 @@ export const pdfTheme = {
     muted: '#525252', // Secondary text
     borders: '#EAEAEA', // Lines and borders (light gray)
     paper: '#FFFFFF', // Background (white)
-    accent: '#F97316', // RiskMate Orange - only for emphasis (headers, dividers, badges)
+    accent: '#F97316', // Riskmate Orange - only for emphasis (headers, dividers, badges)
     accentLight: '#FED7AA', // Lighter orange for backgrounds if needed
   },
   

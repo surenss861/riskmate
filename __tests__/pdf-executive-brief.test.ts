@@ -138,7 +138,7 @@ describe('PDF Executive Brief Validation', () => {
       pageBreaks.forEach((pageText, idx) => {
         // Strip footer/header noise
         const cleanText = pageText
-          .replace(/RiskMate Executive Brief.*/g, '')
+          .replace(/Riskmate Executive Brief.*/g, '')
           .replace(/Confidential.*/g, '')
           .replace(/build:.*/g, '')
           .replace(/reportId:.*/g, '')

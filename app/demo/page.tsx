@@ -66,7 +66,7 @@ const getTourSteps = (role: DemoRole): TourStep[] => {
       {
         id: 'billing',
         title: 'Billing is external by design',
-        description: 'Operational data stays tamper-proof. Stripe manages billing; RiskMate governs operations. This separation protects you.',
+        description: 'Operational data stays tamper-proof. Stripe manages billing; Riskmate governs operations. This separation protects you.',
         target: '[data-tour="billing"]',
         position: 'top',
       },
@@ -113,7 +113,7 @@ const getTourSteps = (role: DemoRole): TourStep[] => {
     {
       id: 'billing',
       title: 'Billing is external by design',
-      description: 'Operational data stays tamper-proof. Stripe manages billing; RiskMate governs operations. This separation protects you.',
+      description: 'Operational data stays tamper-proof. Stripe manages billing; Riskmate governs operations. This separation protects you.',
       target: '[data-tour="billing"]',
       position: 'top',
     },
@@ -165,7 +165,7 @@ function DemoContent() {
         {/* Header with Enhanced Copy */}
         <div className="mb-8">
           <div className="mb-6">
-            <h1 className={`${typography.h1} mb-3`}>RiskMate Interactive Demo</h1>
+            <h1 className={`${typography.h1} mb-3`}>Riskmate Interactive Demo</h1>
             <p className="text-white text-lg mb-2">
               See how real risk governance actually works — live, role by role
             </p>
@@ -206,7 +206,7 @@ function DemoContent() {
               <div className="flex items-start justify-between mb-4">
                 <div>
                   <h3 className="font-semibold text-white mb-1">What do you run?</h3>
-                  <p className="text-sm text-white/60">Choose your operation type to see RiskMate configured for your needs</p>
+                  <p className="text-sm text-white/60">Choose your operation type to see Riskmate configured for your needs</p>
                 </div>
                 <button
                   onClick={() => {
@@ -313,7 +313,7 @@ function DemoContent() {
                 ✕
               </button>
               <h2 className="text-2xl font-semibold text-white mb-4">
-                You&apos;ve just seen RiskMate enforce risk — not just track it
+                You&apos;ve just seen Riskmate enforce risk — not just track it
               </h2>
               <div className="space-y-4 text-sm text-white/80 mb-6">
                 <p>
@@ -326,7 +326,7 @@ function DemoContent() {
                   <li>Billing, access, and security were intentionally separated</li>
                 </ul>
                 <p className="text-white/90 font-medium">
-                  That&apos;s how RiskMate protects teams during audits, incidents, and insurance reviews.
+                  That&apos;s how Riskmate protects teams during audits, incidents, and insurance reviews.
                 </p>
               </div>
               <div className="mb-4">

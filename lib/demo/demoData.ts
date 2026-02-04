@@ -47,7 +47,7 @@ export const operationPresets: Record<OperationType, OperationPreset> = {
     description: 'Fire Protection, Sprinklers, Inspections',
     role: 'safety_lead',
     scenario: 'audit_review',
-    message: 'If it isn&apos;t logged, it didn&apos;t happen. RiskMate makes it defensible.',
+    message: 'If it isn&apos;t logged, it didn&apos;t happen. Riskmate makes it defensible.',
   },
   infrastructure_heavy_civil: {
     type: 'infrastructure_heavy_civil',

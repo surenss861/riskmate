@@ -11,12 +11,12 @@ interface Message {
 }
 
 const FAQ_ANSWERS: Record<string, string> = {
-  'report': 'To generate a report, go to any job detail page and click "Generate PDF Report". RiskMate will create a professional, branded PDF with all hazards, mitigations, photos, and compliance information in about 30 seconds.',
-  'risk score': 'Risk scores are calculated automatically based on the hazards you identify. Each hazard has a weight (e.g., height work = 15 points, live electrical = 20 points). The score ranges from 0-100, with higher scores indicating higher risk. RiskMate also generates a mitigation checklist based on your risk factors.',
+  'report': 'To generate a report, go to any job detail page and click "Generate PDF Report". Riskmate will create a professional, branded PDF with all hazards, mitigations, photos, and compliance information in about 30 seconds.',
+  'risk score': 'Risk scores are calculated automatically based on the hazards you identify. Each hazard has a weight (e.g., height work = 15 points, live electrical = 20 points). The score ranges from 0-100, with higher scores indicating higher risk. Riskmate also generates a mitigation checklist based on your risk factors.',
   'seats': 'Starter plan includes 1 seat, Pro plan includes 5 seats, and Business plan includes unlimited seats. Each seat is a team member who can access your organization\'s jobs and documentation.',
-  'tax': 'In most jurisdictions, business software and tools used for operational purposes, including safety and compliance, are tax-deductible. RiskMate is a business expense that can typically be deducted. Please consult with your accountant for specific advice regarding your business.',
-  'pricing': 'RiskMate has three plans: Starter ($29/mo, 3 jobs/month, 1 seat), Pro ($59/mo, unlimited jobs, 5 seats), and Business ($129/mo, unlimited jobs, unlimited seats, plus Permit Pack Generator and advanced features).',
-  'trial': 'Yes! You can start with a free trial. The Starter plan includes 3 jobs per month, so you can test RiskMate with real jobs before committing to a paid plan.',
+  'tax': 'In most jurisdictions, business software and tools used for operational purposes, including safety and compliance, are tax-deductible. Riskmate is a business expense that can typically be deducted. Please consult with your accountant for specific advice regarding your business.',
+  'pricing': 'Riskmate has three plans: Starter ($29/mo, 3 jobs/month, 1 seat), Pro ($59/mo, unlimited jobs, 5 seats), and Business ($129/mo, unlimited jobs, unlimited seats, plus Permit Pack Generator and advanced features).',
+  'trial': 'Yes! You can start with a free trial. The Starter plan includes 3 jobs per month, so you can test Riskmate with real jobs before committing to a paid plan.',
   'mobile': 'Mobile apps for iOS and Android are currently in development (Q1 2025). The web version works great on mobile browsers, and we\'re building native apps with offline mode and GPS metadata.',
 }
 
@@ -32,7 +32,7 @@ export function ChatWidget() {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
-      text: 'Hi! I\'m here to help. Ask me anything about RiskMate, or choose a question below.',
+      text: 'Hi! I\'m here to help. Ask me anything about Riskmate, or choose a question below.',
       sender: 'bot',
       timestamp: new Date(),
     },
@@ -139,7 +139,7 @@ export function ChatWidget() {
             {/* Header */}
             <div className="px-4 py-3 bg-[#F97316] flex items-center justify-between">
               <div>
-                <h3 className="font-semibold text-black">RiskMate Support</h3>
+                <h3 className="font-semibold text-black">Riskmate Support</h3>
                 <p className="text-xs text-black/70">We&apos;re here to help</p>
               </div>
               <button

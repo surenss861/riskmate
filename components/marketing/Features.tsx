@@ -57,7 +57,7 @@ export function Features() {
             Everything you need for compliance
           </h2>
           <p className="text-lg" style={{ color: colors.gray600 }}>
-            RiskMate combines risk assessment, mitigation tracking, and reporting into one streamlined platform.
+            Riskmate combines risk assessment, mitigation tracking, and reporting into one streamlined platform.
           </p>
         </motion.div>
 

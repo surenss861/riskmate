@@ -26,12 +26,12 @@ export function OnboardingWizard({ isOpen, onComplete, onSkip }: OnboardingWizar
   const steps: OnboardingStep[] = [
     {
       id: 'welcome',
-      title: 'Welcome to RiskMate',
+      title: 'Welcome to Riskmate',
       description: 'Let\'s get you set up in just a few steps',
       component: (
         <div className="space-y-4">
           <p className="text-white/70">
-            RiskMate helps you document every job with hazard checklists, risk assessments, photos, and signatures.
+            Riskmate helps you document every job with hazard checklists, risk assessments, photos, and signatures.
           </p>
           <p className="text-white/70">
             Everything gets timestamped and saved automatically, ready for clients, insurers, and auditors.
@@ -98,7 +98,7 @@ export function OnboardingWizard({ isOpen, onComplete, onSkip }: OnboardingWizar
     {
       id: 'first-job',
       title: 'Create Your First Job',
-      description: 'Let\'s create a job to see how RiskMate works',
+      description: 'Let\'s create a job to see how Riskmate works',
       component: (
         <div className="space-y-4">
           <p className="text-white/70">

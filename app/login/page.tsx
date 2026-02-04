@@ -50,7 +50,7 @@ export default function LoginPage() {
           </div>
 
           <h1 className="text-3xl font-bold mb-2 font-display">Welcome Back</h1>
-          <p className="text-[#A1A1A1] mb-8">Sign in to your RiskMate account</p>
+          <p className="text-[#A1A1A1] mb-8">Sign in to your Riskmate account</p>
 
           {error && (
             <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">

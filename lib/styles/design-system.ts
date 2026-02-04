@@ -1,5 +1,5 @@
 /**
- * Global Design System for RiskMate
+ * Global Design System for Riskmate
  * 
  * This file defines standardized styles for cards, buttons, spacing, and other UI elements
  * to ensure consistency across the entire application.

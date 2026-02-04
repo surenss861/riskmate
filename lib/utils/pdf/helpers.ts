@@ -38,7 +38,7 @@ export function drawHeaderFooterAndWatermark(
     .lineTo(width - marginX, footerY)
     .stroke();
 
-  // Footer: "RiskMate" (left) - explicit x, y with large width and no line breaks
+  // Footer: "Riskmate" (left) - explicit x, y with large width and no line breaks
   doc
     .fillColor(STYLES.colors.accent)
     .fontSize(10)

@@ -1,7 +1,7 @@
 /**
  * Service Worker for Offline Support
  * 
- * Basic offline caching for RiskMate PWA functionality.
+ * Basic offline caching for Riskmate PWA functionality.
  */
 
 const CACHE_NAME = 'riskmate-v2' // Bump version to clear old cache

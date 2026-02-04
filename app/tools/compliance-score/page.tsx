@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import RiskMateLogo from '@/components/RiskMateLogo'
+import RiskmateLogo from '@/components/RiskmateLogo'
 import Link from 'next/link'
 
 export default function ComplianceScorePage() {
@@ -87,7 +87,7 @@ export default function ComplianceScorePage() {
       <header className="border-b border-white/10 px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <Link href="/">
-            <RiskMateLogo size="md" showText />
+            <RiskmateLogo size="md" showText />
           </Link>
           <div className="flex items-center gap-4">
             <button
@@ -178,26 +178,26 @@ export default function ComplianceScorePage() {
                   <h3 className="font-semibold mb-2 text-white">What This Means:</h3>
                   {score >= 80 ? (
                     <p className="text-sm text-white/70">
-                      <strong className="text-green-400">Excellent:</strong> Your company has strong safety compliance practices. RiskMate can help you maintain this level and streamline documentation.
+                      <strong className="text-green-400">Excellent:</strong> Your company has strong safety compliance practices. Riskmate can help you maintain this level and streamline documentation.
                     </p>
                   ) : score >= 60 ? (
                     <p className="text-sm text-white/70">
-                      <strong className="text-yellow-400">Good:</strong> You&apos;re on the right track, but there&apos;s room for improvement. RiskMate can help fill the gaps in documentation and tracking.
+                      <strong className="text-yellow-400">Good:</strong> You&apos;re on the right track, but there&apos;s room for improvement. Riskmate can help fill the gaps in documentation and tracking.
                     </p>
                   ) : score >= 40 ? (
                     <p className="text-sm text-white/70">
-                      <strong className="text-orange-400">Needs Improvement:</strong> Your compliance practices need work. RiskMate can help you establish proper documentation and safety tracking.
+                      <strong className="text-orange-400">Needs Improvement:</strong> Your compliance practices need work. Riskmate can help you establish proper documentation and safety tracking.
                     </p>
                   ) : (
                     <p className="text-sm text-white/70">
-                      <strong className="text-red-400">Critical:</strong> Your company is at significant risk. RiskMate can help you build a proper safety compliance system from the ground up.
+                      <strong className="text-red-400">Critical:</strong> Your company is at significant risk. Riskmate can help you build a proper safety compliance system from the ground up.
                     </p>
                   )}
                 </div>
 
                 <div className="p-4 bg-[#F97316]/10 rounded-lg border border-[#F97316]/20">
                   <p className="text-sm text-white/80">
-                    <strong>RiskMate helps you:</strong> Document hazards automatically, track mitigations, maintain photo evidence, generate audit-ready reports, and build a complete compliance trail.
+                    <strong>Riskmate helps you:</strong> Document hazards automatically, track mitigations, maintain photo evidence, generate audit-ready reports, and build a complete compliance trail.
                   </p>
                 </div>
               </div>
@@ -214,7 +214,7 @@ export default function ComplianceScorePage() {
         >
           <h2 className="text-3xl font-bold mb-4 font-display">Improve Your Compliance Score</h2>
           <p className="text-[#A1A1A1] mb-8 max-w-2xl mx-auto">
-            RiskMate automates safety documentation, making it easy to maintain high compliance scores and pass audits.
+            Riskmate automates safety documentation, making it easy to maintain high compliance scores and pass audits.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <button

@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import RiskMateLogo from '@/components/RiskMateLogo'
+import RiskmateLogo from '@/components/RiskmateLogo'
 import Link from 'next/link'
 
 export default function PenAndPaperComparisonPage() {
@@ -14,7 +14,7 @@ export default function PenAndPaperComparisonPage() {
       <header className="border-b border-white/10 px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <Link href="/">
-            <RiskMateLogo size="md" showText />
+            <RiskmateLogo size="md" showText />
           </Link>
           <div className="flex items-center gap-4">
             <button
@@ -39,10 +39,10 @@ export default function PenAndPaperComparisonPage() {
             Comparison
           </div>
           <h1 className="text-5xl font-bold mb-6 font-display">
-            RiskMate vs Pen & Paper
+            Riskmate vs Pen & Paper
           </h1>
           <p className="text-xl text-[#A1A1A1] max-w-3xl mx-auto">
-            Stop losing paperwork, scrambling for photos, and spending hours creating reports. Here&apos;s why contractors switch from pen & paper to RiskMate.
+            Stop losing paperwork, scrambling for photos, and spending hours creating reports. Here&apos;s why contractors switch from pen & paper to Riskmate.
           </p>
         </motion.div>
 
@@ -84,7 +84,7 @@ export default function PenAndPaperComparisonPage() {
           transition={{ duration: 0.6 }}
           className="mb-16"
         >
-          <h2 className="text-3xl font-bold mb-6">Pen & Paper vs RiskMate</h2>
+          <h2 className="text-3xl font-bold mb-6">Pen & Paper vs Riskmate</h2>
           <div className="space-y-6">
             {[
               {
@@ -131,7 +131,7 @@ export default function PenAndPaperComparisonPage() {
                     <p className="text-sm text-white/60">{item.paper}</p>
                   </div>
                   <div>
-                    <div className="text-sm text-green-400 font-medium mb-2">RiskMate</div>
+                    <div className="text-sm text-green-400 font-medium mb-2">Riskmate</div>
                     <p className="text-sm text-white/80">{item.riskmate}</p>
                   </div>
                 </div>
@@ -173,7 +173,7 @@ export default function PenAndPaperComparisonPage() {
                 </ul>
               </div>
               <div>
-                <h3 className="text-xl font-semibold mb-4 text-[#F97316]">RiskMate Cost</h3>
+                <h3 className="text-xl font-semibold mb-4 text-[#F97316]">Riskmate Cost</h3>
                 <ul className="space-y-3 text-white/80">
                   <li className="flex items-start gap-3">
                     <span className="text-green-400 mt-1">✓</span>
@@ -207,7 +207,7 @@ export default function PenAndPaperComparisonPage() {
         >
           <h2 className="text-3xl font-bold mb-4 font-display">Ready to leave pen & paper behind?</h2>
           <p className="text-[#A1A1A1] mb-8 max-w-2xl mx-auto">
-            Join contractors who switched from paper forms to RiskMate and never looked back.
+            Join contractors who switched from paper forms to Riskmate and never looked back.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <button

@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import RiskMateLogo from '@/components/RiskMateLogo'
+import RiskmateLogo from '@/components/RiskmateLogo'
 import Link from 'next/link'
 
 const INCIDENT_TYPES = [
@@ -35,7 +35,7 @@ export default function IncidentCostPage() {
       <header className="border-b border-white/10 px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <Link href="/">
-            <RiskMateLogo size="md" showText />
+            <RiskmateLogo size="md" showText />
           </Link>
           <div className="flex items-center gap-4">
             <button
@@ -196,7 +196,7 @@ export default function IncidentCostPage() {
 
             <div className="p-4 bg-[#F97316]/10 rounded-lg border border-[#F97316]/20">
               <p className="text-sm text-white/80">
-                <strong>Prevent incidents with RiskMate:</strong> Proper hazard documentation, mitigation tracking, and safety protocols reduce the likelihood of workplace incidents by 40-60%.
+                <strong>Prevent incidents with Riskmate:</strong> Proper hazard documentation, mitigation tracking, and safety protocols reduce the likelihood of workplace incidents by 40-60%.
               </p>
             </div>
           </motion.div>
@@ -211,7 +211,7 @@ export default function IncidentCostPage() {
         >
           <h2 className="text-3xl font-bold mb-4 font-display">Prevent Incidents Before They Happen</h2>
           <p className="text-[#A1A1A1] mb-8 max-w-2xl mx-auto">
-            RiskMate helps you identify and mitigate hazards before they become incidents. A single prevented incident can save you tens of thousands of dollars.
+            Riskmate helps you identify and mitigate hazards before they become incidents. A single prevented incident can save you tens of thousands of dollars.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <button

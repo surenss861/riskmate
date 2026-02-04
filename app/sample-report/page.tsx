@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import RiskMateLogo from '@/components/RiskMateLogo'
+import RiskmateLogo from '@/components/RiskmateLogo'
 import Link from 'next/link'
 
 export default function SampleReportPage() {
@@ -14,7 +14,7 @@ export default function SampleReportPage() {
       <header className="border-b border-white/10 px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <Link href="/">
-            <RiskMateLogo size="md" showText />
+            <RiskmateLogo size="md" showText />
           </Link>
           <div className="flex items-center gap-4">
             <button
@@ -49,7 +49,7 @@ export default function SampleReportPage() {
           <div className="flex items-center justify-between mb-6">
             <div>
               <h2 className="text-2xl font-semibold mb-2">Electrical Installation - Commercial Building</h2>
-              <p className="text-[#A1A1A1]">Sample job report generated with RiskMate</p>
+              <p className="text-[#A1A1A1]">Sample job report generated with Riskmate</p>
             </div>
             <div className="text-right">
               <div className="text-4xl font-bold text-[#F97316] mb-1">72</div>
@@ -143,7 +143,7 @@ export default function SampleReportPage() {
               Download Sample PDF (No email required)
             </button>
             <p className="text-center text-sm text-[#A1A1A1] mt-4">
-              This is a real example of a RiskMate-generated report. No signup required.
+              This is a real example of a Riskmate-generated report. No signup required.
             </p>
           </div>
         </motion.div>

@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import RiskMateLogo from '@/components/RiskMateLogo'
+import RiskmateLogo from '@/components/RiskmateLogo'
 import Link from 'next/link'
 import Image from 'next/image'
 
@@ -15,7 +15,7 @@ export default function ElectricalCaseStudyPage() {
       <header className="border-b border-white/10 px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <Link href="/">
-            <RiskMateLogo size="md" showText />
+            <RiskmateLogo size="md" showText />
           </Link>
           <div className="flex items-center gap-4">
             <button
@@ -46,10 +46,10 @@ export default function ElectricalCaseStudyPage() {
             Electrical Contractor Case Study
           </div>
           <h1 className="text-5xl font-bold mb-6 font-display">
-            How an Electrical Contractor Uses RiskMate for Commercial Installations
+            How an Electrical Contractor Uses Riskmate for Commercial Installations
           </h1>
           <p className="text-xl text-[#A1A1A1] max-w-3xl mx-auto">
-            See how James, an electrical contractor in Toronto, documents high-risk commercial electrical work with RiskMate—from hazard identification to client-ready reports.
+            See how James, an electrical contractor in Toronto, documents high-risk commercial electrical work with Riskmate—from hazard identification to client-ready reports.
           </p>
         </motion.div>
 
@@ -64,7 +64,7 @@ export default function ElectricalCaseStudyPage() {
           <h2 className="text-3xl font-bold mb-6">The Challenge</h2>
           <div className="bg-[#121212] rounded-xl border border-white/10 p-8">
             <p className="text-lg text-white/80 leading-relaxed mb-4">
-              James runs a 5-person electrical contracting company specializing in commercial installations. Before RiskMate, he was:
+              James runs a 5-person electrical contracting company specializing in commercial installations. Before Riskmate, he was:
             </p>
             <ul className="space-y-3 text-white/70">
               <li className="flex items-start gap-3">
@@ -194,12 +194,12 @@ export default function ElectricalCaseStudyPage() {
           transition={{ duration: 0.6 }}
           className="mb-16"
         >
-          <h2 className="text-3xl font-bold mb-6">How RiskMate Solved It</h2>
+          <h2 className="text-3xl font-bold mb-6">How Riskmate Solved It</h2>
           <div className="grid md:grid-cols-3 gap-6">
             {[
               {
                 step: 'Before the job',
-                action: 'James completes the hazard checklist on his phone. RiskMate automatically calculates a risk score of 78 (HIGH RISK) and generates 12 required mitigations.',
+                action: 'James completes the hazard checklist on his phone. Riskmate automatically calculates a risk score of 78 (HIGH RISK) and generates 12 required mitigations.',
                 time: '5 minutes',
               },
               {
@@ -299,7 +299,7 @@ export default function ElectricalCaseStudyPage() {
           <h2 className="text-3xl font-bold mb-6">Sample PDF Report</h2>
           <div className="bg-[#121212] rounded-xl border border-white/10 p-8">
             <p className="text-white/70 mb-6">
-              Here&apos;s what the client receives—a professional, audit-ready PDF report generated automatically by RiskMate.
+              Here&apos;s what the client receives—a professional, audit-ready PDF report generated automatically by Riskmate.
             </p>
             <div className="bg-black/20 rounded-lg p-6 border border-white/5 mb-6">
               <div className="aspect-[8.5/11] bg-white/5 rounded border border-white/10 flex items-center justify-center">
@@ -334,7 +334,7 @@ export default function ElectricalCaseStudyPage() {
         >
           <h2 className="text-3xl font-bold mb-4 font-display">Ready to document your electrical work like this?</h2>
           <p className="text-[#A1A1A1] mb-8 max-w-2xl mx-auto">
-            Join electrical contractors across Canada who use RiskMate to create professional, audit-ready safety documentation.
+            Join electrical contractors across Canada who use Riskmate to create professional, audit-ready safety documentation.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <button

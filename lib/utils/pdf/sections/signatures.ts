@@ -9,7 +9,7 @@ import type { JobData } from '../types';
  * Hybrid approach: Pages 2+ = legal/compliance style
  * 
  * Improvements:
- * - Add "Prepared by RiskMate" line
+ * - Add "Prepared by Riskmate" line
  * - Add Document ID / hash style line
  * - Put compliance paragraph into bordered callout block
  * - Keep signature rows aligned, less vertical sprawl

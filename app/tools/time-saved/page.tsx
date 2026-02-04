@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import RiskMateLogo from '@/components/RiskMateLogo'
+import RiskmateLogo from '@/components/RiskmateLogo'
 import Link from 'next/link'
 
 export default function TimeSavedPage() {
@@ -13,7 +13,7 @@ export default function TimeSavedPage() {
   const [hourlyRate, setHourlyRate] = useState(50)
 
   const timeSavedPerJob = useMemo(() => {
-    // RiskMate saves 40-60% of documentation time
+    // Riskmate saves 40-60% of documentation time
     // Using 50% as average
     return hoursPerJob * 0.5
   }, [hoursPerJob])
@@ -37,7 +37,7 @@ export default function TimeSavedPage() {
       <header className="border-b border-white/10 px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <Link href="/">
-            <RiskMateLogo size="md" showText />
+            <RiskmateLogo size="md" showText />
           </Link>
           <div className="flex items-center gap-4">
             <button
@@ -60,7 +60,7 @@ export default function TimeSavedPage() {
         >
           <h1 className="text-5xl font-bold mb-4 font-display">Time Saved Calculator</h1>
           <p className="text-xl text-[#A1A1A1] max-w-3xl mx-auto">
-            See how much time and money RiskMate saves you per job, per month, and per year. RiskMate reduces documentation time by 40-60%.
+            See how much time and money Riskmate saves you per job, per month, and per year. Riskmate reduces documentation time by 40-60%.
           </p>
         </motion.div>
 
@@ -117,7 +117,7 @@ export default function TimeSavedPage() {
 
             <div className="p-4 bg-[#F97316]/10 rounded-lg border border-[#F97316]/20">
               <p className="text-sm text-white/80">
-                <strong>RiskMate saves 40-60%</strong> of documentation time through automation, templates, and one-click PDF generation.
+                <strong>Riskmate saves 40-60%</strong> of documentation time through automation, templates, and one-click PDF generation.
               </p>
             </div>
           </motion.div>
@@ -172,7 +172,7 @@ export default function TimeSavedPage() {
 
             {/* ROI */}
             <div className="p-4 bg-black/20 rounded-lg border border-white/5">
-              <div className="text-sm text-white/70 mb-1">RiskMate Cost (Pro Plan)</div>
+              <div className="text-sm text-white/70 mb-1">Riskmate Cost (Pro Plan)</div>
               <div className="text-2xl font-bold text-white mb-2">$59/month</div>
               <div className="text-sm text-green-400 font-semibold">
                 ROI: {Math.round((monthlySavings.dollars / 59) * 100)}% — Pays for itself {Math.round(monthlySavings.dollars / 59)}x over
@@ -190,7 +190,7 @@ export default function TimeSavedPage() {
         >
           <h2 className="text-3xl font-bold mb-4 font-display">Start Saving Time Today</h2>
           <p className="text-[#A1A1A1] mb-8 max-w-2xl mx-auto">
-            RiskMate automates your safety documentation, saving you hours per job and thousands per year.
+            Riskmate automates your safety documentation, saving you hours per job and thousands per year.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <button

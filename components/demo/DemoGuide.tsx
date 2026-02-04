@@ -84,7 +84,7 @@ export function DemoGuide({ currentStep, onComplete }: DemoGuideProps) {
             </div>
             <h4 className="text-lg font-semibold text-white mb-2">Demo Complete</h4>
             <p className="text-sm text-white/60 mb-6">
-              You&apos;ve seen how RiskMate documents risk with complete audit trails.
+              You&apos;ve seen how Riskmate documents risk with complete audit trails.
             </p>
           </div>
           <div className="space-y-3">
@@ -192,7 +192,7 @@ export function DemoGuide({ currentStep, onComplete }: DemoGuideProps) {
       {/* Trust Footer */}
       <div className="mt-auto pt-6 border-t border-white/10 space-y-2">
         <p className="text-xs text-white/40 text-center leading-relaxed">
-          Demo mode simulates actions locally. Real RiskMate logs every action with timestamps and actor names.
+          Demo mode simulates actions locally. Real Riskmate logs every action with timestamps and actor names.
         </p>
         <p className="text-xs text-white/50 text-center leading-relaxed font-medium">
           This demo simulates the workflow. In production, these actions are saved, permissioned, and logged to an immutable audit trail.

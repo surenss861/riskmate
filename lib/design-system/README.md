@@ -1,4 +1,4 @@
-# RiskMate Design System
+# Riskmate Design System
 
 Shared design system for both marketing site and app UI.
 

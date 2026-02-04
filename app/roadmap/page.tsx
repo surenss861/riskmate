@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import RiskMateLogo from '@/components/RiskMateLogo'
+import RiskmateLogo from '@/components/RiskmateLogo'
 import Link from 'next/link'
 
 export default function RoadmapPage() {
@@ -18,13 +18,13 @@ export default function RoadmapPage() {
       },
       {
         title: 'Interactive Demo Sandbox',
-        description: 'Try RiskMate without signing up. Explore sample jobs, hazards, mitigations, and generate PDF previews.',
+        description: 'Try Riskmate without signing up. Explore sample jobs, hazards, mitigations, and generate PDF previews.',
         date: 'November 2024',
         category: 'Public',
       },
       {
         title: 'Case Study Pages',
-        description: 'Real examples from Electrical, Roofing, and HVAC contractors showing how they use RiskMate.',
+        description: 'Real examples from Electrical, Roofing, and HVAC contractors showing how they use Riskmate.',
         date: 'November 2024',
         category: 'Public',
       },
@@ -94,13 +94,13 @@ export default function RoadmapPage() {
       },
       {
         title: 'API Access',
-        description: 'Integrate RiskMate with your existing tools via REST API. Perfect for larger organizations.',
+        description: 'Integrate Riskmate with your existing tools via REST API. Perfect for larger organizations.',
         eta: 'Q2 2025',
         category: 'Business Plan',
       },
       {
         title: 'Multi-Language Support',
-        description: 'RiskMate in Spanish, French, and other languages for diverse teams.',
+        description: 'Riskmate in Spanish, French, and other languages for diverse teams.',
         eta: 'Q2 2025',
         category: 'All Plans',
       },
@@ -146,7 +146,7 @@ export default function RoadmapPage() {
       <header className="border-b border-white/10 px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <Link href="/">
-            <RiskMateLogo size="md" showText />
+            <RiskmateLogo size="md" showText />
           </Link>
           <div className="flex items-center gap-4">
             <button
@@ -169,7 +169,7 @@ export default function RoadmapPage() {
         >
           <h1 className="text-5xl font-bold mb-4 font-display">Feature Roadmap</h1>
           <p className="text-xl text-[#A1A1A1] max-w-3xl mx-auto">
-            See what we&apos;ve shipped, what we&apos;re building, and what&apos;s coming next. We&apos;re constantly improving RiskMate based on your feedback.
+            See what we&apos;ve shipped, what we&apos;re building, and what&apos;s coming next. We&apos;re constantly improving Riskmate based on your feedback.
           </p>
         </motion.div>
 

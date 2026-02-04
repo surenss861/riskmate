@@ -1,5 +1,5 @@
 /**
- * RiskMate Design System Tokens
+ * Riskmate Design System Tokens
  * 
  * Single source of truth for both marketing site and app UI.
  * Two "skins" use the same tokens but different application rules.

@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import RiskMateLogo from '@/components/RiskMateLogo'
+import RiskmateLogo from '@/components/RiskmateLogo'
 import Link from 'next/link'
 
 export default function SafetyCultureComparisonPage() {
@@ -14,7 +14,7 @@ export default function SafetyCultureComparisonPage() {
       <header className="border-b border-white/10 px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <Link href="/">
-            <RiskMateLogo size="md" showText />
+            <RiskmateLogo size="md" showText />
           </Link>
           <div className="flex items-center gap-4">
             <button
@@ -39,10 +39,10 @@ export default function SafetyCultureComparisonPage() {
             Comparison
           </div>
           <h1 className="text-5xl font-bold mb-6 font-display">
-            RiskMate vs SafetyCulture
+            Riskmate vs SafetyCulture
           </h1>
           <p className="text-xl text-[#A1A1A1] max-w-3xl mx-auto">
-            Why contractors choose RiskMate over SafetyCulture for job-specific safety documentation and compliance reporting.
+            Why contractors choose Riskmate over SafetyCulture for job-specific safety documentation and compliance reporting.
           </p>
         </motion.div>
 
@@ -59,7 +59,7 @@ export default function SafetyCultureComparisonPage() {
               <thead>
                 <tr className="border-b border-white/10">
                   <th className="pb-4 pr-8 font-semibold">Feature</th>
-                  <th className="pb-4 px-8 font-semibold text-center">RiskMate</th>
+                  <th className="pb-4 px-8 font-semibold text-center">Riskmate</th>
                   <th className="pb-4 px-8 font-semibold text-center">SafetyCulture</th>
                 </tr>
               </thead>
@@ -87,7 +87,7 @@ export default function SafetyCultureComparisonPage() {
           </div>
         </motion.section>
 
-        {/* Why RiskMate */}
+        {/* Why Riskmate */}
         <motion.section
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -95,32 +95,32 @@ export default function SafetyCultureComparisonPage() {
           transition={{ duration: 0.6 }}
           className="mb-16"
         >
-          <h2 className="text-3xl font-bold mb-6">Why Contractors Choose RiskMate</h2>
+          <h2 className="text-3xl font-bold mb-6">Why Contractors Choose Riskmate</h2>
           <div className="space-y-6">
             {[
               {
                 title: 'Built Specifically for Service Contractors',
-                description: 'RiskMate is purpose-built for electrical, roofing, HVAC, and renovation contractors. SafetyCulture is a generic platform trying to serve everyone—from factories to offices to construction sites. RiskMate understands your workflow.',
+                description: 'Riskmate is purpose-built for electrical, roofing, HVAC, and renovation contractors. SafetyCulture is a generic platform trying to serve everyone—from factories to offices to construction sites. Riskmate understands your workflow.',
               },
               {
                 title: 'Job-Centric, Not Checklist-Centric',
-                description: 'RiskMate organizes everything around jobs (before, during, after). SafetyCulture is checklist-focused, which doesn\'t match how contractors actually work. You think in jobs, not generic safety audits.',
+                description: 'Riskmate organizes everything around jobs (before, during, after). SafetyCulture is checklist-focused, which doesn\'t match how contractors actually work. You think in jobs, not generic safety audits.',
               },
               {
                 title: 'Automatic Risk Scoring',
-                description: 'RiskMate automatically calculates risk scores based on hazards you identify. SafetyCulture requires manual risk assessment. RiskMate saves time and ensures consistency.',
+                description: 'Riskmate automatically calculates risk scores based on hazards you identify. SafetyCulture requires manual risk assessment. Riskmate saves time and ensures consistency.',
               },
               {
                 title: 'Professional PDF Reports',
-                description: 'RiskMate generates branded, audit-ready PDF reports in one click. SafetyCulture reports are basic and require customization. Your clients and insurers need professional documentation.',
+                description: 'Riskmate generates branded, audit-ready PDF reports in one click. SafetyCulture reports are basic and require customization. Your clients and insurers need professional documentation.',
               },
               {
                 title: 'Better Pricing for Small Teams',
-                description: 'RiskMate starts at $29/month for your business (not per user). SafetyCulture charges $24-99 per user per month. For a 5-person team, that\'s $120-495/month vs RiskMate\'s $59/month (Pro plan).',
+                description: 'Riskmate starts at $29/month for your business (not per user). SafetyCulture charges $24-99 per user per month. For a 5-person team, that\'s $120-495/month vs Riskmate\'s $59/month (Pro plan).',
               },
               {
                 title: 'Faster Setup',
-                description: 'RiskMate works out of the box. SafetyCulture requires hours of configuration, custom form building, and workflow setup. RiskMate gets you documenting jobs in 5 minutes.',
+                description: 'Riskmate works out of the box. SafetyCulture requires hours of configuration, custom form building, and workflow setup. Riskmate gets you documenting jobs in 5 minutes.',
               },
             ].map((item, index) => (
               <div key={index} className="p-6 bg-[#121212] rounded-xl border border-white/10">
@@ -142,7 +142,7 @@ export default function SafetyCultureComparisonPage() {
           <h2 className="text-3xl font-bold mb-6">When to Use Each</h2>
           <div className="grid md:grid-cols-2 gap-6">
             <div className="p-6 bg-gradient-to-br from-[#F97316]/10 to-transparent rounded-xl border border-[#F97316]/20">
-              <h3 className="text-xl font-semibold mb-4 text-[#F97316]">Choose RiskMate If:</h3>
+              <h3 className="text-xl font-semibold mb-4 text-[#F97316]">Choose Riskmate If:</h3>
               <ul className="space-y-3 text-white/80">
                 <li className="flex items-start gap-3">
                   <svg className="w-6 h-6 text-green-400 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -212,9 +212,9 @@ export default function SafetyCultureComparisonPage() {
           transition={{ duration: 0.6 }}
           className="text-center bg-[#121212] rounded-xl border border-white/10 p-12"
         >
-          <h2 className="text-3xl font-bold mb-4 font-display">Ready to try RiskMate?</h2>
+          <h2 className="text-3xl font-bold mb-4 font-display">Ready to try Riskmate?</h2>
           <p className="text-[#A1A1A1] mb-8 max-w-2xl mx-auto">
-            See why contractors choose RiskMate over SafetyCulture for job-specific safety documentation.
+            See why contractors choose Riskmate over SafetyCulture for job-specific safety documentation.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <button

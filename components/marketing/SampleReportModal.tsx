@@ -83,7 +83,7 @@ export function SampleReportModal({ isOpen, onClose }: SampleReportModalProps) {
                         Executive Summary
                       </h2>
                       <p style={{ color: colors.gray600 }}>
-                        This report demonstrates RiskMate&apos;s professional PDF generation. The actual report includes
+                        This report demonstrates Riskmate&apos;s professional PDF generation. The actual report includes
                         detailed hazard checklists, risk scores, mitigation tracking, photo evidence, and compliance signatures.
                       </p>
                     </div>

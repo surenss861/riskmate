@@ -505,7 +505,7 @@ export function DemoJobDetail({ jobId, currentStep, onStepComplete }: DemoJobDet
           </div>
           <h3 className={`${typography.h2} ${spacing.normal}`}>Demo Complete</h3>
           <p className="text-sm text-white/60 mb-6">
-            You&apos;ve seen how RiskMate documents risk with complete audit trails.
+            You&apos;ve seen how Riskmate documents risk with complete audit trails.
           </p>
         </motion.div>
       )}

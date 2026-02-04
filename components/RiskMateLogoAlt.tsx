@@ -2,7 +2,7 @@
 
 import { motion } from 'framer-motion'
 
-interface RiskMateLogoAltProps {
+interface RiskmateLogoAltProps {
   width?: number
   height?: number
   showText?: boolean
@@ -11,16 +11,16 @@ interface RiskMateLogoAltProps {
 }
 
 /**
- * Alternative logo designs for RiskMate
+ * Alternative logo designs for Riskmate
  * Variant options: shield (default), badge, minimal
  */
-export default function RiskMateLogoAlt({
+export default function RiskmateLogoAlt({
   width = 28,
   height = 28,
   showText = false,
   className = '',
   variant = 'shield',
-}: RiskMateLogoAltProps) {
+}: RiskmateLogoAltProps) {
   const ShieldLogo = () => (
     <svg
       width={width}
@@ -143,7 +143,7 @@ export default function RiskMateLogoAlt({
       <LogoComponent />
       {showText && (
         <span className="text-white/90 font-semibold tracking-tight text-sm">
-          RiskMate
+          Riskmate
         </span>
       )}
     </div>

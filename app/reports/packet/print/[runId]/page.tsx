@@ -343,7 +343,7 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
     }
 
     const logoUrl = organization?.logo_url || null
-    const organizationName = organization?.name || 'RiskMate'
+    const organizationName = organization?.name || 'Riskmate'
     const isDraft = reportRun.status === 'draft' || reportRun.status === 'pending'
 
     if (debugMode) {
@@ -375,7 +375,7 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
     // Normalize all string values before rendering (prevent .replace crashes)
     const safeJobId = String(packetData?.meta?.jobId || reportRun.job_id || '')
     const safeRunId = String(runId || '')
-    const safeOrgName = String(organizationName || 'RiskMate')
+    const safeOrgName = String(organizationName || 'Riskmate')
     const safeGeneratedAt = reportRun.generated_at || packetData?.meta?.generatedAt || new Date().toISOString()
     
     // Generate verification URL and QR code

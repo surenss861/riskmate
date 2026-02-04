@@ -21,7 +21,7 @@ interface PrintPageProps {
  * Print-friendly report page
  * 
  * This page renders the report as HTML optimized for PDF export.
- * Uses RiskMate design tokens and proper CSS layering for watermark.
+ * Uses Riskmate design tokens and proper CSS layering for watermark.
  * 
  * Security: Uses signed token in URL for access (not relying on cookies in headless browser)
  */
@@ -250,7 +250,7 @@ export default async function PrintReportPage({ params, searchParams }: PrintPag
             {logoUrl && (
               <img src={logoUrl} alt="Logo" className="cover-logo" />
             )}
-            <div className="cover-brand">RiskMate</div>
+            <div className="cover-brand">Riskmate</div>
           </div>
 
           <h1 className="cover-title">Risk Snapshot Report</h1>
@@ -494,14 +494,14 @@ export default async function PrintReportPage({ params, searchParams }: PrintPag
           <div className="compliance-callout">
             <h3 className="callout-title">Compliance Statement</h3>
             <p className="callout-text">
-              This report was generated through RiskMate and includes all safety, hazard, and control
+              This report was generated through Riskmate and includes all safety, hazard, and control
               documentation submitted by the assigned crew. All data is timestamped and stored securely.
               This documentation serves as evidence of compliance with safety protocols and regulatory requirements.
             </p>
           </div>
 
           <div className="document-meta">
-            <div>Prepared by RiskMate</div>
+            <div>Prepared by Riskmate</div>
             {reportRun && (
               <>
                 <div>Report Run ID: {reportRun.id.substring(0, 8).toUpperCase()}</div>
@@ -572,7 +572,7 @@ export default async function PrintReportPage({ params, searchParams }: PrintPag
   }
 }
 
-// Print styles with RiskMate branding, proper watermark layering, and CSS print rules
+// Print styles with Riskmate branding, proper watermark layering, and CSS print rules
 const printStyles = (colors: typeof import('@/lib/design-system/tokens').colors) => `
   @page {
     size: A4;
@@ -683,7 +683,7 @@ const printStyles = (colors: typeof import('@/lib/design-system/tokens').colors)
       align-items: unset !important;
       margin: 0 !important;
       padding: 40pt 16mm !important;
-      background: ${colors.black} !important; /* RiskMate black (#111111) */
+      background: ${colors.black} !important; /* Riskmate black (#111111) */
       color: ${colors.white};
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;

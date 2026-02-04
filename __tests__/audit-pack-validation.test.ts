@@ -224,7 +224,7 @@ describe('Audit Pack End-to-End Validation', () => {
     // Verify CSV counts
     const controlsFile = zip.file(`controls_${manifest.pack_id}.csv`)!
     const controlsContent = await controlsFile.async('string')
-    const controlsRows = controlsContent.split('\n').filter(line => line.trim() && !line.startsWith('RiskMate') && !line.startsWith('Export') && !line.startsWith('Generated') && !line.startsWith('Organization') && !line.startsWith('Time') && !line.startsWith('Work') && !line.startsWith('Total') && !line.startsWith('Completed') && !line.startsWith('Pending') && !line.startsWith('---') && !line.startsWith('Control ID'))
+    const controlsRows = controlsContent.split('\n').filter(line => line.trim() && !line.startsWith('Riskmate') && !line.startsWith('Export') && !line.startsWith('Generated') && !line.startsWith('Organization') && !line.startsWith('Time') && !line.startsWith('Work') && !line.startsWith('Total') && !line.startsWith('Completed') && !line.startsWith('Pending') && !line.startsWith('---') && !line.startsWith('Control ID'))
     // Subtract 1 for header row
     const actualControlsCount = Math.max(0, controlsRows.length - 1)
     
@@ -235,7 +235,7 @@ describe('Audit Pack End-to-End Validation', () => {
     // Verify attestations CSV counts
     const attestationsFile = zip.file(`attestations_${manifest.pack_id}.csv`)!
     const attestationsContent = await attestationsFile.async('string')
-    const attestationsRows = attestationsContent.split('\n').filter(line => line.trim() && !line.startsWith('RiskMate') && !line.startsWith('Export') && !line.startsWith('Generated') && !line.startsWith('Organization') && !line.startsWith('Time') && !line.startsWith('Work') && !line.startsWith('Total') && !line.startsWith('Signed') && !line.startsWith('Pending') && !line.startsWith('---') && !line.startsWith('Attestation ID'))
+    const attestationsRows = attestationsContent.split('\n').filter(line => line.trim() && !line.startsWith('Riskmate') && !line.startsWith('Export') && !line.startsWith('Generated') && !line.startsWith('Organization') && !line.startsWith('Time') && !line.startsWith('Work') && !line.startsWith('Total') && !line.startsWith('Signed') && !line.startsWith('Pending') && !line.startsWith('---') && !line.startsWith('Attestation ID'))
     const actualAttestationsCount = Math.max(0, attestationsRows.length - 1)
     
     expect(manifest.summary.total_attestations).toBeGreaterThanOrEqual(actualAttestationsCount - 1)

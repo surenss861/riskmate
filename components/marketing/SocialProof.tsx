@@ -12,7 +12,7 @@ import { colors } from '@/lib/design-system/tokens'
 export function SocialProof() {
   const testimonials = [
     {
-      quote: 'RiskMate cut my reporting time in half. Clients love the professional PDFs.',
+      quote: 'Riskmate cut my reporting time in half. Clients love the professional PDFs.',
       author: 'James L.',
       role: 'Electrical Contractor',
     },
@@ -42,7 +42,7 @@ export function SocialProof() {
             Built with real contractors
           </h2>
           <p className="text-lg" style={{ color: colors.gray600 }}>
-            RiskMate was built with feedback from dozens of electricians, roofers, HVAC technicians, and renovators during beta testing.
+            Riskmate was built with feedback from dozens of electricians, roofers, HVAC technicians, and renovators during beta testing.
           </p>
         </motion.div>
 

@@ -77,7 +77,7 @@ export function Changelog() {
         <div>
           <h3 className="text-lg font-semibold text-white">What&apos;s New</h3>
           <p className="text-xs text-white/50 mt-0.5">
-            Recent updates and improvements to RiskMate
+            Recent updates and improvements to Riskmate
           </p>
         </div>
         <button

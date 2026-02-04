@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import RiskMateLogo from '@/components/RiskMateLogo'
+import RiskmateLogo from '@/components/RiskmateLogo'
 import { ErrorModal } from '@/components/dashboard/ErrorModal'
 import { subscriptionsApi } from '@/lib/api'
 import { cardStyles, buttonStyles } from '@/lib/styles/design-system'
@@ -75,7 +75,7 @@ export default function PricingPage() {
       <header className="sticky top-0 z-20 border-b border-white/10 bg-black/40 backdrop-blur-2xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4 min-w-0">
           <div className="flex-shrink-0 min-w-0">
-            <RiskMateLogo size="md" showText />
+            <RiskmateLogo size="md" showText />
           </div>
           <div className="flex items-center gap-3 min-w-0 flex-wrap justify-end">
             <button
@@ -459,7 +459,7 @@ export default function PricingPage() {
               className="bg-white/5 border border-white/10 rounded-xl p-6"
             >
               <p className="text-white/80 mb-4 italic">
-                &quot;RiskMate cut my documentation time in half. Clients love the proof packs.&quot;
+                &quot;Riskmate cut my documentation time in half. Clients love the proof packs.&quot;
               </p>
               <p className="text-sm text-white/60">— James L., Electrical Contractor</p>
             </motion.div>
@@ -490,9 +490,9 @@ export default function PricingPage() {
 
         {/* ROI Calculator */}
         <div className="mb-16 bg-white/5 border border-white/10 rounded-2xl p-8">
-          <h2 className="text-3xl font-bold text-center mb-4">See How Much RiskMate Saves Your Business</h2>
+          <h2 className="text-3xl font-bold text-center mb-4">See How Much Riskmate Saves Your Business</h2>
           <p className="text-center text-white/60 mb-8">
-            RiskMate reduces job documentation time by 40–60% per job. Fewer safety mistakes = fewer client disputes.
+            Riskmate reduces job documentation time by 40–60% per job. Fewer safety mistakes = fewer client disputes.
           </p>
           <div className="max-w-2xl mx-auto space-y-6">
             <div>
@@ -536,7 +536,7 @@ export default function PricingPage() {
           <h2 className="text-3xl font-bold text-center mb-8">Frequently Asked Questions</h2>
           <div className="space-y-6">
             <div className="bg-white/5 border border-white/10 rounded-xl p-6">
-              <h3 className="text-lg font-semibold mb-2">Can I use RiskMate as a solo contractor?</h3>
+              <h3 className="text-lg font-semibold mb-2">Can I use Riskmate as a solo contractor?</h3>
               <p className="text-white/70">Absolutely! The Starter plan is perfect for solo contractors. You get 3 {terms.workRecord.plural.toLowerCase()} per month, automatic risk scoring, and branded proof packs—everything you need to document your work professionally.</p>
             </div>
             <div className="bg-white/5 border border-white/10 rounded-xl p-6">
@@ -553,7 +553,7 @@ export default function PricingPage() {
             </div>
             <div className="bg-white/5 border border-white/10 rounded-xl p-6">
               <h3 className="text-lg font-semibold mb-2">Is this tax-deductible?</h3>
-              <p className="text-white/70">Yes! RiskMate is a business expense and is tax-deductible for contractors. It&apos;s a software tool for safety documentation and compliance, which qualifies as a business expense in Canada and the US.</p>
+              <p className="text-white/70">Yes! Riskmate is a business expense and is tax-deductible for contractors. It&apos;s a software tool for safety documentation and compliance, which qualifies as a business expense in Canada and the US.</p>
             </div>
             <div className="bg-white/5 border border-white/10 rounded-xl p-6">
               <h3 className="text-lg font-semibold mb-2">Can I change plans later?</h3>
@@ -569,7 +569,7 @@ export default function PricingPage() {
             </div>
             <div className="bg-white/5 border border-white/10 rounded-xl p-6">
               <h3 className="text-lg font-semibold mb-2">Do you offer refunds?</h3>
-              <p className="text-white/70">We offer a satisfaction guarantee. If you&apos;re not happy with RiskMate within the first 30 days, contact us and we&apos;ll work with you to make it right or provide a refund.</p>
+              <p className="text-white/70">We offer a satisfaction guarantee. If you&apos;re not happy with Riskmate within the first 30 days, contact us and we&apos;ll work with you to make it right or provide a refund.</p>
             </div>
           </div>
         </div>

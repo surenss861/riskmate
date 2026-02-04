@@ -75,7 +75,7 @@ export function LegalModal({ open, version, updatedAt, onAccept }: LegalModalPro
 
             <div className="space-y-4 text-sm text-[#C5CADB]">
               <p>
-                To comply with OSHA, insurance, and customer requirements, RiskMate records
+                To comply with OSHA, insurance, and customer requirements, Riskmate records
                 that each user has accepted our Terms of Service and Privacy Policy. Please
                 review the agreement before continuing.
               </p>

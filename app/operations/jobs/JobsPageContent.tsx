@@ -835,7 +835,7 @@ export function JobsPageContentView(props: JobsPageContentProps) {
               </div>
             </div>
             <div className="text-white/25 text-center">
-              RiskMate maintains a continuous, immutable risk ledger for every job.
+              Riskmate maintains a continuous, immutable risk ledger for every job.
             </div>
             </div>
           </PageSection>

@@ -1,5 +1,5 @@
 /**
- * Caching layer for RiskMate using SWR
+ * Caching layer for Riskmate using SWR
  * Org-scoped cache keys with stale-while-revalidate pattern
  */
 

@@ -37,13 +37,13 @@ export default function PrivacyPage() {
           >
             <Image 
               src="/riskmatefinal.png" 
-              alt="RiskMate" 
+              alt="Riskmate" 
               width={28} 
               height={28}
               className="h-7 w-auto"
               priority
             />
-            <span className="text-white/90 font-medium tracking-wide text-sm">RiskMate</span>
+            <span className="text-white/90 font-medium tracking-wide text-sm">Riskmate</span>
           </motion.div>
           <div className="flex items-center gap-4">
             <button
@@ -68,7 +68,7 @@ export default function PrivacyPage() {
           <section>
             <h2 className="text-2xl font-semibold mb-4">1. Information We Collect</h2>
             <p className="text-[#A1A1A1] mb-4">
-              We collect information you provide directly to us and information automatically collected when you use RiskMate.
+              We collect information you provide directly to us and information automatically collected when you use Riskmate.
             </p>
             <ul className="list-disc list-inside space-y-2 text-[#A1A1A1] ml-4">
               <li><strong className="text-white">Account Information:</strong> Name, email address, and password when you create an account</li>
@@ -87,7 +87,7 @@ export default function PrivacyPage() {
               <li>Manage your account and provide customer support</li>
               <li>Process payments and manage subscriptions</li>
               <li>Send service-related notifications and updates</li>
-              <li>Improve RiskMate&apos;s features and user experience</li>
+              <li>Improve Riskmate&apos;s features and user experience</li>
               <li>Detect and prevent fraud or abuse</li>
               <li>Comply with legal obligations</li>
             </ul>
@@ -164,7 +164,7 @@ export default function PrivacyPage() {
           <section>
             <h2 className="text-2xl font-semibold mb-4">8. Children&apos;s Privacy</h2>
             <p className="text-[#A1A1A1]">
-              RiskMate is not intended for users under 18 years of age. We do not knowingly collect personal information from children.
+              Riskmate is not intended for users under 18 years of age. We do not knowingly collect personal information from children.
             </p>
           </section>
 
@@ -172,7 +172,7 @@ export default function PrivacyPage() {
             <h2 className="text-2xl font-semibold mb-4">9. Changes to This Policy</h2>
             <p className="text-[#A1A1A1]">
               We may update this Privacy Policy from time to time. We will notify you of changes by posting the new policy on this page 
-              and updating the &quot;Last updated&quot; date. Continued use of RiskMate after changes constitutes acceptance.
+              and updating the &quot;Last updated&quot; date. Continued use of Riskmate after changes constitutes acceptance.
             </p>
           </section>
 

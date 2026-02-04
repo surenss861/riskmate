@@ -52,7 +52,7 @@ export async function buildReportPDF(
         Title: 'Report', // TODO: Update with your report title
         Author: 'Riskmate',
         Subject: 'Report',
-        Creator: 'RiskMate Platform',
+        Creator: 'Riskmate Platform',
       },
     })
 
