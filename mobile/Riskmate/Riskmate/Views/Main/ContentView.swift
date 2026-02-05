@@ -67,6 +67,7 @@ struct ContentView: View {
                     }
                 }
             } else {
+                // ONLY unauthenticated entry: hero auth (AuthView = AuthHeroShell). No other login/signup view.
                 AuthView()
             }
         }
