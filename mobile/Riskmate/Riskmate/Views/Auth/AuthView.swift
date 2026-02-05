@@ -36,51 +36,58 @@ struct AuthView: View {
 
             VStack(spacing: 0) {
 
-                // HERO
-                VStack(alignment: .leading, spacing: 12) {
+                // HERO (Landing) — centered, web-level polish
+                VStack(spacing: 0) {
                     Spacer(minLength: 22)
 
-                    Text("Riskmate")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(RMTheme.Colors.accent)
-                        .tracking(0.4)
+                    VStack(spacing: 14) {
+                        Text("Riskmate")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(RMTheme.Colors.accent)
+                            .padding(.bottom, 6)
 
-                    Text("Audit-ready\nproof packs\nfrom everyday\nfield work")
-                        .font(.system(size: 40, weight: .bold, design: .serif))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [.white, .white.opacity(0.82)],
-                                startPoint: .top,
-                                endPoint: .bottom
+                        Text("Audit-ready\nproof packs\nfrom everyday\nfield work")
+                            .font(.system(size: 42, weight: .semibold, design: .serif))
+                            .tracking(-0.8)
+                            .lineSpacing(-6)
+                            .multilineTextAlignment(.center)
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [
+                                        Color.white,
+                                        Color.white.opacity(0.82)
+                                    ],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
                             )
-                        )
-                        .tracking(-0.8)
-                        .lineSpacing(-6)
-                        .shadow(color: .black.opacity(0.55), radius: 14, x: 0, y: 8)
+                            .shadow(color: .black.opacity(0.55), radius: 20, x: 0, y: 18)
 
-                    Text("Turn site activity into compliance you can defend — fast.")
-                        .font(.system(size: 15, weight: .regular))
-                        .foregroundColor(.white.opacity(0.62))
-                        .lineSpacing(2)
-                        .padding(.top, 2)
+                        Text("Turn site activity into compliance you can defend — fast.")
+                            .font(.system(size: 15, weight: .regular))
+                            .foregroundColor(Color.white.opacity(0.62))
+                            .multilineTextAlignment(.center)
+                            .lineSpacing(2)
+                            .padding(.top, 2)
 
-                    HStack(spacing: 8) {
-                        Circle().fill(.white.opacity(0.85)).frame(width: 6, height: 6)
-                        Text("Ledger Contract v1.0 • Frozen")
-                            .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                            .foregroundColor(.white.opacity(0.88))
+                        Text("•  Ledger Contract v1.0  •  Frozen")
+                            .font(.system(size: 13, weight: .medium, design: .monospaced))
+                            .foregroundColor(Color.white.opacity(0.88))
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 9)
+                            .background(.ultraThinMaterial, in: Capsule())
+                            .overlay(
+                                Capsule().stroke(Color.white.opacity(0.14), lineWidth: 1)
+                            )
+                            .shadow(color: .black.opacity(0.35), radius: 10, x: 0, y: 8)
+                            .padding(.top, 6)
                     }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 9)
-                    .background(.ultraThinMaterial, in: Capsule())
-                    .overlay(
-                        Capsule().stroke(.white.opacity(0.14), lineWidth: 1)
-                    )
-                    .shadow(color: .black.opacity(0.35), radius: 10, x: 0, y: 8)
+                    .frame(maxWidth: 520)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.horizontal, 22)
 
                     Spacer(minLength: 18)
                 }
-                .padding(.horizontal, 22)
 
                 // FORM (only when login/signup)
                 if screen != .landing {
