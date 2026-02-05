@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useRef, useMemo, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
-import RiskmateLogo from '@/components/RiskmateLogo'
+import RiskMateLogo from '@/components/RiskMateLogo'
 
 // Track funnel events (one-shot guard)
 const funnelLogRef: Record<string, boolean> = {}
@@ -127,7 +127,7 @@ function ThankYouContent() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
         >
-          <RiskmateLogo size="lg" showText className="mb-8" />
+          <RiskMateLogo size="lg" showText className="mb-8" />
           
           {status === 'loading' ? (
             <>

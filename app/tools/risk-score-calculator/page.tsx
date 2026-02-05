@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import RiskmateLogo from '@/components/RiskmateLogo'
+import RiskMateLogo from '@/components/RiskMateLogo'
 import Link from 'next/link'
 
 export default function RiskScoreCalculatorPage() {
@@ -104,7 +104,7 @@ export default function RiskScoreCalculatorPage() {
       <header className="border-b border-white/10 px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <Link href="/">
-            <RiskmateLogo size="md" showText />
+            <RiskMateLogo size="md" showText />
           </Link>
           <div className="flex items-center gap-4">
             <button

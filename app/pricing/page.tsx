@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import RiskmateLogo from '@/components/RiskmateLogo'
+import RiskMateLogo from '@/components/RiskMateLogo'
 import { ErrorModal } from '@/components/dashboard/ErrorModal'
 import { subscriptionsApi } from '@/lib/api'
 import { cardStyles, buttonStyles } from '@/lib/styles/design-system'
@@ -75,7 +75,7 @@ export default function PricingPage() {
       <header className="sticky top-0 z-20 border-b border-white/10 bg-black/40 backdrop-blur-2xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4 min-w-0">
           <div className="flex-shrink-0 min-w-0">
-            <RiskmateLogo size="md" showText />
+            <RiskMateLogo size="md" showText />
           </div>
           <div className="flex items-center gap-3 min-w-0 flex-wrap justify-end">
             <button
