@@ -91,6 +91,13 @@ class Analytics {
         ])
     }
     
+    func trackOfflineSyncFailed(itemType: String, error: String) {
+        trackEvent("offline_sync_failed", metadata: [
+            "item_type": itemType,
+            "error": error
+        ])
+    }
+    
     // MARK: - Onboarding Events
     
     func trackOnboardingCompleted() {
