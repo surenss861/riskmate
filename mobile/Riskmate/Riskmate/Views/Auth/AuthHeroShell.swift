@@ -230,33 +230,37 @@ struct AuthNoiseOverlay: View {
 }
 
 // MARK: - Compact Glass Card (smaller radius, top bevel)
+private enum AuthHeroGlassCardLayout {
+    static let cardRadius: CGFloat = 14
+}
+
 struct AuthHeroGlassCard<Content: View>: View {
     let content: Content
-    private static let cardRadius: CGFloat = 14
 
     init(@ViewBuilder content: () -> Content) {
         self.content = content()
     }
 
     var body: some View {
+        let radius = AuthHeroGlassCardLayout.cardRadius
         VStack(alignment: .leading, spacing: 12) {
             content
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: Self.cardRadius))
+        .clipShape(RoundedRectangle(cornerRadius: radius))
         .overlay(
-            RoundedRectangle(cornerRadius: Self.cardRadius)
+            RoundedRectangle(cornerRadius: radius)
                 .stroke(RMTheme.Colors.border, lineWidth: 1)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: Self.cardRadius - 1)
+            RoundedRectangle(cornerRadius: radius - 1)
                 .stroke(Color.white.opacity(0.08), lineWidth: 1)
                 .padding(1)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: Self.cardRadius)
+            RoundedRectangle(cornerRadius: radius)
                 .stroke(
                     LinearGradient(
                         colors: [Color.white.opacity(0.12), Color.clear],
@@ -266,7 +270,7 @@ struct AuthHeroGlassCard<Content: View>: View {
                     lineWidth: 1
                 )
                 .padding(1)
-                .clipShape(RoundedRectangle(cornerRadius: Self.cardRadius - 0.5))
+                .clipShape(RoundedRectangle(cornerRadius: radius - 0.5))
         )
         .shadow(color: Color.black.opacity(0.4), radius: 14, x: 0, y: 6)
     }

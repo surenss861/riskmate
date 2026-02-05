@@ -328,7 +328,7 @@ struct OverviewTab: View {
                 // Managed on Web card when Hazards + Controls are both empty (hide those tabs)
                 if showManagedOnWebCard {
                     ManagedOnWebCard(
-                        onOpenWebApp: { WebAppURL.openWebApp(jobId: jobId) },
+                        onOpenWebApp: { WebAppURL.openWebApp(jobId: job.id) },
                         onViewWorkRecords: { quickAction.requestSwitchToWorkRecords(filter: nil) }
                     )
                     .padding(.horizontal, RMTheme.Spacing.pagePadding)
