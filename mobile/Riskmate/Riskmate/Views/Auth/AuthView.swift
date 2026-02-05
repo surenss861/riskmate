@@ -23,71 +23,77 @@ struct AuthView: View {
 
             RadialGradient(
                 colors: [
-                    RMTheme.Colors.accent.opacity(0.14),
-                    .clear,
-                    .black.opacity(0.65)
+                    RMTheme.Colors.accent.opacity(0.10),
+                    Color.clear,
+                    Color.black.opacity(0.70)
                 ],
-                center: .topLeading,
-                startRadius: 80,
-                endRadius: 520
+                center: .center,
+                startRadius: 90,
+                endRadius: 560
             )
             .blendMode(.screen)
             .allowsHitTesting(false)
 
-            VStack(spacing: 0) {
-
-                // HERO (Landing) — centered, web-level polish
+            GeometryReader { geo in
                 VStack(spacing: 0) {
-                    Spacer(minLength: 22)
 
-                    VStack(spacing: 14) {
-                        Text("Riskmate")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(RMTheme.Colors.accent)
-                            .padding(.bottom, 6)
+                    // HERO (Landing) — centered, micro-polish + safe-area–aware top
+                    VStack(spacing: 0) {
+                        VStack(spacing: 12) {
+                            Text("Riskmate")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundColor(RMTheme.Colors.accent)
+                                .padding(.bottom, 6)
 
-                        Text("Audit-ready\nproof packs\nfrom everyday\nfield work")
-                            .font(.system(size: 42, weight: .semibold, design: .serif))
-                            .tracking(-0.8)
-                            .lineSpacing(-6)
-                            .multilineTextAlignment(.center)
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: [
-                                        Color.white,
-                                        Color.white.opacity(0.82)
-                                    ],
-                                    startPoint: .top,
-                                    endPoint: .bottom
+                            Text("Audit-ready\nproof packs\nfrom everyday\nfield work")
+                                .font(.system(size: 42, weight: .semibold, design: .serif))
+                                .tracking(-0.8)
+                                .lineSpacing(-6)
+                                .multilineTextAlignment(.center)
+                                .foregroundStyle(
+                                    LinearGradient(
+                                        colors: [
+                                            Color.white,
+                                            Color.white.opacity(0.82)
+                                        ],
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    )
                                 )
-                            )
-                            .shadow(color: .black.opacity(0.55), radius: 20, x: 0, y: 18)
+                                .shadow(color: .black.opacity(0.42), radius: 16, x: 0, y: 12)
 
-                        Text("Turn site activity into compliance you can defend — fast.")
-                            .font(.system(size: 15, weight: .regular))
-                            .foregroundColor(Color.white.opacity(0.62))
-                            .multilineTextAlignment(.center)
-                            .lineSpacing(2)
-                            .padding(.top, 2)
+                            Text("Turn site activity into compliance you can defend — fast.")
+                                .font(.system(size: 15, weight: .regular))
+                                .foregroundColor(Color.white.opacity(0.62))
+                                .multilineTextAlignment(.center)
+                                .lineSpacing(2)
+                                .padding(.top, 2)
 
-                        Text("•  Ledger Contract v1.0  •  Frozen")
-                            .font(.system(size: 13, weight: .medium, design: .monospaced))
-                            .foregroundColor(Color.white.opacity(0.88))
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 9)
-                            .background(.ultraThinMaterial, in: Capsule())
-                            .overlay(
-                                Capsule().stroke(Color.white.opacity(0.14), lineWidth: 1)
-                            )
-                            .shadow(color: .black.opacity(0.35), radius: 10, x: 0, y: 8)
-                            .padding(.top, 6)
+                            Text("•  Ledger Contract v1.0  •  Frozen")
+                                .font(.system(size: 13, weight: .medium, design: .monospaced))
+                                .foregroundColor(Color.white.opacity(0.88))
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 9)
+                                .background(
+                                    LinearGradient(
+                                        colors: [Color.white.opacity(0.10), Color.white.opacity(0.02)],
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    )
+                                    .clipShape(Capsule())
+                                )
+                                .background(.ultraThinMaterial, in: Capsule())
+                                .overlay(Capsule().stroke(Color.white.opacity(0.18), lineWidth: 1))
+                                .shadow(color: .black.opacity(0.35), radius: 10, x: 0, y: 8)
+                                .padding(.top, 4)
+                        }
+                        .frame(maxWidth: 520)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.horizontal, 22)
+                        .padding(.top, geo.safeAreaInsets.top + 18)
+
+                        Spacer(minLength: 18)
                     }
-                    .frame(maxWidth: 520)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.horizontal, 22)
-
-                    Spacer(minLength: 18)
-                }
 
                 // FORM (only when login/signup)
                 if screen != .landing {
@@ -268,9 +274,14 @@ struct AuthView: View {
                                 .padding(.vertical, 16)
                                 .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18))
                                 .overlay(
-                                    RoundedRectangle(cornerRadius: 18)
-                                        .stroke(.white.opacity(0.16), lineWidth: 1)
+                                    LinearGradient(
+                                        colors: [Color.white.opacity(0.06), Color.white.opacity(0.02)],
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    )
+                                    .clipShape(RoundedRectangle(cornerRadius: 18))
                                 )
+                                .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.white.opacity(0.18), lineWidth: 1))
                                 .shadow(color: .black.opacity(0.45), radius: 18, x: 0, y: 10)
                         }
                     }
@@ -279,6 +290,7 @@ struct AuthView: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .preferredColorScheme(.dark)
         .scrollDismissesKeyboard(.interactively)
