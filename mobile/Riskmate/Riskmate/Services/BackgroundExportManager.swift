@@ -65,7 +65,7 @@ class BackgroundExportManager: NSObject, ObservableObject {
     }
     
     private func startExport(_ export: ExportTask) async {
-        await updateExportState(export.id, state: .preparing)
+        updateExportState(export.id, state: .preparing)
         
         do {
             // Generate export (this may take time on server)
@@ -89,7 +89,7 @@ class BackgroundExportManager: NSObject, ObservableObject {
             saveLastExport(jobId: export.jobId, type: export.type, url: permanentURL)
             
             // Update state (on main actor for thread safety)
-            await updateExportState(export.id, state: .ready, fileURL: permanentURL)
+            updateExportState(export.id, state: .ready, fileURL: permanentURL)
             
             // Track success
             Analytics.shared.trackExportSucceeded(jobId: export.jobId, type: export.type.rawValue)
@@ -121,7 +121,7 @@ class BackgroundExportManager: NSObject, ObservableObject {
             
         } catch {
             let errorMessage = error.localizedDescription
-            await updateExportState(export.id, state: .failed(errorMessage))
+            updateExportState(export.id, state: .failed(errorMessage))
             Analytics.shared.trackExportFailed(jobId: export.jobId, type: export.type.rawValue, error: errorMessage)
             CrashReporting.shared.captureError(error)
         }

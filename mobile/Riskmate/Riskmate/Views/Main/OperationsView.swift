@@ -139,13 +139,18 @@ struct OperationsView: View {
                     )
                 }
             } header: {
-                OperationsHeaderView(
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Jobs")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(RMTheme.Colors.textPrimary)
+                    OperationsHeaderView(
                     activeCount: activeJobs.count,
                     highRiskCount: highRiskJobs.count,
                     missingEvidenceCount: missingEvidenceJobs.count,
                     lastSync: jobsStore.lastSyncDate,
                     onKPITap: handleKPITap
                 )
+                }
             } footer: {
                 if activeJobs.count < filteredJobs.count {
                     Text("Showing \(activeJobs.count) of \(filteredJobs.count) jobs")
@@ -159,6 +164,10 @@ struct OperationsView: View {
                     searchQuery: searchQuery,
                     jobsEmpty: jobsStore.jobs.isEmpty
                 )
+            } header: {
+                Text("Jobs")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(RMTheme.Colors.textPrimary)
             }
         }
     }
@@ -168,6 +177,7 @@ struct OperationsView: View {
             operationsListSections
         }
         .listStyle(.insetGrouped)
+        .listSectionSpacing(.compact)
         .searchable(text: $searchQuery, prompt: "Search jobs")
         .anchoringRefresh(isRefreshing: $isRefreshing) {
             _ = try? await jobsStore.fetch(forceRefresh: true)

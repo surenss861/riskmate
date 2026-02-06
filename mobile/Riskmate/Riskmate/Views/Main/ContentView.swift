@@ -166,8 +166,8 @@ struct ContentView: View {
             selectedTab = tab
         }
         .overlay(alignment: .bottomTrailing) {
-            // Global FAB for quick evidence capture (hidden for auditors and on Operations tab)
-            if !entitlements.isAuditor() && selectedTab != .operations {
+            // FAB only on Work Records (Operations has its own FloatingEvidenceFAB)
+            if !entitlements.isAuditor() && selectedTab == .workRecords {
                 Button {
                     quickAction.presentEvidence(jobId: nil)
                 } label: {

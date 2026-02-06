@@ -46,7 +46,7 @@ struct RMStickyFilterBar<Content: View>: View {
         VStack(spacing: 0) {
             content
                 .padding(.horizontal, RMTheme.Spacing.pagePadding)
-                .padding(.vertical, RMTheme.Spacing.md)
+                .padding(.vertical, RMTheme.Spacing.sm)
                 .background(
                     .ultraThinMaterial,
                     in: Rectangle()

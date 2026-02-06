@@ -52,7 +52,7 @@ struct OperationsHeaderView: View {
             
             Spacer()
         }
-        .padding(.vertical, RMSystemTheme.Spacing.xs)
+        .padding(.vertical, 4)
     }
     
     private func relativeTime(_ date: Date) -> String {

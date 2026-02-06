@@ -36,36 +36,22 @@ struct LedgerTrustStrip: View {
                 .accessibilityLabel(isVerified ? "Verified" : "Verification issue")
                 .accessibilityHint("Tap to view verification details")
                 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(isVerified ? "Cryptographically Verified" : "Verification Issue")
-                        .font(RMSystemTheme.Typography.subheadline.weight(.semibold))
-                        .foregroundStyle(RMSystemTheme.Colors.textPrimary)
-                    
-                    if let anchored = lastAnchored {
-                        // Ticking timestamp (updates once on open)
-                        TickingTimestamp(date: anchored)
-                            .font(RMSystemTheme.Typography.caption)
-                            .foregroundStyle(RMSystemTheme.Colors.textSecondary)
-                    } else {
-                        Text("Pending anchor")
-                            .font(RMSystemTheme.Typography.caption)
-                            .foregroundStyle(RMSystemTheme.Colors.textTertiary)
-                    }
-                    
-                    // Immutability flex (subtle, confident)
-                    Text("Proofs cannot be altered once anchored.")
-                        .font(RMSystemTheme.Typography.caption2)
-                        .foregroundStyle(RMSystemTheme.Colors.textTertiary)
-                        .padding(.top, 2)
-                    
-                    // Micro pulse on successful sync (very subtle, respects Reduce Motion)
-                    if isVerified && !UIAccessibility.isReduceMotionEnabled {
-                        Circle()
-                            .fill(RMSystemTheme.Colors.success.opacity(0.3))
-                            .frame(width: 4, height: 4)
-                            .padding(.top, 4)
-                            .symbolEffect(.pulse, options: .repeating.speed(2.0))
-                            .accessibilityHidden(true) // Decorative
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack(spacing: 4) {
+                        Text(isVerified ? "Cryptographically Verified" : "Verification Issue")
+                            .font(RMSystemTheme.Typography.caption.weight(.semibold))
+                            .foregroundStyle(RMSystemTheme.Colors.textPrimary)
+                        if let anchored = lastAnchored {
+                            Text("·")
+                                .foregroundStyle(RMSystemTheme.Colors.textTertiary)
+                            TickingTimestamp(date: anchored)
+                                .font(RMSystemTheme.Typography.caption2)
+                                .foregroundStyle(RMSystemTheme.Colors.textSecondary)
+                        } else {
+                            Text("· Pending anchor")
+                                .font(RMSystemTheme.Typography.caption2)
+                                .foregroundStyle(RMSystemTheme.Colors.textTertiary)
+                        }
                     }
                 }
                 
@@ -76,7 +62,7 @@ struct LedgerTrustStrip: View {
                     .foregroundStyle(RMSystemTheme.Colors.textTertiary)
             }
             .padding(.horizontal, RMSystemTheme.Spacing.md)
-            .padding(.vertical, RMSystemTheme.Spacing.sm)
+            .padding(.vertical, RMSystemTheme.Spacing.xs + 2)
             .background(
                 VisualEffectBlur(style: .systemMaterial)
                     .overlay(

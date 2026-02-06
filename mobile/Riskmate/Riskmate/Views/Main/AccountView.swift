@@ -114,7 +114,8 @@ struct AccountView: View {
                         }
                     } header: {
                         Text("Organization")
-                            .foregroundColor(RMTheme.Colors.textSecondary)
+                            .font(RMTheme.Typography.caption)
+                            .foregroundColor(RMTheme.Colors.textTertiary)
                     }
                 }
                 
@@ -207,13 +208,14 @@ struct AccountView: View {
                         HStack {
                             Image(systemName: "arrow.counterclockwise")
                             Text("Reset Onboarding & Coach Marks")
-                                .foregroundColor(RMTheme.Colors.accent)
                         }
+                        .foregroundColor(RMTheme.Colors.error.opacity(0.9))
                     }
                     .listRowBackground(RMTheme.Colors.surface.opacity(0.5))
                 } header: {
                     Text("Development")
-                        .foregroundColor(RMTheme.Colors.textSecondary)
+                        .font(RMTheme.Typography.caption)
+                        .foregroundColor(RMTheme.Colors.textTertiary)
                 }
                 #endif
                 
@@ -253,7 +255,8 @@ struct AccountView: View {
                     .disabled(isDeletingAccount)
                 } header: {
                     Text("Danger Zone")
-                        .foregroundColor(RMTheme.Colors.textSecondary)
+                        .font(RMTheme.Typography.caption)
+                        .foregroundColor(RMTheme.Colors.textTertiary)
                 } footer: {
                     Text("Deleting your account will permanently remove all your data. This action cannot be undone.")
                         .foregroundColor(RMTheme.Colors.textTertiary)

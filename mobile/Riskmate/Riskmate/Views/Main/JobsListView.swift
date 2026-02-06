@@ -65,7 +65,7 @@ struct JobsListView: View {
                     RMOfflineBanner()
                     // Sticky Filter Bar
                     RMStickyFilterBar {
-                        VStack(spacing: RMTheme.Spacing.md) {
+                        VStack(spacing: RMTheme.Spacing.sm) {
                             // Search Bar
                             HStack(spacing: RMTheme.Spacing.sm) {
                                 Image(systemName: "magnifyingglass")
@@ -181,6 +181,7 @@ struct JobsListView: View {
                         .padding(RMSystemTheme.Spacing.xl)
                     } else {
                         List {
+                            Section {
                             ForEach(filteredJobs) { job in
                                 NavigationLink(value: job) {
                                     JobCard(job: job) {
@@ -241,7 +242,11 @@ struct JobsListView: View {
                                     }
                                 }
                             }
-                            
+                            } header: {
+                                Text("Proof Records")
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundColor(RMTheme.Colors.textPrimary)
+                            }
                             // Load more indicator
                             if jobsStore.isLoadingMore {
                                 HStack {

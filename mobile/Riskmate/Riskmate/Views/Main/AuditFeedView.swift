@@ -43,7 +43,7 @@ struct AuditFeedView: View {
                     // Saved Views as Horizontal Cards
                     SavedViewsCarousel()
                         .padding(.horizontal, RMTheme.Spacing.pagePadding)
-                        .padding(.top, RMTheme.Spacing.md)
+                        .padding(.top, RMTheme.Spacing.sm)
                     
                     if isLoading {
                         // Premium skeleton loading
@@ -51,7 +51,7 @@ struct AuditFeedView: View {
                             VStack(spacing: RMTheme.Spacing.md) {
                                 RMSkeletonList(count: 8)
                             }
-                            .padding(.top, RMTheme.Spacing.md)
+                            .padding(.top, RMTheme.Spacing.sm)
                         }
                     } else if let errorMessage = errorMessage {
                         // Error state - show error with retry
