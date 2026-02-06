@@ -17,6 +17,21 @@ struct AuthView: View {
 
     private var isSignup: Bool { screen == .signup }
 
+    /// Button never looks tappable unless valid (Apple review: reviewers try empty submits)
+    private var isFormValid: Bool {
+        guard !email.isEmpty, password.count >= 8 else { return false }
+        if isSignup { return !confirmPassword.isEmpty && password == confirmPassword }
+        return true
+    }
+
+    private var legalAgreementText: some View {
+        Text("By creating an account, you agree to our [Terms of Service](https://www.riskmate.dev/terms) and [Privacy Policy](https://www.riskmate.dev/privacy).")
+            .font(.caption2)
+            .foregroundColor(RMTheme.Colors.textTertiary)
+            .multilineTextAlignment(.center)
+            .tint(RMTheme.Colors.accent)
+    }
+
     @ViewBuilder
     private var heroBlock: some View {
         VStack(spacing: 12) {
@@ -181,10 +196,10 @@ struct AuthView: View {
 
                     // FORM (only when login/signup)
                     if screen != .landing {
-                    RMGlassCard {
-                        VStack(spacing: 12) {
-                            HStack {
-                                Button {
+                    RMGlassCard(reducedShadow: true) {
+                        VStack(alignment: .leading, spacing: 12) {
+                            // Back only — no duplicate CTA in header (Apple review)
+                            Button {
                                     clearFormState()
                                     withAnimation(RMTheme.Animation.spring) { screen = .landing }
                                 } label: {
@@ -195,14 +210,21 @@ struct AuthView: View {
                                     .font(.system(size: 14, weight: .semibold))
                                     .foregroundColor(.white.opacity(0.8))
                                 }
+                                .frame(maxWidth: .infinity, alignment: .leading)
 
-                                Spacer()
-
-                                Text(isSignup ? "Create Account" : "Sign In")
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .foregroundColor(.white.opacity(0.75))
+                            // Content-based header (title belongs in content)
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text(isSignup ? "Create your account" : "Sign in")
+                                    .font(.title2.weight(.semibold))
+                                    .foregroundColor(RMTheme.Colors.textPrimary)
+                                Text(isSignup
+                                    ? "Start logging audit-ready proof packs in minutes."
+                                    : "Access your audit ledger and work records.")
+                                    .font(.subheadline)
+                                    .foregroundColor(RMTheme.Colors.textSecondary)
                             }
-                            .padding(.bottom, 2)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.bottom, 4)
 
                             RMAuthTextField(
                                 title: "Email",
@@ -235,6 +257,13 @@ struct AuthView: View {
                                 )
                             )
 
+                            if !isSignup {
+                                Link("Forgot password?", destination: URL(string: "https://www.riskmate.dev/forgot-password")!)
+                                    .font(.caption)
+                                    .foregroundColor(RMTheme.Colors.textTertiary)
+                                    .frame(maxWidth: .infinity, alignment: .trailing)
+                            }
+
                             if isSignup {
                                 RMAuthTextField(
                                     title: "Confirm Password",
@@ -250,17 +279,23 @@ struct AuthView: View {
                                     )
                                 )
 
-                                Text("Minimum 6 characters")
+                                Text("At least 8 characters")
                                     .font(.caption)
-                                    .foregroundColor(.white.opacity(0.55))
+                                    .foregroundColor(RMTheme.Colors.textTertiary)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     .padding(.leading, 2)
+                            }
+
+                            if isSignup {
+                                legalAgreementText
+                                    .padding(.top, 4)
+                                    .padding(.bottom, 4)
                             }
 
                             RMPrimaryButton(
                                 title: isSignup ? "Create Account" : "Sign In",
                                 isLoading: sessionManager.isLoading,
-                                isDisabled: email.isEmpty || password.isEmpty || (isSignup && confirmPassword.isEmpty)
+                                isDisabled: !isFormValid
                             ) { handleSubmit() }
                             .padding(.top, 6)
 
@@ -279,22 +314,20 @@ struct AuthView: View {
                             Divider().overlay(RMTheme.Colors.divider)
                                 .padding(.vertical, 10)
 
-                            HStack(spacing: 6) {
-                                Text(isSignup ? "Already have an account?" : "Don't have an account?")
+                            HStack(spacing: 4) {
+                                Text(isSignup ? "Already have an account?" : "New here?")
                                     .foregroundColor(RMTheme.Colors.textSecondary)
-                                    .font(RMTheme.Typography.body)
-
-                                Button(isSignup ? "Sign In" : "Start Free") {
-                                    let generator = UIImpactFeedbackGenerator(style: .light)
-                                    generator.impactOccurred()
+                                Button(isSignup ? "Sign In" : "Create an account") {
+                                    Haptics.tap()
                                     clearFormState()
                                     withAnimation(RMTheme.Animation.spring) {
                                         screen = isSignup ? .login : .signup
                                     }
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { focusedField = .email }
                                 }
                                 .foregroundColor(RMTheme.Colors.accent)
-                                .font(RMTheme.Typography.bodyBold)
                             }
+                            .font(.footnote)
                         }
                     }
                     .frame(maxWidth: 420)
@@ -326,7 +359,7 @@ struct AuthView: View {
 
         if isSignup {
             if password != confirmPassword { errorText = "Passwords do not match"; return }
-            if password.count < 6 { errorText = "Password must be at least 6 characters"; return }
+            if password.count < 8 { errorText = "Password must be at least 8 characters"; return }
         }
 
         Task {

@@ -3,9 +3,11 @@ import SwiftUI
 /// Riskmate glass card - iOS material + web sharpness (hybrid)
 struct RMGlassCard<Content: View>: View {
     let content: Content
+    var reducedShadow: Bool = false
     
-    init(@ViewBuilder content: () -> Content) {
+    init(reducedShadow: Bool = false, @ViewBuilder content: () -> Content) {
         self.content = content()
+        self.reducedShadow = reducedShadow
     }
     
     var body: some View {
@@ -43,7 +45,7 @@ struct RMGlassCard<Content: View>: View {
                             .padding(0.5)
                     )
             }
-            .themeShadow(RMTheme.Shadow.card)
+            .themeShadow(reducedShadow ? RMTheme.Shadow.small : RMTheme.Shadow.card)
     }
 }
 
