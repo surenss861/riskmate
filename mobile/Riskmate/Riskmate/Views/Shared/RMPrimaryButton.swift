@@ -20,13 +20,21 @@ struct RMPrimaryButton: View {
             ZStack {
                 RoundedRectangle(cornerRadius: RMTheme.Radius.md, style: .continuous)
                     .fill(
-                        LinearGradient(
-                            colors: [RMTheme.Colors.accent, RMTheme.Colors.accentLight],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
+                        (isDisabled && !isLoading)
+                            ? AnyShapeStyle(RMTheme.Colors.surface)
+                            : AnyShapeStyle(LinearGradient(
+                                colors: [RMTheme.Colors.accent, RMTheme.Colors.accentLight],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            ))
                     )
-                    .opacity(isDisabled ? 0.5 : 1.0)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: RMTheme.Radius.md, style: .continuous)
+                            .stroke(
+                                (isDisabled && !isLoading) ? RMTheme.Colors.border : Color.clear,
+                                lineWidth: 1
+                            )
+                    )
                 
                 if isLoading {
                     HStack(spacing: 8) {
@@ -41,7 +49,8 @@ struct RMPrimaryButton: View {
                 } else {
                     Text(title)
                         .font(RMTheme.Typography.bodyBold)
-                        .foregroundColor(.black)
+                        .foregroundColor((isDisabled && !isLoading) ? RMTheme.Colors.textTertiary : .black)
+                        .opacity((isDisabled && !isLoading) ? 0.7 : 1.0)
                 }
             }
             .frame(height: 52)
@@ -50,7 +59,7 @@ struct RMPrimaryButton: View {
         }
         .buttonStyle(.plain)
         .disabled(isDisabled || isLoading)
-        .themeShadow(RMTheme.Shadow.button)
+        .themeShadow((isDisabled && !isLoading) ? RMTheme.Shadow.small : RMTheme.Shadow.button)
         .simultaneousGesture(
             DragGesture(minimumDistance: 0)
                 .onChanged { _ in isPressed = true }

@@ -99,7 +99,7 @@ struct AuthView: View {
     }
 
     private func landingCTAs(safeBottom: CGFloat) -> some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 10) {
             Button {
                 clearFormState()
                 withAnimation(RMTheme.Animation.spring) { screen = .signup }
@@ -109,7 +109,7 @@ struct AuthView: View {
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundColor(.black)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 18)
+                    .padding(.vertical, 14)
                     .background(RMTheme.Colors.accent.opacity(0.95), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                     .overlay(
                         LinearGradient(
@@ -140,15 +140,15 @@ struct AuthView: View {
                     .foregroundColor(.white.opacity(0.85))
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
+            .padding(.vertical, 10)
         }
-        .padding(14)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .padding(10)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .stroke(.white.opacity(0.10), lineWidth: 1)
         )
-        .shadow(color: .black.opacity(0.35), radius: 22, x: 0, y: 14)
+        .shadow(color: .black.opacity(0.3), radius: 16, x: 0, y: 10)
         .padding(.horizontal, 18)
         .padding(.bottom, max(18, safeBottom + 10))
         .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -189,17 +189,20 @@ struct AuthView: View {
 
                         Spacer(minLength: 0)
 
-                        // CTA REGION — lighter dock, tighter pill-to-dock gap
+                        // CTA REGION — pull up 24–40pt to reduce gap canyon
                         landingCTAs(safeBottom: safeBottom)
-                            .padding(.top, 20)
+                            .padding(.top, -32)
                     }
 
-                    // FORM (only when login/signup)
+                    // FORM (only when login/signup) — centered auth rail (~45–55% down)
                     if screen != .landing {
-                    RMGlassCard(reducedShadow: true) {
-                        VStack(alignment: .leading, spacing: 12) {
-                            // Back only — no duplicate CTA in header (Apple review)
-                            Button {
+                    ScrollView(showsIndicators: false) {
+                        VStack(spacing: 0) {
+                            Spacer(minLength: 44)
+                            RMGlassCard(reducedShadow: true) {
+                            VStack(alignment: .leading, spacing: 0) {
+                                // Back only — no duplicate CTA in header (Apple review)
+                                Button {
                                     clearFormState()
                                     withAnimation(RMTheme.Animation.spring) { screen = .landing }
                                 } label: {
@@ -212,127 +215,133 @@ struct AuthView: View {
                                 }
                                 .frame(maxWidth: .infinity, alignment: .leading)
 
-                            // Content-based header (title belongs in content)
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text(isSignup ? "Create your account" : "Sign in")
-                                    .font(.title2.weight(.semibold))
-                                    .foregroundColor(RMTheme.Colors.textPrimary)
-                                Text(isSignup
-                                    ? "Start logging audit-ready proof packs in minutes."
-                                    : "Access your audit ledger and work records.")
-                                    .font(.subheadline)
-                                    .foregroundColor(RMTheme.Colors.textSecondary)
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.bottom, 4)
+                                // Title → subhead: 6–8pt
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text(isSignup ? "Create your account" : "Sign in")
+                                        .font(.title2.weight(.semibold))
+                                        .foregroundColor(RMTheme.Colors.textPrimary)
+                                    Text(isSignup
+                                        ? "Start logging audit-ready proof packs in minutes."
+                                        : "Access your audit ledger and work records.")
+                                        .font(.subheadline)
+                                        .foregroundColor(RMTheme.Colors.textSecondary)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.top, 4)
+                                .padding(.bottom, 14) // Subhead → first field: 14–16pt
 
-                            RMAuthTextField(
-                                title: "Email",
-                                text: $email,
-                                icon: "envelope",
-                                isSecure: false,
-                                keyboardType: .emailAddress,
-                                textContentType: .emailAddress,
-                                onSubmit: { focusedField = .password },
-                                focused: Binding(
-                                    get: { focusedField == .email },
-                                    set: { $0 ? (focusedField = .email) : (focusedField = nil) }
-                                )
-                            )
-
-                            RMAuthTextField(
-                                title: "Password",
-                                text: $password,
-                                icon: "lock",
-                                isSecure: true,
-                                keyboardType: .default,
-                                textContentType: isSignup ? .newPassword : .password,
-                                onSubmit: {
-                                    if isSignup { focusedField = .confirmPassword }
-                                    else { handleSubmit() }
-                                },
-                                focused: Binding(
-                                    get: { focusedField == .password },
-                                    set: { $0 ? (focusedField = .password) : (focusedField = nil) }
-                                )
-                            )
-
-                            if !isSignup {
-                                Link("Forgot password?", destination: URL(string: "https://www.riskmate.dev/forgot-password")!)
-                                    .font(.caption)
-                                    .foregroundColor(RMTheme.Colors.textTertiary)
-                                    .frame(maxWidth: .infinity, alignment: .trailing)
-                            }
-
-                            if isSignup {
                                 RMAuthTextField(
-                                    title: "Confirm Password",
-                                    text: $confirmPassword,
+                                    title: "Email",
+                                    text: $email,
+                                    icon: "envelope",
+                                    isSecure: false,
+                                    keyboardType: .emailAddress,
+                                    textContentType: .emailAddress,
+                                    onSubmit: { focusedField = .password },
+                                    focused: Binding(
+                                        get: { focusedField == .email },
+                                        set: { $0 ? (focusedField = .email) : (focusedField = nil) }
+                                    )
+                                )
+                                .padding(.bottom, 10) // Between fields: 10–12pt
+
+                                RMAuthTextField(
+                                    title: "Password",
+                                    text: $password,
                                     icon: "lock",
                                     isSecure: true,
                                     keyboardType: .default,
-                                    textContentType: .newPassword,
-                                    onSubmit: { handleSubmit() },
+                                    textContentType: isSignup ? .newPassword : .password,
+                                    onSubmit: {
+                                        if isSignup { focusedField = .confirmPassword }
+                                        else { handleSubmit() }
+                                    },
                                     focused: Binding(
-                                        get: { focusedField == .confirmPassword },
-                                        set: { $0 ? (focusedField = .confirmPassword) : (focusedField = nil) }
+                                        get: { focusedField == .password },
+                                        set: { $0 ? (focusedField = .password) : (focusedField = nil) }
                                     )
                                 )
+                                .padding(.bottom, isSignup ? 10 : 6) // Fields: 10pt; Password → Forgot: 6pt
 
-                                Text("At least 8 characters")
-                                    .font(.caption)
-                                    .foregroundColor(RMTheme.Colors.textTertiary)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(.leading, 2)
-                            }
-
-                            if isSignup {
-                                legalAgreementText
-                                    .padding(.top, 4)
-                                    .padding(.bottom, 4)
-                            }
-
-                            RMPrimaryButton(
-                                title: isSignup ? "Create Account" : "Sign In",
-                                isLoading: sessionManager.isLoading,
-                                isDisabled: !isFormValid
-                            ) { handleSubmit() }
-                            .padding(.top, 6)
-
-                            if let errorText {
-                                HStack(spacing: 8) {
-                                    Image(systemName: "exclamationmark.triangle.fill")
-                                        .font(.system(size: 12, weight: .semibold))
-                                    Text(errorText)
-                                        .font(RMTheme.Typography.bodySmallBold)
+                                if !isSignup {
+                                    Link("Forgot password?", destination: URL(string: "https://www.riskmate.dev/forgot-password")!)
+                                        .font(.footnote)
+                                        .foregroundColor(RMTheme.Colors.textTertiary)
+                                        .frame(maxWidth: .infinity, alignment: .trailing)
+                                        .padding(.bottom, 12) // Forgot → button: 12–14pt
                                 }
-                                .foregroundColor(RMTheme.Colors.error)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.top, 4)
-                            }
 
-                            Divider().overlay(RMTheme.Colors.divider)
-                                .padding(.vertical, 10)
+                                if isSignup {
+                                    RMAuthTextField(
+                                        title: "Confirm Password",
+                                        text: $confirmPassword,
+                                        icon: "lock",
+                                        isSecure: true,
+                                        keyboardType: .default,
+                                        textContentType: .newPassword,
+                                        onSubmit: { handleSubmit() },
+                                        focused: Binding(
+                                            get: { focusedField == .confirmPassword },
+                                            set: { $0 ? (focusedField = .confirmPassword) : (focusedField = nil) }
+                                        )
+                                    )
+                                    .padding(.bottom, 10)
 
-                            HStack(spacing: 4) {
-                                Text(isSignup ? "Already have an account?" : "New here?")
-                                    .foregroundColor(RMTheme.Colors.textSecondary)
-                                Button(isSignup ? "Sign In" : "Create an account") {
-                                    Haptics.tap()
-                                    clearFormState()
-                                    withAnimation(RMTheme.Animation.spring) {
-                                        screen = isSignup ? .login : .signup
+                                    Text("At least 8 characters")
+                                        .font(.caption)
+                                        .foregroundColor(RMTheme.Colors.textTertiary)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .padding(.leading, 2)
+                                        .padding(.bottom, 12)
+
+                                    legalAgreementText
+                                        .padding(.bottom, 12) // Legal → button
+                                }
+
+                                    RMPrimaryButton(
+                                    title: isSignup ? "Create Account" : "Sign In",
+                                    isLoading: sessionManager.isLoading,
+                                    isDisabled: !isFormValid
+                                ) { handleSubmit() }
+                                .padding(.bottom, 12) // Button → footer: 12–16pt
+
+                                if let errorText {
+                                    HStack(spacing: 8) {
+                                        Image(systemName: "exclamationmark.triangle.fill")
+                                            .font(.system(size: 12, weight: .semibold))
+                                        Text(errorText)
+                                            .font(RMTheme.Typography.bodySmallBold)
                                     }
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { focusedField = .email }
+                                    .foregroundColor(RMTheme.Colors.error)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.top, 4)
                                 }
-                                .foregroundColor(RMTheme.Colors.accent)
+
+                                Divider().overlay(RMTheme.Colors.divider)
+                                    .padding(.vertical, 12)
+
+                                HStack(spacing: 4) {
+                                    Text(isSignup ? "Already have an account?" : "New here?")
+                                        .foregroundColor(RMTheme.Colors.textSecondary)
+                                    Button(isSignup ? "Sign In" : "Create an account") {
+                                        Haptics.tap()
+                                        clearFormState()
+                                        withAnimation(RMTheme.Animation.spring) {
+                                            screen = isSignup ? .login : .signup
+                                        }
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { focusedField = .email }
+                                    }
+                                    .foregroundColor(RMTheme.Colors.accent)
+                                }
+                                .font(.footnote)
                             }
-                            .font(.footnote)
                         }
+                        .frame(maxWidth: 420)
+                        .padding(.horizontal, 20)
+                            Spacer(minLength: 0)
+                        }
+                        .frame(minHeight: geo.size.height - safeTop - safeBottom)
                     }
-                    .frame(maxWidth: 420)
-                    .padding(.horizontal, 20)
-                    .padding(.top, 10)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
 
