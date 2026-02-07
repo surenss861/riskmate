@@ -243,8 +243,31 @@ export default function HomePage() {
 
         {/* Hero Section */}
         <section className="relative min-h-[80vh] flex items-center justify-center overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-b from-[#0A0A0A] via-[#0A0A0A] to-black"></div>
+          <div className="absolute inset-0 bg-gradient-to-b from-[#0A0A0A] via-[#0A0A0A] to-black" />
+          {/* Subtle ledger/grid texture — visible on pause */}
+          <div 
+            className="absolute inset-0 opacity-[0.03]"
+            style={{
+              backgroundImage: `
+                linear-gradient(rgba(255,255,255,0.08) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.08) 1px, transparent 1px)
+              `,
+              backgroundSize: '48px 48px',
+            }}
+          />
           <div className="relative z-10 max-w-4xl mx-auto px-6 py-20 text-center">
+            <motion.div
+              className="mb-6 flex justify-center"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5 }}
+            >
+              <span 
+                className="px-3 py-1.5 rounded-full text-[10px] md:text-[11px] font-medium tracking-[0.12em] uppercase text-white/60 border border-white/10"
+              >
+                Riskmate • Ledger-Anchored
+              </span>
+            </motion.div>
             <motion.h1
               className="text-5xl md:text-6xl font-bold mb-6 font-display"
               initial={{ opacity: 0, y: 20 }}
@@ -259,7 +282,7 @@ export default function HomePage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.2 }}
             >
-              Immutable compliance ledger + evidence chain-of-custody for high-liability ops
+              Capture once. Anchor permanently. Defend forever.
             </motion.p>
             <motion.div
               className="flex justify-center mb-8"
@@ -272,37 +295,78 @@ export default function HomePage() {
               </span>
             </motion.div>
             <motion.div
-              className="flex flex-col sm:flex-row gap-4 justify-center mb-8"
+              className="flex flex-col sm:flex-row gap-4 justify-center mb-4"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.4 }}
             >
-              <motion.button
-                onClick={() => router.push('/signup')}
-                className="px-8 py-4 bg-[#F97316] text-black rounded-lg hover:bg-[#FB923C] transition-all font-semibold text-lg"
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-              >
-                Start Free
-              </motion.button>
+              <div className="flex flex-col items-center sm:items-end">
+                <motion.button
+                  onClick={() => router.push('/signup')}
+                  className="px-8 py-4 bg-[#F97316] text-black rounded-lg hover:bg-[#FB923C] transition-all font-semibold text-lg w-full sm:w-auto"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  Start Free
+                </motion.button>
+                <p className="text-xs text-white/45 mt-2 text-center sm:text-right">
+                  No credit card • Audit-safe from day one
+                </p>
+              </div>
               <motion.button
                 onClick={() => setSampleReportOpen(true)}
-                className="px-8 py-4 border border-white/10 rounded-lg hover:border-white/20 transition-colors font-semibold text-lg"
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
+                className="px-8 py-4 text-white/60 hover:text-white/90 transition-colors font-medium text-lg"
+                whileHover={{ scale: 1.01 }}
+                whileTap={{ scale: 0.99 }}
               >
                 View Sample Report
               </motion.button>
             </motion.div>
             <motion.p
-              className="text-sm text-white/50"
+              className="text-xs text-white/40"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: 0.6, delay: 0.6 }}
             >
-              No credit card required
+              Built for contractors, insurers, and regulators.
             </motion.p>
           </div>
+        </section>
+
+        {/* 4-step mental model — Capture → Review → Anchor → Defend */}
+        <section id="how-it-works" className="max-w-4xl mx-auto px-6 py-20 border-t border-white/5">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+            className="grid grid-cols-1 md:grid-cols-4 gap-8 md:gap-6"
+          >
+            <div>
+              <div className="text-[#F97316] font-semibold text-sm mb-2">Capture</div>
+              <p className="text-[#A1A1A1] text-sm leading-relaxed">
+                Evidence from the field. Hazards, photos, checklists — captured where the work happens.
+              </p>
+            </div>
+            <div>
+              <div className="text-[#F97316] font-semibold text-sm mb-2">Review</div>
+              <p className="text-[#A1A1A1] text-sm leading-relaxed">
+                Work records live in your operations view until ready. No premature locking.
+              </p>
+            </div>
+            <div>
+              <div className="text-[#F97316] font-semibold text-sm mb-2">Anchor</div>
+              <p className="text-[#A1A1A1] text-sm leading-relaxed">
+                Once anchored, records are immutable. Timestamped, hashed, and bound to the ledger.
+              </p>
+            </div>
+            <div>
+              <div className="text-[#F97316] font-semibold text-sm mb-2">Defend</div>
+              <p className="text-[#A1A1A1] text-sm leading-relaxed">
+                Export proof packs. Audit-ready PDFs, attestations, and chain-of-custody on demand.
+              </p>
+            </div>
+          </motion.div>
         </section>
 
         {/* Enhanced Trust Signals Section */}
