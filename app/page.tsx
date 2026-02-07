@@ -241,258 +241,104 @@ export default function HomePage() {
         {/* Spacer for fixed nav */}
         <div className="h-20" />
 
-        {/* Hero Section */}
+        {/* Hero — minimal, authority */}
         <section className="relative min-h-[80vh] flex items-center justify-center overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-b from-[#0A0A0A] via-[#0A0A0A] to-black" />
-          {/* Subtle ledger/grid texture — visible on pause */}
-          <div 
-            className="absolute inset-0 opacity-[0.03]"
-            style={{
-              backgroundImage: `
-                linear-gradient(rgba(255,255,255,0.08) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(255,255,255,0.08) 1px, transparent 1px)
-              `,
-              backgroundSize: '48px 48px',
-            }}
-          />
-          {/* Anchored Proof symbol — faint, behind content, one-time lock-in animation */}
-          <motion.div
-            className="absolute inset-0 flex items-center justify-center pointer-events-none"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.8 }}
-          >
-            <motion.div
-              className="relative"
-              initial={{ filter: 'drop-shadow(0 0 0 rgba(249,115,22,0))' }}
-              animate={{
-                filter: [
-                  'drop-shadow(0 0 0 rgba(249,115,22,0))',
-                  'drop-shadow(0 0 12px rgba(249,115,22,0.35))',
-                  'drop-shadow(0 0 8px rgba(249,115,22,0.15))',
-                ],
-              }}
-              transition={{
-                times: [0, 0.7, 0.9],
-                duration: 1,
-              }}
-            >
-              <svg
-                viewBox="0 0 24 24"
-                className="w-28 md:w-36 h-28 md:h-36 text-white/[0.06]"
-                fill="currentColor"
-              >
-                <rect x="4" y="18" width="16" height="6" rx="0" />
-                <motion.rect
-                  x="7"
-                  width="12"
-                  height="5"
-                  rx="0"
-                  fill="currentColor"
-                  initial={{ y: 2 }}
-                  animate={{ y: 12 }}
-                  transition={{
-                    duration: 0.35,
-                    delay: 0.15,
-                    ease: [0.25, 0.46, 0.45, 0.94],
-                  }}
-                />
-              </svg>
-            </motion.div>
-          </motion.div>
+          <div className="absolute inset-0 bg-[#0A0A0A]" />
           <div className="relative z-10 max-w-4xl mx-auto px-6 py-20 text-center">
-            <motion.div
-              className="mb-6 flex justify-center"
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
-            >
-              <span 
-                className="px-3 py-1.5 rounded-full text-[10px] md:text-[11px] font-medium tracking-[0.12em] uppercase text-white/60 border border-white/10"
-              >
-                Riskmate • Ledger-Anchored
-              </span>
-            </motion.div>
-            <motion.h1
-              className="text-5xl md:text-6xl font-bold mb-6 font-display"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6 }}
-            >
+            <div className="mb-6 text-[11px] text-white/50 tracking-wide uppercase">
+              Riskmate
+            </div>
+            <div className="mb-2 text-sm text-white/40">
+              Ledger-anchored records
+            </div>
+            <h1 className="text-5xl md:text-6xl font-bold mb-6 font-display text-white">
               Audit-ready proof packs from everyday field work
-            </motion.h1>
-            <motion.div
-              className="h-0.5 w-24 mx-auto mb-6 bg-[#F97316]"
-              initial={{ opacity: 0, scaleX: 0.8 }}
-              animate={{ opacity: 1, scaleX: 1 }}
-              transition={{ duration: 0.5, delay: 0.2 }}
-            />
-            <motion.p
-              className="text-xl text-[#A1A1A1] mb-3 max-w-2xl mx-auto"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.2 }}
-            >
-              Capture once. Anchor permanently. Defend forever.
-            </motion.p>
-            <motion.p
-              className="text-xl text-[#A1A1A1] mb-8 max-w-2xl mx-auto"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.5, delay: 0.4 }}
-            >
-              Proof that holds up when it matters.
-            </motion.p>
-            <motion.div
-              className="flex flex-col sm:flex-row gap-4 justify-center mb-4"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.4 }}
-            >
-              <div className="flex flex-col items-center sm:items-end">
-                <motion.button
-                  onClick={() => router.push('/signup')}
-                  className="px-8 py-4 bg-[#F97316] text-black rounded-lg hover:bg-[#FB923C] transition-all font-semibold text-lg w-full sm:w-auto"
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                >
-                  Start Free
-                </motion.button>
-                <p className="text-xs text-white/45 mt-2 text-center sm:text-right">
-                  No credit card • Immutable records from day one
-                </p>
-              </div>
-              <div className="flex flex-col items-center sm:items-start">
-                <span className="text-[10px] md:text-[11px] uppercase tracking-wider text-white/45 mb-1">
-                  See an actual audit-ready proof pack
-                </span>
-                <motion.button
-                  onClick={() => setSampleReportOpen(true)}
-                  className="px-8 py-4 text-white/60 hover:text-white/90 transition-colors font-medium text-lg"
-                  whileHover={{ scale: 1.01 }}
-                  whileTap={{ scale: 0.99 }}
-                >
-                  View Sample Report
-                </motion.button>
-              </div>
-            </motion.div>
-            <motion.p
-              className="text-xs text-white/40"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.6, delay: 0.6 }}
-            >
-              Used by general contractors, insurers, and compliance reviewers.
-            </motion.p>
+            </h1>
+            <p className="text-xl text-[#A1A1A1] mb-10 max-w-2xl mx-auto">
+              Turn photos, logs, and site activity into evidence regulators accept.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <button
+                onClick={() => router.push('/signup')}
+                className="px-8 py-4 bg-[#F97316] text-black rounded-lg hover:bg-[#FB923C] transition-colors font-semibold text-lg"
+              >
+                Start Free
+              </button>
+              <button
+                onClick={() => setSampleReportOpen(true)}
+                className="px-8 py-4 text-white/60 hover:text-white/90 transition-colors font-medium text-lg"
+              >
+                View Sample Audit
+              </button>
+            </div>
           </div>
         </section>
 
-        {/* Proof pack artifact preview — static, no interactivity */}
-        <section className="max-w-4xl mx-auto px-6 -mt-8 pb-4">
-          <motion.div
-            initial={{ opacity: 0, y: 24 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.5 }}
-            className="mx-auto max-w-sm"
-          >
-            <p className="text-[10px] md:text-[11px] uppercase tracking-wider text-white/45 mb-3 text-center">
-              Example audit-ready proof pack
-            </p>
-            <div 
-              className="bg-[#1A1A1A] border border-white/10 rounded-lg overflow-hidden shadow-2xl"
-              style={{ boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' }}
-            >
-              <div className="px-4 py-3 border-b border-white/10 bg-white/[0.02]">
-                <div className="text-xs font-mono text-white/80">Audit Proof Pack</div>
-              </div>
-              <div className="p-4 space-y-2 min-h-[120px] relative">
-                <div className="h-2 bg-white/5 rounded w-full" />
-                <div className="h-2 bg-white/5 rounded w-3/4" />
-                <div className="h-2 bg-white/5 rounded w-5/6" />
-                <div className="h-2 bg-white/5 rounded w-full" />
-                <div className="h-2 bg-white/5 rounded w-2/3" />
-                <div className="h-2 bg-white/5 rounded w-4/5" />
-                <div className="absolute inset-0 backdrop-blur-sm bg-black/20 pointer-events-none" aria-hidden />
-              </div>
-              <div className="px-4 py-3 border-t border-white/10 bg-white/[0.02] flex items-center justify-between gap-4">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-8 h-8 text-white/50" aria-hidden>
-                  <rect x="4" y="18" width="16" height="6" rx="0" />
-                  <rect x="7" y="12" width="12" height="5" rx="0" />
-                </svg>
-                <span className="text-[10px] font-mono text-white/40">2025-02-07T12:00:00Z</span>
-              </div>
-            </div>
-          </motion.div>
-        </section>
-
-        {/* Tension sentence — why this exists */}
-        <section className="max-w-4xl mx-auto px-6 pt-12 pb-4">
-          <motion.p
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.5 }}
-            className="text-center text-[#A1A1A1] text-lg md:text-xl max-w-2xl mx-auto"
-          >
-            Most field evidence dies in court. Riskmate turns it into proof.
-          </motion.p>
-        </section>
-
-        {/* 4-step mental model — Capture → Review → Anchor → Defend */}
-        <section id="how-it-works" className="max-w-4xl mx-auto px-6 py-16 border-t border-white/5">
-          <motion.p
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.4 }}
-            className="text-sm text-[#8A8A8A] mb-8 max-w-xl mx-auto text-center"
-          >
-            Photos, logs, and site activity become immutable, timestamped proof regulators accept.
-          </motion.p>
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6 }}
-            className="grid grid-cols-1 md:grid-cols-4 gap-8 md:gap-6"
-          >
+        {/* Process — Capture → Review → Anchor → Defend */}
+        <section id="how-it-works" className="max-w-4xl mx-auto px-6 py-20 border-t border-white/5">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-8 md:gap-6">
             <div>
               <div className="text-[#F97316] font-semibold text-sm mb-2">Capture</div>
               <p className="text-[#A1A1A1] text-sm leading-relaxed">
-                Field evidence, once.
+                Field evidence recorded as work happens.
               </p>
             </div>
             <div>
               <div className="text-[#F97316] font-semibold text-sm mb-2">Review</div>
               <p className="text-[#A1A1A1] text-sm leading-relaxed">
-                Flag risk before it compounds.
+                Risks flagged before they compound.
               </p>
             </div>
             <div>
               <div className="text-[#F97316] font-semibold text-sm mb-2">Anchor</div>
               <p className="text-[#A1A1A1] text-sm leading-relaxed">
-                Freeze records to the ledger.
+                Records frozen into the ledger.
               </p>
             </div>
             <div>
               <div className="text-[#F97316] font-semibold text-sm mb-2">Defend</div>
               <p className="text-[#A1A1A1] text-sm leading-relaxed">
-                Export proof regulators accept.
+                Proof packs exported for audits and claims.
               </p>
             </div>
-          </motion.div>
-          <motion.div
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.4, delay: 0.2 }}
-            className="flex justify-center mt-12"
-          >
-            <span className="px-4 py-2 text-xs bg-[#121212] text-white/70 border border-white/10 rounded-lg font-mono">
-              Ledger Contract v1.0 (Frozen)
-            </span>
-          </motion.div>
+          </div>
+        </section>
+
+        {/* Proof — real PDF packets */}
+        <section id="proof" className="max-w-6xl mx-auto px-6 py-20 border-t border-white/5">
+          <h2 className="text-2xl font-semibold text-white mb-8 text-center">Proof packs</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {[
+              { name: 'Compliance Packet', pdf: '/Test-compliance-packet.pdf' },
+              { name: 'Incident Packet', pdf: '/Test-incident-packet.pdf' },
+              { name: 'Insurance Packet', pdf: '/Test-insurance-packet.pdf' },
+              { name: 'Audit Packet', pdf: '/Test-audit-packet.pdf' },
+            ].map((pack) => (
+              <a
+                key={pack.name}
+                href={pack.pdf}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block p-6 bg-[#121212] border border-white/10 rounded-lg hover:border-white/20 transition-colors text-left group"
+              >
+                <div className="aspect-[3/4] mb-4 bg-white/5 rounded border border-white/5 overflow-hidden">
+                  <object
+                    data={`${pack.pdf}#page=1&view=FitH`}
+                    type="application/pdf"
+                    className="w-full h-full pointer-events-none"
+                    aria-hidden
+                  >
+                    <div className="w-full h-full flex items-center justify-center text-white/30 text-sm">
+                      PDF
+                    </div>
+                  </object>
+                </div>
+                <div className="font-medium text-white mb-1 group-hover:text-[#F97316] transition-colors">{pack.name}</div>
+                <div className="text-xs text-white/40">Generated Feb 7, 2026</div>
+                <div className="text-[10px] text-white/30 mt-2">Immutable • Timestamped • Exported</div>
+              </a>
+            ))}
+          </div>
         </section>
 
         {/* Enhanced Trust Signals Section */}
