@@ -1,0 +1,12 @@
+<!--
+  Anchored Proof"  Riskmate Abstract Symbol (v1)
+  Two elements ’ one resolved structure
+  ViewBox: 0 0 24 24 | Scale via viewBox, never via path edits
+  Use: App icon, Web hero, UI small use (solid fill)
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" role="img" aria-label="Anchored Proof symbol">
+  <!-- Bottom block (Anchor): 16×6, bottom-aligned, center axis -->
+  <rect x="4" y="18" width="16" height="6" rx="0" fill="currentColor"/>
+  <!-- Top block (Proof): 12×5, gap 1 from anchor, +1 offset right (intentional tension) -->
+  <rect x="7" y="12" width="12" height="5" rx="0" fill="currentColor"/>
+</svg>

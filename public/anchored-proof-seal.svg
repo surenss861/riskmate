@@ -1,0 +1,12 @@
+<!--
+  Anchored Proof"  Ledger Seal variant
+  Stroke only, opacity 0.22
+  Use: PDF stamp, proof pack watermark, footer seal
+  Apply fill="none" stroke="currentColor" stroke-width="1" opacity="0.22" in context
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" opacity="0.22" role="img" aria-label="Anchored Proof seal">
+  <!-- Bottom block (Anchor): 16×6 -->
+  <rect x="4" y="18" width="16" height="6" rx="0" stroke="currentColor" fill="none"/>
+  <!-- Top block (Proof): 12×5, +1 offset right -->
+  <rect x="7" y="12" width="12" height="5" rx="0" stroke="currentColor" fill="none"/>
+</svg>
