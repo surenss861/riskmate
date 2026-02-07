@@ -168,7 +168,7 @@ struct JobsListView: View {
                                 VStack(spacing: RMTheme.Spacing.sm) {
                                     Divider()
                                         .background(RMTheme.Colors.divider.opacity(0.3))
-                                    Text("Riskmate creates permanent proof so compliance is never questioned.")
+                                    Text("Work Records become immutable only when anchored to the ledger.")
                                         .font(RMTheme.Typography.bodySmall)
                                         .foregroundColor(RMTheme.Colors.textTertiary)
                                         .multilineTextAlignment(.center)
@@ -243,9 +243,14 @@ struct JobsListView: View {
                                 }
                             }
                             } header: {
-                                Text("Proof Records")
-                                    .font(.system(size: 15, weight: .semibold))
-                                    .foregroundColor(RMTheme.Colors.textPrimary)
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Proof Records")
+                                        .font(.system(size: 15, weight: .semibold))
+                                        .foregroundColor(RMTheme.Colors.textPrimary)
+                                    Text("Not yet anchored")
+                                        .font(RMTheme.Typography.caption)
+                                        .foregroundColor(RMTheme.Colors.textTertiary)
+                                }
                             }
                             // Load more indicator
                             if jobsStore.isLoadingMore {
