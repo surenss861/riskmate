@@ -276,6 +276,12 @@ export default function HomePage() {
             >
               Audit-ready proof packs from everyday field work
             </motion.h1>
+            <motion.div
+              className="h-0.5 w-24 mx-auto mb-6 bg-[#F97316]"
+              initial={{ opacity: 0, scaleX: 0.8 }}
+              animate={{ opacity: 1, scaleX: 1 }}
+              transition={{ duration: 0.5, delay: 0.2 }}
+            />
             <motion.p
               className="text-xl text-[#A1A1A1] mb-6 max-w-2xl mx-auto"
               initial={{ opacity: 0, y: 20 }}
