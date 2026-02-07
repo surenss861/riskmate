@@ -336,12 +336,12 @@ export default function HomePage() {
               Capture once. Anchor permanently. Defend forever.
             </motion.p>
             <motion.p
-              className="text-sm text-[#8A8A8A] mb-8 max-w-xl mx-auto"
+              className="text-xl text-[#A1A1A1] mb-8 max-w-2xl mx-auto"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: 0.5, delay: 0.4 }}
             >
-              Photos, logs, and site activity become immutable, timestamped proof regulators accept.
+              Proof that holds up when it matters.
             </motion.p>
             <motion.div
               className="flex flex-col sm:flex-row gap-4 justify-center mb-4"
@@ -396,6 +396,9 @@ export default function HomePage() {
             transition={{ duration: 0.5 }}
             className="mx-auto max-w-sm"
           >
+            <p className="text-[10px] md:text-[11px] uppercase tracking-wider text-white/45 mb-3 text-center">
+              Example audit-ready proof pack
+            </p>
             <div 
               className="bg-[#1A1A1A] border border-white/10 rounded-lg overflow-hidden shadow-2xl"
               style={{ boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' }}
@@ -423,8 +426,30 @@ export default function HomePage() {
           </motion.div>
         </section>
 
+        {/* Tension sentence — why this exists */}
+        <section className="max-w-4xl mx-auto px-6 pt-12 pb-4">
+          <motion.p
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5 }}
+            className="text-center text-[#A1A1A1] text-lg md:text-xl max-w-2xl mx-auto"
+          >
+            Most field evidence dies in court. Riskmate turns it into proof.
+          </motion.p>
+        </section>
+
         {/* 4-step mental model — Capture → Review → Anchor → Defend */}
-        <section id="how-it-works" className="max-w-4xl mx-auto px-6 py-20 border-t border-white/5">
+        <section id="how-it-works" className="max-w-4xl mx-auto px-6 py-16 border-t border-white/5">
+          <motion.p
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.4 }}
+            className="text-sm text-[#8A8A8A] mb-8 max-w-xl mx-auto text-center"
+          >
+            Photos, logs, and site activity become immutable, timestamped proof regulators accept.
+          </motion.p>
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
@@ -479,7 +504,7 @@ export default function HomePage() {
             transition={{ duration: 0.6 }}
             className="text-center mb-12"
           >
-            <p className="text-sm text-[#A1A1A1] mb-6">Trusted by contractors across Canada</p>
+            <p className="text-sm text-[#A1A1A1] mb-6">Used by general contractors and compliance teams across Canada</p>
             <div className="flex flex-wrap justify-center items-center gap-8 mb-8 opacity-60">
               {/* Placeholder company type logos */}
               <div className="px-6 py-3 bg-[#121212] rounded-lg border border-white/5 text-sm">Electrical Contractors</div>
