@@ -95,7 +95,7 @@ export default function HomePage() {
                 }}
                 className="text-white/70 hover:text-white transition-colors text-sm"
               >
-                How it Works
+                Process
               </button>
               <button
                 onClick={() => {
@@ -104,7 +104,7 @@ export default function HomePage() {
                 }}
                 className="text-white/70 hover:text-white transition-colors text-sm"
               >
-                Proof
+                Verification
               </button>
               <button
                 onClick={() => {
@@ -181,7 +181,7 @@ export default function HomePage() {
                   }}
                   className="block w-full text-left text-white/70 hover:text-white transition-colors py-2"
                 >
-                  How it Works
+                  Process
                 </button>
                 <button
                   onClick={() => {
@@ -191,7 +191,7 @@ export default function HomePage() {
                   }}
                   className="block w-full text-left text-white/70 hover:text-white transition-colors py-2"
                 >
-                  Proof
+                  Verification
                 </button>
                 <button
                   onClick={() => {
@@ -336,23 +336,13 @@ export default function HomePage() {
               Capture once. Anchor permanently. Defend forever.
             </motion.p>
             <motion.p
-              className="text-sm text-[#8A8A8A] mb-6 max-w-xl mx-auto"
+              className="text-sm text-[#8A8A8A] mb-8 max-w-xl mx-auto"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: 0.5, delay: 0.4 }}
             >
-              Photos, logs, and site activity are cryptographically anchored into an immutable audit record.
+              Photos, logs, and site activity become immutable, timestamped proof regulators accept.
             </motion.p>
-            <motion.div
-              className="flex justify-center mb-8"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.3 }}
-            >
-              <span className="px-4 py-2 text-xs bg-[#121212] text-white/70 border border-white/10 rounded-lg font-mono">
-                Ledger Contract v1.0 (Frozen)
-              </span>
-            </motion.div>
             <motion.div
               className="flex flex-col sm:flex-row gap-4 justify-center mb-4"
               initial={{ opacity: 0, y: 20 }}
@@ -369,7 +359,7 @@ export default function HomePage() {
                   Start Free
                 </motion.button>
                 <p className="text-xs text-white/45 mt-2 text-center sm:text-right">
-                  No credit card • Audit-safe from day one
+                  No credit card • Immutable records from day one
                 </p>
               </div>
               <div className="flex flex-col items-center sm:items-start">
@@ -395,6 +385,42 @@ export default function HomePage() {
               Used by general contractors, insurers, and compliance reviewers.
             </motion.p>
           </div>
+        </section>
+
+        {/* Proof pack artifact preview — static, no interactivity */}
+        <section className="max-w-4xl mx-auto px-6 -mt-8 pb-4">
+          <motion.div
+            initial={{ opacity: 0, y: 24 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5 }}
+            className="mx-auto max-w-sm"
+          >
+            <div 
+              className="bg-[#1A1A1A] border border-white/10 rounded-lg overflow-hidden shadow-2xl"
+              style={{ boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' }}
+            >
+              <div className="px-4 py-3 border-b border-white/10 bg-white/[0.02]">
+                <div className="text-xs font-mono text-white/80">Audit Proof Pack</div>
+              </div>
+              <div className="p-4 space-y-2 min-h-[120px] relative">
+                <div className="h-2 bg-white/5 rounded w-full" />
+                <div className="h-2 bg-white/5 rounded w-3/4" />
+                <div className="h-2 bg-white/5 rounded w-5/6" />
+                <div className="h-2 bg-white/5 rounded w-full" />
+                <div className="h-2 bg-white/5 rounded w-2/3" />
+                <div className="h-2 bg-white/5 rounded w-4/5" />
+                <div className="absolute inset-0 backdrop-blur-sm bg-black/20 pointer-events-none" aria-hidden />
+              </div>
+              <div className="px-4 py-3 border-t border-white/10 bg-white/[0.02] flex items-center justify-between gap-4">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-8 h-8 text-white/50" aria-hidden>
+                  <rect x="4" y="18" width="16" height="6" rx="0" />
+                  <rect x="7" y="12" width="12" height="5" rx="0" />
+                </svg>
+                <span className="text-[10px] font-mono text-white/40">2025-02-07T12:00:00Z</span>
+              </div>
+            </div>
+          </motion.div>
         </section>
 
         {/* 4-step mental model — Capture → Review → Anchor → Defend */}
@@ -430,6 +456,17 @@ export default function HomePage() {
                 Export proof regulators accept.
               </p>
             </div>
+          </motion.div>
+          <motion.div
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.4, delay: 0.2 }}
+            className="flex justify-center mt-12"
+          >
+            <span className="px-4 py-2 text-xs bg-[#121212] text-white/70 border border-white/10 rounded-lg font-mono">
+              Ledger Contract v1.0 (Frozen)
+            </span>
           </motion.div>
         </section>
 
