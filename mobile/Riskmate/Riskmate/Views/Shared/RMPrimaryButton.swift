@@ -1,5 +1,40 @@
 import SwiftUI
 
+/// Button style for auth primary actions — orange when enabled, neutral surface when disabled.
+/// Keeps "one orange element per screen" rule.
+struct RMPrimaryButtonStyle: ButtonStyle {
+    var isEnabled: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 17, weight: .semibold))
+            .foregroundColor(isEnabled ? .black : RMTheme.Colors.textTertiary.opacity(0.7))
+            .frame(maxWidth: .infinity)
+            .frame(height: 52)
+            .background(
+                Group {
+                    if isEnabled {
+                        LinearGradient(
+                            colors: [RMTheme.Colors.accent, RMTheme.Colors.accent.opacity(0.85)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    } else {
+                        RMTheme.Colors.surface
+                    }
+                }
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(RMTheme.Colors.border.opacity(isEnabled ? 0.0 : 0.8), lineWidth: 1)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .shadow(color: .black.opacity(isEnabled ? 0.25 : 0.10), radius: isEnabled ? 10 : 6, x: 0, y: 6)
+            .opacity(configuration.isPressed && isEnabled ? 0.92 : 1.0)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+    }
+}
+
 /// Riskmate primary button - keep orange, add press feel + haptic
 struct RMPrimaryButton: View {
     let title: String

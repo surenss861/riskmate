@@ -3,6 +3,7 @@ import SwiftUI
 /// Canonical auth screen when logged out. Landing = hero + bottom CTAs; form appears on tap.
 /// This file does NOT contain "Welcome Back" — hero copy is "Audit-ready proof packs." / "Compliance you can defend."
 struct AuthView: View {
+    @Environment(\.openURL) private var openURL
     @StateObject private var sessionManager = SessionManager.shared
 
     @State private var screen: Screen = .landing
@@ -19,17 +20,28 @@ struct AuthView: View {
 
     /// Button never looks tappable unless valid (Apple review: reviewers try empty submits)
     private var isFormValid: Bool {
-        guard !email.isEmpty, password.count >= 8 else { return false }
+        guard !email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              password.count >= 8 else { return false }
         if isSignup { return !confirmPassword.isEmpty && password == confirmPassword }
         return true
     }
 
     private var legalAgreementText: some View {
-        Text("By creating an account, you agree to our [Terms of Service](https://www.riskmate.dev/terms) and [Privacy Policy](https://www.riskmate.dev/privacy).")
-            .font(.caption2)
-            .foregroundColor(RMTheme.Colors.textTertiary)
-            .multilineTextAlignment(.center)
-            .tint(RMTheme.Colors.accent)
+        HStack(spacing: 0) {
+            Text("By creating an account, you agree to our ")
+            Button("Terms of Service") {
+                openURL(URL(string: "https://www.riskmate.dev/terms")!)
+            }
+            Text(" and ")
+            Button("Privacy Policy") {
+                openURL(URL(string: "https://www.riskmate.dev/privacy")!)
+            }
+            Text(".")
+        }
+        .font(.caption2)
+        .foregroundColor(RMTheme.Colors.textTertiary)
+        .tint(RMTheme.Colors.textSecondary)
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     @ViewBuilder
@@ -194,13 +206,10 @@ struct AuthView: View {
                             .padding(.top, -32)
                     }
 
-                    // FORM (only when login/signup) — centered auth rail (~45–55% down)
+                    // FORM (only when login/signup) — AuthRail centers card, scrolls with keyboard
                     if screen != .landing {
-                    ScrollView(showsIndicators: false) {
-                        VStack(spacing: 0) {
-                            Spacer(minLength: 44)
-                            RMGlassCard(reducedShadow: true) {
-                            VStack(alignment: .leading, spacing: 0) {
+                    AuthRail {
+                        VStack(alignment: .leading, spacing: 0) {
                                 // Back only — no duplicate CTA in header (Apple review)
                                 Button {
                                     clearFormState()
@@ -227,9 +236,10 @@ struct AuthView: View {
                                         .foregroundColor(RMTheme.Colors.textSecondary)
                                 }
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.top, 4)
                                 .padding(.bottom, 14) // Subhead → first field: 14–16pt
 
+                            RMGlassCard(reducedShadow: true) {
+                                VStack(alignment: .leading, spacing: 0) {
                                 RMAuthTextField(
                                     title: "Email",
                                     text: $email,
@@ -264,11 +274,15 @@ struct AuthView: View {
                                 .padding(.bottom, isSignup ? 10 : 6) // Fields: 10pt; Password → Forgot: 6pt
 
                                 if !isSignup {
-                                    Link("Forgot password?", destination: URL(string: "https://www.riskmate.dev/forgot-password")!)
+                                    HStack {
+                                        Spacer()
+                                        Button("Forgot password?") {
+                                            openURL(URL(string: "https://www.riskmate.dev/forgot-password")!)
+                                        }
                                         .font(.footnote)
                                         .foregroundColor(RMTheme.Colors.textTertiary)
-                                        .frame(maxWidth: .infinity, alignment: .trailing)
-                                        .padding(.bottom, 12) // Forgot → button: 12–14pt
+                                    }
+                                    .padding(.bottom, 12) // Forgot → button: 12–14pt
                                 }
 
                                 if isSignup {
@@ -298,11 +312,14 @@ struct AuthView: View {
                                         .padding(.bottom, 12) // Legal → button
                                 }
 
-                                    RMPrimaryButton(
-                                    title: isSignup ? "Create Account" : "Sign In",
-                                    isLoading: sessionManager.isLoading,
-                                    isDisabled: !isFormValid
-                                ) { handleSubmit() }
+                                Button {
+                                    Haptics.tap()
+                                    handleSubmit()
+                                } label: {
+                                    Text(sessionManager.isLoading ? (isSignup ? "Creating..." : "Signing In...") : (isSignup ? "Create Account" : "Sign In"))
+                                }
+                                .buttonStyle(RMPrimaryButtonStyle(isEnabled: isFormValid && !sessionManager.isLoading))
+                                .disabled(!isFormValid || sessionManager.isLoading)
                                 .padding(.bottom, 12) // Button → footer: 12–16pt
 
                                 if let errorText {
@@ -334,13 +351,10 @@ struct AuthView: View {
                                     .foregroundColor(RMTheme.Colors.accent)
                                 }
                                 .font(.footnote)
+                                }
                             }
                         }
                         .frame(maxWidth: 420)
-                        .padding(.horizontal, 20)
-                            Spacer(minLength: 0)
-                        }
-                        .frame(minHeight: geo.size.height - safeTop - safeBottom)
                     }
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
