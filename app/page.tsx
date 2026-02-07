@@ -255,6 +255,51 @@ export default function HomePage() {
               backgroundSize: '48px 48px',
             }}
           />
+          {/* Anchored Proof symbol — faint, behind content, one-time lock-in animation */}
+          <motion.div
+            className="absolute inset-0 flex items-center justify-center pointer-events-none"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.8 }}
+          >
+            <motion.div
+              className="relative"
+              initial={{ filter: 'drop-shadow(0 0 0 rgba(249,115,22,0))' }}
+              animate={{
+                filter: [
+                  'drop-shadow(0 0 0 rgba(249,115,22,0))',
+                  'drop-shadow(0 0 12px rgba(249,115,22,0.35))',
+                  'drop-shadow(0 0 8px rgba(249,115,22,0.15))',
+                ],
+              }}
+              transition={{
+                times: [0, 0.7, 0.9],
+                duration: 1,
+              }}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                className="w-28 md:w-36 h-28 md:h-36 text-white/[0.06]"
+                fill="currentColor"
+              >
+                <rect x="4" y="18" width="16" height="6" rx="0" />
+                <motion.rect
+                  x="7"
+                  width="12"
+                  height="5"
+                  rx="0"
+                  fill="currentColor"
+                  initial={{ y: 2 }}
+                  animate={{ y: 12 }}
+                  transition={{
+                    duration: 0.35,
+                    delay: 0.15,
+                    ease: [0.25, 0.46, 0.45, 0.94],
+                  }}
+                />
+              </svg>
+            </motion.div>
+          </motion.div>
           <div className="relative z-10 max-w-4xl mx-auto px-6 py-20 text-center">
             <motion.div
               className="mb-6 flex justify-center"
@@ -283,12 +328,20 @@ export default function HomePage() {
               transition={{ duration: 0.5, delay: 0.2 }}
             />
             <motion.p
-              className="text-xl text-[#A1A1A1] mb-6 max-w-2xl mx-auto"
+              className="text-xl text-[#A1A1A1] mb-3 max-w-2xl mx-auto"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.2 }}
             >
               Capture once. Anchor permanently. Defend forever.
+            </motion.p>
+            <motion.p
+              className="text-sm text-[#8A8A8A] mb-6 max-w-xl mx-auto"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.5, delay: 0.4 }}
+            >
+              Photos, logs, and site activity are cryptographically anchored into an immutable audit record.
             </motion.p>
             <motion.div
               className="flex justify-center mb-8"
@@ -319,14 +372,19 @@ export default function HomePage() {
                   No credit card • Audit-safe from day one
                 </p>
               </div>
-              <motion.button
-                onClick={() => setSampleReportOpen(true)}
-                className="px-8 py-4 text-white/60 hover:text-white/90 transition-colors font-medium text-lg"
-                whileHover={{ scale: 1.01 }}
-                whileTap={{ scale: 0.99 }}
-              >
-                View Sample Report
-              </motion.button>
+              <div className="flex flex-col items-center sm:items-start">
+                <span className="text-[10px] md:text-[11px] uppercase tracking-wider text-white/45 mb-1">
+                  See an actual audit-ready proof pack
+                </span>
+                <motion.button
+                  onClick={() => setSampleReportOpen(true)}
+                  className="px-8 py-4 text-white/60 hover:text-white/90 transition-colors font-medium text-lg"
+                  whileHover={{ scale: 1.01 }}
+                  whileTap={{ scale: 0.99 }}
+                >
+                  View Sample Report
+                </motion.button>
+              </div>
             </motion.div>
             <motion.p
               className="text-xs text-white/40"
@@ -334,7 +392,7 @@ export default function HomePage() {
               animate={{ opacity: 1 }}
               transition={{ duration: 0.6, delay: 0.6 }}
             >
-              Built for contractors, insurers, and regulators.
+              Used by general contractors, insurers, and compliance reviewers.
             </motion.p>
           </div>
         </section>
@@ -351,25 +409,25 @@ export default function HomePage() {
             <div>
               <div className="text-[#F97316] font-semibold text-sm mb-2">Capture</div>
               <p className="text-[#A1A1A1] text-sm leading-relaxed">
-                Evidence from the field. Hazards, photos, checklists — captured where the work happens.
+                Field evidence, once.
               </p>
             </div>
             <div>
               <div className="text-[#F97316] font-semibold text-sm mb-2">Review</div>
               <p className="text-[#A1A1A1] text-sm leading-relaxed">
-                Work records live in your operations view until ready. No premature locking.
+                Flag risk before it compounds.
               </p>
             </div>
             <div>
               <div className="text-[#F97316] font-semibold text-sm mb-2">Anchor</div>
               <p className="text-[#A1A1A1] text-sm leading-relaxed">
-                Once anchored, records are immutable. Timestamped, hashed, and bound to the ledger.
+                Freeze records to the ledger.
               </p>
             </div>
             <div>
               <div className="text-[#F97316] font-semibold text-sm mb-2">Defend</div>
               <p className="text-[#A1A1A1] text-sm leading-relaxed">
-                Export proof packs. Audit-ready PDFs, attestations, and chain-of-custody on demand.
+                Export proof regulators accept.
               </p>
             </div>
           </motion.div>
