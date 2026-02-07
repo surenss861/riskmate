@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Image from 'next/image'
 import { motion } from 'framer-motion'
-import RiskMateLogo from '@/components/RiskMateLogo'
+import RiskmateLogo from '@/components/RiskmateLogo'
 
 interface ClientReport {
   job: {
@@ -89,7 +89,7 @@ export default function ClientPortalPage() {
     <div className="min-h-screen bg-[#050505] text-white">
       <header className="border-b border-white/10 px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <RiskMateLogo size="md" showText />
+          <RiskmateLogo size="md" showText />
           <p className="text-sm text-white/60">Client Portal</p>
         </div>
       </header>

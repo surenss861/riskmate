@@ -2,7 +2,7 @@
 
 import { motion } from 'framer-motion'
 
-interface RiskMateLogoProps {
+interface RiskmateLogoProps {
   width?: number
   height?: number
   showText?: boolean
@@ -11,20 +11,18 @@ interface RiskMateLogoProps {
   size?: 'sm' | 'md' | 'lg'
 }
 
-export default function RiskMateLogo({
+export default function RiskmateLogo({
   width,
   height,
   showText = true,
   className = '',
   animated = false,
   size,
-}: RiskMateLogoProps) {
-  // Determine text size based on size prop or width
+}: RiskmateLogoProps) {
   const getTextSize = () => {
     if (size === 'sm') return 'text-sm'
     if (size === 'lg') return 'text-2xl'
     if (size === 'md') return 'text-lg'
-    // Default based on width if provided
     if (width && width < 30) return 'text-sm'
     if (width && width > 50) return 'text-2xl'
     return 'text-base'
@@ -61,4 +59,3 @@ export default function RiskMateLogo({
 
   return <LogoText />
 }
-

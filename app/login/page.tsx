@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { motion } from 'framer-motion'
-import RiskMateLogo from '@/components/RiskMateLogo'
+import RiskmateLogo from '@/components/RiskmateLogo'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -46,7 +46,7 @@ export default function LoginPage() {
           className="bg-[#121212]/80 backdrop-blur-sm border border-white/10 rounded-xl p-8"
         >
           <div className="flex items-center justify-center mb-8">
-            <RiskMateLogo size="lg" showText={true} />
+            <RiskmateLogo size="lg" showText={true} />
           </div>
 
           <h1 className="text-3xl font-bold mb-2 font-display">Welcome Back</h1>

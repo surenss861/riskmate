@@ -1,7 +1,5 @@
 'use client'
 
-import { motion } from 'framer-motion'
-
 interface RiskmateLogoAltProps {
   width?: number
   height?: number
@@ -10,10 +8,6 @@ interface RiskmateLogoAltProps {
   variant?: 'shield' | 'badge' | 'minimal'
 }
 
-/**
- * Alternative logo designs for Riskmate
- * Variant options: shield (default), badge, minimal
- */
 export default function RiskmateLogoAlt({
   width = 28,
   height = 28,
@@ -73,7 +67,6 @@ export default function RiskmateLogoAlt({
           <stop offset="100%" stopColor="#EA580C" />
         </linearGradient>
       </defs>
-      {/* Hexagon badge */}
       <path
         d="M20 2L32 10V20L20 38L8 20V10L20 2Z"
         fill="url(#badgeGrad)"
@@ -107,7 +100,6 @@ export default function RiskmateLogoAlt({
           <stop offset="100%" stopColor="#FF8A00" />
         </linearGradient>
       </defs>
-      {/* Simple shield outline */}
       <path
         d="M20 4L8 9V19C8 26.5 13.5 33.5 20 36C26.5 33.5 32 26.5 32 19V9L20 4Z"
         fill="none"
@@ -149,4 +141,3 @@ export default function RiskmateLogoAlt({
     </div>
   )
 }
-

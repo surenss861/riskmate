@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { motion } from 'framer-motion'
-import RiskMateLogo from '@/components/RiskMateLogo'
+import RiskmateLogo from '@/components/RiskmateLogo'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
 interface DashboardNavbarProps {
@@ -97,7 +97,7 @@ export function DashboardNavbar({ email, onLogout }: DashboardNavbarProps) {
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.4 }}
           >
-            <RiskMateLogo size="sm" showText />
+            <RiskmateLogo size="sm" showText />
           </motion.div>
           {!loading && (
             <nav className="hidden items-center gap-6 md:flex">

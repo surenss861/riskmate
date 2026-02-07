@@ -6,7 +6,7 @@ import { jobsApi } from '@/lib/api'
 import { useRiskFactors, useTemplates } from '@/lib/cache'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import ProtectedRoute from '@/components/ProtectedRoute'
-import RiskMateLogo from '@/components/RiskMateLogo'
+import RiskmateLogo from '@/components/RiskmateLogo'
 import { spacing, typography } from '@/lib/styles/design-system'
 import { AppBackground, AppShell, PageSection, GlassCard, Button, Input, Select, PageHeader } from '@/components/shared'
 

@@ -6,7 +6,7 @@ import { jobsApi, teamApi } from '@/lib/api'
 import { useRiskFactors, usePlan } from '@/lib/cache'
 import { Toast } from '@/components/dashboard/Toast'
 import ProtectedRoute from '@/components/ProtectedRoute'
-import RiskMateLogo from '@/components/RiskMateLogo'
+import RiskmateLogo from '@/components/RiskmateLogo'
 import { GenerationProgressModal } from '@/components/dashboard/GenerationProgressModal'
 import { DashboardSkeleton, SkeletonLoader } from '@/components/dashboard/SkeletonLoader'
 import { EditableText } from '@/components/dashboard/EditableText'
@@ -667,7 +667,7 @@ export default function JobDetailPage() {
           <div className="max-w-7xl mx-auto px-6 py-4">
             <div className="flex items-center justify-between min-w-0">
               <div className="flex items-center gap-3 min-w-0 flex-shrink-0">
-                <RiskMateLogo size="sm" showText={true} />
+                <RiskmateLogo size="sm" showText={true} />
               </div>
               <div className="flex items-center gap-3 min-w-0 flex-wrap justify-end">
                 <button

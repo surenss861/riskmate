@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { motion } from 'framer-motion'
 import ScrollToTop from '@/components/ScrollToTop'
-import RiskMateLogo from '@/components/RiskMateLogo'
+import RiskmateLogo from '@/components/RiskmateLogo'
 import { SampleReportModal } from '@/components/marketing'
 import { 
   EventChip, 
@@ -79,7 +79,7 @@ export default function HomePage() {
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.4 }}
             >
-              <RiskMateLogo size="sm" showText={true} />
+              <RiskmateLogo size="sm" showText={true} />
             </motion.div>
             <div className="hidden md:flex items-center gap-6 min-w-0 flex-wrap justify-end">
               <button

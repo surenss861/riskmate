@@ -241,8 +241,8 @@ React components used by the app and marketing pages.
 | `components/StripeCheckout.tsx` | Stripe checkout UI. |
 | `components/ToastContainer.tsx` | Global toast container. |
 | `components/UpgradeBanner.tsx` | Plan upgrade banner. |
-| `components/RiskMateLogo.tsx` | RiskMate logo. |
-| `components/RiskMateLogoAlt.tsx` | Alt logo. |
+| `components/RiskmateLogo.tsx` | Riskmate logo. |
+| `components/RiskmateLogoAlt.tsx` | Alt logo. |
 | `components/ScrollSection.tsx` | Scroll section wrapper. |
 
 ### audit/
