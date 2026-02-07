@@ -254,8 +254,18 @@ export default function HomePage() {
             <h1 className="text-5xl md:text-6xl font-bold mb-6 font-display text-white">
               Audit-ready proof packs from everyday field work
             </h1>
+            <motion.div
+              className="h-0.5 w-7 mx-auto mb-6 bg-[#F97316] origin-center"
+              initial={{ scaleX: 0 }}
+              animate={{ scaleX: 1 }}
+              transition={{
+                delay: 0.3,
+                duration: 0.22,
+                ease: [0.4, 0, 0.2, 1],
+              }}
+            />
             <p className="text-xl text-[#A1A1A1] mb-10 max-w-2xl mx-auto">
-              Turn photos, logs, and site activity into evidence regulators accept.
+              Field records, locked into audit-grade proof.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <button
@@ -303,6 +313,9 @@ export default function HomePage() {
             </div>
           </div>
         </section>
+
+        {/* Spacer — hero = promise, scroll = evidence */}
+        <div className="min-h-[50vh]" aria-hidden />
 
         {/* Proof — real PDF packets */}
         <section id="proof" className="max-w-6xl mx-auto px-6 py-20 border-t border-white/5">
