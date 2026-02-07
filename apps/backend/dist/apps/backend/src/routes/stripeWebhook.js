@@ -246,7 +246,7 @@ async function stripeWebhookHandler(req, res) {
             // Non-critical - log but don't fail
             console.warn("Failed to track webhook failure:", trackErr);
         }
-        return res.status(400).send(`Webhook Error: ${err?.message}`);
+        return res.status(401).send(`Webhook Error: ${err?.message}`);
     }
     // Idempotency check: skip if already processed
     const { data: existingEvent } = await supabaseClient_1.supabase

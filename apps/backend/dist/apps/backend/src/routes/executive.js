@@ -703,7 +703,7 @@ exports.executiveRouter.post('/alerts/check', async (req, res) => {
                 {
                     key: 'INTEGRITY_ERROR',
                     shouldAlert: (m) => m.ledger_integrity === 'error',
-                    subject: () => 'RiskMate — Ledger Integrity Error',
+                    subject: () => 'Riskmate — Ledger Integrity Error',
                     body: (m, orgName) => {
                         const errorDetails = m.ledger_integrity_error_details;
                         return `
@@ -721,7 +721,7 @@ exports.executiveRouter.post('/alerts/check', async (req, res) => {
                 {
                     key: 'VIOLATIONS_PRESENT',
                     shouldAlert: (m) => (m.recent_violations || 0) > 0,
-                    subject: (m) => `RiskMate — ${m.recent_violations} Security Violation${m.recent_violations > 1 ? 's' : ''} Detected`,
+                    subject: (m) => `Riskmate — ${m.recent_violations} Security Violation${m.recent_violations > 1 ? 's' : ''} Detected`,
                     body: (m, orgName) => `
             <h2>Security Violations Detected</h2>
             <p>${m.recent_violations} unauthorized access attempt${m.recent_violations > 1 ? 's' : ''} ${m.recent_violations > 1 ? 'have' : 'has'} been blocked for ${orgName}.</p>
@@ -735,7 +735,7 @@ exports.executiveRouter.post('/alerts/check', async (req, res) => {
                         const delta = m.deltas?.high_risk_jobs || 0;
                         return delta >= 3 && timeRange !== 'all'; // Only alert on deltas for time-bounded ranges
                     },
-                    subject: (m) => `RiskMate — High-Risk Jobs Increased by ${m.deltas?.high_risk_jobs || 0}`,
+                    subject: (m) => `Riskmate — High-Risk Jobs Increased by ${m.deltas?.high_risk_jobs || 0}`,
                     body: (m, orgName) => {
                         const delta = m.deltas?.high_risk_jobs || 0;
                         const current = m.high_risk_jobs || 0;
@@ -751,7 +751,7 @@ exports.executiveRouter.post('/alerts/check', async (req, res) => {
                 {
                     key: 'ATTESTATIONS_OVERDUE',
                     shouldAlert: (m) => (m.pending_signoffs || 0) > 0,
-                    subject: (m) => `RiskMate — ${m.pending_signoffs} Pending Attestation${m.pending_signoffs > 1 ? 's' : ''}`,
+                    subject: (m) => `Riskmate — ${m.pending_signoffs} Pending Attestation${m.pending_signoffs > 1 ? 's' : ''}`,
                     body: (m, orgName) => `
             <h2>Pending Attestations</h2>
             <p>${m.pending_signoffs} attestation${m.pending_signoffs > 1 ? 's are' : ' is'} pending for ${orgName}.</p>

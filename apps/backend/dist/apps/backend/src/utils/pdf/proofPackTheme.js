@@ -15,7 +15,7 @@ const normalize_1 = require("./normalize");
 /**
  * Shared PDF theme for all proof pack PDFs
  */
-// Draw consistent header with RiskMate branding
+// Draw consistent header with Riskmate branding
 function drawHeader(doc, options) {
     const margin = styles_1.STYLES.spacing.pageMargin;
     doc.y = margin;

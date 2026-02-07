@@ -121,7 +121,7 @@ async function generateExecutiveBriefPDF(brief, organizationName, generatedBy) {
         for (let i = 0; i < pageCount; i++) {
             doc.switchToPage(i);
             doc.fontSize(8).font('Helvetica-Oblique');
-            doc.text(`RiskMate Executive Brief | Generated ${new Date(brief.generated_at).toLocaleDateString()} | Page ${i + 1} of ${pageCount}`, 50, doc.page.height - 30, { align: 'center', width: doc.page.width - 100 });
+            doc.text(`Riskmate Executive Brief | Generated ${new Date(brief.generated_at).toLocaleDateString()} | Page ${i + 1} of ${pageCount}`, 50, doc.page.height - 30, { align: 'center', width: doc.page.width - 100 });
         }
         doc.end();
     });

@@ -14,7 +14,7 @@ function addWatermark(doc) {
         .font(styles_1.STYLES.fonts.light);
     doc
         .opacity(0.05)
-        .text('RiskMate', doc.page.width / 2, doc.page.height / 2, {
+        .text('Riskmate', doc.page.width / 2, doc.page.height / 2, {
         align: 'center',
         width: 200,
         lineBreak: false,
@@ -167,7 +167,7 @@ function addFooterInline(doc, organization, jobId, reportGeneratedAt, pageNumber
         .fillColor(styles_1.STYLES.colors.accent)
         .fontSize(10)
         .font(styles_1.STYLES.fonts.header)
-        .text('RiskMate', margin, footerY + 8, {
+        .text('Riskmate', margin, footerY + 8, {
         width: 100,
         lineBreak: false,
     });

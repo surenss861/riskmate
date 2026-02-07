@@ -40,6 +40,31 @@ exports.exportsRouter.post('/jobs/:id/export/pdf', auth_1.authenticate, rateLimi
             res.setHeader('X-Error-ID', errorId);
             return res.status(404).json(errorResponse);
         }
+        // Idempotent: if an export is already queued/processing for (jobId, type), return it
+        const { data: existingInProgress } = await supabaseClient_1.supabase
+            .from('exports')
+            .select('id, export_type, state, progress, created_at, started_at, completed_at')
+            .eq('organization_id', organization_id)
+            .eq('work_record_id', jobId)
+            .eq('export_type', export_type)
+            .in('state', ['queued', 'preparing', 'generating', 'uploading'])
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+        if (existingInProgress) {
+            res.setHeader('X-Export-In-Progress', 'true');
+            return res.status(200).json({
+                data: {
+                    id: existingInProgress.id,
+                    export_type: existingInProgress.export_type,
+                    state: existingInProgress.state,
+                    progress: existingInProgress.progress,
+                    created_at: existingInProgress.created_at,
+                    started_at: existingInProgress.started_at,
+                    completed_at: existingInProgress.completed_at,
+                },
+            });
+        }
         // Get idempotency key (optional but recommended)
         const idempotencyKey = (0, idempotency_1.getIdempotencyKey)(req) || req.body?.idempotency_key || crypto_1.default.randomUUID();
         // Check idempotency
@@ -94,6 +119,8 @@ exports.exportsRouter.post('/jobs/:id/export/pdf', auth_1.authenticate, rateLimi
             export_type,
         });
         if (insertError) {
+            // Log actual DB error for debugging (e.g. missing table/columns in production)
+            console.error('[exports] INSERT exports failed:', insertError.code, insertError.message, { jobId, organization_id, export_type });
             // Check for unique constraint violation (idempotency race condition)
             if (insertError.code === '23505') {
                 const { data: existing } = await supabaseClient_1.supabase
@@ -126,6 +153,19 @@ exports.exportsRouter.post('/jobs/:id/export/pdf', auth_1.authenticate, rateLimi
             });
             res.setHeader('X-Error-ID', errorId);
             (0, errorResponse_1.logErrorForSupport)(500, 'DATABASE_ERROR', requestId, organization_id, errorResponse.message, errorResponse.internal_message, 'operations', 'error', '/api/jobs/:id/export/pdf');
+            return res.status(500).json(errorResponse);
+        }
+        // Defensive: Supabase can succeed with null data in edge cases
+        if (!exportJob) {
+            console.error('[exports] INSERT succeeded but no row returned', { jobId, organization_id, export_type });
+            const { response: errorResponse, errorId } = (0, errorResponse_1.createErrorResponse)({
+                message: 'Failed to create export job',
+                internalMessage: 'Export record created but response missing',
+                code: 'DATABASE_ERROR',
+                requestId,
+                statusCode: 500,
+            });
+            res.setHeader('X-Error-ID', errorId);
             return res.status(500).json(errorResponse);
         }
         res.status(201).json({
@@ -179,6 +219,31 @@ exports.exportsRouter.post('/jobs/:id/export/proof-pack', auth_1.authenticate, r
             res.setHeader('X-Error-ID', errorId);
             return res.status(404).json(errorResponse);
         }
+        // Idempotent: if an export is already queued/processing for (jobId, proof_pack), return it
+        const { data: existingInProgressProof } = await supabaseClient_1.supabase
+            .from('exports')
+            .select('id, export_type, state, progress, created_at, started_at, completed_at')
+            .eq('organization_id', organization_id)
+            .eq('work_record_id', jobId)
+            .eq('export_type', 'proof_pack')
+            .in('state', ['queued', 'preparing', 'generating', 'uploading'])
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+        if (existingInProgressProof) {
+            res.setHeader('X-Export-In-Progress', 'true');
+            return res.status(200).json({
+                data: {
+                    id: existingInProgressProof.id,
+                    export_type: existingInProgressProof.export_type,
+                    state: existingInProgressProof.state,
+                    progress: existingInProgressProof.progress,
+                    created_at: existingInProgressProof.created_at,
+                    started_at: existingInProgressProof.started_at,
+                    completed_at: existingInProgressProof.completed_at,
+                },
+            });
+        }
         // Get idempotency key
         const idempotencyKey = (0, idempotency_1.getIdempotencyKey)(req) || req.body?.idempotency_key || crypto_1.default.randomUUID();
         // Check idempotency
@@ -222,6 +287,7 @@ exports.exportsRouter.post('/jobs/:id/export/proof-pack', auth_1.authenticate, r
             .select()
             .single();
         if (insertError) {
+            console.error('[exports] INSERT exports (proof_pack) failed:', insertError.code, insertError.message, { jobId, organization_id });
             if (insertError.code === '23505') {
                 const { data: existing } = await supabaseClient_1.supabase
                     .from('exports')
@@ -255,6 +321,18 @@ exports.exportsRouter.post('/jobs/:id/export/proof-pack', auth_1.authenticate, r
             (0, errorResponse_1.logErrorForSupport)(500, 'DATABASE_ERROR', requestId, organization_id, errorResponse.message, errorResponse.internal_message, 'operations', 'error', '/api/jobs/:id/export/proof-pack');
             return res.status(500).json(errorResponse);
         }
+        if (!exportJob) {
+            console.error('[exports] INSERT (proof_pack) succeeded but no row returned', { jobId, organization_id });
+            const { response: errorResponse, errorId } = (0, errorResponse_1.createErrorResponse)({
+                message: 'Failed to create export job',
+                internalMessage: 'Export record created but response missing',
+                code: 'DATABASE_ERROR',
+                requestId,
+                statusCode: 500,
+            });
+            res.setHeader('X-Error-ID', errorId);
+            return res.status(500).json(errorResponse);
+        }
         res.status(201).json({
             data: {
                 id: exportJob.id,
@@ -276,6 +354,85 @@ exports.exportsRouter.post('/jobs/:id/export/proof-pack', auth_1.authenticate, r
         });
         res.setHeader('X-Error-ID', errorId);
         (0, errorResponse_1.logErrorForSupport)(500, 'EXPORT_REQUEST_ERROR', requestId, authReq.user?.organization_id, errorResponse.message, errorResponse.internal_message, 'operations', 'error', '/api/jobs/:id/export/proof-pack');
+        res.status(500).json(errorResponse);
+    }
+});
+// GET /api/jobs/:id/exports
+// List exports for a job (export history)
+exports.exportsRouter.get('/jobs/:id/exports', auth_1.authenticate, async (req, res) => {
+    const authReq = req;
+    const requestId = authReq.requestId || 'unknown';
+    try {
+        const { organization_id } = authReq.user;
+        const jobId = req.params.id;
+        const { data: job, error: jobError } = await supabaseClient_1.supabase
+            .from('jobs')
+            .select('id, organization_id')
+            .eq('id', jobId)
+            .eq('organization_id', organization_id)
+            .single();
+        if (jobError || !job) {
+            const { response: errorResponse, errorId } = (0, errorResponse_1.createErrorResponse)({
+                message: 'Job not found',
+                internalMessage: `Job ${jobId} not found for org ${organization_id}`,
+                code: 'JOB_NOT_FOUND',
+                requestId,
+                statusCode: 404,
+            });
+            res.setHeader('X-Error-ID', errorId);
+            return res.status(404).json(errorResponse);
+        }
+        const { data: rows, error: fetchError } = await supabaseClient_1.supabase
+            .from('exports')
+            .select('id, export_type, state, failure_reason, created_at, completed_at, storage_path')
+            .eq('organization_id', organization_id)
+            .eq('work_record_id', jobId)
+            .order('created_at', { ascending: false })
+            .limit(100);
+        if (fetchError) {
+            const { response: errorResponse, errorId } = (0, errorResponse_1.createErrorResponse)({
+                message: 'Failed to load export history',
+                internalMessage: fetchError.message || String(fetchError),
+                code: 'DATABASE_ERROR',
+                requestId,
+                statusCode: 500,
+            });
+            res.setHeader('X-Error-ID', errorId);
+            (0, errorResponse_1.logErrorForSupport)(500, 'DATABASE_ERROR', requestId, organization_id, errorResponse.message, errorResponse.internal_message, 'operations', 'error', '/api/jobs/:id/exports');
+            return res.status(500).json(errorResponse);
+        }
+        // Signed URLs are generated per request only; never stored in DB.
+        const exports = await Promise.all((rows || []).map(async (row) => {
+            let download_url = null;
+            if (row.state === 'ready' && row.storage_path) {
+                const { data: signed } = await supabaseClient_1.supabase.storage
+                    .from('exports')
+                    .createSignedUrl(row.storage_path, 60 * 60 * 24 * 7);
+                download_url = signed?.signedUrl ?? null;
+            }
+            return {
+                id: row.id,
+                export_type: row.export_type,
+                state: row.state,
+                failure_reason: row.failure_reason ?? null,
+                created_at: row.created_at,
+                completed_at: row.completed_at ?? null,
+                download_url,
+            };
+        }));
+        res.json({ data: exports });
+    }
+    catch (err) {
+        console.error('[Export History] Error:', err);
+        const { response: errorResponse, errorId } = (0, errorResponse_1.createErrorResponse)({
+            message: 'Failed to load export history',
+            internalMessage: err?.message || String(err),
+            code: 'EXPORT_HISTORY_ERROR',
+            requestId,
+            statusCode: 500,
+        });
+        res.setHeader('X-Error-ID', errorId);
+        (0, errorResponse_1.logErrorForSupport)(500, 'EXPORT_HISTORY_ERROR', requestId, authReq.user?.organization_id, errorResponse.message, errorResponse.internal_message, 'operations', 'error', '/api/jobs/:id/exports');
         res.status(500).json(errorResponse);
     }
 });
@@ -325,6 +482,7 @@ exports.exportsRouter.get('/exports/:id', auth_1.authenticate, async (req, res) 
                 error_code: exportJob.error_code,
                 error_id: exportJob.error_id,
                 error_message: exportJob.error_message,
+                failure_reason: exportJob.failure_reason ?? exportJob.error_message ?? null,
                 created_at: exportJob.created_at,
                 started_at: exportJob.started_at,
                 completed_at: exportJob.completed_at,

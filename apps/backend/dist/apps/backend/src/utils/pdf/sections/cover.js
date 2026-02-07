@@ -27,7 +27,7 @@ function renderCoverPage(doc, job, organization, logoBuffer, reportGeneratedAt, 
         .fillColor(styles_1.STYLES.colors.accent)
         .fontSize(20)
         .font(styles_1.STYLES.fonts.header)
-        .text('RiskMate', margin, headerY, {
+        .text('Riskmate', margin, headerY, {
         width: 120,
         lineBreak: false,
     });

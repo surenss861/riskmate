@@ -132,8 +132,10 @@ async function processExportQueue() {
                 }
             }
             else {
-                // Other errors are unexpected
-                console.warn('[ExportWorker] RPC claim failed, using fallback:', rpcError.message);
+                // Other errors (e.g. 500/HTML from Cloudflare when RPC is unreachable) — use fallback
+                const msg = rpcError.message || String(rpcError);
+                const shortMsg = msg.length > 200 ? msg.slice(0, 200) + '…' : msg;
+                console.warn('[ExportWorker] RPC claim failed, using fallback:', shortMsg);
                 if (requireRpc) {
                     console.error('[ExportWorker] ❌ CRITICAL: RPC call failed in production!');
                     return;
@@ -304,7 +306,14 @@ async function processExport(exportJob) {
             is_poison_pill: isPoisonPill,
             error: err?.message || String(err),
         });
-        // Update state to 'failed' (or keep as 'queued' if not poison pill for retry)
+        // Specific, actionable failure_reason for UI (trust moment)
+        let failureReason;
+        try {
+            failureReason = await getFailureReason(exportJob, err);
+        }
+        catch (_) {
+            failureReason = `Export failed. Tap retry or contact support with export ID: ${id}`;
+        }
         const errorId = crypto_1.default.randomUUID();
         await supabaseClient_1.supabase
             .from('exports')
@@ -314,6 +323,7 @@ async function processExport(exportJob) {
             error_code: 'EXPORT_GENERATION_FAILED',
             error_id: errorId,
             error_message: err?.message || String(err),
+            failure_reason: failureReason, // Human-readable for iOS/UI
         })
             .eq('id', id);
         // Write ledger event: export.failed
@@ -638,6 +648,76 @@ async function generateExecutiveBrief(organizationId, jobId) {
         manifestHash,
         manifest,
     };
+}
+/**
+ * Build a specific, actionable failure_reason for the UI (trust moment).
+ * Rule order: user-fixable blockers first, then infra errors, then default.
+ */
+async function getFailureReason(exportJob, err) {
+    const { id, work_record_id: jobId, export_type, organization_id } = exportJob;
+    const msg = (err?.message || String(err)).toLowerCase();
+    // 1. User-fixable blockers FIRST (proof_pack)
+    if (export_type === 'proof_pack' && jobId) {
+        try {
+            const evidenceRequired = 5;
+            const actual = await countEvidence(organization_id, jobId);
+            if (actual < evidenceRequired) {
+                const missing = evidenceRequired - actual;
+                return `Missing ${missing} evidence item${missing === 1 ? '' : 's'}. Upload photos before generating proof pack.`;
+            }
+            const hazardsCount = await countHazards(jobId);
+            if (hazardsCount === 0) {
+                return 'No hazards configured. Add hazards in web app before generating report.';
+            }
+            const incompleteControls = await countIncompleteControls(jobId);
+            if (incompleteControls > 0) {
+                return `${incompleteControls} control${incompleteControls === 1 ? '' : 's'} not completed. Mark them complete or skip them.`;
+            }
+        }
+        catch (_) {
+            // Ignore; fall through to infra/default
+        }
+    }
+    // 2. Infrastructure errors (actionable but not user-fixable)
+    if (msg.includes('timeout') || msg.includes('etimedout') || msg.includes('econnreset')) {
+        return 'Upload timed out. Check your internet connection and retry.';
+    }
+    if (msg.includes('pdf') || msg.includes('generation') || msg.includes('enotype')) {
+        return `Report generation failed. Contact support with export ID: ${id}`;
+    }
+    if (msg.includes('storage') || msg.includes('upload')) {
+        return 'Storage upload failed. Retry or contact support.';
+    }
+    return `Export failed. Tap retry or contact support with export ID: ${id}`;
+}
+async function countEvidence(orgId, workRecordId) {
+    const { count } = await supabaseClient_1.supabase
+        .from('evidence')
+        .select('*', { count: 'exact', head: true })
+        .eq('organization_id', orgId)
+        .eq('work_record_id', workRecordId);
+    return count ?? 0;
+}
+async function countHazards(jobId) {
+    try {
+        const { count } = await supabaseClient_1.supabase
+            .from('hazards')
+            .select('*', { count: 'exact', head: true })
+            .eq('job_id', jobId);
+        return count ?? 0;
+    }
+    catch {
+        return 0;
+    }
+}
+async function countIncompleteControls(jobId) {
+    const { count } = await supabaseClient_1.supabase
+        .from('mitigation_items')
+        .select('*', { count: 'exact', head: true })
+        .eq('job_id', jobId)
+        .eq('is_completed', false)
+        .is('deleted_at', null);
+    return count ?? 0;
 }
 /**
  * Ensure exports bucket exists

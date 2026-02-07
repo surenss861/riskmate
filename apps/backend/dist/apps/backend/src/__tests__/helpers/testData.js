@@ -36,8 +36,8 @@ async function setupTestData() {
         throw new Error(`Test organization ${testOrgId} not found. ` +
             "Create a test organization in Supabase and set TEST_ORG_ID.");
     }
-    if (org.name !== "RiskMate Test Org") {
-        throw new Error(`Test organization name mismatch. Expected "RiskMate Test Org", got "${org.name}". ` +
+    if (org.name !== "Riskmate Test Org") {
+        throw new Error(`Test organization name mismatch. Expected "Riskmate Test Org", got "${org.name}". ` +
             "This prevents accidental use of production data.");
     }
     // Get or create test users using service role (admin) client
@@ -221,9 +221,9 @@ async function cleanupTestData(testOrgId) {
         console.warn(`Test organization ${testOrgId} not found, skipping cleanup`);
         return;
     }
-    if (org.name !== "RiskMate Test Org") {
+    if (org.name !== "Riskmate Test Org") {
         throw new Error(`Safety fuse: Attempted to cleanup non-test organization "${org.name}". ` +
-            "Only 'RiskMate Test Org' can be cleaned up by tests.");
+            "Only 'Riskmate Test Org' can be cleaned up by tests.");
     }
     // Delete in order to respect foreign key constraints
     // Order: child tables first, then parent tables

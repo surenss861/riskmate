@@ -97,7 +97,7 @@ exports.verificationRouter.get('/ledger/events/:id/verify', auth_1.authenticate,
             while (currentEvent.prev_hash && depth < maxChainDepth) {
                 const { data: prev } = await supabaseClient_1.supabase
                     .from('audit_logs')
-                    .select('hash, prev_hash, ledger_seq')
+                    .select('hash, prev_hash, ledger_seq, actor_id, event_name, target_type, target_id, metadata, created_at')
                     .eq('organization_id', organization_id)
                     .eq('hash', currentEvent.prev_hash)
                     .maybeSingle();
@@ -105,12 +105,9 @@ exports.verificationRouter.get('/ledger/events/:id/verify', auth_1.authenticate,
                     chainOk = false;
                     break;
                 }
-                // Verify this prev event's hash
-                const prevExpectedHash = computeLedgerHash(prev.prev_hash, prev.ledger_seq || 0, organization_id, currentEvent.actor_id, // Use current event's actor for consistency
-                currentEvent.event_name, // This should match, but we're just checking hash computation
-                currentEvent.target_type, currentEvent.target_id, currentEvent.metadata, currentEvent.created_at);
-                // Note: We can't fully verify prev event without fetching its full record
-                // For now, just check that prev_hash exists and points to a valid event
+                // Verify this prev event's hash using its own fields (not current event's fields)
+                const prevExpectedHash = computeLedgerHash(prev.prev_hash, prev.ledger_seq || 0, organization_id, prev.actor_id, prev.event_name, prev.target_type, prev.target_id, prev.metadata, prev.created_at);
+                // Advance to prev for next iteration
                 currentEvent = prev;
                 depth++;
             }

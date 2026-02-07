@@ -50,7 +50,7 @@ const requireWriteAccess_1 = require("../middleware/requireWriteAccess");
 const realtimeEvents_1 = require("../utils/realtimeEvents");
 exports.jobsRouter = express_1.default.Router();
 // Log that jobs routes are being loaded (verification for deployment)
-console.log("[ROUTES] ✅ Jobs routes loaded (including /:id/hazards and /:id/controls)");
+console.log("[ROUTES] ✅ Jobs routes loaded (including /:id/hazards, /:id/controls, /:id/permit-packs)");
 // Rate-limited logging for cursor misuse (once per organization per hour)
 // This helps identify client misconfigurations without spamming logs
 const cursorMisuseLogs = new Map();
@@ -222,8 +222,14 @@ exports.jobsRouter.get("/", auth_1.authenticate, async (req, res) => {
         // Apply search filter (q parameter - search job name, address, or ID)
         if (q && typeof q === 'string' && q.trim()) {
             const searchTerm = q.trim();
+            // Validate searchTerm to prevent injection (alphanumeric, spaces, hyphens, underscores only)
+            if (!/^[a-zA-Z0-9\s\-_]+$/.test(searchTerm)) {
+                return res.status(400).json({ message: 'Invalid search term format' });
+            }
+            // Escape special characters for LIKE query
+            const escapedTerm = searchTerm.replace(/[%_]/g, '\\$&');
             // Search in client_name, location, or id (case-insensitive partial match)
-            query = query.or(`client_name.ilike.%${searchTerm}%,location.ilike.%${searchTerm}%,id.eq.${searchTerm}`);
+            query = query.or(`client_name.ilike.%${escapedTerm}%,location.ilike.%${escapedTerm}%,id.eq.${escapedTerm}`);
         }
         // Cursor-based pagination (per-sort cursor keys for consistency)
         if (useCursor) {
@@ -422,9 +428,19 @@ exports.jobsRouter.get("/", auth_1.authenticate, async (req, res) => {
                 .from('documents')
                 .select('job_id')
                 .in('job_id', jobIds);
-            // Group by job_id
-            const mitigationsByJob = {};
+            // evidence_count = uploaded + processed documents only (excludes pending uploads).
+            // When we add upload queue UI, pending can be shown separately so meta row stays authoritative.
+            const evidenceCountByJob = {};
             const documentsByJob = {};
+            documents?.forEach((doc) => {
+                documentsByJob[doc.job_id] = true;
+                evidenceCountByJob[doc.job_id] = (evidenceCountByJob[doc.job_id] || 0) + 1;
+            });
+            // Default evidence required; can be made per-job-type or org policy later. Fail-safe parse: missing/invalid/empty => 5; allow 1+ only (use >= 0 if you ever want global "no evidence required").
+            const parsed = Number.parseInt(process.env.EVIDENCE_REQUIRED_DEFAULT ?? '', 10);
+            const EVIDENCE_REQUIRED_DEFAULT = Number.isFinite(parsed) && parsed >= 1 ? parsed : 5;
+            // Group by job_id. Controls completed = done || is_completed (N/A can count as complete when we add that flag).
+            const mitigationsByJob = {};
             mitigationItems?.forEach((item) => {
                 if (!mitigationsByJob[item.job_id]) {
                     mitigationsByJob[item.job_id] = { total: 0, completed: 0 };
@@ -434,13 +450,11 @@ exports.jobsRouter.get("/", auth_1.authenticate, async (req, res) => {
                     mitigationsByJob[item.job_id].completed++;
                 }
             });
-            documents?.forEach((doc) => {
-                documentsByJob[doc.job_id] = true;
-            });
             // Calculate readiness_score (0-100) and blockers_count per job
             jobIds.forEach((jobId) => {
                 const mitigation = mitigationsByJob[jobId] || { total: 0, completed: 0 };
                 const hasEvidence = documentsByJob[jobId] || false;
+                const evidenceCount = evidenceCountByJob[jobId] || 0;
                 // Explicit readiness calculation with audit-defensible fields
                 const mitigations_total = mitigation.total;
                 const mitigations_complete = mitigation.completed;
@@ -470,6 +484,10 @@ exports.jobsRouter.get("/", auth_1.authenticate, async (req, res) => {
                     blockers_count,
                     missing_evidence,
                     pending_attestations,
+                    evidence_count: evidenceCount,
+                    evidence_required: EVIDENCE_REQUIRED_DEFAULT,
+                    controls_completed: mitigations_complete,
+                    controls_total: mitigations_total,
                 };
             });
         }
@@ -531,10 +549,14 @@ exports.jobsRouter.get("/", auth_1.authenticate, async (req, res) => {
                     blockers_count: 0,
                     missing_evidence: false,
                     pending_attestations: 0,
+                    evidence_count: 0,
+                    evidence_required: 5,
+                    controls_completed: 0,
+                    controls_total: 0,
                 };
                 return {
                     ...job,
-                    // Optional fields (may not exist if migration hasn't run - use type assertion to avoid TS errors)
+                    // Optional fields properly typed (may not exist if migration hasn't run)
                     applied_template_id: job.applied_template_id ?? null,
                     applied_template_type: job.applied_template_type ?? null,
                     review_flag: job.review_flag ?? null,
@@ -547,6 +569,11 @@ exports.jobsRouter.get("/", auth_1.authenticate, async (req, res) => {
                     blockers_count: readiness.blockers_count,
                     missing_evidence: readiness.missing_evidence,
                     pending_attestations: readiness.pending_attestations,
+                    // iOS Operations meta row: "Evidence 0/5 • Controls 3/5"
+                    evidence_count: readiness.evidence_count,
+                    evidence_required: readiness.evidence_required,
+                    controls_completed: readiness.controls_completed,
+                    controls_total: readiness.controls_total,
                 };
             });
         }
@@ -775,6 +802,73 @@ exports.jobsRouter.get("/:id/controls", auth_1.authenticate, async (req, res) =>
     catch (err) {
         console.error("[Jobs] Controls fetch failed:", err);
         res.status(500).json({ message: "Failed to fetch controls" });
+    }
+});
+// POST /api/jobs/:id/permit-pack
+// Alias for web client compatibility: redirects to /api/reports/permit-pack/:jobId
+exports.jobsRouter.post("/:id/permit-pack", auth_1.authenticate, (0, limits_1.requireFeature)("permit_pack"), (req, res) => {
+    const base = `${req.protocol}://${req.get("host")}`;
+    res.redirect(308, `${base}/api/reports/permit-pack/${req.params.id}`);
+});
+// GET /api/jobs/:id/permit-packs
+// Returns list of generated permit packs / proof packs for this job (web parity: no 404)
+exports.jobsRouter.get("/:id/permit-packs", auth_1.authenticate, async (req, res) => {
+    const authReq = req;
+    try {
+        const jobId = authReq.params.id;
+        const { organization_id } = authReq.user;
+        // Verify job belongs to organization
+        const { data: job, error: jobError } = await supabaseClient_1.supabase
+            .from("jobs")
+            .select("id, organization_id")
+            .eq("id", jobId)
+            .eq("organization_id", organization_id)
+            .single();
+        if (jobError || !job) {
+            return res.status(404).json({ message: "Job not found" });
+        }
+        // Proof packs are tracked in exports (work_record_id = job id, export_type = proof_pack, state = ready)
+        const { data: exports, error: exportsError } = await supabaseClient_1.supabase
+            .from("exports")
+            .select("id, storage_path, completed_at, created_by")
+            .eq("work_record_id", jobId)
+            .eq("organization_id", organization_id)
+            .eq("export_type", "proof_pack")
+            .eq("state", "ready")
+            .not("storage_path", "is", null)
+            .order("completed_at", { ascending: false });
+        if (exportsError) {
+            console.error("[Jobs] Permit-packs fetch failed:", exportsError);
+            return res.status(500).json({ message: "Failed to fetch permit packs" });
+        }
+        const packs = (exports || []).map((exp, idx) => ({
+            id: exp.id,
+            version: (exports?.length ?? 0) - idx,
+            file_path: exp.storage_path ?? "",
+            generated_at: exp.completed_at ?? "",
+            generated_by: exp.created_by ?? null,
+            downloadUrl: null,
+        }));
+        // Generate signed URLs for each pack (use Promise.allSettled for error resilience)
+        const packsWithUrls = await Promise.allSettled(packs.map(async (pack) => {
+            if (!pack.file_path)
+                return { ...pack, downloadUrl: null };
+            try {
+                const { data: signed } = await supabaseClient_1.supabase.storage
+                    .from("exports")
+                    .createSignedUrl(pack.file_path, 60 * 60);
+                return { ...pack, downloadUrl: signed?.signedUrl ?? null };
+            }
+            catch (err) {
+                console.error("[Jobs] Failed to generate signed URL for pack:", pack.id, err);
+                return { ...pack, downloadUrl: null };
+            }
+        })).then(results => results.map(r => r.status === 'fulfilled' ? r.value : { id: '', version: 0, file_path: '', generated_at: '', generated_by: null, downloadUrl: null }));
+        res.json({ data: packsWithUrls });
+    }
+    catch (err) {
+        console.error("[Jobs] Permit-packs failed:", err);
+        res.status(500).json({ message: "Failed to fetch permit packs" });
     }
 });
 // GET /api/jobs/:id
@@ -1161,6 +1255,7 @@ exports.jobsRouter.patch("/:id/mitigations/:mitigationId", auth_1.authenticate, 
         res.status(500).json({ message: "Failed to update mitigation item" });
     }
 });
+const MAX_CACHE_SIZE = 1000; // Limit to 1000 entries
 const jobReportCache = new Map();
 const JOB_REPORT_TTL_MS = 60 * 1000;
 const getCachedJobReport = (key) => {
@@ -1174,6 +1269,12 @@ const getCachedJobReport = (key) => {
     return cached.data;
 };
 const setCachedJobReport = (key, data) => {
+    // Implement simple LRU: if cache is full, delete oldest entry
+    if (jobReportCache.size >= MAX_CACHE_SIZE) {
+        const firstKey = jobReportCache.keys().next().value;
+        if (firstKey)
+            jobReportCache.delete(firstKey);
+    }
     jobReportCache.set(key, { data, expiresAt: Date.now() + JOB_REPORT_TTL_MS });
 };
 const invalidateJobReportCache = (organizationId, jobId) => {

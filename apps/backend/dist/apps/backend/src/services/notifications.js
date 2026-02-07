@@ -94,7 +94,7 @@ async function notifyReportReady(params) {
     const tokens = await fetchOrgTokens(params.organizationId);
     await sendExpoPush(tokens, {
         title: "📄 Risk report ready",
-        body: "Your RiskMate PDF report is ready to view.",
+        body: "Your Riskmate PDF report is ready to view.",
         data: {
             type: "report_ready",
             jobId: params.jobId,

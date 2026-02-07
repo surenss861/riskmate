@@ -12,7 +12,7 @@
  * 
  * Prerequisites:
  * - TEST_ORG_ID environment variable set to a test organization ID
- * - Test organization must be named "RiskMate Test Org" (safety fuse)
+ * - Test organization must be named "Riskmate Test Org" (safety fuse)
  * - TEST_OWNER_EMAIL, TEST_AUDITOR_EMAIL, TEST_EXEC_EMAIL (optional, auto-generated if not set)
  * - TEST_USER_PASSWORD (optional, defaults to "TestPassword123!")
  * 

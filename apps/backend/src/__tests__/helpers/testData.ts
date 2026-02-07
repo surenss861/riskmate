@@ -55,9 +55,9 @@ export async function setupTestData(): Promise<TestData> {
     );
   }
 
-  if (org.name !== "RiskMate Test Org") {
+  if (org.name !== "Riskmate Test Org") {
     throw new Error(
-      `Test organization name mismatch. Expected "RiskMate Test Org", got "${org.name}". ` +
+      `Test organization name mismatch. Expected "Riskmate Test Org", got "${org.name}". ` +
       "This prevents accidental use of production data."
     );
   }
@@ -269,10 +269,10 @@ export async function cleanupTestData(testOrgId: string): Promise<void> {
     return;
   }
 
-  if (org.name !== "RiskMate Test Org") {
+  if (org.name !== "Riskmate Test Org") {
     throw new Error(
       `Safety fuse: Attempted to cleanup non-test organization "${org.name}". ` +
-      "Only 'RiskMate Test Org' can be cleaned up by tests."
+      "Only 'Riskmate Test Org' can be cleaned up by tests."
     );
   }
 

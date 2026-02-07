@@ -20,12 +20,13 @@ export type AuditWriteResult = {
 };
 /**
  * Extract client metadata from request (for audit logging)
- * Looks for client, app_version, device_id in headers or body
+ * Looks for client, app_version, device_id in headers or body.
+ * Defaults to 'unknown' when header exists but value missing so audit rows are never missing these.
  */
 export declare function extractClientMetadata(req?: any): {
-    client?: string;
-    appVersion?: string;
-    deviceId?: string;
+    client: string;
+    appVersion: string;
+    deviceId: string;
 };
 export declare function recordAuditLog(entry: AuditLogEntry): Promise<AuditWriteResult>;
 //# sourceMappingURL=audit.d.ts.map

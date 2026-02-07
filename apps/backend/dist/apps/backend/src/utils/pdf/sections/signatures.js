@@ -100,7 +100,7 @@ function renderSignaturesAndCompliance(doc, pageWidth, pageHeight, margin, safeA
         .fontSize(styles_1.STYLES.sizes.h3)
         .font(styles_1.STYLES.fonts.header)
         .text('Compliance Statement', margin, complianceY);
-    const complianceText = 'This report was generated through RiskMate and includes all safety, hazard, and control ' +
+    const complianceText = 'This report was generated through Riskmate and includes all safety, hazard, and control ' +
         'documentation submitted by the assigned crew. All data is timestamped and stored securely. ' +
         'This documentation serves as evidence of compliance with safety protocols and regulatory requirements.';
     doc
