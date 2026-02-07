@@ -294,6 +294,14 @@ struct AccountView: View {
                     }
                     .listRowBackground(RMTheme.Colors.surface.opacity(0.3))
                 }
+                
+                // Bottom spacer so Sign Out / Danger Zone clear the tab bar
+                Section {
+                    Color.clear
+                        .frame(height: 88)
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                }
             }
             .scrollContentBackground(.hidden)
                 .navigationTitle("Settings")

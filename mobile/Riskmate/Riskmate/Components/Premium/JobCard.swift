@@ -51,15 +51,15 @@ struct JobCard: View {
                     
                     StatusChip(text: job.status.uppercased())
                     
-                    // Contextual action hint for critical jobs
+                    // Contextual action hint for critical jobs — stronger contrast
                     if (job.riskScore ?? 0) >= 90 {
                         HStack(spacing: 4) {
                             Image(systemName: "exclamationmark.triangle.fill")
                                 .font(.system(size: 10, weight: .semibold))
-                                .foregroundStyle(RMSystemTheme.Colors.warning)
+                                .foregroundStyle(RMTheme.Colors.error)
                             Text("High risk — add proof to reduce exposure")
                                 .font(RMSystemTheme.Typography.caption2)
-                                .foregroundStyle(RMSystemTheme.Colors.textTertiary)
+                                .foregroundStyle(RMSystemTheme.Colors.textSecondary)
                         }
                         .padding(.top, 2)
                         .transition(.opacity.combined(with: .move(edge: .top)))
@@ -101,20 +101,20 @@ struct JobCard: View {
     }
 }
 
-/// Risk level pill
+/// Risk level pill — less blocky, clear but not competing with CTA
 struct RiskPill: View {
     let text: String
     let color: Color
     
     var body: some View {
         Text(text)
-            .font(RMSystemTheme.Typography.caption2.weight(.bold))
+            .font(.system(size: 10, weight: .semibold))
             .foregroundStyle(.white)
-            .padding(.horizontal, RMSystemTheme.Spacing.sm)
-            .padding(.vertical, 6)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
             .background(
                 Capsule()
-                    .fill(color)
+                    .fill(color.opacity(0.9))
             )
     }
 }
@@ -169,22 +169,25 @@ enum ComplianceStatus {
     }
 }
 
-/// Badge shown on Work Records rows for external compliance view.
+/// Badge shown on Work Records rows — CRITICAL primary, non-compliant smaller
 struct ComplianceBadge: View {
     let status: ComplianceStatus
+
+    private var isSubtle: Bool {
+        status == .nonCompliant // Non-compliant smaller so CRITICAL risk pill wins
+    }
 
     var body: some View {
         HStack(spacing: 4) {
             Image(systemName: status.icon)
-                .font(RMSystemTheme.Typography.caption2)
+                .font(.system(size: isSubtle ? 9 : 10, weight: .semibold))
             Text(status.displayText)
-                .font(RMSystemTheme.Typography.caption2)
-                .fontWeight(.medium)
+                .font(.system(size: isSubtle ? 9 : 10, weight: .medium))
         }
         .foregroundStyle(status.color)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(status.color.opacity(0.15))
+        .padding(.horizontal, isSubtle ? 6 : 8)
+        .padding(.vertical, isSubtle ? 3 : 4)
+        .background(status.color.opacity(isSubtle ? 0.12 : 0.18))
         .clipShape(Capsule())
     }
 }

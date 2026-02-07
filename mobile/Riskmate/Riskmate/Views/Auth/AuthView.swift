@@ -74,22 +74,16 @@ struct AuthView: View {
                 .padding(.top, 2)
 
             Text("•  Ledger Contract v1.0  •  Frozen")
-                .font(.system(size: 12, weight: .medium, design: .monospaced))
-                .foregroundColor(Color.white.opacity(0.88))
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
+                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                .foregroundColor(Color.white.opacity(0.75))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
                 .background(
-                    LinearGradient(
-                        colors: [Color.white.opacity(0.10), Color.white.opacity(0.02)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                    .clipShape(Capsule())
+                    Capsule()
+                        .fill(Color.white.opacity(0.06))
+                        .overlay(Capsule().stroke(Color.white.opacity(0.12), lineWidth: 0.5))
                 )
-                .background(.ultraThinMaterial, in: Capsule())
-                .overlay(Capsule().stroke(.white.opacity(0.16), lineWidth: 1))
-                .shadow(color: .black.opacity(0.35), radius: 10, x: 0, y: 8)
-                .padding(.top, 2)
+                .padding(.top, 4)
         }
         .frame(maxWidth: 520)
         .frame(maxWidth: .infinity, alignment: .center)

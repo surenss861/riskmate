@@ -8,7 +8,7 @@ struct RMPrimaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 17, weight: .semibold))
-            .foregroundColor(isEnabled ? .black : RMTheme.Colors.textTertiary.opacity(0.7))
+            .foregroundColor(isEnabled ? .black : RMTheme.Colors.textTertiary.opacity(0.85))
             .frame(maxWidth: .infinity)
             .frame(height: 52)
             .background(
@@ -21,12 +21,20 @@ struct RMPrimaryButtonStyle: ButtonStyle {
                         )
                     } else {
                         RMTheme.Colors.surface
+                            .overlay(
+                                LinearGradient(
+                                    colors: [Color.white.opacity(0.06), Color.clear],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                            )
                     }
                 }
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(RMTheme.Colors.border.opacity(isEnabled ? 0.0 : 0.8), lineWidth: 1)
+                    .stroke(RMTheme.Colors.border.opacity(isEnabled ? 0.0 : 0.6), lineWidth: 0.5)
             )
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             .shadow(color: .black.opacity(isEnabled ? 0.25 : 0.10), radius: isEnabled ? 10 : 6, x: 0, y: 6)

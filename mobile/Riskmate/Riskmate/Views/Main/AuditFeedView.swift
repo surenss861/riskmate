@@ -212,7 +212,6 @@ struct AuditFeedView: View {
                 }
             }
         }
-        .syncStatusChip()
         .onAppear {
             // Show first-visit animation once
             if !hasSeenFirstVisit && !isLoading && !events.isEmpty {
