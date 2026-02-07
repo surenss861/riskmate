@@ -101,7 +101,7 @@ export function TrustReceiptStrip({
         )}
         <div className="flex items-center gap-1 flex-shrink-0">
           <Clock className="w-3 h-3" />
-          <span>{formatRelativeTime(occurredAt)}</span>
+          <span suppressHydrationWarning>{formatRelativeTime(occurredAt)}</span>
         </div>
         {category && (
           <div className="flex items-center gap-1 flex-shrink-0">
@@ -133,7 +133,7 @@ export function TrustReceiptStrip({
         </div>
         <div className="flex items-center gap-1 text-xs text-white/60 flex-shrink-0">
           <Clock className="w-3 h-3" />
-          <time dateTime={occurredAt}>{formatRelativeTime(occurredAt)}</time>
+          <time dateTime={occurredAt} suppressHydrationWarning>{formatRelativeTime(occurredAt)}</time>
         </div>
       </div>
 

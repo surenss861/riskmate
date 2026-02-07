@@ -393,7 +393,7 @@ export default function HomePage() {
                 <TrustReceiptStrip
                   actorName="Safety Lead"
                   actorRole="safety_lead"
-                  occurredAt={new Date(Date.now() - 3600000).toISOString()}
+                  occurredAt="2025-02-05T11:00:00.000Z"
                   eventType="incident.closed"
                   category="operations"
                   summary="Incident #INC-2025-001 closed with corrective actions"
@@ -405,7 +405,7 @@ export default function HomePage() {
                 <IntegrityBadge
                   status="verified"
                   verifiedThrough="ledger_hash"
-                  lastVerified={new Date().toISOString()}
+                  lastVerified="2025-02-05T12:00:00.000Z"
                 />
               </div>
             </motion.div>
@@ -431,7 +431,7 @@ export default function HomePage() {
                 <TrustReceiptStrip
                   actorName="Admin"
                   actorRole="admin"
-                  occurredAt={new Date(Date.now() - 7200000).toISOString()}
+                  occurredAt="2025-02-05T10:00:00.000Z"
                   eventType="access.revoked"
                   category="access"
                   summary="Access revoked for former employee"
@@ -464,7 +464,7 @@ export default function HomePage() {
                 <PackCard
                   packId="pack_abc123"
                   packType="proof"
-                  generatedAt={new Date(Date.now() - 86400000).toISOString()}
+                  generatedAt="2025-02-04T12:00:00.000Z"
                   generatedBy="Admin"
                   filters={{ job_id: 'job_xyz789', time_range: '30d' }}
                   contents={{

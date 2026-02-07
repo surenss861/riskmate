@@ -155,7 +155,7 @@ export function PackCard({
             <div className="truncate font-mono text-sm text-white mb-1" title={packId}>
               {packId.slice(0, 16)}...
             </div>
-            <div className="text-xs text-white/60 mb-1">
+            <div className="text-xs text-white/60 mb-1" suppressHydrationWarning>
               {formatRelativeTime(generatedDate)}
             </div>
             {packContents && summarizeContents(packContents) !== 'Contents not available' && (
@@ -251,7 +251,7 @@ export function PackCard({
           <Calendar className="w-3 h-3 text-white/50" />
           <div>
             <div className="text-white/50">Generated</div>
-            <div className="font-medium">{generatedDate.toLocaleDateString()}</div>
+            <div className="font-medium" suppressHydrationWarning>{generatedDate.toLocaleDateString()}</div>
           </div>
         </div>
         {generatedBy && (
