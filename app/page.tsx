@@ -251,21 +251,26 @@ export default function HomePage() {
             <div className="mb-2 text-sm text-white/40">
               Ledger-anchored records
             </div>
+            <div className="mb-6">
+              <div className="text-[10px] font-mono text-white/50 tracking-[0.15em] uppercase mb-3">
+                Verified system
+              </div>
+              <motion.div
+                className="h-1 w-12 mx-auto mb-6 bg-[#F97316] origin-center"
+                initial={{ scaleX: 0 }}
+                animate={{ scaleX: 1 }}
+                transition={{
+                  delay: 0.15,
+                  duration: 0.22,
+                  ease: [0.4, 0, 0.2, 1],
+                }}
+              />
+            </div>
             <h1 className="text-5xl md:text-6xl font-bold mb-6 font-display text-white">
               Audit-ready proof packs from everyday field work
             </h1>
-            <motion.div
-              className="h-0.5 w-7 mx-auto mb-6 bg-[#F97316] origin-center"
-              initial={{ scaleX: 0 }}
-              animate={{ scaleX: 1 }}
-              transition={{
-                delay: 0.3,
-                duration: 0.22,
-                ease: [0.4, 0, 0.2, 1],
-              }}
-            />
             <p className="text-xl text-[#A1A1A1] mb-10 max-w-2xl mx-auto">
-              Field records, locked into audit-grade proof.
+              If it isn&apos;t anchored, it doesn&apos;t exist.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <button
@@ -317,15 +322,38 @@ export default function HomePage() {
         {/* Spacer — hero = promise, scroll = evidence */}
         <div className="min-h-[50vh]" aria-hidden />
 
-        {/* Proof — real PDF packets */}
+        {/* Proof — verified outputs */}
         <section id="proof" className="max-w-6xl mx-auto px-6 py-20 border-t border-white/5">
-          <h2 className="text-2xl font-semibold text-white mb-8 text-center">Proof packs</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <h2 className="text-2xl font-semibold text-white mb-3 text-center">What auditors actually receive</h2>
+          <p className="text-sm text-white/50 mb-10 text-center max-w-xl mx-auto">
+            These are real, exported records. Nothing here is mocked.
+          </p>
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            {/* Featured: Audit Packet */}
+            <a
+              href="/Test-audit-packet.pdf"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="lg:col-span-2 block p-6 bg-[#121212] border border-white/10 rounded-lg hover:border-[#F97316]/40 transition-colors text-left group"
+            >
+              <div className="aspect-[3/4] max-h-64 mb-4 bg-white/5 rounded border border-white/5 overflow-hidden">
+                <object
+                  data="/Test-audit-packet.pdf#page=1&view=FitH"
+                  type="application/pdf"
+                  className="w-full h-full pointer-events-none"
+                  aria-hidden
+                >
+                  <div className="w-full h-full flex items-center justify-center text-white/30 text-sm">PDF</div>
+                </object>
+              </div>
+              <div className="font-medium text-white mb-2 group-hover:text-[#F97316] transition-colors">Audit Packet</div>
+              <div className="text-[10px] font-mono text-white/40">sha256:a3f2b8c1...9d4e</div>
+              <div className="text-xs text-white/40 mt-1">2026-02-07T12:00:00Z</div>
+            </a>
             {[
-              { name: 'Compliance Packet', pdf: '/Test-compliance-packet.pdf' },
-              { name: 'Incident Packet', pdf: '/Test-incident-packet.pdf' },
-              { name: 'Insurance Packet', pdf: '/Test-insurance-packet.pdf' },
-              { name: 'Audit Packet', pdf: '/Test-audit-packet.pdf' },
+              { name: 'Compliance Packet', pdf: '/Test-compliance-packet.pdf', hash: 'sha256:7c2e...f1a9' },
+              { name: 'Incident Packet', pdf: '/Test-incident-packet.pdf', hash: 'sha256:9b1d...c3e8' },
+              { name: 'Insurance Packet', pdf: '/Test-insurance-packet.pdf', hash: 'sha256:e4a2...6b7f' },
             ].map((pack) => (
               <a
                 key={pack.name}
@@ -334,21 +362,19 @@ export default function HomePage() {
                 rel="noopener noreferrer"
                 className="block p-6 bg-[#121212] border border-white/10 rounded-lg hover:border-white/20 transition-colors text-left group"
               >
-                <div className="aspect-[3/4] mb-4 bg-white/5 rounded border border-white/5 overflow-hidden">
+                <div className="aspect-[3/4] max-h-48 mb-4 bg-white/5 rounded border border-white/5 overflow-hidden">
                   <object
                     data={`${pack.pdf}#page=1&view=FitH`}
                     type="application/pdf"
                     className="w-full h-full pointer-events-none"
                     aria-hidden
                   >
-                    <div className="w-full h-full flex items-center justify-center text-white/30 text-sm">
-                      PDF
-                    </div>
+                    <div className="w-full h-full flex items-center justify-center text-white/30 text-sm">PDF</div>
                   </object>
                 </div>
-                <div className="font-medium text-white mb-1 group-hover:text-[#F97316] transition-colors">{pack.name}</div>
-                <div className="text-xs text-white/40">Generated Feb 7, 2026</div>
-                <div className="text-[10px] text-white/30 mt-2">Immutable • Timestamped • Exported</div>
+                <div className="font-medium text-white mb-1 group-hover:text-[#F97316] transition-colors text-sm">{pack.name}</div>
+                <div className="text-[10px] font-mono text-white/40">{pack.hash}</div>
+                <div className="text-xs text-white/40 mt-1">2026-02-07T12:00:00Z</div>
               </a>
             ))}
           </div>
