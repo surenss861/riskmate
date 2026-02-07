@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
+import Image from 'next/image'
 import { motion } from 'framer-motion'
 import ScrollToTop from '@/components/ScrollToTop'
 import RiskmateLogo from '@/components/RiskmateLogo'
@@ -124,7 +125,7 @@ export default function HomePage() {
                 Sign In
               </button>
               <button
-                onClick={() => router.push('/login')}
+                onClick={() => router.push('/signup')}
                 className="px-4 py-2 bg-[#F97316] hover:bg-[#FB923C] text-black rounded-md font-medium text-sm transition-colors"
               >
                 Get Started
@@ -207,20 +208,20 @@ export default function HomePage() {
                     Interactive
                   </span>
                 </button>
-                <button
-                  onClick={() => {
-                    router.push('/login')
-                    setMobileMenuOpen(false)
-                  }}
-                  className="w-full px-4 py-2 border border-white/20 hover:border-white/40 rounded-md font-medium text-sm transition-colors"
-                >
-                  Sign In
-                </button>
-                <button
-                  onClick={() => {
-                    router.push('/login')
-                    setMobileMenuOpen(false)
-                  }}
+<button
+                onClick={() => {
+                  router.push('/login')
+                  setMobileMenuOpen(false)
+                }}
+                className="w-full px-4 py-2 border border-white/20 hover:border-white/40 rounded-md font-medium text-sm transition-colors"
+              >
+                Sign In
+              </button>
+              <button
+                onClick={() => {
+                  router.push('/signup')
+                  setMobileMenuOpen(false)
+                }}
                   className="w-full px-4 py-2 bg-[#F97316] hover:bg-[#FB923C] text-black rounded-md font-medium text-sm transition-colors"
                 >
                   Get Started
@@ -256,9 +257,10 @@ export default function HomePage() {
             <h1 className="text-5xl md:text-6xl font-bold mb-6 font-display text-white">
               Audit-ready proof packs from everyday field work
             </h1>
-            <p className="text-xl text-[#A1A1A1] mb-10 max-w-2xl mx-auto">
-              If it isn&apos;t anchored, it doesn&apos;t exist.
+            <p className="text-xl text-[#A1A1A1] mb-3 max-w-2xl mx-auto">
+              Immutable compliance ledger + evidence chain-of-custody. Export audit packets in one click.
             </p>
+            <p className="text-sm text-white/40 font-mono mb-10">If it isn&apos;t anchored, it doesn&apos;t exist.</p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <button
                 onClick={() => router.push('/signup')}
@@ -268,7 +270,7 @@ export default function HomePage() {
               </button>
               <button
                 onClick={() => setSampleReportOpen(true)}
-                className="px-8 py-4 text-white/60 hover:text-white/90 transition-colors font-medium text-lg"
+                className="px-8 py-4 rounded-lg border border-white/15 bg-white/[0.03] hover:bg-white/[0.06] hover:border-white/25 text-white/80 hover:text-white transition-colors font-semibold text-lg"
               >
                 View Sample Audit
               </button>
@@ -302,14 +304,16 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* Spacer — hero = promise, scroll = evidence */}
-        <div className="min-h-[50vh]" aria-hidden />
+        {/* Divider — hero promise → scroll evidence */}
+        <div className="max-w-4xl mx-auto px-6 py-8 border-t border-white/5">
+          <p className="text-center text-xs text-white/40 font-mono tracking-wider">Scroll for evidence ↓</p>
+        </div>
 
         {/* Proof — verified outputs */}
         <section id="proof" className="max-w-6xl mx-auto px-6 py-20 border-t border-white/5">
           <h2 className="text-2xl font-semibold text-white mb-3 text-center">What auditors actually receive</h2>
           <p className="text-sm text-white/50 mb-10 text-center max-w-xl mx-auto">
-            These are real, exported records. Nothing here is mocked.
+            These are real export formats from Riskmate. Sample data shown.
           </p>
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
             {/* Featured: Audit Packet */}
@@ -322,20 +326,21 @@ export default function HomePage() {
               <div className="flex items-center justify-between mb-3">
                 <span className="text-[10px] font-mono text-white/60 tracking-wider uppercase">Audit Packet</span>
                 <span className="flex items-center gap-1.5 text-[10px] text-[#F97316]/80">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#F97316]" /> Verified
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#F97316]" /> VERIFIED
                 </span>
               </div>
-              <div className="aspect-[3/4] max-h-56 mb-4 bg-white/[0.03] rounded border border-white/10 flex items-center justify-center">
-                <span className="text-[11px] font-mono text-white/30">Document</span>
+              <div className="aspect-[3/4] max-h-56 mb-4 rounded border border-white/10 overflow-hidden bg-white/[0.02] relative">
+                <Image src="/proof/audit-01.png" alt="Audit packet page 1" fill className="object-cover object-top" sizes="(max-width: 1024px) 100vw, 50vw" />
               </div>
-              <div className="text-[11px] font-mono text-white/50 tracking-tight mb-1">sha256:a3f2b8c1...9d4e</div>
+              <p className="text-[10px] text-white/40 mb-2">Includes: job log, photo evidence, signatures, risk score, chain-of-custody</p>
+              <div className="text-[11px] font-mono text-white/50 tracking-tight mb-1">Ledger anchor: sha256:a3f2b8c1...9d4e</div>
               <div className="text-[10px] text-white/40 mb-3">2026-02-07T12:00:00Z</div>
               <span className="text-[11px] text-[#F97316] group-hover:underline">View PDF →</span>
             </a>
             {[
-              { name: 'Compliance Packet', pdf: '/Test-compliance-packet.pdf', hash: 'sha256:7c2e...f1a9' },
-              { name: 'Incident Packet', pdf: '/Test-incident-packet.pdf', hash: 'sha256:9b1d...c3e8' },
-              { name: 'Insurance Packet', pdf: '/Test-insurance-packet.pdf', hash: 'sha256:e4a2...6b7f' },
+              { name: 'Compliance Packet', pdf: '/Test-compliance-packet.pdf', img: '/proof/compliance-01.png', hash: 'sha256:7c2e...f1a9', contents: 'Checklists, sign-offs, documentation, proof of work' },
+              { name: 'Incident Packet', pdf: '/Test-incident-packet.pdf', img: '/proof/incident-01.png', hash: 'sha256:9b1d...c3e8', contents: 'Flag escalation trail, accountability markers, decisions' },
+              { name: 'Insurance Packet', pdf: '/Test-insurance-packet.pdf', img: '/proof/insurance-01.png', hash: 'sha256:e4a2...6b7f', contents: 'Job completion, risk score, flags, attachments, audit trail' },
             ].map((pack) => (
               <a
                 key={pack.name}
@@ -347,13 +352,14 @@ export default function HomePage() {
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-[10px] font-mono text-white/60 tracking-wider uppercase">{pack.name.replace(' Packet', '')}</span>
                   <span className="flex items-center gap-1.5 text-[10px] text-[#F97316]/80">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#F97316]" /> Verified
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#F97316]" /> VERIFIED
                   </span>
                 </div>
-                <div className="aspect-[3/4] max-h-40 mb-4 bg-white/[0.03] rounded border border-white/10 flex items-center justify-center">
-                  <span className="text-[11px] font-mono text-white/30">Document</span>
+                <div className="aspect-[3/4] max-h-40 mb-4 rounded border border-white/10 overflow-hidden bg-white/[0.02] relative">
+                  <Image src={pack.img} alt={`${pack.name} page 1`} fill className="object-cover object-top" sizes="(max-width: 1024px) 100vw, 25vw" />
                 </div>
-                <div className="text-[11px] font-mono text-white/50 tracking-tight mb-1">{pack.hash}</div>
+                <p className="text-[10px] text-white/40 mb-2">{pack.contents}</p>
+                <div className="text-[11px] font-mono text-white/50 tracking-tight mb-1">Ledger: {pack.hash}</div>
                 <div className="text-[10px] text-white/40 mb-3">2026-02-07T12:00:00Z</div>
                 <span className="text-[11px] text-[#F97316] group-hover:underline">View PDF →</span>
               </a>
@@ -578,7 +584,7 @@ export default function HomePage() {
           </motion.div>
         </section>
 
-        {/* Founder Story Section */}
+        {/* Founder Story — deposition, not blog */}
         <section className="max-w-4xl mx-auto px-6 py-20">
           <motion.div
             className="text-center"
@@ -589,23 +595,18 @@ export default function HomePage() {
           >
             <h2 className="text-4xl font-bold mb-6 font-display">Why Riskmate Exists</h2>
             <div className="bg-[#121212] rounded-xl border border-white/10 p-8 text-left">
-              <p className="text-lg text-white/80 leading-relaxed mb-4">
-                After talking to dozens of contractors across Canada, one thing was consistent:
-              </p>
-              <p className="text-xl text-white font-semibold mb-6 italic">
+              <p className="text-lg text-white font-semibold mb-4">
                 &ldquo;Safety paperwork was a mess.&rdquo;
               </p>
-              <p className="text-lg text-white/80 leading-relaxed mb-4">
-                Electricians were taking photos in iMessage, losing them, then scrambling to recreate reports when clients asked. Roofers were filling out paper forms that got lost or damaged. HVAC crews were using Google Drive folders that no one could find.
+              <p className="text-white/70 leading-relaxed mb-4">
+                Electricians losing photos in iMessage. Roofers with paper forms that got lost. HVAC crews using Google Drive folders no one could find.
               </p>
-              <p className="text-lg text-white/80 leading-relaxed">
-                <strong className="text-white">Riskmate fixes that.</strong> One clean dashboard. Everything timestamped. Audit-ready reports in one click. No more lost paperwork, no more scrambling, no more liability gaps.
+              <p className="text-white/70 leading-relaxed mb-4">
+                Riskmate produces proof packs: immutable records you hand to insurers and auditors. One click.
               </p>
-              <div className="mt-8 pt-8 border-t border-white/10">
-                <p className="text-sm text-[#A1A1A1]">
-                  Built by contractors, for contractors. Every feature was designed with real field work in mind.
-                </p>
-              </div>
+              <p className="text-sm text-white/40 font-mono">
+                This is why it exists.
+              </p>
             </div>
           </motion.div>
         </section>
