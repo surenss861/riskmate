@@ -47,43 +47,47 @@ struct AuthView: View {
     @ViewBuilder
     private var heroBlock: some View {
         VStack(spacing: 12) {
-            Text("Riskmate")
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundColor(RMTheme.Colors.accent)
-                .padding(.bottom, 6)
-
-            Text("Audit-ready\nproof packs\nfrom everyday\nfield work")
-                .font(.system(size: 38, weight: .semibold, design: .serif))
-                .tracking(-0.8)
-                .lineSpacing(-3)
-                .multilineTextAlignment(.center)
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [Color.white, Color.white.opacity(0.88)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-                .shadow(color: .black.opacity(0.42), radius: 16, x: 0, y: 12)
-
-            Text("Turn site activity into compliance you can defend — fast.")
-                .font(.system(size: 15, weight: .regular))
-                .foregroundColor(Color.white.opacity(0.62))
-                .multilineTextAlignment(.center)
-                .lineSpacing(2)
-                .padding(.top, 2)
-
-            Text("•  Ledger Contract v1.0  •  Frozen")
-                .font(.system(size: 11, weight: .medium, design: .monospaced))
-                .foregroundColor(Color.white.opacity(0.75))
-                .padding(.horizontal, 10)
+            // Micro-pill above headline — anchors as infrastructure, not marketing
+            Text("RISK MATE")
+                .font(.system(size: 10, weight: .semibold))
+                .tracking(2)
+                .foregroundColor(Color.white.opacity(0.85))
+                .padding(.horizontal, 12)
                 .padding(.vertical, 6)
                 .background(
                     Capsule()
                         .fill(Color.white.opacity(0.06))
-                        .overlay(Capsule().stroke(Color.white.opacity(0.12), lineWidth: 0.5))
+                        .overlay(Capsule().stroke(Color.white.opacity(0.10), lineWidth: 0.5))
                 )
+                .padding(.bottom, 4)
+
+            // Web-hero lockup: line 1 = authority, line 2 = grounded
+            Text("Audit-ready proof packs\nfrom everyday field work")
+                .font(.system(size: 36, weight: .semibold, design: .serif))
+                .tracking(-0.6)
+                .lineSpacing(4)
+                .multilineTextAlignment(.center)
+                .foregroundColor(Color.white.opacity(0.95))
+            // No gradient, no glow — let the words carry it
+
+            Text("Turn site activity into compliance you can defend — fast.")
+                .font(.system(size: 15, weight: .regular))
+                .foregroundColor(Color.white.opacity(0.72))
+                .multilineTextAlignment(.center)
+                .lineSpacing(2)
                 .padding(.top, 4)
+
+            Text("Ledger Contract v1.0 • Frozen")
+                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                .foregroundColor(Color.white.opacity(0.55))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(
+                    Capsule()
+                        .fill(Color.white.opacity(0.04))
+                        .overlay(Capsule().stroke(Color.white.opacity(0.08), lineWidth: 0.5))
+                )
+                .padding(.top, 2)
         }
         .frame(maxWidth: 520)
         .frame(maxWidth: .infinity, alignment: .center)
