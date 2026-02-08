@@ -600,16 +600,18 @@ export function JobPacketView({
           )}
           {(() => {
             const photos = attachments.filter((a) => a.type === 'photo')
+            const nonPhotoAttachments = attachments.filter((a) => a.type !== 'photo')
             const allCount = photos.length
             const beforeCount = photos.filter((p) => (p.category ?? 'during') === 'before').length
             const duringCount = photos.filter((p) => (p.category ?? 'during') === 'during').length
             const afterCount = photos.filter((p) => (p.category ?? 'during') === 'after').length
             const filteredAttachments =
               photoFilter === 'all'
-                ? attachments.filter((a) => a.type === 'photo')
-                : attachments.filter(
-                    (a) => a.type === 'photo' && (a.category ?? 'during') === photoFilter
-                  )
+                ? attachments
+                : [
+                    ...nonPhotoAttachments,
+                    ...photos.filter((p) => (p.category ?? 'during') === photoFilter),
+                  ]
             const categoryBadgeClass = (cat: PhotoCategory) => {
               if (cat === 'before') return 'bg-[#e3f2fd] text-[#1976d2]'
               if (cat === 'after') return 'bg-[#e8f5e9] text-[#388e3c]'

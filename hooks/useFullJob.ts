@@ -19,6 +19,7 @@ const TABLES_TO_WATCH = [
   { table: 'job_risk_scores', filterKey: 'job_id' },
   { table: 'mitigation_items', filterKey: 'job_id' },
   { table: 'documents', filterKey: 'job_id' },
+  { table: 'job_photos', filterKey: 'job_id' },
   { table: 'audit_logs', filterKey: 'target_id' },
 ] as const
 
