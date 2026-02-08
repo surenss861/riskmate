@@ -9,6 +9,15 @@ import Image from 'next/image'
 import { ImageModal } from '@/components/report/ImageModal'
 import { typography, spacing } from '@/lib/styles/design-system'
 import { AppBackground, AppShell, PageSection, GlassCard, Button, Input, Select, PageHeader } from '@/components/shared'
+import { Toast } from '@/components/dashboard/Toast'
+
+type PhotoCategory = 'before' | 'during' | 'after'
+
+function getDefaultCategory(jobStatus: string): PhotoCategory {
+  if (jobStatus === 'draft') return 'before'
+  if (jobStatus === 'completed' || jobStatus === 'archived') return 'after'
+  return 'during'
+}
 
 interface RiskFactor {
   id: string
@@ -41,6 +50,11 @@ export default function EditJobPage() {
   })
   const [error, setError] = useState<string | null>(null)
   const [documents, setDocuments] = useState<any[]>([])
+  const [jobStatus, setJobStatus] = useState<string>('draft')
+  const [uploadCategory, setUploadCategory] = useState<PhotoCategory>('during')
+  const [photoFilter, setPhotoFilter] = useState<'all' | PhotoCategory>('all')
+  const [categoryDropdownOpen, setCategoryDropdownOpen] = useState<string | null>(null)
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
   const [uploading, setUploading] = useState(false)
   const [selectedImage, setSelectedImage] = useState<{ url: string; alt: string } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -57,6 +71,9 @@ export default function EditJobPage() {
     try {
       const response = await jobsApi.get(jobId)
       const job = response.data
+
+      setJobStatus(job.status ?? 'draft')
+      setUploadCategory(getDefaultCategory(job.status ?? 'draft'))
       
       setFormData({
         client_name: job.client_name || '',
@@ -125,6 +142,7 @@ export default function EditJobPage() {
         name: file.name,
         type: 'photo',
         description: `Uploaded on ${new Date().toLocaleDateString()}`,
+        category: uploadCategory,
       })
       
       // Reload documents
@@ -142,7 +160,26 @@ export default function EditJobPage() {
     }
   }
 
-  const photos = documents.filter((doc) => doc.type === 'photo' && doc.url)
+  const photos = documents.filter((doc: any) => doc.type === 'photo' && doc.url) as Array<{ id: string; name: string; description?: string; url: string; created_at?: string; category?: PhotoCategory }>
+  const filteredPhotos = photoFilter === 'all' ? photos : photos.filter((p) => (p.category ?? 'during') === photoFilter)
+  const beforeCount = photos.filter((p) => (p.category ?? 'during') === 'before').length
+  const duringCount = photos.filter((p) => (p.category ?? 'during') === 'during').length
+  const afterCount = photos.filter((p) => (p.category ?? 'during') === 'after').length
+  const categoryBadgeClass = (cat: PhotoCategory) => {
+    if (cat === 'before') return 'bg-[#e3f2fd] text-[#1976d2]'
+    if (cat === 'after') return 'bg-[#e8f5e9] text-[#388e3c]'
+    return 'bg-[#fff3e0] text-[#f57c00]'
+  }
+  const handleCategoryChange = async (photoId: string, newCategory: PhotoCategory) => {
+    try {
+      await jobsApi.updateDocumentCategory(jobId, photoId, newCategory)
+      await loadDocuments()
+      setToast({ message: 'Category updated', type: 'success' })
+    } catch {
+      setToast({ message: 'Failed to update category', type: 'error' })
+    }
+    setCategoryDropdownOpen(null)
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -391,9 +428,33 @@ export default function EditJobPage() {
             <PageSection>
               <GlassCard className="p-8">
                 <h2 className="text-2xl font-semibold mb-4">Photos & Evidence</h2>
-                <p className="text-sm text-[#A1A1A1] mb-6">
+                <p className="text-sm text-[#A1A1A1] mb-4">
                   Upload photos to document job conditions, hazards, and completed work.
                 </p>
+
+                {/* Photo category selector for upload */}
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-white/80 mb-2">Photo category for next upload</label>
+                  <div className="flex gap-2">
+                    {(['before', 'during', 'after'] as const).map((cat) => (
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() => setUploadCategory(cat)}
+                        className={`flex-1 py-2.5 px-3 rounded-lg border text-sm font-medium transition-colors ${
+                          uploadCategory === cat
+                            ? 'bg-[#2563eb] border-[#2563eb] text-white'
+                            : 'bg-white/5 border-white/20 text-white/80 hover:bg-white/10'
+                        }`}
+                      >
+                        {cat === 'before' && '📸 Before'}
+                        {cat === 'during' && '🔧 During'}
+                        {cat === 'after' && '✅ After'}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-xs text-white/50 mt-1.5">Select when this photo was taken relative to the job.</p>
+                </div>
 
                 {/* Upload Button */}
                 <div className="mb-6">
@@ -440,67 +501,139 @@ export default function EditJobPage() {
                   </label>
                 </div>
 
+                {/* Filter tabs */}
+                {photos.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-2 mb-4">
+                    <span className="text-xs text-white/50 mr-1">Filter:</span>
+                    {(['all', 'before', 'during', 'after'] as const).map((tab) => {
+                      const count = tab === 'all' ? photos.length : tab === 'before' ? beforeCount : tab === 'during' ? duringCount : afterCount
+                      return (
+                        <button
+                          key={tab}
+                          type="button"
+                          onClick={() => setPhotoFilter(tab)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                            photoFilter === tab
+                              ? 'bg-[#2563eb] text-white'
+                              : 'bg-white/5 border border-white/10 text-white/70 hover:bg-white/10'
+                          }`}
+                        >
+                          {tab === 'all' ? 'All' : tab.charAt(0).toUpperCase() + tab.slice(1)} ({count})
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+
                 {/* Photo Gallery */}
-                {photos.length > 0 ? (
+                {filteredPhotos.length > 0 ? (
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    {photos.map((photo) => (
-                      <div
-                        key={photo.id}
-                        className="bg-[#121212]/60 border border-white/10 rounded-lg overflow-hidden cursor-pointer hover:border-white/20 transition-colors"
-                        onClick={() => {
-                          if (photo.url) {
-                            setSelectedImage({
-                              url: photo.url,
-                              alt: photo.description || photo.name,
-                            })
-                          }
-                        }}
-                      >
-                        {photo.url ? (
-                          <div className="relative w-full h-48 overflow-hidden group">
-                            <Image
-                              src={photo.url}
-                              alt={photo.description || photo.name}
-                              width={400}
-                              height={192}
-                              className="w-full h-48 object-cover"
-                              unoptimized
-                            />
-                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
-                              <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                                <svg
-                                  className="w-8 h-8 text-white"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  viewBox="0 0 24 24"
-                                >
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"
+                    {filteredPhotos.map((photo) => {
+                      const cat = (photo.category ?? 'during') as PhotoCategory
+                      return (
+                        <div
+                          key={photo.id}
+                          className="bg-[#121212]/60 border border-white/10 rounded-lg overflow-hidden hover:border-white/20 transition-colors"
+                        >
+                          <div className="relative">
+                            <div
+                              className="cursor-pointer"
+                              onClick={() => {
+                                if (photo.url) {
+                                  setSelectedImage({
+                                    url: photo.url,
+                                    alt: photo.description || photo.name,
+                                  })
+                                }
+                              }}
+                            >
+                              {photo.url ? (
+                                <div className="relative w-full h-48 overflow-hidden group">
+                                  <Image
+                                    src={photo.url}
+                                    alt={photo.description || photo.name}
+                                    width={400}
+                                    height={192}
+                                    className="w-full h-48 object-cover"
+                                    unoptimized
                                   />
-                                </svg>
+                                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                                    <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                                      <svg
+                                        className="w-8 h-8 text-white"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                      >
+                                        <path
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                          strokeWidth={2}
+                                          d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"
+                                        />
+                                      </svg>
+                                    </div>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="w-full h-48 bg-white/5 flex items-center justify-center text-white/40">
+                                  Image unavailable
+                                </div>
+                              )}
+                            </div>
+                            <div className="absolute top-2 right-2 z-10">
+                              <div className="relative">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setCategoryDropdownOpen(categoryDropdownOpen === photo.id ? null : photo.id)
+                                  }}
+                                  className={`px-2 py-0.5 rounded text-[11px] font-bold uppercase ${categoryBadgeClass(cat)} hover:opacity-90`}
+                                >
+                                  {cat}
+                                </button>
+                                {categoryDropdownOpen === photo.id && (
+                                  <>
+                                    <div className="absolute top-full right-0 mt-1 py-1 min-w-[100px] rounded-lg bg-[#1a1a1a] border border-white/20 shadow-xl z-20">
+                                      {(['before', 'during', 'after'] as const).map((newCat) => (
+                                        <button
+                                          key={newCat}
+                                          type="button"
+                                          onClick={() => handleCategoryChange(photo.id, newCat)}
+                                          className="block w-full text-left px-3 py-1.5 text-sm text-white/90 hover:bg-white/10"
+                                        >
+                                          {newCat.charAt(0).toUpperCase() + newCat.slice(1)}
+                                        </button>
+                                      ))}
+                                    </div>
+                                    <div
+                                      className="fixed inset-0 z-10"
+                                      aria-hidden
+                                      onClick={() => setCategoryDropdownOpen(null)}
+                                    />
+                                  </>
+                                )}
                               </div>
                             </div>
                           </div>
-                        ) : (
-                          <div className="w-full h-48 bg-white/5 flex items-center justify-center text-white/40">
-                            Image unavailable
-                          </div>
-                        )}
-                        <div className="p-3">
-                          <div className="text-sm font-semibold text-white truncate">
-                            {photo.description || photo.name}
-                          </div>
-                          {photo.created_at && (
-                            <div className="text-xs text-white/60 mt-1">
-                              {new Date(photo.created_at).toLocaleDateString()}
+                          <div className="p-3">
+                            <div className="text-sm font-semibold text-white truncate">
+                              {photo.description || photo.name}
                             </div>
-                          )}
+                            {photo.created_at && (
+                              <div className="text-xs text-white/60 mt-1">
+                                {new Date(photo.created_at).toLocaleDateString()}
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      )
+                    })}
+                  </div>
+                ) : photos.length > 0 ? (
+                  <div className="text-center py-12 border border-dashed border-white/10 rounded-lg">
+                    <p className="text-white/60 text-sm">No photos in this category</p>
                   </div>
                 ) : (
                   <div className="text-center py-12 border border-dashed border-white/10 rounded-lg">
@@ -623,6 +756,15 @@ export default function EditJobPage() {
               </div>
             </PageSection>
           </form>
+
+          {toast && (
+            <Toast
+              message={toast.message}
+              type={toast.type}
+              isOpen={true}
+              onClose={() => setToast(null)}
+            />
+          )}
         </AppShell>
       </AppBackground>
     </ProtectedRoute>

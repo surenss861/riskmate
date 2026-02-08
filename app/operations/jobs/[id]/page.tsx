@@ -116,6 +116,7 @@ export default function JobDetailPage() {
     url?: string
     file_path?: string
     created_at: string
+    category?: 'before' | 'during' | 'after'
   }>>([])
   const [signoffs, setSignoffs] = useState<Array<{
     id: string
@@ -298,12 +299,13 @@ export default function JobDetailPage() {
         setAttachments(docs.map((doc: any) => ({
           id: doc.id,
           name: doc.file_name || doc.name || 'Untitled',
-          type: doc.type === 'photo' ? 'photo' : 
+          type: doc.type === 'photo' ? 'photo' :
                 doc.file_name?.toLowerCase().includes('permit') ? 'permit' :
                 doc.file_name?.toLowerCase().includes('inspection') ? 'inspection' : 'document',
-          url: doc.file_path,
-          file_path: doc.file_path,
+          url: doc.url ?? doc.file_path,
+          file_path: doc.file_path ?? doc.storage_path,
           created_at: doc.created_at,
+          category: doc.type === 'photo' ? (doc.category ?? 'during') : undefined,
         })))
       } catch (err) {
         console.error('Failed to load attachments:', err)
@@ -1363,15 +1365,29 @@ export default function JobDetailPage() {
                       setAttachments(docs.map((doc: any) => ({
                         id: doc.id,
                         name: doc.file_name || doc.name || 'Untitled',
-                        type: doc.type === 'photo' ? 'photo' : 
+                        type: doc.type === 'photo' ? 'photo' :
                               doc.file_name?.toLowerCase().includes('permit') ? 'permit' :
                               doc.file_name?.toLowerCase().includes('inspection') ? 'inspection' : 'document',
-                        url: doc.file_path,
-                        file_path: doc.file_path,
+                        url: doc.url ?? doc.file_path,
+                        file_path: doc.file_path ?? doc.storage_path,
                         created_at: doc.created_at,
+                        category: doc.type === 'photo' ? (doc.category ?? 'during') : undefined,
                       })))
                     } catch (err) {
                       console.error('Failed to reload attachments:', err)
+                    }
+                  }}
+                  onAttachmentCategoryChange={async (docId, newCategory) => {
+                    const previous = attachments.map((a) => (a.id === docId ? { ...a } : a))
+                    setAttachments((prev) =>
+                      prev.map((a) => (a.id === docId ? { ...a, category: newCategory } : a))
+                    )
+                    try {
+                      await jobsApi.updateDocumentCategory(jobId, docId, newCategory)
+                      setToast({ message: 'Category updated', type: 'success' })
+                    } catch (err) {
+                      setAttachments(previous)
+                      setToast({ message: 'Failed to update category', type: 'error' })
                     }
                   }}
                 />

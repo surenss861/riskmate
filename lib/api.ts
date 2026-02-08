@@ -405,7 +405,7 @@ export const jobsApi = {
     return apiRequest<{ data: any[] }>(`/api/jobs/${id}/documents`);
   },
 
-  uploadDocument: async (id: string, file: File, metadata: { name: string; type?: string; description?: string }) => {
+  uploadDocument: async (id: string, file: File, metadata: { name: string; type?: string; description?: string; category?: 'before' | 'during' | 'after' }) => {
     const supabase = createSupabaseBrowserClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) throw new Error('Not authenticated')
@@ -437,7 +437,7 @@ export const jobsApi = {
     if (uploadError) throw uploadError
     if (!uploadData?.path) throw new Error('Upload failed')
 
-    // Save metadata via backend
+    // Save metadata via backend (category for photos: before/during/after)
     return apiRequest<{ data: any }>(`/api/jobs/${id}/documents`, {
       method: 'POST',
       body: JSON.stringify({
@@ -447,7 +447,15 @@ export const jobsApi = {
         file_size: file.size,
         mime_type: file.type,
         description: metadata.description || null,
+        ...(metadata.type === 'photo' && metadata.category ? { category: metadata.category } : {}),
       }),
+    })
+  },
+
+  updateDocumentCategory: async (jobId: string, docId: string, category: 'before' | 'during' | 'after') => {
+    return apiRequest<{ ok: boolean; data: any }>(`/api/jobs/${jobId}/documents/${docId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ category }),
     })
   },
 

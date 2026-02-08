@@ -1,12 +1,20 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { Download, FileText, Shield, CheckCircle, Clock, User, Flag, Upload, X, Image as ImageIcon, ExternalLink, Loader2 } from 'lucide-react'
 import { cardStyles, buttonStyles, typography } from '@/lib/styles/design-system'
 import { jobsApi } from '@/lib/api'
 import { useRouter } from 'next/navigation'
 import { TrustReceiptStrip, IntegrityBadge, EnforcementBanner, EmptyState } from '@/components/shared'
+
+export type PhotoCategory = 'before' | 'during' | 'after'
+
+function getDefaultCategory(jobStatus: string): PhotoCategory {
+  if (jobStatus === 'draft') return 'before'
+  if (jobStatus === 'completed' || jobStatus === 'archived') return 'after'
+  return 'during'
+}
 
 type UploadTaskStatus = 'uploading' | 'success' | 'failed'
 
@@ -16,6 +24,7 @@ interface UploadTask {
   status: UploadTaskStatus
   progress: number
   error?: string
+  category?: PhotoCategory
 }
 
 interface Attachment {
@@ -25,6 +34,7 @@ interface Attachment {
   url?: string
   file_path?: string
   created_at: string
+  category?: PhotoCategory
 }
 
 interface Signoff {
@@ -69,6 +79,7 @@ interface JobPacketViewProps {
   signoffs?: Signoff[]
   onExport?: (packType: 'insurance' | 'audit' | 'incident' | 'compliance') => void
   onAttachmentUploaded?: () => void
+  onAttachmentCategoryChange?: (docId: string, category: PhotoCategory) => Promise<void>
 }
 
 export function JobPacketView({ 
@@ -78,25 +89,38 @@ export function JobPacketView({
   attachments = [],
   signoffs = [],
   onExport,
-  onAttachmentUploaded 
+  onAttachmentUploaded,
+  onAttachmentCategoryChange,
 }: JobPacketViewProps) {
   const router = useRouter()
   const [selectedPack, setSelectedPack] = useState<'insurance' | 'audit' | 'incident' | 'compliance' | null>(null)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [uploadQueue, setUploadQueue] = useState<UploadTask[]>([])
+  const [uploadModalOpen, setUploadModalOpen] = useState(false)
+  const [pendingFiles, setPendingFiles] = useState<File[]>([])
+  const [uploadCategory, setUploadCategory] = useState<PhotoCategory>(() => getDefaultCategory(job.status))
+  const [photoFilter, setPhotoFilter] = useState<'all' | PhotoCategory>('all')
+  const [categoryDropdownOpen, setCategoryDropdownOpen] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const runUpload = async (task: UploadTask) => {
+  useEffect(() => {
+    setUploadCategory(getDefaultCategory(job.status))
+  }, [job.status])
+
+  const runUpload = async (task: UploadTask, category?: PhotoCategory) => {
     if (task.status !== 'uploading') return
     const fileType = task.file.type.startsWith('image/') ? 'photo' :
       task.file.name.includes('permit') ? 'permit' :
       task.file.name.includes('inspection') ? 'inspection' : 'document'
+    const isPhoto = fileType === 'photo'
+    const photoCategory = category ?? task.category
     try {
       await jobsApi.uploadDocument(job.id, task.file, {
         name: task.file.name,
         type: fileType,
         description: `Uploaded for ${selectedPack || 'job'} packet`,
+        ...(isPhoto && photoCategory ? { category: photoCategory } : {}),
       })
       setUploadQueue((prev) =>
         prev.map((t) => (t.id === task.id ? { ...t, status: 'success' as const, progress: 100 } : t))
@@ -441,22 +465,92 @@ export function JobPacketView({
               if (files.length === 0) return
 
               setUploadError(null)
-              setUploading(true)
-              const newTasks: UploadTask[] = files.map((file) => ({
-                id: `${job.id}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-                file,
-                status: 'uploading' as const,
-                progress: 0,
-              }))
-              setUploadQueue((prev) => [...prev, ...newTasks])
+              const photoFiles = files.filter((f) => f.type.startsWith('image/'))
+              const nonPhotoFiles = files.filter((f) => !f.type.startsWith('image/'))
+
+              if (photoFiles.length > 0) {
+                setPendingFiles(photoFiles)
+                setUploadCategory(getDefaultCategory(job.status))
+                setUploadModalOpen(true)
+              }
+
+              if (nonPhotoFiles.length > 0) {
+                setUploading(true)
+                const nonPhotoTasks: UploadTask[] = nonPhotoFiles.map((file) => ({
+                  id: `${job.id}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+                  file,
+                  status: 'uploading' as const,
+                  progress: 0,
+                }))
+                setUploadQueue((prev) => [...prev, ...nonPhotoTasks])
+                nonPhotoTasks.forEach((t) => runUpload(t))
+              }
+
               if (fileInputRef.current) {
                 fileInputRef.current.value = ''
               }
-              setTimeout(() => {
-                newTasks.forEach((t) => runUpload(t))
-              }, 0)
             }}
           />
+
+          {/* Photo upload modal: category selector then upload */}
+          {uploadModalOpen && pendingFiles.length > 0 && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setUploadModalOpen(false)}>
+              <div className={`${cardStyles.base} p-6 max-w-md w-full border border-white/20`} onClick={(e) => e.stopPropagation()}>
+                <h4 className={`${typography.h3} mb-2`}>Add Photo Evidence</h4>
+                <p className="text-sm text-white/60 mb-4">Choose when this photo was taken relative to the job.</p>
+                <div className="flex gap-2 mb-4">
+                  {(['before', 'during', 'after'] as const).map((cat) => (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => setUploadCategory(cat)}
+                      className={`flex-1 py-2.5 px-3 rounded-lg border text-sm font-medium transition-colors ${
+                        uploadCategory === cat
+                          ? 'bg-[#2563eb] border-[#2563eb] text-white'
+                          : 'bg-white/5 border-white/20 text-white/80 hover:bg-white/10'
+                      }`}
+                    >
+                      {cat === 'before' && '📸 Before'}
+                      {cat === 'during' && '🔧 During'}
+                      {cat === 'after' && '✅ After'}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-white/50 mb-4">{pendingFiles.length} photo(s) selected</p>
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => { setUploadModalOpen(false); setPendingFiles([]) }}
+                    className={`${buttonStyles.secondary} flex-1`}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setUploading(true)
+                      const newTasks: UploadTask[] = pendingFiles.map((file) => ({
+                        id: `${job.id}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+                        file,
+                        status: 'uploading' as const,
+                        progress: 0,
+                        category: uploadCategory,
+                      }))
+                      setUploadQueue((prev) => [...prev, ...newTasks])
+                      setUploadModalOpen(false)
+                      setPendingFiles([])
+                      newTasks.forEach((t) => runUpload(t, uploadCategory))
+                    }}
+                    className={`${buttonStyles.primary} flex-1 flex items-center justify-center gap-2`}
+                  >
+                    <Upload className="w-4 h-4" />
+                    Upload
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {uploadQueue.length > 0 && (
             <div className="mb-4 space-y-2">
               {uploadQueue.map((task) => (
@@ -504,37 +598,131 @@ export function JobPacketView({
               {uploadError}
             </div>
           )}
-          {attachments.length === 0 && uploadQueue.length === 0 ? (
-            <div className="p-6 bg-white/5 rounded-lg border border-dashed border-white/10 text-center">
-              <FileText className="w-8 h-8 text-white/40 mx-auto mb-2" />
-              <p className="text-sm text-white/60 mb-2">Upload permit / photo / inspection</p>
-              <p className="text-xs text-white/40">Supports images, PDFs, and documents</p>
-            </div>
-          ) : attachments.length > 0 ? (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {attachments.map((attachment) => (
-                <div
-                  key={attachment.id}
-                  className="p-3 bg-white/5 rounded-lg border border-white/10 hover:border-white/20 transition-colors"
-                >
-                  <div className="flex items-center gap-2 mb-2">
-                    {attachment.type === 'photo' ? (
-                      <ImageIcon className="w-4 h-4 text-white/60" />
-                    ) : (
-                      <FileText className="w-4 h-4 text-white/60" />
-                    )}
-                    <span className="text-xs text-white/50 capitalize">{attachment.type}</span>
+          {(() => {
+            const photos = attachments.filter((a) => a.type === 'photo')
+            const allCount = photos.length
+            const beforeCount = photos.filter((p) => (p.category ?? 'during') === 'before').length
+            const duringCount = photos.filter((p) => (p.category ?? 'during') === 'during').length
+            const afterCount = photos.filter((p) => (p.category ?? 'during') === 'after').length
+            const filteredAttachments =
+              photoFilter === 'all'
+                ? attachments
+                : attachments.filter(
+                    (a) => a.type !== 'photo' || (a.category ?? 'during') === photoFilter
+                  )
+            const categoryBadgeClass = (cat: PhotoCategory) => {
+              if (cat === 'before') return 'bg-[#e3f2fd] text-[#1976d2]'
+              if (cat === 'after') return 'bg-[#e8f5e9] text-[#388e3c]'
+              return 'bg-[#fff3e0] text-[#f57c00]'
+            }
+            return (
+              <>
+                {photos.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-2 mb-4">
+                    <span className="text-xs text-white/50 mr-1">Photos:</span>
+                    {(['all', 'before', 'during', 'after'] as const).map((tab) => {
+                      const count = tab === 'all' ? allCount : tab === 'before' ? beforeCount : tab === 'during' ? duringCount : afterCount
+                      return (
+                        <button
+                          key={tab}
+                          type="button"
+                          onClick={() => setPhotoFilter(tab)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                            photoFilter === tab
+                              ? 'bg-[#2563eb] text-white'
+                              : 'bg-white/5 border border-white/10 text-white/70 hover:bg-white/10'
+                          }`}
+                        >
+                          {tab === 'all' ? 'All' : tab.charAt(0).toUpperCase() + tab.slice(1)} ({count})
+                        </button>
+                      )
+                    })}
                   </div>
-                  <p className="text-sm text-white/80 truncate mb-1" title={attachment.name}>
-                    {attachment.name}
-                  </p>
-                  <p className="text-xs text-white/40">
-                    {new Date(attachment.created_at).toLocaleDateString()}
-                  </p>
-                </div>
-              ))}
-            </div>
-          ) : null}
+                )}
+                {attachments.length === 0 && uploadQueue.length === 0 ? (
+                  <div className="p-6 bg-white/5 rounded-lg border border-dashed border-white/10 text-center">
+                    <FileText className="w-8 h-8 text-white/40 mx-auto mb-2" />
+                    <p className="text-sm text-white/60 mb-2">Upload permit / photo / inspection</p>
+                    <p className="text-xs text-white/40">Supports images, PDFs, and documents</p>
+                  </div>
+                ) : filteredAttachments.length > 0 ? (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {filteredAttachments.map((attachment) => {
+                      const isPhoto = attachment.type === 'photo'
+                      const cat = (isPhoto ? (attachment.category ?? 'during') : null) as PhotoCategory | null
+                      return (
+                        <div
+                          key={attachment.id}
+                          className="relative p-3 bg-white/5 rounded-lg border border-white/10 hover:border-white/20 transition-colors"
+                        >
+                          {isPhoto && attachment.url && (
+                            <div className="absolute top-2 right-2 z-10">
+                              <div className="relative">
+                                <button
+                                  type="button"
+                                  onClick={() => setCategoryDropdownOpen(categoryDropdownOpen === attachment.id ? null : attachment.id)}
+                                  className={`px-2 py-0.5 rounded text-[11px] font-bold uppercase ${categoryBadgeClass(cat!)}} hover:opacity-90`}
+                                >
+                                  {cat}
+                                </button>
+                                {categoryDropdownOpen === attachment.id && onAttachmentCategoryChange && (
+                                  <>
+                                    <div className="absolute top-full right-0 mt-1 py-1 min-w-[100px] rounded-lg bg-[#1a1a1a] border border-white/20 shadow-xl z-20">
+                                      {(['before', 'during', 'after'] as const).map((newCat) => (
+                                        <button
+                                          key={newCat}
+                                          type="button"
+                                          onClick={async () => {
+                                            await onAttachmentCategoryChange(attachment.id, newCat)
+                                            setCategoryDropdownOpen(null)
+                                          }}
+                                          className="block w-full text-left px-3 py-1.5 text-sm text-white/90 hover:bg-white/10"
+                                        >
+                                          {newCat.charAt(0).toUpperCase() + newCat.slice(1)}
+                                        </button>
+                                      ))}
+                                    </div>
+                                    <div
+                                      className="fixed inset-0 z-10"
+                                      aria-hidden
+                                      onClick={() => setCategoryDropdownOpen(null)}
+                                    />
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                          <div className="flex items-center gap-2 mb-2">
+                            {isPhoto ? (
+                              <ImageIcon className="w-4 h-4 text-white/60" />
+                            ) : (
+                              <FileText className="w-4 h-4 text-white/60" />
+                            )}
+                            <span className="text-xs text-white/50 capitalize">{attachment.type}</span>
+                          </div>
+                          {isPhoto && attachment.url && (
+                            <div className="w-full h-24 rounded bg-white/5 mb-2 overflow-hidden">
+                              <img src={attachment.url} alt="" className="w-full h-full object-cover" />
+                            </div>
+                          )}
+                          <p className="text-sm text-white/80 truncate mb-1" title={attachment.name}>
+                            {attachment.name}
+                          </p>
+                          <p className="text-xs text-white/40">
+                            {new Date(attachment.created_at).toLocaleDateString()}
+                          </p>
+                        </div>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <div className="p-6 bg-white/5 rounded-lg border border-dashed border-white/10 text-center">
+                    <p className="text-sm text-white/60">No photos in this category</p>
+                  </div>
+                )}
+              </>
+            )
+          })()}
         </section>
 
         {/* Attestations (Role-based) - Sealed Records */}
