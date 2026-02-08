@@ -116,7 +116,7 @@ export class ApiError extends Error {
     this.statusCode = options?.statusCode ?? def?.statusCode ?? 500
     this.requestId = options?.requestId
     this.details = options?.details
-    this.retryable = options?.retryable ?? def?.retryable
+    this.retryable = options?.retryable ?? (def as ApiErrorCodeDef | null)?.retryable
     this.retry_after_seconds = options?.retry_after_seconds
     this.category = options?.category
     this.classification = options?.classification

@@ -10,10 +10,7 @@
  * - Error code registry completeness
  */
 
-import {
-  createErrorResponse,
-  type ApiErrorResponse,
-} from '@/lib/utils/apiResponse'
+import { createErrorResponse } from '@/lib/utils/apiResponse'
 import {
   ERROR_CODE_REGISTRY,
   ERROR_CATEGORIES,
@@ -36,7 +33,7 @@ describe('createErrorResponse', () => {
     expect(r2.error_id).toBeDefined()
     expect(r1.error_id).not.toBe(r2.error_id)
     expect(typeof r1.error_id).toBe('string')
-    expect(r1.error_id.length).toBeGreaterThan(0)
+    expect((r1.error_id ?? '').length).toBeGreaterThan(0)
   })
 
   it('should return both response and errorId', () => {

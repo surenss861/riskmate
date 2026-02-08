@@ -55,7 +55,7 @@ describe('Error Response Format Integration', () => {
 
       expect(response.error_id).toBeDefined()
       expect(typeof response.error_id).toBe('string')
-      expect(response.error_id.length).toBe(36) // UUID format
+      expect((response.error_id ?? '').length).toBe(36) // UUID format
     })
 
     it('error responses should include request_id when provided', () => {
