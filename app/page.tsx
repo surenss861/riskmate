@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation'
 import { useState, useEffect, useRef, useLayoutEffect } from 'react'
 import Image from 'next/image'
-import { motion } from 'framer-motion'
+import { motion, useReducedMotion } from 'framer-motion'
 import ScrollToTop from '@/components/ScrollToTop'
 import RiskmateLogo from '@/components/RiskmateLogo'
 import { SampleReportModal } from '@/components/marketing'
@@ -35,15 +35,7 @@ const heroItem = {
 
 function HeroSection({ onSignup, onSampleReport }: { onSignup: () => void; onSampleReport: () => void }) {
   const { ref: titleWrapRef, width } = useElementWidth<HTMLDivElement>()
-  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false)
-  useEffect(() => {
-    const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
-    setPrefersReducedMotion(mq.matches)
-    const handler = () => setPrefersReducedMotion(mq.matches)
-    mq.addEventListener('change', handler)
-    return () => mq.removeEventListener('change', handler)
-  }, [])
-
+  const prefersReducedMotion = useReducedMotion() ?? false
   const underlineWidth = Math.max(120, Math.min(width * 0.32, 220))
 
   return (
@@ -83,7 +75,7 @@ function HeroSection({ onSignup, onSampleReport }: { onSignup: () => void; onSam
             >
               <div className="absolute inset-0 rounded-full bg-white/10" />
               <motion.div
-                initial={prefersReducedMotion ? false : { scaleX: 0, opacity: 0, filter: 'blur(6px)' }}
+                initial={prefersReducedMotion ? { scaleX: 1, opacity: 1, filter: 'blur(0px)' } : { scaleX: 0, opacity: 0, filter: 'blur(6px)' }}
                 animate={
                   prefersReducedMotion
                     ? { scaleX: 1, opacity: 1 }
@@ -122,7 +114,7 @@ function HeroSection({ onSignup, onSampleReport }: { onSignup: () => void; onSam
             <span className="relative z-10">Start Free</span>
             {!prefersReducedMotion && (
               <motion.span
-                className="absolute inset-0 bg-white/20"
+                className="pointer-events-none absolute inset-y-0 left-0 w-[45%] bg-white/35 blur-md"
                 initial={{ x: '-120%', opacity: 0 }}
                 animate={{ x: '120%', opacity: [0, 0.6, 0] }}
                 transition={{ duration: 1.1, delay: 0.55, ease: [0.16, 1, 0.3, 1] }}
