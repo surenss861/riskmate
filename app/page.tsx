@@ -14,6 +14,7 @@ export default function HomePage() {
   const [navOpacity, setNavOpacity] = useState(0.4)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [sampleReportOpen, setSampleReportOpen] = useState(false)
+  const [verifyModal, setVerifyModal] = useState<{ name: string; hash: string; contents: string } | null>(null)
 
   useEffect(() => {
     const handleOpenSampleReport = () => setSampleReportOpen(true)
@@ -317,55 +318,116 @@ export default function HomePage() {
           </p>
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
             {/* Featured: Audit Packet */}
-            <a
-              href="/Test-audit-packet.pdf"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="lg:col-span-2 block p-6 bg-[#121212] border border-white/10 rounded-lg hover:border-[#F97316]/40 transition-colors text-left group"
-            >
+            <div className="lg:col-span-2 p-6 bg-[#121212] border border-white/10 rounded-lg hover:border-[#F97316]/40 transition-colors text-left group">
               <div className="flex items-center justify-between mb-3">
                 <span className="text-[10px] font-mono text-white/60 tracking-wider uppercase">Audit Packet</span>
                 <span className="flex items-center gap-1.5 text-[10px] text-[#F97316]/80">
                   <span className="w-1.5 h-1.5 rounded-full bg-[#F97316]" /> VERIFIED
                 </span>
               </div>
-              <div className="aspect-[3/4] max-h-56 mb-4 rounded border border-white/10 overflow-hidden bg-white/[0.02] relative">
-                <Image src="/proof/audit-01.png" alt="Audit packet page 1" fill className="object-cover object-top" sizes="(max-width: 1024px) 100vw, 50vw" />
-              </div>
+              <a href="/Test-audit-packet.pdf" target="_blank" rel="noopener noreferrer" className="block mb-4">
+                <div className="aspect-[3/4] max-h-56 rounded border border-white/10 overflow-hidden bg-white/[0.02] relative">
+                  <Image src="/proof/audit-01.png" alt="Audit packet page 1" fill className="object-cover object-top" sizes="(max-width: 1024px) 100vw, 50vw" />
+                </div>
+              </a>
               <p className="text-[10px] text-white/40 mb-2">Includes: job log, photo evidence, signatures, risk score, chain-of-custody</p>
               <div className="text-[11px] font-mono text-white/50 tracking-tight mb-1">Ledger anchor: sha256:a3f2b8c1...9d4e</div>
               <div className="text-[10px] text-white/40 mb-3">2026-02-07T12:00:00Z</div>
-              <span className="text-[11px] text-[#F97316] group-hover:underline">View PDF →</span>
-            </a>
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <a href="/Test-audit-packet.pdf" target="_blank" rel="noopener noreferrer" className="text-[11px] text-[#F97316] group-hover:underline">View PDF →</a>
+                <button
+                  type="button"
+                  onClick={() => setVerifyModal({ name: 'Audit Packet', hash: 'sha256:a3f2b8c1...9d4e', contents: 'job log, photo evidence, signatures, risk score, chain-of-custody' })}
+                  className="px-2.5 py-1 rounded-md border border-white/20 text-[10px] font-mono text-white/60 hover:text-white/90 hover:border-white/30 transition-colors"
+                >
+                  Verify
+                </button>
+              </div>
+            </div>
             {[
               { name: 'Compliance Packet', pdf: '/Test-compliance-packet.pdf', img: '/proof/compliance-01.png', hash: 'sha256:7c2e...f1a9', contents: 'Checklists, sign-offs, documentation, proof of work' },
               { name: 'Incident Packet', pdf: '/Test-incident-packet.pdf', img: '/proof/incident-01.png', hash: 'sha256:9b1d...c3e8', contents: 'Flag escalation trail, accountability markers, decisions' },
               { name: 'Insurance Packet', pdf: '/Test-insurance-packet.pdf', img: '/proof/insurance-01.png', hash: 'sha256:e4a2...6b7f', contents: 'Job completion, risk score, flags, attachments, audit trail' },
             ].map((pack) => (
-              <a
-                key={pack.name}
-                href={pack.pdf}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block p-6 bg-[#121212] border border-white/10 rounded-lg hover:border-white/20 transition-colors text-left group"
-              >
+              <div key={pack.name} className="p-6 bg-[#121212] border border-white/10 rounded-lg hover:border-white/20 transition-colors text-left group">
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-[10px] font-mono text-white/60 tracking-wider uppercase">{pack.name.replace(' Packet', '')}</span>
                   <span className="flex items-center gap-1.5 text-[10px] text-[#F97316]/80">
                     <span className="w-1.5 h-1.5 rounded-full bg-[#F97316]" /> VERIFIED
                   </span>
                 </div>
-                <div className="aspect-[3/4] max-h-40 mb-4 rounded border border-white/10 overflow-hidden bg-white/[0.02] relative">
-                  <Image src={pack.img} alt={`${pack.name} page 1`} fill className="object-cover object-top" sizes="(max-width: 1024px) 100vw, 25vw" />
-                </div>
+                <a href={pack.pdf} target="_blank" rel="noopener noreferrer" className="block mb-4">
+                  <div className="aspect-[3/4] max-h-40 rounded border border-white/10 overflow-hidden bg-white/[0.02] relative">
+                    <Image src={pack.img} alt={`${pack.name} page 1`} fill className="object-cover object-top" sizes="(max-width: 1024px) 100vw, 25vw" />
+                  </div>
+                </a>
                 <p className="text-[10px] text-white/40 mb-2">{pack.contents}</p>
                 <div className="text-[11px] font-mono text-white/50 tracking-tight mb-1">Ledger: {pack.hash}</div>
                 <div className="text-[10px] text-white/40 mb-3">2026-02-07T12:00:00Z</div>
-                <span className="text-[11px] text-[#F97316] group-hover:underline">View PDF →</span>
-              </a>
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <a href={pack.pdf} target="_blank" rel="noopener noreferrer" className="text-[11px] text-[#F97316] group-hover:underline">View PDF →</a>
+                  <button
+                    type="button"
+                    onClick={() => setVerifyModal({ name: pack.name, hash: pack.hash, contents: pack.contents })}
+                    className="px-2.5 py-1 rounded-md border border-white/20 text-[10px] font-mono text-white/60 hover:text-white/90 hover:border-white/30 transition-colors"
+                  >
+                    Verify
+                  </button>
+                </div>
+              </div>
             ))}
           </div>
         </section>
+
+        {/* Verify modal — hash, timestamp, anchor, how to verify */}
+        {verifyModal && (
+          <div
+            className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+            onClick={() => setVerifyModal(null)}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="verify-modal-title"
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.96 }}
+              className="bg-[#121212] border border-white/15 rounded-xl p-6 max-w-md w-full shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 id="verify-modal-title" className="text-lg font-semibold text-white mb-4 font-mono">
+                Verify pack: {verifyModal.name}
+              </h3>
+              <div className="space-y-3 text-sm">
+                <div>
+                  <span className="text-white/40 text-xs font-mono uppercase tracking-wider">Ledger anchor</span>
+                  <p className="font-mono text-white/80 break-all">{verifyModal.hash}</p>
+                </div>
+                <div>
+                  <span className="text-white/40 text-xs font-mono uppercase tracking-wider">Timestamp</span>
+                  <p className="font-mono text-white/80">2026-02-07T12:00:00Z</p>
+                </div>
+                <div>
+                  <span className="text-white/40 text-xs font-mono uppercase tracking-wider">Contents</span>
+                  <p className="text-white/70">{verifyModal.contents}</p>
+                </div>
+                <div className="pt-4 border-t border-white/10">
+                  <span className="text-white/40 text-xs font-mono uppercase tracking-wider">How to verify</span>
+                  <p className="text-white/60 text-sm mt-1">
+                    Each exported pack is anchored to the ledger. The hash above uniquely identifies this artifact. In production, auditors can recompute the hash and confirm the record has not been altered.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setVerifyModal(null)}
+                className="mt-6 w-full px-4 py-2 rounded-lg border border-white/20 text-white/80 hover:bg-white/5 transition-colors text-sm"
+              >
+                Close
+              </button>
+            </motion.div>
+          </div>
+        )}
 
         {/* Pricing - Minimal Cards */}
         <section 
