@@ -5,7 +5,7 @@ import { getRequestId } from '@/lib/utils/requestId'
 import { createSuccessResponse, createErrorResponse } from '@/lib/utils/apiResponse'
 import { logApiError } from '@/lib/utils/errorLogging'
 import { handleApiError, API_ERROR_CODES } from '@/lib/utils/apiErrors'
-import { checkRateLimit, RATE_LIMIT_PRESETS } from '@/lib/utils/rateLimiter'
+import { checkRateLimitWithContext, RATE_LIMIT_CONFIGS } from '@/lib/utils/rateLimiter'
 
 export const runtime = 'nodejs'
 
@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Rate limit: 10 exports per hour per org
-    const rateLimitResult = checkRateLimit(request, RATE_LIMIT_PRESETS.export, {
+    const rateLimitResult = checkRateLimitWithContext(request, RATE_LIMIT_CONFIGS.export, {
       organization_id,
       user_id,
     })

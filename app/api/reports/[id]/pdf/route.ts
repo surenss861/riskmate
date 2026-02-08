@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { signPrintToken } from '@/lib/utils/printToken'
 import { generatePdfFromUrl } from '@/lib/utils/playwright'
-import { checkRateLimit, RATE_LIMIT_PRESETS } from '@/lib/utils/rateLimiter'
+import { checkRateLimitWithContext, RATE_LIMIT_CONFIGS } from '@/lib/utils/rateLimiter'
 import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { logApiError } from '@/lib/utils/errorLogging'
 import { API_ERROR_CODES } from '@/lib/utils/apiErrors'
@@ -106,7 +106,7 @@ export async function POST(
     }
 
     // Rate limit: 20 PDF generations per hour per org
-    const rateLimitResult = checkRateLimit(request, RATE_LIMIT_PRESETS.pdf, {
+    const rateLimitResult = checkRateLimitWithContext(request, RATE_LIMIT_CONFIGS.pdf, {
       organization_id: userData.organization_id,
       user_id: user.id,
     })

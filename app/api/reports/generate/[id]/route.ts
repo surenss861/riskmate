@@ -8,7 +8,7 @@ import { buildJobPacket } from '@/lib/utils/packets/builder'
 import { computeCanonicalHash } from '@/lib/utils/canonicalJson'
 import { signPrintToken } from '@/lib/utils/printToken'
 import { isValidPacketType, type PacketType, PACKETS } from '@/lib/utils/packets/types'
-import { checkRateLimit, RATE_LIMIT_PRESETS } from '@/lib/utils/rateLimiter'
+import { checkRateLimitWithContext, RATE_LIMIT_CONFIGS } from '@/lib/utils/rateLimiter'
 import crypto from 'crypto'
 
 export const runtime = 'nodejs'
@@ -90,7 +90,7 @@ export async function POST(
     console.log(`[reports][${requestId}][stage] fetch_job_ok`)
 
     // Rate limit: 20 PDF generations per hour per org
-    const rateLimitResult = checkRateLimit(request, RATE_LIMIT_PRESETS.pdf, {
+    const rateLimitResult = checkRateLimitWithContext(request, RATE_LIMIT_CONFIGS.pdf, {
       organization_id,
       user_id: user.id,
     })

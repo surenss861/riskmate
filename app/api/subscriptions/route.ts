@@ -148,10 +148,24 @@ export async function GET(request: NextRequest) {
     })
   } catch (error: any) {
     console.error('Subscription fetch failed:', error)
-    return NextResponse.json(
-      { message: 'Failed to fetch subscription' },
-      { status: 500 }
+    const requestId = getRequestId(request)
+    const { response, errorId } = createErrorResponse(
+      'Failed to fetch subscription',
+      'QUERY_ERROR',
+      {
+        requestId,
+        statusCode: 500,
+        details: process.env.NODE_ENV === 'development' ? { detail: error?.message } : undefined,
+      }
     )
+    logApiError(500, 'QUERY_ERROR', errorId, requestId, undefined, response.message, {
+      category: 'internal', severity: 'error', route: ROUTE,
+      details: process.env.NODE_ENV === 'development' ? { detail: error?.message } : undefined,
+    })
+    return NextResponse.json(response, {
+      status: 500,
+      headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+    })
   }
 }
 

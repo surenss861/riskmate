@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { resolveOrgContext, hashId } from '@/lib/utils/orgContext'
-import { checkRateLimit, RATE_LIMIT_PRESETS } from '@/lib/utils/rateLimiter'
+import { checkRateLimitWithContext, RATE_LIMIT_CONFIGS } from '@/lib/utils/rateLimiter'
 import PDFDocument from 'pdfkit'
 import crypto from 'crypto'
 import QRCode from 'qrcode'
@@ -2877,7 +2877,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Rate limit: 20 PDF generations per hour per org
-    const rateLimitResult = checkRateLimit(request, RATE_LIMIT_PRESETS.pdf, {
+    const rateLimitResult = checkRateLimitWithContext(request, RATE_LIMIT_CONFIGS.pdf, {
       organization_id: orgContext.orgId,
       user_id: orgContext.userId,
     })

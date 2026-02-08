@@ -5,7 +5,7 @@ import { getRequestId } from '@/lib/utils/requestId'
 import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { logApiError } from '@/lib/utils/errorLogging'
 import { handleApiError, API_ERROR_CODES } from '@/lib/utils/apiErrors'
-import { checkRateLimit, RATE_LIMIT_PRESETS } from '@/lib/utils/rateLimiter'
+import { checkRateLimitWithContext, RATE_LIMIT_CONFIGS } from '@/lib/utils/rateLimiter'
 import { generateLedgerExportPDF } from '@/lib/utils/pdf/ledgerExport'
 import { randomUUID } from 'crypto'
 
@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Rate limit: 10 exports per hour per org
-    const rateLimitResult = checkRateLimit(request, RATE_LIMIT_PRESETS.export, {
+    const rateLimitResult = checkRateLimitWithContext(request, RATE_LIMIT_CONFIGS.export, {
       organization_id,
       user_id,
     })
