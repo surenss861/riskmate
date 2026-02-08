@@ -606,7 +606,7 @@ export function JobPacketView({
             const afterCount = photos.filter((p) => (p.category ?? 'during') === 'after').length
             const filteredAttachments =
               photoFilter === 'all'
-                ? attachments
+                ? attachments.filter((a) => a.type === 'photo')
                 : attachments.filter(
                     (a) => a.type === 'photo' && (a.category ?? 'during') === photoFilter
                   )

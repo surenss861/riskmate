@@ -304,9 +304,12 @@ async function buildSectionData({
               createdAt: photo.created_at,
               uploadedBy: uploader?.name || null,
               uploadedByEmail: uploader?.email || null,
+              category: photo.category ?? null,
             }
           }),
           count: photos.length,
+          jobStartDate: job.start_date ?? null,
+          jobEndDate: job.end_date ?? null,
         },
         meta: {
           title: 'Evidence Photos',
