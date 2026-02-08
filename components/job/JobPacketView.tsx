@@ -7,8 +7,9 @@ import { cardStyles, buttonStyles, typography } from '@/lib/styles/design-system
 import { jobsApi } from '@/lib/api'
 import { useRouter } from 'next/navigation'
 import { TrustReceiptStrip, IntegrityBadge, EnforcementBanner, EmptyState } from '@/components/shared'
+import { getEffectivePhotoCategory, type PhotoCategory } from '@/lib/utils/photoCategory'
 
-export type PhotoCategory = 'before' | 'during' | 'after'
+export type { PhotoCategory }
 
 function getDefaultCategory(jobStatus: string): PhotoCategory {
   if (jobStatus === 'draft') return 'before'
@@ -61,6 +62,8 @@ interface JobPacketViewProps {
     flagged_at?: string | null
     site_id?: string | null
     site_name?: string | null
+    start_date?: string | null
+    end_date?: string | null
   }
   mitigations?: Array<{
     id: string
@@ -601,17 +604,17 @@ export function JobPacketView({
           {(() => {
             const photos = attachments.filter((a) => a.type === 'photo')
             const nonPhotoAttachments = attachments.filter((a) => a.type !== 'photo')
+            const jobStart = job.start_date ?? null
+            const jobEnd = job.end_date ?? null
+            const effectiveCat = (p: Attachment) => getEffectivePhotoCategory(p, jobStart, jobEnd)
             const allCount = photos.length
-            const beforeCount = photos.filter((p) => (p.category ?? 'during') === 'before').length
-            const duringCount = photos.filter((p) => (p.category ?? 'during') === 'during').length
-            const afterCount = photos.filter((p) => (p.category ?? 'during') === 'after').length
+            const beforeCount = photos.filter((p) => effectiveCat(p) === 'before').length
+            const duringCount = photos.filter((p) => effectiveCat(p) === 'during').length
+            const afterCount = photos.filter((p) => effectiveCat(p) === 'after').length
             const filteredAttachments =
               photoFilter === 'all'
                 ? attachments
-                : [
-                    ...nonPhotoAttachments,
-                    ...photos.filter((p) => (p.category ?? 'during') === photoFilter),
-                  ]
+                : photos.filter((p) => effectiveCat(p) === photoFilter)
             const categoryBadgeClass = (cat: PhotoCategory) => {
               if (cat === 'before') return 'bg-[#e3f2fd] text-[#1976d2]'
               if (cat === 'after') return 'bg-[#e8f5e9] text-[#388e3c]'
@@ -651,7 +654,7 @@ export function JobPacketView({
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     {filteredAttachments.map((attachment) => {
                       const isPhoto = attachment.type === 'photo'
-                      const cat = (isPhoto ? (attachment.category ?? 'during') : null) as PhotoCategory | null
+                      const cat = (isPhoto ? effectiveCat(attachment) : null) as PhotoCategory | null
                       return (
                         <div
                           key={attachment.id}

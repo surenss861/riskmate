@@ -10,8 +10,7 @@ import { ImageModal } from '@/components/report/ImageModal'
 import { typography, spacing } from '@/lib/styles/design-system'
 import { AppBackground, AppShell, PageSection, GlassCard, Button, Input, Select, PageHeader } from '@/components/shared'
 import { Toast } from '@/components/dashboard/Toast'
-
-type PhotoCategory = 'before' | 'during' | 'after'
+import { getEffectivePhotoCategory, type PhotoCategory } from '@/lib/utils/photoCategory'
 
 function getDefaultCategory(jobStatus: string): PhotoCategory {
   if (jobStatus === 'draft') return 'before'
@@ -35,6 +34,7 @@ export default function EditJobPage() {
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [jobEndDate, setJobEndDate] = useState<string | null>(null)
   const [riskFactors, setRiskFactors] = useState<RiskFactor[]>([])
   const [selectedRiskFactors, setSelectedRiskFactors] = useState<string[]>([])
   const [formData, setFormData] = useState({
@@ -86,6 +86,7 @@ export default function EditJobPage() {
         subcontractor_count: job.subcontractor_count || 0,
         insurance_status: job.insurance_status || 'pending',
       })
+      setJobEndDate(job.end_date ?? null)
 
       // Load selected risk factors from risk_score_detail
       if (job.risk_score_detail?.factors) {
@@ -160,11 +161,13 @@ export default function EditJobPage() {
     }
   }
 
+  const jobStartDate = formData.start_date || null
   const photos = documents.filter((doc: any) => doc.type === 'photo' && doc.url) as Array<{ id: string; name: string; description?: string; url: string; created_at?: string; category?: PhotoCategory }>
-  const filteredPhotos = photoFilter === 'all' ? photos : photos.filter((p) => (p.category ?? 'during') === photoFilter)
-  const beforeCount = photos.filter((p) => (p.category ?? 'during') === 'before').length
-  const duringCount = photos.filter((p) => (p.category ?? 'during') === 'during').length
-  const afterCount = photos.filter((p) => (p.category ?? 'during') === 'after').length
+  const effectiveCat = (p: { category?: PhotoCategory | null; created_at?: string | null }) => getEffectivePhotoCategory(p, jobStartDate, jobEndDate)
+  const filteredPhotos = photoFilter === 'all' ? photos : photos.filter((p) => effectiveCat(p) === photoFilter)
+  const beforeCount = photos.filter((p) => effectiveCat(p) === 'before').length
+  const duringCount = photos.filter((p) => effectiveCat(p) === 'during').length
+  const afterCount = photos.filter((p) => effectiveCat(p) === 'after').length
   const categoryBadgeClass = (cat: PhotoCategory) => {
     if (cat === 'before') return 'bg-[#e3f2fd] text-[#1976d2]'
     if (cat === 'after') return 'bg-[#e8f5e9] text-[#388e3c]'
@@ -533,7 +536,7 @@ export default function EditJobPage() {
                 {filteredPhotos.length > 0 ? (
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                     {filteredPhotos.map((photo) => {
-                      const cat = (photo.category ?? 'during') as PhotoCategory
+                      const cat = effectiveCat(photo) as PhotoCategory
                       return (
                         <div
                           key={photo.id}

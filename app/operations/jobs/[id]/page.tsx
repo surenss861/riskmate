@@ -68,6 +68,8 @@ interface Job {
   created_at: string
   applied_template_id?: string | null
   applied_template_type?: 'hazard' | 'job' | null
+  start_date?: string | null
+  end_date?: string | null
 }
 
 export default function JobDetailPage() {
