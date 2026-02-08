@@ -5,7 +5,7 @@ import { getRequestId } from '@/lib/utils/requestId'
 import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { logApiError } from '@/lib/utils/errorLogging'
 import { handleApiError, API_ERROR_CODES } from '@/lib/utils/apiErrors'
-import { checkRateLimitWithContext, RATE_LIMIT_CONFIGS } from '@/lib/utils/rateLimiter'
+import { checkRateLimitWithContext, RATE_LIMIT_CONFIGS, type RateLimitResult } from '@/lib/utils/rateLimiter'
 import { generateLedgerExportPDF } from '@/lib/utils/pdf/ledgerExport'
 import { randomUUID } from 'crypto'
 
@@ -20,6 +20,7 @@ export const runtime = 'nodejs'
  */
 export async function POST(request: NextRequest) {
   const requestId = getRequestId(request)
+  let rateLimitResult: RateLimitResult | null = null
 
   try {
     let organization_id: string
@@ -50,7 +51,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Rate limit: 10 exports per hour per org
-    const rateLimitResult = checkRateLimitWithContext(request, RATE_LIMIT_CONFIGS.export, {
+    rateLimitResult = checkRateLimitWithContext(request, RATE_LIMIT_CONFIGS.export, {
       organization_id,
       user_id,
     })
@@ -217,7 +218,13 @@ export async function POST(request: NextRequest) {
         })
         return NextResponse.json(response, {
           status: 500,
-          headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+          headers: {
+            'X-Request-ID': requestId,
+            'X-Error-ID': errorId,
+            'X-RateLimit-Limit': String(rateLimitResult.limit),
+            'X-RateLimit-Remaining': String(rateLimitResult.remaining),
+            'X-RateLimit-Reset': String(rateLimitResult.resetAt),
+          },
         })
       }
 
@@ -244,7 +251,13 @@ export async function POST(request: NextRequest) {
       })
       return NextResponse.json(response, {
         status: 500,
-        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+        headers: {
+          'X-Request-ID': requestId,
+          'X-Error-ID': errorId,
+          'X-RateLimit-Limit': String(rateLimitResult.limit),
+          'X-RateLimit-Remaining': String(rateLimitResult.remaining),
+          'X-RateLimit-Reset': String(rateLimitResult.resetAt),
+        },
       })
     }
 
@@ -339,6 +352,14 @@ export async function POST(request: NextRequest) {
       stack: err.stack,
       requestId,
     })
-    return handleApiError(error, requestId, undefined, { route: ROUTE })
+    const rateLimitHeaders =
+      rateLimitResult != null
+        ? {
+            'X-RateLimit-Limit': String(rateLimitResult.limit),
+            'X-RateLimit-Remaining': String(rateLimitResult.remaining),
+            'X-RateLimit-Reset': String(rateLimitResult.resetAt),
+          }
+        : undefined
+    return handleApiError(error, requestId, rateLimitHeaders, { route: ROUTE })
   }
 }
