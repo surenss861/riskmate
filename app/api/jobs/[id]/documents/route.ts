@@ -28,6 +28,17 @@ export async function GET(
 
     if (error) throw error
 
+    // Get job_photos for category (before/during/after)
+    const { data: jobPhotos } = await supabase
+      .from('job_photos')
+      .select('file_path, category')
+      .eq('job_id', jobId)
+      .eq('organization_id', organization_id)
+
+    const categoryByPath = new Map(
+      (jobPhotos || []).map((p) => [p.file_path, p.category as 'before' | 'during' | 'after'])
+    )
+
     // Generate signed URLs for documents
     const documentsWithUrls = await Promise.all(
       (data || []).map(async (doc) => {
@@ -46,6 +57,7 @@ export async function GET(
             description: doc.description,
             created_at: doc.created_at,
             uploaded_by: doc.uploaded_by,
+            category: doc.type === 'photo' ? (categoryByPath.get(doc.file_path) ?? null) : undefined,
             url: signed?.signedUrl || null,
           }
         } catch (error) {
@@ -60,6 +72,7 @@ export async function GET(
             description: doc.description,
             created_at: doc.created_at,
             uploaded_by: doc.uploaded_by,
+            category: doc.type === 'photo' ? (categoryByPath.get(doc.file_path) ?? null) : undefined,
             url: null,
           }
         }
@@ -92,13 +105,32 @@ export async function POST(
     const supabase = await createSupabaseServerClient()
     const userId = user_id
 
-    const { name, type = 'photo', file_path, file_size, mime_type, description } = body
+    const { name, type = 'photo', file_path, file_size, mime_type, description, category } = body
+
+    const validCategories = ['before', 'during', 'after'] as const
+    const photoCategory =
+      type === 'photo' && category && validCategories.includes(category)
+        ? category
+        : type === 'photo'
+          ? 'during'
+          : undefined
 
     if (!name || !file_path || file_size === undefined || !mime_type) {
       return NextResponse.json(
         {
           message: 'Missing required metadata: name, file_path, file_size, mime_type',
         },
+        { status: 400 }
+      )
+    }
+
+    if (
+      type === 'photo' &&
+      category !== undefined &&
+      !validCategories.includes(category as (typeof validCategories)[number])
+    ) {
+      return NextResponse.json(
+        { message: 'Invalid category. Must be one of: before, during, after' },
         { status: 400 }
       )
     }
@@ -132,6 +164,18 @@ export async function POST(
       throw insertError
     }
 
+    // When type is photo, also save to job_photos for category (before/during/after)
+    if (type === 'photo' && photoCategory) {
+      await supabase.from('job_photos').insert({
+        job_id: jobId,
+        organization_id,
+        file_path: inserted.file_path,
+        description: description ?? null,
+        category: photoCategory,
+        created_by: userId,
+      })
+    }
+
     // Generate signed URL
     const { data: signed } = await supabase.storage
       .from('documents')
@@ -149,6 +193,7 @@ export async function POST(
           description: inserted.description,
           created_at: inserted.created_at,
           uploaded_by: inserted.uploaded_by,
+          ...(type === 'photo' && photoCategory ? { category: photoCategory } : {}),
           url: signed?.signedUrl || null,
         },
       },

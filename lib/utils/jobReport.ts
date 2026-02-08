@@ -65,6 +65,17 @@ export async function buildJobReport(
     .eq('organization_id', organizationId)
     .order('created_at', { ascending: true })
 
+  // Fetch job_photos for category (before/during/after) to attach to photo documents
+  const { data: jobPhotos } = await supabase
+    .from('job_photos')
+    .select('file_path, category')
+    .eq('job_id', jobId)
+    .eq('organization_id', organizationId)
+
+  const categoryByPath = new Map(
+    (jobPhotos || []).map((p) => [p.file_path, p.category as 'before' | 'during' | 'after'])
+  )
+
   // Generate signed URLs for documents
   const documents = await Promise.all(
     (documentsData || []).map(async (doc) => {
@@ -73,14 +84,18 @@ export async function buildJobReport(
           .from('documents')
           .createSignedUrl(doc.file_path, 60 * 60) // 1 hour expiry
 
+        const category = doc.type === 'photo' ? (categoryByPath.get(doc.file_path) ?? null) : undefined
         return {
           ...doc,
+          ...(category ? { category } : {}),
           url: signed?.signedUrl || null,
         }
       } catch (error) {
         console.warn('Failed to generate document signed URL', error)
+        const category = doc.type === 'photo' ? (categoryByPath.get(doc.file_path) ?? null) : undefined
         return {
           ...doc,
+          ...(category ? { category } : {}),
           url: null,
         }
       }

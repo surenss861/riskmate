@@ -94,26 +94,29 @@ export function categorizePhotos(
   during: JobDocumentAsset[];
   after: JobDocumentAsset[];
 } {
-  if (!jobStartDate) return { before: [], during: photos, after: [] };
-
-  const jobStart = new Date(jobStartDate).getTime();
-  const jobEnd = Date.now();
-
   const before: JobDocumentAsset[] = [];
   const during: JobDocumentAsset[] = [];
   const after: JobDocumentAsset[] = [];
 
   photos.forEach((photo) => {
-    if (!photo.created_at) {
+    // Prefer explicit category when available (new/updated photos)
+    if (photo.category) {
+      if (photo.category === 'before') before.push(photo);
+      else if (photo.category === 'after') after.push(photo);
+      else during.push(photo);
+      return;
+    }
+
+    // Fallback: timestamp-based categorization for legacy photos
+    if (!jobStartDate || !photo.created_at) {
       during.push(photo);
       return;
     }
 
+    const jobStart = new Date(jobStartDate).getTime();
     const photoTime = new Date(photo.created_at).getTime();
     if (photoTime < jobStart) {
       before.push(photo);
-    } else if (photoTime > jobEnd) {
-      after.push(photo);
     } else {
       during.push(photo);
     }

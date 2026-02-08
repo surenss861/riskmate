@@ -43,10 +43,13 @@ export interface OrganizationData {
 }
 
 export interface JobDocumentAsset {
+  id?: string;
   name: string;
   description?: string | null;
   created_at?: string | null;
+  file_path?: string;
   buffer: Buffer;
+  category?: 'before' | 'during' | 'after';
 }
 
 export interface AuditLogEntry {
