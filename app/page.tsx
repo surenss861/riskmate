@@ -35,6 +35,16 @@ const heroItem = {
 
 function HeroSection({ onSignup, onSampleReport }: { onSignup: () => void; onSampleReport: () => void }) {
   const { ref: titleWrapRef, width } = useElementWidth<HTMLDivElement>()
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false)
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
+    setPrefersReducedMotion(mq.matches)
+    const handler = () => setPrefersReducedMotion(mq.matches)
+    mq.addEventListener('change', handler)
+    return () => mq.removeEventListener('change', handler)
+  }, [])
+
+  const underlineWidth = Math.max(120, Math.min(width * 0.32, 220))
 
   return (
     <section className="relative min-h-[80vh] flex items-center justify-center overflow-visible">
@@ -47,7 +57,15 @@ function HeroSection({ onSignup, onSampleReport }: { onSignup: () => void; onSam
       >
         <motion.div variants={heroItem} className="mb-6">
           <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-white/20 text-[10px] font-mono text-white/70 tracking-[0.12em] uppercase">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#F97316]" />
+            {prefersReducedMotion ? (
+              <span className="w-1.5 h-1.5 rounded-full bg-[#F97316]" />
+            ) : (
+              <motion.span
+                className="w-1.5 h-1.5 rounded-full bg-[#F97316]"
+                animate={{ opacity: [0.6, 1, 0.6], scale: [1, 1.15, 1] }}
+                transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
+              />
+            )}
             Verified outputs
           </span>
         </motion.div>
@@ -59,16 +77,31 @@ function HeroSection({ onSignup, onSampleReport }: { onSignup: () => void; onSam
               <br />
               everyday field work
             </h1>
-            <motion.div
-              initial={{ scaleX: 0, opacity: 0.4 }}
-              animate={{ scaleX: 1, opacity: 1 }}
-              transition={{ duration: 0.75, delay: 0.25, ease: [0.16, 1, 0.3, 1] }}
-              style={{
-                width: Math.max(120, Math.min(width * 0.32, 220)),
-                transformOrigin: 'center',
-              }}
-              className="absolute left-1/2 -translate-x-1/2 -bottom-4 h-[4px] rounded-full bg-[#F97316] shadow-[0_0_18px_rgba(249,115,22,0.55)]"
-            />
+            <div
+              className="absolute left-1/2 -translate-x-1/2 -bottom-4 h-[4px]"
+              style={{ width: underlineWidth }}
+            >
+              <div className="absolute inset-0 rounded-full bg-white/10" />
+              <motion.div
+                initial={prefersReducedMotion ? false : { scaleX: 0, opacity: 0, filter: 'blur(6px)' }}
+                animate={
+                  prefersReducedMotion
+                    ? { scaleX: 1, opacity: 1 }
+                    : { scaleX: [0, 1.08, 1], opacity: [0, 1, 1], filter: ['blur(6px)', 'blur(0px)', 'blur(0px)'] }
+                }
+                transition={
+                  prefersReducedMotion
+                    ? { duration: 0.4, delay: 0.2 }
+                    : { duration: 0.85, delay: 0.18, times: [0, 0.72, 1], ease: [0.16, 1, 0.3, 1] }
+                }
+                style={{
+                  width: underlineWidth,
+                  transformOrigin: 'center',
+                  willChange: 'transform, opacity, filter',
+                }}
+                className="absolute inset-0 h-[4px] rounded-full bg-[#F97316] shadow-[0_0_18px_rgba(249,115,22,0.55)]"
+              />
+            </div>
           </div>
         </motion.div>
 
@@ -82,12 +115,21 @@ function HeroSection({ onSignup, onSampleReport }: { onSignup: () => void; onSam
           If it isn&apos;t anchored, it doesn&apos;t exist.
         </motion.p>
         <motion.div variants={heroItem} className="flex flex-col sm:flex-row gap-4 justify-center">
-          <button
+          <motion.button
             onClick={onSignup}
-            className="px-8 py-4 bg-[#F97316] text-black rounded-lg hover:bg-[#FB923C] transition-colors font-semibold text-lg"
+            className="relative overflow-hidden px-8 py-4 bg-[#F97316] text-black rounded-lg hover:bg-[#FB923C] transition-colors font-semibold text-lg"
           >
-            Start Free
-          </button>
+            <span className="relative z-10">Start Free</span>
+            {!prefersReducedMotion && (
+              <motion.span
+                className="absolute inset-0 bg-white/20"
+                initial={{ x: '-120%', opacity: 0 }}
+                animate={{ x: '120%', opacity: [0, 0.6, 0] }}
+                transition={{ duration: 1.1, delay: 0.55, ease: [0.16, 1, 0.3, 1] }}
+                style={{ willChange: 'transform, opacity' }}
+              />
+            )}
+          </motion.button>
           <button
             onClick={onSampleReport}
             className="px-8 py-4 rounded-lg border border-white/15 bg-white/[0.03] hover:bg-white/[0.06] hover:border-white/25 text-white/80 hover:text-white transition-colors font-semibold text-lg"
