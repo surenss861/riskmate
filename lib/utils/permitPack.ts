@@ -11,6 +11,7 @@ import archiver from 'archiver'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { buildJobReport } from './jobReport'
 import { generateRiskSnapshotPDF } from './pdf'
+import { getEffectivePhotoCategory } from './photoCategory'
 
 export interface PermitPackOptions {
   jobId: string
@@ -119,7 +120,11 @@ export async function generatePermitPack(
   for (const doc of reportData.documents || []) {
     if (doc.type === 'photo' && doc.file_path) {
       try {
-        const category = doc.category ?? 'during'
+        const category = getEffectivePhotoCategory(
+          { category: doc.category, created_at: doc.created_at },
+          job.start_date,
+          job.end_date
+        )
 
         const { data: fileData } = await supabase.storage
           .from('documents')

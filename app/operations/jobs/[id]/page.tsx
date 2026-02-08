@@ -307,7 +307,7 @@ export default function JobDetailPage() {
           url: doc.url ?? doc.file_path,
           file_path: doc.file_path ?? doc.storage_path,
           created_at: doc.created_at,
-          category: doc.type === 'photo' ? (doc.category ?? 'during') : undefined,
+          category: doc.type === 'photo' ? (doc.category ?? undefined) : undefined,
         })))
       } catch (err) {
         console.error('Failed to load attachments:', err)
@@ -1373,7 +1373,7 @@ export default function JobDetailPage() {
                         url: doc.url ?? doc.file_path,
                         file_path: doc.file_path ?? doc.storage_path,
                         created_at: doc.created_at,
-                        category: doc.type === 'photo' ? (doc.category ?? 'during') : undefined,
+                        category: doc.type === 'photo' ? (doc.category ?? undefined) : undefined,
                       })))
                     } catch (err) {
                       console.error('Failed to reload attachments:', err)
