@@ -239,26 +239,27 @@ export default function HomePage() {
         <section className="relative min-h-[80vh] flex items-center justify-center overflow-hidden">
           <div className="absolute inset-0 bg-[#0A0A0A]" />
           <div className="relative z-10 max-w-4xl mx-auto px-6 py-20 text-center">
-            <div className="mb-6">
+            <div className="w-full max-w-2xl mx-auto flex flex-col items-start mb-6">
               <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-white/20 text-[10px] font-mono text-white/70 tracking-[0.12em] uppercase">
                 <span className="w-1.5 h-1.5 rounded-full bg-[#F97316]" />
                 Verified outputs
               </span>
+              <motion.div
+                className="h-[4px] w-16 mt-4 bg-[#F97316] rounded-full shadow-[0_0_12px_rgba(249,115,22,0.5)]"
+                initial={{ scaleX: 0 }}
+                animate={{ scaleX: 1 }}
+                transition={{ delay: 0.15, duration: 0.35, ease: [0.4, 0, 0.2, 1] }}
+                style={{ transformOrigin: 'left' }}
+              />
             </div>
-            <motion.div
-              className="h-[3px] w-14 mx-auto mb-6 bg-[#F97316] rounded-full"
-              initial={{ scaleX: 0 }}
-              animate={{ scaleX: 1 }}
-              transition={{ delay: 0.15, duration: 0.35, ease: [0.4, 0, 0.2, 1] }}
-              style={{ transformOrigin: 'center' }}
-            />
             <h1 className="text-5xl md:text-6xl font-bold mb-6 font-display text-white">
               Audit-ready proof packs from everyday field work
             </h1>
-            <p className="text-xl text-[#A1A1A1] mb-3 max-w-2xl mx-auto">
+            <p className="text-xl text-[#A1A1A1] mb-2 max-w-2xl mx-auto">
               Immutable compliance ledger + evidence chain-of-custody. Export audit packets in one click.
             </p>
-            <p className="text-sm text-white/40 font-mono mb-10">If it isn&apos;t anchored, it doesn&apos;t exist.</p>
+            <p className="text-sm text-white/50 mb-4 italic">The thing you hand over when someone asks questions.</p>
+            <p className="text-xs text-white/40 font-mono mb-10">If it isn&apos;t anchored, it doesn&apos;t exist.</p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <button
                 onClick={() => router.push('/signup')}
@@ -290,9 +291,9 @@ export default function HomePage() {
               <p className="text-[#A1A1A1] text-sm leading-relaxed">Risks flagged before they compound.</p>
             </div>
             <div>
-              <div className="text-3xl font-bold text-[#F97316]/60 mb-2">03</div>
-              <div className="text-[#F97316] font-semibold text-base mb-1">Anchor</div>
-              <p className="text-[#A1A1A1] text-sm leading-relaxed">Records frozen into the ledger.</p>
+              <div className="text-3xl font-bold text-[#F97316] mb-2">03</div>
+              <div className="text-[#F97316] font-bold text-base mb-1">Anchor</div>
+              <p className="text-white/80 text-sm leading-relaxed">Records frozen into the ledger.</p>
             </div>
             <div>
               <div className="text-3xl font-bold text-[#F97316]/60 mb-2">04</div>
@@ -304,14 +305,21 @@ export default function HomePage() {
 
         {/* Divider — hero promise → scroll evidence */}
         <div className="max-w-4xl mx-auto px-6 py-8 border-t border-white/5">
-          <p className="text-center text-xs text-white/40 font-mono tracking-wider">Scroll for evidence ↓</p>
+          <div className="h-px w-12 mx-auto mb-4 bg-white/20" aria-hidden />
+          <motion.p
+            className="text-center text-xs text-white/60 font-mono tracking-wider"
+            animate={{ opacity: [0.7, 1, 0.7] }}
+            transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
+          >
+            Scroll for evidence ↓
+          </motion.p>
         </div>
 
         {/* Proof — verified outputs */}
         <section id="proof" className="max-w-6xl mx-auto px-6 py-20 border-t border-white/5">
           <h2 className="text-2xl font-semibold text-white mb-3 text-center">What auditors actually receive</h2>
           <p className="text-sm text-white/50 mb-10 text-center max-w-xl mx-auto">
-            These are real export formats from Riskmate. Sample data shown.
+            Auditors receive these exact formats. Nothing here is simulated.
           </p>
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
             {/* Featured: Audit Packet */}
@@ -643,8 +651,8 @@ export default function HomePage() {
           </motion.div>
         </section>
 
-        {/* Founder Story — deposition, not blog */}
-        <section className="max-w-4xl mx-auto px-6 py-20">
+        {/* Founder Story — context, not justification */}
+        <section className="max-w-4xl mx-auto px-6 pt-16 pb-20">
           <motion.div
             className="text-center"
             initial={{ opacity: 0, y: 20 }}
@@ -652,7 +660,7 @@ export default function HomePage() {
             viewport={{ once: true }}
             transition={{ duration: 0.6 }}
           >
-            <h2 className="text-4xl font-bold mb-6 font-display">Why Riskmate Exists</h2>
+            <h2 className="text-2xl font-semibold mb-6 font-display text-white/80">Why Riskmate Exists</h2>
             <div className="bg-[#121212] rounded-xl border border-white/10 p-8 text-left">
               <p className="text-lg text-white font-semibold mb-4">
                 &ldquo;Safety paperwork was a mess.&rdquo;
