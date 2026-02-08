@@ -119,12 +119,7 @@ export async function generatePermitPack(
   for (const doc of reportData.documents || []) {
     if (doc.type === 'photo' && doc.file_path) {
       try {
-        // Try to determine category from description or use 'during' as default
-        const category = doc.description?.toLowerCase().includes('before')
-          ? 'before'
-          : doc.description?.toLowerCase().includes('after')
-          ? 'after'
-          : 'during'
+        const category = doc.category ?? 'during'
 
         const { data: fileData } = await supabase.storage
           .from('documents')
