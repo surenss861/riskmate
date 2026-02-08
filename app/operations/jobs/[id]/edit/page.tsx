@@ -171,14 +171,18 @@ export default function EditJobPage() {
     return 'bg-[#fff3e0] text-[#f57c00]'
   }
   const handleCategoryChange = async (photoId: string, newCategory: PhotoCategory) => {
+    const previousDocuments = [...documents]
+    setDocuments((prev) =>
+      prev.map((doc) => (doc.id === photoId ? { ...doc, category: newCategory } : doc))
+    )
+    setCategoryDropdownOpen(null)
     try {
       await jobsApi.updateDocumentCategory(jobId, photoId, newCategory)
-      await loadDocuments()
       setToast({ message: 'Category updated', type: 'success' })
     } catch {
+      setDocuments(previousDocuments)
       setToast({ message: 'Failed to update category', type: 'error' })
     }
-    setCategoryDropdownOpen(null)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
