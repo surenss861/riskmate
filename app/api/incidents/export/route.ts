@@ -221,8 +221,13 @@ export async function GET(request: NextRequest) {
       }
     })
   } catch (error: unknown) {
-    console.error('[incidents/export] Error:', { requestId }, error)
-    return handleApiError(error, requestId)
+    const err = error instanceof Error ? error : new Error(String(error))
+    console.error('[incidents/export] Error:', {
+      message: err.message,
+      stack: err.stack,
+      requestId,
+    })
+    return handleApiError(error, requestId, undefined, { route: ROUTE })
   }
 }
 

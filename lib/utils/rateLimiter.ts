@@ -9,6 +9,7 @@
  */
 
 import { NextRequest } from 'next/server'
+import { getOrganizationContext } from '@/lib/utils/organizationGuard'
 
 export interface RateLimitConfig {
   windowMs: number
@@ -42,19 +43,24 @@ const rateLimitStore: Record<string, RateLimitEntry> = {}
 const CLEANUP_INTERVAL_MS = 5 * 60 * 1000
 let cleanupScheduled = false
 
+/**
+ * Run cleanup of expired entries. Used by the interval and by tests.
+ */
+export function runCleanup(): void {
+  const now = Date.now()
+  for (const key of Object.keys(rateLimitStore)) {
+    if (rateLimitStore[key].resetAt < now) {
+      delete rateLimitStore[key]
+    }
+  }
+}
+
 function scheduleCleanup(): void {
   if (cleanupScheduled) return
   // Skip interval in test env to avoid Jest "open handles" (tests pass, process exits)
   if (process.env.NODE_ENV === 'test') return
   cleanupScheduled = true
-  setInterval(() => {
-    const now = Date.now()
-    for (const key of Object.keys(rateLimitStore)) {
-      if (rateLimitStore[key].resetAt < now) {
-        delete rateLimitStore[key]
-      }
-    }
-  }, CLEANUP_INTERVAL_MS)
+  setInterval(runCleanup, CLEANUP_INTERVAL_MS)
 }
 
 /**
@@ -70,15 +76,26 @@ function buildKey(
 }
 
 /**
- * Check rate limit for a request. Call after authentication to ensure
- * org and user context are available.
+ * Check rate limit for a request. Resolves organization and user from the request
+ * via getOrganizationContext, then applies the rate limit.
  *
- * @param request - NextRequest for pathname
+ * @param request - NextRequest (used for pathname and auth)
  * @param config - Rate limit configuration
- * @param context - Authenticated org and user (from getOrganizationContext or similar)
- * @returns RateLimitResult with allowed status and headers info
+ * @returns RateLimitResult with allowed status and header values (limit, remaining, resetAt, retryAfter)
  */
-export function checkRateLimit(
+export async function checkRateLimit(
+  request: NextRequest,
+  config: RateLimitConfig
+): Promise<RateLimitResult> {
+  const context = await getOrganizationContext(request)
+  return checkRateLimitWithContext(request, config, context)
+}
+
+/**
+ * Check rate limit with explicit context. Use when you already have org/user
+ * (e.g. in tests or after getOrganizationContext elsewhere).
+ */
+export function checkRateLimitWithContext(
   request: NextRequest,
   config: RateLimitConfig,
   context: RateLimitContext
@@ -142,7 +159,35 @@ export function checkRateLimit(
 }
 
 /**
- * Pre-configured rate limit configs per spec
+ * Pre-configured rate limit configs for API routes.
+ * Use with checkRateLimit(request, { ...RATE_LIMIT_CONFIGS.export }).
+ */
+export const RATE_LIMIT_CONFIGS = {
+  export: {
+    windowMs: 60 * 60 * 1000,
+    maxRequests: 10,
+    keyPrefix: 'export',
+  },
+  pdf: {
+    windowMs: 60 * 60 * 1000,
+    maxRequests: 20,
+    keyPrefix: 'pdf',
+  },
+  bulk: {
+    windowMs: 60 * 1000,
+    maxRequests: 60,
+    keyPrefix: 'bulk',
+  },
+  mutation: {
+    windowMs: 60 * 1000,
+    maxRequests: 120,
+    keyPrefix: 'mutation',
+  },
+} as const
+
+/**
+ * Pre-configured rate limit configs with optional env overrides (export, pdf).
+ * @deprecated Prefer RATE_LIMIT_CONFIGS for new code.
  */
 export const RATE_LIMIT_PRESETS = {
   export: {

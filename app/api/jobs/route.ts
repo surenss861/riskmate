@@ -388,14 +388,27 @@ export async function POST(request: NextRequest) {
           logUsage: false,
         })
 
-        return NextResponse.json(
+        const { response, errorId } = createErrorResponse(
+          `${entitlements.tier === 'starter' ? 'Starter' : 'Plan'} limit reached (${entitlements.jobs_monthly_limit} jobs/month). Upgrade to Pro for unlimited jobs.`,
+          'ENTITLEMENTS_JOB_LIMIT_REACHED',
           {
-            code: 'JOB_LIMIT',
-            denial_code: 'MONTHLY_LIMIT_REACHED',
-            message: `${entitlements.tier === 'starter' ? 'Starter' : 'Plan'} limit reached (${entitlements.jobs_monthly_limit} jobs/month). Upgrade to Pro for unlimited jobs.`,
-          },
-          { status: 403 }
+            requestId,
+            statusCode: 403,
+            details: {
+              code: 'JOB_LIMIT',
+              denial_code: 'MONTHLY_LIMIT_REACHED',
+              current_count: count || 0,
+              limit: entitlements.jobs_monthly_limit,
+            },
+          }
         )
+        logApiError(403, 'ENTITLEMENTS_JOB_LIMIT_REACHED', errorId, requestId, organization_id, response.message, {
+          category: 'entitlements', severity: 'warn', route: ROUTE_JOBS,
+        })
+        return NextResponse.json(response, {
+          status: 403,
+          headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+        })
       }
     }
 
@@ -491,10 +504,12 @@ export async function POST(request: NextRequest) {
         errorMessage = 'Permission denied: Job was created but cannot be retrieved. Row-level security policy may be blocking access. Check your team role and RLS policies.'
         statusCode = 403
       }
-      // RLS policy violation
-      else if (jobError.message?.includes('row-level security') || jobError.message?.includes('RLS') || jobError.code === '42501') {
-        errorMessage = 'Permission denied: You may not have permission to create jobs. Check your team role.'
-        statusCode = 403
+      // RLS policy violation / recursion
+      else if (jobError.message?.includes('row-level security') || jobError.message?.includes('RLS') || jobError.message?.includes('infinite recursion') || jobError.code === '42501' || jobError.code === '42P17') {
+        errorMessage = jobError.message?.includes('infinite recursion')
+          ? 'Database policy recursion detected. This indicates a configuration issue with row-level security policies.'
+          : 'Permission denied: You may not have permission to create jobs. Check your team role.'
+        statusCode = jobError.message?.includes('infinite recursion') ? 500 : 403
       }
       // Foreign key constraint violation
       else if (jobError.message?.includes('foreign key') || jobError.code === '23503') {
@@ -522,17 +537,39 @@ export async function POST(request: NextRequest) {
       else {
         errorMessage = jobError.message || 'Failed to create job'
       }
-      
-      return NextResponse.json(
-        { 
-          message: errorMessage,
-          error: jobError.message,
-          code: jobError.code,
-          hint: jobError.hint,
-          details: jobError.details || (process.env.NODE_ENV === 'development' ? jobError : undefined)
+
+      const errorCode =
+        statusCode === 500 && errorMessage.includes('recursion')
+          ? 'RLS_RECURSION_ERROR'
+          : statusCode === 403
+          ? 'AUTH_ROLE_FORBIDDEN'
+          : statusCode === 400 && errorMessage.includes('required')
+          ? 'MISSING_REQUIRED_FIELD'
+          : statusCode === 400 || statusCode === 409
+          ? 'VALIDATION_ERROR'
+          : 'QUERY_ERROR'
+
+      const { response, errorId } = createErrorResponse(errorMessage, errorCode, {
+        requestId,
+        statusCode,
+        details: {
+          databaseError: {
+            code: jobError.code,
+            hint: jobError.hint,
+            ...(process.env.NODE_ENV === 'development' && { raw: jobError.details }),
+          },
         },
-        { status: statusCode }
-      )
+      })
+      logApiError(statusCode, errorCode, errorId, requestId, organization_id, response.message, {
+        category: statusCode >= 500 ? 'internal' : statusCode === 403 ? 'auth' : 'validation',
+        severity: statusCode >= 500 ? 'error' : 'warn',
+        route: ROUTE_JOBS,
+        details: { databaseError: { code: jobError.code, message: jobError.message } },
+      })
+      return NextResponse.json(response, {
+        status: statusCode,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
     }
 
     // Handle case where insert succeeded but SELECT was blocked by RLS (no error, but no data)
@@ -653,10 +690,24 @@ export async function POST(request: NextRequest) {
     )
   } catch (error: any) {
     console.error('Job creation error:', error)
-    return NextResponse.json(
-      { message: error.message || 'Failed to create job' },
-      { status: 500 }
+    const requestId = request.headers.get('x-request-id') || getRequestId()
+    const { response, errorId } = createErrorResponse(
+      error.message || 'Failed to create job',
+      'QUERY_ERROR',
+      {
+        requestId,
+        statusCode: 500,
+        details: process.env.NODE_ENV === 'development' ? { detail: error?.message } : undefined,
+      }
     )
+    logApiError(500, 'QUERY_ERROR', errorId, requestId, undefined, response.message, {
+      category: 'internal', severity: 'error', route: ROUTE_JOBS,
+      details: process.env.NODE_ENV === 'development' ? { detail: error?.message } : undefined,
+    })
+    return NextResponse.json(response, {
+      status: 500,
+      headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+    })
   }
 }
 

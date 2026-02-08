@@ -7,6 +7,7 @@
 
 import { NextResponse } from 'next/server'
 import { createErrorResponse, type ApiErrorResponse } from '@/lib/utils/apiResponse'
+import { logApiError } from '@/lib/utils/errorLogging'
 
 /** Registry entry for a known API error code */
 export interface ApiErrorCodeDef {
@@ -189,15 +190,47 @@ export function normalizeError(error: unknown, requestId?: string): ApiError {
   })
 }
 
+export interface HandleApiErrorLoggingOptions {
+  route: string
+  organizationId?: string
+}
+
 /**
  * Handle any caught error and return a NextResponse with consistent shape and headers.
  * Use in route catch blocks: return handleApiError(err, requestId)
+ * When loggingOptions is provided, logs a structured error (including error_id) before returning.
  */
 export function handleApiError(
   error: unknown,
   requestId: string,
-  extraHeaders?: Record<string, string>
+  extraHeaders?: Record<string, string>,
+  loggingOptions?: HandleApiErrorLoggingOptions
 ): NextResponse {
   const apiError = normalizeError(error, requestId)
+
+  if (loggingOptions) {
+    const { response, errorId } = createErrorResponse(apiError.message, apiError.code, {
+      requestId,
+      statusCode: apiError.statusCode,
+      details: apiError.details,
+      retry_after_seconds: apiError.retry_after_seconds,
+    })
+    logApiError(apiError.statusCode, apiError.code, errorId, requestId, loggingOptions.organizationId, apiError.message, {
+      category: response.category ?? 'internal',
+      severity: response.severity,
+      route: loggingOptions.route,
+      details: apiError.details,
+    })
+    const headers: Record<string, string> = {
+      'X-Request-ID': requestId,
+      'X-Error-ID': errorId,
+      ...extraHeaders,
+    }
+    if (apiError.retry_after_seconds != null) {
+      headers['Retry-After'] = String(apiError.retry_after_seconds)
+    }
+    return NextResponse.json(response, { status: apiError.statusCode, headers })
+  }
+
   return apiError.toNextResponse(requestId, extraHeaders)
 }

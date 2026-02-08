@@ -1,16 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { getOrganizationContext, verifyJobOwnership } from '@/lib/utils/organizationGuard'
+import { createErrorResponse } from '@/lib/utils/apiResponse'
+import { logApiError } from '@/lib/utils/errorLogging'
+import { getRequestId } from '@/lib/utils/requestId'
 
 export const runtime = 'nodejs'
+
+const ROUTE_JOBS_ID = '/api/jobs/[id]'
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const requestId = getRequestId(request)
+
   try {
     // Get organization context (throws if unauthorized)
-    const { organization_id } = await getOrganizationContext()
+    const { organization_id } = await getOrganizationContext(request)
     const { id: jobId } = await params
 
     // Verify job ownership (defense-in-depth)
@@ -27,10 +34,18 @@ export async function GET(
       .single()
 
     if (jobError || !job) {
-      return NextResponse.json(
-        { message: 'Job not found' },
-        { status: 404 }
+      const { response, errorId } = createErrorResponse(
+        'Job not found',
+        'NOT_FOUND',
+        { requestId, statusCode: 404 }
       )
+      logApiError(404, 'NOT_FOUND', errorId, requestId, organization_id, response.message, {
+        category: 'validation', severity: 'warn', route: ROUTE_JOBS_ID,
+      })
+      return NextResponse.json(response, {
+        status: 404,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
     }
 
     // Get risk score
@@ -56,10 +71,24 @@ export async function GET(
     })
   } catch (error: any) {
     console.error('Job fetch failed:', error)
-    return NextResponse.json(
-      { message: 'Failed to fetch job' },
-      { status: 500 }
+    const requestId = getRequestId(request)
+    const { response, errorId } = createErrorResponse(
+      'Failed to fetch job',
+      'QUERY_ERROR',
+      {
+        requestId,
+        statusCode: 500,
+        details: process.env.NODE_ENV === 'development' ? { detail: error?.message } : undefined,
+      }
     )
+    logApiError(500, 'QUERY_ERROR', errorId, requestId, undefined, response.message, {
+      category: 'internal', severity: 'error', route: ROUTE_JOBS_ID,
+      details: process.env.NODE_ENV === 'development' ? { detail: error?.message } : undefined,
+    })
+    return NextResponse.json(response, {
+      status: 500,
+      headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+    })
   }
 }
 
@@ -67,9 +96,11 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const requestId = getRequestId(request)
+
   try {
     // Get organization context (throws if unauthorized)
-    const { organization_id } = await getOrganizationContext()
+    const { organization_id } = await getOrganizationContext(request)
     const { id: jobId } = await params
     const body = await request.json()
 
@@ -157,9 +188,23 @@ export async function PATCH(
     })
   } catch (error: any) {
     console.error('Job update failed:', error)
-    return NextResponse.json(
-      { message: error.message || 'Failed to update job' },
-      { status: 500 }
+    const requestId = getRequestId(request)
+    const { response, errorId } = createErrorResponse(
+      error.message || 'Failed to update job',
+      'QUERY_ERROR',
+      {
+        requestId,
+        statusCode: 500,
+        details: process.env.NODE_ENV === 'development' ? { detail: error?.message } : undefined,
+      }
     )
+    logApiError(500, 'QUERY_ERROR', errorId, requestId, undefined, response.message, {
+      category: 'internal', severity: 'error', route: ROUTE_JOBS_ID,
+      details: process.env.NODE_ENV === 'development' ? { detail: error?.message } : undefined,
+    })
+    return NextResponse.json(response, {
+      status: 500,
+      headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+    })
   }
 }
