@@ -41,6 +41,25 @@ function HeroSection({ onSignup, onSampleReport }: { onSignup: () => void; onSam
   return (
     <section className="relative min-h-[80vh] flex items-center justify-center overflow-visible">
       <div className="absolute inset-0 bg-[#0A0A0A]" />
+      {!prefersReducedMotion && (
+        <motion.div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 opacity-[0.35]"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+        >
+          <motion.div
+            className="absolute left-1/2 top-1/2 h-[520px] w-[520px] -translate-x-1/2 -translate-y-1/2 rounded-full blur-3xl"
+            style={{
+              background: 'radial-gradient(circle at center, rgba(249,115,22,0.18), rgba(249,115,22,0.0) 62%)',
+              willChange: 'transform, opacity',
+            }}
+            animate={{ x: [0, 12, -8, 0], y: [0, -10, 8, 0] }}
+            transition={{ duration: 14, repeat: Infinity, ease: 'easeInOut' }}
+          />
+        </motion.div>
+      )}
       <motion.div
         className="relative z-10 max-w-4xl mx-auto px-6 py-20 text-center"
         variants={heroVariants}
@@ -56,6 +75,7 @@ function HeroSection({ onSignup, onSampleReport }: { onSignup: () => void; onSam
                 className="w-1.5 h-1.5 rounded-full bg-[#F97316]"
                 animate={{ opacity: [0.6, 1, 0.6], scale: [1, 1.15, 1] }}
                 transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
+                style={{ willChange: 'transform, opacity' }}
               />
             )}
             Verified outputs
@@ -78,18 +98,18 @@ function HeroSection({ onSignup, onSampleReport }: { onSignup: () => void; onSam
                 initial={prefersReducedMotion ? { scaleX: 1, opacity: 1, filter: 'blur(0px)' } : { scaleX: 0, opacity: 0, filter: 'blur(6px)' }}
                 animate={
                   prefersReducedMotion
-                    ? { scaleX: 1, opacity: 1 }
+                    ? { scaleX: 1, opacity: 1, filter: 'blur(0px)' }
                     : { scaleX: [0, 1.08, 1], opacity: [0, 1, 1], filter: ['blur(6px)', 'blur(0px)', 'blur(0px)'] }
                 }
                 transition={
                   prefersReducedMotion
-                    ? { duration: 0.4, delay: 0.2 }
+                    ? { duration: 0, delay: 0 }
                     : { duration: 0.85, delay: 0.18, times: [0, 0.72, 1], ease: [0.16, 1, 0.3, 1] }
                 }
                 style={{
                   width: underlineWidth,
                   transformOrigin: 'center',
-                  willChange: 'transform, opacity, filter',
+                  willChange: prefersReducedMotion ? undefined : ('transform, opacity, filter' as React.CSSProperties['willChange']),
                 }}
                 className="absolute inset-0 h-[4px] rounded-full bg-[#F97316] shadow-[0_0_18px_rgba(249,115,22,0.55)]"
               />
