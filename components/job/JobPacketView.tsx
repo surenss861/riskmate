@@ -613,7 +613,7 @@ export function JobPacketView({
             const afterCount = photos.filter((p) => effectiveCat(p) === 'after').length
             const filteredAttachments =
               photoFilter === 'all'
-                ? attachments
+                ? photos
                 : photos.filter((p) => effectiveCat(p) === photoFilter)
             const categoryBadgeClass = (cat: PhotoCategory) => {
               if (cat === 'before') return 'bg-[#e3f2fd] text-[#1976d2]'
@@ -723,6 +723,30 @@ export function JobPacketView({
                 ) : (
                   <div className="p-6 bg-white/5 rounded-lg border border-dashed border-white/10 text-center">
                     <p className="text-sm text-white/60">No photos in this category</p>
+                  </div>
+                )}
+                {nonPhotoAttachments.length > 0 && (
+                  <div className="mt-6 pt-6 border-t border-white/5">
+                    <h4 className="text-sm font-medium text-white/80 mb-3">Documents</h4>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      {nonPhotoAttachments.map((attachment) => (
+                        <div
+                          key={attachment.id}
+                          className="relative p-3 bg-white/5 rounded-lg border border-white/10 hover:border-white/20 transition-colors"
+                        >
+                          <div className="flex items-center gap-2 mb-2">
+                            <FileText className="w-4 h-4 text-white/60" />
+                            <span className="text-xs text-white/50 capitalize">{attachment.type}</span>
+                          </div>
+                          <p className="text-sm text-white/80 truncate mb-1" title={attachment.name}>
+                            {attachment.name}
+                          </p>
+                          <p className="text-xs text-white/40">
+                            {new Date(attachment.created_at).toLocaleDateString()}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </>
