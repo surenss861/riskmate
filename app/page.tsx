@@ -1,12 +1,104 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useLayoutEffect } from 'react'
 import Image from 'next/image'
 import { motion } from 'framer-motion'
 import ScrollToTop from '@/components/ScrollToTop'
 import RiskmateLogo from '@/components/RiskmateLogo'
 import { SampleReportModal } from '@/components/marketing'
+
+function useElementWidth<T extends HTMLElement>() {
+  const ref = useRef<T | null>(null)
+  const [width, setWidth] = useState(0)
+
+  useLayoutEffect(() => {
+    if (!ref.current) return
+    const el = ref.current
+    const ro = new ResizeObserver(() => setWidth(el.getBoundingClientRect().width))
+    setWidth(el.getBoundingClientRect().width)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
+  return { ref, width }
+}
+
+const heroVariants = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.08, delayChildren: 0.1 } },
+}
+const heroItem = {
+  hidden: { opacity: 0, y: 10, filter: 'blur(6px)' },
+  show: { opacity: 1, y: 0, filter: 'blur(0px)', transition: { duration: 0.5, ease: [0.16, 1, 0.3, 1] } },
+}
+
+function HeroSection({ onSignup, onSampleReport }: { onSignup: () => void; onSampleReport: () => void }) {
+  const { ref: titleWrapRef, width } = useElementWidth<HTMLDivElement>()
+
+  return (
+    <section className="relative min-h-[80vh] flex items-center justify-center overflow-visible">
+      <div className="absolute inset-0 bg-[#0A0A0A]" />
+      <motion.div
+        className="relative z-10 max-w-4xl mx-auto px-6 py-20 text-center"
+        variants={heroVariants}
+        initial="hidden"
+        animate="show"
+      >
+        <motion.div variants={heroItem} className="mb-6">
+          <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-white/20 text-[10px] font-mono text-white/70 tracking-[0.12em] uppercase">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#F97316]" />
+            Verified outputs
+          </span>
+        </motion.div>
+
+        <motion.div variants={heroItem} className="relative inline-block mb-8">
+          <div ref={titleWrapRef} className="relative inline-block">
+            <h1 className="font-display text-5xl md:text-6xl font-bold leading-tight text-white">
+              Audit-ready proof packs from
+              <br />
+              everyday field work
+            </h1>
+            <motion.div
+              initial={{ scaleX: 0, opacity: 0.4 }}
+              animate={{ scaleX: 1, opacity: 1 }}
+              transition={{ duration: 0.75, delay: 0.25, ease: [0.16, 1, 0.3, 1] }}
+              style={{
+                width: Math.max(120, Math.min(width * 0.32, 220)),
+                transformOrigin: 'center',
+              }}
+              className="absolute left-1/2 -translate-x-1/2 -bottom-4 h-[4px] rounded-full bg-[#F97316] shadow-[0_0_18px_rgba(249,115,22,0.55)]"
+            />
+          </div>
+        </motion.div>
+
+        <motion.p variants={heroItem} className="text-xl text-[#A1A1A1] mb-2 max-w-2xl mx-auto">
+          Immutable compliance ledger + evidence chain-of-custody. Export audit packets in one click.
+        </motion.p>
+        <motion.p variants={heroItem} className="text-sm text-white/50 mb-4 italic">
+          The thing you hand over when someone asks questions.
+        </motion.p>
+        <motion.p variants={heroItem} className="text-xs text-white/40 font-mono mb-10">
+          If it isn&apos;t anchored, it doesn&apos;t exist.
+        </motion.p>
+        <motion.div variants={heroItem} className="flex flex-col sm:flex-row gap-4 justify-center">
+          <button
+            onClick={onSignup}
+            className="px-8 py-4 bg-[#F97316] text-black rounded-lg hover:bg-[#FB923C] transition-colors font-semibold text-lg"
+          >
+            Start Free
+          </button>
+          <button
+            onClick={onSampleReport}
+            className="px-8 py-4 rounded-lg border border-white/15 bg-white/[0.03] hover:bg-white/[0.06] hover:border-white/25 text-white/80 hover:text-white transition-colors font-semibold text-lg"
+          >
+            View Sample Audit
+          </button>
+        </motion.div>
+      </motion.div>
+    </section>
+  )
+}
 
 export default function HomePage() {
   const router = useRouter()
@@ -236,46 +328,10 @@ export default function HomePage() {
         <div className="h-20" />
 
         {/* Hero — minimal, authority */}
-        <section className="relative min-h-[80vh] flex items-center justify-center overflow-hidden">
-          <div className="absolute inset-0 bg-[#0A0A0A]" />
-          <div className="relative z-10 max-w-4xl mx-auto px-6 py-20 text-center">
-            <div className="w-full max-w-2xl mx-auto flex flex-col items-start mb-6">
-              <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-white/20 text-[10px] font-mono text-white/70 tracking-[0.12em] uppercase">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#F97316]" />
-                Verified outputs
-              </span>
-              <motion.div
-                className="h-[4px] w-16 mt-4 bg-[#F97316] rounded-full shadow-[0_0_12px_rgba(249,115,22,0.5)]"
-                initial={{ scaleX: 0 }}
-                animate={{ scaleX: 1 }}
-                transition={{ delay: 0.15, duration: 0.35, ease: [0.4, 0, 0.2, 1] }}
-                style={{ transformOrigin: 'left' }}
-              />
-            </div>
-            <h1 className="text-5xl md:text-6xl font-bold mb-6 font-display text-white">
-              Audit-ready proof packs from everyday field work
-            </h1>
-            <p className="text-xl text-[#A1A1A1] mb-2 max-w-2xl mx-auto">
-              Immutable compliance ledger + evidence chain-of-custody. Export audit packets in one click.
-            </p>
-            <p className="text-sm text-white/50 mb-4 italic">The thing you hand over when someone asks questions.</p>
-            <p className="text-xs text-white/40 font-mono mb-10">If it isn&apos;t anchored, it doesn&apos;t exist.</p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <button
-                onClick={() => router.push('/signup')}
-                className="px-8 py-4 bg-[#F97316] text-black rounded-lg hover:bg-[#FB923C] transition-colors font-semibold text-lg"
-              >
-                Start Free
-              </button>
-              <button
-                onClick={() => setSampleReportOpen(true)}
-                className="px-8 py-4 rounded-lg border border-white/15 bg-white/[0.03] hover:bg-white/[0.06] hover:border-white/25 text-white/80 hover:text-white transition-colors font-semibold text-lg"
-              >
-                View Sample Audit
-              </button>
-            </div>
-          </div>
-        </section>
+        <HeroSection
+          onSignup={() => router.push('/signup')}
+          onSampleReport={() => setSampleReportOpen(true)}
+        />
 
         {/* Process — Capture → Review → Anchor → Defend */}
         <section id="how-it-works" className="max-w-4xl mx-auto px-6 py-20 border-t border-white/5">
