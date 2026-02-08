@@ -1691,6 +1691,124 @@ jobsRouter.post("/:id/documents", authenticate, requireWriteAccess, async (req: 
   }
 });
 
+// PATCH /api/jobs/:id/documents/:docId
+// Update photo category (before|during|after). Only applies to photos; category is stored in job_photos.
+jobsRouter.patch("/:id/documents/:docId", authenticate, requireWriteAccess, async (req: express.Request, res: express.Response) => {
+  const authReq = req as AuthenticatedRequest;
+  try {
+    const jobId = authReq.params.id;
+    const docId = authReq.params.docId;
+    const { organization_id, id: userId } = authReq.user;
+    const { category } = authReq.body || {};
+
+    if (category === undefined) {
+      return res.status(400).json({ message: "Missing category in body" });
+    }
+    if (!PHOTO_CATEGORIES.includes(category as (typeof PHOTO_CATEGORIES)[number])) {
+      return res.status(400).json({
+        message: "Invalid category. Must be one of: before, during, after",
+      });
+    }
+
+    // Verify job belongs to organization
+    const { data: job, error: jobError } = await supabase
+      .from("jobs")
+      .select("id, organization_id")
+      .eq("id", jobId)
+      .eq("organization_id", organization_id)
+      .single();
+
+    if (jobError || !job) {
+      return res.status(404).json({ message: "Job not found" });
+    }
+
+    // Load document and ensure it is a photo
+    const { data: doc, error: docError } = await supabase
+      .from("documents")
+      .select("id, file_path, type, name, description, created_at")
+      .eq("id", docId)
+      .eq("job_id", jobId)
+      .eq("organization_id", organization_id)
+      .maybeSingle();
+
+    if (docError) throw docError;
+    if (!doc) {
+      return res.status(404).json({ message: "Document not found" });
+    }
+    if (doc.type !== "photo") {
+      return res.status(400).json({
+        message: "Category can only be updated for photos",
+      });
+    }
+
+    const categoryValue = category as (typeof PHOTO_CATEGORIES)[number];
+
+    // Update or insert job_photos row (by job_id, organization_id, file_path)
+    const { data: existing } = await supabase
+      .from("job_photos")
+      .select("id")
+      .eq("job_id", jobId)
+      .eq("organization_id", organization_id)
+      .eq("file_path", doc.file_path)
+      .maybeSingle();
+
+    if (existing) {
+      const { data: updated, error: updateError } = await supabase
+        .from("job_photos")
+        .update({ category: categoryValue })
+        .eq("id", existing.id)
+        .select()
+        .single();
+
+      if (updateError) throw updateError;
+      invalidateJobReportCache(organization_id, jobId);
+      return res.json({
+        ok: true,
+        data: {
+          id: doc.id,
+          file_path: doc.file_path,
+          type: doc.type,
+          name: doc.name,
+          description: doc.description,
+          created_at: doc.created_at,
+          category: updated?.category ?? categoryValue,
+        },
+      });
+    }
+
+    // No job_photos row: insert one (e.g. legacy photo)
+    const { data: inserted, error: insertError } = await supabase
+      .from("job_photos")
+      .insert({
+        job_id: jobId,
+        organization_id,
+        file_path: doc.file_path,
+        category: categoryValue,
+        created_by: userId,
+      })
+      .select()
+      .single();
+
+    if (insertError) throw insertError;
+    invalidateJobReportCache(organization_id, jobId);
+    return res.json({
+      ok: true,
+      data: {
+        id: doc.id,
+        file_path: doc.file_path,
+        type: doc.type,
+        name: doc.name,
+        description: doc.description,
+        created_at: doc.created_at,
+        category: inserted?.category ?? categoryValue,
+      },
+    });
+  } catch (err: any) {
+    console.error("Document category update failed:", err);
+    res.status(500).json({ message: "Failed to update photo category" });
+  }
+});
+
 // GET /api/jobs/:id/audit
 // Returns recent audit entries for a specific job
 jobsRouter.get("/:id/audit", authenticate, async (req: express.Request, res: express.Response) => {
@@ -2178,6 +2296,38 @@ jobsRouter.post("/:id/proof-pack", authenticate, async (req: express.Request, re
       return res.status(404).json({ message: "Job not found" });
     }
 
+    // Build photos array from reportData.documents: fetch photo docs, download storage objects, preserve description/created_at/category
+    const photoDocuments = (reportData.documents ?? []).filter(
+      (doc: any) => doc.type === "photo" && doc.file_path
+    );
+    const photos = (
+      await Promise.all(
+        photoDocuments.map(async (document: any) => {
+          try {
+            const { data: fileData } = await supabase.storage
+              .from("documents")
+              .download(document.file_path);
+
+            if (!fileData) {
+              return null;
+            }
+
+            const arrayBuffer = await fileData.arrayBuffer();
+            return {
+              name: document.name,
+              description: document.description,
+              created_at: document.created_at,
+              buffer: Buffer.from(arrayBuffer),
+              category: document.category ?? undefined,
+            };
+          } catch (error) {
+            console.warn("Failed to include photo in proof-pack PDF", error);
+            return null;
+          }
+        })
+      )
+    ).filter((item): item is NonNullable<typeof item> => item !== null);
+
     // For now, use the existing PDF generation
     // TODO: Create pack-specific PDF templates
     const { generateRiskSnapshotPDF } = await import("../utils/pdf");
@@ -2186,7 +2336,7 @@ jobsRouter.post("/:id/proof-pack", authenticate, async (req: express.Request, re
       reportData.risk_score,
       reportData.mitigations || [],
       reportData.organization ?? { id: organization_id, name: reportData.job?.client_name ?? "Organization" },
-      [], // Photos - can be enhanced later
+      photos,
       reportData.audit || []
     );
 
