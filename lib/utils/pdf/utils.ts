@@ -86,6 +86,10 @@ export function getSeverityColor(severity: string): string {
   return STYLES.colors.riskLow;
 }
 
+/**
+ * Categorize photos into before/during/after for PDF sections.
+ * Uses explicit category when set; falls back to timestamp vs job start for legacy photos.
+ */
 export function categorizePhotos(
   photos: JobDocumentAsset[],
   jobStartDate?: string | null

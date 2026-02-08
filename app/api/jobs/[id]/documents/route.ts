@@ -89,6 +89,11 @@ export async function GET(
   }
 }
 
+/**
+ * POST /api/jobs/[id]/documents
+ * Request body: { name, type?, file_path, file_size, mime_type, description?, category? }
+ * - category: 'before' | 'during' | 'after' (photos only; defaults to 'during' if omitted)
+ */
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -108,6 +113,7 @@ export async function POST(
     const { name, type = 'photo', file_path, file_size, mime_type, description, category } = body
 
     const validCategories = ['before', 'during', 'after'] as const
+    // Default to 'during' for photos when category not provided (ticket: Backend API & PDF for Photo Categories)
     const photoCategory =
       type === 'photo' && category && validCategories.includes(category)
         ? category
@@ -193,7 +199,7 @@ export async function POST(
           description: inserted.description,
           created_at: inserted.created_at,
           uploaded_by: inserted.uploaded_by,
-          ...(type === 'photo' && photoCategory ? { category: photoCategory } : {}),
+          ...(type === 'photo' ? { category: photoCategory! } : {}),
           url: signed?.signedUrl || null,
         },
       },
