@@ -1494,8 +1494,20 @@ jobsRouter.get("/:id/documents", authenticate, async (req: express.Request, res:
 
     if (error) throw error;
 
+    // Fetch job_photos for category (before/during/after) to include on photo documents
+    const { data: jobPhotos } = await supabase
+      .from("job_photos")
+      .select("file_path, category")
+      .eq("job_id", jobId)
+      .eq("organization_id", organization_id);
+
+    const categoryByPath = new Map(
+      (jobPhotos || []).map((p) => [p.file_path, p.category as "before" | "during" | "after"])
+    );
+
     const documentsWithUrls = await Promise.all(
       (data || []).map(async (doc) => {
+        const category = doc.type === "photo" ? (categoryByPath.get(doc.file_path) ?? null) : undefined;
         try {
           const { data: signed } = await supabase.storage
             .from("documents")
@@ -1511,6 +1523,7 @@ jobsRouter.get("/:id/documents", authenticate, async (req: express.Request, res:
             description: doc.description,
             created_at: doc.created_at,
             uploaded_by: doc.uploaded_by,
+            ...(category ? { category } : {}),
             url: signed?.signedUrl || null,
           };
         } catch (error) {
@@ -1525,6 +1538,7 @@ jobsRouter.get("/:id/documents", authenticate, async (req: express.Request, res:
             description: doc.description,
             created_at: doc.created_at,
             uploaded_by: doc.uploaded_by,
+            ...(category ? { category } : {}),
             url: null,
           };
         }
@@ -1538,6 +1552,9 @@ jobsRouter.get("/:id/documents", authenticate, async (req: express.Request, res:
   }
 });
 
+// Valid photo categories
+const PHOTO_CATEGORIES = ["before", "during", "after"] as const;
+
 // POST /api/jobs/:id/documents
 // Persists document metadata after upload to storage
 jobsRouter.post("/:id/documents", authenticate, requireWriteAccess, async (req: express.Request, res: express.Response) => {
@@ -1545,7 +1562,7 @@ jobsRouter.post("/:id/documents", authenticate, requireWriteAccess, async (req: 
   try {
     const jobId = authReq.params.id;
     const { organization_id, id: userId } = authReq.user;
-    const { name, type = "photo", file_path, file_size, mime_type, description } = authReq.body || {};
+    const { name, type = "photo", file_path, file_size, mime_type, description, category } = authReq.body || {};
 
     if (!name || !file_path || file_size === undefined || !mime_type) {
       return res.status(400).json({
@@ -1553,10 +1570,24 @@ jobsRouter.post("/:id/documents", authenticate, requireWriteAccess, async (req: 
       });
     }
 
+    if (type === "photo" && category !== undefined && !PHOTO_CATEGORIES.includes(category as (typeof PHOTO_CATEGORIES)[number])) {
+      return res.status(400).json({
+        message: "Invalid category. Must be one of: before, during, after",
+      });
+    }
+
     const parsedFileSize = Number(file_size);
     if (!Number.isFinite(parsedFileSize) || parsedFileSize <= 0) {
       return res.status(400).json({ message: "file_size must be a positive number" });
     }
+
+    // Photo category: validate, default to 'during' for photos when omitted
+    const photoCategory =
+      type === "photo" && category && PHOTO_CATEGORIES.includes(category as (typeof PHOTO_CATEGORIES)[number])
+        ? (category as (typeof PHOTO_CATEGORIES)[number])
+        : type === "photo"
+          ? "during"
+          : undefined;
 
     // Verify job belongs to organization
     const { data: job, error: jobError } = await supabase
@@ -1588,6 +1619,27 @@ jobsRouter.post("/:id/documents", authenticate, requireWriteAccess, async (req: 
 
     if (insertError) {
       throw insertError;
+    }
+
+    // When type is photo, insert job_photos row with category
+    if (type === "photo" && photoCategory) {
+      const { error: photoError } = await supabase
+        .from("job_photos")
+        .insert({
+          job_id: jobId,
+          organization_id,
+          file_path: inserted.file_path,
+          description: description ?? null,
+          category: photoCategory,
+          created_by: userId,
+        });
+
+      if (photoError) {
+        console.error("job_photos insert failed:", photoError);
+        // Delete the document to avoid orphaned metadata without category
+        await supabase.from("documents").delete().eq("id", inserted.id);
+        return res.status(500).json({ message: "Failed to save photo category" });
+      }
     }
 
     const { data: signed } = await supabase.storage
@@ -1629,6 +1681,7 @@ jobsRouter.post("/:id/documents", authenticate, requireWriteAccess, async (req: 
         description: inserted.description,
         created_at: inserted.created_at,
         uploaded_by: inserted.uploaded_by,
+        ...(type === "photo" && photoCategory ? { category: photoCategory } : {}),
         url: signed?.signedUrl || null,
       },
     });

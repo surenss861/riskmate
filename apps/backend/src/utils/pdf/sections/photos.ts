@@ -8,13 +8,14 @@ export function renderPhotosSection(
   doc: PDFKit.PDFDocument,
   photos: JobDocumentAsset[],
   jobStartDate: string | null | undefined,
+  jobEndDate: string | null | undefined,
   pageWidth: number,
   pageHeight: number,
   margin: number,
   safeAddPage: (estimatedPages?: number) => void,
   estimatedTotalPages: number
 ) {
-  const { before, during, after } = categorizePhotos(photos, jobStartDate);
+  const { before, during, after } = categorizePhotos(photos, jobStartDate, jobEndDate);
 
   const sections = [
     { title: 'Before Photos', photos: before },

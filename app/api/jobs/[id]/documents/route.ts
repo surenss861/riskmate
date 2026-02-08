@@ -172,7 +172,7 @@ export async function POST(
 
     // When type is photo, also save to job_photos for category (before/during/after)
     if (type === 'photo' && photoCategory) {
-      await supabase.from('job_photos').insert({
+      const { error: photoError } = await supabase.from('job_photos').insert({
         job_id: jobId,
         organization_id,
         file_path: inserted.file_path,
@@ -180,6 +180,16 @@ export async function POST(
         category: photoCategory,
         created_by: userId,
       })
+
+      if (photoError) {
+        console.error('job_photos insert failed:', photoError)
+        // Delete the document to avoid orphaned metadata without category (rollback)
+        await supabase.from('documents').delete().eq('id', inserted.id)
+        return NextResponse.json(
+          { message: 'Failed to save photo category' },
+          { status: 500 }
+        )
+      }
     }
 
     // Generate signed URL

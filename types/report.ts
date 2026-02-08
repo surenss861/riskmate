@@ -42,6 +42,7 @@ export interface JobReportData {
     created_at: string
     uploaded_by?: string | null
     url?: string | null
+    category?: 'before' | 'during' | 'after'
   }>
   audit: Array<{
     id: string

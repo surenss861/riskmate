@@ -147,6 +147,7 @@ reportsRouter.post("/generate/:jobId", authenticate as unknown as RequestHandler
               description: document.description,
               created_at: document.created_at,
               buffer: Buffer.from(arrayBuffer),
+              category: document.category ?? undefined,
             };
           } catch (error) {
             console.warn("Failed to include photo in PDF", error);

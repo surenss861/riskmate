@@ -87,7 +87,8 @@ export function getSeverityColor(severity: string): string {
 
 export function categorizePhotos(
   photos: JobDocumentAsset[],
-  jobStartDate?: string | null
+  jobStartDate?: string | null,
+  jobEndDate?: string | null
 ): {
   before: JobDocumentAsset[];
   during: JobDocumentAsset[];
@@ -96,13 +97,23 @@ export function categorizePhotos(
   if (!jobStartDate) return { before: [], during: photos, after: [] };
 
   const jobStart = new Date(jobStartDate).getTime();
-  const jobEnd = Date.now();
+  // Use job end date for "after" determination; if no end_date, use start_date (legacy: before/during only)
+  const jobEnd = jobEndDate ? new Date(jobEndDate).getTime() : jobStart;
 
   const before: JobDocumentAsset[] = [];
   const during: JobDocumentAsset[] = [];
   const after: JobDocumentAsset[] = [];
 
   photos.forEach((photo) => {
+    // First route by explicit category (from job_photos) when present
+    if (photo.category === 'before' || photo.category === 'during' || photo.category === 'after') {
+      if (photo.category === 'before') before.push(photo);
+      else if (photo.category === 'during') during.push(photo);
+      else after.push(photo);
+      return;
+    }
+
+    // Fallback: timestamp-based logic for legacy photos without category
     if (!photo.created_at) {
       during.push(photo);
       return;

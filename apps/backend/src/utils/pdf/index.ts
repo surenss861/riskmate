@@ -55,7 +55,7 @@ export async function generateRiskSnapshotPDF(
     const margin = STYLES.spacing.pageMargin;
 
     const groupedTimeline = groupTimelineEvents(auditLogs);
-    const { before, during, after } = categorizePhotos(photos, job.start_date);
+    const { before, during, after } = categorizePhotos(photos, job.start_date, job.end_date);
 
     // Rough estimate for footer page numbers
     const estimatedTotalPages =
@@ -162,6 +162,7 @@ export async function generateRiskSnapshotPDF(
       doc,
       photos,
       job.start_date,
+      job.end_date,
       pageWidth,
       pageHeight,
       margin,
