@@ -1507,7 +1507,6 @@ jobsRouter.get("/:id/documents", authenticate, async (req: express.Request, res:
 
     const documentsWithUrls = await Promise.all(
       (data || []).map(async (doc) => {
-        const category = doc.type === "photo" ? (categoryByPath.get(doc.file_path) ?? null) : undefined;
         try {
           const { data: signed } = await supabase.storage
             .from("documents")
@@ -1523,7 +1522,7 @@ jobsRouter.get("/:id/documents", authenticate, async (req: express.Request, res:
             description: doc.description,
             created_at: doc.created_at,
             uploaded_by: doc.uploaded_by,
-            ...(category ? { category } : {}),
+            ...(doc.type === "photo" ? { category: categoryByPath.get(doc.file_path) ?? null } : {}),
             url: signed?.signedUrl || null,
           };
         } catch (error) {
@@ -1538,7 +1537,7 @@ jobsRouter.get("/:id/documents", authenticate, async (req: express.Request, res:
             description: doc.description,
             created_at: doc.created_at,
             uploaded_by: doc.uploaded_by,
-            ...(category ? { category } : {}),
+            ...(doc.type === "photo" ? { category: categoryByPath.get(doc.file_path) ?? null } : {}),
             url: null,
           };
         }

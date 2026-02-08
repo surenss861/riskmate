@@ -94,9 +94,7 @@ export function categorizePhotos(
   during: JobDocumentAsset[];
   after: JobDocumentAsset[];
 } {
-  if (!jobStartDate) return { before: [], during: photos, after: [] };
-
-  const jobStart = new Date(jobStartDate).getTime();
+  const jobStart = jobStartDate ? new Date(jobStartDate).getTime() : NaN;
   // Use job end date for "after" determination; if no end_date, use start_date (legacy: before/during only)
   const jobEnd = jobEndDate ? new Date(jobEndDate).getTime() : jobStart;
 
@@ -105,7 +103,7 @@ export function categorizePhotos(
   const after: JobDocumentAsset[] = [];
 
   photos.forEach((photo) => {
-    // First route by explicit category (from job_photos) when present
+    // Process explicit category first (from job_photos); keep assigned category even when jobStartDate is null
     if (photo.category === 'before' || photo.category === 'during' || photo.category === 'after') {
       if (photo.category === 'before') before.push(photo);
       else if (photo.category === 'during') during.push(photo);
@@ -113,18 +111,22 @@ export function categorizePhotos(
       return;
     }
 
-    // Fallback: timestamp-based logic for legacy photos without category
-    if (!photo.created_at) {
-      during.push(photo);
-      return;
-    }
-
-    const photoTime = new Date(photo.created_at).getTime();
-    if (photoTime < jobStart) {
-      before.push(photo);
-    } else if (photoTime > jobEnd) {
-      after.push(photo);
+    // Only when photo.category is missing: fall back to timestamp comparison when job dates available
+    if (Number.isFinite(jobStart)) {
+      if (!photo.created_at) {
+        during.push(photo);
+        return;
+      }
+      const photoTime = new Date(photo.created_at).getTime();
+      if (photoTime < jobStart) {
+        before.push(photo);
+      } else if (Number.isFinite(jobEnd) && photoTime > jobEnd) {
+        after.push(photo);
+      } else {
+        during.push(photo);
+      }
     } else {
+      // No job start date: uncategorized photos go to during (legacy behavior)
       during.push(photo);
     }
   });

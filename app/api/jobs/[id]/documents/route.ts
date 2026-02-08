@@ -57,7 +57,7 @@ export async function GET(
             description: doc.description,
             created_at: doc.created_at,
             uploaded_by: doc.uploaded_by,
-            category: doc.type === 'photo' ? (categoryByPath.get(doc.file_path) ?? null) : undefined,
+            ...(doc.type === 'photo' ? { category: categoryByPath.get(doc.file_path) ?? null } : {}),
             url: signed?.signedUrl || null,
           }
         } catch (error) {
@@ -72,7 +72,7 @@ export async function GET(
             description: doc.description,
             created_at: doc.created_at,
             uploaded_by: doc.uploaded_by,
-            category: doc.type === 'photo' ? (categoryByPath.get(doc.file_path) ?? null) : undefined,
+            ...(doc.type === 'photo' ? { category: categoryByPath.get(doc.file_path) ?? null } : {}),
             url: null,
           }
         }

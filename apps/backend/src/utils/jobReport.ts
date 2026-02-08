@@ -71,18 +71,16 @@ export async function buildJobReport(
           .from("documents")
           .createSignedUrl(doc.file_path, 60 * 60); // 1 hour expiry
 
-        const category = doc.type === "photo" ? (categoryByPath.get(doc.file_path) ?? null) : undefined;
         return {
           ...doc,
-          ...(category ? { category } : {}),
+          ...(doc.type === "photo" ? { category: categoryByPath.get(doc.file_path) ?? null } : {}),
           url: signed?.signedUrl || null,
         };
       } catch (error) {
         console.warn("Failed to generate document signed URL", error);
-        const category = doc.type === "photo" ? (categoryByPath.get(doc.file_path) ?? null) : undefined;
         return {
           ...doc,
-          ...(category ? { category } : {}),
+          ...(doc.type === "photo" ? { category: categoryByPath.get(doc.file_path) ?? null } : {}),
           url: null,
         };
       }
