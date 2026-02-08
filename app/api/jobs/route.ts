@@ -134,6 +134,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const requestId = request.headers.get('x-request-id') || getRequestId()
   try {
     const supabase = await createSupabaseServerClient()
     const { data: { user }, error: authError } = await supabase.auth.getUser()
@@ -348,9 +349,6 @@ export async function POST(request: NextRequest) {
         headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
       })
     }
-
-    // Get request ID from header or generate
-    const requestId = request.headers.get('x-request-id') || getRequestId()
 
     // Get entitlements ONCE at request start (request-scoped snapshot)
     const entitlements = await getOrgEntitlements(organization_id)
@@ -690,7 +688,6 @@ export async function POST(request: NextRequest) {
     )
   } catch (error: any) {
     console.error('Job creation error:', error)
-    const requestId = request.headers.get('x-request-id') || getRequestId()
     const { response, errorId } = createErrorResponse(
       error.message || 'Failed to create job',
       'QUERY_ERROR',
