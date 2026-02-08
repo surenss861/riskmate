@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
     let organization_id: string
     let user_id: string
     try {
-      const context = await getOrganizationContext()
+      const context = await getOrganizationContext(request)
       organization_id = context.organization_id
       user_id = context.user_id
     } catch (authError: any) {

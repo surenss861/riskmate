@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
   try {
     let organization_id: string
     try {
-      const context = await getOrganizationContext()
+      const context = await getOrganizationContext(request)
       organization_id = context.organization_id
     } catch (authError: any) {
       console.error('[proof-packs/export] Auth error:', {
