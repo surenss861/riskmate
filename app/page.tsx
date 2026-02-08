@@ -246,14 +246,11 @@ export default function HomePage() {
               </span>
             </div>
             <motion.div
-              className="h-1 w-12 mx-auto mb-6 bg-[#F97316] origin-center"
+              className="h-[3px] w-14 mx-auto mb-6 bg-[#F97316] rounded-full"
               initial={{ scaleX: 0 }}
               animate={{ scaleX: 1 }}
-              transition={{
-                delay: 0.15,
-                duration: 0.22,
-                ease: [0.4, 0, 0.2, 1],
-              }}
+              transition={{ delay: 0.15, duration: 0.35, ease: [0.4, 0, 0.2, 1] }}
+              style={{ transformOrigin: 'center' }}
             />
             <h1 className="text-5xl md:text-6xl font-bold mb-6 font-display text-white">
               Audit-ready proof packs from everyday field work
