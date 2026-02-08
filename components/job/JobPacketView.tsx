@@ -608,7 +608,7 @@ export function JobPacketView({
               photoFilter === 'all'
                 ? attachments
                 : attachments.filter(
-                    (a) => a.type !== 'photo' || (a.category ?? 'during') === photoFilter
+                    (a) => a.type === 'photo' && (a.category ?? 'during') === photoFilter
                   )
             const categoryBadgeClass = (cat: PhotoCategory) => {
               if (cat === 'before') return 'bg-[#e3f2fd] text-[#1976d2]'
@@ -661,9 +661,9 @@ export function JobPacketView({
                                 <button
                                   type="button"
                                   onClick={() => setCategoryDropdownOpen(categoryDropdownOpen === attachment.id ? null : attachment.id)}
-                                  className={`px-2 py-0.5 rounded text-[11px] font-bold uppercase ${categoryBadgeClass(cat!)}} hover:opacity-90`}
+                                  className={`px-2 py-0.5 rounded text-[11px] font-bold uppercase ${categoryBadgeClass(cat!)} hover:opacity-90`}
                                 >
-                                  {cat}
+                                  {cat!.toUpperCase()}
                                 </button>
                                 {categoryDropdownOpen === attachment.id && onAttachmentCategoryChange && (
                                   <>
