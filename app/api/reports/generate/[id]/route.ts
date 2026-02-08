@@ -8,6 +8,7 @@ import { buildJobPacket } from '@/lib/utils/packets/builder'
 import { computeCanonicalHash } from '@/lib/utils/canonicalJson'
 import { signPrintToken } from '@/lib/utils/printToken'
 import { isValidPacketType, type PacketType, PACKETS } from '@/lib/utils/packets/types'
+import { checkRateLimit, RATE_LIMIT_PRESETS } from '@/lib/utils/rateLimiter'
 import crypto from 'crypto'
 
 export const runtime = 'nodejs'
@@ -87,6 +88,43 @@ export async function POST(
       )
     }
     console.log(`[reports][${requestId}][stage] fetch_job_ok`)
+
+    // Rate limit: 20 PDF generations per hour per org
+    const rateLimitResult = checkRateLimit(request, RATE_LIMIT_PRESETS.pdf, {
+      organization_id,
+      user_id: user.id,
+    })
+    if (!rateLimitResult.allowed) {
+      console.log(JSON.stringify({
+        event: 'rate_limit_exceeded',
+        organization_id,
+        user_id: user.id,
+        endpoint: request.nextUrl?.pathname,
+        limit: rateLimitResult.limit,
+        window_ms: rateLimitResult.windowMs,
+        retry_after: rateLimitResult.retryAfter,
+        request_id: requestId,
+      }))
+      return NextResponse.json(
+        {
+          message: 'Rate limit exceeded. Please try again later.',
+          requestId,
+          stage: 'rate_limit',
+          error_code: 'RATE_LIMIT_EXCEEDED',
+          retry_after_seconds: rateLimitResult.retryAfter,
+        },
+        {
+          status: 429,
+          headers: {
+            'X-Request-ID': requestId,
+            'X-RateLimit-Limit': String(rateLimitResult.limit),
+            'X-RateLimit-Remaining': '0',
+            'X-RateLimit-Reset': String(rateLimitResult.resetAt),
+            'Retry-After': String(rateLimitResult.retryAfter),
+          },
+        }
+      )
+    }
 
     // Get packet type and status from request body
     const body = await request.json().catch(() => ({}))
@@ -411,6 +449,9 @@ export async function POST(
           'Expires': '0',
           'X-Build-SHA': buildSha, // Include build SHA for deployment verification
           'X-PDF-Method': pdfMethod, // Indicate which PDF generation method was used
+          'X-RateLimit-Limit': String(rateLimitResult.limit),
+          'X-RateLimit-Remaining': String(rateLimitResult.remaining),
+          'X-RateLimit-Reset': String(rateLimitResult.resetAt),
         },
       }
     )

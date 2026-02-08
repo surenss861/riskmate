@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { getOrganizationContext } from '@/lib/utils/organizationGuard'
 import { getRequestId } from '@/lib/utils/requestId'
 import { createSuccessResponse, createErrorResponse } from '@/lib/utils/apiResponse'
+import { checkRateLimit, RATE_LIMIT_PRESETS } from '@/lib/utils/rateLimiter'
 
 export const runtime = 'nodejs'
 
@@ -15,9 +16,11 @@ export async function GET(request: NextRequest) {
 
   try {
     let organization_id: string
+    let user_id: string
     try {
       const context = await getOrganizationContext(request)
       organization_id = context.organization_id
+      user_id = context.user_id
     } catch (authError: any) {
       console.error('[incidents/export] Auth error:', {
         message: authError.message,
@@ -31,6 +34,49 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(errorResponse, { 
         status: 401,
         headers: { 'X-Request-ID': requestId }
+      })
+    }
+
+    // Rate limit: 10 exports per hour per org
+    const rateLimitResult = checkRateLimit(request, RATE_LIMIT_PRESETS.export, {
+      organization_id,
+      user_id,
+    })
+    if (!rateLimitResult.allowed) {
+      console.log(JSON.stringify({
+        event: 'rate_limit_exceeded',
+        organization_id,
+        user_id,
+        endpoint: request.nextUrl?.pathname,
+        limit: rateLimitResult.limit,
+        window_ms: rateLimitResult.windowMs,
+        retry_after: rateLimitResult.retryAfter,
+        request_id: requestId,
+      }))
+      const errorResponse = createErrorResponse(
+        'Rate limit exceeded. Please try again later.',
+        'RATE_LIMIT_EXCEEDED',
+        {
+          requestId,
+          statusCode: 429,
+          retryable: true,
+          retry_after_seconds: rateLimitResult.retryAfter,
+          details: {
+            limit: rateLimitResult.limit,
+            window: '1 hour',
+            resetAt: rateLimitResult.resetAt,
+          },
+        }
+      )
+      return NextResponse.json(errorResponse, {
+        status: 429,
+        headers: {
+          'X-Request-ID': requestId,
+          'X-RateLimit-Limit': String(rateLimitResult.limit),
+          'X-RateLimit-Remaining': '0',
+          'X-RateLimit-Reset': String(rateLimitResult.resetAt),
+          'Retry-After': String(rateLimitResult.retryAfter),
+        },
       })
     }
     
@@ -117,6 +163,9 @@ export async function GET(request: NextRequest) {
           'Content-Type': 'text/csv; charset=utf-8',
           'Content-Disposition': `attachment; filename="incidents-export-${new Date().toISOString().split('T')[0]}.csv"`,
           'X-Request-ID': requestId,
+          'X-RateLimit-Limit': String(rateLimitResult.limit),
+          'X-RateLimit-Remaining': String(rateLimitResult.remaining),
+          'X-RateLimit-Reset': String(rateLimitResult.resetAt),
           'X-Exported-At': exportedAt,
           'X-Export-Format': 'csv',
           'X-Export-View': 'incident-review',
@@ -145,6 +194,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(successResponse, {
       headers: { 
         'X-Request-ID': requestId,
+        'X-RateLimit-Limit': String(rateLimitResult.limit),
+        'X-RateLimit-Remaining': String(rateLimitResult.remaining),
+        'X-RateLimit-Reset': String(rateLimitResult.resetAt),
         'Content-Type': 'application/json; charset=utf-8',
       }
     })

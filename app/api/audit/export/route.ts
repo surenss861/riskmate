@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { getOrganizationContext } from '@/lib/utils/organizationGuard'
 import { getRequestId } from '@/lib/utils/requestId'
 import { createErrorResponse } from '@/lib/utils/apiResponse'
+import { checkRateLimit, RATE_LIMIT_PRESETS } from '@/lib/utils/rateLimiter'
 import { generateLedgerExportPDF } from '@/lib/utils/pdf/ledgerExport'
 import { randomUUID } from 'crypto'
 
@@ -38,6 +39,50 @@ export async function POST(request: NextRequest) {
         headers: { 'X-Request-ID': requestId }
       })
     }
+
+    // Rate limit: 10 exports per hour per org
+    const rateLimitResult = checkRateLimit(request, RATE_LIMIT_PRESETS.export, {
+      organization_id,
+      user_id,
+    })
+    if (!rateLimitResult.allowed) {
+      console.log(JSON.stringify({
+        event: 'rate_limit_exceeded',
+        organization_id,
+        user_id,
+        endpoint: request.nextUrl?.pathname,
+        limit: rateLimitResult.limit,
+        window_ms: rateLimitResult.windowMs,
+        retry_after: rateLimitResult.retryAfter,
+        request_id: requestId,
+      }))
+      const errorResponse = createErrorResponse(
+        'Rate limit exceeded. Please try again later.',
+        'RATE_LIMIT_EXCEEDED',
+        {
+          requestId,
+          statusCode: 429,
+          retryable: true,
+          retry_after_seconds: rateLimitResult.retryAfter,
+          details: {
+            limit: rateLimitResult.limit,
+            window: '1 hour',
+            resetAt: rateLimitResult.resetAt,
+          },
+        }
+      )
+      return NextResponse.json(errorResponse, {
+        status: 429,
+        headers: {
+          'X-Request-ID': requestId,
+          'X-RateLimit-Limit': String(rateLimitResult.limit),
+          'X-RateLimit-Remaining': '0',
+          'X-RateLimit-Reset': String(rateLimitResult.resetAt),
+          'Retry-After': String(rateLimitResult.retryAfter),
+        },
+      })
+    }
+
     const body = await request.json()
     
     const {
@@ -256,6 +301,9 @@ export async function POST(request: NextRequest) {
         'Content-Disposition': `attachment; filename="${filename}"`,
         'Content-Length': pdfBuffer.length.toString(),
         'X-Request-ID': requestId,
+        'X-RateLimit-Limit': String(rateLimitResult.limit),
+        'X-RateLimit-Remaining': String(rateLimitResult.remaining),
+        'X-RateLimit-Reset': String(rateLimitResult.resetAt),
       },
     })
   } catch (error: any) {

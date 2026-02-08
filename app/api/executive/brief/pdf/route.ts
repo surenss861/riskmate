@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { resolveOrgContext, hashId } from '@/lib/utils/orgContext'
+import { checkRateLimit, RATE_LIMIT_PRESETS } from '@/lib/utils/rateLimiter'
 import PDFDocument from 'pdfkit'
 import crypto from 'crypto'
 import QRCode from 'qrcode'
@@ -2875,6 +2876,50 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Rate limit: 20 PDF generations per hour per org
+    const rateLimitResult = checkRateLimit(request, RATE_LIMIT_PRESETS.pdf, {
+      organization_id: orgContext.orgId,
+      user_id: orgContext.userId,
+    })
+    if (!rateLimitResult.allowed) {
+      const requestId = crypto.randomBytes(8).toString('hex')
+      console.log(JSON.stringify({
+        event: 'rate_limit_exceeded',
+        organization_id: orgContext.orgId,
+        user_id: orgContext.userId,
+        endpoint: request.nextUrl?.pathname,
+        limit: rateLimitResult.limit,
+        window_ms: rateLimitResult.windowMs,
+        retry_after: rateLimitResult.retryAfter,
+        request_id: requestId,
+      }))
+      return NextResponse.json(
+        {
+          ok: false,
+          message: 'Rate limit exceeded. Please try again later.',
+          code: 'RATE_LIMIT_EXCEEDED',
+          requestId,
+          retryable: true,
+          retry_after_seconds: rateLimitResult.retryAfter,
+          details: {
+            limit: rateLimitResult.limit,
+            window: '1 hour',
+            resetAt: rateLimitResult.resetAt,
+          },
+        },
+        {
+          status: 429,
+          headers: {
+            'X-Request-ID': requestId,
+            'X-RateLimit-Limit': String(rateLimitResult.limit),
+            'X-RateLimit-Remaining': '0',
+            'X-RateLimit-Reset': String(rateLimitResult.resetAt),
+            'Retry-After': String(rateLimitResult.retryAfter),
+          },
+        }
+      )
+    }
+
         // Use resolved org name (sanitized immediately)
         // CRITICAL: Show actual org name if available; only fall back to ID when name is missing
         let organizationName = sanitizeText(orgContext.orgName)
@@ -3091,6 +3136,9 @@ export async function POST(request: NextRequest) {
       'Pragma': 'no-cache',
       'Expires': '0',
       'Content-Length': String(buffer.length),
+      'X-RateLimit-Limit': String(rateLimitResult.limit),
+      'X-RateLimit-Remaining': String(rateLimitResult.remaining),
+      'X-RateLimit-Reset': String(rateLimitResult.resetAt),
       'X-PDF-Hash': hash,
       'X-Executive-Brief-Mode': 'premium',
       'X-Executive-Brief-ReportId': reportId.substring(0, 8),

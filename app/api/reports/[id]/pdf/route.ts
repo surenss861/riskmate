@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { signPrintToken } from '@/lib/utils/printToken'
 import { generatePdfFromUrl } from '@/lib/utils/playwright'
+import { checkRateLimit, RATE_LIMIT_PRESETS } from '@/lib/utils/rateLimiter'
+import { createErrorResponse } from '@/lib/utils/apiResponse'
+import crypto from 'crypto'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60 // 60 seconds for PDF generation
@@ -66,6 +69,50 @@ export async function POST(
       )
     }
 
+    // Rate limit: 20 PDF generations per hour per org
+    const rateLimitResult = checkRateLimit(request, RATE_LIMIT_PRESETS.pdf, {
+      organization_id: userData.organization_id,
+      user_id: user.id,
+    })
+    if (!rateLimitResult.allowed) {
+      const requestId = crypto.randomUUID()
+      console.log(JSON.stringify({
+        event: 'rate_limit_exceeded',
+        organization_id: userData.organization_id,
+        user_id: user.id,
+        endpoint: request.nextUrl?.pathname,
+        limit: rateLimitResult.limit,
+        window_ms: rateLimitResult.windowMs,
+        retry_after: rateLimitResult.retryAfter,
+        request_id: requestId,
+      }))
+      const errorResponse = createErrorResponse(
+        'Rate limit exceeded. Please try again later.',
+        'RATE_LIMIT_EXCEEDED',
+        {
+          requestId,
+          statusCode: 429,
+          retryable: true,
+          retry_after_seconds: rateLimitResult.retryAfter,
+          details: {
+            limit: rateLimitResult.limit,
+            window: '1 hour',
+            resetAt: rateLimitResult.resetAt,
+          },
+        }
+      )
+      return NextResponse.json(errorResponse, {
+        status: 429,
+        headers: {
+          'X-Request-ID': requestId,
+          'X-RateLimit-Limit': String(rateLimitResult.limit),
+          'X-RateLimit-Remaining': '0',
+          'X-RateLimit-Reset': String(rateLimitResult.resetAt),
+          'Retry-After': String(rateLimitResult.retryAfter),
+        },
+      })
+    }
+
     // Generate short-lived signed token for print route
     const token = signPrintToken({
       jobId,
@@ -88,6 +135,9 @@ export async function POST(
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `attachment; filename="riskmate-report-${jobId.substring(0, 8)}.pdf"`,
+        'X-RateLimit-Limit': String(rateLimitResult.limit),
+        'X-RateLimit-Remaining': String(rateLimitResult.remaining),
+        'X-RateLimit-Reset': String(rateLimitResult.resetAt),
       },
     })
   } catch (error: any) {
