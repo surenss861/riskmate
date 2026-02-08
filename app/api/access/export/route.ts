@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { getOrganizationContext } from '@/lib/utils/organizationGuard'
 import { getRequestId } from '@/lib/utils/requestId'
 import { createSuccessResponse, createErrorResponse } from '@/lib/utils/apiResponse'
+import { handleApiError, API_ERROR_CODES } from '@/lib/utils/apiErrors'
 
 export const runtime = 'nodejs'
 
@@ -24,7 +25,7 @@ export async function GET(request: NextRequest) {
         requestId,
       })
       const errorResponse = createErrorResponse(
-        'Unauthorized: Please log in to export data',
+        API_ERROR_CODES.UNAUTHORIZED.defaultMessage,
         'UNAUTHORIZED',
         { requestId, statusCode: 401 }
       )
@@ -65,11 +66,22 @@ export async function GET(request: NextRequest) {
     const { data: events, error } = await query
 
     if (error) {
-      console.error('[access/export] Query error:', error)
-      return NextResponse.json(
-        { ok: false, message: 'Failed to fetch access events', code: 'QUERY_ERROR' },
-        { status: 500 }
+      console.error('[access/export] Query error:', { code: error.code, message: error.message, requestId })
+      const errorResponse = createErrorResponse(
+        API_ERROR_CODES.QUERY_ERROR.defaultMessage,
+        'QUERY_ERROR',
+        {
+          requestId,
+          statusCode: 500,
+          details: {
+            databaseError: { code: error.code, message: error.message },
+          },
+        }
       )
+      return NextResponse.json(errorResponse, {
+        status: 500,
+        headers: { 'X-Request-ID': requestId },
+      })
     }
 
     const eventList = events || []
@@ -129,25 +141,9 @@ export async function GET(request: NextRequest) {
         'Content-Type': 'application/json; charset=utf-8',
       }
     })
-  } catch (error: any) {
-    console.error('[access/export] Error:', {
-      message: error.message,
-      stack: error.stack,
-      requestId,
-    })
-    const errorResponse = createErrorResponse(
-      error.message || 'Failed to export access log',
-      error.code || 'EXPORT_ERROR',
-      {
-        requestId,
-        statusCode: 500,
-        details: process.env.NODE_ENV === 'development' ? { stack: error.stack } : undefined,
-      }
-    )
-    return NextResponse.json(errorResponse, { 
-      status: 500,
-      headers: { 'X-Request-ID': requestId }
-    })
+  } catch (error: unknown) {
+    console.error('[access/export] Error:', { requestId }, error)
+    return handleApiError(error, requestId)
   }
 }
 

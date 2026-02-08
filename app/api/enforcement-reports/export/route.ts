@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { getOrganizationContext } from '@/lib/utils/organizationGuard'
 import { getRequestId } from '@/lib/utils/requestId'
 import { createSuccessResponse, createErrorResponse } from '@/lib/utils/apiResponse'
+import { handleApiError, API_ERROR_CODES } from '@/lib/utils/apiErrors'
 import { generateLedgerExportPDF } from '@/lib/utils/pdf/ledgerExport'
 import { randomUUID } from 'crypto'
 
@@ -29,7 +30,7 @@ export async function GET(request: NextRequest) {
         requestId,
       })
       const errorResponse = createErrorResponse(
-        'Unauthorized: Please log in to export data',
+        API_ERROR_CODES.UNAUTHORIZED.defaultMessage,
         'UNAUTHORIZED',
         { requestId, statusCode: 401 }
       )
@@ -91,7 +92,7 @@ export async function GET(request: NextRequest) {
         organization_id,
       })
       const errorResponse = createErrorResponse(
-        'Failed to fetch enforcement events',
+        API_ERROR_CODES.QUERY_ERROR.defaultMessage,
         'QUERY_ERROR',
         {
           requestId,
@@ -245,25 +246,9 @@ export async function GET(request: NextRequest) {
         'Content-Type': 'application/json; charset=utf-8',
       }
     })
-  } catch (error: any) {
-    console.error('[enforcement-reports/export] Error:', {
-      message: error.message,
-      stack: error.stack,
-      requestId,
-    })
-    const errorResponse = createErrorResponse(
-      error.message || 'Failed to export enforcement report',
-      error.code || 'EXPORT_ERROR',
-      {
-        requestId,
-        statusCode: 500,
-        details: process.env.NODE_ENV === 'development' ? { stack: error.stack } : undefined,
-      }
-    )
-    return NextResponse.json(errorResponse, { 
-      status: 500,
-      headers: { 'X-Request-ID': requestId }
-    })
+  } catch (error: unknown) {
+    console.error('[enforcement-reports/export] Error:', { requestId }, error)
+    return handleApiError(error, requestId)
   }
 }
 

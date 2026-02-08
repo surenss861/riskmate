@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { getOrganizationContext } from '@/lib/utils/organizationGuard'
 import { getRequestId } from '@/lib/utils/requestId'
 import { createErrorResponse } from '@/lib/utils/apiResponse'
+import { handleApiError, API_ERROR_CODES } from '@/lib/utils/apiErrors'
 import { checkRateLimit, RATE_LIMIT_PRESETS } from '@/lib/utils/rateLimiter'
 import { generateLedgerExportPDF } from '@/lib/utils/pdf/ledgerExport'
 import { randomUUID } from 'crypto'
@@ -30,7 +31,7 @@ export async function POST(request: NextRequest) {
         requestId,
       })
       const errorResponse = createErrorResponse(
-        'Unauthorized: Please log in to export data',
+        API_ERROR_CODES.UNAUTHORIZED.defaultMessage,
         'UNAUTHORIZED',
         { requestId, statusCode: 401 }
       )
@@ -57,7 +58,7 @@ export async function POST(request: NextRequest) {
         request_id: requestId,
       }))
       const errorResponse = createErrorResponse(
-        'Rate limit exceeded. Please try again later.',
+        API_ERROR_CODES.RATE_LIMIT_EXCEEDED.defaultMessage,
         'RATE_LIMIT_EXCEEDED',
         {
           requestId,
@@ -181,7 +182,7 @@ export async function POST(request: NextRequest) {
 
       if (error.code === '42P17' || error.message?.includes('infinite recursion')) {
         const errorResponse = createErrorResponse(
-          'Database policy recursion detected. This indicates a configuration issue with row-level security policies.',
+          API_ERROR_CODES.RLS_RECURSION_ERROR.defaultMessage,
           'RLS_RECURSION_ERROR',
           {
             requestId,
@@ -202,7 +203,7 @@ export async function POST(request: NextRequest) {
       }
 
       const errorResponse = createErrorResponse(
-        'Failed to fetch audit events for export',
+        API_ERROR_CODES.QUERY_ERROR.defaultMessage,
         'QUERY_ERROR',
         {
           requestId,
@@ -306,24 +307,8 @@ export async function POST(request: NextRequest) {
         'X-RateLimit-Reset': String(rateLimitResult.resetAt),
       },
     })
-  } catch (error: any) {
-    console.error('[audit/export] Unhandled error:', {
-      message: error.message,
-      stack: error.stack,
-      requestId,
-    })
-    const errorResponse = createErrorResponse(
-      error.message || 'Failed to export audit ledger',
-      'EXPORT_ERROR',
-      {
-        requestId,
-        statusCode: 500,
-        details: process.env.NODE_ENV === 'development' ? { stack: error.stack } : undefined,
-      }
-    )
-    return NextResponse.json(errorResponse, { 
-      status: 500,
-      headers: { 'X-Request-ID': requestId }
-    })
+  } catch (error: unknown) {
+    console.error('[audit/export] Unhandled error:', { requestId }, error)
+    return handleApiError(error, requestId)
   }
 }
