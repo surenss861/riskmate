@@ -46,7 +46,13 @@ export async function POST(request: NextRequest) {
       })
       return NextResponse.json(response, {
         status: 401,
-        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+        headers: {
+          'X-Request-ID': requestId,
+          'X-Error-ID': errorId,
+          'X-RateLimit-Limit': String(RATE_LIMIT_CONFIGS.export.maxRequests),
+          'X-RateLimit-Remaining': String(RATE_LIMIT_CONFIGS.export.maxRequests),
+          'X-RateLimit-Reset': String(Math.ceil((Date.now() + RATE_LIMIT_CONFIGS.export.windowMs) / 1000)),
+        },
       })
     }
 
