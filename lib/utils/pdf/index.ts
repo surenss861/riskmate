@@ -145,6 +145,7 @@ export async function generateRiskSnapshotPDF(
       doc,
       photos,
       job.start_date,
+      job.end_date,
       pageWidth,
       pageHeight,
       margin,

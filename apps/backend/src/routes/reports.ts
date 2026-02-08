@@ -513,11 +513,11 @@ reportsRouter.post("/permit-pack/:jobId", authenticate as unknown as RequestHand
       }
     }
 
-    // Add custom selected documents
+    // Add custom selected documents (photos and other docs are stored in the same bucket they're uploaded to; use persisted bucket when available)
     for (const doc of documents) {
       if (doc.storage_path) {
         try {
-          const bucket = doc.type === "photo" ? "photos" : "documents";
+          const bucket = (doc as { bucket?: string }).bucket ?? "documents";
           const { data: fileData, error: downloadError } = await supabase.storage
             .from(bucket)
             .download(doc.storage_path);

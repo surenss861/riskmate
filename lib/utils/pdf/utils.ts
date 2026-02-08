@@ -88,39 +88,48 @@ export function getSeverityColor(severity: string): string {
 
 /**
  * Categorize photos into before/during/after for PDF sections.
- * Uses explicit category when set; falls back to timestamp vs job start for legacy photos.
+ * Honors explicit category first; when missing, compares timestamps to job start/end
+ * to place photos into before/during/after; defaults to during only when dates are unavailable.
  */
 export function categorizePhotos(
   photos: JobDocumentAsset[],
-  jobStartDate?: string | null
+  jobStartDate?: string | null,
+  jobEndDate?: string | null
 ): {
   before: JobDocumentAsset[];
   during: JobDocumentAsset[];
   after: JobDocumentAsset[];
 } {
+  const jobStart = jobStartDate ? new Date(jobStartDate).getTime() : NaN;
+  const jobEnd = jobEndDate ? new Date(jobEndDate).getTime() : jobStart;
+
   const before: JobDocumentAsset[] = [];
   const during: JobDocumentAsset[] = [];
   const after: JobDocumentAsset[] = [];
 
   photos.forEach((photo) => {
-    // Prefer explicit category when available (new/updated photos)
-    if (photo.category) {
+    // Honor explicit category first (from job_photos / document metadata)
+    if (photo.category === 'before' || photo.category === 'during' || photo.category === 'after') {
       if (photo.category === 'before') before.push(photo);
-      else if (photo.category === 'after') after.push(photo);
-      else during.push(photo);
+      else if (photo.category === 'during') during.push(photo);
+      else after.push(photo);
       return;
     }
 
-    // Fallback: timestamp-based categorization for legacy photos
-    if (!jobStartDate || !photo.created_at) {
+    // When category missing: fall back to timestamp vs job start/end
+    if (!Number.isFinite(jobStart)) {
       during.push(photo);
       return;
     }
-
-    const jobStart = new Date(jobStartDate).getTime();
+    if (!photo.created_at) {
+      during.push(photo);
+      return;
+    }
     const photoTime = new Date(photo.created_at).getTime();
     if (photoTime < jobStart) {
       before.push(photo);
+    } else if (Number.isFinite(jobEnd) && photoTime > jobEnd) {
+      after.push(photo);
     } else {
       during.push(photo);
     }
