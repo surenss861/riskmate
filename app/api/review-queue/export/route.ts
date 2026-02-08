@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { getOrganizationContext } from '@/lib/utils/organizationGuard'
 import { getRequestId } from '@/lib/utils/requestId'
 import { createSuccessResponse, createErrorResponse, ExportResponse } from '@/lib/utils/apiResponse'
+import { logApiError } from '@/lib/utils/errorLogging'
 import { handleApiError, API_ERROR_CODES } from '@/lib/utils/apiErrors'
 
 export const runtime = 'nodejs'
@@ -25,14 +26,17 @@ export async function GET(request: NextRequest) {
         message: authError.message,
         requestId,
       })
-      const errorResponse = createErrorResponse(
+      const { response, errorId } = createErrorResponse(
         API_ERROR_CODES.UNAUTHORIZED.defaultMessage,
         'UNAUTHORIZED',
         { requestId, statusCode: 401 }
       )
-      return NextResponse.json(errorResponse, { 
+      logApiError(401, 'UNAUTHORIZED', errorId, requestId, undefined, response.message, {
+        category: 'auth', severity: 'warn', route: '/api/review-queue/export',
+      })
+      return NextResponse.json(response, {
         status: 401,
-        headers: { 'X-Request-ID': requestId }
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
       })
     }
     
@@ -81,7 +85,7 @@ export async function GET(request: NextRequest) {
         requestId,
         organization_id,
       })
-      const errorResponse = createErrorResponse(
+      const { response, errorId } = createErrorResponse(
         API_ERROR_CODES.QUERY_ERROR.defaultMessage,
         'QUERY_ERROR',
         {
@@ -95,9 +99,13 @@ export async function GET(request: NextRequest) {
           },
         }
       )
-      return NextResponse.json(errorResponse, { 
+      logApiError(500, 'QUERY_ERROR', errorId, requestId, organization_id, response.message, {
+        category: 'internal', severity: 'error', route: '/api/review-queue/export',
+        details: { databaseError: { code: error.code, message: error.message } },
+      })
+      return NextResponse.json(response, {
         status: 500,
-        headers: { 'X-Request-ID': requestId }
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
       })
     }
 

@@ -4,19 +4,33 @@ import { calculateRiskScore, generateMitigationItems } from '@/lib/utils/riskSco
 import { getOrgEntitlements } from '@/lib/entitlements'
 import { logFeatureUsage } from '@/lib/featureLogging'
 import { getRequestId } from '@/lib/featureEvents'
+import { createErrorResponse } from '@/lib/utils/apiResponse'
+import { logApiError } from '@/lib/utils/errorLogging'
 
 export const runtime = 'nodejs'
 
+const ROUTE_JOBS = '/api/jobs'
+
 export async function GET(request: NextRequest) {
+  const requestId = request.headers.get('x-request-id') || getRequestId()
+
   try {
     const supabase = await createSupabaseServerClient()
     const { data: { user }, error: authError } = await supabase.auth.getUser()
 
     if (authError || !user) {
-      return NextResponse.json(
-        { message: 'Unauthorized' },
-        { status: 401 }
+      const { response, errorId } = createErrorResponse(
+        'Unauthorized: Please log in to access jobs',
+        'UNAUTHORIZED',
+        { requestId, statusCode: 401 }
       )
+      logApiError(401, 'UNAUTHORIZED', errorId, requestId, undefined, response.message, {
+        category: 'auth', severity: 'warn', route: ROUTE_JOBS,
+      })
+      return NextResponse.json(response, {
+        status: 401,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
     }
 
     // Get user's organization_id
@@ -27,10 +41,18 @@ export async function GET(request: NextRequest) {
       .single()
 
     if (userError || !userData?.organization_id) {
-      return NextResponse.json(
-        { message: 'Failed to get organization ID' },
-        { status: 500 }
+      const { response, errorId } = createErrorResponse(
+        'Failed to get organization ID',
+        'QUERY_ERROR',
+        { requestId, statusCode: 500 }
       )
+      logApiError(500, 'QUERY_ERROR', errorId, requestId, userData?.organization_id, response.message, {
+        category: 'internal', severity: 'error', route: ROUTE_JOBS,
+      })
+      return NextResponse.json(response, {
+        status: 500,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
     }
 
     const organization_id = userData.organization_id
@@ -90,10 +112,24 @@ export async function GET(request: NextRequest) {
     })
   } catch (error: any) {
     console.error('Jobs fetch failed:', error)
-    return NextResponse.json(
-      { message: 'Failed to fetch jobs' },
-      { status: 500 }
+    const requestId = request.headers.get('x-request-id') || getRequestId()
+    const { response, errorId } = createErrorResponse(
+      'Failed to fetch jobs',
+      'QUERY_ERROR',
+      {
+        requestId,
+        statusCode: 500,
+        details: process.env.NODE_ENV === 'development' ? { detail: error?.message } : undefined,
+      }
     )
+    logApiError(500, 'QUERY_ERROR', errorId, requestId, undefined, response.message, {
+      category: 'internal', severity: 'error', route: ROUTE_JOBS,
+      details: process.env.NODE_ENV === 'development' ? { detail: error?.message } : undefined,
+    })
+    return NextResponse.json(response, {
+      status: 500,
+      headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+    })
   }
 }
 
@@ -103,10 +139,18 @@ export async function POST(request: NextRequest) {
     const { data: { user }, error: authError } = await supabase.auth.getUser()
 
     if (authError || !user) {
-      return NextResponse.json(
-        { message: 'Unauthorized' },
-        { status: 401 }
+      const { response, errorId } = createErrorResponse(
+        'Unauthorized: Please log in to create jobs',
+        'UNAUTHORIZED',
+        { requestId, statusCode: 401 }
       )
+      logApiError(401, 'UNAUTHORIZED', errorId, requestId, undefined, response.message, {
+        category: 'auth', severity: 'warn', route: ROUTE_JOBS,
+      })
+      return NextResponse.json(response, {
+        status: 401,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
     }
 
     // Get user's organization_id
@@ -117,10 +161,18 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (userError || !userData?.organization_id) {
-      return NextResponse.json(
-        { message: 'Failed to get organization ID' },
-        { status: 500 }
+      const { response, errorId } = createErrorResponse(
+        'Failed to get organization ID',
+        'QUERY_ERROR',
+        { requestId, statusCode: 500 }
       )
+      logApiError(500, 'QUERY_ERROR', errorId, requestId, userData?.organization_id, response.message, {
+        category: 'internal', severity: 'error', route: ROUTE_JOBS,
+      })
+      return NextResponse.json(response, {
+        status: 500,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
     }
 
     const organization_id = userData.organization_id
@@ -145,10 +197,18 @@ export async function POST(request: NextRequest) {
 
     // Preflight validation: Required fields
     if (!client_name || !client_type || !job_type || !location) {
-      return NextResponse.json(
-        { message: 'Missing required fields: client_name, client_type, job_type, location' },
-        { status: 400 }
+      const { response, errorId } = createErrorResponse(
+        'Missing required fields: client_name, client_type, job_type, location',
+        'MISSING_REQUIRED_FIELD',
+        { requestId, statusCode: 400 }
       )
+      logApiError(400, 'MISSING_REQUIRED_FIELD', errorId, requestId, organization_id, response.message, {
+        category: 'validation', severity: 'warn', route: ROUTE_JOBS,
+      })
+      return NextResponse.json(response, {
+        status: 400,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
     }
 
     // Preflight validation: Verify user has permission to create jobs
@@ -162,10 +222,18 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (membershipError || !membership) {
-      return NextResponse.json(
-        { message: 'Permission denied: You are not an active member of this organization.' },
-        { status: 403 }
+      const { response, errorId } = createErrorResponse(
+        'Permission denied: You are not an active member of this organization.',
+        'AUTH_ROLE_FORBIDDEN',
+        { requestId, statusCode: 403 }
       )
+      logApiError(403, 'AUTH_ROLE_FORBIDDEN', errorId, requestId, organization_id, response.message, {
+        category: 'auth', severity: 'warn', route: ROUTE_JOBS,
+      })
+      return NextResponse.json(response, {
+        status: 403,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
     }
 
     // Preflight validation: Normalize enum values (lowercase)
@@ -179,33 +247,65 @@ export async function POST(request: NextRequest) {
     const validInsuranceStatuses = ['pending', 'approved', 'rejected', 'not_required']
 
     if (!validClientTypes.includes(normalizedClientType)) {
-      return NextResponse.json(
-        { message: `Invalid client_type: "${client_type}". Must be one of: ${validClientTypes.join(', ')}` },
-        { status: 400 }
+      const { response, errorId } = createErrorResponse(
+        `Invalid client_type: "${client_type}". Must be one of: ${validClientTypes.join(', ')}`,
+        'INVALID_FORMAT',
+        { requestId, statusCode: 400 }
       )
+      logApiError(400, 'INVALID_FORMAT', errorId, requestId, organization_id, response.message, {
+        category: 'validation', severity: 'warn', route: ROUTE_JOBS,
+      })
+      return NextResponse.json(response, {
+        status: 400,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
     }
 
     if (!validJobTypes.includes(normalizedJobType)) {
-      return NextResponse.json(
-        { message: `Invalid job_type: "${job_type}". Must be one of: ${validJobTypes.join(', ')}` },
-        { status: 400 }
+      const { response, errorId } = createErrorResponse(
+        `Invalid job_type: "${job_type}". Must be one of: ${validJobTypes.join(', ')}`,
+        'INVALID_FORMAT',
+        { requestId, statusCode: 400 }
       )
+      logApiError(400, 'INVALID_FORMAT', errorId, requestId, organization_id, response.message, {
+        category: 'validation', severity: 'warn', route: ROUTE_JOBS,
+      })
+      return NextResponse.json(response, {
+        status: 400,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
     }
 
     if (!validInsuranceStatuses.includes(normalizedInsuranceStatus)) {
-      return NextResponse.json(
-        { message: `Invalid insurance_status: "${insurance_status}". Must be one of: ${validInsuranceStatuses.join(', ')}` },
-        { status: 400 }
+      const { response, errorId } = createErrorResponse(
+        `Invalid insurance_status: "${insurance_status}". Must be one of: ${validInsuranceStatuses.join(', ')}`,
+        'INVALID_FORMAT',
+        { requestId, statusCode: 400 }
       )
+      logApiError(400, 'INVALID_FORMAT', errorId, requestId, organization_id, response.message, {
+        category: 'validation', severity: 'warn', route: ROUTE_JOBS,
+      })
+      return NextResponse.json(response, {
+        status: 400,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
     }
 
     // Preflight validation: Validate template reference if provided
     if (applied_template_id) {
       if (!applied_template_type || !['job', 'hazard'].includes(applied_template_type)) {
-        return NextResponse.json(
-          { message: 'If applied_template_id is provided, applied_template_type must be "job" or "hazard"' },
-          { status: 400 }
+        const { response, errorId } = createErrorResponse(
+          'If applied_template_id is provided, applied_template_type must be "job" or "hazard"',
+          'INVALID_FORMAT',
+          { requestId, statusCode: 400 }
         )
+        logApiError(400, 'INVALID_FORMAT', errorId, requestId, organization_id, response.message, {
+          category: 'validation', severity: 'warn', route: ROUTE_JOBS,
+        })
+        return NextResponse.json(response, {
+          status: 400,
+          headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+        })
       }
 
       // Verify template exists and belongs to organization
@@ -218,19 +318,35 @@ export async function POST(request: NextRequest) {
         .single()
 
       if (templateError || !template) {
-        return NextResponse.json(
-          { message: `Template not found or does not belong to your organization.` },
-          { status: 400 }
+        const { response, errorId } = createErrorResponse(
+          'Template not found or does not belong to your organization.',
+          'NOT_FOUND',
+          { requestId, statusCode: 400 }
         )
+        logApiError(400, 'NOT_FOUND', errorId, requestId, organization_id, response.message, {
+          category: 'validation', severity: 'warn', route: ROUTE_JOBS,
+        })
+        return NextResponse.json(response, {
+          status: 400,
+          headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+        })
       }
     }
 
     // Preflight validation: Validate subcontractor count
     if (has_subcontractors && (subcontractor_count === undefined || subcontractor_count < 0)) {
-      return NextResponse.json(
-        { message: 'If has_subcontractors is true, subcontractor_count must be a non-negative number' },
-        { status: 400 }
+      const { response, errorId } = createErrorResponse(
+        'If has_subcontractors is true, subcontractor_count must be a non-negative number',
+        'VALIDATION_ERROR',
+        { requestId, statusCode: 400 }
       )
+      logApiError(400, 'VALIDATION_ERROR', errorId, requestId, organization_id, response.message, {
+        category: 'validation', severity: 'warn', route: ROUTE_JOBS,
+      })
+      return NextResponse.json(response, {
+        status: 400,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
     }
 
     // Get request ID from header or generate

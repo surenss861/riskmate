@@ -3,8 +3,11 @@ import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { getOrganizationContext } from '@/lib/utils/organizationGuard'
 import { getRequestId } from '@/lib/utils/requestId'
 import { createSuccessResponse, createErrorResponse } from '@/lib/utils/apiResponse'
+import { logApiError } from '@/lib/utils/errorLogging'
 
 export const runtime = 'nodejs'
+
+const ROUTE = '/api/audit/events'
 
 /**
  * GET /api/audit/events
@@ -26,14 +29,17 @@ export async function GET(request: NextRequest) {
         message: authError.message,
         requestId,
       })
-      const errorResponse = createErrorResponse(
+      const { response, errorId } = createErrorResponse(
         'Unauthorized: Please log in to view audit events',
         'UNAUTHORIZED',
         { requestId, statusCode: 401 }
       )
-      return NextResponse.json(errorResponse, { 
+      logApiError(401, 'UNAUTHORIZED', errorId, requestId, undefined, response.message, {
+        category: 'auth', severity: 'warn', route: ROUTE,
+      })
+      return NextResponse.json(response, {
         status: 401,
-        headers: { 'X-Request-ID': requestId }
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
       })
     }
     
@@ -134,7 +140,7 @@ export async function GET(request: NextRequest) {
       })
 
       if (error.code === '42P17' || error.message?.includes('infinite recursion')) {
-        const errorResponse = createErrorResponse(
+        const { response, errorId } = createErrorResponse(
           'Database policy recursion detected. This indicates a configuration issue with row-level security policies.',
           'RLS_RECURSION_ERROR',
           {
@@ -149,13 +155,17 @@ export async function GET(request: NextRequest) {
             },
           }
         )
-        return NextResponse.json(errorResponse, { 
+        logApiError(500, 'RLS_RECURSION_ERROR', errorId, requestId, organization_id, response.message, {
+          category: 'internal', severity: 'error', route: ROUTE,
+          details: { databaseError: { code: error.code, message: error.message } },
+        })
+        return NextResponse.json(response, {
           status: 500,
-          headers: { 'X-Request-ID': requestId }
+          headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
         })
       }
 
-      const errorResponse = createErrorResponse(
+      const { response, errorId } = createErrorResponse(
         'Failed to fetch audit events',
         'QUERY_ERROR',
         {
@@ -170,9 +180,13 @@ export async function GET(request: NextRequest) {
           },
         }
       )
-      return NextResponse.json(errorResponse, { 
+      logApiError(500, 'QUERY_ERROR', errorId, requestId, organization_id, response.message, {
+        category: 'internal', severity: 'error', route: ROUTE,
+        details: { databaseError: { code: error.code, message: error.message } },
+      })
+      return NextResponse.json(response, {
         status: 500,
-        headers: { 'X-Request-ID': requestId }
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
       })
     }
 
@@ -260,19 +274,22 @@ export async function GET(request: NextRequest) {
       requestId,
     })
     
-    const errorResponse = createErrorResponse(
+    const { response, errorId } = createErrorResponse(
       error.message || 'Failed to fetch audit events',
-      'AUDIT_QUERY_ERROR',
+      'QUERY_ERROR',
       {
         requestId,
         statusCode: 500,
         details: process.env.NODE_ENV === 'development' ? { stack: error.stack } : undefined,
       }
     )
-    
-    return NextResponse.json(errorResponse, { 
+    logApiError(500, 'QUERY_ERROR', errorId, requestId, undefined, response.message, {
+      category: 'internal', severity: 'error', route: ROUTE,
+      details: process.env.NODE_ENV === 'development' ? { stack: error.stack } : undefined,
+    })
+    return NextResponse.json(response, {
       status: 500,
-      headers: { 'X-Request-ID': requestId }
+      headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
     })
   }
 }

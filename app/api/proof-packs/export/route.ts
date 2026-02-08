@@ -3,10 +3,13 @@ import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { getOrganizationContext } from '@/lib/utils/organizationGuard'
 import { getRequestId } from '@/lib/utils/requestId'
 import { createSuccessResponse, createErrorResponse } from '@/lib/utils/apiResponse'
+import { logApiError } from '@/lib/utils/errorLogging'
 import { handleApiError, API_ERROR_CODES } from '@/lib/utils/apiErrors'
 import { checkRateLimit, RATE_LIMIT_PRESETS } from '@/lib/utils/rateLimiter'
 
 export const runtime = 'nodejs'
+
+const ROUTE = '/api/proof-packs/export'
 
 /**
  * GET /api/proof-packs/export
@@ -27,14 +30,19 @@ export async function GET(request: NextRequest) {
         message: authError.message,
         requestId,
       })
-      const errorResponse = createErrorResponse(
+      const { response, errorId } = createErrorResponse(
         API_ERROR_CODES.UNAUTHORIZED.defaultMessage,
         'UNAUTHORIZED',
         { requestId, statusCode: 401 }
       )
-      return NextResponse.json(errorResponse, { 
+      logApiError(401, 'UNAUTHORIZED', errorId, requestId, undefined, response.message, {
+        category: 'auth',
+        severity: 'warn',
+        route: ROUTE,
+      })
+      return NextResponse.json(response, {
         status: 401,
-        headers: { 'X-Request-ID': requestId }
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
       })
     }
 
@@ -54,13 +62,12 @@ export async function GET(request: NextRequest) {
         retry_after: rateLimitResult.retryAfter,
         request_id: requestId,
       }))
-      const errorResponse = createErrorResponse(
+      const { response, errorId } = createErrorResponse(
         API_ERROR_CODES.RATE_LIMIT_EXCEEDED.defaultMessage,
         'RATE_LIMIT_EXCEEDED',
         {
           requestId,
           statusCode: 429,
-          retryable: true,
           retry_after_seconds: rateLimitResult.retryAfter,
           details: {
             limit: rateLimitResult.limit,
@@ -69,10 +76,16 @@ export async function GET(request: NextRequest) {
           },
         }
       )
-      return NextResponse.json(errorResponse, {
+      logApiError(429, 'RATE_LIMIT_EXCEEDED', errorId, requestId, organization_id, response.message, {
+        category: 'internal',
+        severity: 'warn',
+        route: ROUTE,
+      })
+      return NextResponse.json(response, {
         status: 429,
         headers: {
           'X-Request-ID': requestId,
+          'X-Error-ID': errorId,
           'X-RateLimit-Limit': String(rateLimitResult.limit),
           'X-RateLimit-Remaining': '0',
           'X-RateLimit-Reset': String(rateLimitResult.resetAt),
@@ -119,7 +132,7 @@ export async function GET(request: NextRequest) {
         requestId,
         organization_id,
       })
-      const errorResponse = createErrorResponse(
+      const { response, errorId } = createErrorResponse(
         API_ERROR_CODES.QUERY_ERROR.defaultMessage,
         'QUERY_ERROR',
         {
@@ -133,9 +146,15 @@ export async function GET(request: NextRequest) {
           },
         }
       )
-      return NextResponse.json(errorResponse, { 
+      logApiError(500, 'QUERY_ERROR', errorId, requestId, organization_id, response.message, {
+        category: 'internal',
+        severity: 'error',
+        route: ROUTE,
+        details: { databaseError: { code: jobsError.code, message: jobsError.message } },
+      })
+      return NextResponse.json(response, {
         status: 500,
-        headers: { 'X-Request-ID': requestId }
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
       })
     }
 

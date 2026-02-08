@@ -44,7 +44,7 @@ export async function extractProxyError(res: Response): Promise<{
     data?.error?.message ||
     (typeof text === 'string' && text.trim() ? text.substring(0, 200) : 'Request failed')
 
-  const hint = data?.hint || data?.support_hint || data?.error?.hint
+  const hint = data?.error_hint ?? data?.hint ?? data?.support_hint ?? data?.error?.hint
   const requestId = data?.request_id || data?.requestId || res.headers.get('X-Request-ID') || undefined
   const statusCode = res.status
 

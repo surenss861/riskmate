@@ -18,6 +18,7 @@ export interface ApiErrorCodeDef {
 /**
  * Central error code registry.
  * Use these codes in createErrorResponse() and ApiError so clients can rely on stable values.
+ * Enhanced metadata (hint, supportUrl, category, classification) comes from errorCodes.ts.
  */
 export const API_ERROR_CODES = {
   UNAUTHORIZED: {
@@ -56,6 +57,11 @@ export const API_ERROR_CODES = {
     statusCode: 500,
     retryable: true,
   },
+  PDF_GENERATION_ERROR: {
+    defaultMessage: 'Failed to generate PDF report.',
+    statusCode: 500,
+    retryable: true,
+  },
   INTERNAL_ERROR: {
     defaultMessage: 'An unexpected error occurred. Please try again.',
     statusCode: 500,
@@ -75,6 +81,12 @@ export class ApiError extends Error {
   readonly details?: unknown
   readonly retryable?: boolean
   readonly retry_after_seconds?: number
+  errorId?: string
+  category?: string
+  classification?: string
+  severity?: 'error' | 'warn' | 'info'
+  supportHint?: string
+  retry_strategy?: string
 
   constructor(
     code: ApiErrorCode | string,
@@ -85,6 +97,12 @@ export class ApiError extends Error {
       details?: unknown
       retryable?: boolean
       retry_after_seconds?: number
+      errorId?: string
+      category?: string
+      classification?: string
+      severity?: 'error' | 'warn' | 'info'
+      supportHint?: string
+      retry_strategy?: string
     }
   ) {
     const def = typeof code === 'string' && code in API_ERROR_CODES
@@ -99,25 +117,32 @@ export class ApiError extends Error {
     this.details = options?.details
     this.retryable = options?.retryable ?? def?.retryable
     this.retry_after_seconds = options?.retry_after_seconds
+    this.category = options?.category
+    this.classification = options?.classification
+    this.severity = options?.severity
+    this.supportHint = options?.supportHint
+    this.retry_strategy = options?.retry_strategy
     Object.setPrototypeOf(this, ApiError.prototype)
   }
 
   /** Build the standard JSON body for this error */
   toJson(): ApiErrorResponse {
-    return createErrorResponse(this.message, this.code, {
+    const { response, errorId } = createErrorResponse(this.message, this.code, {
       requestId: this.requestId,
       statusCode: this.statusCode,
       details: this.details,
-      retryable: this.retryable,
       retry_after_seconds: this.retry_after_seconds,
     })
+    this.errorId = errorId
+    return response
   }
 
-  /** Build NextResponse with correct status and X-Request-ID header */
+  /** Build NextResponse with correct status, X-Request-ID and X-Error-ID headers */
   toNextResponse(requestId: string, extraHeaders?: Record<string, string>): NextResponse {
     const body = this.toJson()
     const headers: Record<string, string> = {
       'X-Request-ID': requestId,
+      ...(this.errorId && { 'X-Error-ID': this.errorId }),
       ...extraHeaders,
     }
     if (this.retry_after_seconds != null) {

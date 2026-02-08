@@ -4,10 +4,14 @@ import { signPrintToken } from '@/lib/utils/printToken'
 import { generatePdfFromUrl } from '@/lib/utils/playwright'
 import { checkRateLimit, RATE_LIMIT_PRESETS } from '@/lib/utils/rateLimiter'
 import { createErrorResponse } from '@/lib/utils/apiResponse'
-import crypto from 'crypto'
+import { logApiError } from '@/lib/utils/errorLogging'
+import { API_ERROR_CODES } from '@/lib/utils/apiErrors'
+import { getRequestId } from '@/lib/utils/requestId'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60 // 60 seconds for PDF generation
+
+const ROUTE = '/api/reports/[id]/pdf'
 
 /**
  * PDF Generation API Endpoint
@@ -27,15 +31,27 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const requestId = getRequestId(request)
+
   try {
     const supabase = await createSupabaseServerClient()
     const { data: { user }, error: authError } = await supabase.auth.getUser()
 
     if (authError || !user) {
-      return NextResponse.json(
-        { message: 'Unauthorized' },
-        { status: 401 }
+      const { response, errorId } = createErrorResponse(
+        API_ERROR_CODES.UNAUTHORIZED.defaultMessage,
+        'UNAUTHORIZED',
+        { requestId, statusCode: 401 }
       )
+      logApiError(401, 'UNAUTHORIZED', errorId, requestId, undefined, response.message, {
+        category: 'auth',
+        severity: 'warn',
+        route: ROUTE,
+      })
+      return NextResponse.json(response, {
+        status: 401,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
     }
 
     // Get user's organization_id
@@ -46,10 +62,20 @@ export async function POST(
       .single()
 
     if (userError || !userData?.organization_id) {
-      return NextResponse.json(
-        { message: 'Failed to get organization ID' },
-        { status: 500 }
+      const { response, errorId } = createErrorResponse(
+        'Failed to get organization ID',
+        'QUERY_ERROR',
+        { requestId, statusCode: 500 }
       )
+      logApiError(500, 'QUERY_ERROR', errorId, requestId, userData?.organization_id, response.message, {
+        category: 'internal',
+        severity: 'error',
+        route: ROUTE,
+      })
+      return NextResponse.json(response, {
+        status: 500,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
     }
 
     const { id: jobId } = await params
@@ -63,10 +89,20 @@ export async function POST(
       .single()
 
     if (!job) {
-      return NextResponse.json(
-        { message: 'Job not found' },
-        { status: 404 }
+      const { response, errorId } = createErrorResponse(
+        API_ERROR_CODES.NOT_FOUND.defaultMessage,
+        'NOT_FOUND',
+        { requestId, statusCode: 404 }
       )
+      logApiError(404, 'NOT_FOUND', errorId, requestId, userData.organization_id, response.message, {
+        category: 'validation',
+        severity: 'warn',
+        route: ROUTE,
+      })
+      return NextResponse.json(response, {
+        status: 404,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
     }
 
     // Rate limit: 20 PDF generations per hour per org
@@ -75,7 +111,6 @@ export async function POST(
       user_id: user.id,
     })
     if (!rateLimitResult.allowed) {
-      const requestId = crypto.randomUUID()
       console.log(JSON.stringify({
         event: 'rate_limit_exceeded',
         organization_id: userData.organization_id,
@@ -86,13 +121,12 @@ export async function POST(
         retry_after: rateLimitResult.retryAfter,
         request_id: requestId,
       }))
-      const errorResponse = createErrorResponse(
-        'Rate limit exceeded. Please try again later.',
+      const { response, errorId } = createErrorResponse(
+        API_ERROR_CODES.RATE_LIMIT_EXCEEDED.defaultMessage,
         'RATE_LIMIT_EXCEEDED',
         {
           requestId,
           statusCode: 429,
-          retryable: true,
           retry_after_seconds: rateLimitResult.retryAfter,
           details: {
             limit: rateLimitResult.limit,
@@ -101,10 +135,16 @@ export async function POST(
           },
         }
       )
-      return NextResponse.json(errorResponse, {
+      logApiError(429, 'RATE_LIMIT_EXCEEDED', errorId, requestId, userData.organization_id, response.message, {
+        category: 'internal',
+        severity: 'warn',
+        route: ROUTE,
+      })
+      return NextResponse.json(response, {
         status: 429,
         headers: {
           'X-Request-ID': requestId,
+          'X-Error-ID': errorId,
           'X-RateLimit-Limit': String(rateLimitResult.limit),
           'X-RateLimit-Remaining': '0',
           'X-RateLimit-Reset': String(rateLimitResult.resetAt),
@@ -135,6 +175,7 @@ export async function POST(
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `attachment; filename="riskmate-report-${jobId.substring(0, 8)}.pdf"`,
+        'X-Request-ID': requestId,
         'X-RateLimit-Limit': String(rateLimitResult.limit),
         'X-RateLimit-Remaining': String(rateLimitResult.remaining),
         'X-RateLimit-Reset': String(rateLimitResult.resetAt),
@@ -142,13 +183,26 @@ export async function POST(
     })
   } catch (error: any) {
     console.error('[reports] PDF generation failed:', error)
-    return NextResponse.json(
+    const requestId = getRequestId(request)
+    const { response, errorId } = createErrorResponse(
+      API_ERROR_CODES.PDF_GENERATION_ERROR.defaultMessage,
+      'PDF_GENERATION_ERROR',
       {
-        message: 'Failed to generate PDF report',
-        detail: error?.message ?? String(error),
-      },
-      { status: 500 }
+        requestId,
+        statusCode: 500,
+        details: process.env.NODE_ENV === 'development' ? { detail: error?.message ?? String(error) } : undefined,
+      }
     )
+    logApiError(500, 'PDF_GENERATION_ERROR', errorId, requestId, undefined, response.message, {
+      category: 'internal',
+      severity: 'error',
+      route: ROUTE,
+      details: { detail: error?.message ?? String(error) },
+    })
+    return NextResponse.json(response, {
+      status: 500,
+      headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+    })
   }
 }
 

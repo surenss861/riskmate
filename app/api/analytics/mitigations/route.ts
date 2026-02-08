@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { createErrorResponse } from '@/lib/utils/apiResponse'
+import { logApiError } from '@/lib/utils/errorLogging'
+import { getRequestId } from '@/lib/utils/requestId'
 
 export const runtime = 'nodejs'
+
+const ROUTE = '/api/analytics/mitigations'
 
 const MAX_FETCH_LIMIT = 1000
 
@@ -17,15 +22,25 @@ function toDateKey(date: Date | string): string {
 }
 
 export async function GET(request: NextRequest) {
+  const requestId = getRequestId(request)
+
   try {
     const supabase = await createSupabaseServerClient()
     const { data: { user }, error: authError } = await supabase.auth.getUser()
 
     if (authError || !user) {
-      return NextResponse.json(
-        { message: 'Unauthorized' },
-        { status: 401 }
+      const { response, errorId } = createErrorResponse(
+        'Unauthorized: Please log in to access analytics',
+        'UNAUTHORIZED',
+        { requestId, statusCode: 401 }
       )
+      logApiError(401, 'UNAUTHORIZED', errorId, requestId, undefined, response.message, {
+        category: 'auth', severity: 'warn', route: ROUTE,
+      })
+      return NextResponse.json(response, {
+        status: 401,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
     }
 
     // Get user's organization_id
@@ -36,10 +51,18 @@ export async function GET(request: NextRequest) {
       .single()
 
     if (userError || !userData?.organization_id) {
-      return NextResponse.json(
-        { message: 'Failed to get organization ID' },
-        { status: 500 }
+      const { response, errorId } = createErrorResponse(
+        'Failed to get organization ID',
+        'QUERY_ERROR',
+        { requestId, statusCode: 500 }
       )
+      logApiError(500, 'QUERY_ERROR', errorId, requestId, userData?.organization_id, response.message, {
+        category: 'internal', severity: 'error', route: ROUTE,
+      })
+      return NextResponse.json(response, {
+        status: 500,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
     }
 
     const orgId = userData.organization_id
@@ -184,10 +207,24 @@ export async function GET(request: NextRequest) {
     })
   } catch (error: any) {
     console.error('Analytics metrics error:', error)
-    return NextResponse.json(
-      { message: 'Failed to fetch analytics metrics' },
-      { status: 500 }
+    const requestId = getRequestId(request)
+    const { response, errorId } = createErrorResponse(
+      'Failed to fetch analytics metrics',
+      'QUERY_ERROR',
+      {
+        requestId,
+        statusCode: 500,
+        details: process.env.NODE_ENV === 'development' ? { detail: error?.message } : undefined,
+      }
     )
+    logApiError(500, 'QUERY_ERROR', errorId, requestId, undefined, response.message, {
+      category: 'internal', severity: 'error', route: ROUTE,
+      details: process.env.NODE_ENV === 'development' ? { detail: error?.message } : undefined,
+    })
+    return NextResponse.json(response, {
+      status: 500,
+      headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+    })
   }
 }
 
