@@ -51,9 +51,16 @@ export function UploadEvidenceModal({
       setError('Please upload a file or provide notes describing the evidence')
       return
     }
-    if (needsPhotoCategory && !hasValidPhotoCategory) {
-      setError('Please select a photo category (before/during/after)')
-      return
+    // Photo evidence must have an image file and category; disallow notes-only photo records
+    if (evidenceType === 'photo') {
+      if (!file) {
+        setError('Photo evidence requires an image file.')
+        return
+      }
+      if (!hasValidPhotoCategory) {
+        setError('Please select a photo category (before/during/after).')
+        return
+      }
     }
     if (evidenceType === 'photo' && file && !file.type.startsWith('image/')) {
       setError('Please upload an image file when evidence type is Photo')
@@ -330,6 +337,7 @@ export function UploadEvidenceModal({
             disabled={
               loading ||
               (!file && !notes.trim()) ||
+              (evidenceType === 'photo' && !file) ||
               (needsPhotoCategory && !hasValidPhotoCategory)
             }
             className={buttonStyles.primary + (loading ? ' opacity-50 cursor-not-allowed' : '')}
