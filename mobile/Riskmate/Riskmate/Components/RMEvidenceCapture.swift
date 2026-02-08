@@ -5,9 +5,10 @@ import PhotosUI
 /// Enhanced evidence capture with camera, before/during/after, and tagging
 struct RMEvidenceCapture: View {
     let jobId: String
+    var jobStatus: String = ""
     @Environment(\.dismiss) private var dismiss
     
-    @State private var selectedPhase: EvidencePhase = .before
+    @State private var selectedPhase: EvidencePhase = .during
     @State private var selectedType: EvidenceType = .workArea
     @State private var showEvidenceTypeGrid = false // Collapsed by default (Apple trick)
     @State private var showCamera = false
@@ -26,6 +27,10 @@ struct RMEvidenceCapture: View {
                 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: RMTheme.Spacing.sectionSpacing) {
+                        // Photo category selection (before camera/gallery — ticket: iOS Native Photo Category Selection)
+                        CategorySelectionView(selectedCategory: $selectedPhase, jobStatus: jobStatus)
+                            .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                        
                         // Permission Primer (always visible)
                         PermissionPrimerCard()
                             .padding(.horizontal, RMTheme.Spacing.pagePadding)
@@ -127,12 +132,17 @@ struct RMEvidenceCapture: View {
             }
             .rmNavigationBar(title: "Capture Evidence")
             .sheet(isPresented: $showCamera) {
-                CameraView(capturedImage: $capturedImage, onCapture: {
-                    // Mark photo as captured to trigger progressive disclosure
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                        hasCapturedPhoto = true
+                CameraView(
+                    capturedImage: $capturedImage,
+                    onCapture: {
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                            hasCapturedPhoto = true
+                        }
+                    },
+                    onImageCaptured: { image in
+                        uploadCapturedImage(image)
                     }
-                })
+                )
             }
             .sheet(isPresented: $showPhotoPicker) {
                 PhotoPickerView(
@@ -192,9 +202,35 @@ struct RMEvidenceCapture: View {
             showPermissionAlert = true
         }
     }
+    
+    /// Upload a captured camera image with the selected photo category (phase)
+    private func uploadCapturedImage(_ image: UIImage) {
+        guard let data = image.jpegData(compressionQuality: 0.8) else { return }
+        let evidenceId = "ev_\(UUID().uuidString)"
+        let fileName = "evidence_\(Date().timeIntervalSince1970).jpg"
+        Task {
+            do {
+                try await uploadManager.uploadEvidence(
+                    jobId: jobId,
+                    evidenceId: evidenceId,
+                    fileData: data,
+                    fileName: fileName,
+                    mimeType: "image/jpeg",
+                    phase: selectedPhase.rawValue
+                )
+                await MainActor.run {
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                        hasCapturedPhoto = true
+                    }
+                }
+            } catch {
+                print("[RMEvidenceCapture] Camera upload failed: \(error)")
+            }
+        }
+    }
 }
 
-enum EvidencePhase: String, CaseIterable {
+enum EvidencePhase: String, CaseIterable, Codable {
     case before = "before"
     case during = "during"
     case after = "after"
@@ -213,6 +249,102 @@ enum EvidencePhase: String, CaseIterable {
         case .during: return "circle.fill"
         case .after: return "checkmark.circle.fill"
         }
+    }
+    
+    /// Emoji icon for category picker (ticket spec)
+    var categoryIcon: String {
+        switch self {
+        case .before: return "📸"
+        case .during: return "🔧"
+        case .after: return "✅"
+        }
+    }
+    
+    var description: String {
+        switch self {
+        case .before: return "Pre-job site conditions"
+        case .during: return "Work in progress"
+        case .after: return "Completed work"
+        }
+    }
+}
+
+/// Default photo category based on job status (ticket: auto-select)
+func getDefaultCategory(jobStatus: String) -> EvidencePhase {
+    switch jobStatus.lowercased() {
+    case "draft":
+        return .before
+    case "completed", "archived":
+        return .after
+    default:
+        return .during
+    }
+}
+
+// MARK: - Category Selection (ticket: iOS Native Photo Category Selection)
+
+struct CategorySelectionView: View {
+    @Binding var selectedCategory: EvidencePhase
+    let jobStatus: String
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Photo Category")
+                .font(.subheadline)
+                .fontWeight(.semibold)
+                .foregroundColor(.secondary)
+                .textCase(.uppercase)
+            
+            VStack(spacing: 0) {
+                ForEach([EvidencePhase.before, .during, .after], id: \.self) { category in
+                    CategoryRow(
+                        category: category,
+                        isSelected: selectedCategory == category,
+                        onTap: { selectedCategory = category }
+                    )
+                }
+            }
+            .background(Color(.systemBackground))
+            .cornerRadius(10)
+        }
+        .onAppear {
+            selectedCategory = getDefaultCategory(jobStatus: jobStatus)
+        }
+    }
+}
+
+struct CategoryRow: View {
+    let category: EvidencePhase
+    let isSelected: Bool
+    let onTap: () -> Void
+    
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 12) {
+                Text(category.categoryIcon)
+                    .font(.title2)
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(category.displayName)
+                        .font(.body)
+                        .fontWeight(.medium)
+                    
+                    Text(category.description)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                
+                Spacer()
+                
+                if isSelected {
+                    Image(systemName: "checkmark")
+                        .foregroundColor(.blue)
+                }
+            }
+            .padding(14)
+        }
+        .buttonStyle(.plain)
+        .background(isSelected ? Color.blue.opacity(0.1) : Color.clear)
     }
 }
 
@@ -347,6 +479,7 @@ struct EvidenceTypeGrid: View {
 struct CameraView: UIViewControllerRepresentable {
     @Binding var capturedImage: UIImage?
     let onCapture: () -> Void
+    var onImageCaptured: ((UIImage) -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
     
     func makeUIViewController(context: Context) -> UIImagePickerController {
@@ -372,7 +505,8 @@ struct CameraView: UIViewControllerRepresentable {
         func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
             if let image = info[.originalImage] as? UIImage {
                 parent.capturedImage = image
-                parent.onCapture() // Trigger progressive disclosure
+                parent.onImageCaptured?(image)
+                parent.onCapture()
             }
             parent.dismiss()
         }
@@ -425,7 +559,8 @@ struct PhotoPickerView: View {
                                         evidenceId: evidenceId,
                                         fileData: data,
                                         fileName: fileName,
-                                        mimeType: mimeType
+                                        mimeType: mimeType,
+                                        phase: phase.rawValue
                                     )
                                     // Trigger progressive disclosure after first photo
                                     DispatchQueue.main.async {

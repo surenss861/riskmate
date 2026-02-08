@@ -40,7 +40,10 @@ struct EvidenceCaptureSheet: View {
                         .padding(.top, RMSystemTheme.Spacing.xs)
                 }
                 
-                RMEvidenceCapture(jobId: effectiveJobId)
+                RMEvidenceCapture(
+                    jobId: effectiveJobId,
+                    jobStatus: jobsStore.jobs.first { $0.id == effectiveJobId }?.status ?? ""
+                )
             }
             .navigationTitle("Add Evidence")
             .navigationBarTitleDisplayMode(.inline)

@@ -4,6 +4,8 @@ import PhotosUI
 /// Multi-select photo picker for job photos with background upload
 struct RMPhotoPicker: View {
     let jobId: String
+    /// Photo category (before/during/after). Defaults to "during" when used without category selection.
+    var phase: String = "during"
     @Environment(\.dismiss) private var dismiss
     @State private var selectedItems: [PhotosPickerItem] = []
     @State private var isUploading = false
@@ -73,7 +75,8 @@ struct RMPhotoPicker: View {
                     evidenceId: evidenceId,
                     fileData: jpegData,
                     fileName: fileName,
-                    mimeType: "image/jpeg"
+                    mimeType: "image/jpeg",
+                    phase: phase
                 )
             } catch {
                 print("[RMPhotoPicker] Upload failed: \(error)")

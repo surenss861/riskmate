@@ -1350,12 +1350,43 @@ struct EvidenceItem: Identifiable, Codable {
     let type: String
     let fileName: String
     let uploadedAt: Date
+    /// Photo category from API: "before", "during", or "after" (evidence.phase)
+    let phase: String?
     
     enum CodingKeys: String, CodingKey {
         case id
         case type
         case fileName = "file_name"
         case uploadedAt = "uploaded_at"
+        case createdAt = "created_at"
+        case phase
+    }
+    
+    init(id: String, type: String, fileName: String, uploadedAt: Date, phase: String? = nil) {
+        self.id = id
+        self.type = type
+        self.fileName = fileName
+        self.uploadedAt = uploadedAt
+        self.phase = phase
+    }
+    
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        type = try c.decode(String.self, forKey: .type)
+        fileName = try c.decode(String.self, forKey: .fileName)
+        uploadedAt = try c.decodeIfPresent(Date.self, forKey: .uploadedAt)
+            ?? c.decode(Date.self, forKey: .createdAt)
+        phase = try c.decodeIfPresent(String.self, forKey: .phase)
+    }
+    
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(type, forKey: .type)
+        try c.encode(fileName, forKey: .fileName)
+        try c.encode(uploadedAt, forKey: .uploadedAt)
+        try c.encodeIfPresent(phase, forKey: .phase)
     }
 }
 
@@ -1370,10 +1401,14 @@ struct EvidenceCard: View {
                     .font(.system(size: 24))
                 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(item.fileName)
-                        .font(RMTheme.Typography.bodySmallBold)
-                        .foregroundColor(RMTheme.Colors.textPrimary)
-                    
+                    HStack(spacing: RMTheme.Spacing.sm) {
+                        Text(item.fileName)
+                            .font(RMTheme.Typography.bodySmallBold)
+                            .foregroundColor(RMTheme.Colors.textPrimary)
+                        if let phase = item.phase, !phase.isEmpty {
+                            CategoryBadge(phase: phase)
+                        }
+                    }
                     Text(formatDate(item.uploadedAt))
                         .font(RMTheme.Typography.caption)
                         .foregroundColor(RMTheme.Colors.textSecondary)
@@ -1389,6 +1424,38 @@ struct EvidenceCard: View {
         formatter.dateStyle = .short
         formatter.timeStyle = .short
         return formatter.string(from: date)
+    }
+}
+
+/// Category badge for Before/During/After (ticket: iOS Native Photo Category Selection)
+struct CategoryBadge: View {
+    let phase: String
+    
+    private var displayName: String {
+        switch phase.lowercased() {
+        case "before": return "Before"
+        case "after": return "After"
+        default: return "During"
+        }
+    }
+    
+    private var badgeColor: Color {
+        switch phase.lowercased() {
+        case "before": return .blue
+        case "after": return .green
+        default: return .orange
+        }
+    }
+    
+    var body: some View {
+        Text(displayName.uppercased())
+            .font(.caption2)
+            .fontWeight(.bold)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(badgeColor.opacity(0.2))
+            .foregroundColor(badgeColor)
+            .cornerRadius(4)
     }
 }
 
