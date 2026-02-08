@@ -55,6 +55,10 @@ export function UploadEvidenceModal({
       setError('Please select a photo category (before/during/after)')
       return
     }
+    if (evidenceType === 'photo' && file && !file.type.startsWith('image/')) {
+      setError('Please upload an image file when evidence type is Photo')
+      return
+    }
 
     setLoading(true)
     setError(null)
@@ -264,7 +268,7 @@ export function UploadEvidenceModal({
                 onChange={handleFileChange}
                 className="hidden"
                 id="evidence-file"
-                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.txt"
+                accept={isPhoto ? 'image/*' : '.pdf,.doc,.docx,.jpg,.jpeg,.png,.txt'}
               />
               <label
                 htmlFor="evidence-file"

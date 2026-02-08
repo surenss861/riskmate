@@ -162,7 +162,8 @@ export default function EditJobPage() {
   }
 
   const jobStartDate = formData.start_date || null
-  const photos = documents.filter((doc: any) => doc.type === 'photo' && doc.url) as Array<{ id: string; name: string; description?: string; url: string; created_at?: string; category?: PhotoCategory }>
+  const photos = documents.filter((doc: any) => doc.type === 'photo' && (doc.url || doc.file_path || doc.storage_path)) as Array<{ id: string; name: string; description?: string; url?: string; file_path?: string; storage_path?: string; created_at?: string; category?: PhotoCategory }>
+  const photoDisplayUrl = (p: (typeof photos)[number]) => p.url ?? p.file_path ?? p.storage_path ?? ''
   const effectiveCat = (p: { category?: PhotoCategory | null; created_at?: string | null }) => getEffectivePhotoCategory(p, jobStartDate, jobEndDate)
   const filteredPhotos = photoFilter === 'all' ? photos : photos.filter((p) => effectiveCat(p) === photoFilter)
   const beforeCount = photos.filter((p) => effectiveCat(p) === 'before').length
@@ -546,18 +547,19 @@ export default function EditJobPage() {
                             <div
                               className="cursor-pointer"
                               onClick={() => {
-                                if (photo.url) {
+                                const url = photoDisplayUrl(photo)
+                                if (url) {
                                   setSelectedImage({
-                                    url: photo.url,
+                                    url,
                                     alt: photo.description || photo.name,
                                   })
                                 }
                               }}
                             >
-                              {photo.url ? (
+                              {photoDisplayUrl(photo) ? (
                                 <div className="relative w-full h-48 overflow-hidden group">
                                   <Image
-                                    src={photo.url}
+                                    src={photoDisplayUrl(photo)}
                                     alt={photo.description || photo.name}
                                     width={400}
                                     height={192}
