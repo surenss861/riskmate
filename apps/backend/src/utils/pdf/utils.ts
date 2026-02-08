@@ -95,8 +95,7 @@ export function categorizePhotos(
   after: JobDocumentAsset[];
 } {
   const jobStart = jobStartDate ? new Date(jobStartDate).getTime() : NaN;
-  // Use job end date for "after" determination; if no end_date, use start_date (legacy: before/during only)
-  const jobEnd = jobEndDate ? new Date(jobEndDate).getTime() : jobStart;
+  const jobEnd = jobEndDate ? new Date(jobEndDate).getTime() : NaN;
 
   const before: JobDocumentAsset[] = [];
   const during: JobDocumentAsset[] = [];

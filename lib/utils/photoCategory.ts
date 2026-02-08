@@ -13,6 +13,8 @@ export interface PhotoForCategory {
 /**
  * Returns the effective category for a photo. Uses explicit category when set;
  * when missing, derives before/during/after from created_at vs job start/end.
+ * Only classifies as 'after' when a valid end date exists and photoTime > jobEnd.
+ * When end date is missing, photos after start date remain in 'during'.
  * Defaults to 'during' when dates are unavailable.
  */
 export function getEffectivePhotoCategory(
@@ -24,7 +26,7 @@ export function getEffectivePhotoCategory(
     return photo.category
   }
   const jobStart = jobStartDate ? new Date(jobStartDate).getTime() : NaN
-  const jobEnd = jobEndDate ? new Date(jobEndDate).getTime() : jobStart
+  const jobEnd = jobEndDate ? new Date(jobEndDate).getTime() : NaN
   if (!Number.isFinite(jobStart) || !photo.created_at) {
     return 'during'
   }

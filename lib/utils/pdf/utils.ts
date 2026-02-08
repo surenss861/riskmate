@@ -101,7 +101,7 @@ export function categorizePhotos(
   after: JobDocumentAsset[];
 } {
   const jobStart = jobStartDate ? new Date(jobStartDate).getTime() : NaN;
-  const jobEnd = jobEndDate ? new Date(jobEndDate).getTime() : jobStart;
+  const jobEnd = jobEndDate ? new Date(jobEndDate).getTime() : NaN;
 
   const before: JobDocumentAsset[] = [];
   const during: JobDocumentAsset[] = [];

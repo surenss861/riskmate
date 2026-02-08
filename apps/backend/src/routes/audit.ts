@@ -3368,7 +3368,8 @@ auditRouter.post('/readiness/resolve', authenticate as unknown as express.Reques
 
     if (action_type === 'create_evidence') {
       // Create evidence/document (payload already validated above)
-      const { job_id, name, file_path, file_size, mime_type, description } = payload || {}
+      const { job_id, name, file_path, file_size, mime_type, description, category } = payload || {}
+      const docType = payload?.type || 'evidence'
 
       // Create document record
       const { data: document, error: docError } = await supabase
@@ -3377,7 +3378,7 @@ auditRouter.post('/readiness/resolve', authenticate as unknown as express.Reques
           job_id,
           organization_id,
           name,
-          type: payload?.type || 'evidence',
+          type: docType,
           file_path,
           file_size: file_size || null,
           mime_type: mime_type || null,
@@ -3389,6 +3390,32 @@ auditRouter.post('/readiness/resolve', authenticate as unknown as express.Reques
 
       if (docError) {
         throw new Error(`Failed to create evidence: ${docError.message}`)
+      }
+
+      // When type is photo, insert/upsert job_photos row with category for filtering/PDF grouping
+      const PHOTO_CATEGORIES = ['before', 'during', 'after'] as const
+      const photoCategory =
+        docType === 'photo' && category && PHOTO_CATEGORIES.includes(category as (typeof PHOTO_CATEGORIES)[number])
+          ? (category as (typeof PHOTO_CATEGORIES)[number])
+          : docType === 'photo'
+            ? 'during'
+            : undefined
+
+      if (docType === 'photo' && photoCategory) {
+        const { error: photoError } = await supabase.from('job_photos').insert({
+          job_id,
+          organization_id,
+          file_path: document.file_path,
+          description: description ?? null,
+          category: photoCategory,
+          created_by: userId,
+        })
+
+        if (photoError) {
+          console.error('job_photos insert failed:', photoError)
+          await supabase.from('documents').delete().eq('id', document.id)
+          throw new Error('Failed to save photo category')
+        }
       }
 
       internalResult = { document_id: document.id }
@@ -3615,18 +3642,19 @@ auditRouter.post('/readiness/bulk-resolve', authenticate as unknown as express.R
             const { readiness_item_id, rule_code, action_type, payload: itemPayload } = resolvePayload
 
             if (action_type === 'create_evidence') {
-              const { job_id, name, file_path } = itemPayload || {}
+              const { job_id, name, file_path, category } = itemPayload || {}
               if (!job_id || !name || !file_path) {
                 throw new Error('job_id, name, and file_path required for create_evidence')
               }
 
+              const docType = itemPayload?.type || 'evidence'
               const { data: document, error: docError } = await supabase
                 .from('documents')
                 .insert({
                   job_id,
                   organization_id,
                   name,
-                  type: itemPayload?.type || 'evidence',
+                  type: docType,
                   file_path,
                   file_size: itemPayload?.file_size || null,
                   mime_type: itemPayload?.mime_type || null,
@@ -3637,6 +3665,29 @@ auditRouter.post('/readiness/bulk-resolve', authenticate as unknown as express.R
                 .single()
 
               if (docError) throw new Error(`Failed to create evidence: ${docError.message}`)
+
+              const BULK_PHOTO_CATEGORIES = ['before', 'during', 'after'] as const
+              const photoCategory =
+                docType === 'photo' && category && BULK_PHOTO_CATEGORIES.includes(category as (typeof BULK_PHOTO_CATEGORIES)[number])
+                  ? (category as (typeof BULK_PHOTO_CATEGORIES)[number])
+                  : docType === 'photo'
+                    ? 'during'
+                    : undefined
+
+              if (docType === 'photo' && photoCategory) {
+                const { error: photoError } = await supabase.from('job_photos').insert({
+                  job_id,
+                  organization_id,
+                  file_path: document.file_path,
+                  description: itemPayload?.description ?? null,
+                  category: photoCategory,
+                  created_by: userId,
+                })
+                if (photoError) {
+                  await supabase.from('documents').delete().eq('id', document.id)
+                  throw new Error('Failed to save photo category')
+                }
+              }
 
               // Emit readiness.resolved ledger event
               await recordAuditLog({

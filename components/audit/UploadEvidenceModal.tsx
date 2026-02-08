@@ -4,7 +4,9 @@ import { useState } from 'react'
 import { X, Upload, AlertCircle } from 'lucide-react'
 import { buttonStyles } from '@/lib/styles/design-system'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
-import { auditApi } from '@/lib/api'
+import { auditApi, jobsApi } from '@/lib/api'
+
+type PhotoCategory = 'before' | 'during' | 'after'
 
 interface UploadEvidenceModalProps {
   isOpen: boolean
@@ -26,10 +28,15 @@ export function UploadEvidenceModal({
   ruleCode,
 }: UploadEvidenceModalProps) {
   const [evidenceType, setEvidenceType] = useState<string>('document')
+  const [photoCategory, setPhotoCategory] = useState<PhotoCategory | ''>('')
   const [notes, setNotes] = useState('')
   const [file, setFile] = useState<File | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const isPhoto = evidenceType === 'photo'
+  const needsPhotoCategory = isPhoto && !!file
+  const hasValidPhotoCategory = isPhoto ? (photoCategory === 'before' || photoCategory === 'during' || photoCategory === 'after') : true
 
   if (!isOpen) return null
 
@@ -42,6 +49,10 @@ export function UploadEvidenceModal({
   const handleSubmit = async () => {
     if (!file && !notes.trim()) {
       setError('Please upload a file or provide notes describing the evidence')
+      return
+    }
+    if (needsPhotoCategory && !hasValidPhotoCategory) {
+      setError('Please select a photo category (before/during/after)')
       return
     }
 
@@ -103,25 +114,43 @@ export function UploadEvidenceModal({
             mime_type: mime_type || null,
             type: evidenceType,
             description: notes.trim() || null,
+            ...(isPhoto && hasValidPhotoCategory ? { category: photoCategory } : {}),
           },
         })
 
         onComplete({ meta })
         onClose()
-        
+
         // Reset form
         setFile(null)
         setNotes('')
         setEvidenceType('document')
+        setPhotoCategory('')
         return
       }
 
-      // Legacy path: Direct document creation (if not using readiness/resolve)
-      // This path is kept for backward compatibility but ideally all flows should go through readiness/resolve
-        const { data: docData, error: docError } = await supabase
+      // Legacy path for photos: route through documents API (includes job_photos)
+      if (evidenceType === 'photo' && file && hasValidPhotoCategory) {
+        await jobsApi.uploadDocument(workRecordId, file, {
+          name: file.name,
+          type: 'photo',
+          description: notes.trim() || undefined,
+          category: photoCategory as PhotoCategory,
+        })
+        onComplete()
+        onClose()
+        setFile(null)
+        setNotes('')
+        setEvidenceType('document')
+        setPhotoCategory('')
+        return
+      }
+
+      // Legacy path: Direct document creation for non-photos
+      const { data: docData, error: docError } = await supabase
         .from('documents')
-          .insert({
-            job_id: workRecordId,
+        .insert({
+          job_id: workRecordId,
           organization_id: userData.organization_id,
           name: file?.name || `Evidence: ${evidenceType}`,
           type: evidenceType,
@@ -129,22 +158,23 @@ export function UploadEvidenceModal({
           file_size: file_size,
           mime_type: mime_type,
           description: notes.trim() || null,
-            uploaded_by: session.user.id,
-          })
-          .select('id')
-          .single()
+          uploaded_by: session.user.id,
+        })
+        .select('id')
+        .single()
 
-        if (docError) {
+      if (docError) {
         throw new Error(`Failed to create evidence: ${docError.message}`)
-        }
+      }
 
       onComplete()
       onClose()
-      
+
       // Reset form
       setFile(null)
       setNotes('')
       setEvidenceType('document')
+      setPhotoCategory('')
     } catch (err: any) {
       console.error('Failed to upload evidence:', err)
       setError(err.message || 'Failed to upload evidence. Please try again.')
@@ -186,7 +216,10 @@ export function UploadEvidenceModal({
             </label>
             <select
               value={evidenceType}
-              onChange={(e) => setEvidenceType(e.target.value)}
+              onChange={(e) => {
+                setEvidenceType(e.target.value)
+                if (e.target.value !== 'photo') setPhotoCategory('')
+              }}
               className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-[#F97316]"
             >
               <option value="document">Document</option>
@@ -196,6 +229,29 @@ export function UploadEvidenceModal({
               <option value="other">Other</option>
             </select>
           </div>
+
+          {/* Photo Category (before/during/after) - required when uploading a photo */}
+          {isPhoto && (
+            <div>
+              <label className="block text-sm font-medium text-white/80 mb-2">
+                Photo Category <span className="text-red-400">*</span>
+              </label>
+              <select
+                value={photoCategory}
+                onChange={(e) => setPhotoCategory(e.target.value as PhotoCategory | '')}
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-[#F97316]"
+                required={needsPhotoCategory}
+              >
+                <option value="">Select category...</option>
+                <option value="before">Before</option>
+                <option value="during">During</option>
+                <option value="after">After</option>
+              </select>
+              {needsPhotoCategory && !hasValidPhotoCategory && (
+                <p className="text-xs text-amber-400 mt-1">Please select a category when uploading a photo</p>
+              )}
+            </div>
+          )}
 
           {/* File Upload */}
           <div>
@@ -267,7 +323,11 @@ export function UploadEvidenceModal({
           </button>
           <button
             onClick={handleSubmit}
-            disabled={loading || (!file && !notes.trim())}
+            disabled={
+              loading ||
+              (!file && !notes.trim()) ||
+              (needsPhotoCategory && !hasValidPhotoCategory)
+            }
             className={buttonStyles.primary + (loading ? ' opacity-50 cursor-not-allowed' : '')}
           >
             {loading ? 'Uploading...' : 'Upload Evidence'}

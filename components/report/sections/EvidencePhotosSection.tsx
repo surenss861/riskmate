@@ -37,7 +37,7 @@ function categorizeSectionPhotos(
   jobEndDate?: string | null
 ): { before: SectionPhoto[]; during: SectionPhoto[]; after: SectionPhoto[] } {
   const jobStart = jobStartDate ? new Date(jobStartDate).getTime() : NaN
-  const jobEnd = jobEndDate ? new Date(jobEndDate).getTime() : jobStart
+  const jobEnd = jobEndDate ? new Date(jobEndDate).getTime() : NaN
   const before: SectionPhoto[] = []
   const during: SectionPhoto[] = []
   const after: SectionPhoto[] = []
