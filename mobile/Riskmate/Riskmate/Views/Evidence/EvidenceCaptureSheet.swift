@@ -76,8 +76,8 @@ struct EvidenceCaptureSheet: View {
             lastModeRaw = selectedMode.rawValue
         }
         .onChange(of: uploadManager.uploads) { oldUploads, newUploads in
-            // Watch for newly synced uploads
-            for upload in newUploads {
+            // Watch for newly synced uploads for the current job only
+            for upload in newUploads where upload.jobId == effectiveJobId {
                 if case .synced = upload.state {
                     // If this is a new synced upload we haven't tracked
                     if !trackedUploadIds.contains(upload.id) {
