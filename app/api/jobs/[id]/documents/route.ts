@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { getOrganizationContext, verifyJobOwnership } from '@/lib/utils/organizationGuard'
+import { getDefaultPhotoCategory } from '@/lib/utils/photoCategory'
 
 export const runtime = 'nodejs'
 
@@ -173,12 +174,28 @@ export async function POST(
     const { name, type = 'photo', file_path, file_size, mime_type, description, category } = body
 
     const validCategories = ['before', 'during', 'after'] as const
-    // Default to 'during' for photos when category not provided (ticket: Backend API & PDF for Photo Categories)
+
+    // Fetch job status (and optional dates) to derive default photo category when omitted or invalid
+    const { data: job, error: jobError } = await supabase
+      .from('jobs')
+      .select('status, start_date, end_date')
+      .eq('id', jobId)
+      .eq('organization_id', organization_id)
+      .maybeSingle()
+
+    if (jobError || !job) {
+      return NextResponse.json(
+        { message: 'Job not found' },
+        { status: 404 }
+      )
+    }
+
+    const defaultCategory = getDefaultPhotoCategory(job.status ?? '')
     const photoCategory =
       type === 'photo' && category && validCategories.includes(category)
         ? category
         : type === 'photo'
-          ? 'during'
+          ? defaultCategory
           : undefined
 
     if (!name || !file_path || file_size === undefined || !mime_type) {
