@@ -1613,6 +1613,14 @@ jobsRouter.get("/:id/documents", authenticate, async (req: express.Request, res:
 
 // Valid photo categories
 const PHOTO_CATEGORIES = ["before", "during", "after"] as const;
+type PhotoCategory = (typeof PHOTO_CATEGORIES)[number];
+
+// Same logic as frontend getDefaultPhotoCategory: draft→before, completed/archived→after, else during
+function getDefaultPhotoCategory(jobStatus: string): PhotoCategory {
+  if (jobStatus === "draft") return "before";
+  if (jobStatus === "completed" || jobStatus === "archived") return "after";
+  return "during";
+}
 
 // POST /api/jobs/:id/documents
 // Persists document metadata after upload to storage
@@ -1640,18 +1648,10 @@ jobsRouter.post("/:id/documents", authenticate, requireWriteAccess, async (req: 
       return res.status(400).json({ message: "file_size must be a positive number" });
     }
 
-    // Photo category: validate, default to 'during' for photos when omitted
-    const photoCategory =
-      type === "photo" && category && PHOTO_CATEGORIES.includes(category as (typeof PHOTO_CATEGORIES)[number])
-        ? (category as (typeof PHOTO_CATEGORIES)[number])
-        : type === "photo"
-          ? "during"
-          : undefined;
-
-    // Verify job belongs to organization
+    // Verify job belongs to organization and fetch status for default photo category
     const { data: job, error: jobError } = await supabase
       .from("jobs")
-      .select("id")
+      .select("id, status")
       .eq("id", jobId)
       .eq("organization_id", organization_id)
       .single();
@@ -1659,6 +1659,13 @@ jobsRouter.post("/:id/documents", authenticate, requireWriteAccess, async (req: 
     if (jobError || !job) {
       return res.status(404).json({ message: "Job not found" });
     }
+
+    // Photo category: use provided valid category, or derive default from job status (draft→before, completed/archived→after, else during)
+    const hasValidCategory = type === "photo" && category && PHOTO_CATEGORIES.includes(category as (typeof PHOTO_CATEGORIES)[number]);
+    const photoCategory: PhotoCategory | undefined =
+      type === "photo"
+        ? (hasValidCategory ? (category as PhotoCategory) : getDefaultPhotoCategory(job.status ?? ""))
+        : undefined;
 
     const { data: inserted, error: insertError } = await supabase
       .from("documents")
