@@ -2,12 +2,15 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { getOrganizationContext, verifyJobOwnership } from '@/lib/utils/organizationGuard'
 import { createErrorResponse } from '@/lib/utils/apiResponse'
+import { recordAuditLog } from '@/lib/audit/auditLogger'
 
 export const runtime = 'nodejs'
 
 const VALID_CATEGORIES = ['before', 'during', 'after'] as const
 
 const IMAGE_MIME_PREFIX = 'image/'
+
+const READ_ONLY_ROLES = ['executive', 'auditor'] as const
 
 /**
  * PATCH /api/jobs/[id]/documents/[docId]
@@ -22,6 +25,29 @@ export async function PATCH(
   try {
     const context = await getOrganizationContext(request)
     const { id: jobId, docId } = await params
+
+    if (READ_ONLY_ROLES.includes(context.user_role as (typeof READ_ONLY_ROLES)[number])) {
+      const supabase = await createSupabaseServerClient()
+      await recordAuditLog(supabase, {
+        organizationId: context.organization_id,
+        actorId: context.user_id,
+        eventName: 'auth.role_violation',
+        targetType: 'document',
+        targetId: docId,
+        metadata: {
+          attempted_action: 'update_document',
+          policy_statement: 'Executives and auditors have read-only access and cannot update documents',
+          endpoint: `/api/jobs/${jobId}/documents/${docId}`,
+          role: context.user_role,
+        },
+      })
+      const { response } = createErrorResponse(
+        'Read-only users cannot update document category',
+        'AUTH_ROLE_READ_ONLY',
+        { statusCode: 403 }
+      )
+      return NextResponse.json(response, { status: 403 })
+    }
 
     await verifyJobOwnership(jobId, context.organization_id)
 
