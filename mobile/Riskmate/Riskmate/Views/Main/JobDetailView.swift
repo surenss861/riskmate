@@ -1212,7 +1212,15 @@ struct EvidenceTab: View {
             .padding(.vertical, RMTheme.Spacing.lg)
         }
         .sheet(isPresented: $showImagePicker) {
-            RMPhotoPicker(jobId: jobId)
+            EvidenceCaptureSheet(jobId: jobId) {
+                // Refresh evidence list when sheet completes (e.g. after upload)
+                Task { await loadEvidence() }
+            }
+        }
+        .onChange(of: showImagePicker) { _, isShowing in
+            if !isShowing {
+                Task { await loadEvidence() }
+            }
         }
         .task {
             await loadEvidence()
