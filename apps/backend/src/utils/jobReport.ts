@@ -67,7 +67,7 @@ export async function buildJobReport(
   const IMAGE_MIME_PREFIX = "image/";
   const { data: imageEvidence } = await supabase
     .from("evidence")
-    .select("id, storage_path, file_name, mime_type, phase, evidence_type, created_at")
+    .select("id, storage_path, file_name, mime_type, phase, evidence_type, created_at, uploaded_by")
     .eq("work_record_id", jobId)
     .eq("organization_id", organizationId)
     .eq("state", "sealed");
@@ -84,11 +84,14 @@ export async function buildJobReport(
             : null;
         const category = fromJobPhotos ?? fromPhase ?? "during";
         return {
-          file_path: ev.storage_path,
+          id: ev.id,
+          file_path: ev.storage_path ?? "",
           name: ev.file_name ?? "Evidence",
           type: "photo" as const,
+          mime_type: ev.mime_type ?? null,
           description: ev.evidence_type || ev.file_name || null,
           created_at: ev.created_at ?? null,
+          uploaded_by: ev.uploaded_by ?? null,
           category,
           source_bucket: "evidence" as const,
         };

@@ -39,6 +39,62 @@ export async function GET(
       (jobPhotos || []).map((p) => [p.file_path, p.category as 'before' | 'during' | 'after'])
     )
 
+    // Image evidence from evidence bucket (iOS uploads): same shape as documents for galleries/re-categorization
+    const IMAGE_MIME_PREFIX = 'image/'
+    const { data: imageEvidence } = await supabase
+      .from('evidence')
+      .select('id, storage_path, file_name, mime_type, phase, created_at, uploaded_by')
+      .eq('work_record_id', jobId)
+      .eq('organization_id', organization_id)
+      .eq('state', 'sealed')
+
+    const PHOTO_CATEGORIES = ['before', 'during', 'after'] as const
+    const evidenceAsDocuments = await Promise.all(
+      (imageEvidence || [])
+        .filter((ev) => ev.mime_type?.toLowerCase().startsWith(IMAGE_MIME_PREFIX))
+        .map(async (ev) => {
+          const fromJobPhotos = categoryByPath.get(ev.storage_path ?? '')
+          const fromPhase =
+            ev.phase && PHOTO_CATEGORIES.includes(ev.phase as (typeof PHOTO_CATEGORIES)[number])
+              ? (ev.phase as (typeof PHOTO_CATEGORIES)[number])
+              : null
+          const category = fromJobPhotos ?? fromPhase ?? null
+          try {
+            const { data: signed } = await supabase.storage
+              .from('evidence')
+              .createSignedUrl(ev.storage_path, 60 * 10)
+            return {
+              id: ev.id,
+              name: ev.file_name ?? 'Evidence',
+              type: 'photo' as const,
+              size: null as number | null,
+              storage_path: ev.storage_path,
+              mime_type: ev.mime_type,
+              description: null,
+              created_at: ev.created_at,
+              uploaded_by: ev.uploaded_by ?? null,
+              ...(category ? { category } : {}),
+              url: signed?.signedUrl ?? null,
+            }
+          } catch (err) {
+            console.warn('Failed to generate evidence signed URL', err)
+            return {
+              id: ev.id,
+              name: ev.file_name ?? 'Evidence',
+              type: 'photo' as const,
+              size: null as number | null,
+              storage_path: ev.storage_path,
+              mime_type: ev.mime_type,
+              description: null,
+              created_at: ev.created_at,
+              uploaded_by: ev.uploaded_by ?? null,
+              ...(category ? { category } : {}),
+              url: null,
+            }
+          }
+        })
+    )
+
     // Generate signed URLs for documents
     const documentsWithUrls = await Promise.all(
       (data || []).map(async (doc) => {
@@ -79,7 +135,11 @@ export async function GET(
       })
     )
 
-    return NextResponse.json({ data: documentsWithUrls })
+    // Merge documents + evidence bucket images, sort by created_at
+    const merged = [...documentsWithUrls, ...evidenceAsDocuments].sort(
+      (a, b) => new Date(a.created_at ?? 0).getTime() - new Date(b.created_at ?? 0).getTime()
+    )
+    return NextResponse.json({ data: merged })
   } catch (error: any) {
     console.error('Docs fetch failed:', error)
     return NextResponse.json(
