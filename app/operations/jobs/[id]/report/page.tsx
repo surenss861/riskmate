@@ -8,8 +8,10 @@ import RiskmateLogo from '@/components/RiskmateLogo'
 import { ReportView } from '@/components/report/ReportView'
 import { ErrorModal } from '@/components/dashboard/ErrorModal'
 import { PacketSelector } from '@/components/report/PacketSelector'
+import { Toast } from '@/components/dashboard/Toast'
 import type { PacketType } from '@/lib/utils/packets/types'
 import { useFullJob } from '@/hooks/useFullJob'
+import { jobsApi } from '@/lib/api'
 import { typography, dividerStyles } from '@/lib/styles/design-system'
 
 const base64ToBlob = (base64: string, contentType = 'application/pdf') => {
@@ -36,11 +38,12 @@ export default function JobReportPage() {
   const router = useRouter()
   const jobId = Array.isArray(params.id) ? params.id[0] : (params.id as string | undefined)
 
-  const { data, isLoading, error } = useFullJob(jobId)
+  const { data, isLoading, error, refetch } = useFullJob(jobId)
   const [exporting, setExporting] = useState(false)
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null)
   const [exportError, setExportError] = useState<string | null>(null)
   const [showPacketSelector, setShowPacketSelector] = useState(false)
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
 
   useEffect(() => {
     return () => {
@@ -393,6 +396,19 @@ export default function JobReportPage() {
             readOnly={false}
             onExport={() => setShowPacketSelector(true)}
             exportInProgress={exporting}
+            onDocumentCategoryChange={
+              jobId
+                ? async (docId, newCategory) => {
+                    try {
+                      await jobsApi.updateDocumentCategory(jobId, docId, newCategory)
+                      await refetch()
+                      setToast({ message: 'Category updated', type: 'success' })
+                    } catch {
+                      setToast({ message: 'Failed to update category', type: 'error' })
+                    }
+                  }
+                : undefined
+            }
           />
         </main>
 
@@ -413,6 +429,14 @@ export default function JobReportPage() {
           title="Export Error"
           message={exportError || ''}
           onClose={() => setExportError(null)}
+        />
+
+        {/* Toast Notification */}
+        <Toast
+          message={toast?.message || ''}
+          type={toast?.type || 'success'}
+          isOpen={toast !== null}
+          onClose={() => setToast(null)}
         />
       </div>
     </ProtectedRoute>

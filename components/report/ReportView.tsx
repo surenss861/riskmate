@@ -5,12 +5,15 @@ import Image from 'next/image'
 import { JobReportData } from '@/types/report'
 import { ImageModal } from './ImageModal'
 import { TeamSignatures } from './TeamSignatures'
+import { getEffectivePhotoCategory, type PhotoCategory } from '@/lib/utils/photoCategory'
 
 interface ReportViewProps {
   data: JobReportData
   readOnly?: boolean
   onExport?: () => void
   exportInProgress?: boolean
+  /** When provided and not readOnly, enables category edit affordances and PATCH calls */
+  onDocumentCategoryChange?: (docId: string, category: PhotoCategory) => Promise<void>
 }
 
 function formatName(user: { actor_name?: string | null; actor_email?: string | null } | null): string {
@@ -98,14 +101,40 @@ export function ReportView({
   readOnly = false,
   onExport,
   exportInProgress = false,
+  onDocumentCategoryChange,
 }: ReportViewProps) {
   const { job, risk_score, mitigations, documents, audit, organization } = data
 
   const completedControls = mitigations.filter(m => m.done || m.is_completed).length
   const totalControls = mitigations.length
-  const photos = documents.filter(d => d.type === 'photo' && d.url)
-  
+  const photos = documents.filter(d => d.type === 'photo' && d.url) as Array<{
+    id: string
+    name: string
+    description?: string | null
+    url?: string | null
+    created_at?: string | null
+    category?: PhotoCategory | null
+  }>
+
   const [selectedImage, setSelectedImage] = useState<{ url: string; alt: string } | null>(null)
+  const [photoFilter, setPhotoFilter] = useState<'all' | PhotoCategory>('all')
+  const [categoryDropdownOpen, setCategoryDropdownOpen] = useState<string | null>(null)
+
+  const jobStart = job.start_date ?? null
+  const jobEnd = job.end_date ?? null
+  const effectiveCat = (p: (typeof photos)[number]) =>
+    getEffectivePhotoCategory(p, jobStart, jobEnd)
+  const filteredPhotos =
+    photoFilter === 'all' ? photos : photos.filter((p) => effectiveCat(p) === photoFilter)
+  const beforeCount = photos.filter((p) => effectiveCat(p) === 'before').length
+  const duringCount = photos.filter((p) => effectiveCat(p) === 'during').length
+  const afterCount = photos.filter((p) => effectiveCat(p) === 'after').length
+  const categoryBadgeClass = (cat: PhotoCategory) => {
+    if (cat === 'before') return 'bg-[#e3f2fd] text-[#1976d2]'
+    if (cat === 'after') return 'bg-[#e8f5e9] text-[#388e3c]'
+    return 'bg-[#fff3e0] text-[#f57c00]'
+  }
+  const canEditCategory = !readOnly && !!onDocumentCategoryChange && job.status !== 'archived' && job.status !== 'completed'
 
   // Get most recent audit entry for system timestamp (sorted by created_at descending)
   const sortedAudit = [...audit].sort((a, b) => 
@@ -260,62 +289,147 @@ export function ReportView({
       {photos.length > 0 && (
         <div className="space-y-4">
           <h2 className="text-2xl font-bold text-white">📸 Evidence Gallery</h2>
+          {/* Category filter tabs */}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-white/50 mr-1">Filter:</span>
+            {(['all', 'before', 'during', 'after'] as const).map((tab) => {
+              const count =
+                tab === 'all'
+                  ? photos.length
+                  : tab === 'before'
+                  ? beforeCount
+                  : tab === 'during'
+                  ? duringCount
+                  : afterCount
+              return (
+                <button
+                  key={tab}
+                  type="button"
+                  onClick={() => setPhotoFilter(tab)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                    photoFilter === tab
+                      ? 'bg-[#F97316] text-black'
+                      : 'bg-white/5 border border-white/10 text-white/70 hover:bg-white/10'
+                  }`}
+                >
+                  {tab === 'all' ? 'All' : tab.charAt(0).toUpperCase() + tab.slice(1)} ({count})
+                </button>
+              )
+            })}
+          </div>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            {photos.map((photo) => (
-              <div
-                key={photo.id}
-                className="bg-white/5 border border-white/10 rounded-xl overflow-hidden cursor-pointer hover:border-white/20 transition-colors"
-                onClick={() => {
-                  if (photo.url) {
-                    setSelectedImage({
-                      url: photo.url,
-                      alt: photo.description || photo.name,
-                    })
-                  }
-                }}
-              >
-                {photo.url ? (
-                  <div className="relative w-full h-48 overflow-hidden group">
-                    <Image
-                      src={photo.url}
-                      alt={photo.description || photo.name}
-                      width={400}
-                      height={192}
-                      className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300"
-                      unoptimized
-                    />
-                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
-                      <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                        <svg
-                          className="w-8 h-8 text-white"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"
-                          />
-                        </svg>
-                      </div>
+            {filteredPhotos.map((photo) => {
+              const cat = effectiveCat(photo)
+              return (
+                <div
+                  key={photo.id}
+                  className="bg-white/5 border border-white/10 rounded-xl overflow-hidden cursor-pointer hover:border-white/20 transition-colors relative"
+                  onClick={() => {
+                    if (photo.url) {
+                      setSelectedImage({
+                        url: photo.url,
+                        alt: photo.description || photo.name,
+                      })
+                    }
+                  }}
+                >
+                  {/* Category badge with picker */}
+                  <div className="absolute top-2 right-2 z-10">
+                    <div className="relative">
+                      {canEditCategory ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setCategoryDropdownOpen(categoryDropdownOpen === photo.id ? null : photo.id)
+                            }}
+                            className={`px-2 py-0.5 rounded text-[11px] font-bold uppercase ${categoryBadgeClass(cat)} hover:opacity-90`}
+                          >
+                            {cat}
+                          </button>
+                          {categoryDropdownOpen === photo.id && (
+                            <>
+                              <div className="absolute top-full right-0 mt-1 py-1 min-w-[100px] rounded-lg bg-[#1a1a1a] border border-white/20 shadow-xl z-20">
+                                {(['before', 'during', 'after'] as const).map((newCat) => (
+                                  <button
+                                    key={newCat}
+                                    type="button"
+                                    onClick={async (e) => {
+                                      e.stopPropagation()
+                                      await onDocumentCategoryChange?.(photo.id, newCat)
+                                      setCategoryDropdownOpen(null)
+                                    }}
+                                    className="block w-full text-left px-3 py-1.5 text-sm text-white/90 hover:bg-white/10"
+                                  >
+                                    {newCat.charAt(0).toUpperCase() + newCat.slice(1)}
+                                  </button>
+                                ))}
+                              </div>
+                              <div
+                                className="fixed inset-0 z-10"
+                                aria-hidden
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setCategoryDropdownOpen(null)
+                                }}
+                              />
+                            </>
+                          )}
+                        </>
+                      ) : (
+                        <span className={`px-2 py-0.5 rounded text-[11px] font-bold uppercase ${categoryBadgeClass(cat)}`}>
+                          {cat}
+                        </span>
+                      )}
                     </div>
                   </div>
-                ) : (
-                  <div className="w-full h-48 bg-white/5 flex items-center justify-center text-white/40">
-                    Image unavailable
-                  </div>
-                )}
-                <div className="p-3">
-                  <div className="text-sm font-semibold text-white">{photo.description || photo.name}</div>
-                  {photo.created_at && (
-                    <div className="text-xs text-white/60 mt-1">{formatTime(photo.created_at)}</div>
+                  {photo.url ? (
+                    <div className="relative w-full h-48 overflow-hidden group">
+                      <Image
+                        src={photo.url}
+                        alt={photo.description || photo.name}
+                        width={400}
+                        height={192}
+                        className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300"
+                        unoptimized
+                      />
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                        <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                          <svg
+                            className="w-8 h-8 text-white"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"
+                            />
+                          </svg>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="w-full h-48 bg-white/5 flex items-center justify-center text-white/40">
+                      Image unavailable
+                    </div>
                   )}
+                  <div className="p-3">
+                    <div className="text-sm font-semibold text-white">{photo.description || photo.name}</div>
+                    {photo.created_at && (
+                      <div className="text-xs text-white/60 mt-1">{formatTime(photo.created_at)}</div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
+          {filteredPhotos.length === 0 && photos.length > 0 && (
+            <p className="text-center text-white/60 py-6">No photos in this category</p>
+          )}
         </div>
       )}
 
