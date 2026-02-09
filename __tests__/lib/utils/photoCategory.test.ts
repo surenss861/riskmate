@@ -62,6 +62,31 @@ describe('getEffectivePhotoCategory', () => {
     expect(getEffectivePhotoCategory({})).toBe('during')
     expect(getEffectivePhotoCategory({ created_at: null })).toBe('during')
   })
+
+  it('legacy/undefined: returns during when created_at is undefined', () => {
+    expect(getEffectivePhotoCategory({ created_at: undefined }, jobStart, jobEnd)).toBe('during')
+  })
+
+  it('legacy/undefined: when job end date is missing, photo after start stays during', () => {
+    expect(
+      getEffectivePhotoCategory(
+        { created_at: '2026-01-15T18:00:00Z' },
+        jobStart,
+        null
+      )
+    ).toBe('during')
+    expect(
+      getEffectivePhotoCategory(
+        { created_at: '2026-01-15T18:00:00Z' },
+        jobStart,
+        undefined
+      )
+    ).toBe('during')
+  })
+
+  it('legacy/undefined: invalid created_at string defaults to during', () => {
+    expect(getEffectivePhotoCategory({ created_at: 'not-a-date' }, jobStart, jobEnd)).toBe('during')
+  })
 })
 
 describe('categorizePhotos', () => {
@@ -103,6 +128,55 @@ describe('categorizePhotos', () => {
     const photos = [mockPhoto({ created_at: '2026-01-15T12:00:00Z' })]
     const { before, during, after } = categorizePhotos(photos, null, jobEnd)
     expect(before).toHaveLength(0)
+    expect(during).toHaveLength(1)
+    expect(after).toHaveLength(0)
+  })
+
+  it('timestamp fallback groups correctly relative to start/end dates', () => {
+    const photos = [
+      mockPhoto({ created_at: '2026-01-14T23:00:00Z' }),
+      mockPhoto({ created_at: '2026-01-15T09:00:00Z' }),
+      mockPhoto({ created_at: '2026-01-15T12:00:00Z' }),
+      mockPhoto({ created_at: '2026-01-15T17:00:00Z' }),
+      mockPhoto({ created_at: '2026-01-15T17:00:01Z' }),
+    ]
+    const { before, during, after } = categorizePhotos(photos, jobStart, jobEnd)
+    expect(before).toHaveLength(1)
+    expect(before[0].created_at).toBe('2026-01-14T23:00:00Z')
+    expect(during).toHaveLength(3)
+    expect(after).toHaveLength(1)
+    expect(after[0].created_at).toBe('2026-01-15T17:00:01Z')
+  })
+
+  it('legacy/undefined: photos without created_at go to during', () => {
+    const photos = [
+      mockPhoto({ created_at: undefined }),
+      mockPhoto({}),
+    ]
+    const { before, during, after } = categorizePhotos(photos, jobStart, jobEnd)
+    expect(before).toHaveLength(0)
+    expect(during).toHaveLength(2)
+    expect(after).toHaveLength(0)
+  })
+
+  it('legacy/undefined: when job start is missing all photos go to during', () => {
+    const photos = [
+      mockPhoto({ created_at: '2026-01-15T08:00:00Z' }),
+      mockPhoto({ created_at: '2026-01-15T18:00:00Z' }),
+    ]
+    const { before, during, after } = categorizePhotos(photos, null, jobEnd)
+    expect(before).toHaveLength(0)
+    expect(during).toHaveLength(2)
+    expect(after).toHaveLength(0)
+  })
+
+  it('legacy/undefined: when job end is missing, photos after start stay in during', () => {
+    const photos = [
+      mockPhoto({ created_at: '2026-01-15T08:00:00Z' }),
+      mockPhoto({ created_at: '2026-01-15T20:00:00Z' }),
+    ]
+    const { before, during, after } = categorizePhotos(photos, jobStart, null)
+    expect(before).toHaveLength(1)
     expect(during).toHaveLength(1)
     expect(after).toHaveLength(0)
   })

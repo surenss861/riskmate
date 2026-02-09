@@ -1204,8 +1204,12 @@ struct EvidenceTab: View {
                     .padding(.top, RMTheme.Spacing.sm)
                 } else {
                     ForEach(evidence) { item in
-                        EvidenceCard(item: item)
-                            .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                        EvidenceCard(
+                            jobId: jobId,
+                            item: item,
+                            onCategoryChanged: { await loadEvidence() }
+                        )
+                        .padding(.horizontal, RMTheme.Spacing.pagePadding)
                     }
                 }
             }
@@ -1417,34 +1421,95 @@ struct EvidenceItem: Identifiable, Codable {
 }
 
 struct EvidenceCard: View {
+    let jobId: String
     let item: EvidenceItem
-    
+    var onCategoryChanged: (() async -> Void)?
+    @State private var showCategoryPicker = false
+    @State private var isUpdating = false
+
     var body: some View {
         RMGlassCard {
             HStack(spacing: RMTheme.Spacing.md) {
                 Image(systemName: item.type == "photo" ? "photo.fill" : "doc.fill")
                     .foregroundColor(RMTheme.Colors.accent)
                     .font(.system(size: 24))
-                
+
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: RMTheme.Spacing.sm) {
                         Text(item.fileName)
                             .font(RMTheme.Typography.bodySmallBold)
                             .foregroundColor(RMTheme.Colors.textPrimary)
-                        if item.type == "photo", let category = item.category, !category.isEmpty {
-                            CategoryBadge(category: category)
+                        if item.type == "photo" {
+                            categoryBadgeView
                         }
                     }
                     Text(formatDate(item.uploadedAt))
                         .font(RMTheme.Typography.caption)
                         .foregroundColor(RMTheme.Colors.textSecondary)
                 }
-                
+
                 Spacer()
+                if item.type == "photo", onCategoryChanged != nil {
+                    Button {
+                        Haptics.tap()
+                        showCategoryPicker = true
+                    } label: {
+                        Image(systemName: "pencil.circle.fill")
+                            .font(.system(size: 22))
+                            .foregroundColor(RMTheme.Colors.accent.opacity(0.9))
+                    }
+                    .disabled(isUpdating)
+                }
             }
         }
+        .confirmationDialog("Change photo category", isPresented: $showCategoryPicker, titleVisibility: .visible) {
+            ForEach([EvidencePhase.before, .during, .after], id: \.self) { phase in
+                Button(phase.displayName) {
+                    Task { await updateCategory(phase.rawValue) }
+                }
+            }
+            Button("Cancel", role: .cancel) {
+                showCategoryPicker = false
+            }
+        } message: {
+            Text("When was this photo taken relative to the job?")
+        }
     }
-    
+
+    @ViewBuilder
+    private var categoryBadgeView: some View {
+        let category = item.category ?? "during"
+        if onCategoryChanged != nil {
+            Button {
+                Haptics.tap()
+                showCategoryPicker = true
+            } label: {
+                CategoryBadge(category: category)
+            }
+            .buttonStyle(.plain)
+            .disabled(isUpdating)
+        } else {
+            CategoryBadge(category: category)
+        }
+    }
+
+    private func updateCategory(_ category: String) async {
+        showCategoryPicker = false
+        isUpdating = true
+        defer { isUpdating = false }
+        do {
+            try await APIClient.shared.updateDocumentCategory(jobId: jobId, docId: item.id, category: category)
+            ToastCenter.shared.show("Category updated", systemImage: "checkmark.circle.fill", style: .success)
+            await onCategoryChanged?()
+        } catch {
+            ToastCenter.shared.show(
+                error.localizedDescription,
+                systemImage: "exclamationmark.triangle",
+                style: .error
+            )
+        }
+    }
+
     private func formatDate(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.dateStyle = .short
