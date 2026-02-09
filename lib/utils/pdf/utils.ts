@@ -1,5 +1,6 @@
 import { STYLES } from './styles';
 import type { JobDocumentAsset } from './types';
+import { categorizePhotos as categorizePhotosFromCategory } from '@/lib/utils/photoCategory';
 
 export async function fetchLogoBuffer(logoUrl?: string | null): Promise<Buffer | null> {
   if (!logoUrl) return null;
@@ -86,55 +87,6 @@ export function getSeverityColor(severity: string): string {
   return STYLES.colors.riskLow;
 }
 
-/**
- * Categorize photos into before/during/after for PDF sections.
- * Honors explicit category first; when missing, compares timestamps to job start/end
- * to place photos into before/during/after; defaults to during only when dates are unavailable.
- */
-export function categorizePhotos(
-  photos: JobDocumentAsset[],
-  jobStartDate?: string | null,
-  jobEndDate?: string | null
-): {
-  before: JobDocumentAsset[];
-  during: JobDocumentAsset[];
-  after: JobDocumentAsset[];
-} {
-  const jobStart = jobStartDate ? new Date(jobStartDate).getTime() : NaN;
-  const jobEnd = jobEndDate ? new Date(jobEndDate).getTime() : NaN;
-
-  const before: JobDocumentAsset[] = [];
-  const during: JobDocumentAsset[] = [];
-  const after: JobDocumentAsset[] = [];
-
-  photos.forEach((photo) => {
-    // Honor explicit category first (from job_photos / document metadata)
-    if (photo.category === 'before' || photo.category === 'during' || photo.category === 'after') {
-      if (photo.category === 'before') before.push(photo);
-      else if (photo.category === 'during') during.push(photo);
-      else after.push(photo);
-      return;
-    }
-
-    // When category missing: fall back to timestamp vs job start/end
-    if (!Number.isFinite(jobStart)) {
-      during.push(photo);
-      return;
-    }
-    if (!photo.created_at) {
-      during.push(photo);
-      return;
-    }
-    const photoTime = new Date(photo.created_at).getTime();
-    if (photoTime < jobStart) {
-      before.push(photo);
-    } else if (Number.isFinite(jobEnd) && photoTime > jobEnd) {
-      after.push(photo);
-    } else {
-      during.push(photo);
-    }
-  });
-
-  return { before, during, after };
-}
+/** Re-export from shared photoCategory for PDF consumers. */
+export const categorizePhotos = categorizePhotosFromCategory;
 

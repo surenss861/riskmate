@@ -4,8 +4,7 @@
  * - categorizePhotos: prioritizes explicit category, falls back to timestamp for legacy photos
  */
 
-import { getDefaultPhotoCategory, getEffectivePhotoCategory } from '@/lib/utils/photoCategory'
-import { categorizePhotos } from '@/lib/utils/pdf/utils'
+import { getDefaultPhotoCategory, getEffectivePhotoCategory, categorizePhotos } from '@/lib/utils/photoCategory'
 import type { JobDocumentAsset } from '@/lib/utils/pdf/types'
 
 describe('getDefaultPhotoCategory', () => {

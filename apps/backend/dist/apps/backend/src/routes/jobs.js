@@ -1384,10 +1384,12 @@ exports.jobsRouter.get("/:id/documents", auth_1.authenticate, async (req, res) =
                 };
             }
         }));
+        // Use evidence bucket when file_path indicates evidence storage (e.g. readiness photo uploads)
         const documentsWithUrls = await Promise.all((data || []).map(async (doc) => {
+            const bucket = doc.file_path?.startsWith("evidence/") ? "evidence" : "documents";
             try {
                 const { data: signed } = await supabaseClient_1.supabase.storage
-                    .from("documents")
+                    .from(bucket)
                     .createSignedUrl(doc.file_path, 60 * 10);
                 return {
                     id: doc.id,
@@ -1431,6 +1433,14 @@ exports.jobsRouter.get("/:id/documents", auth_1.authenticate, async (req, res) =
 });
 // Valid photo categories
 const PHOTO_CATEGORIES = ["before", "during", "after"];
+// Same logic as frontend getDefaultPhotoCategory: draft→before, completed/archived→after, else during
+function getDefaultPhotoCategory(jobStatus) {
+    if (jobStatus === "draft")
+        return "before";
+    if (jobStatus === "completed" || jobStatus === "archived")
+        return "after";
+    return "during";
+}
 // POST /api/jobs/:id/documents
 // Persists document metadata after upload to storage
 exports.jobsRouter.post("/:id/documents", auth_1.authenticate, requireWriteAccess_1.requireWriteAccess, async (req, res) => {
@@ -1453,22 +1463,21 @@ exports.jobsRouter.post("/:id/documents", auth_1.authenticate, requireWriteAcces
         if (!Number.isFinite(parsedFileSize) || parsedFileSize <= 0) {
             return res.status(400).json({ message: "file_size must be a positive number" });
         }
-        // Photo category: validate, default to 'during' for photos when omitted
-        const photoCategory = type === "photo" && category && PHOTO_CATEGORIES.includes(category)
-            ? category
-            : type === "photo"
-                ? "during"
-                : undefined;
-        // Verify job belongs to organization
+        // Verify job belongs to organization and fetch status for default photo category
         const { data: job, error: jobError } = await supabaseClient_1.supabase
             .from("jobs")
-            .select("id")
+            .select("id, status")
             .eq("id", jobId)
             .eq("organization_id", organization_id)
             .single();
         if (jobError || !job) {
             return res.status(404).json({ message: "Job not found" });
         }
+        // Photo category: use provided valid category, or derive default from job status (draft→before, completed/archived→after, else during)
+        const hasValidCategory = type === "photo" && category && PHOTO_CATEGORIES.includes(category);
+        const photoCategory = type === "photo"
+            ? (hasValidCategory ? category : getDefaultPhotoCategory(job.status ?? ""))
+            : undefined;
         const { data: inserted, error: insertError } = await supabaseClient_1.supabase
             .from("documents")
             .insert({
@@ -1587,32 +1596,60 @@ exports.jobsRouter.patch("/:id/documents/:docId", auth_1.authenticate, requireWr
             .maybeSingle();
         if (docError)
             throw docError;
-        if (!doc) {
-            return res.status(404).json({ message: "Document not found" });
-        }
-        if (doc.type !== "photo") {
-            return res.status(400).json({
-                message: "Category can only be updated for photos",
-            });
-        }
         const categoryValue = category;
-        // Update or insert job_photos row (by job_id, organization_id, file_path)
-        const { data: existing } = await supabaseClient_1.supabase
-            .from("job_photos")
-            .select("id")
-            .eq("job_id", jobId)
-            .eq("organization_id", organization_id)
-            .eq("file_path", doc.file_path)
-            .maybeSingle();
-        if (existing) {
-            const { data: updated, error: updateError } = await supabaseClient_1.supabase
+        const IMAGE_MIME_PREFIX = "image/";
+        // Path 1: document found in documents table — existing behavior unchanged
+        if (doc) {
+            if (doc.type !== "photo") {
+                return res.status(400).json({
+                    message: "Category can only be updated for photos",
+                });
+            }
+            // Update or insert job_photos row (by job_id, organization_id, file_path)
+            const { data: existing } = await supabaseClient_1.supabase
                 .from("job_photos")
-                .update({ category: categoryValue })
-                .eq("id", existing.id)
+                .select("id")
+                .eq("job_id", jobId)
+                .eq("organization_id", organization_id)
+                .eq("file_path", doc.file_path)
+                .maybeSingle();
+            if (existing) {
+                const { data: updated, error: updateError } = await supabaseClient_1.supabase
+                    .from("job_photos")
+                    .update({ category: categoryValue })
+                    .eq("id", existing.id)
+                    .select()
+                    .single();
+                if (updateError)
+                    throw updateError;
+                invalidateJobReportCache(organization_id, jobId);
+                return res.json({
+                    ok: true,
+                    data: {
+                        id: doc.id,
+                        file_path: doc.file_path,
+                        type: doc.type,
+                        name: doc.name,
+                        description: doc.description,
+                        created_at: doc.created_at,
+                        category: updated?.category ?? categoryValue,
+                    },
+                });
+            }
+            // No job_photos row: insert one (e.g. legacy photo)
+            const { data: inserted, error: insertError } = await supabaseClient_1.supabase
+                .from("job_photos")
+                .insert({
+                job_id: jobId,
+                organization_id,
+                file_path: doc.file_path,
+                category: categoryValue,
+                created_by: userId,
+            })
                 .select()
                 .single();
-            if (updateError)
-                throw updateError;
+            if (insertError)
+                throw insertError;
             invalidateJobReportCache(organization_id, jobId);
             return res.json({
                 ok: true,
@@ -1623,17 +1660,66 @@ exports.jobsRouter.patch("/:id/documents/:docId", auth_1.authenticate, requireWr
                     name: doc.name,
                     description: doc.description,
                     created_at: doc.created_at,
+                    category: inserted?.category ?? categoryValue,
+                },
+            });
+        }
+        // Path 2: no documents row — try evidence table (iOS/evidence photos)
+        const { data: ev, error: evError } = await supabaseClient_1.supabase
+            .from("evidence")
+            .select("id, storage_path, file_name, mime_type, evidence_type, created_at")
+            .eq("id", docId)
+            .eq("work_record_id", jobId)
+            .eq("organization_id", organization_id)
+            .eq("state", "sealed")
+            .maybeSingle();
+        if (evError)
+            throw evError;
+        if (!ev) {
+            return res.status(404).json({ message: "Document not found" });
+        }
+        if (!ev.mime_type?.toLowerCase().startsWith(IMAGE_MIME_PREFIX)) {
+            return res.status(400).json({
+                message: "Category can only be updated for photos",
+            });
+        }
+        const storagePath = ev.storage_path ?? "";
+        const { data: existingPhoto } = await supabaseClient_1.supabase
+            .from("job_photos")
+            .select("id")
+            .eq("job_id", jobId)
+            .eq("organization_id", organization_id)
+            .eq("file_path", storagePath)
+            .maybeSingle();
+        if (existingPhoto) {
+            const { data: updated, error: updateError } = await supabaseClient_1.supabase
+                .from("job_photos")
+                .update({ category: categoryValue })
+                .eq("id", existingPhoto.id)
+                .select()
+                .single();
+            if (updateError)
+                throw updateError;
+            invalidateJobReportCache(organization_id, jobId);
+            return res.json({
+                ok: true,
+                data: {
+                    id: ev.id,
+                    file_path: storagePath,
+                    type: "photo",
+                    name: ev.file_name ?? "Evidence",
+                    description: ev.evidence_type ?? null,
+                    created_at: ev.created_at,
                     category: updated?.category ?? categoryValue,
                 },
             });
         }
-        // No job_photos row: insert one (e.g. legacy photo)
         const { data: inserted, error: insertError } = await supabaseClient_1.supabase
             .from("job_photos")
             .insert({
             job_id: jobId,
             organization_id,
-            file_path: doc.file_path,
+            file_path: storagePath,
             category: categoryValue,
             created_by: userId,
         })
@@ -1645,12 +1731,12 @@ exports.jobsRouter.patch("/:id/documents/:docId", auth_1.authenticate, requireWr
         return res.json({
             ok: true,
             data: {
-                id: doc.id,
-                file_path: doc.file_path,
-                type: doc.type,
-                name: doc.name,
-                description: doc.description,
-                created_at: doc.created_at,
+                id: ev.id,
+                file_path: storagePath,
+                type: "photo",
+                name: ev.file_name ?? "Evidence",
+                description: ev.evidence_type ?? null,
+                created_at: ev.created_at,
                 category: inserted?.category ?? categoryValue,
             },
         });

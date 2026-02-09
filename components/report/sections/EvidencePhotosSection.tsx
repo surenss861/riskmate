@@ -5,6 +5,7 @@
 
 import { formatPdfTimestamp } from '@/lib/utils/pdfFormatUtils'
 import { pdfTheme } from '@/lib/design-system/pdfTheme'
+import { categorizePhotos } from '@/lib/utils/photoCategory'
 
 type SectionPhoto = {
   id: string
@@ -27,47 +28,14 @@ interface EvidencePhotosSectionProps {
   emptyMessage?: string
 }
 
-/**
- * Categorize photos into before/during/after (equivalent to categorizePhotos in lib/utils/pdf/utils.ts).
- * Honors explicit category first; when missing, compares timestamps to job start/end; defaults to during when dates unavailable.
- */
+/** Map SectionPhoto to shape expected by shared categorizePhotos (created_at). */
 function categorizeSectionPhotos(
   photos: SectionPhoto[],
   jobStartDate?: string | null,
   jobEndDate?: string | null
 ): { before: SectionPhoto[]; during: SectionPhoto[]; after: SectionPhoto[] } {
-  const jobStart = jobStartDate ? new Date(jobStartDate).getTime() : NaN
-  const jobEnd = jobEndDate ? new Date(jobEndDate).getTime() : NaN
-  const before: SectionPhoto[] = []
-  const during: SectionPhoto[] = []
-  const after: SectionPhoto[] = []
-
-  photos.forEach((photo) => {
-    if (photo.category === 'before' || photo.category === 'during' || photo.category === 'after') {
-      if (photo.category === 'before') before.push(photo)
-      else if (photo.category === 'during') during.push(photo)
-      else after.push(photo)
-      return
-    }
-    if (!Number.isFinite(jobStart)) {
-      during.push(photo)
-      return
-    }
-    if (!photo.createdAt) {
-      during.push(photo)
-      return
-    }
-    const photoTime = new Date(photo.createdAt).getTime()
-    if (photoTime < jobStart) {
-      before.push(photo)
-    } else if (Number.isFinite(jobEnd) && photoTime > jobEnd) {
-      after.push(photo)
-    } else {
-      during.push(photo)
-    }
-  })
-
-  return { before, during, after }
+  const withCreatedAt = photos.map((p) => ({ ...p, created_at: p.createdAt ?? null }))
+  return categorizePhotos(withCreatedAt, jobStartDate, jobEndDate)
 }
 
 function PhotoItem({ photo }: { photo: SectionPhoto }) {

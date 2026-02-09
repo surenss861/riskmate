@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.categorizePhotos = void 0;
 exports.fetchLogoBuffer = fetchLogoBuffer;
 exports.formatDate = formatDate;
 exports.formatTime = formatTime;
@@ -7,8 +8,8 @@ exports.formatShortDate = formatShortDate;
 exports.truncateText = truncateText;
 exports.getRiskColor = getRiskColor;
 exports.getSeverityColor = getSeverityColor;
-exports.categorizePhotos = categorizePhotos;
 const styles_1 = require("./styles");
+const photoCategory_1 = require("@lib/utils/photoCategory");
 async function fetchLogoBuffer(logoUrl) {
     if (!logoUrl)
         return null;
@@ -105,45 +106,6 @@ function getSeverityColor(severity) {
         return styles_1.STYLES.colors.riskMedium;
     return styles_1.STYLES.colors.riskLow;
 }
-function categorizePhotos(photos, jobStartDate, jobEndDate) {
-    const jobStart = jobStartDate ? new Date(jobStartDate).getTime() : NaN;
-    const jobEnd = jobEndDate ? new Date(jobEndDate).getTime() : NaN;
-    const before = [];
-    const during = [];
-    const after = [];
-    photos.forEach((photo) => {
-        // Process explicit category first (from job_photos); keep assigned category even when jobStartDate is null
-        if (photo.category === 'before' || photo.category === 'during' || photo.category === 'after') {
-            if (photo.category === 'before')
-                before.push(photo);
-            else if (photo.category === 'during')
-                during.push(photo);
-            else
-                after.push(photo);
-            return;
-        }
-        // Only when photo.category is missing: fall back to timestamp comparison when job dates available
-        if (Number.isFinite(jobStart)) {
-            if (!photo.created_at) {
-                during.push(photo);
-                return;
-            }
-            const photoTime = new Date(photo.created_at).getTime();
-            if (photoTime < jobStart) {
-                before.push(photo);
-            }
-            else if (Number.isFinite(jobEnd) && photoTime > jobEnd) {
-                after.push(photo);
-            }
-            else {
-                during.push(photo);
-            }
-        }
-        else {
-            // No job start date: uncategorized photos go to during (legacy behavior)
-            during.push(photo);
-        }
-    });
-    return { before, during, after };
-}
+/** Re-export from shared photoCategory for backend PDF consumers. */
+exports.categorizePhotos = photoCategory_1.categorizePhotos;
 //# sourceMappingURL=utils.js.map

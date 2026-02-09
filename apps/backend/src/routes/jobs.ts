@@ -1561,11 +1561,13 @@ jobsRouter.get("/:id/documents", authenticate, async (req: express.Request, res:
         })
     );
 
+    // Use evidence bucket when file_path indicates evidence storage (e.g. readiness photo uploads)
     const documentsWithUrls = await Promise.all(
       (data || []).map(async (doc) => {
+        const bucket = doc.file_path?.startsWith("evidence/") ? "evidence" : "documents";
         try {
           const { data: signed } = await supabase.storage
-            .from("documents")
+            .from(bucket)
             .createSignedUrl(doc.file_path, 60 * 10);
 
           return {

@@ -106,14 +106,15 @@ export function UploadEvidenceModal({
       let file_size: number | null = null
       let mime_type: string | null = null
 
-      // If file is provided, upload it
+      // If file is provided, upload it. Photo evidence uses evidence bucket so GET can sign from same bucket; other types use documents bucket.
       if (file) {
         const fileExt = file.name.split('.').pop()
         const fileName = `${workRecordId}/${Date.now()}.${fileExt}`
         const storagePath = `evidence/${fileName}`
+        const bucket = evidenceType === 'photo' ? 'evidence' : 'documents'
 
         const { data: uploadData, error: uploadError } = await supabase.storage
-          .from('documents')
+          .from(bucket)
           .upload(storagePath, file)
 
         if (uploadError) {

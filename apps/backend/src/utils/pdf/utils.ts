@@ -1,5 +1,6 @@
 import { STYLES } from './styles';
 import type { JobDocumentAsset } from './types';
+import { categorizePhotos as categorizePhotosFromCategory } from '@lib/utils/photoCategory';
 
 export async function fetchLogoBuffer(logoUrl?: string | null): Promise<Buffer | null> {
   if (!logoUrl) return null;
@@ -85,51 +86,6 @@ export function getSeverityColor(severity: string): string {
   return STYLES.colors.riskLow;
 }
 
-export function categorizePhotos(
-  photos: JobDocumentAsset[],
-  jobStartDate?: string | null,
-  jobEndDate?: string | null
-): {
-  before: JobDocumentAsset[];
-  during: JobDocumentAsset[];
-  after: JobDocumentAsset[];
-} {
-  const jobStart = jobStartDate ? new Date(jobStartDate).getTime() : NaN;
-  const jobEnd = jobEndDate ? new Date(jobEndDate).getTime() : NaN;
-
-  const before: JobDocumentAsset[] = [];
-  const during: JobDocumentAsset[] = [];
-  const after: JobDocumentAsset[] = [];
-
-  photos.forEach((photo) => {
-    // Process explicit category first (from job_photos); keep assigned category even when jobStartDate is null
-    if (photo.category === 'before' || photo.category === 'during' || photo.category === 'after') {
-      if (photo.category === 'before') before.push(photo);
-      else if (photo.category === 'during') during.push(photo);
-      else after.push(photo);
-      return;
-    }
-
-    // Only when photo.category is missing: fall back to timestamp comparison when job dates available
-    if (Number.isFinite(jobStart)) {
-      if (!photo.created_at) {
-        during.push(photo);
-        return;
-      }
-      const photoTime = new Date(photo.created_at).getTime();
-      if (photoTime < jobStart) {
-        before.push(photo);
-      } else if (Number.isFinite(jobEnd) && photoTime > jobEnd) {
-        after.push(photo);
-      } else {
-        during.push(photo);
-      }
-    } else {
-      // No job start date: uncategorized photos go to during (legacy behavior)
-      during.push(photo);
-    }
-  });
-
-  return { before, during, after };
-}
+/** Re-export from shared photoCategory for backend PDF consumers. */
+export const categorizePhotos = categorizePhotosFromCategory;
 
