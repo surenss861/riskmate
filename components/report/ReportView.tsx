@@ -134,7 +134,7 @@ export function ReportView({
     if (cat === 'after') return 'bg-[#e8f5e9] text-[#388e3c]'
     return 'bg-[#fff3e0] text-[#f57c00]'
   }
-  const canEditCategory = !readOnly && !!onDocumentCategoryChange && job.status !== 'archived' && job.status !== 'completed'
+  const canEditCategory = !readOnly && !!onDocumentCategoryChange
 
   // Get most recent audit entry for system timestamp (sorted by created_at descending)
   const sortedAudit = [...audit].sort((a, b) => 
