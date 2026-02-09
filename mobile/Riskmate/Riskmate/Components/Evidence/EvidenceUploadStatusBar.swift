@@ -214,7 +214,6 @@ struct EvidenceUploadStatusBar: View {
                     try await uploadManager.retryUpload(upload)
                     retriedCount += 1
                 } catch {
-                    fileMissingCount += 1
                     ToastCenter.shared.show(
                         error.localizedDescription,
                         systemImage: "exclamationmark.triangle",
