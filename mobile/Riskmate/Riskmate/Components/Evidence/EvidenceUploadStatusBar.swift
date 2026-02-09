@@ -207,14 +207,28 @@ struct EvidenceUploadStatusBar: View {
         
         Haptics.tap()
         
-        // Retry all failed uploads for this job
         Task {
-            for _ in failedUploads {
-                // TODO: Implement retry in BackgroundUploadManager
-                // await uploadManager.retryUpload(upload.id)
+            var retriedCount = 0
+            for upload in failedUploads {
+                do {
+                    try await uploadManager.retryUpload(upload)
+                    retriedCount += 1
+                } catch {
+                    fileMissingCount += 1
+                    ToastCenter.shared.show(
+                        error.localizedDescription,
+                        systemImage: "exclamationmark.triangle",
+                        style: .error
+                    )
+                }
             }
-            
-            ToastCenter.shared.show("Retrying uploads", systemImage: "arrow.clockwise", style: .success)
+            if retriedCount > 0 {
+                ToastCenter.shared.show(
+                    retriedCount == 1 ? "Retrying upload" : "Retrying \(retriedCount) uploads",
+                    systemImage: "arrow.clockwise",
+                    style: .success
+                )
+            }
         }
     }
 }

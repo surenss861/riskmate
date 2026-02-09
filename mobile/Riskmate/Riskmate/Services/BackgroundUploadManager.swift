@@ -201,18 +201,92 @@ class BackgroundUploadManager: NSObject, ObservableObject {
         }
     }
     
-    /// Retry failed upload
+    /// Retry failed upload: create and start a new upload task using the preserved temp file
     func retryUpload(_ upload: UploadTask) async throws {
-        // Remove old upload
-        uploads.removeAll { $0.id == upload.id }
+        // Verify file still exists for retry
+        guard let filePath = upload.fileURL else {
+            throw UploadError.uploadFailed("Original file no longer available - please add evidence again")
+        }
+        let fileURL = URL(fileURLWithPath: filePath)
+        guard FileManager.default.fileExists(atPath: filePath) else {
+            throw UploadError.uploadFailed("Original file no longer available - please add evidence again")
+        }
         
-        // TODO: Re-upload with original file data
-        // For now, mark as queued and let user re-upload
-        var updated = upload
-        updated.state = .queued
-        updated.retryCount += 1
-        uploads.append(updated)
+        // Get auth token
+        guard let token = try await AuthService.shared.getAccessToken() else {
+            throw UploadError.noAuthToken
+        }
+        
+        // Extract boundary from multipart file (first line is --{boundary}\r\n)
+        let boundary: String
+        do {
+            let data = try Data(contentsOf: fileURL)
+            var firstLineEnd = data.startIndex
+            while firstLineEnd < data.endIndex && data[firstLineEnd] != 0x0d && data[firstLineEnd] != 0x0a {
+                firstLineEnd = data.index(after: firstLineEnd)
+            }
+            guard let firstLine = String(data: data[..<firstLineEnd], encoding: .utf8),
+                  firstLine.hasPrefix("--") else {
+                throw UploadError.uploadFailed("Invalid multipart file format - please add evidence again")
+            }
+            boundary = String(firstLine.dropFirst(2))
+        } catch {
+            throw UploadError.uploadFailed("Could not read upload file - please add evidence again")
+        }
+        
+        // Get file size
+        let fileSize: Int
+        do {
+            let attrs = try FileManager.default.attributesOfItem(atPath: filePath)
+            fileSize = attrs[.size] as? Int ?? 0
+        } catch {
+            throw UploadError.uploadFailed("Could not read file size - please add evidence again")
+        }
+        
+        let baseURL = AppConfig.shared.backendURL
+        guard let url = URL(string: "\(baseURL)/api/jobs/\(upload.jobId)/evidence/upload") else {
+            throw UploadError.invalidURL
+        }
+        
+        let idempotencyKey = upload.idempotencyKey ?? generateIdempotencyKey(fileData: try Data(contentsOf: fileURL), evidenceId: upload.id)
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        request.setValue("\(fileSize)", forHTTPHeaderField: "Content-Length")
+        request.setValue(idempotencyKey, forHTTPHeaderField: "Idempotency-Key")
+        request.timeoutInterval = 60.0
+        
+        // Remove old task mapping (if any) before creating new task
+        removeTaskMapping(forUploadId: upload.id)
+        
+        let task = backgroundSession.uploadTask(with: request, fromFile: fileURL)
+        storeTaskMapping(taskIdentifier: task.taskIdentifier, uploadId: upload.id)
+        
+        // Update retry count and state
+        if let idx = uploads.firstIndex(where: { $0.id == upload.id }) {
+            uploads[idx].retryCount += 1
+            uploads[idx].state = .uploading
+            uploads[idx].progress = 0
+        } else {
+            var updated = upload
+            updated.retryCount += 1
+            updated.state = .uploading
+            updated.progress = 0
+            uploads.append(updated)
+        }
         saveUploads()
+        
+        Analytics.shared.trackEvidenceUploadStarted(evidenceId: upload.id)
+        task.resume()
+    }
+    
+    private func removeTaskMapping(forUploadId uploadId: String) {
+        var mappings = getTaskMappings()
+        let keysToRemove = mappings.filter { $0.value == uploadId }.map { $0.key }
+        for k in keysToRemove { mappings.removeValue(forKey: k) }
+        saveTaskMappings(mappings)
     }
     
     // MARK: - State Management
@@ -310,19 +384,19 @@ extension BackgroundUploadManager: URLSessionTaskDelegate {
             let upload = self.uploads.first(where: { $0.id == uploadId })
             let jobId = upload?.jobId ?? ""
             
-            // Clean up temp file after upload completes (success or failure)
-            if let upload = upload,
-               let filePath = upload.fileURL {
-                let fileURL = URL(fileURLWithPath: filePath)
-                try? FileManager.default.removeItem(at: fileURL)
-            }
-            
             if let error = error {
                 let errorMessage = error.localizedDescription
                 self.updateUploadState(uploadId, state: .failed(errorMessage))
                 Analytics.shared.trackEvidenceUploadFailed(evidenceId: uploadId, error: errorMessage)
                 CrashReporting.shared.captureError(error)
             } else {
+                // Clean up temp file only on success; keep on failure for retry
+                if let upload = upload,
+                   let filePath = upload.fileURL {
+                    let fileURL = URL(fileURLWithPath: filePath)
+                    try? FileManager.default.removeItem(at: fileURL)
+                }
+                
                 self.updateUploadState(uploadId, state: .synced)
                 Analytics.shared.trackEvidenceUploadSucceeded(evidenceId: uploadId)
                 

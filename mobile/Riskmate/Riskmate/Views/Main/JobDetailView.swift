@@ -1272,7 +1272,15 @@ struct UploadStatusCard: View {
                         Button {
                             Haptics.tap()
                             Task {
-                                try? await uploadManager.retryUpload(upload)
+                                do {
+                                    try await uploadManager.retryUpload(upload)
+                                } catch {
+                                    ToastCenter.shared.show(
+                                        error.localizedDescription,
+                                        systemImage: "exclamationmark.triangle",
+                                        style: .error
+                                    )
+                                }
                             }
                         } label: {
                             Text("Retry")
@@ -1307,7 +1315,15 @@ struct UploadStatusCard: View {
             if case .failed = upload.state {
                 Haptics.tap()
                 Task {
-                    try? await uploadManager.retryUpload(upload)
+                    do {
+                        try await uploadManager.retryUpload(upload)
+                    } catch {
+                        ToastCenter.shared.show(
+                            error.localizedDescription,
+                            systemImage: "exclamationmark.triangle",
+                            style: .error
+                        )
+                    }
                 }
             }
         }
