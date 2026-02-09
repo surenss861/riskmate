@@ -668,6 +668,21 @@ class APIClient {
         )
         return response.data
     }
+
+    /// Update photo category (before/during/after) for a document or evidence item.
+    /// docId may be a document id or evidence id (PATCH /api/jobs/:id/documents/:docId).
+    func updateDocumentCategory(jobId: String, docId: String, category: String) async throws {
+        struct UpdateCategoryBody: Encodable {
+            let category: String
+        }
+        let body = UpdateCategoryBody(category: category)
+        let data = try JSONEncoder().encode(body)
+        let _: EmptyResponse = try await request(
+            endpoint: "/api/jobs/\(jobId)/documents/\(docId)",
+            method: "PATCH",
+            body: data
+        )
+    }
     
     /// Get hazards for a job
     func getHazards(jobId: String) async throws -> [Hazard] {

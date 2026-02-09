@@ -32,6 +32,10 @@ const heroItem = {
   hidden: { opacity: 0, y: 10, filter: 'blur(6px)' },
   show: { opacity: 1, y: 0, filter: 'blur(0px)', transition: { duration: 0.5, ease: [0.16, 1, 0.3, 1] } },
 }
+const heroItemHeadline = {
+  hidden: { opacity: 0, y: 10 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: [0.16, 1, 0.3, 1] } },
+}
 
 function HeroSection({ onSignup, onSampleReport }: { onSignup: () => void; onSampleReport: () => void }) {
   const { ref: titleWrapRef, width } = useElementWidth<HTMLDivElement>()
@@ -49,17 +53,33 @@ function HeroSection({ onSignup, onSampleReport }: { onSignup: () => void; onSam
           animate={{ opacity: 1 }}
           transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
         >
-          <motion.div
-            className="absolute left-1/2 top-1/2 h-[520px] w-[520px] -translate-x-1/2 -translate-y-1/2 rounded-full blur-3xl"
-            style={{
-              background: 'radial-gradient(circle at center, rgba(249,115,22,0.18), rgba(249,115,22,0.0) 62%)',
-              willChange: 'transform, opacity',
-            }}
-            animate={{ x: [0, 12, -8, 0], y: [0, -10, 8, 0] }}
-            transition={{ duration: 14, repeat: Infinity, ease: 'easeInOut' }}
-          />
+        <motion.div
+          className="absolute left-1/2 top-1/2 h-[520px] w-[520px] -translate-x-1/2 -translate-y-1/2 rounded-full blur-3xl"
+          style={{
+            background: 'radial-gradient(circle at center, rgba(249,115,22,0.18), rgba(249,115,22,0.0) 62%)',
+            willChange: 'transform, opacity',
+          }}
+          animate={{ x: [0, 12, -8, 0], y: [0, -10, 8, 0] }}
+          transition={{ duration: 14, repeat: Infinity, ease: 'easeInOut' }}
+        />
         </motion.div>
       )}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 opacity-[0.06] z-[1]"
+        style={{
+          background:
+            'repeating-linear-gradient(to bottom, rgba(255,255,255,0.35) 0px, rgba(255,255,255,0.35) 1px, rgba(255,255,255,0) 3px, rgba(255,255,255,0) 6px)',
+          mixBlendMode: 'overlay',
+        }}
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 opacity-[0.7] z-[1]"
+        style={{
+          background: 'radial-gradient(circle at center, rgba(0,0,0,0) 35%, rgba(0,0,0,0.65) 100%)',
+        }}
+      />
       <motion.div
         className="relative z-10 max-w-4xl mx-auto px-6 py-20 text-center"
         variants={heroVariants}
@@ -82,13 +102,27 @@ function HeroSection({ onSignup, onSampleReport }: { onSignup: () => void; onSam
           </span>
         </motion.div>
 
-        <motion.div variants={heroItem} className="relative inline-block mb-8">
+        <motion.div variants={heroItemHeadline} className="relative inline-block mb-8">
           <div ref={titleWrapRef} className="relative inline-block">
-            <h1 className="font-display text-5xl md:text-6xl font-bold leading-tight text-white">
+            <motion.h1
+              className="font-display text-5xl md:text-6xl font-bold leading-tight text-white"
+              initial={
+                prefersReducedMotion
+                  ? { opacity: 1, y: 0, filter: 'blur(0px)', letterSpacing: '0em' }
+                  : { opacity: 0, y: 6, filter: 'blur(8px)', letterSpacing: '0.02em' }
+              }
+              animate={{ opacity: 1, y: 0, filter: 'blur(0px)', letterSpacing: '0em' }}
+              transition={
+                prefersReducedMotion
+                  ? { duration: 0, delay: 0 }
+                  : { duration: 0.7, delay: 0.12, ease: [0.16, 1, 0.3, 1] }
+              }
+              style={{ willChange: prefersReducedMotion ? undefined : ('transform, opacity, filter' as React.CSSProperties['willChange']) }}
+            >
               Audit-ready proof packs from
               <br />
               everyday field work
-            </h1>
+            </motion.h1>
             <div
               className="absolute left-1/2 -translate-x-1/2 -bottom-4 h-[4px]"
               style={{ width: underlineWidth }}

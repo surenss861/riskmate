@@ -437,7 +437,9 @@ export const jobsApi = {
     if (uploadError) throw uploadError
     if (!uploadData?.path) throw new Error('Upload failed')
 
-    // Save metadata via backend (category for photos: before/during/after)
+    // Save metadata via backend (category for photos: before/during/after; always include when type is photo)
+    const isPhoto = metadata.type === 'photo'
+    const photoCategory = isPhoto ? (metadata.category ?? 'during') : undefined
     return apiRequest<{ data: any }>(`/api/jobs/${id}/documents`, {
       method: 'POST',
       body: JSON.stringify({
@@ -447,7 +449,7 @@ export const jobsApi = {
         file_size: file.size,
         mime_type: file.type,
         description: metadata.description || null,
-        ...(metadata.type === 'photo' && metadata.category ? { category: metadata.category } : {}),
+        ...(isPhoto && photoCategory ? { category: photoCategory } : {}),
       }),
     })
   },
