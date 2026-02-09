@@ -76,8 +76,53 @@ export async function buildJobReport(
     (jobPhotos || []).map((p) => [p.file_path, p.category as 'before' | 'during' | 'after'])
   )
 
+  // Image evidence: query evidence table for image MIME types, derive category from job_photos or phase, merge into documents
+  const IMAGE_MIME_PREFIX = 'image/'
+  const { data: imageEvidence } = await supabase
+    .from('evidence')
+    .select('id, storage_path, file_name, mime_type, phase, evidence_type, created_at')
+    .eq('work_record_id', jobId)
+    .eq('organization_id', organizationId)
+    .eq('state', 'sealed')
+
+  const PHOTO_CATEGORIES = ['before', 'during', 'after'] as const
+  const evidencePhotoItems = (imageEvidence || [])
+    .filter((ev) => ev.mime_type?.toLowerCase().startsWith(IMAGE_MIME_PREFIX))
+    .map((ev) => {
+      const fromJobPhotos = categoryByPath.get(ev.storage_path ?? '')
+      const fromPhase =
+        ev.phase && PHOTO_CATEGORIES.includes(ev.phase as (typeof PHOTO_CATEGORIES)[number])
+          ? (ev.phase as (typeof PHOTO_CATEGORIES)[number])
+          : null
+      const category = fromJobPhotos ?? fromPhase ?? 'during'
+      return {
+        file_path: ev.storage_path,
+        name: ev.file_name ?? 'Evidence',
+        type: 'photo' as const,
+        description: ev.evidence_type || ev.file_name || null,
+        created_at: ev.created_at ?? null,
+        category,
+        source_bucket: 'evidence' as const,
+      }
+    })
+
+  // Generate signed URLs for evidence photos (url for exports)
+  const evidencePhotosWithUrl = await Promise.all(
+    evidencePhotoItems.map(async (item) => {
+      try {
+        const { data: signed } = await supabase.storage
+          .from('evidence')
+          .createSignedUrl(item.file_path, 60 * 60)
+        return { ...item, url: signed?.signedUrl ?? null }
+      } catch (error) {
+        console.warn('Failed to generate evidence photo signed URL', error)
+        return { ...item, url: null }
+      }
+    })
+  )
+
   // Generate signed URLs for documents
-  const documents = await Promise.all(
+  const documentsFromTable = await Promise.all(
     (documentsData || []).map(async (doc) => {
       try {
         const { data: signed } = await supabase.storage
@@ -98,6 +143,11 @@ export async function buildJobReport(
         }
       }
     })
+  )
+
+  // Merge evidence photos into documents (sorted chronologically) so legacy report/full endpoints include categorized evidence
+  const documents = [...documentsFromTable, ...evidencePhotosWithUrl].sort(
+    (a, b) => new Date(a.created_at ?? 0).getTime() - new Date(b.created_at ?? 0).getTime()
   )
 
   // Fetch audit logs with user names
