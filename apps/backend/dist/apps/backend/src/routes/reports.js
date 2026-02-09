@@ -100,8 +100,9 @@ exports.reportsRouter.post("/generate/:jobId", auth_1.authenticate, (async (req,
         const photoDocuments = (reportData.documents ?? []).filter((doc) => doc.type === "photo" && doc.file_path);
         const photos = (await Promise.all(photoDocuments.map(async (document) => {
             try {
+                const bucket = document.source_bucket === "evidence" ? "evidence" : "documents";
                 const { data: fileData } = await supabaseClient_1.supabase.storage
-                    .from("documents")
+                    .from(bucket)
                     .download(document.file_path);
                 if (!fileData) {
                     return null;
@@ -112,6 +113,7 @@ exports.reportsRouter.post("/generate/:jobId", auth_1.authenticate, (async (req,
                     description: document.description,
                     created_at: document.created_at,
                     buffer: Buffer.from(arrayBuffer),
+                    category: document.category ?? undefined,
                 };
             }
             catch (error) {
@@ -428,11 +430,11 @@ exports.reportsRouter.post("/permit-pack/:jobId", auth_1.authenticate, (0, limit
                 }
             }
         }
-        // Add custom selected documents
+        // Add custom selected documents (photos and other docs are stored in the same bucket they're uploaded to; use persisted bucket when available)
         for (const doc of documents) {
             if (doc.storage_path) {
                 try {
-                    const bucket = doc.type === "photo" ? "photos" : "documents";
+                    const bucket = doc.bucket ?? "documents";
                     const { data: fileData, error: downloadError } = await supabaseClient_1.supabase.storage
                         .from(bucket)
                         .download(doc.storage_path);

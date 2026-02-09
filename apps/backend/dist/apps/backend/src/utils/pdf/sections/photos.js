@@ -4,8 +4,8 @@ exports.renderPhotosSection = renderPhotosSection;
 const styles_1 = require("../styles");
 const helpers_1 = require("../helpers");
 const utils_1 = require("../utils");
-function renderPhotosSection(doc, photos, jobStartDate, pageWidth, pageHeight, margin, safeAddPage, estimatedTotalPages) {
-    const { before, during, after } = (0, utils_1.categorizePhotos)(photos, jobStartDate);
+function renderPhotosSection(doc, photos, jobStartDate, jobEndDate, pageWidth, pageHeight, margin, safeAddPage, estimatedTotalPages) {
+    const { before, during, after } = (0, utils_1.categorizePhotos)(photos, jobStartDate, jobEndDate);
     const sections = [
         { title: 'Before Photos', photos: before },
         { title: 'During Job Photos', photos: during },

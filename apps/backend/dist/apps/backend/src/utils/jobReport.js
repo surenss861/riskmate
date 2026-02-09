@@ -28,14 +28,65 @@ async function buildJobReport(organizationId, jobId) {
         .eq("job_id", jobId)
         .eq("organization_id", organizationId)
         .order("created_at", { ascending: true });
+    // Fetch job_photos for category (before/during/after) to attach to photo documents
+    const { data: jobPhotos } = await supabaseClient_1.supabase
+        .from("job_photos")
+        .select("file_path, category")
+        .eq("job_id", jobId)
+        .eq("organization_id", organizationId);
+    const categoryByPath = new Map((jobPhotos || []).map((p) => [p.file_path, p.category]));
+    // Image evidence: pull storage paths and join with job_photos for category, then merge into documents for PDF/reports
+    const IMAGE_MIME_PREFIX = "image/";
+    const { data: imageEvidence } = await supabaseClient_1.supabase
+        .from("evidence")
+        .select("id, storage_path, file_name, mime_type, phase, evidence_type, created_at, uploaded_by")
+        .eq("work_record_id", jobId)
+        .eq("organization_id", organizationId)
+        .eq("state", "sealed");
+    const PHOTO_CATEGORIES = ["before", "during", "after"];
+    const evidencePhotoItems = (imageEvidence || [])
+        .filter((ev) => ev.mime_type?.toLowerCase().startsWith(IMAGE_MIME_PREFIX))
+        .map((ev) => {
+        const fromJobPhotos = categoryByPath.get(ev.storage_path ?? "");
+        const fromPhase = ev.phase && PHOTO_CATEGORIES.includes(ev.phase)
+            ? ev.phase
+            : null;
+        const category = fromJobPhotos ?? fromPhase ?? null;
+        return {
+            id: ev.id,
+            file_path: ev.storage_path ?? "",
+            name: ev.file_name ?? "Evidence",
+            type: "photo",
+            mime_type: ev.mime_type ?? null,
+            description: ev.evidence_type || ev.file_name || null,
+            created_at: ev.created_at ?? null,
+            uploaded_by: ev.uploaded_by ?? null,
+            ...(category != null ? { category } : {}),
+            source_bucket: "evidence",
+        };
+    });
+    // Generate signed URLs for evidence photos (url for exports)
+    const evidencePhotosWithUrl = await Promise.all(evidencePhotoItems.map(async (item) => {
+        try {
+            const { data: signed } = await supabaseClient_1.supabase.storage
+                .from("evidence")
+                .createSignedUrl(item.file_path, 60 * 60);
+            return { ...item, url: signed?.signedUrl ?? null };
+        }
+        catch (error) {
+            console.warn("Failed to generate evidence photo signed URL", error);
+            return { ...item, url: null };
+        }
+    }));
     // Generate signed URLs for documents
-    const documents = await Promise.all((documentsData || []).map(async (doc) => {
+    const documentsFromTable = await Promise.all((documentsData || []).map(async (doc) => {
         try {
             const { data: signed } = await supabaseClient_1.supabase.storage
                 .from("documents")
                 .createSignedUrl(doc.file_path, 60 * 60); // 1 hour expiry
             return {
                 ...doc,
+                ...(doc.type === "photo" ? { category: categoryByPath.get(doc.file_path) ?? null } : {}),
                 url: signed?.signedUrl || null,
             };
         }
@@ -43,10 +94,13 @@ async function buildJobReport(organizationId, jobId) {
             console.warn("Failed to generate document signed URL", error);
             return {
                 ...doc,
+                ...(doc.type === "photo" ? { category: categoryByPath.get(doc.file_path) ?? null } : {}),
                 url: null,
             };
         }
     }));
+    // Merge evidence photos into documents so PDF/reports receive categorized evidence alongside document photos
+    const documents = [...documentsFromTable, ...evidencePhotosWithUrl].sort((a, b) => new Date(a.created_at ?? 0).getTime() - new Date(b.created_at ?? 0).getTime());
     // Fetch audit logs with user names
     const { data: auditLogsData } = await supabaseClient_1.supabase
         .from("audit_logs")

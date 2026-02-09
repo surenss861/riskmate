@@ -43,6 +43,7 @@ export interface JobDocumentAsset {
     description?: string | null;
     created_at?: string | null;
     buffer: Buffer;
+    category?: 'before' | 'during' | 'after';
 }
 export interface AuditLogEntry {
     id: string;

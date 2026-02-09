@@ -191,7 +191,7 @@ evidenceRouter.post(
               created_by: userId,
             })
             if (photoError) {
-              logWithRequest(requestId, 'warn', { msg: 'job_photos upsert failed on idempotent replay', photoError: photoError.message })
+              logWithRequest('warn', 'job_photos upsert failed on idempotent replay', requestId, { photoError: photoError.message })
             }
           }
         }
@@ -457,7 +457,7 @@ evidenceRouter.post(
             created_by: userId,
           })
           if (photoError) {
-            logWithRequest(requestId, 'warn', { msg: 'job_photos upsert failed for evidence', photoError: photoError.message })
+            logWithRequest('warn', 'job_photos upsert failed for evidence', requestId, { photoError: photoError.message })
           }
         }
       }

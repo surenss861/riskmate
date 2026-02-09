@@ -41,7 +41,7 @@ async function generateRiskSnapshotPDF(job, riskScore, mitigationItems, organiza
         const pageHeight = doc.page.height;
         const margin = styles_1.STYLES.spacing.pageMargin;
         const groupedTimeline = (0, helpers_1.groupTimelineEvents)(auditLogs);
-        const { before, during, after } = (0, utils_1.categorizePhotos)(photos, job.start_date);
+        const { before, during, after } = (0, utils_1.categorizePhotos)(photos, job.start_date, job.end_date);
         // Rough estimate for footer page numbers
         const estimatedTotalPages = 1 + // cover
             1 + // executive
@@ -78,7 +78,7 @@ async function generateRiskSnapshotPDF(job, riskScore, mitigationItems, organiza
         (0, hazardChecklist_1.renderHazardChecklist)(doc, job, riskScore, pageWidth, pageHeight, margin, safeAddPage, estimatedTotalPages);
         (0, controlsApplied_1.renderControlsApplied)(doc, mitigationItems, accent, pageWidth, pageHeight, margin, safeAddPage, estimatedTotalPages);
         (0, timeline_1.renderTimeline)(doc, auditLogs, pageWidth, pageHeight, margin, safeAddPage, estimatedTotalPages);
-        (0, photos_1.renderPhotosSection)(doc, photos, job.start_date, pageWidth, pageHeight, margin, safeAddPage, estimatedTotalPages);
+        (0, photos_1.renderPhotosSection)(doc, photos, job.start_date, job.end_date, pageWidth, pageHeight, margin, safeAddPage, estimatedTotalPages);
         (0, signatures_1.renderSignaturesAndCompliance)(doc, pageWidth, pageHeight, margin, safeAddPage, estimatedTotalPages);
         // Final footer for last page
         (0, helpers_1.addFooterInline)(doc, organization, job.id, reportGeneratedAt, pageCount, pageCount);

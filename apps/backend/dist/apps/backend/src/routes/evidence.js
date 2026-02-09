@@ -11,6 +11,7 @@ const errorResponse_1 = require("../utils/errorResponse");
 const audit_1 = require("../middleware/audit");
 const idempotency_1 = require("../utils/idempotency");
 const rateLimiter_1 = require("../middleware/rateLimiter");
+const structuredLog_1 = require("../utils/structuredLog");
 const crypto_1 = __importDefault(require("crypto"));
 const busboy_1 = __importDefault(require("busboy"));
 exports.evidenceRouter = express_1.default.Router();
@@ -128,6 +129,43 @@ exports.evidenceRouter.post('/jobs/:id/evidence/upload', auth_1.authenticate, ra
             .eq('idempotency_key', idempotencyKey)
             .maybeSingle();
         if (existingEvidence) {
+            // Idempotent replay: ensure job_photos row exists with category so category is persisted on retries
+            const IMAGE_MIME_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+            const PHOTO_CATEGORIES = ['before', 'during', 'after'];
+            const isImage = existingEvidence.mime_type && IMAGE_MIME_TYPES.includes(existingEvidence.mime_type.toLowerCase());
+            const rawCategory = existingEvidence.phase || existingEvidence.category || '';
+            const photoCategory = isImage
+                ? (rawCategory && PHOTO_CATEGORIES.includes(rawCategory)
+                    ? rawCategory
+                    : 'during')
+                : null;
+            if (photoCategory && existingEvidence.storage_path) {
+                const { data: existingPhoto } = await supabaseClient_1.supabase
+                    .from('job_photos')
+                    .select('id')
+                    .eq('job_id', jobId)
+                    .eq('organization_id', organization_id)
+                    .eq('file_path', existingEvidence.storage_path)
+                    .maybeSingle();
+                if (existingPhoto) {
+                    await supabaseClient_1.supabase
+                        .from('job_photos')
+                        .update({ category: photoCategory })
+                        .eq('id', existingPhoto.id);
+                }
+                else {
+                    const { error: photoError } = await supabaseClient_1.supabase.from('job_photos').insert({
+                        job_id: jobId,
+                        organization_id,
+                        file_path: existingEvidence.storage_path,
+                        category: photoCategory,
+                        created_by: userId,
+                    });
+                    if (photoError) {
+                        (0, structuredLog_1.logWithRequest)('warn', 'job_photos upsert failed on idempotent replay', requestId, { photoError: photoError.message });
+                    }
+                }
+            }
             // Return existing evidence (idempotent)
             res.setHeader('X-Idempotency-Replayed', 'true');
             return res.status(200).json({
@@ -158,9 +196,9 @@ exports.evidenceRouter.post('/jobs/:id/evidence/upload', auth_1.authenticate, ra
             fileData = parsed.file.data;
             fileName = parsed.file.name;
             mimeType = parsed.file.type;
-            // Extract metadata fields
+            // Extract metadata fields (accept both phase and category for compatibility)
             metadata = {
-                phase: parsed.fields.phase || parsed.fields.phase || '',
+                phase: parsed.fields.phase || parsed.fields.category || '',
                 evidence_type: parsed.fields.evidence_type || parsed.fields.tag || '',
                 captured_at: parsed.fields.captured_at || '',
             };
@@ -337,6 +375,43 @@ exports.evidenceRouter.post('/jobs/:id/evidence/upload', auth_1.authenticate, ra
             res.setHeader('X-Error-ID', errorId);
             (0, errorResponse_1.logErrorForSupport)(500, 'DATABASE_ERROR', requestId, organization_id, errorResponse.message, errorResponse.internal_message, 'operations', 'error', '/api/jobs/:id/evidence/upload');
             return res.status(500).json(errorResponse);
+        }
+        // Persist category into job_photos for PDF/report categorization (before/during/after)
+        // Only for image uploads; storage_path aligns with evidence bucket used by consumers
+        const IMAGE_MIME_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+        const PHOTO_CATEGORIES = ['before', 'during', 'after'];
+        const rawCategory = metadata.phase || metadata.category || '';
+        const photoCategory = IMAGE_MIME_TYPES.includes(mimeType.toLowerCase())
+            ? (rawCategory && PHOTO_CATEGORIES.includes(rawCategory)
+                ? rawCategory
+                : 'during')
+            : null;
+        if (photoCategory) {
+            const { data: existingPhoto } = await supabaseClient_1.supabase
+                .from('job_photos')
+                .select('id')
+                .eq('job_id', jobId)
+                .eq('organization_id', organization_id)
+                .eq('file_path', storagePath)
+                .maybeSingle();
+            if (existingPhoto) {
+                await supabaseClient_1.supabase
+                    .from('job_photos')
+                    .update({ category: photoCategory })
+                    .eq('id', existingPhoto.id);
+            }
+            else {
+                const { error: photoError } = await supabaseClient_1.supabase.from('job_photos').insert({
+                    job_id: jobId,
+                    organization_id,
+                    file_path: storagePath,
+                    category: photoCategory,
+                    created_by: userId,
+                });
+                if (photoError) {
+                    (0, structuredLog_1.logWithRequest)('warn', 'job_photos upsert failed for evidence', requestId, { photoError: photoError.message });
+                }
+            }
         }
         // Set ledger_written flag to prevent trigger double-logging
         await supabaseClient_1.supabase.rpc('set_ledger_written');

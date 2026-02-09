@@ -105,27 +105,42 @@ function getSeverityColor(severity) {
         return styles_1.STYLES.colors.riskMedium;
     return styles_1.STYLES.colors.riskLow;
 }
-function categorizePhotos(photos, jobStartDate) {
-    if (!jobStartDate)
-        return { before: [], during: photos, after: [] };
-    const jobStart = new Date(jobStartDate).getTime();
-    const jobEnd = Date.now();
+function categorizePhotos(photos, jobStartDate, jobEndDate) {
+    const jobStart = jobStartDate ? new Date(jobStartDate).getTime() : NaN;
+    const jobEnd = jobEndDate ? new Date(jobEndDate).getTime() : NaN;
     const before = [];
     const during = [];
     const after = [];
     photos.forEach((photo) => {
-        if (!photo.created_at) {
-            during.push(photo);
+        // Process explicit category first (from job_photos); keep assigned category even when jobStartDate is null
+        if (photo.category === 'before' || photo.category === 'during' || photo.category === 'after') {
+            if (photo.category === 'before')
+                before.push(photo);
+            else if (photo.category === 'during')
+                during.push(photo);
+            else
+                after.push(photo);
             return;
         }
-        const photoTime = new Date(photo.created_at).getTime();
-        if (photoTime < jobStart) {
-            before.push(photo);
-        }
-        else if (photoTime > jobEnd) {
-            after.push(photo);
+        // Only when photo.category is missing: fall back to timestamp comparison when job dates available
+        if (Number.isFinite(jobStart)) {
+            if (!photo.created_at) {
+                during.push(photo);
+                return;
+            }
+            const photoTime = new Date(photo.created_at).getTime();
+            if (photoTime < jobStart) {
+                before.push(photo);
+            }
+            else if (Number.isFinite(jobEnd) && photoTime > jobEnd) {
+                after.push(photo);
+            }
+            else {
+                during.push(photo);
+            }
         }
         else {
+            // No job start date: uncategorized photos go to during (legacy behavior)
             during.push(photo);
         }
     });

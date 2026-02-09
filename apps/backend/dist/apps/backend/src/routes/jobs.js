@@ -1325,6 +1325,65 @@ exports.jobsRouter.get("/:id/documents", auth_1.authenticate, async (req, res) =
             .order("created_at", { ascending: true });
         if (error)
             throw error;
+        // Fetch job_photos for category (before/during/after) to include on photo documents
+        const { data: jobPhotos } = await supabaseClient_1.supabase
+            .from("job_photos")
+            .select("file_path, category")
+            .eq("job_id", jobId)
+            .eq("organization_id", organization_id);
+        const categoryByPath = new Map((jobPhotos || []).map((p) => [p.file_path, p.category]));
+        // Image evidence from evidence bucket (iOS uploads): same shape as documents for galleries/re-categorization
+        const IMAGE_MIME_PREFIX = "image/";
+        const DOC_PHOTO_CATEGORIES = ["before", "during", "after"];
+        const { data: imageEvidence } = await supabaseClient_1.supabase
+            .from("evidence")
+            .select("id, storage_path, file_name, mime_type, phase, created_at, uploaded_by")
+            .eq("work_record_id", jobId)
+            .eq("organization_id", organization_id)
+            .eq("state", "sealed");
+        const evidenceAsDocuments = await Promise.all((imageEvidence || [])
+            .filter((ev) => ev.mime_type?.toLowerCase().startsWith(IMAGE_MIME_PREFIX))
+            .map(async (ev) => {
+            const fromJobPhotos = categoryByPath.get(ev.storage_path ?? "");
+            const fromPhase = ev.phase && DOC_PHOTO_CATEGORIES.includes(ev.phase)
+                ? ev.phase
+                : null;
+            const category = fromJobPhotos ?? fromPhase ?? null;
+            try {
+                const { data: signed } = await supabaseClient_1.supabase.storage
+                    .from("evidence")
+                    .createSignedUrl(ev.storage_path, 60 * 10);
+                return {
+                    id: ev.id,
+                    name: ev.file_name ?? "Evidence",
+                    type: "photo",
+                    size: null,
+                    storage_path: ev.storage_path,
+                    mime_type: ev.mime_type,
+                    description: null,
+                    created_at: ev.created_at,
+                    uploaded_by: ev.uploaded_by ?? null,
+                    ...(category ? { category } : {}),
+                    url: signed?.signedUrl ?? null,
+                };
+            }
+            catch (err) {
+                console.warn("Failed to generate evidence signed URL", err);
+                return {
+                    id: ev.id,
+                    name: ev.file_name ?? "Evidence",
+                    type: "photo",
+                    size: null,
+                    storage_path: ev.storage_path,
+                    mime_type: ev.mime_type,
+                    description: null,
+                    created_at: ev.created_at,
+                    uploaded_by: ev.uploaded_by ?? null,
+                    ...(category ? { category } : {}),
+                    url: null,
+                };
+            }
+        }));
         const documentsWithUrls = await Promise.all((data || []).map(async (doc) => {
             try {
                 const { data: signed } = await supabaseClient_1.supabase.storage
@@ -1340,6 +1399,7 @@ exports.jobsRouter.get("/:id/documents", auth_1.authenticate, async (req, res) =
                     description: doc.description,
                     created_at: doc.created_at,
                     uploaded_by: doc.uploaded_by,
+                    ...(doc.type === "photo" ? { category: categoryByPath.get(doc.file_path) ?? null } : {}),
                     url: signed?.signedUrl || null,
                 };
             }
@@ -1355,17 +1415,22 @@ exports.jobsRouter.get("/:id/documents", auth_1.authenticate, async (req, res) =
                     description: doc.description,
                     created_at: doc.created_at,
                     uploaded_by: doc.uploaded_by,
+                    ...(doc.type === "photo" ? { category: categoryByPath.get(doc.file_path) ?? null } : {}),
                     url: null,
                 };
             }
         }));
-        res.json({ data: documentsWithUrls });
+        // Merge documents + evidence bucket images, sort by created_at
+        const merged = [...documentsWithUrls, ...evidenceAsDocuments].sort((a, b) => new Date(a.created_at ?? 0).getTime() - new Date(b.created_at ?? 0).getTime());
+        res.json({ data: merged });
     }
     catch (err) {
         console.error("Docs fetch failed:", err);
         res.status(500).json({ message: "Failed to fetch documents" });
     }
 });
+// Valid photo categories
+const PHOTO_CATEGORIES = ["before", "during", "after"];
 // POST /api/jobs/:id/documents
 // Persists document metadata after upload to storage
 exports.jobsRouter.post("/:id/documents", auth_1.authenticate, requireWriteAccess_1.requireWriteAccess, async (req, res) => {
@@ -1373,16 +1438,27 @@ exports.jobsRouter.post("/:id/documents", auth_1.authenticate, requireWriteAcces
     try {
         const jobId = authReq.params.id;
         const { organization_id, id: userId } = authReq.user;
-        const { name, type = "photo", file_path, file_size, mime_type, description } = authReq.body || {};
+        const { name, type = "photo", file_path, file_size, mime_type, description, category } = authReq.body || {};
         if (!name || !file_path || file_size === undefined || !mime_type) {
             return res.status(400).json({
                 message: "Missing required metadata: name, file_path, file_size, mime_type",
+            });
+        }
+        if (type === "photo" && category !== undefined && !PHOTO_CATEGORIES.includes(category)) {
+            return res.status(400).json({
+                message: "Invalid category. Must be one of: before, during, after",
             });
         }
         const parsedFileSize = Number(file_size);
         if (!Number.isFinite(parsedFileSize) || parsedFileSize <= 0) {
             return res.status(400).json({ message: "file_size must be a positive number" });
         }
+        // Photo category: validate, default to 'during' for photos when omitted
+        const photoCategory = type === "photo" && category && PHOTO_CATEGORIES.includes(category)
+            ? category
+            : type === "photo"
+                ? "during"
+                : undefined;
         // Verify job belongs to organization
         const { data: job, error: jobError } = await supabaseClient_1.supabase
             .from("jobs")
@@ -1410,6 +1486,25 @@ exports.jobsRouter.post("/:id/documents", auth_1.authenticate, requireWriteAcces
             .single();
         if (insertError) {
             throw insertError;
+        }
+        // When type is photo, insert job_photos row with category
+        if (type === "photo" && photoCategory) {
+            const { error: photoError } = await supabaseClient_1.supabase
+                .from("job_photos")
+                .insert({
+                job_id: jobId,
+                organization_id,
+                file_path: inserted.file_path,
+                description: description ?? null,
+                category: photoCategory,
+                created_by: userId,
+            });
+            if (photoError) {
+                console.error("job_photos insert failed:", photoError);
+                // Delete the document to avoid orphaned metadata without category
+                await supabaseClient_1.supabase.from("documents").delete().eq("id", inserted.id);
+                return res.status(500).json({ message: "Failed to save photo category" });
+            }
         }
         const { data: signed } = await supabaseClient_1.supabase.storage
             .from("documents")
@@ -1445,6 +1540,7 @@ exports.jobsRouter.post("/:id/documents", auth_1.authenticate, requireWriteAcces
                 description: inserted.description,
                 created_at: inserted.created_at,
                 uploaded_by: inserted.uploaded_by,
+                ...(type === "photo" && photoCategory ? { category: photoCategory } : {}),
                 url: signed?.signedUrl || null,
             },
         });
@@ -1452,6 +1548,116 @@ exports.jobsRouter.post("/:id/documents", auth_1.authenticate, requireWriteAcces
     catch (err) {
         console.error("Document metadata save failed:", err);
         res.status(500).json({ message: "Failed to save document metadata" });
+    }
+});
+// PATCH /api/jobs/:id/documents/:docId
+// Update photo category (before|during|after). Only applies to photos; category is stored in job_photos.
+exports.jobsRouter.patch("/:id/documents/:docId", auth_1.authenticate, requireWriteAccess_1.requireWriteAccess, async (req, res) => {
+    const authReq = req;
+    try {
+        const jobId = authReq.params.id;
+        const docId = authReq.params.docId;
+        const { organization_id, id: userId } = authReq.user;
+        const { category } = authReq.body || {};
+        if (category === undefined) {
+            return res.status(400).json({ message: "Missing category in body" });
+        }
+        if (!PHOTO_CATEGORIES.includes(category)) {
+            return res.status(400).json({
+                message: "Invalid category. Must be one of: before, during, after",
+            });
+        }
+        // Verify job belongs to organization
+        const { data: job, error: jobError } = await supabaseClient_1.supabase
+            .from("jobs")
+            .select("id, organization_id")
+            .eq("id", jobId)
+            .eq("organization_id", organization_id)
+            .single();
+        if (jobError || !job) {
+            return res.status(404).json({ message: "Job not found" });
+        }
+        // Load document and ensure it is a photo
+        const { data: doc, error: docError } = await supabaseClient_1.supabase
+            .from("documents")
+            .select("id, file_path, type, name, description, created_at")
+            .eq("id", docId)
+            .eq("job_id", jobId)
+            .eq("organization_id", organization_id)
+            .maybeSingle();
+        if (docError)
+            throw docError;
+        if (!doc) {
+            return res.status(404).json({ message: "Document not found" });
+        }
+        if (doc.type !== "photo") {
+            return res.status(400).json({
+                message: "Category can only be updated for photos",
+            });
+        }
+        const categoryValue = category;
+        // Update or insert job_photos row (by job_id, organization_id, file_path)
+        const { data: existing } = await supabaseClient_1.supabase
+            .from("job_photos")
+            .select("id")
+            .eq("job_id", jobId)
+            .eq("organization_id", organization_id)
+            .eq("file_path", doc.file_path)
+            .maybeSingle();
+        if (existing) {
+            const { data: updated, error: updateError } = await supabaseClient_1.supabase
+                .from("job_photos")
+                .update({ category: categoryValue })
+                .eq("id", existing.id)
+                .select()
+                .single();
+            if (updateError)
+                throw updateError;
+            invalidateJobReportCache(organization_id, jobId);
+            return res.json({
+                ok: true,
+                data: {
+                    id: doc.id,
+                    file_path: doc.file_path,
+                    type: doc.type,
+                    name: doc.name,
+                    description: doc.description,
+                    created_at: doc.created_at,
+                    category: updated?.category ?? categoryValue,
+                },
+            });
+        }
+        // No job_photos row: insert one (e.g. legacy photo)
+        const { data: inserted, error: insertError } = await supabaseClient_1.supabase
+            .from("job_photos")
+            .insert({
+            job_id: jobId,
+            organization_id,
+            file_path: doc.file_path,
+            category: categoryValue,
+            created_by: userId,
+        })
+            .select()
+            .single();
+        if (insertError)
+            throw insertError;
+        invalidateJobReportCache(organization_id, jobId);
+        return res.json({
+            ok: true,
+            data: {
+                id: doc.id,
+                file_path: doc.file_path,
+                type: doc.type,
+                name: doc.name,
+                description: doc.description,
+                created_at: doc.created_at,
+                category: inserted?.category ?? categoryValue,
+            },
+        });
+    }
+    catch (err) {
+        console.error("Document category update failed:", err);
+        res.status(500).json({ message: "Failed to update photo category" });
     }
 });
 // GET /api/jobs/:id/audit
@@ -1887,11 +2093,35 @@ exports.jobsRouter.post("/:id/proof-pack", auth_1.authenticate, async (req, res)
         if (!reportData?.job) {
             return res.status(404).json({ message: "Job not found" });
         }
+        // Build photos array from reportData.documents: fetch photo docs, download storage objects, preserve description/created_at/category
+        const photoDocuments = (reportData.documents ?? []).filter((doc) => doc.type === "photo" && doc.file_path);
+        const photos = (await Promise.all(photoDocuments.map(async (document) => {
+            try {
+                const bucket = document.source_bucket === "evidence" ? "evidence" : "documents";
+                const { data: fileData } = await supabaseClient_1.supabase.storage
+                    .from(bucket)
+                    .download(document.file_path);
+                if (!fileData) {
+                    return null;
+                }
+                const arrayBuffer = await fileData.arrayBuffer();
+                return {
+                    name: document.name,
+                    description: document.description,
+                    created_at: document.created_at,
+                    buffer: Buffer.from(arrayBuffer),
+                    category: document.category ?? undefined,
+                };
+            }
+            catch (error) {
+                console.warn("Failed to include photo in proof-pack PDF", error);
+                return null;
+            }
+        }))).filter((item) => item !== null);
         // For now, use the existing PDF generation
         // TODO: Create pack-specific PDF templates
         const { generateRiskSnapshotPDF } = await Promise.resolve().then(() => __importStar(require("../utils/pdf")));
-        const pdfBuffer = await generateRiskSnapshotPDF(reportData.job, reportData.risk_score, reportData.mitigations || [], reportData.organization ?? { id: organization_id, name: reportData.job?.client_name ?? "Organization" }, [], // Photos - can be enhanced later
-        reportData.audit || []);
+        const pdfBuffer = await generateRiskSnapshotPDF(reportData.job, reportData.risk_score, reportData.mitigations || [], reportData.organization ?? { id: organization_id, name: reportData.job?.client_name ?? "Organization" }, photos, reportData.audit || []);
         const pdfBase64 = pdfBuffer.toString("base64");
         // Log audit event
         // Extract client metadata from request
