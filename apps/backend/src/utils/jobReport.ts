@@ -82,7 +82,7 @@ export async function buildJobReport(
           ev.phase && PHOTO_CATEGORIES.includes(ev.phase as (typeof PHOTO_CATEGORIES)[number])
             ? (ev.phase as (typeof PHOTO_CATEGORIES)[number])
             : null;
-        const category = fromJobPhotos ?? fromPhase ?? "during";
+        const category = fromJobPhotos ?? fromPhase ?? null;
         return {
           id: ev.id,
           file_path: ev.storage_path ?? "",
@@ -92,7 +92,7 @@ export async function buildJobReport(
           description: ev.evidence_type || ev.file_name || null,
           created_at: ev.created_at ?? null,
           uploaded_by: ev.uploaded_by ?? null,
-          category,
+          ...(category != null ? { category } : {}),
           source_bucket: "evidence" as const,
         };
       });
