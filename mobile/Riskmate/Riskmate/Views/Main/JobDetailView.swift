@@ -1431,7 +1431,9 @@ struct EvidenceCard: View {
                         Text(item.fileName)
                             .font(RMTheme.Typography.bodySmallBold)
                             .foregroundColor(RMTheme.Colors.textPrimary)
-                        CategoryBadge(category: item.category.map { $0.isEmpty ? "during" : $0 } ?? "during")
+                        if item.type == "photo", let category = item.category, !category.isEmpty {
+                            CategoryBadge(category: category)
+                        }
                     }
                     Text(formatDate(item.uploadedAt))
                         .font(RMTheme.Typography.caption)

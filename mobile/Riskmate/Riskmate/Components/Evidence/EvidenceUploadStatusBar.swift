@@ -203,8 +203,6 @@ struct EvidenceUploadStatusBar: View {
     }
     
     private func retryFailedUploads() {
-        guard jobId != nil else { return }
-        
         Haptics.tap()
         
         Task {
