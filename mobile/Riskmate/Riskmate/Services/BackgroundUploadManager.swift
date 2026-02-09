@@ -1,6 +1,7 @@
 import Foundation
 import UIKit
 import Combine
+import CryptoKit
 
 /// Background upload manager for evidence and documents
 /// Handles background URLSession uploads that continue even when app is backgrounded
@@ -83,7 +84,7 @@ class BackgroundUploadManager: NSObject, ObservableObject {
         let fileURL = FileManager.default.temporaryDirectory
             .appendingPathComponent(tempFileName)
         
-        // Create upload task (store file URL for retries)
+        // Create upload task (store file URL for retries); do not persist until file is on disk
         let upload = UploadTask(
             id: evidenceId,
             jobId: jobId,
@@ -94,9 +95,6 @@ class BackgroundUploadManager: NSObject, ObservableObject {
             idempotencyKey: idempotencyKey,
             fileURL: fileURL.path
         )
-        
-        uploads.append(upload)
-        saveUploads()
         
         // Create multipart form data
         let boundary = UUID().uuidString
@@ -122,6 +120,10 @@ class BackgroundUploadManager: NSObject, ObservableObject {
         } catch {
             throw UploadError.uploadFailed("Failed to write upload file to disk: \(error.localizedDescription)")
         }
+        
+        // Persist upload only after temp file exists so retries have a valid source file
+        uploads.append(upload)
+        saveUploads()
         
         // Create request
         let baseURL = AppConfig.shared.backendURL
@@ -154,13 +156,15 @@ class BackgroundUploadManager: NSObject, ObservableObject {
         task.resume()
     }
     
-    /// Generate idempotency key from file data and evidence ID
+    /// Generate idempotency key from file data and evidence ID (deterministic SHA256, stable across app launches)
     private func generateIdempotencyKey(fileData: Data, evidenceId: String) -> String {
-        var hasher = Hasher()
-        hasher.combine(fileData)
-        hasher.combine(evidenceId)
-        let hash = hasher.finalize()
-        return "\(evidenceId)-\(abs(hash))"
+        var input = Data()
+        if let idData = evidenceId.data(using: .utf8) {
+            input.append(idData)
+        }
+        input.append(fileData)
+        let hash = SHA256.hash(data: input)
+        return hash.map { String(format: "%02x", $0) }.joined()
     }
     
     /// Reconcile uploads on app launch - check for completed tasks
