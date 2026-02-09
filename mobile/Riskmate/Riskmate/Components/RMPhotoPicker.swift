@@ -5,7 +5,7 @@ import PhotosUI
 struct RMPhotoPicker: View {
     let jobId: String
     /// Photo category (before/during/after). Defaults to "during" when used without category selection.
-    var phase: String = "during"
+    var category: String = "during"
     @Environment(\.dismiss) private var dismiss
     @State private var selectedItems: [PhotosPickerItem] = []
     @State private var isUploading = false
@@ -76,7 +76,7 @@ struct RMPhotoPicker: View {
                     fileData: jpegData,
                     fileName: fileName,
                     mimeType: "image/jpeg",
-                    phase: phase
+                    category: category
                 )
             } catch {
                 print("[RMPhotoPicker] Upload failed: \(error)")

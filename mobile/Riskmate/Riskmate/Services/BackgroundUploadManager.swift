@@ -46,14 +46,14 @@ class BackgroundUploadManager: NSObject, ObservableObject {
     
     /// Start uploading evidence in background
     /// - Parameters:
-    ///   - phase: Photo category: "before", "during", or "after". Defaults to "during" if nil.
+    ///   - category: Photo category: "before", "during", or "after". Defaults to "during" if nil.
     func uploadEvidence(
         jobId: String,
         evidenceId: String,
         fileData: Data,
         fileName: String,
         mimeType: String,
-        phase: String? = nil
+        category: String? = nil
     ) async throws {
         // Check for duplicate upload (idempotency)
         if uploads.contains(where: { upload in
@@ -99,12 +99,18 @@ class BackgroundUploadManager: NSObject, ObservableObject {
         // Create multipart form data
         let boundary = UUID().uuidString
         var body = Data()
-        let phaseValue = phase ?? "during"
+        let categoryValue = category ?? "during"
         
-        // Add phase (photo category: before/during/after) — backend reads "phase"
+        // Add category (photo category: before/during/after) — backend reads "category"
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"category\"\r\n\r\n".data(using: .utf8)!)
+        body.append(categoryValue.data(using: .utf8)!)
+        body.append("\r\n".data(using: .utf8)!)
+        
+        // Backward compatibility: also send phase for legacy backend support
         body.append("--\(boundary)\r\n".data(using: .utf8)!)
         body.append("Content-Disposition: form-data; name=\"phase\"\r\n\r\n".data(using: .utf8)!)
-        body.append(phaseValue.data(using: .utf8)!)
+        body.append(categoryValue.data(using: .utf8)!)
         body.append("\r\n".data(using: .utf8)!)
         
         // Add file data

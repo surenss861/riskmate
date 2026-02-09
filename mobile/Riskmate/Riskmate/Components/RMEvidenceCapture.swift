@@ -216,7 +216,7 @@ struct RMEvidenceCapture: View {
                     fileData: data,
                     fileName: fileName,
                     mimeType: "image/jpeg",
-                    phase: selectedPhase.rawValue
+                    category: selectedPhase.rawValue
                 )
                 await MainActor.run {
                     withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
@@ -561,7 +561,7 @@ struct PhotoPickerView: View {
                                     fileData: jpegData,
                                     fileName: fileName,
                                     mimeType: mimeType,
-                                    phase: phase.rawValue
+                                    category: phase.rawValue
                                 )
                                 DispatchQueue.main.async {
                                     onCapture()
