@@ -384,6 +384,45 @@ evidenceRouter.post(
         return res.status(500).json(errorResponse)
       }
 
+      // Persist category into job_photos for PDF/report categorization (before/during/after)
+      // Only for image uploads; storage_path aligns with evidence bucket used by consumers
+      const IMAGE_MIME_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
+      const PHOTO_CATEGORIES = ['before', 'during', 'after'] as const
+      const rawCategory = metadata.phase || metadata.category || ''
+      const photoCategory = IMAGE_MIME_TYPES.includes(mimeType.toLowerCase())
+        ? (rawCategory && PHOTO_CATEGORIES.includes(rawCategory as (typeof PHOTO_CATEGORIES)[number])
+            ? (rawCategory as (typeof PHOTO_CATEGORIES)[number])
+            : 'during')
+        : null
+
+      if (photoCategory) {
+        const { data: existingPhoto } = await supabase
+          .from('job_photos')
+          .select('id')
+          .eq('job_id', jobId)
+          .eq('organization_id', organization_id)
+          .eq('file_path', storagePath)
+          .maybeSingle()
+
+        if (existingPhoto) {
+          await supabase
+            .from('job_photos')
+            .update({ category: photoCategory })
+            .eq('id', existingPhoto.id)
+        } else {
+          const { error: photoError } = await supabase.from('job_photos').insert({
+            job_id: jobId,
+            organization_id,
+            file_path: storagePath,
+            category: photoCategory,
+            created_by: userId,
+          })
+          if (photoError) {
+            logWithRequest(requestId, 'warn', { msg: 'job_photos upsert failed for evidence', photoError: photoError.message })
+          }
+        }
+      }
+
       // Set ledger_written flag to prevent trigger double-logging
       await supabase.rpc('set_ledger_written')
 
