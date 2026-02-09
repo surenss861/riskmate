@@ -1358,8 +1358,8 @@ struct EvidenceItem: Identifiable, Codable {
     let type: String
     let fileName: String
     let uploadedAt: Date
-    /// Photo category from API: "before", "during", or "after" (evidence.phase)
-    let phase: String?
+    /// Photo category from API: "before", "during", or "after" (evidence.category; legacy phase supported on decode)
+    let category: String?
     
     enum CodingKeys: String, CodingKey {
         case id
@@ -1367,15 +1367,16 @@ struct EvidenceItem: Identifiable, Codable {
         case fileName = "file_name"
         case uploadedAt = "uploaded_at"
         case createdAt = "created_at"
+        case category
         case phase
     }
     
-    init(id: String, type: String, fileName: String, uploadedAt: Date, phase: String? = nil) {
+    init(id: String, type: String, fileName: String, uploadedAt: Date, category: String? = nil) {
         self.id = id
         self.type = type
         self.fileName = fileName
         self.uploadedAt = uploadedAt
-        self.phase = phase
+        self.category = category
     }
     
     init(from decoder: Decoder) throws {
@@ -1385,7 +1386,8 @@ struct EvidenceItem: Identifiable, Codable {
         fileName = try c.decode(String.self, forKey: .fileName)
         uploadedAt = try c.decodeIfPresent(Date.self, forKey: .uploadedAt)
             ?? c.decode(Date.self, forKey: .createdAt)
-        phase = try c.decodeIfPresent(String.self, forKey: .phase)
+        category = try c.decodeIfPresent(String.self, forKey: .category)
+            ?? c.decodeIfPresent(String.self, forKey: .phase)
     }
     
     func encode(to encoder: Encoder) throws {
@@ -1394,7 +1396,7 @@ struct EvidenceItem: Identifiable, Codable {
         try c.encode(type, forKey: .type)
         try c.encode(fileName, forKey: .fileName)
         try c.encode(uploadedAt, forKey: .uploadedAt)
-        try c.encodeIfPresent(phase, forKey: .phase)
+        try c.encodeIfPresent(category, forKey: .category)
     }
 }
 
@@ -1413,8 +1415,8 @@ struct EvidenceCard: View {
                         Text(item.fileName)
                             .font(RMTheme.Typography.bodySmallBold)
                             .foregroundColor(RMTheme.Colors.textPrimary)
-                        if let phase = item.phase, !phase.isEmpty {
-                            CategoryBadge(phase: phase)
+                        if let category = item.category, !category.isEmpty {
+                            CategoryBadge(category: category)
                         }
                     }
                     Text(formatDate(item.uploadedAt))
@@ -1437,10 +1439,10 @@ struct EvidenceCard: View {
 
 /// Category badge for Before/During/After (ticket: iOS Native Photo Category Selection)
 struct CategoryBadge: View {
-    let phase: String
+    let category: String
     
     private var displayName: String {
-        switch phase.lowercased() {
+        switch category.lowercased() {
         case "before": return "Before"
         case "after": return "After"
         default: return "During"
@@ -1448,7 +1450,7 @@ struct CategoryBadge: View {
     }
     
     private var badgeColor: Color {
-        switch phase.lowercased() {
+        switch category.lowercased() {
         case "before": return .blue
         case "after": return .green
         default: return .orange
