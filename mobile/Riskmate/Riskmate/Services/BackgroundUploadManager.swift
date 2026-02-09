@@ -172,7 +172,57 @@ class BackgroundUploadManager: NSObject, ObservableObject {
         let hash = SHA256.hash(data: input)
         return hash.map { String(format: "%02x", $0) }.joined()
     }
-    
+
+    /// Extracts the raw file part body from a multipart/form-data file (strips part headers).
+    /// Used to regenerate idempotency key for legacy uploads so it matches the original request.
+    private func extractRawFileBytesFromMultipart(fileURL: URL) throws -> Data {
+        let data = try Data(contentsOf: fileURL)
+        var idx = data.startIndex
+        while idx < data.endIndex && data[idx] != 0x0d && data[idx] != 0x0a {
+            idx = data.index(after: idx)
+        }
+        guard idx > data.startIndex,
+              let firstLine = String(data: data[data.startIndex..<idx], encoding: .utf8),
+              firstLine.hasPrefix("--") else {
+            throw UploadError.uploadFailed("Invalid multipart file format - please add evidence again")
+        }
+        let boundary = String(firstLine.dropFirst(2))
+        let boundaryDelim = "\r\n--\(boundary)\r\n"
+        let boundaryEnd = "\r\n--\(boundary)--"
+        guard let boundaryDelimData = boundaryDelim.data(using: .utf8),
+              let boundaryEndData = boundaryEnd.data(using: .utf8),
+              let doubleNewline = "\r\n\r\n".data(using: .utf8),
+              let filePartPrefix = "name=\"file\"".data(using: .utf8) else {
+            throw UploadError.uploadFailed("Invalid multipart encoding - please add evidence again")
+        }
+        var searchStart = data.startIndex
+        while searchStart < data.endIndex {
+            guard let range = data.range(of: boundaryDelimData, range: searchStart..<data.endIndex) else {
+                break
+            }
+            let partStart = range.upperBound
+            let partSlice = data[partStart..<data.endIndex]
+            guard let headerEndRange = partSlice.range(of: doubleNewline) else {
+                searchStart = range.upperBound
+                continue
+            }
+            let headers = data[partStart..<headerEndRange.lowerBound]
+            if headers.range(of: filePartPrefix) != nil {
+                let bodyStart = headerEndRange.upperBound
+                let afterBody = data[bodyStart..<data.endIndex]
+                if let endRange = afterBody.range(of: boundaryDelimData) {
+                    return Data(data[bodyStart..<endRange.lowerBound])
+                }
+                if let endRange = afterBody.range(of: boundaryEndData) {
+                    return Data(data[bodyStart..<endRange.lowerBound])
+                }
+                throw UploadError.uploadFailed("Invalid multipart file format - file part not terminated - please add evidence again")
+            }
+            searchStart = range.upperBound
+        }
+        throw UploadError.uploadFailed("File part not found in multipart - please add evidence again")
+    }
+
     /// Reconcile uploads on app launch - check for completed tasks
     private func reconcileOnLaunch() {
         // Get all active background tasks
@@ -248,7 +298,15 @@ class BackgroundUploadManager: NSObject, ObservableObject {
             throw UploadError.invalidURL
         }
         
-        let idempotencyKey = upload.idempotencyKey ?? generateIdempotencyKey(fileData: try Data(contentsOf: fileURL), evidenceId: upload.id)
+        // Use persisted idempotency key so retries do not create duplicate evidence. For legacy
+        // uploads without a stored key, regenerate from raw file bytes (strip multipart headers).
+        let idempotencyKey: String
+        if let key = upload.idempotencyKey {
+            idempotencyKey = key
+        } else {
+            let rawFileBytes = try extractRawFileBytesFromMultipart(fileURL: fileURL)
+            idempotencyKey = generateIdempotencyKey(fileData: rawFileBytes, evidenceId: upload.id)
+        }
         
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -443,6 +501,10 @@ struct UploadTask: Identifiable, Codable, Equatable {
     var retryCount: Int = 0
     var idempotencyKey: String?
     var fileURL: String? // Path to temporary file for background uploads
+
+    enum CodingKeys: String, CodingKey {
+        case id, jobId, fileName, state, progress, createdAt, retryCount, idempotencyKey, fileURL
+    }
 }
 
 enum UploadState: Codable, Equatable {
