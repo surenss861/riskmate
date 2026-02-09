@@ -546,29 +546,28 @@ struct PhotoPickerView: View {
                 
                 for item in addedItems {
                     item.loadTransferable(type: Data.self) { result in
-                        if case .success(let data) = result, let data = data {
-                            // Upload with metadata
-                            Task {
-                                let evidenceId = "ev_\(UUID().uuidString)"
-                                let fileName = "evidence_\(Date().timeIntervalSince1970).jpg" // Default to jpg, could detect from item
-                                let mimeType = "image/jpeg" // Default, could detect from item
-                                
-                                do {
-                                    try await uploadManager.uploadEvidence(
-                                        jobId: jobId,
-                                        evidenceId: evidenceId,
-                                        fileData: data,
-                                        fileName: fileName,
-                                        mimeType: mimeType,
-                                        phase: phase.rawValue
-                                    )
-                                    // Trigger progressive disclosure after first photo
-                                    DispatchQueue.main.async {
-                                        onCapture()
-                                    }
-                                } catch {
-                                    print("Failed to upload evidence: \(error)")
+                        guard case .success(let rawData) = result, let rawData = rawData else { return }
+                        // Load into UIImage and re-encode as JPEG so HEIC (and other formats) upload correctly
+                        guard let image = UIImage(data: rawData),
+                              let jpegData = image.jpegData(compressionQuality: 0.8) else { return }
+                        Task {
+                            let evidenceId = "ev_\(UUID().uuidString)"
+                            let fileName = "evidence_\(Date().timeIntervalSince1970).jpg"
+                            let mimeType = "image/jpeg"
+                            do {
+                                try await uploadManager.uploadEvidence(
+                                    jobId: jobId,
+                                    evidenceId: evidenceId,
+                                    fileData: jpegData,
+                                    fileName: fileName,
+                                    mimeType: mimeType,
+                                    phase: phase.rawValue
+                                )
+                                DispatchQueue.main.async {
+                                    onCapture()
                                 }
+                            } catch {
+                                print("Failed to upload evidence: \(error)")
                             }
                         }
                     }
