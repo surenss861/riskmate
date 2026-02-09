@@ -1792,35 +1792,65 @@ jobsRouter.patch("/:id/documents/:docId", authenticate, requireWriteAccess, asyn
       .maybeSingle();
 
     if (docError) throw docError;
-    if (!doc) {
-      return res.status(404).json({ message: "Document not found" });
-    }
-    if (doc.type !== "photo") {
-      return res.status(400).json({
-        message: "Category can only be updated for photos",
-      });
-    }
 
     const categoryValue = category as (typeof PHOTO_CATEGORIES)[number];
+    const IMAGE_MIME_PREFIX = "image/";
 
-    // Update or insert job_photos row (by job_id, organization_id, file_path)
-    const { data: existing } = await supabase
-      .from("job_photos")
-      .select("id")
-      .eq("job_id", jobId)
-      .eq("organization_id", organization_id)
-      .eq("file_path", doc.file_path)
-      .maybeSingle();
+    // Path 1: document found in documents table — existing behavior unchanged
+    if (doc) {
+      if (doc.type !== "photo") {
+        return res.status(400).json({
+          message: "Category can only be updated for photos",
+        });
+      }
 
-    if (existing) {
-      const { data: updated, error: updateError } = await supabase
+      // Update or insert job_photos row (by job_id, organization_id, file_path)
+      const { data: existing } = await supabase
         .from("job_photos")
-        .update({ category: categoryValue })
-        .eq("id", existing.id)
+        .select("id")
+        .eq("job_id", jobId)
+        .eq("organization_id", organization_id)
+        .eq("file_path", doc.file_path)
+        .maybeSingle();
+
+      if (existing) {
+        const { data: updated, error: updateError } = await supabase
+          .from("job_photos")
+          .update({ category: categoryValue })
+          .eq("id", existing.id)
+          .select()
+          .single();
+
+        if (updateError) throw updateError;
+        invalidateJobReportCache(organization_id, jobId);
+        return res.json({
+          ok: true,
+          data: {
+            id: doc.id,
+            file_path: doc.file_path,
+            type: doc.type,
+            name: doc.name,
+            description: doc.description,
+            created_at: doc.created_at,
+            category: updated?.category ?? categoryValue,
+          },
+        });
+      }
+
+      // No job_photos row: insert one (e.g. legacy photo)
+      const { data: inserted, error: insertError } = await supabase
+        .from("job_photos")
+        .insert({
+          job_id: jobId,
+          organization_id,
+          file_path: doc.file_path,
+          category: categoryValue,
+          created_by: userId,
+        })
         .select()
         .single();
 
-      if (updateError) throw updateError;
+      if (insertError) throw insertError;
       invalidateJobReportCache(organization_id, jobId);
       return res.json({
         ok: true,
@@ -1831,18 +1861,71 @@ jobsRouter.patch("/:id/documents/:docId", authenticate, requireWriteAccess, asyn
           name: doc.name,
           description: doc.description,
           created_at: doc.created_at,
+          category: inserted?.category ?? categoryValue,
+        },
+      });
+    }
+
+    // Path 2: no documents row — try evidence table (iOS/evidence photos)
+    const { data: ev, error: evError } = await supabase
+      .from("evidence")
+      .select("id, storage_path, file_name, mime_type, evidence_type, created_at")
+      .eq("id", docId)
+      .eq("work_record_id", jobId)
+      .eq("organization_id", organization_id)
+      .eq("state", "sealed")
+      .maybeSingle();
+
+    if (evError) throw evError;
+    if (!ev) {
+      return res.status(404).json({ message: "Document not found" });
+    }
+
+    if (!ev.mime_type?.toLowerCase().startsWith(IMAGE_MIME_PREFIX)) {
+      return res.status(400).json({
+        message: "Category can only be updated for photos",
+      });
+    }
+
+    const storagePath = ev.storage_path ?? "";
+    const { data: existingPhoto } = await supabase
+      .from("job_photos")
+      .select("id")
+      .eq("job_id", jobId)
+      .eq("organization_id", organization_id)
+      .eq("file_path", storagePath)
+      .maybeSingle();
+
+    if (existingPhoto) {
+      const { data: updated, error: updateError } = await supabase
+        .from("job_photos")
+        .update({ category: categoryValue })
+        .eq("id", existingPhoto.id)
+        .select()
+        .single();
+
+      if (updateError) throw updateError;
+      invalidateJobReportCache(organization_id, jobId);
+      return res.json({
+        ok: true,
+        data: {
+          id: ev.id,
+          file_path: storagePath,
+          type: "photo" as const,
+          name: ev.file_name ?? "Evidence",
+          description: ev.evidence_type ?? null,
+          created_at: ev.created_at,
           category: updated?.category ?? categoryValue,
         },
       });
     }
 
-    // No job_photos row: insert one (e.g. legacy photo)
     const { data: inserted, error: insertError } = await supabase
       .from("job_photos")
       .insert({
         job_id: jobId,
         organization_id,
-        file_path: doc.file_path,
+        file_path: storagePath,
         category: categoryValue,
         created_by: userId,
       })
@@ -1854,12 +1937,12 @@ jobsRouter.patch("/:id/documents/:docId", authenticate, requireWriteAccess, asyn
     return res.json({
       ok: true,
       data: {
-        id: doc.id,
-        file_path: doc.file_path,
-        type: doc.type,
-        name: doc.name,
-        description: doc.description,
-        created_at: doc.created_at,
+        id: ev.id,
+        file_path: storagePath,
+        type: "photo" as const,
+        name: ev.file_name ?? "Evidence",
+        description: ev.evidence_type ?? null,
+        created_at: ev.created_at,
         category: inserted?.category ?? categoryValue,
       },
     });
