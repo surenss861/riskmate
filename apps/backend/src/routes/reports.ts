@@ -133,8 +133,9 @@ reportsRouter.post("/generate/:jobId", authenticate as unknown as RequestHandler
       await Promise.all(
         photoDocuments.map(async (document: any) => {
           try {
+            const bucket = document.source_bucket === "evidence" ? "evidence" : "documents";
             const { data: fileData } = await supabase.storage
-              .from("documents")
+              .from(bucket)
               .download(document.file_path);
 
             if (!fileData) {

@@ -157,6 +157,45 @@ evidenceRouter.post(
         .maybeSingle()
 
       if (existingEvidence) {
+        // Idempotent replay: ensure job_photos row exists with category so category is persisted on retries
+        const IMAGE_MIME_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
+        const PHOTO_CATEGORIES = ['before', 'during', 'after'] as const
+        const isImage = existingEvidence.mime_type && IMAGE_MIME_TYPES.includes(existingEvidence.mime_type.toLowerCase())
+        const rawCategory = existingEvidence.phase || (existingEvidence as any).category || ''
+        const photoCategory = isImage
+          ? (rawCategory && PHOTO_CATEGORIES.includes(rawCategory as (typeof PHOTO_CATEGORIES)[number])
+              ? (rawCategory as (typeof PHOTO_CATEGORIES)[number])
+              : 'during')
+          : null
+
+        if (photoCategory && existingEvidence.storage_path) {
+          const { data: existingPhoto } = await supabase
+            .from('job_photos')
+            .select('id')
+            .eq('job_id', jobId)
+            .eq('organization_id', organization_id)
+            .eq('file_path', existingEvidence.storage_path)
+            .maybeSingle()
+
+          if (existingPhoto) {
+            await supabase
+              .from('job_photos')
+              .update({ category: photoCategory })
+              .eq('id', existingPhoto.id)
+          } else {
+            const { error: photoError } = await supabase.from('job_photos').insert({
+              job_id: jobId,
+              organization_id,
+              file_path: existingEvidence.storage_path,
+              category: photoCategory,
+              created_by: userId,
+            })
+            if (photoError) {
+              logWithRequest(requestId, 'warn', { msg: 'job_photos upsert failed on idempotent replay', photoError: photoError.message })
+            }
+          }
+        }
+
         // Return existing evidence (idempotent)
         res.setHeader('X-Idempotency-Replayed', 'true')
         return res.status(200).json({
