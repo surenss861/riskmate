@@ -55,3 +55,7 @@ next-env.d.ts
 
 # iOS Xcode build artifacts (custom DerivedData in repo)
 mobile/Riskmate/.xcode-build/
+
+# Xcode user-specific state (machine-specific, causes merge conflicts)
+**/xcuserdata/
+*.xcuserstate
