@@ -17,6 +17,16 @@ export interface PhotoForCategory {
  * When end date is missing, photos after start date remain in 'during'.
  * Defaults to 'during' when dates are unavailable.
  */
+/**
+ * Returns the default photo category based on job status.
+ * Used when uploading photos to pre-select the most likely category.
+ */
+export function getDefaultPhotoCategory(jobStatus: string): PhotoCategory {
+  if (jobStatus === 'draft') return 'before'
+  if (jobStatus === 'completed' || jobStatus === 'archived') return 'after'
+  return 'during'
+}
+
 export function getEffectivePhotoCategory(
   photo: PhotoForCategory,
   jobStartDate?: string | null,

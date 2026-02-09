@@ -7,15 +7,9 @@ import { cardStyles, buttonStyles, typography } from '@/lib/styles/design-system
 import { jobsApi } from '@/lib/api'
 import { useRouter } from 'next/navigation'
 import { TrustReceiptStrip, IntegrityBadge, EnforcementBanner, EmptyState } from '@/components/shared'
-import { getEffectivePhotoCategory, type PhotoCategory } from '@/lib/utils/photoCategory'
+import { getEffectivePhotoCategory, getDefaultPhotoCategory, type PhotoCategory } from '@/lib/utils/photoCategory'
 
 export type { PhotoCategory }
-
-function getDefaultCategory(jobStatus: string): PhotoCategory {
-  if (jobStatus === 'draft') return 'before'
-  if (jobStatus === 'completed' || jobStatus === 'archived') return 'after'
-  return 'during'
-}
 
 type UploadTaskStatus = 'uploading' | 'success' | 'failed'
 
@@ -102,13 +96,13 @@ export function JobPacketView({
   const [uploadQueue, setUploadQueue] = useState<UploadTask[]>([])
   const [uploadModalOpen, setUploadModalOpen] = useState(false)
   const [pendingFiles, setPendingFiles] = useState<File[]>([])
-  const [uploadCategory, setUploadCategory] = useState<PhotoCategory>(() => getDefaultCategory(job.status))
+  const [uploadCategory, setUploadCategory] = useState<PhotoCategory>(() => getDefaultPhotoCategory(job.status))
   const [photoFilter, setPhotoFilter] = useState<'all' | PhotoCategory>('all')
   const [categoryDropdownOpen, setCategoryDropdownOpen] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    setUploadCategory(getDefaultCategory(job.status))
+    setUploadCategory(getDefaultPhotoCategory(job.status))
   }, [job.status])
 
   const runUpload = async (task: UploadTask, category?: PhotoCategory) => {
@@ -473,7 +467,7 @@ export function JobPacketView({
 
               if (photoFiles.length > 0) {
                 setPendingFiles(photoFiles)
-                setUploadCategory(getDefaultCategory(job.status))
+                setUploadCategory(getDefaultPhotoCategory(job.status))
                 setUploadModalOpen(true)
               }
 

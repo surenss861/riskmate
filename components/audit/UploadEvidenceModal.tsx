@@ -1,12 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { X, Upload, AlertCircle } from 'lucide-react'
 import { buttonStyles } from '@/lib/styles/design-system'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { auditApi, jobsApi } from '@/lib/api'
-
-type PhotoCategory = 'before' | 'during' | 'after'
+import { getDefaultPhotoCategory, type PhotoCategory } from '@/lib/utils/photoCategory'
 
 interface UploadEvidenceModalProps {
   isOpen: boolean
@@ -28,7 +27,7 @@ export function UploadEvidenceModal({
   ruleCode,
 }: UploadEvidenceModalProps) {
   const [evidenceType, setEvidenceType] = useState<string>('document')
-  const [photoCategory, setPhotoCategory] = useState<PhotoCategory | ''>('')
+  const [photoCategory, setPhotoCategory] = useState<PhotoCategory>('during')
   const [notes, setNotes] = useState('')
   const [file, setFile] = useState<File | null>(null)
   const [loading, setLoading] = useState(false)
@@ -37,6 +36,21 @@ export function UploadEvidenceModal({
   const isPhoto = evidenceType === 'photo'
   const needsPhotoCategory = isPhoto && !!file
   const hasValidPhotoCategory = isPhoto ? (photoCategory === 'before' || photoCategory === 'during' || photoCategory === 'after') : true
+
+  // Auto-select photo category based on job status when modal opens
+  useEffect(() => {
+    if (!isOpen || !workRecordId || !isPhoto) return
+    let cancelled = false
+    jobsApi.get(workRecordId).then(
+      (res) => {
+        if (!cancelled && res?.data?.status) {
+          setPhotoCategory(getDefaultPhotoCategory(res.data.status))
+        }
+      },
+      () => { /* ignore - will use default 'during' */ }
+    )
+    return () => { cancelled = true }
+  }, [isOpen, workRecordId, isPhoto])
 
   if (!isOpen) return null
 
@@ -136,7 +150,7 @@ export function UploadEvidenceModal({
         setFile(null)
         setNotes('')
         setEvidenceType('document')
-        setPhotoCategory('')
+        setPhotoCategory('during')
         return
       }
 
@@ -153,7 +167,7 @@ export function UploadEvidenceModal({
         setFile(null)
         setNotes('')
         setEvidenceType('document')
-        setPhotoCategory('')
+        setPhotoCategory('during')
         return
       }
 
@@ -185,7 +199,7 @@ export function UploadEvidenceModal({
       setFile(null)
       setNotes('')
       setEvidenceType('document')
-      setPhotoCategory('')
+      setPhotoCategory('during')
     } catch (err: any) {
       console.error('Failed to upload evidence:', err)
       setError(err.message || 'Failed to upload evidence. Please try again.')
@@ -229,7 +243,7 @@ export function UploadEvidenceModal({
               value={evidenceType}
               onChange={(e) => {
                 setEvidenceType(e.target.value)
-                if (e.target.value !== 'photo') setPhotoCategory('')
+                if (e.target.value !== 'photo') setPhotoCategory('during')
               }}
               className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-[#F97316]"
             >
@@ -241,26 +255,31 @@ export function UploadEvidenceModal({
             </select>
           </div>
 
-          {/* Photo Category (before/during/after) - required when uploading a photo */}
+          {/* Photo Category (before/during/after) - visual selector with auto-select based on job status */}
           {isPhoto && (
             <div>
               <label className="block text-sm font-medium text-white/80 mb-2">
                 Photo Category <span className="text-red-400">*</span>
               </label>
-              <select
-                value={photoCategory}
-                onChange={(e) => setPhotoCategory(e.target.value as PhotoCategory | '')}
-                className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-[#F97316]"
-                required={needsPhotoCategory}
-              >
-                <option value="">Select category...</option>
-                <option value="before">Before</option>
-                <option value="during">During</option>
-                <option value="after">After</option>
-              </select>
-              {needsPhotoCategory && !hasValidPhotoCategory && (
-                <p className="text-xs text-amber-400 mt-1">Please select a category when uploading a photo</p>
-              )}
+              <div className="flex gap-2">
+                {(['before', 'during', 'after'] as const).map((cat) => (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => setPhotoCategory(cat)}
+                    className={`flex-1 py-2.5 px-3 rounded-lg border text-sm font-medium transition-colors ${
+                      photoCategory === cat
+                        ? 'bg-[#F97316] border-[#F97316] text-white'
+                        : 'bg-white/5 border-white/20 text-white/80 hover:bg-white/10'
+                    }`}
+                  >
+                    {cat === 'before' && '📸 Before'}
+                    {cat === 'during' && '🔧 During'}
+                    {cat === 'after' && '✅ After'}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-white/50 mt-1.5">Select when this photo was taken relative to the job.</p>
             </div>
           )}
 

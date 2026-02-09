@@ -10,13 +10,7 @@ import { ImageModal } from '@/components/report/ImageModal'
 import { typography, spacing } from '@/lib/styles/design-system'
 import { AppBackground, AppShell, PageSection, GlassCard, Button, Input, Select, PageHeader } from '@/components/shared'
 import { Toast } from '@/components/dashboard/Toast'
-import { getEffectivePhotoCategory, type PhotoCategory } from '@/lib/utils/photoCategory'
-
-function getDefaultCategory(jobStatus: string): PhotoCategory {
-  if (jobStatus === 'draft') return 'before'
-  if (jobStatus === 'completed' || jobStatus === 'archived') return 'after'
-  return 'during'
-}
+import { getEffectivePhotoCategory, getDefaultPhotoCategory, type PhotoCategory } from '@/lib/utils/photoCategory'
 
 interface RiskFactor {
   id: string
@@ -73,7 +67,7 @@ export default function EditJobPage() {
       const job = response.data
 
       setJobStatus(job.status ?? 'draft')
-      setUploadCategory(getDefaultCategory(job.status ?? 'draft'))
+      setUploadCategory(getDefaultPhotoCategory(job.status ?? 'draft'))
       
       setFormData({
         client_name: job.client_name || '',
