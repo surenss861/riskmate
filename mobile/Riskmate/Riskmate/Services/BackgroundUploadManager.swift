@@ -99,12 +99,12 @@ class BackgroundUploadManager: NSObject, ObservableObject {
         // Create multipart form data
         let boundary = UUID().uuidString
         var body = Data()
-        let categoryValue = phase ?? "during"
+        let phaseValue = phase ?? "during"
         
-        // Add category (photo category: before/during/after) — backend expects "category" field
+        // Add phase (photo category: before/during/after) — backend reads "phase"
         body.append("--\(boundary)\r\n".data(using: .utf8)!)
-        body.append("Content-Disposition: form-data; name=\"category\"\r\n\r\n".data(using: .utf8)!)
-        body.append(categoryValue.data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"phase\"\r\n\r\n".data(using: .utf8)!)
+        body.append(phaseValue.data(using: .utf8)!)
         body.append("\r\n".data(using: .utf8)!)
         
         // Add file data

@@ -190,9 +190,9 @@ evidenceRouter.post(
         fileName = parsed.file.name
         mimeType = parsed.file.type
 
-        // Extract metadata fields
+        // Extract metadata fields (accept both phase and category for compatibility)
         metadata = {
-          phase: parsed.fields.phase || parsed.fields.phase || '',
+          phase: parsed.fields.phase || parsed.fields.category || '',
           evidence_type: parsed.fields.evidence_type || parsed.fields.tag || '',
           captured_at: parsed.fields.captured_at || '',
         }
