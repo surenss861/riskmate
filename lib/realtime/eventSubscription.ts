@@ -16,21 +16,23 @@ const debounceInterval = 500; // 500ms
 const LAST_SEEN_EVENT_AT_KEY = "realtime_last_seen_event_at";
 
 /** Channel ID for job activity (audit_logs where target_type = job and target_id = jobId). Must match subscribe route. */
-export function getJobActivityChannelId(jobId: string): string {
-  return `job-activity-${jobId}`;
+export function getJobActivityChannelId(organizationId: string, jobId: string): string {
+  return `job-activity-${organizationId}-${jobId}`;
 }
 
 /**
  * Subscribe to realtime audit_logs for a specific job (target_type = job and target_id = jobId).
- * Use after POST /api/jobs/[id]/activity/subscribe to get channelId, or call directly with jobId.
+ * Use after POST /api/jobs/[id]/activity/subscribe to get channelId and organizationId, or call directly with jobId and organizationId.
+ * Includes organization_id in filter to prevent cross-tenant data leakage.
  * Returns unsubscribe function.
  */
 export function subscribeToJobActivity(
   jobId: string,
+  organizationId: string,
   onEvent?: (payload: { new: Record<string, unknown> }) => void
 ) {
   const supabase = createSupabaseBrowserClient();
-  const channelId = getJobActivityChannelId(jobId);
+  const channelId = getJobActivityChannelId(organizationId, jobId);
   const channel = supabase.channel(channelId);
 
   channel
@@ -40,7 +42,7 @@ export function subscribeToJobActivity(
         event: "INSERT",
         schema: "public",
         table: "audit_logs",
-        filter: `target_id=eq.${jobId}&target_type=eq.job`,
+        filter: `organization_id=eq.${organizationId}&target_id=eq.${jobId}&target_type=eq.job`,
       },
       (payload) => {
         const row = payload.new as Record<string, unknown> | undefined;

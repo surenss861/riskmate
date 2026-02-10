@@ -11,8 +11,8 @@ export const runtime = 'nodejs'
 const ROUTE = '/api/jobs/[id]/activity/subscribe'
 
 /** Channel ID for Realtime subscription to audit_logs where target_id = jobId. Must match lib/realtime/eventSubscription.ts */
-function getJobActivityChannelId(jobId: string): string {
-  return `job-activity-${jobId}`
+function getJobActivityChannelId(organizationId: string, jobId: string): string {
+  return `job-activity-${organizationId}-${jobId}`
 }
 
 function isValidUuid(s: string): boolean {
@@ -22,8 +22,8 @@ function isValidUuid(s: string): boolean {
 
 /**
  * POST /api/jobs/[id]/activity/subscribe
- * Returns a Supabase Realtime channel ID for subscribing to audit_logs where target_id = jobId.
- * Client should use subscribeToJobActivity(jobId, onEvent) with the same jobId to subscribe.
+ * Returns a Supabase Realtime channel ID and organizationId for subscribing to audit_logs.
+ * Client should use subscribeToJobActivity(jobId, organizationId, onEvent) with the same jobId and organizationId.
  */
 export async function POST(
   request: NextRequest,
@@ -113,8 +113,8 @@ export async function POST(
       })
     }
 
-    const channelId = getJobActivityChannelId(jobId)
-    const payload = { channelId, requestId }
+    const channelId = getJobActivityChannelId(organization_id, jobId)
+    const payload = { channelId, organizationId: organization_id, requestId }
     const successResponse = createSuccessResponse(payload, { requestId })
     return NextResponse.json(successResponse, {
       headers: { 'X-Request-ID': requestId },
