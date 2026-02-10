@@ -51,6 +51,7 @@ struct RMEvidenceCapture: View {
     @Environment(\.dismiss) private var dismiss
     
     @State private var selectedCategory: PhotoCategory = .during
+    @State private var hasUserSelectedCategory = false
     @State private var selectedType: EvidenceType = .workArea
     @State private var showEvidenceTypeGrid = false // Collapsed by default (Apple trick)
     @State private var showCamera = false
@@ -62,6 +63,17 @@ struct RMEvidenceCapture: View {
     
     @StateObject private var uploadManager = BackgroundUploadManager.shared
     
+    /// Binding that marks user selection when category is changed from CategorySelectionView or PhaseSelector.
+    private var categoryBinding: Binding<PhotoCategory> {
+        Binding(
+            get: { selectedCategory },
+            set: { newValue in
+                selectedCategory = newValue
+                hasUserSelectedCategory = true
+            }
+        )
+    }
+    
     var body: some View {
         NavigationStack {
             ZStack {
@@ -70,7 +82,7 @@ struct RMEvidenceCapture: View {
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: RMTheme.Spacing.sectionSpacing) {
                         // Photo category selection (before camera/gallery — ticket: iOS Native Photo Category Selection)
-                        CategorySelectionView(selectedCategory: $selectedCategory, jobStatus: jobStatus)
+                        CategorySelectionView(selectedCategory: categoryBinding, jobStatus: jobStatus)
                             .padding(.horizontal, RMTheme.Spacing.pagePadding)
                         
                         // Permission Primer (always visible)
@@ -85,7 +97,7 @@ struct RMEvidenceCapture: View {
                                     .rmSectionHeader()
                                     .padding(.horizontal, RMTheme.Spacing.pagePadding)
                                 
-                                PhaseSelector(selectedCategory: $selectedCategory)
+                                PhaseSelector(selectedCategory: categoryBinding)
                                     .padding(.horizontal, RMTheme.Spacing.pagePadding)
                                     .transition(.move(edge: .top).combined(with: .opacity))
                             }
@@ -173,8 +185,16 @@ struct RMEvidenceCapture: View {
                 }
             }
             .rmNavigationBar(title: "Capture Evidence")
-            .onChange(of: jobStatus) { _, newStatus in
-                selectedCategory = getDefaultCategory(jobStatus: newStatus)
+            .onChange(of: jobStatus) { oldStatus, newStatus in
+                let priorDefault = getDefaultCategory(jobStatus: oldStatus)
+                if !hasUserSelectedCategory && selectedCategory == priorDefault {
+                    selectedCategory = getDefaultCategory(jobStatus: newStatus)
+                }
+            }
+            .onAppear {
+                if !hasUserSelectedCategory {
+                    selectedCategory = getDefaultCategory(jobStatus: jobStatus)
+                }
             }
             .sheet(isPresented: $showCamera) {
                 CameraView(
@@ -377,9 +397,6 @@ struct CategorySelectionView: View {
             }
             .background(Color(.systemBackground))
             .cornerRadius(10)
-        }
-        .onAppear {
-            selectedCategory = getDefaultCategory(jobStatus: jobStatus)
         }
     }
 }
