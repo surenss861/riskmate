@@ -10,6 +10,7 @@ import { ImageModal } from '@/components/report/ImageModal'
 import { typography, spacing } from '@/lib/styles/design-system'
 import { AppBackground, AppShell, PageSection, GlassCard, Button, Input, Select, PageHeader } from '@/components/shared'
 import { Toast } from '@/components/dashboard/Toast'
+import { Camera, Wrench, CheckCircle } from 'lucide-react'
 import { getEffectivePhotoCategory, getDefaultPhotoCategory, type PhotoCategory } from '@/lib/utils/photoCategory'
 
 interface RiskFactor {
@@ -434,26 +435,28 @@ export default function EditJobPage() {
                   Upload photos to document job conditions, hazards, and completed work.
                 </p>
 
-                {/* Photo category selector for upload */}
+                {/* Photo category selector for upload (Before/During/After with icons) */}
                 <div className="mb-4">
                   <label className="block text-sm font-medium text-white/80 mb-2">Photo category for next upload</label>
-                  <div className="flex gap-2">
-                    {(['before', 'during', 'after'] as const).map((cat) => (
-                      <button
-                        key={cat}
-                        type="button"
-                        onClick={() => setUploadCategory(cat)}
-                        className={`flex-1 py-2.5 px-3 rounded-lg border text-sm font-medium transition-colors ${
-                          uploadCategory === cat
-                            ? 'bg-[#2563eb] border-[#2563eb] text-white'
-                            : 'bg-white/5 border-white/20 text-white/80 hover:bg-white/10'
-                        }`}
-                      >
-                        {cat === 'before' && '📸 Before'}
-                        {cat === 'during' && '🔧 During'}
-                        {cat === 'after' && '✅ After'}
-                      </button>
-                    ))}
+                  <div className="flex flex-wrap gap-2">
+                    {(['before', 'during', 'after'] as const).map((cat) => {
+                      const Icon = cat === 'before' ? Camera : cat === 'during' ? Wrench : CheckCircle
+                      return (
+                        <button
+                          key={cat}
+                          type="button"
+                          onClick={() => setUploadCategory(cat)}
+                          className={`flex-1 min-w-[100px] min-h-[44px] flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg border text-sm font-medium transition-colors ${
+                            uploadCategory === cat
+                              ? 'bg-[#2563eb] border-[#2563eb] text-white'
+                              : 'bg-white/5 border-white/20 text-white/80 hover:bg-white/10'
+                          }`}
+                        >
+                          <Icon className="w-4 h-4 flex-shrink-0" />
+                          <span>{cat === 'before' ? 'Before' : cat === 'during' ? 'During' : 'After'}</span>
+                        </button>
+                      )
+                    })}
                   </div>
                   <p className="text-xs text-white/50 mt-1.5">Select when this photo was taken relative to the job.</p>
                 </div>
@@ -503,7 +506,7 @@ export default function EditJobPage() {
                   </label>
                 </div>
 
-                {/* Filter tabs */}
+                {/* Filter tabs (All / Before / During / After with counts) */}
                 {photos.length > 0 && (
                   <div className="flex flex-wrap items-center gap-2 mb-4">
                     <span className="text-xs text-white/50 mr-1">Filter:</span>
@@ -514,7 +517,7 @@ export default function EditJobPage() {
                           key={tab}
                           type="button"
                           onClick={() => setPhotoFilter(tab)}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                          className={`min-h-[40px] px-3 py-2 rounded-lg text-xs font-medium transition-colors touch-manipulation ${
                             photoFilter === tab
                               ? 'bg-[#2563eb] text-white'
                               : 'bg-white/5 border border-white/10 text-white/70 hover:bg-white/10'

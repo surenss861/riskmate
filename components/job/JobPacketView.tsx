@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { Download, FileText, Shield, CheckCircle, Clock, User, Flag, Upload, X, Image as ImageIcon, ExternalLink, Loader2 } from 'lucide-react'
+import { Download, FileText, Shield, CheckCircle, Clock, User, Flag, Upload, X, Image as ImageIcon, ExternalLink, Loader2, Camera, Wrench } from 'lucide-react'
 import { cardStyles, buttonStyles, typography } from '@/lib/styles/design-system'
 import { jobsApi } from '@/lib/api'
 import { useRouter } from 'next/navigation'
@@ -495,23 +495,25 @@ export function JobPacketView({
               <div className={`${cardStyles.base} p-6 max-w-md w-full border border-white/20`} onClick={(e) => e.stopPropagation()}>
                 <h4 className={`${typography.h3} mb-2`}>Add Photo Evidence</h4>
                 <p className="text-sm text-white/60 mb-4">Choose when this photo was taken relative to the job.</p>
-                <div className="flex gap-2 mb-4">
-                  {(['before', 'during', 'after'] as const).map((cat) => (
-                    <button
-                      key={cat}
-                      type="button"
-                      onClick={() => setUploadCategory(cat)}
-                      className={`flex-1 py-2.5 px-3 rounded-lg border text-sm font-medium transition-colors ${
-                        uploadCategory === cat
-                          ? 'bg-[#2563eb] border-[#2563eb] text-white'
-                          : 'bg-white/5 border-white/20 text-white/80 hover:bg-white/10'
-                      }`}
-                    >
-                      {cat === 'before' && '📸 Before'}
-                      {cat === 'during' && '🔧 During'}
-                      {cat === 'after' && '✅ After'}
-                    </button>
-                  ))}
+                <div className="flex flex-wrap gap-2 mb-4">
+                  {(['before', 'during', 'after'] as const).map((cat) => {
+                    const Icon = cat === 'before' ? Camera : cat === 'during' ? Wrench : CheckCircle
+                    return (
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() => setUploadCategory(cat)}
+                        className={`flex-1 min-w-[100px] min-h-[44px] flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg border text-sm font-medium transition-colors ${
+                          uploadCategory === cat
+                            ? 'bg-[#2563eb] border-[#2563eb] text-white'
+                            : 'bg-white/5 border-white/20 text-white/80 hover:bg-white/10'
+                        }`}
+                      >
+                        <Icon className="w-4 h-4 flex-shrink-0" />
+                        <span>{cat === 'before' ? 'Before' : cat === 'during' ? 'During' : 'After'}</span>
+                      </button>
+                    )
+                  })}
                 </div>
                 <p className="text-xs text-white/50 mb-4">{pendingFiles.length} photo(s) selected</p>
                 <div className="flex gap-3">
@@ -626,7 +628,7 @@ export function JobPacketView({
                           key={tab}
                           type="button"
                           onClick={() => setPhotoFilter(tab)}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                          className={`min-h-[40px] px-3 py-2 rounded-lg text-xs font-medium transition-colors touch-manipulation ${
                             photoFilter === tab
                               ? 'bg-[#2563eb] text-white'
                               : 'bg-white/5 border border-white/10 text-white/70 hover:bg-white/10'

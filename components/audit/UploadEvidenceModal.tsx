@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { X, Upload, AlertCircle } from 'lucide-react'
+import { X, Upload, AlertCircle, Camera, Wrench, CheckCircle } from 'lucide-react'
 import { buttonStyles } from '@/lib/styles/design-system'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { auditApi, jobsApi } from '@/lib/api'
@@ -259,29 +259,31 @@ export function UploadEvidenceModal({
             </select>
           </div>
 
-          {/* Photo Category (before/during/after) - visual selector with auto-select based on job status */}
+          {/* Photo Category (before/during/after) - visual selector with icons, auto-select based on job status */}
           {isPhoto && (
             <div>
               <label className="block text-sm font-medium text-white/80 mb-2">
                 Photo Category <span className="text-red-400">*</span>
               </label>
-              <div className="flex gap-2">
-                {(['before', 'during', 'after'] as const).map((cat) => (
-                  <button
-                    key={cat}
-                    type="button"
-                    onClick={() => setPhotoCategory(cat)}
-                    className={`flex-1 py-2.5 px-3 rounded-lg border text-sm font-medium transition-colors ${
-                      photoCategory === cat
-                        ? 'bg-[#F97316] border-[#F97316] text-white'
-                        : 'bg-white/5 border-white/20 text-white/80 hover:bg-white/10'
-                    }`}
-                  >
-                    {cat === 'before' && '📸 Before'}
-                    {cat === 'during' && '🔧 During'}
-                    {cat === 'after' && '✅ After'}
-                  </button>
-                ))}
+              <div className="flex flex-wrap gap-2">
+                {(['before', 'during', 'after'] as const).map((cat) => {
+                  const Icon = cat === 'before' ? Camera : cat === 'during' ? Wrench : CheckCircle
+                  return (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => setPhotoCategory(cat)}
+                      className={`flex-1 min-w-[100px] min-h-[44px] flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg border text-sm font-medium transition-colors ${
+                        photoCategory === cat
+                          ? 'bg-[#F97316] border-[#F97316] text-white'
+                          : 'bg-white/5 border-white/20 text-white/80 hover:bg-white/10'
+                      }`}
+                    >
+                      <Icon className="w-4 h-4 flex-shrink-0" />
+                      <span>{cat === 'before' ? 'Before' : cat === 'during' ? 'During' : 'After'}</span>
+                    </button>
+                  )
+                })}
               </div>
               <p className="text-xs text-white/50 mt-1.5">Select when this photo was taken relative to the job.</p>
             </div>
