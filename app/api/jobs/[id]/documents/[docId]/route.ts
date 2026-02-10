@@ -14,9 +14,11 @@ const READ_ONLY_ROLES = ['executive', 'auditor'] as const
 
 /**
  * PATCH /api/jobs/[id]/documents/[docId]
- * Update photo category (before/during/after). Applies to:
+ * Update photo category (before/during/after). Mirrors backend: validate category, ensure job ownership,
+ * update or insert job_photos by job_id/organization_id/file_path; return updated document/evidence shape.
  * - Documents: category stored in job_photos (by file_path).
- * - Evidence items (iOS): docId is evidence.id; updates evidence.phase and optionally job_photos for consistency with merged GET.
+ * - Evidence items (iOS): docId is evidence.id; update/insert job_photos only (same as backend).
+ * Aligned with jobsApi.updateDocumentCategory() and spec.
  */
 export async function PATCH(
   request: NextRequest,
@@ -68,10 +70,12 @@ export async function PATCH(
 
     const supabase = await createSupabaseServerClient()
 
+    const categoryValue = body.category as (typeof VALID_CATEGORIES)[number]
+
     // Resolve document (photo) to get file_path; category is stored in job_photos
     const { data: doc, error: docError } = await supabase
       .from('documents')
-      .select('id, file_path, type')
+      .select('id, file_path, type, name, description, created_at')
       .eq('id', docId)
       .eq('job_id', jobId)
       .eq('organization_id', context.organization_id)
@@ -86,7 +90,7 @@ export async function PATCH(
         return NextResponse.json(response, { status: 400 })
       }
 
-      // Update or insert job_photos row (insert for legacy photos that only exist in documents)
+      // Update or insert job_photos row (by job_id, organization_id, file_path) — mirror backend
       const { data: existing } = await supabase
         .from('job_photos')
         .select('id')
@@ -98,36 +102,58 @@ export async function PATCH(
       if (existing) {
         const { data: updated, error: updateError } = await supabase
           .from('job_photos')
-          .update({ category: body.category })
+          .update({ category: categoryValue })
           .eq('id', existing.id)
           .select()
           .single()
 
         if (updateError) throw updateError
-        return NextResponse.json({ ok: true, data: { ...doc, category: updated.category } })
+        return NextResponse.json({
+          ok: true,
+          data: {
+            id: doc.id,
+            file_path: doc.file_path,
+            type: doc.type,
+            name: doc.name,
+            description: doc.description ?? null,
+            created_at: doc.created_at,
+            category: updated?.category ?? categoryValue,
+          },
+        })
       }
 
-      // Legacy photo: no job_photos row; create one with the new category
+      // No job_photos row: insert one (e.g. legacy photo) — mirror backend
       const { data: inserted, error: insertError } = await supabase
         .from('job_photos')
         .insert({
           job_id: jobId,
           organization_id: context.organization_id,
           file_path: doc.file_path,
-          category: body.category,
+          category: categoryValue,
           created_by: context.user_id ?? null,
         })
         .select()
         .single()
 
       if (insertError) throw insertError
-      return NextResponse.json({ ok: true, data: { ...doc, category: inserted.category } })
+      return NextResponse.json({
+        ok: true,
+        data: {
+          id: doc.id,
+          file_path: doc.file_path,
+          type: doc.type,
+          name: doc.name,
+          description: doc.description ?? null,
+          created_at: doc.created_at,
+          category: inserted?.category ?? categoryValue,
+        },
+      })
     }
 
-    // docId not in documents: try evidence (iOS evidence items returned by merged GET)
+    // Path 2: no documents row — try evidence table (iOS/evidence photos); update job_photos only (mirror backend)
     const { data: ev, error: evError } = await supabase
       .from('evidence')
-      .select('id, storage_path, phase, mime_type')
+      .select('id, storage_path, file_name, mime_type, evidence_type, created_at')
       .eq('id', docId)
       .eq('work_record_id', jobId)
       .eq('organization_id', context.organization_id)
@@ -150,15 +176,6 @@ export async function PATCH(
 
     const storagePath = ev.storage_path ?? ''
 
-    // Update evidence.phase so merged GET returns the new category
-    const { error: phaseError } = await supabase
-      .from('evidence')
-      .update({ phase: body.category })
-      .eq('id', ev.id)
-
-    if (phaseError) throw phaseError
-
-    // Sync job_photos for this path so merged GET (categoryByPath / fromPhase) stays consistent
     const { data: existingPhoto } = await supabase
       .from('job_photos')
       .select('id')
@@ -168,29 +185,51 @@ export async function PATCH(
       .maybeSingle()
 
     if (existingPhoto) {
-      await supabase
+      const { data: updated, error: updateError } = await supabase
         .from('job_photos')
-        .update({ category: body.category })
+        .update({ category: categoryValue })
         .eq('id', existingPhoto.id)
-    } else if (storagePath) {
-      await supabase
-        .from('job_photos')
-        .insert({
-          job_id: jobId,
-          organization_id: context.organization_id,
+        .select()
+        .single()
+
+      if (updateError) throw updateError
+      return NextResponse.json({
+        ok: true,
+        data: {
+          id: ev.id,
           file_path: storagePath,
-          category: body.category,
-          created_by: context.user_id ?? null,
-        })
+          type: 'photo' as const,
+          name: ev.file_name ?? 'Evidence',
+          description: ev.evidence_type ?? null,
+          created_at: ev.created_at,
+          category: updated?.category ?? categoryValue,
+        },
+      })
     }
 
+    const { data: inserted, error: insertError } = await supabase
+      .from('job_photos')
+      .insert({
+        job_id: jobId,
+        organization_id: context.organization_id,
+        file_path: storagePath,
+        category: categoryValue,
+        created_by: context.user_id ?? null,
+      })
+      .select()
+      .single()
+
+    if (insertError) throw insertError
     return NextResponse.json({
       ok: true,
       data: {
         id: ev.id,
         file_path: storagePath,
         type: 'photo' as const,
-        category: body.category,
+        name: ev.file_name ?? 'Evidence',
+        description: ev.evidence_type ?? null,
+        created_at: ev.created_at,
+        category: inserted?.category ?? categoryValue,
       },
     })
   } catch (error: unknown) {
