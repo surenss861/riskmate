@@ -1,0 +1,25 @@
+/**
+ * Pure helpers for job activity feed filters (realtime and row matching).
+ * No Supabase/client imports so tests can import this module without env.
+ */
+
+/** Channel ID for job activity. Must match subscribe route and eventSubscription. */
+export function getJobActivityChannelId(organizationId: string, jobId: string): string {
+  return `job-activity-${organizationId}-${jobId}`;
+}
+
+/** Build realtime filter string: organization_id AND (target_id OR metadata->>job_id). */
+export function getJobActivityRealtimeFilter(organizationId: string, jobId: string): string {
+  return `organization_id=eq.${organizationId}&or=(target_id.eq.${jobId},metadata->>job_id.eq.${jobId})`;
+}
+
+/** True if this audit row belongs in the job activity feed (target is job or metadata.job_id = jobId). */
+export function isJobActivityRow(row: Record<string, unknown> | undefined, jobId: string): boolean {
+  if (!row) return false;
+  const isJobTarget = row.target_type === "job" && row.target_id === jobId;
+  const hasJobIdInMetadata =
+    row.metadata &&
+    typeof row.metadata === "object" &&
+    (row.metadata as Record<string, unknown>).job_id === jobId;
+  return Boolean(isJobTarget || hasJobIdInMetadata);
+}

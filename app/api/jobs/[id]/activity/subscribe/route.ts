@@ -10,7 +10,7 @@ export const runtime = 'nodejs'
 
 const ROUTE = '/api/jobs/[id]/activity/subscribe'
 
-/** Channel ID for Realtime subscription to audit_logs where target_id = jobId. Must match lib/realtime/eventSubscription.ts */
+/** Channel ID for Realtime subscription to audit_logs where target_id = jobId or metadata->>job_id = jobId. Must match lib/realtime/eventSubscription.ts */
 function getJobActivityChannelId(organizationId: string, jobId: string): string {
   return `job-activity-${organizationId}-${jobId}`
 }

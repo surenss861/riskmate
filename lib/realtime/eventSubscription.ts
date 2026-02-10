@@ -6,6 +6,13 @@
  */
 
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import {
+  getJobActivityChannelId,
+  getJobActivityRealtimeFilter,
+  isJobActivityRow,
+} from "@/lib/realtime/jobActivityFilters";
+
+export { getJobActivityChannelId, getJobActivityRealtimeFilter, isJobActivityRow };
 
 // Debounce/coalesce state
 let pendingEvents: Map<string, number> = new Map();
@@ -15,13 +22,8 @@ const debounceInterval = 500; // 500ms
 // Last seen event timestamp (for catch-up)
 const LAST_SEEN_EVENT_AT_KEY = "realtime_last_seen_event_at";
 
-/** Channel ID for job activity (audit_logs where target_type = job and target_id = jobId). Must match subscribe route. */
-export function getJobActivityChannelId(organizationId: string, jobId: string): string {
-  return `job-activity-${organizationId}-${jobId}`;
-}
-
 /**
- * Subscribe to realtime audit_logs for a specific job (target_type = job and target_id = jobId).
+ * Subscribe to realtime audit_logs for a specific job: rows where target_type=job and target_id=jobId, or metadata->>job_id=jobId (e.g. document.uploaded).
  * Use after POST /api/jobs/[id]/activity/subscribe to get channelId and organizationId, or call directly with jobId and organizationId.
  * Includes organization_id in filter to prevent cross-tenant data leakage.
  * Returns unsubscribe function.
@@ -35,6 +37,8 @@ export function subscribeToJobActivity(
   const channelId = getJobActivityChannelId(organizationId, jobId);
   const channel = supabase.channel(channelId);
 
+  const filter = getJobActivityRealtimeFilter(organizationId, jobId);
+
   channel
     .on(
       "postgres_changes",
@@ -42,11 +46,11 @@ export function subscribeToJobActivity(
         event: "INSERT",
         schema: "public",
         table: "audit_logs",
-        filter: `organization_id=eq.${organizationId}&target_id=eq.${jobId}&target_type=eq.job`,
+        filter,
       },
       (payload) => {
         const row = payload.new as Record<string, unknown> | undefined;
-        if (row?.target_type !== "job") return;
+        if (!isJobActivityRow(row, jobId)) return;
         if (onEvent) onEvent(payload as { new: Record<string, unknown> });
       }
     )
