@@ -17,7 +17,7 @@ import { EvidenceVerification } from '@/components/dashboard/EvidenceVerificatio
 import { TemplatesManager, TemplateModal, TemplateModalProps } from '@/components/dashboard/TemplatesManager'
 import { ApplyTemplateInline } from '@/components/dashboard/ApplyTemplateInline'
 import { JobPacketView } from '@/components/job/JobPacketView'
-import { JobActivityFeed } from '@/components/job/JobActivityFeed'
+import { JobActivityFeed, type AuditEvent } from '@/components/job/JobActivityFeed'
 import { typography, emptyStateStyles, spacing, dividerStyles, tabStyles } from '@/lib/styles/design-system'
 import { ErrorModal } from '@/components/dashboard/ErrorModal'
 import { optimizePhoto } from '@/lib/utils/photoOptimization'
@@ -159,6 +159,7 @@ export default function JobDetailPage() {
     metadata?: any
   }>>([])
   const [activeTab, setActiveTab] = useState<'overview' | 'activity'>('overview')
+  const [activityInitialEvents, setActivityInitialEvents] = useState<AuditEvent[] | null>(null)
 
   const loadVersionHistory = async () => {
     if (loadingVersionHistory || !jobId) return
@@ -382,6 +383,20 @@ export default function JobDetailPage() {
     }
     loadOrgId()
   }, [])
+
+  // Load initial job activity when Activity tab is selected (for JobActivityFeed)
+  useEffect(() => {
+    if (activeTab !== 'activity' || !jobId) return
+    let cancelled = false
+    jobsApi.getJobActivity(jobId, { limit: 20, offset: 0 }).then((res) => {
+      if (!cancelled && res.data?.events) {
+        setActivityInitialEvents(res.data.events as AuditEvent[])
+      }
+    }).catch(() => {
+      if (!cancelled) setActivityInitialEvents([])
+    })
+    return () => { cancelled = true }
+  }, [activeTab, jobId])
 
   // Load permit packs for Business plan users (lazy - only when section is visible)
   useEffect(() => {
@@ -832,6 +847,7 @@ export default function JobDetailPage() {
                 </p>
                 <JobActivityFeed
                   jobId={jobId}
+                  initialEvents={activityInitialEvents ?? undefined}
                   enableRealtime={true}
                   showFilters={true}
                   maxHeight="70vh"

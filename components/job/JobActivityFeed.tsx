@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { jobsApi } from '@/lib/api'
 import { subscribeToJobActivity } from '@/lib/realtime/eventSubscription'
 import { getEventMapping } from '@/lib/audit/eventMapper'
@@ -96,6 +96,8 @@ export function JobActivityFeed({
   const [total, setTotal] = useState(0)
   const [hasMore, setHasMore] = useState(false)
   const [filter, setFilter] = useState<FilterType>(FILTER_ALL)
+  const filterRef = useRef<FilterType>(filter)
+  filterRef.current = filter
   const [subscribeContext, setSubscribeContext] = useState<{ channelId: string; organizationId: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -183,9 +185,13 @@ export function JobActivityFeed({
           target_id: row.target_id as string,
           metadata: row.metadata as Record<string, unknown>,
         }
-        setEvents((prev) => [newEvent, ...prev])
-        setTotal((t) => t + 1)
-        setOffset((o) => o + 1)
+        const currentFilter = filterRef.current
+        const matches = filterEventsByType([newEvent], currentFilter)
+        if (matches.length > 0) {
+          setEvents((prev) => [newEvent, ...prev])
+          setTotal((t) => t + 1)
+          setOffset((o) => o + 1)
+        }
       },
       channelId
     )
