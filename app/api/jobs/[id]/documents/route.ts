@@ -263,8 +263,9 @@ export async function POST(
         console.error('job_photos insert failed:', photoError)
         // Delete the document to avoid orphaned metadata without category (rollback)
         await supabase.from('documents').delete().eq('id', inserted.id)
-        // Remove uploaded file from storage to avoid orphaned blob
-        await supabase.storage.from('documents').remove([inserted.file_path]).catch(() => {})
+        // Remove uploaded file from storage to avoid orphaned blob (use bucket matching file_path)
+        const rollbackBucket = inserted.file_path?.startsWith('evidence/') ? 'evidence' : 'documents'
+        await supabase.storage.from(rollbackBucket).remove([inserted.file_path]).catch(() => {})
         return NextResponse.json(
           { message: 'Failed to save photo category' },
           { status: 500 }
