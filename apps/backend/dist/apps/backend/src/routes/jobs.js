@@ -1515,8 +1515,9 @@ exports.jobsRouter.post("/:id/documents", auth_1.authenticate, requireWriteAcces
                 return res.status(500).json({ message: "Failed to save photo category" });
             }
         }
+        const storageBucket = inserted.file_path?.startsWith("evidence/") ? "evidence" : "documents";
         const { data: signed } = await supabaseClient_1.supabase.storage
-            .from("documents")
+            .from(storageBucket)
             .createSignedUrl(inserted.file_path, 60 * 10);
         // Extract client metadata from request
         const clientMetadata = (0, audit_1.extractClientMetadata)(req);

@@ -1,6 +1,6 @@
 import { STYLES } from './styles';
 import type { JobDocumentAsset } from './types';
-import { categorizePhotos as categorizePhotosFromCategory } from '@lib/utils/photoCategory';
+import { categorizePhotos as categorizePhotosFromCategory } from '../../../../../lib/utils/photoCategory';
 
 export async function fetchLogoBuffer(logoUrl?: string | null): Promise<Buffer | null> {
   if (!logoUrl) return null;

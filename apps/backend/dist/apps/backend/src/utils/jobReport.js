@@ -78,11 +78,12 @@ async function buildJobReport(organizationId, jobId) {
             return { ...item, url: null };
         }
     }));
-    // Generate signed URLs for documents
+    // Generate signed URLs for documents (choose bucket by file_path: evidence/ → evidence, else documents)
     const documentsFromTable = await Promise.all((documentsData || []).map(async (doc) => {
+        const bucket = doc.file_path?.startsWith("evidence/") ? "evidence" : "documents";
         try {
             const { data: signed } = await supabaseClient_1.supabase.storage
-                .from("documents")
+                .from(bucket)
                 .createSignedUrl(doc.file_path, 60 * 60); // 1 hour expiry
             return {
                 ...doc,

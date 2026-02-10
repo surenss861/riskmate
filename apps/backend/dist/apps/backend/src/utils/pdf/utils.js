@@ -9,7 +9,7 @@ exports.truncateText = truncateText;
 exports.getRiskColor = getRiskColor;
 exports.getSeverityColor = getSeverityColor;
 const styles_1 = require("./styles");
-const photoCategory_1 = require("@lib/utils/photoCategory");
+const photoCategory_1 = require("../../../../../lib/utils/photoCategory");
 async function fetchLogoBuffer(logoUrl) {
     if (!logoUrl)
         return null;

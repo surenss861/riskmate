@@ -1,4 +1,4 @@
-import { categorizePhotos as categorizePhotosFromCategory } from '@lib/utils/photoCategory';
+import { categorizePhotos as categorizePhotosFromCategory } from '../../../../../lib/utils/photoCategory';
 export declare function fetchLogoBuffer(logoUrl?: string | null): Promise<Buffer | null>;
 export declare function formatDate(dateString?: string | null): string;
 export declare function formatTime(dateString?: string | null): string;
