@@ -308,7 +308,7 @@ export async function GET(
     }
 
     const enrichedEvents = list.map((event: Record<string, unknown>) => {
-      const out = { ...event, event_type: event.event_name }
+      const out: Record<string, unknown> = { ...event, event_type: event.event_name }
       const actorId = event.actor_id as string | undefined
       if (actorId) {
         const actor = actorMap.get(actorId)
