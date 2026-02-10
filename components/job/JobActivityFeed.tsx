@@ -185,6 +185,7 @@ export function JobActivityFeed({
         }
         setEvents((prev) => [newEvent, ...prev])
         setTotal((t) => t + 1)
+        setOffset((o) => o + 1)
       },
       channelId
     )
