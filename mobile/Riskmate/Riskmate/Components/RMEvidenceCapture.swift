@@ -230,40 +230,6 @@ struct RMEvidenceCapture: View {
     }
 }
 
-/// Photo category for before/during/after (ticket: iOS Native Photo Category Selection).
-/// Use EvidencePhase for UI binding; this enum provides the spec name and API alignment.
-enum PhotoCategory: String, CaseIterable {
-    case before = "before"
-    case during = "during"
-    case after = "after"
-    
-    var displayName: String {
-        switch self {
-        case .before: return "Before"
-        case .during: return "During"
-        case .after: return "After"
-        }
-    }
-    
-    var icon: String {
-        switch self {
-        case .before: return "circle.lefthalf.filled"
-        case .during: return "circle.fill"
-        case .after: return "checkmark.circle.fill"
-        }
-    }
-    
-    var description: String {
-        switch self {
-        case .before: return "Pre-job site conditions"
-        case .during: return "Work in progress"
-        case .after: return "Completed work"
-        }
-    }
-    
-    var asEvidencePhase: EvidencePhase { EvidencePhase(rawValue: rawValue) ?? .during }
-}
-
 enum EvidencePhase: String, CaseIterable, Codable {
     case before = "before"
     case during = "during"
