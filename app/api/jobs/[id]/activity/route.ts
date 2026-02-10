@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
-import { getOrganizationContext, verifyJobOwnership } from '@/lib/utils/organizationGuard'
+import { createSupabaseAdminClient } from '@/lib/supabase/admin'
+import { getOrganizationContext } from '@/lib/utils/organizationGuard'
 import { createSuccessResponse, createErrorResponse } from '@/lib/utils/apiResponse'
 import { getRequestId } from '@/lib/utils/requestId'
 import { logApiError } from '@/lib/utils/errorLogging'
@@ -12,7 +13,16 @@ const ROUTE = '/api/jobs/[id]/activity'
 
 const DEFAULT_LIMIT = 50
 const MAX_LIMIT = 100
-const VALID_CATEGORIES = ['governance', 'operations', 'access'] as const
+const VALID_CATEGORIES = [
+  'governance',
+  'operations',
+  'access',
+  'review_queue',
+  'incident_review',
+  'attestations',
+  'system',
+  'access_review',
+] as const
 
 function isValidUuid(s: string): boolean {
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -56,12 +66,12 @@ export async function GET(
       })
     }
 
-    const supabase = await createSupabaseServerClient()
+    const adminSupabase = createSupabaseAdminClient()
 
-    // Check job existence first so missing jobs return 404 (ownership check returns 403)
-    const { data: job, error: jobError } = await supabase
+    // Use admin client to bypass RLS: missing jobs → 404, wrong org → 403
+    const { data: job, error: jobError } = await adminSupabase
       .from('jobs')
-      .select('id')
+      .select('id, organization_id')
       .eq('id', jobId)
       .maybeSingle()
 
@@ -100,7 +110,24 @@ export async function GET(
       })
     }
 
-    await verifyJobOwnership(jobId, organization_id)
+    if (job.organization_id !== organization_id) {
+      const { response, errorId } = createErrorResponse(
+        'You do not have permission to access this job',
+        'FORBIDDEN',
+        { requestId, statusCode: 403 }
+      )
+      logApiError(403, 'FORBIDDEN', errorId, requestId, organization_id, response.message, {
+        category: 'auth',
+        severity: 'warn',
+        route: ROUTE,
+      })
+      return NextResponse.json(response, {
+        status: 403,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
+
+    const supabase = await createSupabaseServerClient()
 
     const { searchParams } = request.nextUrl
     const limitParam = searchParams.get('limit')

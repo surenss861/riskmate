@@ -78,6 +78,7 @@ export async function getOrganizationContext(request?: Request): Promise<Organiz
 
 /**
  * Verify that a resource belongs to the user's organization
+ * Uses admin client to bypass RLS so cross-org access returns 403 instead of 404.
  * Throws if verification fails
  */
 export async function verifyOrganizationOwnership(
@@ -85,15 +86,20 @@ export async function verifyOrganizationOwnership(
   resourceId: string,
   organizationId: string
 ): Promise<boolean> {
-  const supabase = await createSupabaseServerClient()
-  
-  const { data, error } = await supabase
+  const { createSupabaseAdminClient } = await import('@/lib/supabase/admin')
+  const adminSupabase = createSupabaseAdminClient()
+
+  const { data, error } = await adminSupabase
     .from(table)
     .select('organization_id')
     .eq('id', resourceId)
-    .single()
+    .maybeSingle()
 
-  if (error || !data) {
+  if (error) {
+    throw new Error(`Resource not found: ${table}:${resourceId}`)
+  }
+
+  if (!data) {
     throw new Error(`Resource not found: ${table}:${resourceId}`)
   }
 
