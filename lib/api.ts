@@ -557,6 +557,7 @@ export const jobsApi = {
       offset?: number;
       actor_id?: string;
       event_type?: string;
+      event_types?: string[];
       category?: string;
       start_date?: string;
       end_date?: string;
@@ -570,9 +571,36 @@ export const jobsApi = {
     if (params?.category) searchParams.set('category', params.category);
     if (params?.start_date) searchParams.set('start_date', params.start_date);
     if (params?.end_date) searchParams.set('end_date', params.end_date);
+    if (params?.event_types?.length) searchParams.set('event_types', params.event_types.join(','));
     const qs = searchParams.toString();
     const url = qs ? `/api/jobs/${jobId}/activity?${qs}` : `/api/jobs/${jobId}/activity`;
     return apiRequest<{ data: { events: any[]; total: number; has_more: boolean } }>(url);
+  },
+
+  /**
+   * POST /api/jobs/[id]/activity/subscribe - get channelId and organizationId for realtime.
+   * Returns null on 404 or 403 so caller can skip subscribing.
+   */
+  subscribeJobActivity: async (
+    jobId: string
+  ): Promise<{ channelId: string; organizationId: string } | null> => {
+    const token = await getAuthToken();
+    const url = `${API_URL}/api/jobs/${jobId}/activity/subscribe`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token && { Authorization: `Bearer ${token}` }),
+      },
+    });
+    if (res.status === 404 || res.status === 403) return null;
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data?.message || data?.detail || res.statusText);
+    }
+    const json = await res.json();
+    const data = json?.data ?? json;
+    return { channelId: data.channelId, organizationId: data.organizationId };
   },
 
   exportProofPack: async (jobId: string, packType: 'insurance' | 'audit' | 'incident' | 'compliance') => {

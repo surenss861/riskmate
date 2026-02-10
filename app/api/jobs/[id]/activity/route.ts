@@ -134,6 +134,10 @@ export async function GET(
     const offsetParam = searchParams.get('offset')
     const actor_id = searchParams.get('actor_id')
     const event_type = searchParams.get('event_type')
+    const event_typesParam = searchParams.get('event_types')
+    const event_types = event_typesParam
+      ? event_typesParam.split(',').map((s) => s.trim()).filter(Boolean)
+      : null
     const category = searchParams.get('category')
     const start_date = searchParams.get('start_date')
     const end_date = searchParams.get('end_date')
@@ -281,7 +285,8 @@ export async function GET(
       .range(offset, offset + limit - 1)
 
     if (actor_id) query = query.eq('actor_id', actor_id)
-    if (event_type) query = query.eq('event_name', event_type)
+    if (event_types?.length) query = query.in('event_name', event_types)
+    else if (event_type) query = query.eq('event_name', event_type)
     if (category) query = query.eq('category', category)
     if (start_date) query = query.gte('created_at', start_date)
     if (end_date) query = query.lte('created_at', end_date)

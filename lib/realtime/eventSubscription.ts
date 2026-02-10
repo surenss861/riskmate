@@ -24,17 +24,18 @@ const LAST_SEEN_EVENT_AT_KEY = "realtime_last_seen_event_at";
 
 /**
  * Subscribe to realtime audit_logs for a specific job: rows where target_type=job and target_id=jobId, or metadata->>job_id=jobId (e.g. document.uploaded).
- * Use after POST /api/jobs/[id]/activity/subscribe to get channelId and organizationId, or call directly with jobId and organizationId.
+ * Use after POST /api/jobs/[id]/activity/subscribe to get channelId and organizationId; pass optional channelId to use server-provided id.
  * Includes organization_id in filter to prevent cross-tenant data leakage.
  * Returns unsubscribe function.
  */
 export function subscribeToJobActivity(
   jobId: string,
   organizationId: string,
-  onEvent?: (payload: { new: Record<string, unknown> }) => void
+  onEvent?: (payload: { new: Record<string, unknown> }) => void,
+  channelIdOverride?: string
 ) {
   const supabase = createSupabaseBrowserClient();
-  const channelId = getJobActivityChannelId(organizationId, jobId);
+  const channelId = channelIdOverride ?? getJobActivityChannelId(organizationId, jobId);
   const channel = supabase.channel(channelId);
 
   const filter = getJobActivityRealtimeFilter(organizationId, jobId);

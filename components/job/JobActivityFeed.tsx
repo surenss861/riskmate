@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { jobsApi } from '@/lib/api'
 import { subscribeToJobActivity } from '@/lib/realtime/eventSubscription'
-import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { getEventMapping } from '@/lib/audit/eventMapper'
 import { typography, spacing, tabStyles, emptyStateStyles, badgeStyles, cardStyles } from '@/lib/styles/design-system'
 import { SkeletonLoader } from '@/components/dashboard/SkeletonLoader'
@@ -97,18 +96,28 @@ export function JobActivityFeed({
   const [total, setTotal] = useState(0)
   const [hasMore, setHasMore] = useState(false)
   const [filter, setFilter] = useState<FilterType>(FILTER_ALL)
-  const [organizationId, setOrganizationId] = useState<string | null>(null)
+  const [subscribeContext, setSubscribeContext] = useState<{ channelId: string; organizationId: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
 
+  const getEventTypesForFilter = useCallback((f: FilterType): string[] | undefined => {
+    if (f === FILTER_ALL) return undefined
+    if (f === FILTER_STATUS) return STATUS_EVENT_TYPES
+    if (f === FILTER_DOCUMENTS) return DOCUMENT_EVENT_TYPES
+    if (f === FILTER_TEAM) return TEAM_EVENT_TYPES
+    return undefined
+  }, [])
+
   const fetchPage = useCallback(
-    async (off: number, append: boolean) => {
+    async (off: number, append: boolean, filterParam?: FilterType) => {
       if (append) setLoadingMore(true)
       else setLoading(true)
       setError(null)
+      const eventTypes = getEventTypesForFilter(filterParam ?? filter)
       try {
         const res = await jobsApi.getJobActivity(jobId, {
           limit: PAGE_SIZE,
           offset: off,
+          ...(eventTypes?.length ? { event_types: eventTypes } : {}),
         })
         const data = res.data as { events: AuditEvent[]; total: number; has_more: boolean }
         const list = data?.events ?? []
@@ -131,53 +140,59 @@ export function JobActivityFeed({
         setLoadingMore(false)
       }
     },
-    [jobId]
+    [jobId, filter, getEventTypesForFilter]
   )
 
   useEffect(() => {
     if (!jobId) return
-    fetchPage(0, false)
-  }, [jobId, fetchPage])
+    fetchPage(0, false, filter)
+  }, [jobId, filter, fetchPage])
 
   useEffect(() => {
-    if (!enableRealtime || !jobId || !organizationId) return
-    const unsubscribe = subscribeToJobActivity(jobId, organizationId, (payload) => {
-      const row = payload.new as Record<string, unknown>
-      const newEvent: AuditEvent = {
-        id: row.id as string,
-        event_name: row.event_name as string,
-        event_type: row.event_name as string,
-        created_at: row.created_at as string,
-        category: row.category as string,
-        severity: row.severity as AuditEvent['severity'],
-        actor_name: row.actor_name as string,
-        actor_email: row.actor_email as string,
-        actor_role: row.actor_role as string,
-        actor_id: row.actor_id as string,
-        target_type: row.target_type as string,
-        target_id: row.target_id as string,
-        metadata: row.metadata as Record<string, unknown>,
-      }
-      setEvents((prev) => [newEvent, ...prev])
-      setTotal((t) => t + 1)
+    if (!enableRealtime || !jobId) return
+    let cancelled = false
+    jobsApi.subscribeJobActivity(jobId).then((ctx) => {
+      if (!cancelled && ctx) setSubscribeContext(ctx)
     })
-    return () => unsubscribe()
-  }, [enableRealtime, jobId, organizationId])
+    return () => {
+      cancelled = true
+      setSubscribeContext(null)
+    }
+  }, [enableRealtime, jobId])
 
   useEffect(() => {
-    const loadOrgId = async () => {
-      const supabase = createSupabaseBrowserClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        const { data: userRow } = await supabase.from('users').select('organization_id').eq('id', user.id).single()
-        if (userRow?.organization_id) setOrganizationId(userRow.organization_id)
-      }
-    }
-    loadOrgId()
-  }, [])
+    if (!subscribeContext) return
+    const { channelId, organizationId } = subscribeContext
+    const unsubscribe = subscribeToJobActivity(
+      jobId,
+      organizationId,
+      (payload) => {
+        const row = payload.new as Record<string, unknown>
+        const newEvent: AuditEvent = {
+          id: row.id as string,
+          event_name: row.event_name as string,
+          event_type: row.event_name as string,
+          created_at: row.created_at as string,
+          category: row.category as string,
+          severity: row.severity as AuditEvent['severity'],
+          actor_name: row.actor_name as string,
+          actor_email: row.actor_email as string,
+          actor_role: row.actor_role as string,
+          actor_id: row.actor_id as string,
+          target_type: row.target_type as string,
+          target_id: row.target_id as string,
+          metadata: row.metadata as Record<string, unknown>,
+        }
+        setEvents((prev) => [newEvent, ...prev])
+        setTotal((t) => t + 1)
+      },
+      channelId
+    )
+    return () => unsubscribe()
+  }, [jobId, subscribeContext])
 
-  const filteredEvents = filterEventsByType(events, filter)
-  const showLoadMore = hasMore && !loading && !loadingMore && filter === FILTER_ALL
+  const filteredEvents = events
+  const showLoadMore = hasMore && !loading && !loadingMore
 
   if (loading && events.length === 0) {
     return (
@@ -299,7 +314,7 @@ export function JobActivityFeed({
         <div className="flex justify-center pt-4">
           <button
             type="button"
-            onClick={() => fetchPage(offset, true)}
+            onClick={() => fetchPage(offset, true, filter)}
             disabled={loadingMore}
             className="rounded-lg border border-white/20 bg-white/5 px-4 py-2 text-sm font-medium text-white/90 hover:bg-white/10 disabled:opacity-50"
           >
