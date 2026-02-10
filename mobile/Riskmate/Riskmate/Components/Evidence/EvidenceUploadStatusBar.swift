@@ -233,27 +233,27 @@ struct EvidenceUploadStatusBar: View {
 #Preview {
     VStack(spacing: RMSystemTheme.Spacing.md) {
         EvidenceUploadStatusBar(uploads: [
-            UploadTask(id: "1", jobId: "job1", fileName: "photo.jpg", state: .queued, progress: 0, createdAt: Date())
+            UploadTask(id: "1", jobId: "job1", fileName: "photo.jpg", state: .queued, progress: 0, createdAt: Date(), category: "during")
         ], jobId: "job1")
         .padding()
         
         EvidenceUploadStatusBar(uploads: [
-            UploadTask(id: "2", jobId: "job1", fileName: "video.mp4", state: .uploading, progress: 0.5, createdAt: Date())
+            UploadTask(id: "2", jobId: "job1", fileName: "video.mp4", state: .uploading, progress: 0.5, createdAt: Date(), category: "during")
         ], jobId: "job1")
         .padding()
         
         EvidenceUploadStatusBar(uploads: [
-            UploadTask(id: "3", jobId: "job1", fileName: "note.txt", state: .failed("Auth expired - please sign in"), progress: 0, createdAt: Date())
+            UploadTask(id: "3", jobId: "job1", fileName: "note.txt", state: .failed("Auth expired - please sign in"), progress: 0, createdAt: Date(), category: "during")
         ], jobId: "job1")
         .padding()
         
         EvidenceUploadStatusBar(uploads: [
-            UploadTask(id: "4", jobId: "job1", fileName: "file.pdf", state: .failed("Network unavailable"), progress: 0, createdAt: Date())
+            UploadTask(id: "4", jobId: "job1", fileName: "file.pdf", state: .failed("Network unavailable"), progress: 0, createdAt: Date(), category: "during")
         ], jobId: "job1")
         .padding()
         
         EvidenceUploadStatusBar(uploads: [
-            UploadTask(id: "5", jobId: "job1", fileName: "file.pdf", state: .synced, progress: 1.0, createdAt: Date())
+            UploadTask(id: "5", jobId: "job1", fileName: "file.pdf", state: .synced, progress: 1.0, createdAt: Date(), category: "during")
         ], jobId: "job1")
         .padding()
     }
