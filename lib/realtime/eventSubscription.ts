@@ -15,13 +15,13 @@ const debounceInterval = 500; // 500ms
 // Last seen event timestamp (for catch-up)
 const LAST_SEEN_EVENT_AT_KEY = "realtime_last_seen_event_at";
 
-/** Channel ID for job activity (audit_logs where target_id = jobId). Must match subscribe route. */
+/** Channel ID for job activity (audit_logs where target_type = job and target_id = jobId). Must match subscribe route. */
 export function getJobActivityChannelId(jobId: string): string {
   return `job-activity-${jobId}`;
 }
 
 /**
- * Subscribe to realtime audit_logs for a specific job (target_id = jobId).
+ * Subscribe to realtime audit_logs for a specific job (target_type = job and target_id = jobId).
  * Use after POST /api/jobs/[id]/activity/subscribe to get channelId, or call directly with jobId.
  * Returns unsubscribe function.
  */
@@ -40,9 +40,11 @@ export function subscribeToJobActivity(
         event: "*",
         schema: "public",
         table: "audit_logs",
-        filter: `target_id=eq.${jobId}`,
+        filter: `target_id=eq.${jobId}&target_type=eq.job`,
       },
       (payload) => {
+        const row = payload.new as Record<string, unknown> | undefined;
+        if (row?.target_type !== "job") return;
         if (onEvent) onEvent(payload as { new: Record<string, unknown> });
       }
     )
