@@ -8,9 +8,9 @@ export function getJobActivityChannelId(organizationId: string, jobId: string): 
   return `job-activity-${organizationId}-${jobId}`;
 }
 
-/** Build realtime filter string: organization_id AND (target_id OR metadata->>job_id). */
+/** Build realtime filter string: organization_id AND or(and(target_type.eq.job,target_id.eq.jobId),metadata->>job_id.eq.jobId). Matches API route predicate. */
 export function getJobActivityRealtimeFilter(organizationId: string, jobId: string): string {
-  return `organization_id=eq.${organizationId}&or=(target_id.eq.${jobId},metadata->>job_id.eq.${jobId})`;
+  return `organization_id=eq.${organizationId}&or=(and(target_type.eq.job,target_id.eq.${jobId}),metadata->>job_id.eq.${jobId})`;
 }
 
 /** True if this audit row belongs in the job activity feed (target is job or metadata.job_id = jobId). */

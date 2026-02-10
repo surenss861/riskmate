@@ -17,11 +17,11 @@ const DOC_ID = 'dddddddd-eeee-4fff-8000-111122223333'
 
 describe('Job activity feed: metadata.job_id and realtime', () => {
   describe('getJobActivityRealtimeFilter', () => {
-    it('includes organization_id and or(target_id, metadata->>job_id) for realtime subscription', () => {
+    it('includes organization_id and or(and(target_type.eq.job,target_id.eq.jobId),metadata->>job_id.eq.jobId) for realtime subscription', () => {
       const filter = getJobActivityRealtimeFilter(ORG_ID, JOB_ID)
       expect(filter).toContain(`organization_id=eq.${ORG_ID}`)
       expect(filter).toContain('or=(')
-      expect(filter).toContain(`target_id.eq.${JOB_ID}`)
+      expect(filter).toContain(`and(target_type.eq.job,target_id.eq.${JOB_ID})`)
       expect(filter).toContain(`metadata->>job_id.eq.${JOB_ID}`)
     })
   })
