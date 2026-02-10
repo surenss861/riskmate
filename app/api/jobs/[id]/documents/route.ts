@@ -273,9 +273,10 @@ export async function POST(
       }
     }
 
-    // Generate signed URL
+    // Generate signed URL: use evidence bucket when file_path indicates evidence storage
+    const bucket = inserted.file_path?.startsWith('evidence/') ? 'evidence' : 'documents'
     const { data: signed } = await supabase.storage
-      .from('documents')
+      .from(bucket)
       .createSignedUrl(inserted.file_path, 60 * 10)
 
     return NextResponse.json(
