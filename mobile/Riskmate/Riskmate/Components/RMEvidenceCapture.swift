@@ -230,6 +230,40 @@ struct RMEvidenceCapture: View {
     }
 }
 
+/// Photo category for before/during/after (ticket: iOS Native Photo Category Selection).
+/// Use EvidencePhase for UI binding; this enum provides the spec name and API alignment.
+enum PhotoCategory: String, CaseIterable {
+    case before = "before"
+    case during = "during"
+    case after = "after"
+    
+    var displayName: String {
+        switch self {
+        case .before: return "Before"
+        case .during: return "During"
+        case .after: return "After"
+        }
+    }
+    
+    var icon: String {
+        switch self {
+        case .before: return "circle.lefthalf.filled"
+        case .during: return "circle.fill"
+        case .after: return "checkmark.circle.fill"
+        }
+    }
+    
+    var description: String {
+        switch self {
+        case .before: return "Pre-job site conditions"
+        case .during: return "Work in progress"
+        case .after: return "Completed work"
+        }
+    }
+    
+    var asEvidencePhase: EvidencePhase { EvidencePhase(rawValue: rawValue) ?? .during }
+}
+
 enum EvidencePhase: String, CaseIterable, Codable {
     case before = "before"
     case during = "during"
@@ -295,6 +329,32 @@ struct CategorySelectionView: View {
                 .foregroundColor(.secondary)
                 .textCase(.uppercase)
             
+            // Native iOS picker (menu style) — primary control
+            Picker("Photo Category", selection: $selectedCategory) {
+                ForEach([EvidencePhase.before, .during, .after], id: \.self) { phase in
+                    Label {
+                        Text(phase.displayName)
+                    } icon: {
+                        Image(systemName: phase.icon)
+                    }
+                    .tag(phase)
+                }
+            }
+            .pickerStyle(.menu)
+            .labelsHidden()
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .background(Color(.systemBackground))
+            .cornerRadius(10)
+            
+            // Selected category description
+            Text(selectedCategory.description)
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .padding(.horizontal, 4)
+            
+            // Optional: list-style rows for accessibility and tap targets
             VStack(spacing: 0) {
                 ForEach([EvidencePhase.before, .during, .after], id: \.self) { category in
                     CategoryRow(

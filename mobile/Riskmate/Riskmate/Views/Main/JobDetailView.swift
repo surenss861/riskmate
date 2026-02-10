@@ -1270,6 +1270,10 @@ struct UploadStatusCard: View {
                         .font(RMTheme.Typography.bodySmallBold)
                         .foregroundColor(RMTheme.Colors.textPrimary)
                     
+                    if let cat = upload.category {
+                        CategoryBadge(category: cat)
+                    }
+                    
                     Spacer()
                     
                     if case .failed = upload.state {

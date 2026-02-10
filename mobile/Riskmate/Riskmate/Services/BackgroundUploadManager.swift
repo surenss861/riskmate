@@ -84,7 +84,7 @@ class BackgroundUploadManager: NSObject, ObservableObject {
         let fileURL = FileManager.default.temporaryDirectory
             .appendingPathComponent(tempFileName)
         
-        // Create upload task (store file URL for retries); do not persist until file is on disk
+        // Create upload task (store file URL and category for retries/display)
         let upload = UploadTask(
             id: evidenceId,
             jobId: jobId,
@@ -93,7 +93,8 @@ class BackgroundUploadManager: NSObject, ObservableObject {
             progress: 0.0,
             createdAt: Date(),
             idempotencyKey: idempotencyKey,
-            fileURL: fileURL.path
+            fileURL: fileURL.path,
+            category: category ?? "during"
         )
         
         // Create multipart form data
@@ -501,9 +502,11 @@ struct UploadTask: Identifiable, Codable, Equatable {
     var retryCount: Int = 0
     var idempotencyKey: String?
     var fileURL: String? // Path to temporary file for background uploads
+    /// Photo category: "before", "during", or "after" (saved with upload; used for display and retry)
+    var category: String?
 
     enum CodingKeys: String, CodingKey {
-        case id, jobId, fileName, state, progress, createdAt, retryCount, idempotencyKey, fileURL
+        case id, jobId, fileName, state, progress, createdAt, retryCount, idempotencyKey, fileURL, category
     }
 }
 
