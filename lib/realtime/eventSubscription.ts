@@ -37,7 +37,7 @@ export function subscribeToJobActivity(
     .on(
       "postgres_changes",
       {
-        event: "*",
+        event: "INSERT",
         schema: "public",
         table: "audit_logs",
         filter: `target_id=eq.${jobId}&target_type=eq.job`,
