@@ -250,6 +250,27 @@ export async function GET(
       })
     }
 
+    if (start_date && end_date) {
+      const startTime = new Date(start_date).getTime()
+      const endTime = new Date(end_date).getTime()
+      if (startTime > endTime) {
+        const { response, errorId } = createErrorResponse(
+          'start_date must be before or equal to end_date',
+          'VALIDATION_ERROR',
+          { requestId, statusCode: 400 }
+        )
+        logApiError(400, 'VALIDATION_ERROR', errorId, requestId, organization_id, response.message, {
+          category: 'validation',
+          severity: 'warn',
+          route: ROUTE,
+        })
+        return NextResponse.json(response, {
+          status: 400,
+          headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+        })
+      }
+    }
+
     let query = supabase
       .from('audit_logs')
       .select('*', { count: 'exact' })
