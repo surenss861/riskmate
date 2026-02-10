@@ -1710,8 +1710,9 @@ jobsRouter.post("/:id/documents", authenticate, requireWriteAccess, async (req: 
       }
     }
 
+    const storageBucket = inserted.file_path?.startsWith("evidence/") ? "evidence" : "documents";
     const { data: signed } = await supabase.storage
-      .from("documents")
+      .from(storageBucket)
       .createSignedUrl(inserted.file_path, 60 * 10);
 
     // Extract client metadata from request

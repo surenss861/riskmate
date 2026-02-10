@@ -155,12 +155,15 @@ export function UploadEvidenceModal({
         return
       }
 
-      // Legacy path for photos: route through documents API (includes job_photos)
-      if (evidenceType === 'photo' && file && hasValidPhotoCategory) {
-        await jobsApi.uploadDocument(workRecordId, file, {
+      // Legacy path for photos: file already uploaded to evidence bucket above — persist via backend without re-upload
+      if (evidenceType === 'photo' && file && hasValidPhotoCategory && file_path && file_size != null && mime_type) {
+        await jobsApi.registerDocument(workRecordId, {
           name: file.name,
           type: 'photo',
-          description: notes.trim() || undefined,
+          file_path,
+          file_size,
+          mime_type,
+          description: notes.trim() || null,
           category: photoCategory as PhotoCategory,
         })
         onComplete()

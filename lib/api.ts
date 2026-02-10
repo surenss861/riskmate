@@ -405,6 +405,27 @@ export const jobsApi = {
     return apiRequest<{ data: any[] }>(`/api/jobs/${id}/documents`);
   },
 
+  /** Register an already-uploaded file (e.g. in evidence bucket) without re-uploading. */
+  registerDocument: async (
+    id: string,
+    metadata: { name: string; type?: string; file_path: string; file_size: number; mime_type: string; description?: string | null; category?: 'before' | 'during' | 'after' }
+  ) => {
+    const isPhoto = metadata.type === 'photo'
+    const photoCategory = isPhoto ? metadata.category : undefined
+    return apiRequest<{ data: any }>(`/api/jobs/${id}/documents`, {
+      method: 'POST',
+      body: JSON.stringify({
+        name: metadata.name,
+        type: metadata.type || 'photo',
+        file_path: metadata.file_path,
+        file_size: metadata.file_size,
+        mime_type: metadata.mime_type,
+        description: metadata.description ?? null,
+        ...(isPhoto && photoCategory ? { category: photoCategory } : {}),
+      }),
+    })
+  },
+
   uploadDocument: async (id: string, file: File, metadata: { name: string; type?: string; description?: string; category?: 'before' | 'during' | 'after' }) => {
     const supabase = createSupabaseBrowserClient()
     const { data: { user } } = await supabase.auth.getUser()
