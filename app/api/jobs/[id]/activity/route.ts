@@ -56,16 +56,13 @@ export async function GET(
       })
     }
 
-    await verifyJobOwnership(jobId, organization_id)
-
     const supabase = await createSupabaseServerClient()
 
-    // Ensure job exists (404 if not found)
+    // Check job existence first so missing jobs return 404 (ownership check returns 403)
     const { data: job, error: jobError } = await supabase
       .from('jobs')
       .select('id')
       .eq('id', jobId)
-      .eq('organization_id', organization_id)
       .maybeSingle()
 
     if (jobError) {
@@ -102,6 +99,8 @@ export async function GET(
         headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
       })
     }
+
+    await verifyJobOwnership(jobId, organization_id)
 
     const { searchParams } = request.nextUrl
     const limitParam = searchParams.get('limit')

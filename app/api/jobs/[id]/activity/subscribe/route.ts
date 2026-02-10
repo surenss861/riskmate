@@ -52,15 +52,13 @@ export async function POST(
       })
     }
 
-    await verifyJobOwnership(jobId, organization_id)
-
     const supabase = await createSupabaseServerClient()
 
+    // Check job existence first so missing jobs return 404 (ownership check returns 403)
     const { data: job, error: jobError } = await supabase
       .from('jobs')
       .select('id')
       .eq('id', jobId)
-      .eq('organization_id', organization_id)
       .maybeSingle()
 
     if (jobError) {
@@ -97,6 +95,8 @@ export async function POST(
         headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
       })
     }
+
+    await verifyJobOwnership(jobId, organization_id)
 
     const channelId = getJobActivityChannelId(jobId)
     const payload = { channelId, requestId }
