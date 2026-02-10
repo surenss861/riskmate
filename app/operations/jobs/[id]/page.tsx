@@ -18,6 +18,7 @@ import { TemplatesManager, TemplateModal, TemplateModalProps } from '@/component
 import { ApplyTemplateInline } from '@/components/dashboard/ApplyTemplateInline'
 import { JobPacketView } from '@/components/job/JobPacketView'
 import { JobActivityFeed, type AuditEvent } from '@/components/job/JobActivityFeed'
+import { ToastContainer } from '@/components/ToastContainer'
 import { typography, emptyStateStyles, spacing, dividerStyles, tabStyles } from '@/lib/styles/design-system'
 import { ErrorModal } from '@/components/dashboard/ErrorModal'
 import { optimizePhoto } from '@/lib/utils/photoOptimization'
@@ -683,6 +684,7 @@ export default function JobDetailPage() {
 
   return (
     <ProtectedRoute>
+      <ToastContainer />
       <AppBackground>
         <div className="sticky top-0 z-40 border-b border-white/5 bg-black/40 backdrop-blur-sm">
           <div className="max-w-7xl mx-auto px-6 py-4">

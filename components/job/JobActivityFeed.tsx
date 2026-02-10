@@ -1,13 +1,15 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { jobsApi } from '@/lib/api'
 import { subscribeToJobActivity } from '@/lib/realtime/eventSubscription'
 import { getEventMapping } from '@/lib/audit/eventMapper'
+import { toast } from '@/lib/utils/toast'
 import { typography, spacing, tabStyles, emptyStateStyles, badgeStyles, cardStyles } from '@/lib/styles/design-system'
 import { SkeletonLoader } from '@/components/dashboard/SkeletonLoader'
 import { EventChip } from '@/components/shared'
-import { Clock, User, FileText, Activity, Users, Calendar } from 'lucide-react'
+import { Clock, User, FileText, Activity, Users, Calendar, ArrowUpToLine } from 'lucide-react'
 
 export interface AuditEvent {
   id: string
@@ -40,6 +42,9 @@ const FILTER_ALL = 'all'
 const FILTER_STATUS = 'status'
 const FILTER_DOCUMENTS = 'documents'
 const FILTER_TEAM = 'team'
+const DEBOUNCE_MS = 1000
+const HIGHLIGHT_DURATION_MS = 2000
+const SCROLL_THRESHOLD_PX = 80
 type FilterType = typeof FILTER_ALL | typeof FILTER_STATUS | typeof FILTER_DOCUMENTS | typeof FILTER_TEAM
 
 const STATUS_EVENT_TYPES = ['status_changed', 'job.updated', 'job.status_changed', 'job.created']
@@ -100,6 +105,13 @@ export function JobActivityFeed({
   filterRef.current = filter
   const [subscribeContext, setSubscribeContext] = useState<{ channelId: string; organizationId: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [realtimeStatus, setRealtimeStatus] = useState<'idle' | 'connecting' | 'connected' | 'error'>('idle')
+  const [showScrollToTop, setShowScrollToTop] = useState(false)
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null)
+  const [newEventIds, setNewEventIds] = useState<Set<string>>(new Set())
+  const pendingEventsRef = useRef<AuditEvent[]>([])
+  const flushTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const lastToastAtRef = useRef<number>(0)
 
   const getEventTypesForFilter = useCallback((f: FilterType): string[] | undefined => {
     if (f === FILTER_ALL) return undefined
@@ -152,23 +164,62 @@ export function JobActivityFeed({
 
   useEffect(() => {
     if (!enableRealtime || !jobId) return
+    setRealtimeStatus('connecting')
     let cancelled = false
     jobsApi.subscribeJobActivity(jobId).then((ctx) => {
       if (!cancelled && ctx) setSubscribeContext(ctx)
+      else if (!cancelled) setRealtimeStatus('idle')
     })
     return () => {
       cancelled = true
       setSubscribeContext(null)
+      setRealtimeStatus('idle')
     }
   }, [enableRealtime, jobId])
+
+  const flushPendingEvents = useCallback(() => {
+    const pending = pendingEventsRef.current
+    if (pending.length === 0) return
+    pendingEventsRef.current = []
+    if (flushTimerRef.current) {
+      clearTimeout(flushTimerRef.current)
+      flushTimerRef.current = null
+    }
+    const ids = new Set(pending.map((e) => e.id))
+    setNewEventIds((prev) => new Set([...prev, ...ids]))
+    setTimeout(() => {
+      setNewEventIds((prev) => {
+        const next = new Set(prev)
+        ids.forEach((id) => next.delete(id))
+        return next
+      })
+    }, HIGHLIGHT_DURATION_MS)
+    setEvents((prev) => {
+      const existingIds = new Set(prev.map((e) => e.id))
+      const toPrepend = pending.filter((e) => !existingIds.has(e.id))
+      if (toPrepend.length === 0) return prev
+      setTotal((t) => t + toPrepend.length)
+      setOffset((o) => o + toPrepend.length)
+      const el = scrollContainerRef.current
+      const isAtTop = !el || el.scrollTop <= SCROLL_THRESHOLD_PX
+      const now = Date.now()
+      if (!isAtTop && now - lastToastAtRef.current >= DEBOUNCE_MS) {
+        lastToastAtRef.current = now
+        toast.success(toPrepend.length === 1 ? 'New activity' : `${toPrepend.length} new activities`)
+      }
+      return [...toPrepend, ...prev]
+    })
+  }, [])
 
   useEffect(() => {
     if (!subscribeContext) return
     const { channelId, organizationId } = subscribeContext
-    const unsubscribe = subscribeToJobActivity(
-      jobId,
-      organizationId,
-      (payload) => {
+    const unsubscribe = subscribeToJobActivity(jobId, organizationId, {
+      channelIdOverride: channelId,
+      onStatusChange: (status) => {
+        setRealtimeStatus(status === 'SUBSCRIBED' ? 'connected' : status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' ? 'error' : 'idle')
+      },
+      onEvent: (payload) => {
         const row = payload.new as Record<string, unknown>
         const newEvent: AuditEvent = {
           id: row.id as string,
@@ -188,15 +239,32 @@ export function JobActivityFeed({
         const currentFilter = filterRef.current
         const matches = filterEventsByType([newEvent], currentFilter)
         if (matches.length > 0) {
-          setEvents((prev) => [newEvent, ...prev])
-          setTotal((t) => t + 1)
-          setOffset((o) => o + 1)
+          pendingEventsRef.current.push(newEvent)
+          if (!flushTimerRef.current) {
+            flushTimerRef.current = setTimeout(flushPendingEvents, DEBOUNCE_MS)
+          }
         }
       },
-      channelId
-    )
-    return () => unsubscribe()
-  }, [jobId, subscribeContext])
+    })
+    return () => {
+      if (flushTimerRef.current) {
+        clearTimeout(flushTimerRef.current)
+        flushTimerRef.current = null
+      }
+      pendingEventsRef.current = []
+      unsubscribe()
+    }
+  }, [jobId, subscribeContext, flushPendingEvents])
+
+  const handleScroll = useCallback(() => {
+    const el = scrollContainerRef.current
+    if (!el) return
+    setShowScrollToTop(el.scrollTop > SCROLL_THRESHOLD_PX)
+  }, [])
+
+  const scrollToTop = useCallback(() => {
+    scrollContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
+  }, [])
 
   const filteredEvents = events
   const showLoadMore = hasMore && !loading && !loadingMore
@@ -217,9 +285,9 @@ export function JobActivityFeed({
   }
 
   return (
-    <div className="space-y-4" style={{ maxHeight }}>
+    <div className="space-y-4">
       {showFilters && (
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 justify-between">
           {[
             { key: FILTER_ALL, label: 'All Events', icon: Activity },
             { key: FILTER_STATUS, label: 'Status Changes', icon: Clock },
@@ -240,6 +308,23 @@ export function JobActivityFeed({
               {label}
             </button>
           ))}
+          {enableRealtime && realtimeStatus !== 'idle' && (
+            <span
+              className="flex items-center gap-2 text-xs text-white/60"
+              title={realtimeStatus === 'connected' ? 'Live updates enabled' : realtimeStatus === 'error' ? 'Connection lost' : 'Connecting...'}
+            >
+              <span
+                className={`h-2 w-2 rounded-full ${
+                  realtimeStatus === 'connected'
+                    ? 'bg-green-500 animate-pulse'
+                    : realtimeStatus === 'error'
+                      ? 'bg-red-500'
+                      : 'bg-amber-500'
+                }`}
+              />
+              {realtimeStatus === 'connected' ? 'Live' : realtimeStatus === 'error' ? 'Disconnected' : 'Connecting'}
+            </span>
+          )}
         </div>
       )}
 
@@ -262,17 +347,34 @@ export function JobActivityFeed({
       )}
 
       {filteredEvents.length > 0 && (
-        <div className="relative">
-          {/* Timeline vertical line */}
-          <div className="absolute left-[11px] top-2 bottom-2 w-px bg-white/10" aria-hidden />
-          <ul className="space-y-0">
-            {filteredEvents.map((event) => {
-              const mapping = getEventMapping(event.event_type || event.event_name || '')
-              const badgeVariant = getBadgeVariant(event.severity || mapping.severity, event.outcome || mapping.outcome)
-              return (
-                <li key={event.id} className="relative flex gap-4 pb-6 last:pb-0 pl-1">
-                  <div className="absolute left-0 top-5 z-10 h-3 w-3 flex-shrink-0 rounded-full bg-[#F97316] -translate-x-1/2" aria-hidden />
-                  <div className={`flex-1 min-w-0 pl-6 ${cardStyles.base} ${cardStyles.padding.sm}`}>
+        <div className="relative" style={{ maxHeight }}>
+          <div
+            ref={scrollContainerRef}
+            onScroll={handleScroll}
+            className="overflow-y-auto pr-2 -mr-2"
+            style={{ maxHeight: 'calc(70vh - 180px)', minHeight: 120 }}
+          >
+            {/* Timeline vertical line */}
+            <div className="absolute left-[11px] top-2 bottom-2 w-px bg-white/10" aria-hidden />
+            <ul className="space-y-0">
+              {filteredEvents.map((event) => {
+                const mapping = getEventMapping(event.event_type || event.event_name || '')
+                const badgeVariant = getBadgeVariant(event.severity || mapping.severity, event.outcome || mapping.outcome)
+                const isNew = newEventIds.has(event.id)
+                return (
+                  <motion.li
+                    key={event.id}
+                    initial={isNew ? { opacity: 0 } : false}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: 0.3 }}
+                    className="relative flex gap-4 pb-6 last:pb-0 pl-1"
+                  >
+                    <div className="absolute left-0 top-5 z-10 h-3 w-3 flex-shrink-0 rounded-full bg-[#F97316] -translate-x-1/2" aria-hidden />
+                    <div
+                      className={`flex-1 min-w-0 pl-6 ${cardStyles.base} ${cardStyles.padding.sm} transition-all duration-300 ${
+                        isNew ? 'ring-2 ring-[#F97316]/60 ring-offset-2 ring-offset-[#0A0A0A]' : ''
+                      }`}
+                    >
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2 mb-1">
@@ -310,10 +412,27 @@ export function JobActivityFeed({
                       </div>
                     </div>
                   </div>
-                </li>
+                </motion.li>
               )
             })}
           </ul>
+          </div>
+          <AnimatePresence>
+            {showScrollToTop && (
+              <motion.button
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 8 }}
+                type="button"
+                onClick={scrollToTop}
+                className="absolute bottom-4 right-4 flex items-center gap-2 rounded-lg border border-white/20 bg-[#0A0A0A]/90 px-3 py-2 text-sm font-medium text-white/90 shadow-lg backdrop-blur-sm hover:bg-white/10"
+                aria-label="Scroll to top"
+              >
+                <ArrowUpToLine className="h-4 w-4" />
+                New activity
+              </motion.button>
+            )}
+          </AnimatePresence>
         </div>
       )}
 

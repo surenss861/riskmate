@@ -22,6 +22,14 @@ const debounceInterval = 500; // 500ms
 // Last seen event timestamp (for catch-up)
 const LAST_SEEN_EVENT_AT_KEY = "realtime_last_seen_event_at";
 
+export type RealtimeConnectionStatus = "SUBSCRIBED" | "CHANNEL_ERROR" | "TIMED_OUT" | "CLOSED";
+
+export interface SubscribeToJobActivityOptions {
+  onEvent?: (payload: { new: Record<string, unknown> }) => void;
+  onStatusChange?: (status: RealtimeConnectionStatus) => void;
+  channelIdOverride?: string;
+}
+
 /**
  * Subscribe to realtime audit_logs for a specific job: rows where target_type=job and target_id=jobId, or metadata->>job_id=jobId (e.g. document.uploaded).
  * Use after POST /api/jobs/[id]/activity/subscribe to get channelId and organizationId; pass optional channelId to use server-provided id.
@@ -31,11 +39,18 @@ const LAST_SEEN_EVENT_AT_KEY = "realtime_last_seen_event_at";
 export function subscribeToJobActivity(
   jobId: string,
   organizationId: string,
-  onEvent?: (payload: { new: Record<string, unknown> }) => void,
+  onEventOrOpts?: ((payload: { new: Record<string, unknown> }) => void) | SubscribeToJobActivityOptions,
   channelIdOverride?: string
 ) {
+  const opts: SubscribeToJobActivityOptions =
+    typeof onEventOrOpts === "function"
+      ? { onEvent: onEventOrOpts, channelIdOverride }
+      : { ...onEventOrOpts, channelIdOverride: onEventOrOpts?.channelIdOverride ?? channelIdOverride };
+  const { onEvent, onStatusChange } = opts;
+  const chanOverride = opts.channelIdOverride ?? channelIdOverride;
+
   const supabase = createSupabaseBrowserClient();
-  const channelId = channelIdOverride ?? getJobActivityChannelId(organizationId, jobId);
+  const channelId = chanOverride ?? getJobActivityChannelId(organizationId, jobId);
   const channel = supabase.channel(channelId);
 
   const filter = getJobActivityRealtimeFilter(organizationId, jobId);
@@ -61,6 +76,7 @@ export function subscribeToJobActivity(
       } else if (status === "CHANNEL_ERROR") {
         console.error("[RealtimeJobActivity] ❌ Channel error for job:", jobId);
       }
+      onStatusChange?.(status as RealtimeConnectionStatus);
     });
 
   return () => {
