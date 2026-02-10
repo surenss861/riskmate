@@ -15,6 +15,50 @@ const debounceInterval = 500; // 500ms
 // Last seen event timestamp (for catch-up)
 const LAST_SEEN_EVENT_AT_KEY = "realtime_last_seen_event_at";
 
+/** Channel ID for job activity (audit_logs where target_id = jobId). Must match subscribe route. */
+export function getJobActivityChannelId(jobId: string): string {
+  return `job-activity-${jobId}`;
+}
+
+/**
+ * Subscribe to realtime audit_logs for a specific job (target_id = jobId).
+ * Use after POST /api/jobs/[id]/activity/subscribe to get channelId, or call directly with jobId.
+ * Returns unsubscribe function.
+ */
+export function subscribeToJobActivity(
+  jobId: string,
+  onEvent?: (payload: { new: Record<string, unknown> }) => void
+) {
+  const supabase = createSupabaseBrowserClient();
+  const channelId = getJobActivityChannelId(jobId);
+  const channel = supabase.channel(channelId);
+
+  channel
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "audit_logs",
+        filter: `target_id=eq.${jobId}`,
+      },
+      (payload) => {
+        if (onEvent) onEvent(payload as { new: Record<string, unknown> });
+      }
+    )
+    .subscribe((status) => {
+      if (status === "SUBSCRIBED") {
+        console.log("[RealtimeJobActivity] ✅ Subscribed to audit_logs for job:", jobId);
+      } else if (status === "CHANNEL_ERROR") {
+        console.error("[RealtimeJobActivity] ❌ Channel error for job:", jobId);
+      }
+    });
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
+}
+
 /**
  * Subscribe to realtime events for an organization
  */

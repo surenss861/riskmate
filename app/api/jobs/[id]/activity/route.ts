@@ -270,10 +270,33 @@ export async function GET(
     const actorMap = new Map<string, { full_name: string | null; email: string | null; role: string | null }>()
 
     if (actorIds.length > 0) {
-      const { data: users } = await supabase
+      const { data: users, error: usersError } = await supabase
         .from('users')
         .select('id, full_name, email, role')
+        .eq('organization_id', organization_id)
         .in('id', actorIds)
+
+      if (usersError) {
+        const { response, errorId } = createErrorResponse(
+          'Failed to fetch actor metadata',
+          'QUERY_ERROR',
+          {
+            requestId,
+            statusCode: 500,
+            details: { databaseError: usersError.message },
+          }
+        )
+        logApiError(500, 'QUERY_ERROR', errorId, requestId, organization_id, response.message, {
+          category: 'internal',
+          severity: 'error',
+          route: ROUTE,
+          details: { databaseError: usersError.message },
+        })
+        return NextResponse.json(response, {
+          status: 500,
+          headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+        })
+      }
 
       for (const u of users ?? []) {
         actorMap.set(u.id, {
