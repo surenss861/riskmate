@@ -2,13 +2,55 @@ import SwiftUI
 import AVFoundation
 import PhotosUI
 
+// MARK: - PhotoCategory (spec: public type for category selection)
+
+/// Spec-required photo category with before/during/after; map to EvidencePhase for uploads/API.
+enum PhotoCategory: String, CaseIterable, Codable {
+    case before = "before"
+    case during = "during"
+    case after = "after"
+    
+    var displayName: String {
+        switch self {
+        case .before: return "Before"
+        case .during: return "During"
+        case .after: return "After"
+        }
+    }
+    
+    var icon: String {
+        switch self {
+        case .before: return "circle.lefthalf.filled"
+        case .during: return "circle.fill"
+        case .after: return "checkmark.circle.fill"
+        }
+    }
+    
+    var description: String {
+        switch self {
+        case .before: return "Pre-job site conditions"
+        case .during: return "Work in progress"
+        case .after: return "Completed work"
+        }
+    }
+    
+    /// Map to EvidencePhase for uploadEvidence and API updates.
+    var evidencePhase: EvidencePhase {
+        EvidencePhase(rawValue: rawValue) ?? .during
+    }
+    
+    init(evidencePhase: EvidencePhase) {
+        self = PhotoCategory(rawValue: evidencePhase.rawValue) ?? .during
+    }
+}
+
 /// Enhanced evidence capture with camera, before/during/after, and tagging
 struct RMEvidenceCapture: View {
     let jobId: String
     var jobStatus: String = ""
     @Environment(\.dismiss) private var dismiss
     
-    @State private var selectedPhase: EvidencePhase = .during
+    @State private var selectedCategory: PhotoCategory = .during
     @State private var selectedType: EvidenceType = .workArea
     @State private var showEvidenceTypeGrid = false // Collapsed by default (Apple trick)
     @State private var showCamera = false
@@ -28,7 +70,7 @@ struct RMEvidenceCapture: View {
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: RMTheme.Spacing.sectionSpacing) {
                         // Photo category selection (before camera/gallery — ticket: iOS Native Photo Category Selection)
-                        CategorySelectionView(selectedCategory: $selectedPhase, jobStatus: jobStatus)
+                        CategorySelectionView(selectedCategory: $selectedCategory, jobStatus: jobStatus)
                             .padding(.horizontal, RMTheme.Spacing.pagePadding)
                         
                         // Permission Primer (always visible)
@@ -43,7 +85,7 @@ struct RMEvidenceCapture: View {
                                     .rmSectionHeader()
                                     .padding(.horizontal, RMTheme.Spacing.pagePadding)
                                 
-                                PhaseSelector(selectedPhase: $selectedPhase)
+                                PhaseSelector(selectedCategory: $selectedCategory)
                                     .padding(.horizontal, RMTheme.Spacing.pagePadding)
                                     .transition(.move(edge: .top).combined(with: .opacity))
                             }
@@ -131,6 +173,9 @@ struct RMEvidenceCapture: View {
                 }
             }
             .rmNavigationBar(title: "Capture Evidence")
+            .onChange(of: jobStatus) { _, newStatus in
+                selectedCategory = getDefaultCategory(jobStatus: newStatus)
+            }
             .sheet(isPresented: $showCamera) {
                 CameraView(
                     capturedImage: $capturedImage,
@@ -147,7 +192,7 @@ struct RMEvidenceCapture: View {
             .sheet(isPresented: $showPhotoPicker) {
                 PhotoPickerView(
                     jobId: jobId,
-                    phase: selectedPhase,
+                    phase: selectedCategory.evidencePhase,
                     type: selectedType,
                     onCapture: {
                         // Mark photo as captured to trigger progressive disclosure
@@ -216,7 +261,7 @@ struct RMEvidenceCapture: View {
                     fileData: data,
                     fileName: fileName,
                     mimeType: "image/jpeg",
-                    category: selectedPhase.rawValue
+                    category: selectedCategory.evidencePhase.rawValue
                 )
                 await MainActor.run {
                     withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
@@ -270,7 +315,7 @@ enum EvidencePhase: String, CaseIterable, Codable {
 }
 
 /// Default photo category based on job status (ticket: auto-select)
-func getDefaultCategory(jobStatus: String) -> EvidencePhase {
+func getDefaultCategory(jobStatus: String) -> PhotoCategory {
     switch jobStatus.lowercased() {
     case "draft":
         return .before
@@ -284,7 +329,7 @@ func getDefaultCategory(jobStatus: String) -> EvidencePhase {
 // MARK: - Category Selection (ticket: iOS Native Photo Category Selection)
 
 struct CategorySelectionView: View {
-    @Binding var selectedCategory: EvidencePhase
+    @Binding var selectedCategory: PhotoCategory
     let jobStatus: String
     
     var body: some View {
@@ -297,13 +342,13 @@ struct CategorySelectionView: View {
             
             // Native iOS picker (menu style) — primary control
             Picker("Photo Category", selection: $selectedCategory) {
-                ForEach([EvidencePhase.before, .during, .after], id: \.self) { phase in
+                ForEach(PhotoCategory.allCases, id: \.self) { category in
                     Label {
-                        Text(phase.displayName)
+                        Text(category.displayName)
                     } icon: {
-                        Image(systemName: phase.icon)
+                        Image(systemName: category.icon)
                     }
-                    .tag(phase)
+                    .tag(category)
                 }
             }
             .pickerStyle(.menu)
@@ -322,7 +367,7 @@ struct CategorySelectionView: View {
             
             // Optional: list-style rows for accessibility and tap targets
             VStack(spacing: 0) {
-                ForEach([EvidencePhase.before, .during, .after], id: \.self) { category in
+                ForEach(PhotoCategory.allCases, id: \.self) { category in
                     CategoryRow(
                         category: category,
                         isSelected: selectedCategory == category,
@@ -340,14 +385,22 @@ struct CategorySelectionView: View {
 }
 
 struct CategoryRow: View {
-    let category: EvidencePhase
+    let category: PhotoCategory
     let isSelected: Bool
     let onTap: () -> Void
+    
+    private var categoryIcon: String {
+        switch category {
+        case .before: return "📸"
+        case .during: return "🔧"
+        case .after: return "✅"
+        }
+    }
     
     var body: some View {
         Button(action: onTap) {
             HStack(spacing: 12) {
-                Text(category.categoryIcon)
+                Text(categoryIcon)
                     .font(.title2)
                 
                 VStack(alignment: .leading, spacing: 2) {
@@ -436,27 +489,27 @@ struct PermissionPrimerCard: View {
 }
 
 struct PhaseSelector: View {
-    @Binding var selectedPhase: EvidencePhase
+    @Binding var selectedCategory: PhotoCategory
     
     var body: some View {
         HStack(spacing: RMTheme.Spacing.sm) {
-            ForEach(EvidencePhase.allCases, id: \.self) { phase in
+            ForEach(PhotoCategory.allCases, id: \.self) { category in
                 Button {
-                    selectedPhase = phase
+                    selectedCategory = category
                 } label: {
                     VStack(spacing: RMTheme.Spacing.xs) {
-                        Image(systemName: phase.icon)
+                        Image(systemName: category.icon)
                             .font(.system(size: 24))
-                            .foregroundColor(selectedPhase == phase ? .black : RMTheme.Colors.textPrimary)
+                            .foregroundColor(selectedCategory == category ? .black : RMTheme.Colors.textPrimary)
                         
-                        Text(phase.displayName)
+                        Text(category.displayName)
                             .font(RMTheme.Typography.caption)
-                            .foregroundColor(selectedPhase == phase ? .black : RMTheme.Colors.textPrimary)
+                            .foregroundColor(selectedCategory == category ? .black : RMTheme.Colors.textPrimary)
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, RMTheme.Spacing.sm)
                     .background(
-                        selectedPhase == phase ? RMTheme.Colors.accent : RMTheme.Colors.surface.opacity(0.5)
+                        selectedCategory == category ? RMTheme.Colors.accent : RMTheme.Colors.surface.opacity(0.5)
                     )
                     .clipShape(RoundedRectangle(cornerRadius: RMTheme.Radius.sm))
                 }
