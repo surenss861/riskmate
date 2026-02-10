@@ -546,6 +546,35 @@ export const jobsApi = {
     }
   },
 
+  /**
+   * GET /api/jobs/[id]/activity - paginated job activity with optional filters.
+   * Params: limit, offset, actor_id, event_type, category, start_date, end_date.
+   */
+  getJobActivity: async (
+    jobId: string,
+    params?: {
+      limit?: number;
+      offset?: number;
+      actor_id?: string;
+      event_type?: string;
+      category?: string;
+      start_date?: string;
+      end_date?: string;
+    }
+  ) => {
+    const searchParams = new URLSearchParams();
+    if (params?.limit != null) searchParams.set('limit', String(params.limit));
+    if (params?.offset != null) searchParams.set('offset', String(params.offset));
+    if (params?.actor_id) searchParams.set('actor_id', params.actor_id);
+    if (params?.event_type) searchParams.set('event_type', params.event_type);
+    if (params?.category) searchParams.set('category', params.category);
+    if (params?.start_date) searchParams.set('start_date', params.start_date);
+    if (params?.end_date) searchParams.set('end_date', params.end_date);
+    const qs = searchParams.toString();
+    const url = qs ? `/api/jobs/${jobId}/activity?${qs}` : `/api/jobs/${jobId}/activity`;
+    return apiRequest<{ data: { events: any[]; total: number; has_more: boolean } }>(url);
+  },
+
   exportProofPack: async (jobId: string, packType: 'insurance' | 'audit' | 'incident' | 'compliance') => {
     // Use the new Packet Engine endpoint
     return apiRequest<{

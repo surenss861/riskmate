@@ -17,7 +17,8 @@ import { EvidenceVerification } from '@/components/dashboard/EvidenceVerificatio
 import { TemplatesManager, TemplateModal, TemplateModalProps } from '@/components/dashboard/TemplatesManager'
 import { ApplyTemplateInline } from '@/components/dashboard/ApplyTemplateInline'
 import { JobPacketView } from '@/components/job/JobPacketView'
-import { typography, emptyStateStyles, spacing, dividerStyles } from '@/lib/styles/design-system'
+import { JobActivityFeed } from '@/components/job/JobActivityFeed'
+import { typography, emptyStateStyles, spacing, dividerStyles, tabStyles } from '@/lib/styles/design-system'
 import { ErrorModal } from '@/components/dashboard/ErrorModal'
 import { optimizePhoto } from '@/lib/utils/photoOptimization'
 import { getGPSLocation } from '@/lib/utils/gpsMetadata'
@@ -157,6 +158,7 @@ export default function JobDetailPage() {
     actionType?: 'job_created' | 'hazard_added' | 'hazard_removed' | 'mitigation_completed' | 'photo_uploaded' | 'evidence_approved' | 'evidence_rejected' | 'template_applied' | 'worker_assigned' | 'worker_unassigned' | 'status_changed' | 'pdf_generated'
     metadata?: any
   }>>([])
+  const [activeTab, setActiveTab] = useState<'overview' | 'activity'>('overview')
 
   const loadVersionHistory = async () => {
     if (loadingVersionHistory || !jobId) return
@@ -803,6 +805,41 @@ export default function JobDetailPage() {
             )}
           </PageSection>
 
+          {/* Tab navigation: Overview | Activity */}
+          <div className={`${tabStyles.container} mb-6`}>
+            <button
+              type="button"
+              onClick={() => setActiveTab('overview')}
+              className={`${tabStyles.item} ${activeTab === 'overview' ? tabStyles.active : tabStyles.inactive}`}
+            >
+              Overview
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('activity')}
+              className={`${tabStyles.item} ${activeTab === 'activity' ? tabStyles.active : tabStyles.inactive}`}
+            >
+              Activity
+            </button>
+          </div>
+
+          {activeTab === 'activity' ? (
+            <PageSection>
+              <GlassCard className="p-6 md:p-8">
+                <h2 className={`${typography.h2} mb-4`}>Job Activity</h2>
+                <p className="text-sm text-white/60 mb-6">
+                  Timeline of updates to this job—status changes, documents, and team actions.
+                </p>
+                <JobActivityFeed
+                  jobId={jobId}
+                  enableRealtime={true}
+                  showFilters={true}
+                  maxHeight="70vh"
+                />
+              </GlassCard>
+            </PageSection>
+          ) : (
+          <>
           <div className="grid lg:grid-cols-3 gap-6 mb-16">
             <GlassCard className="p-10 flex flex-col h-full">
                 {/* Growable Content Section */}
@@ -1395,6 +1432,8 @@ export default function JobDetailPage() {
                 />
             </div>
           </PageSection>
+          </>
+          )}
         </AppShell>
       </AppBackground>
       <GenerationProgressModal

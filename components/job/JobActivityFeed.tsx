@@ -1,0 +1,319 @@
+'use client'
+
+import { useState, useEffect, useCallback } from 'react'
+import { jobsApi } from '@/lib/api'
+import { subscribeToJobActivity } from '@/lib/realtime/eventSubscription'
+import { createSupabaseBrowserClient } from '@/lib/supabase/client'
+import { getEventMapping } from '@/lib/audit/eventMapper'
+import { typography, spacing, tabStyles, emptyStateStyles, badgeStyles, cardStyles } from '@/lib/styles/design-system'
+import { SkeletonLoader } from '@/components/dashboard/SkeletonLoader'
+import { EventChip } from '@/components/shared'
+import { Clock, User, FileText, Activity, Users, Calendar } from 'lucide-react'
+
+export interface AuditEvent {
+  id: string
+  event_name?: string
+  event_type?: string
+  created_at: string
+  category?: string
+  severity?: 'critical' | 'material' | 'info'
+  outcome?: string
+  actor_name?: string
+  actor_email?: string
+  actor_role?: string
+  actor_id?: string
+  target_type?: string
+  target_id?: string
+  metadata?: Record<string, unknown>
+  summary?: string
+}
+
+export interface JobActivityFeedProps {
+  jobId: string
+  initialEvents?: AuditEvent[]
+  enableRealtime?: boolean
+  showFilters?: boolean
+  maxHeight?: string
+}
+
+const PAGE_SIZE = 20
+const FILTER_ALL = 'all'
+const FILTER_STATUS = 'status'
+const FILTER_DOCUMENTS = 'documents'
+const FILTER_TEAM = 'team'
+type FilterType = typeof FILTER_ALL | typeof FILTER_STATUS | typeof FILTER_DOCUMENTS | typeof FILTER_TEAM
+
+const STATUS_EVENT_TYPES = ['status_changed', 'job.updated', 'job.status_changed', 'job.created']
+const DOCUMENT_EVENT_TYPES = ['document.uploaded', 'photo.uploaded', 'evidence.approved', 'evidence.rejected', 'proof_pack.generated', 'permit_pack.generated']
+const TEAM_EVENT_TYPES = ['worker.assigned', 'worker.unassigned', 'assignment.created', 'assignment.removed', 'signoff.created']
+
+function filterEventsByType(events: AuditEvent[], filter: FilterType): AuditEvent[] {
+  if (filter === FILTER_ALL) return events
+  const eventType = (e: AuditEvent) => (e.event_type || e.event_name || '').toLowerCase()
+  if (filter === FILTER_STATUS) {
+    return events.filter((e) => STATUS_EVENT_TYPES.some((t) => eventType(e).includes(t)))
+  }
+  if (filter === FILTER_DOCUMENTS) {
+    return events.filter((e) => DOCUMENT_EVENT_TYPES.some((t) => eventType(e).includes(t.split('.')[0])))
+  }
+  if (filter === FILTER_TEAM) {
+    return events.filter((e) => TEAM_EVENT_TYPES.some((t) => eventType(e).includes(t.split('.')[0])))
+  }
+  return events
+}
+
+function formatEventTime(iso: string): string {
+  const d = new Date(iso)
+  const now = new Date()
+  const diffMs = now.getTime() - d.getTime()
+  const diffMins = Math.floor(diffMs / 60000)
+  const diffHours = Math.floor(diffMs / 3600000)
+  const diffDays = Math.floor(diffMs / 86400000)
+  if (diffMins < 1) return 'Just now'
+  if (diffMins < 60) return `${diffMins}m ago`
+  if (diffHours < 24) return `${diffHours}h ago`
+  if (diffDays < 7) return `${diffDays}d ago`
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: d.getFullYear() !== now.getFullYear() ? 'numeric' : undefined })
+}
+
+function getBadgeVariant(severity?: string, outcome?: string): 'Success' | 'Info' | 'Warning' | 'Error' {
+  if (outcome === 'blocked' || outcome === 'failure') return 'Error'
+  if (severity === 'critical') return 'Error'
+  if (severity === 'material') return 'Warning'
+  return 'Info'
+}
+
+export function JobActivityFeed({
+  jobId,
+  initialEvents,
+  enableRealtime = true,
+  showFilters = true,
+  maxHeight = '70vh',
+}: JobActivityFeedProps) {
+  const [events, setEvents] = useState<AuditEvent[]>(initialEvents ?? [])
+  const [loading, setLoading] = useState(!initialEvents?.length)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [offset, setOffset] = useState(0)
+  const [total, setTotal] = useState(0)
+  const [hasMore, setHasMore] = useState(false)
+  const [filter, setFilter] = useState<FilterType>(FILTER_ALL)
+  const [organizationId, setOrganizationId] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const fetchPage = useCallback(
+    async (off: number, append: boolean) => {
+      if (append) setLoadingMore(true)
+      else setLoading(true)
+      setError(null)
+      try {
+        const res = await jobsApi.getJobActivity(jobId, {
+          limit: PAGE_SIZE,
+          offset: off,
+        })
+        const data = res.data as { events: AuditEvent[]; total: number; has_more: boolean }
+        const list = data?.events ?? []
+        const tot = data?.total ?? 0
+        const more = data?.has_more ?? false
+        if (append) {
+          setEvents((prev) => (off === 0 ? list : [...prev, ...list]))
+        } else {
+          setEvents(list)
+        }
+        setTotal(tot)
+        setHasMore(more)
+        setOffset(off + list.length)
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Failed to load activity'
+        setError(message)
+        if (!append) setEvents([])
+      } finally {
+        setLoading(false)
+        setLoadingMore(false)
+      }
+    },
+    [jobId]
+  )
+
+  useEffect(() => {
+    if (!jobId) return
+    fetchPage(0, false)
+  }, [jobId, fetchPage])
+
+  useEffect(() => {
+    if (!enableRealtime || !jobId || !organizationId) return
+    const unsubscribe = subscribeToJobActivity(jobId, organizationId, (payload) => {
+      const row = payload.new as Record<string, unknown>
+      const newEvent: AuditEvent = {
+        id: row.id as string,
+        event_name: row.event_name as string,
+        event_type: row.event_name as string,
+        created_at: row.created_at as string,
+        category: row.category as string,
+        severity: row.severity as AuditEvent['severity'],
+        actor_name: row.actor_name as string,
+        actor_email: row.actor_email as string,
+        actor_role: row.actor_role as string,
+        actor_id: row.actor_id as string,
+        target_type: row.target_type as string,
+        target_id: row.target_id as string,
+        metadata: row.metadata as Record<string, unknown>,
+      }
+      setEvents((prev) => [newEvent, ...prev])
+      setTotal((t) => t + 1)
+    })
+    return () => unsubscribe()
+  }, [enableRealtime, jobId, organizationId])
+
+  useEffect(() => {
+    const loadOrgId = async () => {
+      const supabase = createSupabaseBrowserClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        const { data: userRow } = await supabase.from('users').select('organization_id').eq('id', user.id).single()
+        if (userRow?.organization_id) setOrganizationId(userRow.organization_id)
+      }
+    }
+    loadOrgId()
+  }, [])
+
+  const filteredEvents = filterEventsByType(events, filter)
+  const showLoadMore = hasMore && !loading && !loadingMore && filter === FILTER_ALL
+
+  if (loading && events.length === 0) {
+    return (
+      <div className="space-y-4" style={{ maxHeight }}>
+        <div className={cardStyles.base + ' ' + cardStyles.padding.md}>
+          <SkeletonLoader variant="text" lines={2} className="mb-4" />
+          <div className="space-y-3">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <SkeletonLoader key={i} variant="card" height="72px" />
+            ))}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4" style={{ maxHeight }}>
+      {showFilters && (
+        <div className="flex flex-wrap items-center gap-2">
+          {[
+            { key: FILTER_ALL, label: 'All Events', icon: Activity },
+            { key: FILTER_STATUS, label: 'Status Changes', icon: Clock },
+            { key: FILTER_DOCUMENTS, label: 'Documents', icon: FileText },
+            { key: FILTER_TEAM, label: 'Team Actions', icon: Users },
+          ].map(({ key, label, icon: Icon }) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setFilter(key as FilterType)}
+              className={
+                filter === key
+                  ? `${tabStyles.item} ${tabStyles.active} flex items-center gap-2 rounded-lg border border-[#F97316]/30 bg-[#F97316]/10 px-3 py-2 text-sm font-medium text-[#F97316]`
+                  : `${tabStyles.item} ${tabStyles.inactive} flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-white/70 hover:bg-white/10 hover:text-white`
+              }
+            >
+              <Icon className="h-4 w-4" />
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {error && (
+        <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+          {error}
+        </div>
+      )}
+
+      {filteredEvents.length === 0 && !loading && (
+        <div className={`${emptyStateStyles.container} py-12`}>
+          <Calendar className="mx-auto mb-3 h-10 w-10 text-white/40" />
+          <p className={emptyStateStyles.title}>No activity yet</p>
+          <p className={emptyStateStyles.description}>
+            {filter !== FILTER_ALL
+              ? 'No events match this filter. Try "All Events".'
+              : 'Updates to this job will appear here—status changes, documents, and team actions.'}
+          </p>
+        </div>
+      )}
+
+      {filteredEvents.length > 0 && (
+        <div className="relative">
+          {/* Timeline vertical line */}
+          <div className="absolute left-[11px] top-2 bottom-2 w-px bg-white/10" aria-hidden />
+          <ul className="space-y-0">
+            {filteredEvents.map((event) => {
+              const mapping = getEventMapping(event.event_type || event.event_name || '')
+              const badgeVariant = getBadgeVariant(event.severity || mapping.severity, event.outcome || mapping.outcome)
+              return (
+                <li key={event.id} className="relative flex gap-4 pb-6 last:pb-0 pl-1">
+                  <div className="absolute left-0 top-5 z-10 h-3 w-3 flex-shrink-0 rounded-full bg-[#F97316] -translate-x-1/2" aria-hidden />
+                  <div className={`flex-1 min-w-0 pl-6 ${cardStyles.base} ${cardStyles.padding.sm}`}>
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2 mb-1">
+                          <EventChip
+                            eventType={event.event_type || event.event_name || 'unknown'}
+                            severity={event.severity || mapping.severity}
+                            outcome={(event.outcome || mapping.outcome) as 'blocked' | 'allowed' | 'success' | 'failure' | undefined}
+                            showOutcome={false}
+                          />
+                          {badgeVariant === 'Error' && (
+                            <span className={`${badgeStyles.base} bg-red-500/20 text-red-400 border-red-500/30`}>Error</span>
+                          )}
+                          {badgeVariant === 'Warning' && (
+                            <span className={`${badgeStyles.base} bg-amber-500/20 text-amber-400 border-amber-500/30`}>Warning</span>
+                          )}
+                          {badgeVariant === 'Info' && (
+                            <span className={`${badgeStyles.base} bg-blue-500/20 text-blue-400 border-blue-500/30`}>Info</span>
+                          )}
+                        </div>
+                        <p className="text-sm text-white/90">
+                          {event.summary || mapping.description || mapping.title || event.event_type || event.event_name || 'Event'}
+                        </p>
+                        <div className={`mt-2 flex flex-wrap items-center gap-3 ${spacing.gap.tight} text-xs text-white/50`}>
+                          {event.actor_name && (
+                            <span className="flex items-center gap-1">
+                              <User className="h-3.5 w-3.5" />
+                              {event.actor_name}
+                            </span>
+                          )}
+                          <span className="flex items-center gap-1">
+                            <Clock className="h-3.5 w-3.5" />
+                            {formatEventTime(event.created_at)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+      )}
+
+      {showLoadMore && (
+        <div className="flex justify-center pt-4">
+          <button
+            type="button"
+            onClick={() => fetchPage(offset, true)}
+            disabled={loadingMore}
+            className="rounded-lg border border-white/20 bg-white/5 px-4 py-2 text-sm font-medium text-white/90 hover:bg-white/10 disabled:opacity-50"
+          >
+            {loadingMore ? (
+              <>
+                <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-[#F97316] border-t-transparent mr-2 align-middle" />
+                Loading...
+              </>
+            ) : (
+              'Load more'
+            )}
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
