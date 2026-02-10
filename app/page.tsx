@@ -453,6 +453,16 @@ export default function HomePage() {
           </div>
         </section>
 
+        {/* Failure scenarios — consequence without panic */}
+        <section className="max-w-4xl mx-auto px-6 py-12 border-t border-white/5" aria-labelledby="failure-scenarios-heading">
+          <p id="failure-scenarios-heading" className="sr-only">What goes wrong without proof in place</p>
+          <ul className="text-center space-y-2 list-none" role="list">
+            <li className="text-sm text-white/45">Photos missing.</li>
+            <li className="text-sm text-white/45">Signatures disputed.</li>
+            <li className="text-sm text-white/45">Timeline unclear.</li>
+          </ul>
+        </section>
+
         {/* Divider — hero promise → scroll evidence */}
         <div className="max-w-4xl mx-auto px-6 py-8 border-t border-white/5">
           <div className="h-px w-12 mx-auto mb-4 bg-white/20" aria-hidden />
