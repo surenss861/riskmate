@@ -157,10 +157,13 @@ function HeroSection({ onSignup, onSampleReport }: { onSignup: () => void; onSam
         <motion.p variants={heroItem} className="text-sm text-white/50 mb-4 italic">
           The thing you hand over when someone asks questions.
         </motion.p>
+        <p className="text-xs text-white/35 mb-2 font-normal not-italic">
+          The difference between a clean audit and a six-figure problem.
+        </p>
         <motion.p variants={heroItem} className="text-xs text-white/40 font-mono mb-10">
           If it isn&apos;t anchored, it doesn&apos;t exist.
         </motion.p>
-        <motion.div variants={heroItem} className="flex flex-col sm:flex-row gap-4 justify-center">
+        <motion.div variants={heroItem} className="flex flex-col sm:flex-row gap-4 justify-center items-center sm:items-end">
           <motion.button
             onClick={onSignup}
             className="relative overflow-hidden px-8 py-4 bg-[#F97316] text-black rounded-lg hover:bg-[#FB923C] transition-colors font-semibold text-lg"
@@ -176,12 +179,15 @@ function HeroSection({ onSignup, onSampleReport }: { onSignup: () => void; onSam
               />
             )}
           </motion.button>
-          <button
-            onClick={onSampleReport}
-            className="px-8 py-4 rounded-lg border border-white/15 bg-white/[0.03] hover:bg-white/[0.06] hover:border-white/25 text-white/80 hover:text-white transition-colors font-semibold text-lg"
-          >
-            View Sample Audit
-          </button>
+          <div className="flex flex-col items-center gap-1">
+            <button
+              onClick={onSampleReport}
+              className="px-8 py-4 rounded-lg border border-white/15 bg-white/[0.03] hover:bg-white/[0.06] hover:border-white/25 text-white/80 hover:text-white transition-colors font-semibold text-lg"
+            >
+              See the exact file auditors receive
+            </button>
+            <span className="text-[11px] text-white/40 font-mono">Real PDF. Real format. Nothing simulated.</span>
+          </div>
         </motion.div>
       </motion.div>
     </section>
@@ -426,22 +432,22 @@ export default function HomePage() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-10 md:gap-8">
             <div>
               <div className="text-3xl font-bold text-[#F97316]/60 mb-2">01</div>
-              <div className="text-[#F97316] font-semibold text-base mb-1">Capture</div>
+              <div className="text-[#F97316] font-semibold text-base mb-1">Capture <span className="text-white/50 font-normal">(while it still exists)</span></div>
               <p className="text-[#A1A1A1] text-sm leading-relaxed">Field evidence recorded as work happens.</p>
             </div>
             <div>
               <div className="text-3xl font-bold text-[#F97316]/60 mb-2">02</div>
-              <div className="text-[#F97316] font-semibold text-base mb-1">Review</div>
+              <div className="text-[#F97316] font-semibold text-base mb-1">Review <span className="text-white/50 font-normal">(before it compounds)</span></div>
               <p className="text-[#A1A1A1] text-sm leading-relaxed">Risks flagged before they compound.</p>
             </div>
             <div>
               <div className="text-3xl font-bold text-[#F97316] mb-2">03</div>
-              <div className="text-[#F97316] font-bold text-base mb-1">Anchor</div>
+              <div className="text-[#F97316] font-bold text-base mb-1">Anchor <span className="text-white/50 font-normal">(so it can&apos;t be disputed)</span></div>
               <p className="text-white/80 text-sm leading-relaxed">Records frozen into the ledger.</p>
             </div>
             <div>
               <div className="text-3xl font-bold text-[#F97316]/60 mb-2">04</div>
-              <div className="text-[#F97316] font-semibold text-base mb-1">Defend</div>
+              <div className="text-[#F97316] font-semibold text-base mb-1">Defend <span className="text-white/50 font-normal">(when it matters)</span></div>
               <p className="text-[#A1A1A1] text-sm leading-relaxed">Proof packs exported for audits and claims.</p>
             </div>
           </div>
@@ -462,9 +468,10 @@ export default function HomePage() {
         {/* Proof — verified outputs */}
         <section id="proof" className="max-w-6xl mx-auto px-6 py-20 border-t border-white/5">
           <h2 className="text-2xl font-semibold text-white mb-3 text-center">What auditors actually receive</h2>
-          <p className="text-sm text-white/50 mb-10 text-center max-w-xl mx-auto">
-            Auditors receive these exact formats. Nothing here is simulated.
+          <p className="text-sm text-white/70 mb-1 text-center max-w-xl mx-auto">
+            These are the files that end arguments.
           </p>
+          <p className="text-[11px] text-white/40 font-mono mb-10 text-center">Hash-verifiable. Tamper-evident.</p>
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
             {/* Featured: Audit Packet */}
             <div className="lg:col-span-2 p-6 bg-[#121212] border border-white/10 rounded-lg hover:border-[#F97316]/40 transition-colors text-left group">
@@ -714,7 +721,8 @@ export default function HomePage() {
                 <span className="text-[#A1A1A1]">/mo</span>
               </div>
               <p className="text-xs text-[#A1A1A1] mb-1">per business</p>
-              <p className="text-xs text-white/50 mb-6 italic">Used by teams that need inspection-safe documentation.</p>
+              <p className="text-xs text-white/50 mb-1 italic">Used by teams that need inspection-safe documentation.</p>
+              <p className="text-xs text-white/40 mb-6">Cheaper than one denied claim.</p>
               <ul className="space-y-3 mb-8">
                 <li className="flex items-start">
                 <span className="text-[#FACC15] mr-2">✓</span>
@@ -792,6 +800,7 @@ export default function HomePage() {
                 }}
               />
             </motion.button>
+            <p className="text-sm text-white/40 mt-4">Most teams only realize they need this when it&apos;s too late.</p>
           </motion.div>
         </section>
 
@@ -812,11 +821,8 @@ export default function HomePage() {
               <p className="text-white/70 leading-relaxed mb-4">
                 Electricians losing photos in iMessage. Roofers with paper forms that got lost. HVAC crews using Google Drive folders no one could find.
               </p>
-              <p className="text-white/70 leading-relaxed mb-4">
-                Riskmate produces proof packs: immutable records you hand to insurers and auditors. One click.
-              </p>
-              <p className="text-sm text-white/40 font-mono">
-                This is why it exists.
+              <p className="text-white/70 leading-relaxed mb-0">
+                Riskmate produces proof packs: immutable records you hand to insurers and auditors. One click. Riskmate exists so proof is boring, fast, and unquestioned.
               </p>
             </div>
           </motion.div>
