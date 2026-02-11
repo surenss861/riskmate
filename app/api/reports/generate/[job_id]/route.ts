@@ -95,47 +95,51 @@ export async function POST(
     }
     console.log(`[reports][${requestId}][stage] fetch_job_ok`)
 
-    // Rate limit: 20 PDF generations per hour per org
-    const rateLimitResult = checkRateLimitWithContext(request, RATE_LIMIT_CONFIGS.pdf, {
-      organization_id,
-      user_id: user.id,
-    })
-    if (!rateLimitResult.allowed) {
-      console.log(JSON.stringify({
-        event: 'rate_limit_exceeded',
-        organization_id,
-        user_id: user.id,
-        endpoint: request.nextUrl?.pathname,
-        limit: rateLimitResult.limit,
-        window_ms: rateLimitResult.windowMs,
-        retry_after: rateLimitResult.retryAfter,
-        request_id: requestId,
-      }))
-      return NextResponse.json(
-        {
-          message: 'Rate limit exceeded. Please try again later.',
-          requestId,
-          stage: 'rate_limit',
-          error_code: 'RATE_LIMIT_EXCEEDED',
-          retry_after_seconds: rateLimitResult.retryAfter,
-        },
-        {
-          status: 429,
-          headers: {
-            'X-Request-ID': requestId,
-            'X-RateLimit-Limit': String(rateLimitResult.limit),
-            'X-RateLimit-Remaining': '0',
-            'X-RateLimit-Reset': String(rateLimitResult.resetAt),
-            'Retry-After': String(rateLimitResult.retryAfter),
-          },
-        }
-      )
-    }
-
-    // Get packet type and status from request body
+    // Parse body first to support short-circuit for signature-only runs
     const body = await request.json().catch(() => ({}))
     const rawPacketType = body.packetType
     const skipPdfGeneration = body.skipPdfGeneration === true // If true, only create report run, don't generate PDF
+
+    // Rate limit: only apply when generating PDFs (skip for signature-only run creation)
+    let rateLimitResult: { allowed: boolean; limit: number; remaining: number; resetAt: number; retryAfter: number }
+    if (!skipPdfGeneration) {
+      rateLimitResult = checkRateLimitWithContext(request, RATE_LIMIT_CONFIGS.pdf, {
+        organization_id,
+        user_id: user.id,
+      })
+      if (!rateLimitResult.allowed) {
+        console.log(JSON.stringify({
+          event: 'rate_limit_exceeded',
+          organization_id,
+          user_id: user.id,
+          endpoint: request.nextUrl?.pathname,
+          limit: rateLimitResult.limit,
+          window_ms: rateLimitResult.windowMs,
+          retry_after: rateLimitResult.retryAfter,
+          request_id: requestId,
+        }))
+        return NextResponse.json(
+          {
+            message: 'Rate limit exceeded. Please try again later.',
+            requestId,
+            stage: 'rate_limit',
+            error_code: 'RATE_LIMIT_EXCEEDED',
+            retry_after_seconds: rateLimitResult.retryAfter,
+          },
+          {
+            status: 429,
+            headers: {
+              'X-Request-ID': requestId,
+              'X-RateLimit-Limit': String(rateLimitResult.limit),
+              'X-RateLimit-Remaining': '0',
+              'X-RateLimit-Reset': String(rateLimitResult.resetAt),
+              'Retry-After': String(rateLimitResult.retryAfter),
+            },
+          }
+        )
+      }
+    }
+
     // Restrict status: skipPdfGeneration -> ready_for_signatures; otherwise draft. Do not accept client-specified status.
     const status = skipPdfGeneration ? 'ready_for_signatures' : 'draft'
 
