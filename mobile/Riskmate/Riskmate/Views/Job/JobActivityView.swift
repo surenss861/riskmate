@@ -601,7 +601,7 @@ final class JobActivityRealtimeService: ObservableObject {
         await withCheckedContinuation { _ in }
     }
 
-    private func handleInsertAction(_ action: InsertAction, jobId: String) {
+    private func handleInsertAction(_ action: InsertAction, jobId: String) async {
         // InsertAction.record is [String: AnyJSON]; convert to [String: Any] for ActivityEvent(realtimeRecord:).
         var row: [String: Any] = [:]
         for (key, value) in action.record {
