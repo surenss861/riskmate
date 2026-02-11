@@ -60,6 +60,14 @@ export async function POST(
       )
     }
 
+    // Only runs in ready_for_signatures may be finalized (reject draft, superseded, and any other state)
+    if (reportRun.status !== 'ready_for_signatures') {
+      return NextResponse.json(
+        { message: 'Report run must be in ready_for_signatures state to finalize', status: reportRun.status },
+        { status: 400 }
+      )
+    }
+
     // Check signature completeness
     const REQUIRED_ROLES = ['prepared_by', 'reviewed_by', 'approved_by']
     const { data: signatures } = await supabase

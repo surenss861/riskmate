@@ -38,7 +38,8 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { job_id, report_payload, status = 'draft', packet_type = 'insurance' } = body
+    const { job_id, report_payload, packet_type = 'insurance' } = body
+    // Ignore client-provided status; new runs are always draft to enforce signing workflow
 
     if (!job_id) {
       return NextResponse.json(
@@ -93,13 +94,13 @@ export async function POST(request: NextRequest) {
     // Compute data hash using same canonical hashing as verification
     const dataHash = computeCanonicalHash(serverPayload)
 
-    // Create report run (persist data_hash for tamper-evidence)
+    // Create report run (persist data_hash for tamper-evidence); status always draft
     const { data: reportRun, error: createError } = await supabase
       .from('report_runs')
       .insert({
         organization_id: userData.organization_id,
         job_id,
-        status,
+        status: 'draft',
         packet_type: packetType,
         generated_by: user.id,
         data_hash: dataHash,
