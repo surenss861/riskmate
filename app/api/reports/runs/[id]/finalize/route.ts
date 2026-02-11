@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { buildJobReport } from '@/lib/utils/jobReport'
+import { buildJobPacket } from '@/lib/utils/packets/builder'
+import { computeCanonicalHash } from '@/lib/utils/canonicalJson'
+import { isValidPacketType } from '@/lib/utils/packets/types'
+import { createHash } from 'crypto'
 
 export const runtime = 'nodejs'
 
@@ -24,10 +29,10 @@ export async function POST(
 
     const { id: reportRunId } = await params
 
-    // Get report run and verify access
+    // Get report run and verify access (full row needed for hash re-verification)
     const { data: reportRun, error: runError } = await supabase
       .from('report_runs')
-      .select('organization_id, status, generated_by, data_hash')
+      .select('*')
       .eq('id', reportRunId)
       .single()
 
@@ -68,23 +73,62 @@ export async function POST(
       )
     }
 
-    // Check signature completeness
-    const REQUIRED_ROLES = ['prepared_by', 'reviewed_by', 'approved_by']
-    const { data: signatures, error: signaturesError } = await supabase
-      .from('report_signatures')
-      .select('signature_role')
-      .eq('report_run_id', reportRunId)
-      .is('revoked_at', null)
-
-    if (signaturesError) {
-      console.error('[reports/runs/finalize] Signatures query failed:', signaturesError)
+    // Re-verify run payload hash (same logic as GET /api/reports/runs/[id]/verify)
+    const packetType = reportRun.packet_type
+    let currentPayload: any
+    if (packetType && isValidPacketType(packetType)) {
+      currentPayload = await buildJobPacket({
+        jobId: reportRun.job_id,
+        packetType,
+        organizationId: reportRun.organization_id,
+      })
+    } else {
+      currentPayload = await buildJobReport(
+        reportRun.organization_id,
+        reportRun.job_id
+      )
+    }
+    const recomputedHash = computeCanonicalHash(currentPayload)
+    if (recomputedHash !== reportRun.data_hash) {
       return NextResponse.json(
-        { message: 'Failed to load signatures', detail: signaturesError.message },
-        { status: 500 }
+        {
+          message: 'Cannot finalize: report data has changed since this run was created; hash mismatch',
+          code: 'HASH_MISMATCH',
+        },
+        { status: 409 }
       )
     }
 
-    const signedRoles = new Set(signatures?.map((s) => s.signature_role) || [])
+    // Re-verify each active signature's signature_hash (same logic as verify route)
+    const { data: signaturesForVerify } = await supabase
+      .from('report_signatures')
+      .select('id, signature_role, signature_hash, signature_svg, signer_name, signer_title, revoked_at')
+      .eq('report_run_id', reportRunId)
+
+    const activeSignaturesForVerify = signaturesForVerify?.filter((s) => !s.revoked_at) || []
+    for (const sig of activeSignaturesForVerify) {
+      const recomputedSignatureHash = createHash('sha256')
+        .update(reportRun.data_hash ?? '')
+        .update(sig.signature_svg ?? '')
+        .update(sig.signer_name ?? '')
+        .update(sig.signer_title ?? '')
+        .update(sig.signature_role ?? '')
+        .digest('hex')
+      if (recomputedSignatureHash !== sig.signature_hash) {
+        return NextResponse.json(
+          {
+            message: 'Cannot finalize: signature verification failed; data may have been tampered',
+            code: 'SIGNATURE_HASH_MISMATCH',
+            signature_id: sig.id,
+          },
+          { status: 409 }
+        )
+      }
+    }
+
+    // Check signature completeness (use already-fetched active signatures)
+    const REQUIRED_ROLES = ['prepared_by', 'reviewed_by', 'approved_by']
+    const signedRoles = new Set(activeSignaturesForVerify.map((s) => s.signature_role))
     const missingRoles = REQUIRED_ROLES.filter((role) => !signedRoles.has(role))
 
     if (missingRoles.length > 0) {

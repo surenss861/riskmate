@@ -38,7 +38,9 @@ UPDATE report_runs
 SET packet_type = 'insurance'
 WHERE packet_type IS NULL;
 
--- 4) RLS: Allow INSERT with any allowed status (not just draft)
+-- 4) RLS: Allow INSERT only with draft (and ready_for_signatures for server-driven flows).
+-- complete, final, and superseded are not allowed on INSERT; clients must transition
+-- via server routes that enforce hashing and signatures.
 DROP POLICY IF EXISTS "Organization members can create draft report runs" ON report_runs;
 CREATE POLICY "Organization members can create report runs"
 ON report_runs
@@ -49,7 +51,7 @@ WITH CHECK (
     SELECT organization_id FROM users WHERE id = auth.uid()
   )
   AND generated_by = auth.uid()
-  AND status IN ('draft', 'ready_for_signatures', 'complete', 'final', 'superseded')
+  AND status IN ('draft', 'ready_for_signatures')
 );
 
 -- UPDATE policy already permits creator/admin to update; no status restriction,
