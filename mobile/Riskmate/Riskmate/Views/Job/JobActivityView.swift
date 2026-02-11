@@ -162,19 +162,34 @@ struct JobActivityView: View {
 
     /// Known event types from spec so users can filter even when no activity is loaded yet
     private static let knownEventTypes: [String] = [
-        "job.created",
-        "job.status_changed",
-        "job.assigned",
+        "assignment.created",
+        "assignment.removed",
+        "control.added",
+        "control.updated",
+        "control.created",
+        "control.verified",
         "document.uploaded",
         "document.deleted",
         "document.category_changed",
+        "evidence.approved",
+        "evidence.rejected",
+        "evidence.uploaded",
+        "evidence.deleted",
+        "export.generated",
+        "export.pack.generated",
         "hazard.added",
         "hazard.updated",
-        "control.added",
-        "control.updated",
-        "signature.added",
-        "export.generated",
+        "job.created",
+        "job.updated",
+        "job.status_changed",
+        "job.assigned",
+        "job.completed",
+        "permit_pack.generated",
+        "photo.uploaded",
         "proof_pack.generated",
+        "signature.added",
+        "worker.assigned",
+        "worker.unassigned",
     ]
 
     private func loadInitial() async {
@@ -372,7 +387,7 @@ struct ActivityCardView: View {
         if let severity = event.severity, !severity.isEmpty {
             switch severity.lowercased() {
             case "critical": return "Critical"
-            case "material": return "Info"
+            case "material": return "Warning"
             case "info": return "Info"
             default: return severity
             }
@@ -391,7 +406,8 @@ struct ActivityCardView: View {
         if let severity = event.severity {
             switch severity.lowercased() {
             case "critical": return RMTheme.Colors.error
-            case "material", "info": return RMTheme.Colors.info
+            case "material": return RMTheme.Colors.warning
+            case "info": return RMTheme.Colors.info
             default: break
             }
         }
