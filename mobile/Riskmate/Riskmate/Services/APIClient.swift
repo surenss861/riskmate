@@ -701,7 +701,7 @@ class APIClient {
     }
 
     /// Get job activity events with optional filtering and pagination.
-    /// Query params: limit, offset, actor_id, event_type or event_types (comma-separated), category, start_date, end_date (ISO).
+    /// Query params: limit, offset, actor_id, event_type (comma-separated for multiple), category, start_date, end_date (ISO).
     func getJobActivity(
         jobId: String,
         limit: Int = 50,
@@ -719,7 +719,8 @@ class APIClient {
             queryItems.append("actor_id=\(actorId.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? actorId)")
         }
         if let eventTypes = eventTypes, !eventTypes.isEmpty {
-            queryItems.append("event_types=\(eventTypes.joined(separator: ",").addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? eventTypes.joined(separator: ","))")
+            let value = eventTypes.joined(separator: ",")
+            queryItems.append("event_type=\(value.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? value)")
         }
         if let category = category, !category.isEmpty {
             queryItems.append("category=\(category.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? category)")

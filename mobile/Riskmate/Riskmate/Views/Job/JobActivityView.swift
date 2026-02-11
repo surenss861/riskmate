@@ -68,6 +68,7 @@ struct JobActivityView: View {
         .onChange(of: realtimeService.newEvent) { _, newEvent in
             guard let event = newEvent else { return }
             events.insert(event, at: 0)
+            offset += 1
             realtimeService.clearNewEvent()
             Task { await loadActorsIfNeeded() }
             ToastCenter.shared.show("New activity", systemImage: "bell.badge", style: .info)
