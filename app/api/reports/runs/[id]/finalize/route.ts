@@ -70,11 +70,19 @@ export async function POST(
 
     // Check signature completeness
     const REQUIRED_ROLES = ['prepared_by', 'reviewed_by', 'approved_by']
-    const { data: signatures } = await supabase
+    const { data: signatures, error: signaturesError } = await supabase
       .from('report_signatures')
       .select('signature_role')
       .eq('report_run_id', reportRunId)
       .is('revoked_at', null)
+
+    if (signaturesError) {
+      console.error('[reports/runs/finalize] Signatures query failed:', signaturesError)
+      return NextResponse.json(
+        { message: 'Failed to load signatures', detail: signaturesError.message },
+        { status: 500 }
+      )
+    }
 
     const signedRoles = new Set(signatures?.map((s) => s.signature_role) || [])
     const missingRoles = REQUIRED_ROLES.filter((role) => !signedRoles.has(role))
