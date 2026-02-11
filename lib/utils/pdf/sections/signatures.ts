@@ -1,18 +1,31 @@
 import PDFDocument from 'pdfkit';
 import { STYLES } from '../styles';
 import { addSectionHeader } from '../helpers';
+import { formatDate } from '../utils';
 import type { JobData } from '../types';
+
+/** Signature data for PDF rendering (run's report_signatures) */
+export interface PdfSignatureData {
+  signer_name: string;
+  signer_title: string;
+  signature_role: 'prepared_by' | 'reviewed_by' | 'approved_by' | 'other';
+  signature_svg: string;
+  signed_at: string;
+  signature_hash?: string | null;
+}
+
+const ROLE_LABELS: Record<string, string> = {
+  prepared_by: 'Prepared By',
+  reviewed_by: 'Reviewed By',
+  approved_by: 'Approved By',
+  other: 'Signature',
+};
 
 /**
  * Signatures & Compliance - Legal/Compliance Style
- * 
- * Hybrid approach: Pages 2+ = legal/compliance style
- * 
- * Improvements:
- * - Add "Prepared by Riskmate" line
- * - Add Document ID / hash style line
- * - Put compliance paragraph into bordered callout block
- * - Keep signature rows aligned, less vertical sprawl
+ *
+ * When signatures array is provided, renders actual signer name/title, timestamp, signature hash,
+ * and indicates signature captured (SVG stored). Otherwise renders placeholder boxes.
  */
 export function renderSignaturesAndCompliance(
   doc: PDFKit.PDFDocument,
@@ -20,7 +33,8 @@ export function renderSignaturesAndCompliance(
   pageWidth: number,
   pageHeight: number,
   margin: number,
-  safeAddPage: () => void
+  safeAddPage: () => void,
+  signatures?: PdfSignatureData[]
 ) {
   safeAddPage();
   addSectionHeader(doc, 'Signatures & Compliance');
@@ -38,7 +52,7 @@ export function renderSignaturesAndCompliance(
   doc.moveDown(2);
 
   // ============================================
-  // CREW SIGNATURES
+  // CREW SIGNATURES (actual data or placeholders)
   // ============================================
   doc
     .fillColor(STYLES.colors.primaryText)
@@ -49,15 +63,82 @@ export function renderSignaturesAndCompliance(
   doc.moveDown(0.8);
 
   const sigBoxY = doc.y;
-  const sigBoxHeight = 90; // Reduced from 100 for tighter layout
+  const sigBoxHeight = 90;
   const sigBoxWidth = (pageWidth - margin * 2 - 20) / 2;
   const sigSpacing = 20;
+  const count = signatures?.length ? Math.min(signatures.length, 4) : 4;
 
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < count; i++) {
+    const sig = signatures?.[i];
     const row = Math.floor(i / 2);
     const col = i % 2;
     const sigY = sigBoxY + row * (sigBoxHeight + sigSpacing);
     const sigX = margin + col * (sigBoxWidth + sigSpacing);
+
+    const drawBox = (x: number, y: number) => {
+      doc
+        .rect(x, y, sigBoxWidth, sigBoxHeight)
+        .fill(STYLES.colors.sectionBg)
+        .stroke(STYLES.colors.borderGray)
+        .lineWidth(1.5);
+
+      doc
+        .strokeColor(STYLES.colors.secondaryText)
+        .lineWidth(1)
+        .dash(3, { space: 2 })
+        .moveTo(x + 15, y + 20)
+        .lineTo(x + sigBoxWidth - 15, y + 20)
+        .stroke()
+        .undash();
+
+      if (sig) {
+        const roleLabel = ROLE_LABELS[sig.signature_role] ?? sig.signature_role;
+        const dateStr = formatDate(sig.signed_at);
+        const hashStr = sig.signature_hash
+          ? `${sig.signature_hash.substring(0, 12)}…${sig.signature_hash.substring(sig.signature_hash.length - 8)}`
+          : '';
+
+        doc
+          .fillColor(STYLES.colors.secondaryText)
+          .fontSize(STYLES.sizes.caption)
+          .font(STYLES.fonts.light)
+          .text(roleLabel, x + 15, y + 25);
+        doc
+          .fillColor(STYLES.colors.primaryText)
+          .fontSize(STYLES.sizes.body)
+          .font(STYLES.fonts.body)
+          .text(sig.signer_name, x + 15, y + 38, { width: sigBoxWidth - 30 })
+          .text(sig.signer_title, x + 15, y + 52, { width: sigBoxWidth - 30 })
+          .text(`Signed: ${dateStr}`, x + 15, y + 66, { width: sigBoxWidth - 30 });
+        if (hashStr) {
+          doc
+            .fillColor(STYLES.colors.secondaryText)
+            .fontSize(8)
+            .font(STYLES.fonts.light)
+            .text(`Hash: ${hashStr}`, x + 15, y + 78, { width: sigBoxWidth - 30 });
+        }
+        doc
+          .fillColor(STYLES.colors.secondaryText)
+          .fontSize(8)
+          .font(STYLES.fonts.light)
+          .text('Signature captured (SVG on file)', x + 15, y + 86, { width: sigBoxWidth - 30 });
+      } else {
+        doc
+          .fillColor(STYLES.colors.secondaryText)
+          .fontSize(STYLES.sizes.caption)
+          .font(STYLES.fonts.light)
+          .text('Signature', x + 15, y + 25)
+          .fillColor(STYLES.colors.primaryText)
+          .fontSize(STYLES.sizes.body)
+          .font(STYLES.fonts.body)
+          .text('Printed Name: _________________', x + 15, y + 45, { width: sigBoxWidth - 30 })
+          .text('Crew Role: _________________', x + 15, y + 65, { width: sigBoxWidth - 30 })
+          .fillColor(STYLES.colors.secondaryText)
+          .fontSize(STYLES.sizes.caption)
+          .font(STYLES.fonts.light)
+          .text('Date: _________________', x + 15, y + 80);
+      }
+    };
 
     if (sigY + sigBoxHeight > pageHeight - 200) {
       safeAddPage();
@@ -65,78 +146,13 @@ export function renderSignaturesAndCompliance(
       const adjustedRow = Math.floor(i / 2);
       const adjustedY = newY + adjustedRow * (sigBoxHeight + sigSpacing);
       const adjustedX = margin + col * (sigBoxWidth + sigSpacing);
-
-      doc
-        .rect(adjustedX, adjustedY, sigBoxWidth, sigBoxHeight)
-        .fill(STYLES.colors.sectionBg)
-        .stroke(STYLES.colors.borderGray)
-        .lineWidth(1.5);
-
-      doc
-        .strokeColor(STYLES.colors.secondaryText)
-        .lineWidth(1)
-        .dash(3, { space: 2 })
-        .moveTo(adjustedX + 15, adjustedY + 20)
-        .lineTo(adjustedX + sigBoxWidth - 15, adjustedY + 20)
-        .stroke()
-        .undash();
-
-      doc
-        .fillColor(STYLES.colors.secondaryText)
-        .fontSize(STYLES.sizes.caption)
-        .font(STYLES.fonts.light)
-        .text('Signature', adjustedX + 15, adjustedY + 25)
-        .fillColor(STYLES.colors.primaryText)
-        .fontSize(STYLES.sizes.body)
-        .font(STYLES.fonts.body)
-        .text('Printed Name: _________________', adjustedX + 15, adjustedY + 45, {
-          width: sigBoxWidth - 30,
-        })
-        .text('Crew Role: _________________', adjustedX + 15, adjustedY + 65, {
-          width: sigBoxWidth - 30,
-        })
-        .fillColor(STYLES.colors.secondaryText)
-        .fontSize(STYLES.sizes.caption)
-        .font(STYLES.fonts.light)
-        .text('Date: _________________', adjustedX + 15, adjustedY + 80);
+      drawBox(adjustedX, adjustedY);
     } else {
-      doc
-        .rect(sigX, sigY, sigBoxWidth, sigBoxHeight)
-        .fill(STYLES.colors.sectionBg)
-        .stroke(STYLES.colors.borderGray)
-        .lineWidth(1.5);
-
-      doc
-        .strokeColor(STYLES.colors.secondaryText)
-        .lineWidth(1)
-        .dash(3, { space: 2 })
-        .moveTo(sigX + 15, sigY + 20)
-        .lineTo(sigX + sigBoxWidth - 15, sigY + 20)
-        .stroke()
-        .undash();
-
-      doc
-        .fillColor(STYLES.colors.secondaryText)
-        .fontSize(STYLES.sizes.caption)
-        .font(STYLES.fonts.light)
-        .text('Signature', sigX + 15, sigY + 25)
-        .fillColor(STYLES.colors.primaryText)
-        .fontSize(STYLES.sizes.body)
-        .font(STYLES.fonts.body)
-        .text('Printed Name: _________________', sigX + 15, sigY + 45, {
-          width: sigBoxWidth - 30,
-        })
-        .text('Crew Role: _________________', sigX + 15, sigY + 65, {
-          width: sigBoxWidth - 30,
-        })
-        .fillColor(STYLES.colors.secondaryText)
-        .fontSize(STYLES.sizes.caption)
-        .font(STYLES.fonts.light)
-        .text('Date: _________________', sigX + 15, sigY + 80);
+      drawBox(sigX, sigY);
     }
   }
 
-  doc.y = sigBoxY + 2 * (sigBoxHeight + sigSpacing) + 30; // Reduced spacing
+  doc.y = sigBoxY + 2 * (sigBoxHeight + sigSpacing) + 30;
   const complianceY = doc.y;
 
   // ============================================
@@ -155,7 +171,6 @@ export function renderSignaturesAndCompliance(
     'documentation submitted by the assigned crew. All data is timestamped and stored securely. ' +
     'This documentation serves as evidence of compliance with safety protocols and regulatory requirements.';
 
-  // Calculate text height for callout box
   const complianceTextHeight = doc.heightOfString(complianceText, {
     width: pageWidth - margin * 2 - 32,
     lineGap: 4,
@@ -165,14 +180,12 @@ export function renderSignaturesAndCompliance(
   const calloutHeight = complianceTextHeight + 24;
   const calloutWidth = pageWidth - margin * 2;
 
-  // Bordered callout block
   doc
     .roundedRect(margin, calloutY, calloutWidth, calloutHeight, 6)
     .fill(STYLES.colors.lightGrayBg)
     .stroke(STYLES.colors.borderGray)
     .lineWidth(1.5);
 
-  // Compliance text inside callout
   doc
     .fillColor(STYLES.colors.secondaryText)
     .fontSize(STYLES.sizes.body)

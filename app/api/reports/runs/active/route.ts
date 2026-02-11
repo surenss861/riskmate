@@ -122,14 +122,14 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    // Create new run
+    // Create new run in signing-ready state so TeamSignatures can create then sign without manual status change
     const { data: newRun, error: createError } = await supabase
       .from('report_runs')
       .insert({
         organization_id: userData.organization_id,
         job_id: jobId,
         packet_type: packetType,
-        status: 'draft',
+        status: 'ready_for_signatures',
         generated_by: user.id,
         data_hash: dataHash,
       })

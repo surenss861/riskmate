@@ -277,9 +277,12 @@ export function SignatureProofSection({ data }: SignatureProofSectionProps) {
                   <div
                     dangerouslySetInnerHTML={{ __html: sig.signature_svg }}
                     style={{
-                      maxHeight: '60pt',
+                      width: '240pt',
+                      height: '60pt',
                       maxWidth: '100%',
+                      overflow: 'hidden',
                     }}
+                    className="signature-svg-container"
                   />
                 </div>
                 

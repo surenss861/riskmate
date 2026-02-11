@@ -1170,6 +1170,18 @@ function getPrintStyles(): string {
       font-style: italic;
     }
 
+    /* Signature SVG - explicit size for PDF/print so signatures render (not empty placeholders) */
+    .signature-svg-container,
+    .signature-svg-container svg {
+      width: 100%;
+      max-width: 240pt;
+      height: 60pt;
+      display: block;
+    }
+    .signature-svg-container svg {
+      object-fit: contain;
+    }
+
     /* QR Code Container */
     .qr-code-container {
       text-align: center;
