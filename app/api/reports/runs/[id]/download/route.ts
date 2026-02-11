@@ -4,6 +4,7 @@ import { signPrintToken } from '@/lib/utils/printToken'
 import { generatePdfFromService } from '@/lib/utils/playwright-pdf-service'
 import { generatePdfRemote } from '@/lib/utils/playwright-remote'
 import { isValidPacketType } from '@/lib/utils/packets/types'
+import { ensureReportsBucketExists } from '@/lib/utils/ensureReportsBucket'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -136,24 +137,59 @@ export async function GET(
 
     // Store PDF for final/complete runs only (drafts get PDF streamed but not persisted)
     if (isFinalOrComplete) {
+      try {
+        await ensureReportsBucketExists(supabase)
+      } catch (bucketErr: any) {
+        console.error('[reports/runs/download] Reports bucket ensure failed:', bucketErr)
+        return NextResponse.json(
+          {
+            message: 'Failed to ensure reports storage is available',
+            detail: bucketErr?.message ?? 'Bucket check or creation failed',
+            error_code: 'REPORTS_BUCKET_UNAVAILABLE',
+          },
+          { status: 500 }
+        )
+      }
+
       const storagePath = `${organizationId}/${jobId}/${packetType}/${reportRunId}.pdf`
       const { error: uploadError } = await supabase.storage
         .from('reports')
         .upload(storagePath, buffer, { contentType: 'application/pdf', upsert: true })
 
-      if (!uploadError) {
-        const { data: signedUrlData } = await supabase.storage
-          .from('reports')
-          .createSignedUrl(storagePath, 60 * 60 * 24 * 365)
-        await supabase
-          .from('report_runs')
-          .update({
-            pdf_path: storagePath,
-            pdf_signed_url: signedUrlData?.signedUrl ?? null,
-            pdf_generated_at: new Date().toISOString(),
-          })
-          .eq('id', reportRunId)
+      if (uploadError) {
+        console.error('[reports/runs/download] PDF upload failed:', uploadError)
+        return NextResponse.json(
+          {
+            message: 'Failed to persist generated PDF to storage',
+            detail: uploadError.message,
+            error_code: 'PDF_PERSIST_FAILED',
+          },
+          { status: 500 }
+        )
       }
+
+      const { data: signedUrlData } = await supabase.storage
+        .from('reports')
+        .createSignedUrl(storagePath, 60 * 60 * 24 * 365)
+      const { error: updateError } = await supabase
+        .from('report_runs')
+        .update({
+          pdf_path: storagePath,
+          pdf_signed_url: signedUrlData?.signedUrl ?? null,
+          pdf_generated_at: new Date().toISOString(),
+        })
+        .eq('id', reportRunId)
+
+      if (updateError) {
+        console.error('[reports/runs/download] Report run update after upload failed:', updateError)
+        return NextResponse.json(
+          {
+            message: 'Failed to update report run with PDF metadata',
+            detail: updateError.message,
+            error_code: 'REPORT_RUN_UPDATE_FAILED',
+          },
+          { status: 500 }
+        )
     }
 
     return new NextResponse(new Uint8Array(buffer), {

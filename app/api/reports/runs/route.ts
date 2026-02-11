@@ -180,25 +180,28 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Get report runs with limit and optional status filter
-    const limit = parseInt(searchParams.get('limit') || '10', 10)
+    // Pagination: offset + limit (defaults: offset=0, limit=10; cap limit at 100)
+    const rawLimit = parseInt(searchParams.get('limit') || '10', 10)
+    const limit = Math.min(Math.max(1, Number.isNaN(rawLimit) ? 10 : rawLimit), 100)
+    const rawOffset = parseInt(searchParams.get('offset') || '0', 10)
+    const offset = Math.max(0, Number.isNaN(rawOffset) ? 0 : rawOffset)
+
     const statusFilter = searchParams.get('status') ?? null
-    let query = supabase
+
+    // Build base query for both count and data (same filters)
+    const baseFilter = supabase
       .from('report_runs')
-      .select('*')
+      .select('*', { count: 'exact' })
       .eq('job_id', jobId)
       .eq('organization_id', userData.organization_id)
       .order('generated_at', { ascending: false })
 
+    let query = baseFilter
     if (statusFilter && ['draft', 'ready_for_signatures', 'final', 'complete', 'superseded'].includes(statusFilter)) {
       query = query.eq('status', statusFilter)
     }
 
-    if (limit > 0) {
-      query = query.limit(limit)
-    }
-
-    const { data: reportRuns, error } = await query
+    const { data: reportRuns, error, count } = await query.range(offset, offset + limit - 1)
 
     if (error) {
       console.error('[reports/runs] Failed to fetch report runs:', error)
@@ -208,7 +211,19 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    return NextResponse.json({ data: reportRuns || [] })
+    const total = count ?? (reportRuns?.length ?? 0)
+    const hasMore = offset + (reportRuns?.length ?? 0) < total
+
+    return NextResponse.json({
+      data: reportRuns || [],
+      pagination: {
+        limit,
+        offset,
+        total,
+        has_more: hasMore,
+        next_offset: hasMore ? offset + limit : null,
+      },
+    })
   } catch (error: any) {
     console.error('[reports/runs] Error:', error)
     return NextResponse.json(
