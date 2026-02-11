@@ -270,6 +270,13 @@ struct JobActivityView: View {
 
     private func loadInitial() async {
         loadError = nil
+        if let start = appliedFilters.startDate, let end = appliedFilters.endDate, start > end {
+            let message = "Start date must be before end date"
+            loadError = message
+            isLoading = false
+            ToastCenter.shared.show(message, systemImage: "calendar.badge.exclamationmark", style: .warning)
+            return
+        }
         isLoading = true
         offset = 0
         hasMore = true
@@ -303,6 +310,12 @@ struct JobActivityView: View {
 
     private func loadMore() async {
         guard !isLoadingMore, hasMore else { return }
+        if let start = appliedFilters.startDate, let end = appliedFilters.endDate, start > end {
+            let message = "Start date must be before end date"
+            loadMoreError = message
+            ToastCenter.shared.show(message, systemImage: "calendar.badge.exclamationmark", style: .warning)
+            return
+        }
         isLoadingMore = true
         defer { isLoadingMore = false }
         do {

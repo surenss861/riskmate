@@ -759,7 +759,12 @@ class APIClient {
         }
         if let eventTypes = eventTypes, !eventTypes.isEmpty {
             let value = eventTypes.joined(separator: ",")
-            queryItems.append("event_type=\(value.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? value)")
+            let encoded = value.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? value
+            if eventTypes.count == 1 {
+                queryItems.append("event_type=\(encoded)")
+            } else {
+                queryItems.append("event_types=\(encoded)")
+            }
         }
         if let category = category, !category.isEmpty {
             queryItems.append("category=\(category.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? category)")
