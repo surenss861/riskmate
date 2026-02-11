@@ -16,7 +16,10 @@ import { renderHazardChecklist } from './sections/hazardChecklist';
 import { renderControlsApplied } from './sections/controlsApplied';
 import { renderTimeline } from './sections/timeline';
 import { renderPhotosSection } from './sections/photos';
-import { renderSignaturesAndCompliance } from './sections/signatures';
+import {
+  renderSignaturesAndCompliance,
+  type PdfSignatureData,
+} from './sections/signatures';
 
 // ============================================
 // MAIN GENERATOR
@@ -27,7 +30,9 @@ export async function generateRiskSnapshotPDF(
   mitigationItems: MitigationItem[],
   organization: OrganizationData,
   photos: JobDocumentAsset[] = [],
-  auditLogs: AuditLogEntry[] = []
+  auditLogs: AuditLogEntry[] = [],
+  /** When provided (e.g. from report_signatures for a report run), actual signatures are rendered in the PDF */
+  signatures?: PdfSignatureData[]
 ): Promise<Buffer> {
   const accent = organization.accent_color || '#F97316';
   const logoBuffer = await fetchLogoBuffer(organization.logo_url);
@@ -176,7 +181,8 @@ export async function generateRiskSnapshotPDF(
       pageHeight,
       margin,
       safeAddPage,
-      estimatedTotalPages
+      estimatedTotalPages,
+      signatures
     );
 
     // Final footer for last page

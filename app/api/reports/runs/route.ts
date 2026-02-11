@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
-import { createHash } from 'crypto'
+import { buildJobReport } from '@/lib/utils/jobReport'
+import { buildJobPacket } from '@/lib/utils/packets/builder'
+import { computeCanonicalHash } from '@/lib/utils/canonicalJson'
+import { isValidPacketType } from '@/lib/utils/packets/types'
 
 export const runtime = 'nodejs'
 
 /**
  * POST /api/reports/runs
- * Creates a new report run (frozen version) for a job
+ * Creates a new report run (frozen version) for a job.
+ * Payload is built server-side from job data; client must not supply report_payload.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -36,9 +40,17 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { job_id, report_payload, status = 'draft', packet_type = 'insurance' } = body
 
-    if (!job_id || !report_payload) {
+    if (!job_id) {
       return NextResponse.json(
-        { message: 'Missing required fields: job_id, report_payload' },
+        { message: 'Missing required field: job_id' },
+        { status: 400 }
+      )
+    }
+
+    // Reject client-supplied payload; we build server snapshot for integrity
+    if (report_payload !== undefined) {
+      return NextResponse.json(
+        { message: 'report_payload must not be supplied; server builds payload from job_id and packet_type' },
         { status: 400 }
       )
     }
@@ -61,10 +73,25 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Compute data hash for audit integrity
-    const dataHash = createHash('sha256')
-      .update(JSON.stringify(report_payload))
-      .digest('hex')
+    // Build canonical payload server-side (same as verification)
+    let serverPayload: any
+    if (isValidPacketType(packetType)) {
+      serverPayload = await buildJobPacket({
+        jobId: job_id,
+        packetType,
+        organizationId: userData.organization_id,
+        supabaseClient: supabase,
+      })
+    } else {
+      serverPayload = await buildJobReport(
+        userData.organization_id,
+        job_id,
+        supabase
+      )
+    }
+
+    // Compute data hash using same canonical hashing as verification
+    const dataHash = computeCanonicalHash(serverPayload)
 
     // Create report run (persist data_hash for tamper-evidence)
     const { data: reportRun, error: createError } = await supabase
