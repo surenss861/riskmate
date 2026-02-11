@@ -548,9 +548,13 @@ struct ActivityCardView: View {
 
 /// Subscribes to audit_log INSERTs for a job and publishes new events for the view to prepend.
 /// Uses POST /api/jobs/{id}/activity/subscribe for channelId/organizationId, then Supabase postgres_changes with filter.
+/// Authenticates the Supabase client with the current user JWT so RLS on audit_logs allows the feed.
 @MainActor
 final class JobActivityRealtimeService: ObservableObject {
     @Published var newEvent: ActivityEvent?
+
+    /// When non-nil, realtime subscription was skipped (e.g. missing/expired token); view can show message or rely on polling.
+    @Published private(set) var subscriptionUnavailableReason: String?
 
     private var channel: RealtimeChannelV2?
     private var postgresSubscription: RealtimeSubscription?
@@ -560,7 +564,10 @@ final class JobActivityRealtimeService: ObservableObject {
     private(set) var actorCache: [String: (name: String, role: String?)] = [:]
 
     /// Subscribe to job-specific audit_log inserts, then wait until cancelled. Call unsubscribe() on cancel.
+    /// Uses the current user session JWT so RLS on audit_logs allows postgres_changes. On missing/expired token, falls back to polling (no subscription).
     func subscribeAndWait(jobId: String) async {
+        subscriptionUnavailableReason = nil
+
         let subscribeResult: (channelId: String, organizationId: String)
         do {
             subscribeResult = try await APIClient.shared.subscribeToJobActivity(jobId: jobId)
@@ -570,8 +577,26 @@ final class JobActivityRealtimeService: ObservableObject {
         let channelId = subscribeResult.channelId
         let organizationId = subscribeResult.organizationId
 
+        // Authenticate with current user JWT so audit_logs RLS allows the postgres_changes feed.
+        do {
+            let t = try await AuthService.shared.getAccessToken()
+            guard !t.isEmpty else {
+                subscriptionUnavailableReason = "Live updates unavailable — please pull to refresh."
+                return
+            }
+        } catch {
+            subscriptionUnavailableReason = "Live updates unavailable — please pull to refresh."
+            return
+        }
+
         guard let url = URL(string: AppConfig.shared.supabaseURL) else { return }
-        let client = SupabaseClient(supabaseURL: url, supabaseKey: AppConfig.shared.supabaseAnonKey)
+
+        var options = SupabaseClientOptions()
+        options.realtime.accessToken = {
+            // Re-fetch token so refresh is respected during long-lived subscription.
+            try await AuthService.shared.getAccessToken()
+        }
+        let client = SupabaseClient(supabaseURL: url, supabaseKey: AppConfig.shared.supabaseAnonKey, options: options)
         supabaseClient = client
         let ch = client.channel(channelId)
 
@@ -591,6 +616,7 @@ final class JobActivityRealtimeService: ObservableObject {
         do {
             try await ch.subscribeWithError()
         } catch {
+            subscriptionUnavailableReason = "Live updates unavailable — please pull to refresh."
             channel = nil
             postgresSubscription = nil
             supabaseClient = nil
