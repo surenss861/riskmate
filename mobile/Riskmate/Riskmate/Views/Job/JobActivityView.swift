@@ -67,9 +67,10 @@ struct JobActivityView: View {
         }
         .onChange(of: realtimeService.newEvent) { _, newEvent in
             guard let event = newEvent else { return }
+            defer { realtimeService.clearNewEvent() }
+            guard eventMatchesFilters(event, appliedFilters) else { return }
             events.insert(event, at: 0)
             offset += 1
-            realtimeService.clearNewEvent()
             Task { await loadActorsIfNeeded() }
             ToastCenter.shared.show("New activity", systemImage: "bell.badge", style: .info)
         }
@@ -299,8 +300,12 @@ struct JobActivityView: View {
         } catch {
             let message = userFacingErrorMessage(error)
             loadError = message
+            events = []
+            offset = 0
+            hasMore = false
+            loadMoreError = nil
+            isLoadingMore = false
             ToastCenter.shared.show(message, systemImage: "exclamationmark.triangle", style: .error)
-            // Keep existing events; do not replace with []
         }
     }
 
@@ -383,6 +388,25 @@ struct JobActivityView: View {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withFullDate]
         return formatter.string(from: date)
+    }
+
+    /// Returns true if the event passes all applicable filters (actor, event type, date range).
+    private func eventMatchesFilters(_ event: ActivityEvent, _ filters: ActivityFilters) -> Bool {
+        if let filterActorId = filters.actorId {
+            guard event.actorId == filterActorId else { return false }
+        }
+        if !filters.eventTypes.isEmpty {
+            let eventTypeOrName = event.eventName ?? event.eventType ?? ""
+            guard filters.eventTypes.contains(eventTypeOrName) else { return false }
+        }
+        let cal = Calendar.current
+        if let start = filters.startDate {
+            if cal.startOfDay(for: event.createdAt) < cal.startOfDay(for: start) { return false }
+        }
+        if let end = filters.endDate {
+            if cal.startOfDay(for: event.createdAt) > cal.startOfDay(for: end) { return false }
+        }
+        return true
     }
 }
 
