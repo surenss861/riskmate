@@ -11,6 +11,8 @@ CHECK (packet_type IN ('insurance', 'audit', 'incident', 'client_compliance'));
 
 -- Create index for packet type queries
 CREATE INDEX IF NOT EXISTS idx_report_runs_packet_type ON report_runs(packet_type);
+-- Composite index for active-run lookups (job_id + packet_type)
+CREATE INDEX IF NOT EXISTS idx_report_runs_job_packet ON report_runs(job_id, packet_type);
 
 -- Update comment
 COMMENT ON COLUMN report_runs.packet_type IS 'Type of report packet: insurance, audit, incident, or client_compliance';

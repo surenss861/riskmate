@@ -135,8 +135,9 @@ export async function POST(
     // Get packet type and status from request body
     const body = await request.json().catch(() => ({}))
     const rawPacketType = body.packetType
-    const status = body.status || 'draft'
     const skipPdfGeneration = body.skipPdfGeneration === true // If true, only create report run, don't generate PDF
+    // When skipPdfGeneration (e.g. from TeamSignatures), create run as ready_for_signatures so it can be signed immediately
+    const status = skipPdfGeneration ? 'ready_for_signatures' : (body.status || 'draft')
 
     // STAGE: Validate packet type
     console.log(`[reports][${requestId}][stage] validate_packet_type_start`)

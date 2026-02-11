@@ -149,39 +149,29 @@ export function TeamSignatures({
 
   const handleCreateReportRun = async () => {
     if (creatingReportRun) return
-    
+
     setCreatingReportRun(true)
     try {
-      const response = await fetch(`/api/reports/generate/${jobId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          status: 'draft',
-          packetType: 'insurance',
-          skipPdfGeneration: true,
-        }),
+      // Use runs/active so the run is created in ready_for_signatures and can be signed immediately
+      const response = await fetch(`/api/reports/runs/active?job_id=${jobId}&packet_type=insurance`, {
+        method: 'GET',
       })
 
       if (!response.ok) {
         const error = await response.json()
-        throw new Error(error.message || 'Failed to create report run')
+        throw new Error(error.message || 'Failed to get or create report run')
       }
 
       const { data } = await response.json()
-      const newRunId = data.report_run_id || data.runId
-      
+      const runData = data?.id ? data : null
+      const newRunId = runData?.id
+
       if (newRunId) {
         setReportRunId(newRunId)
         if (onReportRunCreated) {
           onReportRunCreated(newRunId)
         }
-        
-        // Reload data
-        const runResponse = await fetch(`/api/reports/runs/${newRunId}`)
-        if (runResponse.ok) {
-          const { data: runData } = await runResponse.json()
-          setReportRun(runData)
-        }
+        setReportRun(runData)
       }
     } catch (error: any) {
       setToast({ message: error.message || 'Failed to create report run', type: 'error' })
@@ -241,7 +231,7 @@ export function TeamSignatures({
     return { canSign: false, reason: 'Unknown role' }
   }
 
-  // Auto-create run and open sign modal (idempotent)
+  // Auto-create run and open sign modal (idempotent). Ensure run is ready_for_signatures before signing.
   const handleSignNowClick = async (role: 'prepared_by' | 'reviewed_by' | 'approved_by') => {
     const permission = canSignForRole(role)
     if (!permission.canSign) {
@@ -249,11 +239,10 @@ export function TeamSignatures({
       return
     }
 
-    // If no run exists, get or create one (idempotent)
+    // If no run exists, get or create one (idempotent) via runs/active (always ready_for_signatures)
     if (!reportRunId) {
       setCreatingReportRun(true)
       try {
-        // Use idempotent get-or-create endpoint
         const response = await fetch(`/api/reports/runs/active?job_id=${jobId}&packet_type=insurance`, {
           method: 'GET',
         })
@@ -264,14 +253,13 @@ export function TeamSignatures({
         }
 
         const { data: runData } = await response.json()
-        
+
         if (runData?.id) {
           setReportRunId(runData.id)
           setReportRun(runData)
           if (onReportRunCreated) {
             onReportRunCreated(runData.id)
           }
-          // Open sign modal
           setCaptureOpen({ role })
         }
       } catch (error: any) {
@@ -279,8 +267,31 @@ export function TeamSignatures({
       } finally {
         setCreatingReportRun(false)
       }
+      return
+    }
+
+    // Run exists: ensure it is ready_for_signatures before opening the signature modal
+    if (reportRun?.status === 'draft') {
+      setCreatingReportRun(true)
+      try {
+        const patchRes = await fetch(`/api/reports/runs/${reportRunId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'ready_for_signatures' }),
+        })
+        if (!patchRes.ok) {
+          const err = await patchRes.json()
+          throw new Error(err.message || 'Failed to prepare run for signing')
+        }
+        const { data: updatedRun } = await patchRes.json()
+        setReportRun(updatedRun)
+        setCaptureOpen({ role })
+      } catch (error: any) {
+        setToast({ message: error.message || 'Failed to prepare run for signing', type: 'error' })
+      } finally {
+        setCreatingReportRun(false)
+      }
     } else {
-      // Run exists, open modal
       setCaptureOpen({ role })
     }
   }
