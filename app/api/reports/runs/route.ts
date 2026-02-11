@@ -148,19 +148,24 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Get report runs with limit support
+    // Get report runs with limit and optional status filter
     const limit = parseInt(searchParams.get('limit') || '10', 10)
+    const statusFilter = searchParams.get('status') ?? null
     let query = supabase
       .from('report_runs')
       .select('*')
       .eq('job_id', jobId)
       .eq('organization_id', userData.organization_id)
       .order('generated_at', { ascending: false })
-    
+
+    if (statusFilter && ['draft', 'final', 'complete', 'superseded'].includes(statusFilter)) {
+      query = query.eq('status', statusFilter)
+    }
+
     if (limit > 0) {
       query = query.limit(limit)
     }
-    
+
     const { data: reportRuns, error } = await query
 
     if (error) {

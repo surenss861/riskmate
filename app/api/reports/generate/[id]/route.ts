@@ -233,6 +233,28 @@ export async function POST(
       console.log(`[reports][${requestId}][stage] create_report_run_ok runId=${reportRun.id}`)
     }
 
+    // When skipPdfGeneration is true, return run only (no PDF) for signature workflow
+    if (skipPdfGeneration) {
+      console.log(`[reports][${requestId}][stage] skip_pdf_returning_run`)
+      return NextResponse.json(
+        {
+          ok: true,
+          data: {
+            report_run_id: reportRun.id,
+            data_hash: reportRun.data_hash,
+            generated_at: reportRun.generated_at,
+            status: reportRun.status,
+          },
+        },
+        {
+          headers: {
+            'Cache-Control': 'no-store, no-cache, must-revalidate',
+            'X-Build-SHA': buildSha,
+          },
+        }
+      )
+    }
+
     // STAGE: Generate signed token
     console.log(`[reports][${requestId}][stage] sign_token_start`)
     // CRITICAL: Token must include both jobId AND runId for security

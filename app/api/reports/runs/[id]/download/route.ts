@@ -1,15 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { signPrintToken } from '@/lib/utils/printToken'
+import { generatePdfFromService } from '@/lib/utils/playwright-pdf-service'
+import { generatePdfRemote } from '@/lib/utils/playwright-remote'
+import { isValidPacketType } from '@/lib/utils/packets/types'
 
 export const runtime = 'nodejs'
-export const maxDuration = 30
+export const maxDuration = 60
 
 /**
  * GET /api/reports/runs/[id]/download
- * Downloads the stored PDF for a report_run (final PDFs only)
- * 
- * For final reports, this serves the frozen artifact instead of regenerating.
- * For draft reports, redirects to generation endpoint.
+ * Fetches report run data, (optionally) generates PDF with signatures, returns PDF download.
+ *
+ * For complete/final runs: serves stored PDF if present; otherwise generates on-demand and stores it.
+ * For draft runs: returns metadata and suggests calling generate first.
  */
 export async function GET(
   request: NextRequest,
@@ -28,10 +32,10 @@ export async function GET(
 
     const { id: reportRunId } = await params
 
-    // Get report run
+    // Get report run (include job_id, packet_type for on-demand generation)
     const { data: reportRun, error: runError } = await supabase
       .from('report_runs')
-      .select('organization_id, status, pdf_path, pdf_signed_url')
+      .select('organization_id, status, pdf_path, pdf_signed_url, job_id, packet_type')
       .eq('id', reportRunId)
       .single()
 
@@ -56,36 +60,92 @@ export async function GET(
       )
     }
 
-    // For final/complete reports, serve the stored artifact only (frozen)
+    // For final/complete reports: serve stored PDF or generate on-demand
     if (reportRun.status === 'final' || reportRun.status === 'complete') {
-      if (!reportRun.pdf_path) {
-        return NextResponse.json(
-          { 
-            message: 'Final PDF is missing for this completed report run. This may indicate a storage or generation issue. Please contact support.',
-            error_code: 'FINAL_PDF_MISSING_FOR_COMPLETE_RUN',
-            report_run_id: reportRunId,
-            status: reportRun.status
-          },
-          { status: 500 }
-        )
+      let pdfPath = reportRun.pdf_path
+      let buffer: Buffer
+
+      if (pdfPath) {
+        // Download from storage
+        const { data: pdfData, error: downloadError } = await supabase.storage
+          .from('reports')
+          .download(pdfPath)
+
+        if (downloadError || !pdfData) {
+          console.error('[reports/runs/download] Failed to download PDF:', downloadError)
+          return NextResponse.json(
+            { message: 'Failed to retrieve PDF', detail: downloadError?.message },
+            { status: 500 }
+          )
+        }
+        buffer = Buffer.from(await pdfData.arrayBuffer())
+      } else {
+        // On-demand PDF generation (fetch run + signatures, call PDF service, return PDF)
+        const jobId = reportRun.job_id
+        const organizationId = reportRun.organization_id
+        const packetType = reportRun.packet_type && isValidPacketType(reportRun.packet_type)
+          ? reportRun.packet_type
+          : 'insurance'
+
+        const token = signPrintToken({
+          jobId,
+          organizationId,
+          reportRunId,
+        })
+        const protocol = request.headers.get('x-forwarded-proto') || 'http'
+        const host = request.headers.get('host')
+        const origin = `${protocol}://${host}`
+        const printUrl = `${origin}/reports/packet/print/${reportRunId}?token=${encodeURIComponent(token)}`
+
+        const pdfServiceUrl = process.env.PDF_SERVICE_URL
+        const pdfServiceSecret = process.env.PDF_SERVICE_SECRET
+        const browserlessToken = process.env.BROWSERLESS_TOKEN
+        const requestId = `download-${reportRunId.substring(0, 8)}`
+
+        if (pdfServiceUrl && pdfServiceSecret) {
+          buffer = await generatePdfFromService({
+            url: printUrl,
+            jobId,
+            organizationId,
+            requestId,
+          })
+        } else if (browserlessToken) {
+          buffer = await generatePdfRemote({
+            url: printUrl,
+            jobId,
+            organizationId,
+            requestId,
+          })
+        } else {
+          return NextResponse.json(
+            {
+              message: 'PDF service not configured. Add PDF_SERVICE_URL + PDF_SERVICE_SECRET or BROWSERLESS_TOKEN.',
+              error_code: 'MISSING_PDF_SERVICE_CONFIG',
+            },
+            { status: 500 }
+          )
+        }
+
+        // Store PDF for future downloads
+        const storagePath = `${organizationId}/${jobId}/${packetType}/${reportRunId}.pdf`
+        const { error: uploadError } = await supabase.storage
+          .from('reports')
+          .upload(storagePath, buffer, { contentType: 'application/pdf', upsert: true })
+
+        if (!uploadError) {
+          const { data: signedUrlData } = await supabase.storage
+            .from('reports')
+            .createSignedUrl(storagePath, 60 * 60 * 24 * 365)
+          await supabase
+            .from('report_runs')
+            .update({
+              pdf_path: storagePath,
+              pdf_signed_url: signedUrlData?.signedUrl ?? null,
+              pdf_generated_at: new Date().toISOString(),
+            })
+            .eq('id', reportRunId)
+        }
       }
-
-      // Download from storage
-      const { data: pdfData, error: downloadError } = await supabase.storage
-        .from('reports')
-        .download(reportRun.pdf_path)
-
-      if (downloadError || !pdfData) {
-        console.error('[reports/runs/download] Failed to download PDF:', downloadError)
-        return NextResponse.json(
-          { message: 'Failed to retrieve PDF', detail: downloadError?.message },
-          { status: 500 }
-        )
-      }
-
-      // Convert to buffer
-      const arrayBuffer = await pdfData.arrayBuffer()
-      const buffer = Buffer.from(arrayBuffer)
 
       return new NextResponse(new Uint8Array(buffer), {
         headers: {
