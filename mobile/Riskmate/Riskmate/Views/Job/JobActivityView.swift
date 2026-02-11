@@ -153,9 +153,29 @@ struct JobActivityView: View {
         .scrollContentBackground(.hidden)
     }
 
+    /// Event types from loaded events, or fallback list so filter sheet is useful with no data
     private var eventTypeOptions: [String] {
-        Array(Set(events.compactMap { $0.eventName ?? $0.eventType })).sorted()
+        let fromEvents = Array(Set(events.compactMap { $0.eventName ?? $0.eventType })).sorted()
+        if !fromEvents.isEmpty { return fromEvents }
+        return Self.knownEventTypes
     }
+
+    /// Known event types from spec so users can filter even when no activity is loaded yet
+    private static let knownEventTypes: [String] = [
+        "job.created",
+        "job.status_changed",
+        "job.assigned",
+        "document.uploaded",
+        "document.deleted",
+        "document.category_changed",
+        "hazard.added",
+        "hazard.updated",
+        "control.added",
+        "control.updated",
+        "signature.added",
+        "export.generated",
+        "proof_pack.generated",
+    ]
 
     private func loadInitial() async {
         isLoading = true
@@ -274,13 +294,16 @@ struct ActivityCardView: View {
                             .foregroundColor(RMTheme.Colors.textSecondary)
                     }
                     Spacer()
-                    Text(displayName)
-                        .font(RMTheme.Typography.caption)
-                        .foregroundColor(categoryColor)
-                        .padding(.horizontal, RMTheme.Spacing.sm)
-                        .padding(.vertical, 4)
-                        .background(categoryColor.opacity(0.2))
-                        .clipShape(Capsule())
+                    HStack(spacing: RMTheme.Spacing.xs) {
+                        outcomeBadge
+                        Text(displayName)
+                            .font(RMTheme.Typography.caption)
+                            .foregroundColor(categoryColor)
+                            .padding(.horizontal, RMTheme.Spacing.sm)
+                            .padding(.vertical, 4)
+                            .background(categoryColor.opacity(0.2))
+                            .clipShape(Capsule())
+                    }
                 }
                 Text(event.summary ?? displayName)
                     .font(RMTheme.Typography.bodySmall)
@@ -320,6 +343,59 @@ struct ActivityCardView: View {
         case "access": return RMTheme.Colors.categoryAccess
         default: return RMTheme.Colors.textSecondary
         }
+    }
+
+    /// Outcome/severity badge (Success, Info, etc.) per ticket: "Action description with badge"
+    @ViewBuilder
+    private var outcomeBadge: some View {
+        let label = outcomeLabel
+        if !label.isEmpty {
+            Text(label)
+                .font(.caption2)
+                .fontWeight(.medium)
+                .foregroundColor(outcomeBadgeColor)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .background(outcomeBadgeColor.opacity(0.2))
+                .clipShape(Capsule())
+        }
+    }
+
+    private var outcomeLabel: String {
+        if let outcome = event.outcome, !outcome.isEmpty {
+            switch outcome.lowercased() {
+            case "success", "allowed": return "Success"
+            case "failed", "blocked": return "Failed"
+            default: return outcome
+            }
+        }
+        if let severity = event.severity, !severity.isEmpty {
+            switch severity.lowercased() {
+            case "critical": return "Critical"
+            case "material": return "Info"
+            case "info": return "Info"
+            default: return severity
+            }
+        }
+        return ""
+    }
+
+    private var outcomeBadgeColor: Color {
+        if let outcome = event.outcome {
+            switch outcome.lowercased() {
+            case "success", "allowed": return RMTheme.Colors.success
+            case "failed", "blocked": return RMTheme.Colors.error
+            default: break
+            }
+        }
+        if let severity = event.severity {
+            switch severity.lowercased() {
+            case "critical": return RMTheme.Colors.error
+            case "material", "info": return RMTheme.Colors.info
+            default: break
+            }
+        }
+        return RMTheme.Colors.textSecondary
     }
 
     private func relativeTime(_ date: Date) -> String {
