@@ -108,7 +108,6 @@ export async function POST(
     const activeSignaturesForVerify = signaturesForVerify?.filter((s) => !s.revoked_at) || []
     for (const sig of activeSignaturesForVerify) {
       const recomputedSignatureHash = createHash('sha256')
-        .update(reportRun.data_hash ?? '')
         .update(sig.signature_svg ?? '')
         .update(sig.signer_name ?? '')
         .update(sig.signer_title ?? '')

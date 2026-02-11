@@ -209,9 +209,8 @@ export async function POST(
       )
     }
 
-    // Compute signature hash bound to run's data_hash (tamper-evidence: signature attests to this exact payload)
+    // Compute signature hash per contract: signature_svg, signer_name, signer_title, signature_role only
     const signatureHash = createHash('sha256')
-      .update(reportRun.data_hash)
       .update(signature_svg)
       .update(signer_name)
       .update(signer_title)
