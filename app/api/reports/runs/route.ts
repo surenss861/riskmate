@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { job_id, report_payload, status = 'draft' } = body
+    const { job_id, report_payload, status = 'draft', packet_type = 'insurance' } = body
 
     if (!job_id || !report_payload) {
       return NextResponse.json(
@@ -42,6 +42,9 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
+
+    const validPacketTypes = ['insurance', 'audit', 'incident', 'client_compliance']
+    const packetType = validPacketTypes.includes(packet_type) ? packet_type : 'insurance'
 
     // Verify job belongs to organization
     const { data: job } = await supabase
@@ -63,13 +66,14 @@ export async function POST(request: NextRequest) {
       .update(JSON.stringify(report_payload))
       .digest('hex')
 
-    // Create report run
+    // Create report run (persist data_hash for tamper-evidence)
     const { data: reportRun, error: createError } = await supabase
       .from('report_runs')
       .insert({
         organization_id: userData.organization_id,
         job_id,
         status,
+        packet_type: packetType,
         generated_by: user.id,
         data_hash: dataHash,
       })
@@ -158,7 +162,7 @@ export async function GET(request: NextRequest) {
       .eq('organization_id', userData.organization_id)
       .order('generated_at', { ascending: false })
 
-    if (statusFilter && ['draft', 'final', 'complete', 'superseded'].includes(statusFilter)) {
+    if (statusFilter && ['draft', 'ready_for_signatures', 'final', 'complete', 'superseded'].includes(statusFilter)) {
       query = query.eq('status', statusFilter)
     }
 

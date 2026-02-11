@@ -55,14 +55,26 @@ export async function GET(
     // Required signature roles
     const REQUIRED_ROLES = ['prepared_by', 'reviewed_by', 'approved_by']
 
-    // Get all non-revoked signatures
-    const { data: signatures } = await supabase
+    // Get all non-revoked signatures; if query fails, return 500 (do not mask DB errors as missing signatures)
+    const { data: signatures, error: signaturesError } = await supabase
       .from('report_signatures')
       .select('signature_role')
       .eq('report_run_id', reportRunId)
       .is('revoked_at', null)
 
-    const signedRoles = new Set(signatures?.map((s) => s.signature_role) || [])
+    if (signaturesError) {
+      console.error('[reports/runs/signatures/check] Signatures query failed:', {
+        error: signaturesError.message,
+        code: signaturesError.code,
+        reportRunId,
+      })
+      return NextResponse.json(
+        { message: 'Failed to check signatures', detail: signaturesError.message },
+        { status: 500 }
+      )
+    }
+
+    const signedRoles = new Set((signatures ?? []).map((s) => s.signature_role))
     const missingRoles = REQUIRED_ROLES.filter((role) => !signedRoles.has(role))
     const isComplete = missingRoles.length === 0
 

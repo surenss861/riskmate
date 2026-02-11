@@ -111,7 +111,14 @@ export async function POST(
       }
     }
 
-    // Block signing on superseded runs (always)
+    // Require run to be in non-draft, signing-ready state so signatures are bound to a frozen payload
+    if (reportRun.status === 'draft') {
+      return NextResponse.json(
+        { message: 'Report run is still in draft. Move the run to ready_for_signatures before signing.' },
+        { status: 400 }
+      )
+    }
+
     if (reportRun.status === 'superseded') {
       return NextResponse.json(
         { message: 'Cannot sign a superseded report run. Please create a new report run.' },
@@ -119,14 +126,29 @@ export async function POST(
       )
     }
 
-    // Block signing on complete/final runs (sealed - no mutations allowed)
     if (reportRun.status === 'complete' || reportRun.status === 'final') {
       return NextResponse.json(
-        { 
+        {
           message: 'This report run is sealed and cannot be modified. Create a new report run to make changes.',
-          status: reportRun.status 
+          status: reportRun.status,
         },
         { status: 409 }
+      )
+    }
+
+    // Signing-ready state: ready_for_signatures only (reject any other non-draft state)
+    if (reportRun.status !== 'ready_for_signatures') {
+      return NextResponse.json(
+        { message: 'Report run is not in a signing-ready state. Status must be ready_for_signatures.' },
+        { status: 400 }
+      )
+    }
+
+    // Require data_hash to bind signature to the frozen run payload
+    if (!reportRun.data_hash || typeof reportRun.data_hash !== 'string') {
+      return NextResponse.json(
+        { message: 'Report run has no data_hash; cannot bind signature to payload.' },
+        { status: 400 }
       )
     }
 
@@ -165,8 +187,9 @@ export async function POST(
       )
     }
 
-    // Compute signature hash (tamper detection)
+    // Compute signature hash bound to run's data_hash (tamper-evidence: signature attests to this exact payload)
     const signatureHash = createHash('sha256')
+      .update(reportRun.data_hash)
       .update(signature_svg)
       .update(signer_name)
       .update(signer_title)

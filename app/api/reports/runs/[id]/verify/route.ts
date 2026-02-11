@@ -89,9 +89,10 @@ export async function GET(
     const activeSignatures = signatures?.filter((s) => !s.revoked_at) || []
     const revokedSignatures = signatures?.filter((s) => s.revoked_at) || []
 
-    // Recompute each signature's hash and compare (same algorithm as POST /api/reports/runs/[id]/signatures)
+    // Recompute each signature's hash (includes run data_hash to match POST /api/reports/runs/[id]/signatures)
     const signatureVerifications = activeSignatures.map((sig) => {
       const recomputedSignatureHash = createHash('sha256')
+        .update(reportRun.data_hash ?? '')
         .update(sig.signature_svg ?? '')
         .update(sig.signer_name ?? '')
         .update(sig.signer_title ?? '')
