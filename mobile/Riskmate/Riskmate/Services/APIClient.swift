@@ -700,6 +700,43 @@ class APIClient {
         return response.data
     }
 
+    /// Get job activity events with optional filtering and pagination.
+    /// Query params: limit, offset, actor_id, event_type or event_types (comma-separated), category, start_date, end_date (ISO).
+    func getJobActivity(
+        jobId: String,
+        limit: Int = 50,
+        offset: Int = 0,
+        actorId: String? = nil,
+        eventTypes: [String]? = nil,
+        category: String? = nil,
+        startDate: String? = nil,
+        endDate: String? = nil
+    ) async throws -> (events: [ActivityEvent], hasMore: Bool) {
+        var queryItems: [String] = []
+        queryItems.append("limit=\(min(max(1, limit), 100))")
+        queryItems.append("offset=\(max(0, offset))")
+        if let actorId = actorId, !actorId.isEmpty {
+            queryItems.append("actor_id=\(actorId.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? actorId)")
+        }
+        if let eventTypes = eventTypes, !eventTypes.isEmpty {
+            queryItems.append("event_types=\(eventTypes.joined(separator: ",").addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? eventTypes.joined(separator: ","))")
+        }
+        if let category = category, !category.isEmpty {
+            queryItems.append("category=\(category.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? category)")
+        }
+        if let startDate = startDate, !startDate.isEmpty {
+            queryItems.append("start_date=\(startDate.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? startDate)")
+        }
+        if let endDate = endDate, !endDate.isEmpty {
+            queryItems.append("end_date=\(endDate.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? endDate)")
+        }
+        let query = "?\(queryItems.joined(separator: "&"))"
+        let response: JobActivityResponse = try await request(
+            endpoint: "/api/jobs/\(jobId)/activity\(query)"
+        )
+        return (response.data.events, response.data.hasMore)
+    }
+
     /// List exports for a job (export history)
     func getExports(jobId: String) async throws -> [Export] {
         let response: ExportsListResponse = try await request(
@@ -887,6 +924,79 @@ struct HazardsResponse: Codable {
 
 struct ControlsResponse: Codable {
     let data: [Control]
+}
+
+// MARK: - Job Activity API
+
+struct JobActivityResponse: Codable {
+    let data: JobActivityData
+}
+
+struct JobActivityData: Codable {
+    let events: [ActivityEvent]
+    let total: Int
+    let hasMore: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case events
+        case total
+        case hasMore = "has_more"
+    }
+}
+
+/// Job activity event from GET /api/jobs/:id/activity (audit log row + enriched actor).
+struct ActivityEvent: Identifiable, Codable {
+    let id: String
+    let actorId: String?
+    let eventName: String?
+    let eventType: String?
+    let actorName: String?
+    let actorRole: String?
+    let createdAt: Date
+    let category: String?
+    let severity: String?
+    let outcome: String?
+    let summary: String?
+    let metadata: [String: RMAnyCodable]?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case actorId = "actor_id"
+        case eventName = "event_name"
+        case eventType = "event_type"
+        case actorName = "actor_name"
+        case actorRole = "actor_role"
+        case createdAt = "created_at"
+        case category
+        case severity
+        case outcome
+        case summary
+        case metadata
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        actorId = try container.decodeIfPresent(String.self, forKey: .actorId)
+        eventName = try container.decodeIfPresent(String.self, forKey: .eventName)
+        eventType = try container.decodeIfPresent(String.self, forKey: .eventType)
+        actorName = try container.decodeIfPresent(String.self, forKey: .actorName)
+        actorRole = try container.decodeIfPresent(String.self, forKey: .actorRole)
+        category = try container.decodeIfPresent(String.self, forKey: .category)
+        severity = try container.decodeIfPresent(String.self, forKey: .severity)
+        outcome = try container.decodeIfPresent(String.self, forKey: .outcome)
+        summary = try container.decodeIfPresent(String.self, forKey: .summary)
+        metadata = try container.decodeIfPresent([String: RMAnyCodable].self, forKey: .metadata)
+        let createdAtString = try container.decode(String.self, forKey: .createdAt)
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = formatter.date(from: createdAtString) {
+            createdAt = date
+        } else {
+            let standardFormatter = ISO8601DateFormatter()
+            createdAt = standardFormatter.date(from: createdAtString) ?? Date()
+        }
+    }
 }
 
 struct PDFResponse: Codable {
