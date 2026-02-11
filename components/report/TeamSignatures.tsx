@@ -152,8 +152,8 @@ export function TeamSignatures({
 
     setCreatingReportRun(true)
     try {
-      // Use runs/active so the run is created in ready_for_signatures and can be signed immediately
-      const response = await fetch(`/api/reports/runs/active?job_id=${jobId}&packet_type=insurance`, {
+      // Use runs/active with force_new=true so a new run is created (and prior active run superseded) instead of returning existing
+      const response = await fetch(`/api/reports/runs/active?job_id=${jobId}&packet_type=insurance&force_new=true`, {
         method: 'GET',
       })
 

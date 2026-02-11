@@ -93,6 +93,28 @@ export async function POST(
       )
     }
 
+    // When signer_user_id is provided, verify the signer exists and is in the same organization
+    if (signer_user_id != null) {
+      const { data: signerUser, error: signerError } = await supabase
+        .from('users')
+        .select('id, organization_id')
+        .eq('id', signer_user_id)
+        .maybeSingle()
+
+      if (signerError || !signerUser) {
+        return NextResponse.json(
+          { message: 'Signer user not found' },
+          { status: 400 }
+        )
+      }
+      if (signerUser.organization_id !== reportRun.organization_id) {
+        return NextResponse.json(
+          { message: 'Signer must belong to the same organization as the report run' },
+          { status: 403 }
+        )
+      }
+    }
+
     // Verify signer is the current user (unless admin creating for someone else)
     if (signer_user_id !== user.id) {
       // Check if user is admin

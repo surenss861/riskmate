@@ -7,9 +7,10 @@ import { isValidPacketType, type PacketType } from '@/lib/utils/packets/types'
 export const runtime = 'nodejs'
 
 /**
- * GET /api/reports/runs/active?job_id=xxx&packet_type=insurance
- * Gets or creates an active (non-superseded, signable) run for a job
- * Idempotent: if an active run exists, returns it; otherwise creates a new one
+ * GET /api/reports/runs/active?job_id=xxx&packet_type=insurance&force_new=true
+ * Gets or creates an active (non-superseded, signable) run for a job.
+ * Idempotent: if an active run exists and force_new is not set, returns it; otherwise creates a new one.
+ * With force_new=true, bypasses the active-run short-circuit, supersedes the prior active run (if any), and inserts a new run.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -39,6 +40,7 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams
     const jobId = searchParams.get('job_id')
     const packetType = (searchParams.get('packet_type') || 'insurance') as PacketType
+    const forceNew = searchParams.get('force_new') === 'true'
 
     if (!jobId) {
       return NextResponse.json(
@@ -83,15 +85,23 @@ export async function GET(request: NextRequest) {
       .limit(1)
       .maybeSingle()
 
-    if (activeRun) {
-      // Return existing active run
+    if (activeRun && !forceNew) {
+      // Return existing active run (idempotent)
       return NextResponse.json({ 
         data: activeRun,
         created: false 
       })
     }
 
-    // No active run exists - create a new one
+    // force_new=true or no active run: create a new one (optionally supersede prior)
+    if (activeRun && forceNew) {
+      await supabase
+        .from('report_runs')
+        .update({ status: 'superseded' })
+        .eq('id', activeRun.id)
+    }
+
+    // No active run exists (or we superseded it) - create a new one
     const packetData = await buildJobPacket({
       jobId,
       packetType,
@@ -100,26 +110,28 @@ export async function GET(request: NextRequest) {
 
     const dataHash = computeCanonicalHash(packetData)
 
-    // Check for recent duplicate (within last 30 seconds) to prevent rapid duplicates
-    const thirtySecondsAgo = new Date(Date.now() - 30 * 1000).toISOString()
-    const { data: recentRun } = await supabase
-      .from('report_runs')
-      .select('*')
-      .eq('job_id', jobId)
-      .eq('organization_id', userData.organization_id)
-      .eq('packet_type', packetType)
-      .eq('data_hash', dataHash)
-      .gte('generated_at', thirtySecondsAgo)
-      .order('generated_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
+    // Check for recent duplicate (within last 30 seconds) to prevent rapid duplicates (skip when force_new)
+    if (!forceNew) {
+      const thirtySecondsAgo = new Date(Date.now() - 30 * 1000).toISOString()
+      const { data: recentRun } = await supabase
+        .from('report_runs')
+        .select('*')
+        .eq('job_id', jobId)
+        .eq('organization_id', userData.organization_id)
+        .eq('packet_type', packetType)
+        .eq('data_hash', dataHash)
+        .gte('generated_at', thirtySecondsAgo)
+        .order('generated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
 
-    if (recentRun) {
-      // Return the recent run to prevent duplicates
-      return NextResponse.json({ 
-        data: recentRun,
-        created: false 
-      })
+      if (recentRun) {
+        // Return the recent run to prevent duplicates
+        return NextResponse.json({ 
+          data: recentRun,
+          created: false 
+        })
+      }
     }
 
     // Create new run in signing-ready state so TeamSignatures can create then sign without manual status change
