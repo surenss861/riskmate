@@ -318,12 +318,13 @@ struct JobActivityView: View {
             events.append(contentsOf: fetched)
             hasMore = more
             offset += fetched.count
+            loadMoreError = nil
             await loadActorsIfNeeded()
         } catch {
             let message = userFacingErrorMessage(error)
             loadMoreError = message
             ToastCenter.shared.show(message, systemImage: "exclamationmark.triangle", style: .error)
-            hasMore = false
+            // Do not set hasMore = false so retryLoadMore() can re-attempt pagination
         }
     }
 
@@ -566,7 +567,14 @@ final class JobActivityRealtimeService: ObservableObject {
             if let u = row["target_id"] as? UUID { return u.uuidString }
             return nil
         }()
-        guard targetId == jobId else { return }
+        let metadataJobId: String? = {
+            guard let meta = row["metadata"] as? [String: Any] else { return nil }
+            if let s = meta["job_id"] as? String { return s }
+            if let u = meta["job_id"] as? UUID { return u.uuidString }
+            return nil
+        }()
+        let belongsToJob = (targetId == jobId) || (metadataJobId == jobId)
+        guard belongsToJob else { return }
         guard let event = ActivityEvent(realtimeRecord: row) else { return }
         newEvent = event
     }
