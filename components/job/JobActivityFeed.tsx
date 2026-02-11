@@ -112,6 +112,39 @@ export function JobActivityFeed({
   const pendingEventsRef = useRef<AuditEvent[]>([])
   const flushTimerRef = useRef<NodeJS.Timeout | null>(null)
   const lastToastAtRef = useRef<number>(0)
+  const eventsRef = useRef<AuditEvent[]>([])
+  const actorCacheRef = useRef<Map<string, { actor_name: string; actor_email: string; actor_role: string }>>(new Map())
+  const actorFetchPromiseRef = useRef<Map<string, Promise<{ actor_name: string; actor_email: string; actor_role: string } | null>>>(new Map())
+
+  useEffect(() => {
+    eventsRef.current = events
+  }, [events])
+
+  const resolveActor = useCallback(async (actorId: string): Promise<{ actor_name: string; actor_email: string; actor_role: string } | null> => {
+    if (!actorId) return null
+    const existing = eventsRef.current.find((e) => e.actor_id === actorId && (e.actor_name != null || e.actor_email != null))
+    if (existing) {
+      const resolved = {
+        actor_name: existing.actor_name ?? 'Unknown',
+        actor_email: existing.actor_email ?? '',
+        actor_role: existing.actor_role ?? 'member',
+      }
+      actorCacheRef.current.set(actorId, resolved)
+      return resolved
+    }
+    const cached = actorCacheRef.current.get(actorId)
+    if (cached) return cached
+    let promise = actorFetchPromiseRef.current.get(actorId)
+    if (!promise) {
+      promise = jobsApi.getActor(actorId).then((actor) => {
+        if (actor) actorCacheRef.current.set(actorId, actor)
+        actorFetchPromiseRef.current.delete(actorId)
+        return actor
+      })
+      actorFetchPromiseRef.current.set(actorId, promise)
+    }
+    return promise
+  }, [])
 
   const getEventTypesForFilter = useCallback((f: FilterType): string[] | undefined => {
     if (f === FILTER_ALL) return undefined
@@ -219,8 +252,20 @@ export function JobActivityFeed({
       onStatusChange: (status) => {
         setRealtimeStatus(status === 'SUBSCRIBED' ? 'connected' : status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' ? 'error' : 'idle')
       },
-      onEvent: (payload) => {
+      onEvent: async (payload) => {
         const row = payload.new as Record<string, unknown>
+        const actorId = row.actor_id as string | undefined
+        let actor_name = row.actor_name as string | undefined
+        let actor_email = row.actor_email as string | undefined
+        let actor_role = row.actor_role as string | undefined
+        if (actorId && (actor_name == null || actor_email == null || actor_role == null)) {
+          const resolved = await resolveActor(actorId)
+          if (resolved) {
+            actor_name = actor_name ?? resolved.actor_name
+            actor_email = actor_email ?? resolved.actor_email
+            actor_role = actor_role ?? resolved.actor_role
+          }
+        }
         const newEvent: AuditEvent = {
           id: row.id as string,
           event_name: row.event_name as string,
@@ -228,10 +273,10 @@ export function JobActivityFeed({
           created_at: row.created_at as string,
           category: row.category as string,
           severity: row.severity as AuditEvent['severity'],
-          actor_name: row.actor_name as string,
-          actor_email: row.actor_email as string,
-          actor_role: row.actor_role as string,
-          actor_id: row.actor_id as string,
+          actor_name,
+          actor_email,
+          actor_role,
+          actor_id: actorId,
           target_type: row.target_type as string,
           target_id: row.target_id as string,
           metadata: row.metadata as Record<string, unknown>,

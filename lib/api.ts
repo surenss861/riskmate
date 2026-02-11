@@ -578,6 +578,22 @@ export const jobsApi = {
   },
 
   /**
+   * GET /api/actors/[id] - lightweight actor lookup for activity feed (actor_name, actor_email, actor_role).
+   */
+  getActor: async (
+    actorId: string
+  ): Promise<{ actor_name: string; actor_email: string; actor_role: string } | null> => {
+    try {
+      const res = await apiRequest<{ data: { actor_name: string; actor_email: string; actor_role: string } }>(
+        `/api/actors/${actorId}`
+      );
+      return res?.data ?? null;
+    } catch {
+      return null;
+    }
+  },
+
+  /**
    * POST /api/jobs/[id]/activity/subscribe - get channelId and organizationId for realtime.
    * Returns null on 404 or 403 so caller can skip subscribing.
    */
