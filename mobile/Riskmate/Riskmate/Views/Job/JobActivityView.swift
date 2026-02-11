@@ -355,9 +355,12 @@ struct JobActivityView: View {
     private func loadActorsIfNeeded() async {
         var byId: [String: ActivityActor] = [:]
         for e in events {
-            guard let aid = e.actorId, let name = e.actorName, !name.isEmpty else { continue }
+            guard let aid = e.actorId else { continue }
+            let name = e.actorName ?? realtimeService.actorCache[aid]?.name
+            guard let name = name, !name.isEmpty else { continue }
+            let role = e.actorRole ?? realtimeService.actorCache[aid]?.role
             if byId[aid] == nil {
-                byId[aid] = ActivityActor(id: aid, name: name, role: e.actorRole)
+                byId[aid] = ActivityActor(id: aid, name: name, role: role)
             }
         }
         actors = byId.values.sorted { $0.name < $1.name }
@@ -531,57 +534,89 @@ struct ActivityCardView: View {
 // MARK: - Job Activity Realtime Service
 
 /// Subscribes to audit_log INSERTs for a job and publishes new events for the view to prepend.
+/// Uses POST /api/jobs/{id}/activity/subscribe for channelId/organizationId, then Supabase postgres_changes with filter.
 @MainActor
 final class JobActivityRealtimeService: ObservableObject {
     @Published var newEvent: ActivityEvent?
 
-    private var channel: Any?
+    private var channel: RealtimeChannelV2?
+    private var postgresSubscription: RealtimeSubscription?
     private var supabaseClient: SupabaseClient?
+
+    /// Cache of actor_id -> (name, role) for realtime enrichment and filter list.
+    private(set) var actorCache: [String: (name: String, role: String?)] = [:]
 
     /// Subscribe to job-specific audit_log inserts, then wait until cancelled. Call unsubscribe() on cancel.
     func subscribeAndWait(jobId: String) async {
+        let subscribeResult: (channelId: String, organizationId: String)
+        do {
+            subscribeResult = try await APIClient.shared.subscribeToJobActivity(jobId: jobId)
+        } catch {
+            return
+        }
+        let channelId = subscribeResult.channelId
+        let organizationId = subscribeResult.organizationId
+
         guard let url = URL(string: AppConfig.shared.supabaseURL) else { return }
         let client = SupabaseClient(supabaseURL: url, supabaseKey: AppConfig.shared.supabaseAnonKey)
         supabaseClient = client
-        let channelName = "job-\(jobId)-activity"
-        let ch = client.channel(channelName)
+        let ch = client.channel(channelId)
 
-        ch.on(event: "postgres_changes") { [weak self] payload in
+        // Filter: (target_type=job AND target_id=jobId) OR (metadata->>job_id=jobId), scoped by organization_id.
+        let filter = "and(organization_id.eq.\(organizationId),or(and(target_type.eq.job,target_id.eq.\(jobId)),metadata->>job_id.eq.\(jobId)))"
+        postgresSubscription = ch.onPostgresChange(
+            InsertAction.self,
+            schema: "public",
+            table: "audit_logs",
+            filter: filter
+        ) { [weak self] action in
             Task { @MainActor in
-                await self?.handlePayload(payload: payload, jobId: jobId)
+                await self?.handleInsertAction(action, jobId: jobId)
             }
         }
-        try? await ch.subscribe()
+
+        do {
+            try await ch.subscribeWithError()
+        } catch {
+            channel = nil
+            postgresSubscription = nil
+            supabaseClient = nil
+            return
+        }
         channel = ch
 
         await withCheckedContinuation { _ in }
     }
 
-    private func handlePayload(payload: Any, jobId: String) {
-        var record: [String: Any]?
-        if let dict = payload as? [String: Any] {
-            record = dict["new"] as? [String: Any] ?? dict["record"] as? [String: Any] ?? dict
+    private func handleInsertAction(_ action: InsertAction, jobId: String) {
+        // InsertAction.record is [String: AnyJSON]; convert to [String: Any] for ActivityEvent(realtimeRecord:).
+        var row: [String: Any] = [:]
+        for (key, value) in action.record {
+            row[key] = value
         }
-        guard let row = record else { return }
-        let targetId: String? = {
-            if let s = row["target_id"] as? String { return s }
-            if let u = row["target_id"] as? UUID { return u.uuidString }
-            return nil
-        }()
-        let metadataJobId: String? = {
-            guard let meta = row["metadata"] as? [String: Any] else { return nil }
-            if let s = meta["job_id"] as? String { return s }
-            if let u = meta["job_id"] as? UUID { return u.uuidString }
-            return nil
-        }()
-        let belongsToJob = (targetId == jobId) || (metadataJobId == jobId)
-        guard belongsToJob else { return }
         guard let event = ActivityEvent(realtimeRecord: row) else { return }
-        newEvent = event
+        let enriched = await enrichEventWithActor(event)
+        newEvent = enriched
+    }
+
+    /// When actor_name is missing but actor_id exists, fetch via /api/actors/{id} or cache; set actorName/actorRole on event.
+    private func enrichEventWithActor(_ event: ActivityEvent) async -> ActivityEvent {
+        guard event.actorName == nil || (event.actorName?.isEmpty == true), let actorId = event.actorId else {
+            return event
+        }
+        if let cached = actorCache[actorId] {
+            return ActivityEvent(from: event, actorName: cached.name, actorRole: cached.role)
+        }
+        guard let actor = try? await APIClient.shared.getActor(id: actorId) else {
+            return event
+        }
+        actorCache[actorId] = (name: actor.name, role: actor.role)
+        return ActivityEvent(from: event, actorName: actor.name, actorRole: actor.role)
     }
 
     func unsubscribe() async {
-        if let ch = channel as? RealtimeChannel {
+        postgresSubscription = nil
+        if let ch = channel {
             await ch.unsubscribe()
         }
         channel = nil

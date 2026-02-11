@@ -700,6 +700,45 @@ class APIClient {
         return response.data
     }
 
+    /// POST /api/jobs/[id]/activity/subscribe — returns channelId and organizationId for Supabase Realtime.
+    /// Use the returned channelId as the Realtime channel name and filter audit_logs with the same org/job.
+    func subscribeToJobActivity(jobId: String) async throws -> (channelId: String, organizationId: String) {
+        // API returns { ok: true, data: { channelId, organizationId, requestId } }
+        struct Wrapper: Codable {
+            let data: SubscribeData?
+            struct SubscribeData: Codable {
+                let channelId: String
+                let organizationId: String
+            }
+        }
+        let response: Wrapper = try await request(
+            endpoint: "/api/jobs/\(jobId)/activity/subscribe",
+            method: "POST"
+        )
+        guard let data = response.data, !data.channelId.isEmpty, !data.organizationId.isEmpty else {
+            throw APIError.invalidResponse
+        }
+        return (channelId: data.channelId, organizationId: data.organizationId)
+    }
+
+    /// GET /api/actors/[id] — lightweight actor lookup (actor_name, actor_role) for activity feed enrichment.
+    func getActor(id actorId: String) async throws -> (name: String, role: String?)? {
+        struct ActorResponse: Codable {
+            let data: ActorData?
+            struct ActorData: Codable {
+                let actorName: String?
+                let actorRole: String?
+                enum CodingKeys: String, CodingKey {
+                    case actorName = "actor_name"
+                    case actorRole = "actor_role"
+                }
+            }
+        }
+        let response: ActorResponse = try await request(endpoint: "/api/actors/\(actorId)")
+        guard let data = response.data, let name = data.actorName, !name.isEmpty else { return nil }
+        return (name: name, role: data.actorRole)
+    }
+
     /// Get job activity events with optional filtering and pagination.
     /// Query params: limit, offset, actor_id, event_type (comma-separated for multiple), category, start_date, end_date (ISO).
     func getJobActivity(
@@ -1019,6 +1058,22 @@ struct ActivityEvent: Identifiable, Codable {
         self.outcome = realtimeRecord["outcome"] as? String
         self.summary = realtimeRecord["summary"] as? String
         self.metadata = nil
+    }
+
+    /// Copy of an event with overridden actor name/role (for realtime enrichment when actor_name is missing).
+    init(from other: ActivityEvent, actorName: String?, actorRole: String?) {
+        id = other.id
+        actorId = other.actorId
+        eventName = other.eventName
+        eventType = other.eventType
+        self.actorName = actorName ?? other.actorName
+        self.actorRole = actorRole ?? other.actorRole
+        createdAt = other.createdAt
+        category = other.category
+        severity = other.severity
+        outcome = other.outcome
+        summary = other.summary
+        metadata = other.metadata
     }
 }
 
