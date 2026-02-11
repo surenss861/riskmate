@@ -10,10 +10,8 @@ export const maxDuration = 60
 
 /**
  * GET /api/reports/runs/[id]/download
- * Fetches report run data, (optionally) generates PDF with signatures, returns PDF download.
- *
- * For complete/final runs: serves stored PDF if present; otherwise generates on-demand and stores it.
- * For draft runs: returns metadata and suggests calling generate first.
+ * Fetches report run (snapshot) and its signatures, passes them to the PDF generation flow,
+ * and returns the generated PDF for all runs (draft, final, complete). Never returns JSON for drafts.
  */
 export async function GET(
   request: NextRequest,
@@ -32,10 +30,10 @@ export async function GET(
 
     const { id: reportRunId } = await params
 
-    // Get report run (include job_id, packet_type for on-demand generation)
+    // Fetch report run (full snapshot: job_id, packet_type, status, pdf_path for optional serve-from-storage)
     const { data: reportRun, error: runError } = await supabase
       .from('report_runs')
-      .select('organization_id, status, pdf_path, pdf_signed_url, job_id, packet_type')
+      .select('id, organization_id, status, pdf_path, pdf_signed_url, job_id, packet_type, data_hash, generated_at')
       .eq('id', reportRunId)
       .single()
 
@@ -60,109 +58,111 @@ export async function GET(
       )
     }
 
-    // For final/complete reports: serve stored PDF or generate on-demand
-    if (reportRun.status === 'final' || reportRun.status === 'complete') {
-      let pdfPath = reportRun.pdf_path
-      let buffer: Buffer
+    // Gather signatures for this run (report_signatures by run_id) — used by print page and for audit
+    const { data: signatures } = await supabase
+      .from('report_signatures')
+      .select('id, signer_name, signer_title, signature_role, signature_svg, signed_at, signature_hash, attestation_text')
+      .eq('report_run_id', reportRunId)
+      .is('revoked_at', null)
+      .order('signed_at', { ascending: true })
 
-      if (pdfPath) {
-        // Download from storage
-        const { data: pdfData, error: downloadError } = await supabase.storage
-          .from('reports')
-          .download(pdfPath)
+    const jobId = reportRun.job_id
+    const organizationId = reportRun.organization_id
+    const packetType = reportRun.packet_type && isValidPacketType(reportRun.packet_type)
+      ? reportRun.packet_type
+      : 'insurance'
 
-        if (downloadError || !pdfData) {
-          console.error('[reports/runs/download] Failed to download PDF:', downloadError)
-          return NextResponse.json(
-            { message: 'Failed to retrieve PDF', detail: downloadError?.message },
-            { status: 500 }
-          )
-        }
-        buffer = Buffer.from(await pdfData.arrayBuffer())
-      } else {
-        // On-demand PDF generation (fetch run + signatures, call PDF service, return PDF)
-        const jobId = reportRun.job_id
-        const organizationId = reportRun.organization_id
-        const packetType = reportRun.packet_type && isValidPacketType(reportRun.packet_type)
-          ? reportRun.packet_type
-          : 'insurance'
+    // If we have a stored PDF for final/complete, serve it
+    const isFinalOrComplete = reportRun.status === 'final' || reportRun.status === 'complete'
+    if (isFinalOrComplete && reportRun.pdf_path) {
+      const { data: pdfData, error: downloadError } = await supabase.storage
+        .from('reports')
+        .download(reportRun.pdf_path)
 
-        const token = signPrintToken({
-          jobId,
-          organizationId,
-          reportRunId,
+      if (!downloadError && pdfData) {
+        const buffer = Buffer.from(await pdfData.arrayBuffer())
+        return new NextResponse(new Uint8Array(buffer), {
+          headers: {
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': `attachment; filename="riskmate-report-${reportRunId.substring(0, 8)}.pdf"`,
+            'X-Report-Run-ID': reportRunId,
+            'X-Report-Status': reportRun.status,
+          },
         })
-        const protocol = request.headers.get('x-forwarded-proto') || 'http'
-        const host = request.headers.get('host')
-        const origin = `${protocol}://${host}`
-        const printUrl = `${origin}/reports/packet/print/${reportRunId}?token=${encodeURIComponent(token)}`
-
-        const pdfServiceUrl = process.env.PDF_SERVICE_URL
-        const pdfServiceSecret = process.env.PDF_SERVICE_SECRET
-        const browserlessToken = process.env.BROWSERLESS_TOKEN
-        const requestId = `download-${reportRunId.substring(0, 8)}`
-
-        if (pdfServiceUrl && pdfServiceSecret) {
-          buffer = await generatePdfFromService({
-            url: printUrl,
-            jobId,
-            organizationId,
-            requestId,
-          })
-        } else if (browserlessToken) {
-          buffer = await generatePdfRemote({
-            url: printUrl,
-            jobId,
-            organizationId,
-            requestId,
-          })
-        } else {
-          return NextResponse.json(
-            {
-              message: 'PDF service not configured. Add PDF_SERVICE_URL + PDF_SERVICE_SECRET or BROWSERLESS_TOKEN.',
-              error_code: 'MISSING_PDF_SERVICE_CONFIG',
-            },
-            { status: 500 }
-          )
-        }
-
-        // Store PDF for future downloads
-        const storagePath = `${organizationId}/${jobId}/${packetType}/${reportRunId}.pdf`
-        const { error: uploadError } = await supabase.storage
-          .from('reports')
-          .upload(storagePath, buffer, { contentType: 'application/pdf', upsert: true })
-
-        if (!uploadError) {
-          const { data: signedUrlData } = await supabase.storage
-            .from('reports')
-            .createSignedUrl(storagePath, 60 * 60 * 24 * 365)
-          await supabase
-            .from('report_runs')
-            .update({
-              pdf_path: storagePath,
-              pdf_signed_url: signedUrlData?.signedUrl ?? null,
-              pdf_generated_at: new Date().toISOString(),
-            })
-            .eq('id', reportRunId)
-        }
       }
-
-      return new NextResponse(new Uint8Array(buffer), {
-        headers: {
-          'Content-Type': 'application/pdf',
-          'Content-Disposition': `attachment; filename="riskmate-report-${reportRunId.substring(0, 8)}.pdf"`,
-          'X-Report-Run-ID': reportRunId,
-          'X-Report-Status': reportRun.status,
-        },
-      })
+      // Fall through to on-demand generation if storage read fails
     }
 
-    // For draft reports, return metadata (can regenerate if needed)
-    return NextResponse.json({
-      message: 'Draft reports can be regenerated. Use /api/reports/generate/[jobId]',
-      report_run_id: reportRunId,
-      status: reportRun.status,
-      pdf_path: reportRun.pdf_path,
+    // On-demand PDF generation: print URL loads run snapshot + signatures and renders PDF
+    const token = signPrintToken({
+      jobId,
+      organizationId,
+      reportRunId,
+    })
+    const protocol = request.headers.get('x-forwarded-proto') || 'http'
+    const host = request.headers.get('host')
+    const origin = `${protocol}://${host}`
+    const printUrl = `${origin}/reports/packet/print/${reportRunId}?token=${encodeURIComponent(token)}`
+
+    const pdfServiceUrl = process.env.PDF_SERVICE_URL
+    const pdfServiceSecret = process.env.PDF_SERVICE_SECRET
+    const browserlessToken = process.env.BROWSERLESS_TOKEN
+    const requestId = `download-${reportRunId.substring(0, 8)}`
+
+    let buffer: Buffer
+    if (pdfServiceUrl && pdfServiceSecret) {
+      buffer = await generatePdfFromService({
+        url: printUrl,
+        jobId,
+        organizationId,
+        requestId,
+      })
+    } else if (browserlessToken) {
+      buffer = await generatePdfRemote({
+        url: printUrl,
+        jobId,
+        organizationId,
+        requestId,
+      })
+    } else {
+      return NextResponse.json(
+        {
+          message: 'PDF service not configured. Add PDF_SERVICE_URL + PDF_SERVICE_SECRET or BROWSERLESS_TOKEN.',
+          error_code: 'MISSING_PDF_SERVICE_CONFIG',
+        },
+        { status: 500 }
+      )
+    }
+
+    // Store PDF for final/complete runs only (drafts get PDF streamed but not persisted)
+    if (isFinalOrComplete) {
+      const storagePath = `${organizationId}/${jobId}/${packetType}/${reportRunId}.pdf`
+      const { error: uploadError } = await supabase.storage
+        .from('reports')
+        .upload(storagePath, buffer, { contentType: 'application/pdf', upsert: true })
+
+      if (!uploadError) {
+        const { data: signedUrlData } = await supabase.storage
+          .from('reports')
+          .createSignedUrl(storagePath, 60 * 60 * 24 * 365)
+        await supabase
+          .from('report_runs')
+          .update({
+            pdf_path: storagePath,
+            pdf_signed_url: signedUrlData?.signedUrl ?? null,
+            pdf_generated_at: new Date().toISOString(),
+          })
+          .eq('id', reportRunId)
+      }
+    }
+
+    return new NextResponse(new Uint8Array(buffer), {
+      headers: {
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `attachment; filename="riskmate-report-${reportRunId.substring(0, 8)}.pdf"`,
+        'X-Report-Run-ID': reportRunId,
+        'X-Report-Status': reportRun.status,
+      },
     })
   } catch (error: any) {
     console.error('[reports/runs/download] Error:', error)

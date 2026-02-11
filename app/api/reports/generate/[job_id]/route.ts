@@ -16,17 +16,23 @@ export const dynamic = 'force-dynamic'
 // Set max duration to handle browser launch and navigation (if plan supports it)
 export const maxDuration = 60
 
+/**
+ * POST /api/reports/generate/[job_id]
+ * Authenticate, fetch job and related data (hazards, controls, documents, etc.),
+ * build report payload on the server, compute SHA-256 hash, insert report_runs,
+ * return run id and hash. Supports skipPdfGeneration for signature workflow.
+ */
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ job_id: string }> }
 ) {
   // Generate request ID for observability/tracing (outside try block for error handler access)
   const requestId = crypto.randomUUID()
   // Log build SHA to verify deployment (critical for debugging stale builds)
   const buildSha = process.env.VERCEL_GIT_COMMIT_SHA || process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA || 'no-sha'
-  
-  // Extract jobId early for logging (outside try block)
-  const { id: jobId } = await params
+
+  // Extract jobId from route param (job_id)
+  const { job_id: jobId } = await params
   console.log(`[reports][${requestId}][stage] request_start build=${buildSha} jobId=${jobId}`)
 
   // Declare pdfMethod at function scope so it's accessible in both try and catch blocks
@@ -59,9 +65,9 @@ export async function POST(
     if (userError || !userData?.organization_id) {
       console.error(`[reports][${requestId}][stage] fetch_user_failed`, userError)
       return NextResponse.json(
-        { 
-          message: 'Failed to get organization ID', 
-          requestId, 
+        {
+          message: 'Failed to get organization ID',
+          requestId,
           stage: 'fetch_user',
           error_code: userError?.code || 'NO_ORG_ID'
         },
@@ -140,7 +146,7 @@ export async function POST(
       if (!isValidPacketType(rawPacketType)) {
         console.error(`[reports][${requestId}][stage] validate_packet_type_failed received=${rawPacketType}`)
         return NextResponse.json(
-          { 
+          {
             message: 'Invalid packet type',
             detail: `packetType must be one of: ${Object.keys(PACKETS).join(', ')}`,
             received: rawPacketType,
@@ -155,7 +161,7 @@ export async function POST(
     }
     console.log(`[reports][${requestId}][stage] validate_packet_type_ok packetType=${packetType}`)
 
-    // STAGE: Build packet data
+    // STAGE: Build report payload on server (job + hazards, controls, documents, etc.)
     console.log(`[reports][${requestId}][stage] build_packet_start packetType=${packetType}`)
     let reportPayload: any
     let dataHash: string
@@ -167,7 +173,7 @@ export async function POST(
         packetType,
         organizationId: organization_id,
       })
-      // Compute hash from packet data structure
+      // Compute SHA-256 hash from packet data structure
       dataHash = computeCanonicalHash(packetData)
       reportPayload = packetData
     } else {
@@ -200,7 +206,7 @@ export async function POST(
       reportRun = existingRun
       console.log(`[reports][${requestId}][stage] check_existing_run_ok reused_runId=${reportRun.id}`)
     } else {
-      // STAGE: Create new report_run (frozen snapshot)
+      // STAGE: Create new report_run (frozen snapshot: status, packet_type, skipPdfGeneration handling, generated_by, organization_id, data_hash)
       console.log(`[reports][${requestId}][stage] create_report_run_start`)
       const { data: newRun, error: runError } = await supabase
         .from('report_runs')
@@ -218,8 +224,8 @@ export async function POST(
       if (runError || !newRun) {
         console.error(`[reports][${requestId}][stage] create_report_run_failed`, runError)
         return NextResponse.json(
-          { 
-            message: 'Failed to create report run', 
+          {
+            message: 'Failed to create report run',
             detail: runError?.message,
             requestId,
             stage: 'create_report_run',
@@ -233,7 +239,7 @@ export async function POST(
       console.log(`[reports][${requestId}][stage] create_report_run_ok runId=${reportRun.id}`)
     }
 
-    // When skipPdfGeneration is true, return run only (no PDF) for signature workflow
+    // When skipPdfGeneration is true, return run id and hash only (no PDF) for signature workflow
     if (skipPdfGeneration) {
       console.log(`[reports][${requestId}][stage] skip_pdf_returning_run`)
       return NextResponse.json(
@@ -270,7 +276,7 @@ export async function POST(
     const protocol = request.headers.get('x-forwarded-proto') || 'http'
     const host = request.headers.get('host')
     const origin = `${protocol}://${host}`
-    
+
     let printUrl: string
     if (packetType && isValidPacketType(packetType)) {
       // New packet-driven route (runId-based for frozen snapshot rendering)
@@ -290,7 +296,7 @@ export async function POST(
     const pdfServiceUrl = process.env.PDF_SERVICE_URL
     const pdfServiceSecret = process.env.PDF_SERVICE_SECRET
     const browserlessToken = process.env.BROWSERLESS_TOKEN
-    
+
     if (pdfServiceUrl && pdfServiceSecret) {
       pdfMethod = 'self-hosted'
     } else if (browserlessToken) {
@@ -342,11 +348,11 @@ export async function POST(
       const errorMessage = browserError?.message || 'Unknown browser error'
       const stage = errorMessage.match(/\[stage=(\w+)\]/)?.[1] || 'generate_pdf'
       const errorCode = browserError?.is429 ? 'BROWSERLESS_RATE_LIMITED' : (browserError?.errorCode || browserError?.code || 'NO_CODE')
-      
+
       console.error(`[reports][${requestId}][stage] ${stage}_failed error_code=${errorCode} is_429=${browserError?.is429 || false}`)
       console.error(`[reports][${requestId}] error_message=`, errorMessage)
       console.error(`[reports][${requestId}] error_stack=`, browserError?.stack || 'No stack')
-      
+
       // For 429 rate limit errors, throw with specific properties so we can return 429 status
       if (browserError?.is429) {
         const rateLimitError = new Error(`[stage=browser_connect] Browserless rate limited: ${errorMessage}`) as any
@@ -354,7 +360,7 @@ export async function POST(
         rateLimitError.errorCode = 'BROWSERLESS_RATE_LIMITED'
         throw rateLimitError
       }
-      
+
       // Return structured error with stage and code for other errors
       throw new Error(`[stage=${stage}] Browser generation failed: ${errorMessage} (code: ${errorCode})`)
     }
@@ -441,7 +447,7 @@ export async function POST(
       const stage = errorMessage.match(/\[stage=(\w+)\]/)?.[1] || 'upload'
       // Try multiple ways to get error code (StorageError doesn't have a standard errorCode property)
       const errorCode = uploadError?.statusCode || uploadError?.status || uploadError?.code || 'NO_CODE'
-      
+
       console.error(`[reports][${requestId}][stage] ${stage}_failed error_code=${errorCode}`)
       console.error(`[reports][${requestId}] error_message=`, errorMessage)
       throw new Error(`[stage=${stage}] ${errorMessage} (code: ${errorCode})`)
@@ -449,7 +455,7 @@ export async function POST(
 
     // STAGE: Request complete
     console.log(`[reports][${requestId}][stage] request_complete runId=${reportRun.id} pdfUrl=${pdfUrl ? 'yes' : 'no'}`)
-    
+
     return NextResponse.json(
       {
         data: {
@@ -484,24 +490,24 @@ export async function POST(
     const errorCode = error?.is429 ? 'BROWSERLESS_RATE_LIMITED' : (error?.errorCode || error?.code || 'NO_CODE')
     const isRateLimited = error?.is429 || false
     const buildSha = process.env.VERCEL_GIT_COMMIT_SHA || process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA || 'no-sha'
-    
+
     console.error(`[reports][${requestId}][stage] ${stage}_failed error_code=${errorCode} is_429=${isRateLimited}`)
     console.error(`[reports][${requestId}] error_message=`, errorMessage)
     console.error(`[reports][${requestId}] error_stack=`, error?.stack || 'No stack')
-    
+
     // Return 429 status for rate limit errors, 500 for everything else
     const statusCode = isRateLimited ? 429 : 500
-    
+
     // Add Retry-After header for 429 errors
     const headers: Record<string, string> = {
       'X-Build-SHA': buildSha, // Include build SHA for deployment verification
       'X-PDF-Method': pdfMethod, // Indicate which PDF generation method was used (or attempted)
     }
-    
+
     if (isRateLimited) {
       headers['Retry-After'] = '2' // Suggest retry after 2 seconds
     }
-    
+
     return NextResponse.json(
       {
         message: errorMessage,
@@ -509,7 +515,7 @@ export async function POST(
         stage,
         error_code: errorCode,
       },
-      { 
+      {
         status: statusCode,
         headers,
       }
