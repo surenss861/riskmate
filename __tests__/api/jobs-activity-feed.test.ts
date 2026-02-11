@@ -17,12 +17,13 @@ const DOC_ID = 'dddddddd-eeee-4fff-8000-111122223333'
 
 describe('Job activity feed: metadata.job_id and realtime', () => {
   describe('getJobActivityRealtimeFilter', () => {
-    it('includes organization_id and or(and(target_type.eq.job,target_id.eq.jobId),metadata->>job_id.eq.jobId) for realtime subscription', () => {
+    it('returns valid PostgREST realtime filter: and(organization_id.eq..., or(...)), no query-param &', () => {
       const filter = getJobActivityRealtimeFilter(ORG_ID, JOB_ID)
-      expect(filter).toContain(`organization_id=eq.${ORG_ID}`)
-      expect(filter).toContain('or=(')
-      expect(filter).toContain(`and(target_type.eq.job,target_id.eq.${JOB_ID})`)
-      expect(filter).toContain(`metadata->>job_id.eq.${JOB_ID}`)
+      const expected =
+        `and(organization_id.eq.${ORG_ID},or(and(target_type.eq.job,target_id.eq.${JOB_ID}),metadata->>job_id.eq.${JOB_ID}))`
+      expect(filter).toBe(expected)
+      expect(filter).not.toContain('&')
+      expect(filter).toMatch(/^and\(/)
     })
   })
 
