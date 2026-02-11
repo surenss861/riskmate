@@ -997,6 +997,28 @@ struct ActivityEvent: Identifiable, Codable {
             createdAt = standardFormatter.date(from: createdAtString) ?? Date()
         }
     }
+
+    /// Build from a realtime postgres payload (e.g. audit_logs INSERT) for in-app prepend.
+    init?(realtimeRecord: [String: Any]) {
+        guard let id = realtimeRecord["id"] as? String else { return nil }
+        let createdAtString = realtimeRecord["created_at"] as? String ?? ""
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let createdAt = formatter.date(from: createdAtString)
+            ?? ISO8601DateFormatter().date(from: createdAtString) ?? Date()
+        self.id = id
+        self.actorId = realtimeRecord["actor_id"] as? String
+        self.eventName = realtimeRecord["event_name"] as? String
+        self.eventType = realtimeRecord["event_type"] as? String ?? realtimeRecord["event_name"] as? String
+        self.actorName = realtimeRecord["actor_name"] as? String
+        self.actorRole = realtimeRecord["actor_role"] as? String
+        self.createdAt = createdAt
+        self.category = realtimeRecord["category"] as? String
+        self.severity = realtimeRecord["severity"] as? String
+        self.outcome = realtimeRecord["outcome"] as? String
+        self.summary = realtimeRecord["summary"] as? String
+        self.metadata = nil
+    }
 }
 
 struct PDFResponse: Codable {

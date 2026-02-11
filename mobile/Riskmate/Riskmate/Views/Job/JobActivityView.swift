@@ -1,4 +1,5 @@
 import SwiftUI
+import Supabase
 
 // MARK: - Job Activity View
 
@@ -20,6 +21,9 @@ struct JobActivityView: View {
     @State private var filterEndDate: Date?
     @State private var appliedFilters: ActivityFilters = ActivityFilters()
     @State private var actors: [ActivityActor] = []
+    @State private var loadError: String?
+    @State private var loadMoreError: String?
+    @StateObject private var realtimeService = JobActivityRealtimeService()
 
     private var hasActiveFilters: Bool {
         appliedFilters.actorId != nil
@@ -30,12 +34,24 @@ struct JobActivityView: View {
 
     var body: some View {
         Group {
-            if isLoading && events.isEmpty {
+            if isLoading && events.isEmpty && loadError == nil {
                 loadingSkeleton
+            } else if let error = loadError, events.isEmpty {
+                errorState(message: error, retry: { Task { await retryLoadInitial() } })
             } else if events.isEmpty {
                 emptyState
             } else {
-                activityList
+                VStack(spacing: 0) {
+                    if let error = loadError {
+                        loadErrorBanner(message: error) { Task { await retryLoadInitial() } }
+                    }
+                    activityList
+                    if let moreError = loadMoreError {
+                        loadMoreErrorBanner(message: moreError) {
+                            Task { await retryLoadMore() }
+                        }
+                    }
+                }
             }
         }
         .refreshable {
@@ -43,6 +59,18 @@ struct JobActivityView: View {
         }
         .task(id: jobId) {
             await loadInitial()
+            await withTaskCancellationHandler {
+                await realtimeService.subscribeAndWait(jobId: jobId)
+            } onCancel: {
+                Task { await realtimeService.unsubscribe() }
+            }
+        }
+        .onChange(of: realtimeService.newEvent) { _, newEvent in
+            guard let event = newEvent else { return }
+            events.insert(event, at: 0)
+            realtimeService.clearNewEvent()
+            Task { await loadActorsIfNeeded() }
+            ToastCenter.shared.show("New activity", systemImage: "bell.badge", style: .info)
         }
         .sheet(isPresented: $showFilterSheet) {
             ActivityFilterSheet(
@@ -119,6 +147,53 @@ struct JobActivityView: View {
         .padding(RMTheme.Spacing.pagePadding)
     }
 
+    private func errorState(message: String, retry: @escaping () -> Void) -> some View {
+        VStack(spacing: RMTheme.Spacing.md) {
+            Image(systemName: "exclamationmark.triangle")
+                .font(.system(size: 40))
+                .foregroundColor(RMTheme.Colors.warning)
+            Text("Couldn't load activity")
+                .font(RMTheme.Typography.bodyBold)
+                .foregroundColor(RMTheme.Colors.textPrimary)
+            Text(message)
+                .font(RMTheme.Typography.bodySmall)
+                .foregroundColor(RMTheme.Colors.textSecondary)
+                .multilineTextAlignment(.center)
+            Button("Retry", action: retry)
+                .font(RMTheme.Typography.bodySmallBold)
+                .foregroundColor(RMTheme.Colors.accent)
+        }
+        .padding(RMTheme.Spacing.pagePadding)
+    }
+
+    private func loadErrorBanner(message: String, retry: @escaping () -> Void) -> some View {
+        HStack {
+            Text(message)
+                .font(RMTheme.Typography.caption)
+                .foregroundColor(RMTheme.Colors.textSecondary)
+            Spacer()
+            Button("Retry", action: retry)
+                .font(RMTheme.Typography.caption)
+                .foregroundColor(RMTheme.Colors.accent)
+        }
+        .padding(RMTheme.Spacing.sm)
+        .background(RMTheme.Colors.surface.opacity(0.8))
+    }
+
+    private func loadMoreErrorBanner(message: String, retry: @escaping () -> Void) -> some View {
+        HStack {
+            Text(message)
+                .font(RMTheme.Typography.caption)
+                .foregroundColor(RMTheme.Colors.textSecondary)
+            Spacer()
+            Button("Retry", action: retry)
+                .font(RMTheme.Typography.caption)
+                .foregroundColor(RMTheme.Colors.accent)
+        }
+        .padding(RMTheme.Spacing.sm)
+        .background(RMTheme.Colors.surface.opacity(0.8))
+    }
+
     private var activityList: some View {
         List {
             ForEach(events) { event in
@@ -193,6 +268,7 @@ struct JobActivityView: View {
     ]
 
     private func loadInitial() async {
+        loadError = nil
         isLoading = true
         offset = 0
         hasMore = true
@@ -213,8 +289,10 @@ struct JobActivityView: View {
             offset = fetched.count
             await loadActorsIfNeeded()
         } catch {
-            events = []
-            hasMore = false
+            let message = userFacingErrorMessage(error)
+            loadError = message
+            ToastCenter.shared.show(message, systemImage: "exclamationmark.triangle", style: .error)
+            // Keep existing events; do not replace with []
         }
     }
 
@@ -240,9 +318,36 @@ struct JobActivityView: View {
             events.append(contentsOf: fetched)
             hasMore = more
             offset += fetched.count
+            await loadActorsIfNeeded()
         } catch {
+            let message = userFacingErrorMessage(error)
+            loadMoreError = message
+            ToastCenter.shared.show(message, systemImage: "exclamationmark.triangle", style: .error)
             hasMore = false
         }
+    }
+
+    private func retryLoadInitial() async {
+        loadError = nil
+        await loadInitial()
+    }
+
+    private func retryLoadMore() async {
+        loadMoreError = nil
+        await loadMore()
+    }
+
+    private func userFacingErrorMessage(_ error: Error) -> String {
+        if let apiError = error as? APIError {
+            switch apiError {
+            case .networkError(_, let msg, _): return msg
+            case .httpError(let code, let msg): return msg.isEmpty ? "Request failed (\(code))" : msg
+            case .decodingError: return "Invalid response"
+            case .invalidURL: return "Invalid request"
+            case .invalidResponse: return "Invalid response"
+            }
+        }
+        return error.localizedDescription
     }
 
     private func loadActorsIfNeeded() async {
@@ -418,6 +523,64 @@ struct ActivityCardView: View {
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .abbreviated
         return formatter.localizedString(for: date, relativeTo: Date())
+    }
+}
+
+// MARK: - Job Activity Realtime Service
+
+/// Subscribes to audit_log INSERTs for a job and publishes new events for the view to prepend.
+@MainActor
+final class JobActivityRealtimeService: ObservableObject {
+    @Published var newEvent: ActivityEvent?
+
+    private var channel: Any?
+    private var supabaseClient: SupabaseClient?
+
+    /// Subscribe to job-specific audit_log inserts, then wait until cancelled. Call unsubscribe() on cancel.
+    func subscribeAndWait(jobId: String) async {
+        guard let url = URL(string: AppConfig.shared.supabaseURL) else { return }
+        let client = SupabaseClient(supabaseURL: url, supabaseKey: AppConfig.shared.supabaseAnonKey)
+        supabaseClient = client
+        let channelName = "job-\(jobId)-activity"
+        let ch = client.channel(channelName)
+
+        ch.on(event: "postgres_changes") { [weak self] payload in
+            Task { @MainActor in
+                await self?.handlePayload(payload: payload, jobId: jobId)
+            }
+        }
+        try? await ch.subscribe()
+        channel = ch
+
+        await withCheckedContinuation { _ in }
+    }
+
+    private func handlePayload(payload: Any, jobId: String) {
+        var record: [String: Any]?
+        if let dict = payload as? [String: Any] {
+            record = dict["new"] as? [String: Any] ?? dict["record"] as? [String: Any] ?? dict
+        }
+        guard let row = record else { return }
+        let targetId: String? = {
+            if let s = row["target_id"] as? String { return s }
+            if let u = row["target_id"] as? UUID { return u.uuidString }
+            return nil
+        }()
+        guard targetId == jobId else { return }
+        guard let event = ActivityEvent(realtimeRecord: row) else { return }
+        newEvent = event
+    }
+
+    func unsubscribe() async {
+        if let ch = channel as? RealtimeChannel {
+            await ch.unsubscribe()
+        }
+        channel = nil
+        supabaseClient = nil
+    }
+
+    func clearNewEvent() {
+        newEvent = nil
     }
 }
 
