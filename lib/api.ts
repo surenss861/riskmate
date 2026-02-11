@@ -579,12 +579,13 @@ export const jobsApi = {
 
   /**
    * GET /api/actors/[id] - lightweight actor lookup for activity feed (actor_name, actor_email, actor_role).
+   * Calls Next.js API route so realtime actor enrichment fallback works.
    */
   getActor: async (
     actorId: string
   ): Promise<{ actor_name: string; actor_email: string; actor_role: string } | null> => {
     try {
-      const res = await apiRequest<{ data: { actor_name: string; actor_email: string; actor_role: string } }>(
+      const res = await nextApiRequest<{ data: { actor_name: string; actor_email: string; actor_role: string } }>(
         `/api/actors/${actorId}`
       );
       return res?.data ?? null;
