@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { buildJobReport } from '@/lib/utils/jobReport'
+import { buildJobPacket } from '@/lib/utils/packets/builder'
 import { computeCanonicalHash } from '@/lib/utils/canonicalJson'
+import { isValidPacketType } from '@/lib/utils/packets/types'
+import { createHash } from 'crypto'
 
 export const runtime = 'nodejs'
 
@@ -54,11 +57,21 @@ export async function GET(
       )
     }
 
-    // Rebuild report payload and recompute hash
-    const currentPayload = await buildJobReport(
-      reportRun.organization_id,
-      reportRun.job_id
-    )
+    // Rebuild payload using same builder as at creation
+    const packetType = reportRun.packet_type
+    let currentPayload: any
+    if (packetType && isValidPacketType(packetType)) {
+      currentPayload = await buildJobPacket({
+        jobId: reportRun.job_id,
+        packetType,
+        organizationId: reportRun.organization_id,
+      })
+    } else {
+      currentPayload = await buildJobReport(
+        reportRun.organization_id,
+        reportRun.job_id
+      )
+    }
     const recomputedHash = computeCanonicalHash(currentPayload)
 
     // Compare hashes
@@ -67,25 +80,34 @@ export async function GET(
       ? null
       : 'Report data has changed since this run was created'
 
-    // Get signatures
+    // Get signatures (need signature_svg, signer_name, signer_title for hash recomputation)
     const { data: signatures } = await supabase
       .from('report_signatures')
-      .select('id, signature_role, signature_hash, signed_at, revoked_at')
+      .select('id, signature_role, signature_hash, signature_svg, signer_name, signer_title, signed_at, revoked_at')
       .eq('report_run_id', reportRunId)
 
     const activeSignatures = signatures?.filter((s) => !s.revoked_at) || []
     const revokedSignatures = signatures?.filter((s) => s.revoked_at) || []
 
-    // Verify signature hashes (recompute and compare)
+    // Recompute each signature's hash and compare (same algorithm as POST /api/reports/runs/[id]/signatures)
     const signatureVerifications = activeSignatures.map((sig) => {
-      // Note: Full signature verification would require recomputing hash from SVG + signer data
-      // For now, we just check that signature exists and hasn't been revoked
+      const recomputedSignatureHash = createHash('sha256')
+        .update(sig.signature_svg ?? '')
+        .update(sig.signer_name ?? '')
+        .update(sig.signer_title ?? '')
+        .update(sig.signature_role ?? '')
+        .digest('hex')
+      const hashMatches = recomputedSignatureHash === sig.signature_hash
+      const mismatchReason = hashMatches ? null : 'Signature hash mismatch; data may have been tampered'
       return {
         signature_id: sig.id,
         role: sig.signature_role,
         signed_at: sig.signed_at,
         hash_present: !!sig.signature_hash,
         revoked: false,
+        verified: hashMatches,
+        hash_mismatch: !hashMatches,
+        hash_mismatch_reason: mismatchReason,
       }
     })
 
