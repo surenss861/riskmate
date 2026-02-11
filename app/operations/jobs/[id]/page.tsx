@@ -18,6 +18,7 @@ import { TemplatesManager, TemplateModal, TemplateModalProps } from '@/component
 import { ApplyTemplateInline } from '@/components/dashboard/ApplyTemplateInline'
 import { JobPacketView } from '@/components/job/JobPacketView'
 import { JobActivityFeed, type AuditEvent } from '@/components/job/JobActivityFeed'
+import { TeamSignatures } from '@/components/report/TeamSignatures'
 import { ToastContainer } from '@/components/ToastContainer'
 import { typography, emptyStateStyles, spacing, dividerStyles, tabStyles } from '@/lib/styles/design-system'
 import { ErrorModal } from '@/components/dashboard/ErrorModal'
@@ -159,8 +160,9 @@ export default function JobDetailPage() {
     actionType?: 'job_created' | 'hazard_added' | 'hazard_removed' | 'mitigation_completed' | 'photo_uploaded' | 'evidence_approved' | 'evidence_rejected' | 'template_applied' | 'worker_assigned' | 'worker_unassigned' | 'status_changed' | 'pdf_generated'
     metadata?: any
   }>>([])
-  const [activeTab, setActiveTab] = useState<'overview' | 'activity'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'activity' | 'signatures'>('overview')
   const [activityInitialEvents, setActivityInitialEvents] = useState<AuditEvent[] | null>(null)
+  const [signatureCount, setSignatureCount] = useState<{ signed: number; total: number } | null>(null)
 
   const loadVersionHistory = async () => {
     if (loadingVersionHistory || !jobId) return
@@ -398,6 +400,33 @@ export default function JobDetailPage() {
     })
     return () => { cancelled = true }
   }, [activeTab, jobId])
+
+  // Fetch initial signature count for tab badge (when no run: 0/3)
+  useEffect(() => {
+    if (!jobId) return
+    let cancelled = false
+    const fetchSignatureCount = async () => {
+      try {
+        const runsRes = await fetch(`/api/reports/runs?job_id=${jobId}&limit=1`)
+        if (!runsRes.ok || cancelled) return
+        const { data: runs } = await runsRes.json()
+        if (!runs?.length) {
+          if (!cancelled) setSignatureCount({ signed: 0, total: 3 })
+          return
+        }
+        const run = runs.find((r: { status: string }) => r.status !== 'superseded') || runs[0]
+        const sigRes = await fetch(`/api/reports/runs/${run.id}/signatures`)
+        if (!sigRes.ok || cancelled) return
+        const { data: sigs } = await sigRes.json()
+        const signed = Array.isArray(sigs) ? sigs.length : 0
+        if (!cancelled) setSignatureCount({ signed, total: 3 })
+      } catch {
+        if (!cancelled) setSignatureCount({ signed: 0, total: 3 })
+      }
+    }
+    fetchSignatureCount()
+    return () => { cancelled = true }
+  }, [jobId])
 
   // Load permit packs for Business plan users (lazy - only when section is visible)
   useEffect(() => {
@@ -822,7 +851,7 @@ export default function JobDetailPage() {
             )}
           </PageSection>
 
-          {/* Tab navigation: Overview | Activity */}
+          {/* Tab navigation: Overview | Activity | Signatures */}
           <div className={`${tabStyles.container} mb-6`}>
             <button
               type="button"
@@ -837,6 +866,18 @@ export default function JobDetailPage() {
               className={`${tabStyles.item} ${activeTab === 'activity' ? tabStyles.active : tabStyles.inactive}`}
             >
               Activity
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('signatures')}
+              className={`${tabStyles.item} ${activeTab === 'signatures' ? tabStyles.active : tabStyles.inactive}`}
+            >
+              Signatures
+              {signatureCount !== null && (
+                <span className="ml-1.5 inline-flex items-center justify-center min-w-[2rem] px-1.5 py-0.5 text-xs font-medium rounded-md bg-white/10 text-white/80 border border-white/10">
+                  {signatureCount.signed}/{signatureCount.total}
+                </span>
+              )}
             </button>
           </div>
 
@@ -853,6 +894,21 @@ export default function JobDetailPage() {
                   enableRealtime={true}
                   showFilters={true}
                   maxHeight="70vh"
+                />
+              </GlassCard>
+            </PageSection>
+          ) : activeTab === 'signatures' ? (
+            <PageSection>
+              <GlassCard className="p-6 md:p-8">
+                <TeamSignatures
+                  jobId={jobId}
+                  readOnly={false}
+                  onReportRunCreated={() => {
+                    setSignatureCount({ signed: 0, total: 3 })
+                  }}
+                  onSignaturesChange={(signed, total) => {
+                    setSignatureCount({ signed, total })
+                  }}
                 />
               </GlassCard>
             </PageSection>

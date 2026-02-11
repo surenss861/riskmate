@@ -38,6 +38,8 @@ interface TeamSignaturesProps {
   readOnly?: boolean
   onReportRunCreated?: (runId: string) => void
   onExport?: () => void
+  /** Called when signature list loads or changes (e.g. after signing). Use for tab badge: (signed, total). */
+  onSignaturesChange?: (signed: number, total: number) => void
 }
 
 const REQUIRED_ROLES: Array<'prepared_by' | 'reviewed_by' | 'approved_by'> = [
@@ -59,6 +61,7 @@ export function TeamSignatures({
   readOnly = false,
   onReportRunCreated,
   onExport,
+  onSignaturesChange,
 }: TeamSignaturesProps) {
   const [signatures, setSignatures] = useState<Signature[]>([])
   const [reportRun, setReportRun] = useState<ReportRun | null>(null)
@@ -146,6 +149,14 @@ export function TeamSignatures({
 
     loadData()
   }, [jobId, reportRunId, onReportRunCreated])
+
+  // Notify parent of signature count for tab badge (updates when signatures load or change)
+  useEffect(() => {
+    if (!loading && onSignaturesChange) {
+      const signed = signatures.filter((s) => REQUIRED_ROLES.includes(s.signature_role)).length
+      onSignaturesChange(signed, REQUIRED_ROLES.length)
+    }
+  }, [loading, signatures, onSignaturesChange])
 
   const handleCreateReportRun = async () => {
     if (creatingReportRun) return
