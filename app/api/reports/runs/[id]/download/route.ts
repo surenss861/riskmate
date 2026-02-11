@@ -190,6 +190,7 @@ export async function GET(
           },
           { status: 500 }
         )
+      }
     }
 
     return new NextResponse(new Uint8Array(buffer), {
@@ -199,7 +200,7 @@ export async function GET(
         'X-Report-Run-ID': reportRunId,
         'X-Report-Status': reportRun.status,
       },
-    })
+    });
   } catch (error: any) {
     console.error('[reports/runs/download] Error:', error)
     return NextResponse.json(

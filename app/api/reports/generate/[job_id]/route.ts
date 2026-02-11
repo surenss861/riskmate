@@ -101,7 +101,8 @@ export async function POST(
     const skipPdfGeneration = body.skipPdfGeneration === true // If true, only create report run, don't generate PDF
 
     // Rate limit: only apply when generating PDFs (skip for signature-only run creation)
-    let rateLimitResult: { allowed: boolean; limit: number; remaining: number; resetAt: number; retryAfter: number }
+    const defaultRateLimit = { allowed: true, limit: 0, remaining: 0, resetAt: 0, retryAfter: 0, windowMs: 0 }
+    let rateLimitResult: { allowed: boolean; limit: number; remaining: number; resetAt: number; retryAfter: number; windowMs: number } = defaultRateLimit
     if (!skipPdfGeneration) {
       rateLimitResult = checkRateLimitWithContext(request, RATE_LIMIT_CONFIGS.pdf, {
         organization_id,
