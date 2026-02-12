@@ -2,8 +2,8 @@ import PDFDocument from 'pdfkit';
 import { STYLES } from '../styles';
 import { addSectionHeader } from '../helpers';
 import { formatDate } from '../utils';
-import { drawSignatureSvgPath } from '../../../../../../../lib/utils/pdf/signatureHelpers';
-import { validateSignatureSvg } from '../../../../../../../lib/utils/signatureValidation';
+import { drawSignatureSvgPath } from '../../../../../../lib/utils/pdf/signatureHelpers';
+import { validateSignatureSvg } from '../../../../../../lib/utils/signatureValidation';
 
 /** Signature data for PDF rendering (run's report_signatures) */
 export interface PdfSignatureData {
