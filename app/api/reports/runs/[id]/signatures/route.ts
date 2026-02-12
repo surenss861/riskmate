@@ -174,39 +174,41 @@ export async function POST(
       )
     }
 
-    // Check if signature for this role already exists (non-revoked)
-    // Use maybeSingle() since 0 rows is expected when no signature exists
-    const { data: existing } = await supabase
-      .from('report_signatures')
-      .select('id, signer_name, signed_at')
-      .eq('report_run_id', reportRunId)
-      .eq('signature_role', signature_role)
-      .is('revoked_at', null)
-      .maybeSingle()
+    // For required roles only: enforce single signature per role (allow multiple "other")
+    const requiredRoles = ['prepared_by', 'reviewed_by', 'approved_by']
+    if (requiredRoles.includes(signature_role)) {
+      const { data: existing } = await supabase
+        .from('report_signatures')
+        .select('id, signer_name, signed_at')
+        .eq('report_run_id', reportRunId)
+        .eq('signature_role', signature_role)
+        .is('revoked_at', null)
+        .maybeSingle()
 
-    if (existing) {
-      const signedAt = existing.signed_at 
-        ? new Date(existing.signed_at).toLocaleString('en-US', { 
-            timeZone: 'America/New_York',
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric',
-            hour: 'numeric',
-            minute: '2-digit',
-            hour12: true,
-            timeZoneName: 'short',
-          })
-        : 'previously'
-      return NextResponse.json(
-        { 
-          message: `Already signed by ${existing.signer_name} at ${signedAt} ET. Refreshing...`,
-          existing_signature: {
-            signer_name: existing.signer_name,
-            signed_at: existing.signed_at,
-          }
-        },
-        { status: 409 }
-      )
+      if (existing) {
+        const signedAt = existing.signed_at
+          ? new Date(existing.signed_at).toLocaleString('en-US', {
+              timeZone: 'America/New_York',
+              year: 'numeric',
+              month: 'short',
+              day: 'numeric',
+              hour: 'numeric',
+              minute: '2-digit',
+              hour12: true,
+              timeZoneName: 'short',
+            })
+          : 'previously'
+        return NextResponse.json(
+          {
+            message: `Already signed by ${existing.signer_name} at ${signedAt} ET. Refreshing...`,
+            existing_signature: {
+              signer_name: existing.signer_name,
+              signed_at: existing.signed_at,
+            },
+          },
+          { status: 409 }
+        )
+      }
     }
 
     // Compute signature hash per contract: signature_svg, signer_name, signer_title, signature_role only
