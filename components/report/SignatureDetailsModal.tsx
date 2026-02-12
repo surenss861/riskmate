@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { X, ChevronDown, ChevronUp } from 'lucide-react'
 import { formatPdfTimestamp } from '@/lib/utils/pdfFormatUtils'
+import { sanitizeSvg } from '@/lib/utils/sanitizeSvg'
 import { Button } from '@/components/shared'
 
 interface Signature {
@@ -69,7 +70,7 @@ export function SignatureDetailsModal({
             <div className="text-sm text-white/60 mb-2">Signature</div>
             <div
               className="border border-white/20 rounded p-3 bg-white"
-              dangerouslySetInnerHTML={{ __html: signature.signature_svg }}
+              dangerouslySetInnerHTML={{ __html: sanitizeSvg(signature.signature_svg) }}
               style={{ maxHeight: '120px', overflow: 'hidden' }}
             />
           </div>

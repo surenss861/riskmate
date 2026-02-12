@@ -6,6 +6,7 @@ import { SignatureDetailsModal } from './SignatureDetailsModal'
 import { Button } from '@/components/shared'
 import { Badge } from '@/lib/design-system/components/Badge'
 import { formatPdfTimestamp } from '@/lib/utils/pdfFormatUtils'
+import { sanitizeSvg } from '@/lib/utils/sanitizeSvg'
 import { Copy, Check, Eye } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { Toast } from '@/components/dashboard/Toast'
@@ -118,8 +119,8 @@ export function TeamSignatures({
             setSignatures(sigData || [])
           }
         } else {
-          // Try to find the latest non-superseded report run for this job
-          const latestRunResponse = await fetch(`/api/reports/runs?job_id=${jobId}&limit=10`)
+          // Try to find the latest non-superseded report run for this job with packet_type=insurance
+          const latestRunResponse = await fetch(`/api/reports/runs?job_id=${jobId}&packet_type=insurance&limit=10`)
           if (latestRunResponse.ok) {
             const { data: runs } = await latestRunResponse.json()
             if (runs && runs.length > 0) {
@@ -366,16 +367,20 @@ export function TeamSignatures({
             headers: { 'Content-Type': 'application/json' },
           })
           
-          if (finalizeResponse.ok) {
-            // Reload run to get updated status
-            const runResponse = await fetch(`/api/reports/runs/${reportRunId}`)
-            if (runResponse.ok) {
-              const { data: runData } = await runResponse.json()
-              setReportRun(runData)
-              setToast({ message: 'All signatures complete. Run sealed.', type: 'success' })
-            }
+          if (!finalizeResponse.ok) {
+            const error = await finalizeResponse.json()
+            throw new Error(error.message || 'Failed to finalize report run')
           }
-        } catch (err) {
+          
+          // Reload run to get updated status
+          const runResponse = await fetch(`/api/reports/runs/${reportRunId}`)
+          if (runResponse.ok) {
+            const { data: runData } = await runResponse.json()
+            setReportRun(runData)
+            setToast({ message: 'All signatures complete. Run sealed.', type: 'success' })
+          }
+        } catch (err: any) {
+          setToast({ message: err.message || 'Failed to finalize report run', type: 'error' })
           console.error('Failed to finalize run:', err)
         }
       }
@@ -572,7 +577,7 @@ export function TeamSignatures({
                     <div className="h-28 rounded-lg bg-white/95 overflow-hidden p-3 border border-white/20">
                       <div
                         className="w-full h-full text-black [&_svg]:w-full [&_svg]:h-full [&_svg]:block [&_svg]:max-w-full [&_svg]:max-h-full [&_path]:stroke-current [&_path]:fill-none [&_path]:stroke-2"
-                        dangerouslySetInnerHTML={{ __html: signature.signature_svg }}
+                        dangerouslySetInnerHTML={{ __html: sanitizeSvg(signature.signature_svg) }}
                       />
                     </div>
                     <div className="text-sm text-white/90 font-medium">{signature.signer_name}</div>
