@@ -195,6 +195,9 @@ export function SectionRenderer({ section }: SectionRendererProps) {
         />
       )
 
+    case 'signature_proof':
+      return <SignatureProofSection data={section.data} />
+
     default:
       // Universal fallback: render EmptySection for unknown types
       // This ensures TOC matches content and unknown types still render
