@@ -169,7 +169,9 @@ reportsRouter.post("/generate/:jobId", authenticate as unknown as RequestHandler
           name: reportData.job?.client_name ?? "Organization",
         },
         photos,
-        reportData.audit || []
+        reportData.audit || [],
+        undefined, // signatures - not used by this legacy route
+        undefined  // reportRunId - not used by this legacy route (no report_run created here)
       );
     } catch (pdfError: any) {
       console.error("PDF generation error:", pdfError);

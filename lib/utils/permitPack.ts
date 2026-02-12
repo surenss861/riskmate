@@ -88,7 +88,9 @@ export async function generatePermitPack(
       name: job?.client_name ?? 'Organization',
     },
     validPhotos,
-    reportData.audit || []
+    reportData.audit || [],
+    undefined, // signatures - not used by permit pack
+    undefined  // reportRunId - not used by permit pack
   )
 
   filesToAdd.push({

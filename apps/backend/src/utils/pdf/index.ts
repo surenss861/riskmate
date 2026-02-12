@@ -20,6 +20,7 @@ import {
   renderSignaturesAndCompliance,
   type PdfSignatureData,
 } from './sections/signatures';
+import { supabase } from '../lib/supabaseClient';
 
 // ============================================
 // MAIN GENERATOR
@@ -32,13 +33,46 @@ export async function generateRiskSnapshotPDF(
   photos: JobDocumentAsset[] = [],
   auditLogs: AuditLogEntry[] = [],
   /** When provided (e.g. from report_signatures for a report run), actual signatures are rendered in the PDF */
-  signatures?: PdfSignatureData[]
+  signatures?: PdfSignatureData[],
+  /** Report run ID to fetch signatures from report_signatures table */
+  reportRunId?: string
 ): Promise<Buffer> {
   const accent = organization.accent_color || '#F97316';
   const logoBuffer = await fetchLogoBuffer(organization.logo_url);
   const reportGeneratedAt = new Date();
   const jobStartDate = job.start_date ? new Date(job.start_date) : null;
   const jobEndDate = job.end_date ? new Date(job.end_date) : null;
+
+  // Fetch signatures from report_signatures table if reportRunId is provided
+  let fetchedSignatures: PdfSignatureData[] = [];
+  if (reportRunId) {
+    try {
+      const { data: signatureData, error: signatureError } = await supabase
+        .from('report_signatures')
+        .select('signer_name, signer_title, signature_role, signature_svg, signed_at, signature_hash')
+        .eq('report_run_id', reportRunId)
+        .eq('revoked', false)
+        .order('signed_at', { ascending: true });
+
+      if (signatureError) {
+        console.warn('Failed to fetch signatures for PDF:', signatureError);
+      } else if (signatureData && signatureData.length > 0) {
+        fetchedSignatures = signatureData.map((sig: any) => ({
+          signer_name: sig.signer_name,
+          signer_title: sig.signer_title,
+          signature_role: sig.signature_role,
+          signature_svg: sig.signature_svg,
+          signed_at: sig.signed_at,
+          signature_hash: sig.signature_hash,
+        }));
+      }
+    } catch (err) {
+      console.warn('Error fetching signatures for PDF:', err);
+    }
+  }
+
+  // Use fetched signatures if available, otherwise use passed-in signatures, or empty array
+  const finalSignatures = fetchedSignatures.length > 0 ? fetchedSignatures : (signatures || []);
 
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({
@@ -182,7 +216,7 @@ export async function generateRiskSnapshotPDF(
       margin,
       safeAddPage,
       estimatedTotalPages,
-      signatures
+      finalSignatures
     );
 
     // Final footer for last page

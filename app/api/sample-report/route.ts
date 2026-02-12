@@ -142,7 +142,9 @@ export async function GET() {
       SAMPLE_MITIGATIONS as any,
       SAMPLE_ORGANIZATION as any,
       SAMPLE_PHOTOS,
-      SAMPLE_AUDIT as any
+      SAMPLE_AUDIT as any,
+      undefined, // signatures - sample report has no signatures
+      undefined  // reportRunId - sample report has no report_run
     )
 
     // Return PDF with proper headers
