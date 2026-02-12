@@ -2492,8 +2492,7 @@ jobsRouter.post("/:id/proof-pack", authenticate, async (req: express.Request, re
       reportData.organization ?? { id: organization_id, name: reportData.job?.client_name ?? "Organization" },
       photos,
       reportData.audit || [],
-      undefined, // signatures - not used by this proof-pack route
-      undefined  // reportRunId - not used by this proof-pack route (no report_run created here)
+      undefined // reportRunId - not used by this proof-pack route (no report_run created here)
     );
 
     const pdfBase64 = pdfBuffer.toString("base64");

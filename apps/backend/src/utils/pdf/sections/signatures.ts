@@ -4,6 +4,7 @@ import { addSectionHeader } from '../helpers';
 import { formatDate } from '../utils';
 import { drawSignatureSvgPath } from '../../../../../../lib/utils/pdf/signatureHelpers';
 import { validateSignatureSvg } from '../../../../../../lib/utils/signatureValidation';
+import { supabase } from '../../../lib/supabaseClient';
 
 /** Signature data for PDF rendering (run's report_signatures) */
 export interface PdfSignatureData {
@@ -15,6 +16,9 @@ export interface PdfSignatureData {
   signature_hash?: string | null;
 }
 
+/** Optional: inject a custom fetcher for signatures (e.g. for tests). When omitted, uses Supabase. */
+export type FetchSignaturesForRun = (reportRunId: string) => Promise<PdfSignatureData[]>;
+
 const ROLE_LABELS: Record<string, string> = {
   prepared_by: 'Prepared By',
   reviewed_by: 'Reviewed By',
@@ -25,20 +29,56 @@ const ROLE_LABELS: Record<string, string> = {
 /** Required roles in display order; placeholders shown for missing roles */
 const REQUIRED_ROLES: (keyof typeof ROLE_LABELS)[] = ['prepared_by', 'reviewed_by', 'approved_by'];
 
+async function defaultFetchSignaturesForRun(reportRunId: string): Promise<PdfSignatureData[]> {
+  const { data, error } = await supabase
+    .from('report_signatures')
+    .select('signer_name, signer_title, signature_role, signature_svg, signed_at, signature_hash')
+    .eq('report_run_id', reportRunId)
+    .is('revoked_at', null)
+    .order('signed_at', { ascending: true });
+
+  if (error) {
+    console.warn('Failed to fetch signatures for PDF:', error);
+    return [];
+  }
+  if (!data?.length) return [];
+  return data.map((row: any) => ({
+    signer_name: row.signer_name,
+    signer_title: row.signer_title,
+    signature_role: row.signature_role,
+    signature_svg: row.signature_svg,
+    signed_at: row.signed_at,
+    signature_hash: row.signature_hash,
+  }));
+}
+
 /**
  * Renders Signatures & Compliance section.
- * When signatures array is provided, maps by role and renders each signature's SVG path(s),
- * signer name/title, signed_at, and signature_hash. Placeholders only for missing roles.
+ * When reportRunId is provided, fetches signatures from report_signatures for that run
+ * (revoked_at IS NULL, order by signed_at) and uses them; otherwise uses the optional
+ * signatures array. Optional fetchSignaturesForRun overrides the default Supabase query.
  */
-export function renderSignaturesAndCompliance(
+export async function renderSignaturesAndCompliance(
   doc: PDFKit.PDFDocument,
   pageWidth: number,
   pageHeight: number,
   margin: number,
   safeAddPage: (estimatedPages?: number) => void,
   estimatedTotalPages: number,
-  signatures?: PdfSignatureData[]
-) {
+  options?: {
+    reportRunId?: string;
+    signatures?: PdfSignatureData[];
+    fetchSignaturesForRun?: FetchSignaturesForRun;
+  }
+): Promise<void> {
+  let signatures: PdfSignatureData[] | undefined;
+  if (options?.reportRunId) {
+    const fetchFn = options.fetchSignaturesForRun ?? defaultFetchSignaturesForRun;
+    signatures = await fetchFn(options.reportRunId);
+  } else {
+    signatures = options?.signatures;
+  }
+
   safeAddPage(estimatedTotalPages);
   addSectionHeader(doc, 'Signatures & Compliance');
 

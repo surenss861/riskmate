@@ -16,11 +16,7 @@ import { renderHazardChecklist } from './sections/hazardChecklist';
 import { renderControlsApplied } from './sections/controlsApplied';
 import { renderTimeline } from './sections/timeline';
 import { renderPhotosSection } from './sections/photos';
-import {
-  renderSignaturesAndCompliance,
-  type PdfSignatureData,
-} from './sections/signatures';
-import { supabase } from '../../lib/supabaseClient';
+import { renderSignaturesAndCompliance } from './sections/signatures';
 
 // ============================================
 // MAIN GENERATOR
@@ -32,9 +28,7 @@ export async function generateRiskSnapshotPDF(
   organization: OrganizationData,
   photos: JobDocumentAsset[] = [],
   auditLogs: AuditLogEntry[] = [],
-  /** When provided (e.g. from report_signatures for a report run), actual signatures are rendered in the PDF */
-  signatures?: PdfSignatureData[],
-  /** Report run ID to fetch signatures from report_signatures table */
+  /** Report run ID to fetch signatures from report_signatures (revoked_at IS NULL, order by signed_at) */
   reportRunId?: string
 ): Promise<Buffer> {
   const accent = organization.accent_color || '#F97316';
@@ -42,37 +36,6 @@ export async function generateRiskSnapshotPDF(
   const reportGeneratedAt = new Date();
   const jobStartDate = job.start_date ? new Date(job.start_date) : null;
   const jobEndDate = job.end_date ? new Date(job.end_date) : null;
-
-  // Fetch signatures from report_signatures table if reportRunId is provided
-  let fetchedSignatures: PdfSignatureData[] = [];
-  if (reportRunId) {
-    try {
-      const { data: signatureData, error: signatureError } = await supabase
-        .from('report_signatures')
-        .select('signer_name, signer_title, signature_role, signature_svg, signed_at, signature_hash')
-        .eq('report_run_id', reportRunId)
-        .is('revoked_at', null)
-        .order('signed_at', { ascending: true });
-
-      if (signatureError) {
-        console.warn('Failed to fetch signatures for PDF:', signatureError);
-      } else if (signatureData && signatureData.length > 0) {
-        fetchedSignatures = signatureData.map((sig: any) => ({
-          signer_name: sig.signer_name,
-          signer_title: sig.signer_title,
-          signature_role: sig.signature_role,
-          signature_svg: sig.signature_svg,
-          signed_at: sig.signed_at,
-          signature_hash: sig.signature_hash,
-        }));
-      }
-    } catch (err) {
-      console.warn('Error fetching signatures for PDF:', err);
-    }
-  }
-
-  // Use fetched signatures if available, otherwise use passed-in signatures, or empty array
-  const finalSignatures = fetchedSignatures.length > 0 ? fetchedSignatures : (signatures || []);
 
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({
@@ -96,12 +59,8 @@ export async function generateRiskSnapshotPDF(
     const groupedTimeline = groupTimelineEvents(auditLogs);
     const { before, during, after } = categorizePhotos(photos, job.start_date, job.end_date);
 
-    // Signature section: slots = 3 required roles + any 'other'; rows = ceil(slots/2); pages ≈ ceil(rows/2)
-    const otherCount = finalSignatures?.filter((s) => s?.signature_role === 'other').length ?? 0;
-    const slotsLength = 3 + otherCount;
-    const sigCount = Math.max(slotsLength, 4);
-    const sigRows = Math.ceil(sigCount / 2);
-    const signaturePages = Math.ceil(sigRows / 2);
+    // Signature section: base estimate (signatures are fetched inside the section when reportRunId is set)
+    const signaturePages = 1;
 
     // Rough estimate for footer page numbers (include extra signature pages so footers match final count)
     const baseEstimatedPages =
@@ -217,20 +176,26 @@ export async function generateRiskSnapshotPDF(
       estimatedTotalPages
     );
 
-    renderSignaturesAndCompliance(
-      doc,
-      pageWidth,
-      pageHeight,
-      margin,
-      safeAddPage,
-      estimatedTotalPages,
-      finalSignatures
-    );
+    void (async () => {
+      try {
+        await renderSignaturesAndCompliance(
+          doc,
+          pageWidth,
+          pageHeight,
+          margin,
+          safeAddPage,
+          estimatedTotalPages,
+          reportRunId != null ? { reportRunId } : undefined
+        );
 
-    // Final footer for last page
-    addFooterInline(doc, organization, job.id, reportGeneratedAt, pageCount, pageCount);
+        // Final footer for last page
+        addFooterInline(doc, organization, job.id, reportGeneratedAt, pageCount, pageCount);
 
-    doc.end();
+        doc.end();
+      } catch (e) {
+        reject(e);
+      }
+    })();
   });
 }
 
