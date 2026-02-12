@@ -187,6 +187,11 @@ export async function GET(request: NextRequest) {
     const offset = Math.max(0, Number.isNaN(rawOffset) ? 0 : rawOffset)
 
     const statusFilter = searchParams.get('status') ?? null
+    
+    // Parse and validate packet_type (default to 'insurance')
+    const rawPacketType = searchParams.get('packet_type')
+    const validPacketTypes = ['insurance', 'audit', 'incident', 'client_compliance']
+    const packetType = rawPacketType && validPacketTypes.includes(rawPacketType) ? rawPacketType : 'insurance'
 
     // Build base query for both count and data (same filters)
     const baseFilter = supabase
@@ -194,6 +199,7 @@ export async function GET(request: NextRequest) {
       .select('*', { count: 'exact' })
       .eq('job_id', jobId)
       .eq('organization_id', userData.organization_id)
+      .eq('packet_type', packetType)
       .order('generated_at', { ascending: false })
 
     let query = baseFilter

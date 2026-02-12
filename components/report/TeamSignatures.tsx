@@ -149,7 +149,7 @@ export function TeamSignatures({
     }
 
     loadData()
-  }, [jobId, reportRunId, onReportRunCreated])
+  }, [jobId, reportRunId])
 
   // Notify parent of signature count for tab badge (updates when signatures load or change)
   useEffect(() => {
