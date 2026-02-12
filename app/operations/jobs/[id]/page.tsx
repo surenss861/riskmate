@@ -401,22 +401,23 @@ export default function JobDetailPage() {
     return () => { cancelled = true }
   }, [activeTab, jobId])
 
-  // Fetch initial signature count for tab badge (when no run: 0/3)
+  // Fetch initial signature count for tab badge during page load
   useEffect(() => {
     if (!jobId) return
     let cancelled = false
     const fetchSignatureCount = async () => {
       try {
-        // Fetch multiple runs to reliably find a non-superseded one
-        const runsRes = await fetch(`/api/reports/runs?job_id=${jobId}&limit=5`)
+        // Fetch the active insurance report run
+        const runsRes = await fetch(`/api/reports/runs?job_id=${jobId}&packet_type=insurance&limit=1`)
         if (!runsRes.ok || cancelled) return
         const { data: runs } = await runsRes.json()
         if (!runs?.length) {
+          // No run exists yet, default to 0/3
           if (!cancelled) setSignatureCount({ signed: 0, total: 3 })
           return
         }
-        // Select first non-superseded run, or fall back to first run
-        const run = runs.find((r: { status: string }) => r.status !== 'superseded') || runs[0]
+        // Use the first insurance run
+        const run = runs[0]
         const sigRes = await fetch(`/api/reports/runs/${run.id}/signatures`)
         if (!sigRes.ok || cancelled) return
         const { data: sigs } = await sigRes.json()
