@@ -13,6 +13,7 @@
     "dev:frontend": "next dev",
     "dev:backend": "pnpm --dir apps/backend dev",
     "build": "next build",
+    "postbuild": "node scripts/copy-pdfkit-afm.js",
     "start": "next start",
     "lint": "next lint",
     "type-check": "tsc --noEmit",

@@ -5,9 +5,7 @@
 
 import PDFDocument from 'pdfkit';
 import { PassThrough } from 'stream';
-
-// Import the signature rendering function (we'll need to export helper functions for testing)
-// For now, we'll create a test version that mirrors the implementation
+import { extractAllPathDs, getViewBox, drawSignatureSvgPath } from '../lib/utils/pdf/signatureHelpers';
 
 interface PdfSignatureData {
   signer_name: string;
@@ -16,45 +14,6 @@ interface PdfSignatureData {
   signature_svg: string;
   signed_at: string;
   signature_hash?: string | null;
-}
-
-/** Extract all path d attributes and polyline points from SVG string */
-function extractAllPathDs(svg: string): string[] {
-  if (!svg || typeof svg !== 'string') return [];
-  const result: string[] = [];
-  
-  // Extract <path d="..."> attributes
-  const pathRegex = /d\s*=\s*["']([^"']+)["']/gi;
-  let match: RegExpExecArray | null;
-  while ((match = pathRegex.exec(svg)) !== null) {
-    const d = match[1].trim();
-    if (d) result.push(d);
-  }
-  
-  // Convert <polyline points="..."> to path d syntax
-  const polylineRegex = /<polyline[^>]*points\s*=\s*["']([^"']+)["']/gi;
-  while ((match = polylineRegex.exec(svg)) !== null) {
-    const pointsStr = match[1].trim();
-    const points = pointsStr.split(/\s+/).map((p) => {
-      const [x, y] = p.split(',').map(Number);
-      return { x: Number.isFinite(x) ? x : 0, y: Number.isFinite(y) ? y : 0 };
-    });
-    if (points.length >= 2) {
-      const d = 'M ' + points.map((pt, i) => (i === 0 ? `${pt.x} ${pt.y}` : `L ${pt.x} ${pt.y}`)).join(' ');
-      result.push(d);
-    }
-  }
-  
-  return result;
-}
-
-/** Parse viewBox from SVG to get width/height for scaling */
-function getViewBox(svg: string): { w: number; h: number } | null {
-  const match = svg.match(/viewBox\s*=\s*["']?\s*[\d.]+\s+[\d.]+\s+([\d.]+)\s+([\d.]+)["']?/i);
-  if (!match) return null;
-  const w = parseFloat(match[1]);
-  const h = parseFloat(match[2]);
-  return Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0 ? { w, h } : null;
 }
 
 describe('PDF Signature Rendering', () => {
@@ -196,19 +155,8 @@ describe('PDF Signature Rendering', () => {
       expect(paths.length).toBeGreaterThan(0);
       expect(viewBox).toBeTruthy();
       
-      doc.save();
-      doc.translate(50, 100);
-      doc.scale(1);
-      
-      for (const pathD of paths) {
-        try {
-          doc.path(pathD).stroke();
-        } catch (e) {
-          // Skip malformed paths
-        }
-      }
-      
-      doc.restore();
+      // Use the shared rendering helper
+      drawSignatureSvgPath(doc, signatureSvg, 50, 100, 200, 50);
       doc.end();
 
       stream.on('end', () => {
@@ -233,14 +181,8 @@ describe('PDF Signature Rendering', () => {
       
       doc.fontSize(14).text('Multi-Stroke Signature Test', 50, 50);
       
-      doc.save();
-      doc.translate(50, 100);
-      
-      for (const pathD of paths) {
-        doc.path(pathD).stroke();
-      }
-      
-      doc.restore();
+      // Use the shared rendering helper
+      drawSignatureSvgPath(doc, multiStrokeSvg, 50, 100, 200, 50);
       doc.end();
 
       stream.on('end', () => {
@@ -268,17 +210,8 @@ describe('PDF Signature Rendering', () => {
       
       doc.fontSize(14).text('Malformed SVG Test', 50, 50);
       
-      // Rendering might fail, but should be caught
-      doc.save();
-      for (const pathD of paths) {
-        try {
-          doc.path(pathD).stroke();
-        } catch (e) {
-          // Expected to fail, but caught
-          expect(e).toBeTruthy();
-        }
-      }
-      doc.restore();
+      // Use the shared rendering helper (handles errors internally)
+      drawSignatureSvgPath(doc, malformedSvg, 50, 100, 200, 50);
       doc.end();
     });
   });

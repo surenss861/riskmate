@@ -7,6 +7,7 @@ import PDFDocument from 'pdfkit';
 import { PassThrough } from 'stream';
 import fs from 'fs';
 import path from 'path';
+import { extractAllPathDs, getViewBox, drawSignatureSvgPath } from '../lib/utils/pdf/signatureHelpers';
 
 describe('PDF Signature Integration', () => {
   const outputDir = path.join(__dirname, '../test-output');
@@ -95,75 +96,13 @@ describe('PDF Signature Integration', () => {
         .text(sig.signer_name, boxX + 10, boxY + 25)
         .text(sig.signer_title, boxX + 10, boxY + 40);
 
-      // Render signature SVG
-      const extractAllPathDs = (svg: string): string[] => {
-        if (!svg || typeof svg !== 'string') return [];
-        const result: string[] = [];
-        
-        const pathRegex = /d\s*=\s*["']([^"']+)["']/gi;
-        let match: RegExpExecArray | null;
-        while ((match = pathRegex.exec(svg)) !== null) {
-          const d = match[1].trim();
-          if (d) result.push(d);
-        }
-        
-        const polylineRegex = /<polyline[^>]*points\s*=\s*["']([^"']+)["']/gi;
-        while ((match = polylineRegex.exec(svg)) !== null) {
-          const pointsStr = match[1].trim();
-          const points = pointsStr.split(/\s+/).map((p) => {
-            const [x, y] = p.split(',').map(Number);
-            return { x: Number.isFinite(x) ? x : 0, y: Number.isFinite(y) ? y : 0 };
-          });
-          if (points.length >= 2) {
-            const d = 'M ' + points.map((pt, i) => (i === 0 ? `${pt.x} ${pt.y}` : `L ${pt.x} ${pt.y}`)).join(' ');
-            result.push(d);
-          }
-        }
-        
-        return result;
-      };
-
-      const getViewBox = (svg: string): { w: number; h: number } | null => {
-        const match = svg.match(/viewBox\s*=\s*["']?\s*[\d.]+\s+[\d.]+\s+([\d.]+)\s+([\d.]+)["']?/i);
-        if (!match) return null;
-        const w = parseFloat(match[1]);
-        const h = parseFloat(match[2]);
-        return Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0 ? { w, h } : null;
-      };
-
-      const paths = extractAllPathDs(sig.signature_svg);
-      const viewBox = getViewBox(sig.signature_svg);
+      // Render signature SVG using shared helper
+      const pathBoxX = boxX + 10;
+      const pathBoxY = boxY + 55;
+      const pathBoxW = boxWidth - 20;
+      const pathBoxH = 25;
       
-      if (paths.length > 0) {
-        const srcW = viewBox?.w ?? 400;
-        const srcH = viewBox?.h ?? 100;
-        const pathBoxX = boxX + 10;
-        const pathBoxY = boxY + 55;
-        const pathBoxW = boxWidth - 20;
-        const pathBoxH = 25;
-        
-        const pad = 2;
-        const scaleX = (pathBoxW - pad * 2) / srcW;
-        const scaleY = (pathBoxH - pad * 2) / srcH;
-        const scale = Math.min(scaleX, scaleY, 1.2);
-        const offsetX = pathBoxX + pad + (pathBoxW - pad * 2 - srcW * scale) / 2;
-        const offsetY = pathBoxY + pad + (pathBoxH - pad * 2 - srcH * scale) / 2;
-
-        doc.save();
-        doc.translate(offsetX, offsetY);
-        doc.scale(scale);
-        doc.strokeColor('#000000').lineWidth(1);
-        
-        for (const pathD of paths) {
-          try {
-            doc.path(pathD).stroke();
-          } catch (e) {
-            // Skip malformed paths
-          }
-        }
-        
-        doc.restore();
-      }
+      drawSignatureSvgPath(doc, sig.signature_svg, pathBoxX, pathBoxY, pathBoxW, pathBoxH);
 
       // Add timestamp and hash
       doc
@@ -237,50 +176,15 @@ describe('PDF Signature Integration', () => {
         .font('Helvetica-Bold')
         .text(testCase.name, 50, y);
       
-      // Extract and render signature
-      const extractAllPathDs = (svg: string): string[] => {
-        if (!svg || typeof svg !== 'string') return [];
-        const result: string[] = [];
-        
-        const pathRegex = /d\s*=\s*["']([^"']+)["']/gi;
-        let match: RegExpExecArray | null;
-        while ((match = pathRegex.exec(svg)) !== null) {
-          const d = match[1].trim();
-          if (d) result.push(d);
-        }
-        
-        const polylineRegex = /<polyline[^>]*points\s*=\s*["']([^"']+)["']/gi;
-        while ((match = polylineRegex.exec(svg)) !== null) {
-          const pointsStr = match[1].trim();
-          const points = pointsStr.split(/\s+/).map((p) => {
-            const [x, y] = p.split(',').map(Number);
-            return { x: Number.isFinite(x) ? x : 0, y: Number.isFinite(y) ? y : 0 };
-          });
-          if (points.length >= 2) {
-            const d = 'M ' + points.map((pt, i) => (i === 0 ? `${pt.x} ${pt.y}` : `L ${pt.x} ${pt.y}`)).join(' ');
-            result.push(d);
-          }
-        }
-        
-        return result;
-      };
-
+      // Extract and render signature using shared helper
       const paths = extractAllPathDs(testCase.svg);
       
       if (paths.length > 0) {
+        // For demo purposes, we want to control scale manually
         doc.save();
         doc.translate(200, y - 5);
         doc.scale(0.5);
-        doc.strokeColor('#000000').lineWidth(2);
-        
-        for (const pathD of paths) {
-          try {
-            doc.path(pathD).stroke();
-          } catch (e) {
-            // Skip malformed paths
-          }
-        }
-        
+        drawSignatureSvgPath(doc, testCase.svg, 0, 0, 400, 100, '#000000', 2);
         doc.restore();
       }
       
