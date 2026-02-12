@@ -459,6 +459,24 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
               },
             }
           }
+          // Detect signature_proof and overwrite its data with real run/signature data
+          if (section.type === 'signature_proof') {
+            return {
+              ...section,
+              data: {
+                reportRunId: safeRunId,
+                reportRunHash: reportRun.data_hash || documentHash,
+                reportRunCreatedAt: safeGeneratedAt,
+                signatures: signatures,
+                isDraft: isDraft,
+                requiredRoles: ['prepared_by', 'reviewed_by', 'approved_by'],
+              },
+              meta: {
+                title: 'Signature Proof & Attestation',
+                empty: false, // Override empty flag - now has real data
+              },
+            }
+          }
           // Ensure all sections have safe meta.title
           return {
             ...section,
@@ -477,22 +495,6 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
           }
         }
       }).filter((s): s is NonNullable<typeof s> => s !== null)
-      
-      // Append signature proof section at the end (after integrity_verification)
-      sectionsWithIntegrity.push({
-        type: 'signature_proof',
-        data: {
-          reportRunId: safeRunId,
-          reportRunHash: reportRun.data_hash || documentHash,
-          reportRunCreatedAt: safeGeneratedAt,
-          signatures: signatures,
-          isDraft: isDraft,
-          requiredRoles: ['prepared_by', 'reviewed_by', 'approved_by'],
-        },
-        meta: {
-          title: 'Signature Proof & Attestation',
-        },
-      })
     } catch (e) {
       console.warn('[PACKET-PRINT] Sections processing failed (non-fatal):', e)
       sectionsWithIntegrity = []

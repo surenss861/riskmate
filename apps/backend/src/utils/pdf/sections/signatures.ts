@@ -62,6 +62,16 @@ export function renderSignaturesAndCompliance(
     }
   }
   const slots = REQUIRED_ROLES.map((role) => ({ role, sig: signaturesByRole.get(role) }));
+  
+  // Append any signatures with role='other' (or additional signatures per role)
+  if (signatures?.length) {
+    for (const s of signatures) {
+      if (s?.signature_role === 'other') {
+        slots.push({ role: 'other', sig: s });
+      }
+    }
+  }
+  
   const count = Math.max(slots.length, 4);
 
   for (let i = 0; i < count; i++) {
