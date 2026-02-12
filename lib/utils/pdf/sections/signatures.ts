@@ -68,10 +68,48 @@ export function renderSignaturesAndCompliance(
   const sigBoxHeight = 90;
   const sigBoxWidth = (pageWidth - margin * 2 - 20) / 2;
   const sigSpacing = 20;
-  const count = signatures?.length ? Math.min(signatures.length, 4) : 4;
+
+  // Map signatures by role for easy lookup
+  const sigsByRole = new Map<string, PdfSignatureData>();
+  if (signatures) {
+    for (const sig of signatures) {
+      sigsByRole.set(sig.signature_role, sig);
+    }
+  }
+
+  // Build fixed slot list: always show required roles first, then 'other' signatures
+  const requiredRoles: Array<'prepared_by' | 'reviewed_by' | 'approved_by'> = [
+    'prepared_by',
+    'reviewed_by',
+    'approved_by',
+  ];
+  const slots: Array<PdfSignatureData | { role: string; placeholder: true }> = [];
+
+  // Add required roles (with signature or placeholder)
+  for (const role of requiredRoles) {
+    const sig = sigsByRole.get(role);
+    if (sig) {
+      slots.push(sig);
+    } else {
+      slots.push({ role, placeholder: true });
+    }
+  }
+
+  // Add 'other' signatures after required roles
+  if (signatures) {
+    for (const sig of signatures) {
+      if (sig.signature_role === 'other') {
+        slots.push(sig);
+      }
+    }
+  }
+
+  // Render up to 4 slots (2 rows × 2 columns)
+  const count = Math.min(slots.length, 4);
 
   for (let i = 0; i < count; i++) {
-    const sig = signatures?.[i];
+    const slot = slots[i];
+    const sig = 'placeholder' in slot ? undefined : slot;
     const row = Math.floor(i / 2);
     const col = i % 2;
     const sigY = sigBoxY + row * (sigBoxHeight + sigSpacing);
@@ -111,10 +149,12 @@ export function renderSignaturesAndCompliance(
           .font(STYLES.fonts.body)
           .text(sig.signer_name, x + 15, y + 38, { width: sigBoxWidth - 30 })
           .text(sig.signer_title, x + 15, y + 52, { width: sigBoxWidth - 30 });
+        let signatureValid = false;
         if (sig.signature_svg) {
           // Validate signature before rendering
           const validation = validateSignatureSvg(sig.signature_svg);
           if (validation.valid) {
+            signatureValid = true;
             const pathBoxX = x + 15;
             const pathBoxY = y + 54;
             const pathBoxW = sigBoxWidth - 30;
@@ -144,17 +184,27 @@ export function renderSignaturesAndCompliance(
             .font(STYLES.fonts.light)
             .text(`Hash: ${hashStr}`, x + 15, y + 78, { width: sigBoxWidth - 30 });
         }
-        doc
-          .fillColor(STYLES.colors.secondaryText)
-          .fontSize(8)
-          .font(STYLES.fonts.light)
-          .text('Signature captured (SVG on file)', x + 15, y + 86, { width: sigBoxWidth - 30 });
+        // Only show "Signature captured" status when SVG is valid
+        if (signatureValid) {
+          doc
+            .fillColor(STYLES.colors.secondaryText)
+            .fontSize(8)
+            .font(STYLES.fonts.light)
+            .text('Signature captured (SVG on file)', x + 15, y + 86, { width: sigBoxWidth - 30 });
+        }
       } else {
+        // Render placeholder with role label if available
+        const placeholderSlot = slots[i];
+        const roleLabel =
+          'placeholder' in placeholderSlot && placeholderSlot.role
+            ? ROLE_LABELS[placeholderSlot.role] ?? 'Signature'
+            : 'Signature';
+
         doc
           .fillColor(STYLES.colors.secondaryText)
           .fontSize(STYLES.sizes.caption)
           .font(STYLES.fonts.light)
-          .text('Signature', x + 15, y + 25)
+          .text(roleLabel, x + 15, y + 25)
           .fillColor(STYLES.colors.primaryText)
           .fontSize(STYLES.sizes.body)
           .font(STYLES.fonts.body)

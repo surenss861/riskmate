@@ -28,19 +28,29 @@ export function extractAllPathDs(svg: string): string[] {
   return result;
 }
 
-/** Parse viewBox from SVG to get width/height for scaling (e.g. viewBox="0 0 400 100") */
-export function getViewBox(svg: string): { w: number; h: number } | null {
-  const match = svg.match(/viewBox\s*=\s*["']?\s*[\d.]+\s+[\d.]+\s+([\d.]+)\s+([\d.]+)["']?/i);
+/** Parse viewBox from SVG to get full dimensions (e.g. viewBox="minX minY width height") */
+export function getViewBox(svg: string): { minX: number; minY: number; w: number; h: number } | null {
+  const match = svg.match(/viewBox\s*=\s*["']?\s*([\d.-]+)\s+([\d.-]+)\s+([\d.]+)\s+([\d.]+)["']?/i);
   if (!match) return null;
-  const w = parseFloat(match[1]);
-  const h = parseFloat(match[2]);
-  return Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0 ? { w, h } : null;
+  const minX = parseFloat(match[1]);
+  const minY = parseFloat(match[2]);
+  const w = parseFloat(match[3]);
+  const h = parseFloat(match[4]);
+  return Number.isFinite(minX) &&
+    Number.isFinite(minY) &&
+    Number.isFinite(w) &&
+    Number.isFinite(h) &&
+    w > 0 &&
+    h > 0
+    ? { minX, minY, w, h }
+    : null;
 }
 
 /**
  * Draw signature SVG path(s) into the given box. All path/polyline strokes are collected,
  * scaled to fit the box (viewBox-based), and drawn so multi-stroke signatures render fully.
  * PDFKit accepts SVG path syntax in .path().
+ * Handles non-zero viewBox origins by translating paths before scaling.
  */
 export function drawSignatureSvgPath(
   doc: PDFKit.PDFDocument,
@@ -56,6 +66,8 @@ export function drawSignatureSvgPath(
   if (pathDs.length === 0) return;
 
   const viewBox = getViewBox(signatureSvg);
+  const minX = viewBox?.minX ?? 0;
+  const minY = viewBox?.minY ?? 0;
   const srcW = viewBox?.w ?? 400;
   const srcH = viewBox?.h ?? 100;
   const pad = 2;
@@ -66,8 +78,12 @@ export function drawSignatureSvgPath(
   const offsetY = boxY + pad + (boxH - pad * 2 - srcH * scale) / 2;
 
   doc.save();
+  // Translate to target position
   doc.translate(offsetX, offsetY);
+  // Scale to fit box
   doc.scale(scale);
+  // Translate by -minX and -minY to handle non-zero viewBox origins
+  doc.translate(-minX, -minY);
   doc
     .strokeColor(strokeColor)
     .lineWidth(lineWidth);
