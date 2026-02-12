@@ -29,6 +29,7 @@ export type SectionType =
   | 'compliance_status'
   | 'requirements_evidence_matrix'
   | 'integrity_verification'
+  | 'signature_proof'
 
 export interface PacketDefinition {
   /** Display title for the packet */
