@@ -96,15 +96,23 @@ export async function generateRiskSnapshotPDF(
     const groupedTimeline = groupTimelineEvents(auditLogs);
     const { before, during, after } = categorizePhotos(photos, job.start_date, job.end_date);
 
-    // Rough estimate for footer page numbers
-    const estimatedTotalPages =
+    // Signature section: slots = 3 required roles + any 'other'; rows = ceil(slots/2); pages ≈ ceil(rows/2)
+    const otherCount = finalSignatures?.filter((s) => s?.signature_role === 'other').length ?? 0;
+    const slotsLength = 3 + otherCount;
+    const sigCount = Math.max(slotsLength, 4);
+    const sigRows = Math.ceil(sigCount / 2);
+    const signaturePages = Math.ceil(sigRows / 2);
+
+    // Rough estimate for footer page numbers (include extra signature pages so footers match final count)
+    const baseEstimatedPages =
       1 + // cover
       1 + // executive
       (riskScore?.factors?.length ? 1 : 0) +
       (mitigationItems.length ? 1 : 0) +
       (groupedTimeline.length ? 1 : 0) +
       (photos.length ? Math.ceil(photos.length / 9) : 0) +
-      1; // signatures
+      1; // signatures (base one)
+    const estimatedTotalPages = baseEstimatedPages + Math.max(0, signaturePages - 1);
 
     const safeAddPage = (estimatedPages?: number) => {
       // Add footer to current page before switching (skip first page)

@@ -191,6 +191,29 @@ export function renderSignaturesAndCompliance(
   }
 
   doc.y = doc.y + 40;
+
+  const complianceText =
+    'This report was generated through Riskmate and includes all safety, hazard, and control ' +
+    'documentation submitted by the assigned crew. All data is timestamped and stored securely. ' +
+    'This documentation serves as evidence of compliance with safety protocols and regulatory requirements.';
+
+  // Projected height of Compliance Statement (title + gap + text)
+  doc.fontSize(STYLES.sizes.h3).font(STYLES.fonts.header);
+  const titleHeight = doc.heightOfString('Compliance Statement', {
+    width: pageWidth - margin * 2,
+  });
+  doc.fontSize(STYLES.sizes.body).font(STYLES.fonts.light);
+  const textHeight = doc.heightOfString(complianceText, {
+    width: pageWidth - margin * 2,
+    lineGap: 4,
+  });
+  const projectedHeight = titleHeight + 24 + textHeight;
+  const footerSpace = 60;
+  const printableBottom = pageHeight - margin - footerSpace;
+  if (doc.y + projectedHeight > printableBottom) {
+    safeAddPage(estimatedTotalPages);
+  }
+
   const complianceY = doc.y;
 
   doc
@@ -198,11 +221,6 @@ export function renderSignaturesAndCompliance(
     .fontSize(STYLES.sizes.h3)
     .font(STYLES.fonts.header)
     .text('Compliance Statement', margin, complianceY);
-
-  const complianceText =
-    'This report was generated through Riskmate and includes all safety, hazard, and control ' +
-    'documentation submitted by the assigned crew. All data is timestamped and stored securely. ' +
-    'This documentation serves as evidence of compliance with safety protocols and regulatory requirements.';
 
   doc
     .fillColor(STYLES.colors.secondaryText)
