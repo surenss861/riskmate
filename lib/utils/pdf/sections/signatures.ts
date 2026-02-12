@@ -104,15 +104,18 @@ export function renderSignaturesAndCompliance(
     }
   }
 
-  // Render up to 4 slots (2 rows × 2 columns)
-  const count = Math.min(slots.length, 4);
+  // Render all slots (dynamically add pages as needed)
+  const count = slots.length;
+  let currentPageStartY = sigBoxY; // Track where signatures start on current page
+  let rowOnCurrentPage = 0; // Track row number relative to current page
 
   for (let i = 0; i < count; i++) {
     const slot = slots[i];
     const sig = 'placeholder' in slot ? undefined : slot;
-    const row = Math.floor(i / 2);
     const col = i % 2;
-    const sigY = sigBoxY + row * (sigBoxHeight + sigSpacing);
+    
+    // Calculate position based on current page context
+    const sigY = currentPageStartY + rowOnCurrentPage * (sigBoxHeight + sigSpacing);
     const sigX = margin + col * (sigBoxWidth + sigSpacing);
 
     const drawBox = (x: number, y: number) => {
@@ -217,19 +220,28 @@ export function renderSignaturesAndCompliance(
       }
     };
 
+    // Check if we need a new page before drawing
     if (sigY + sigBoxHeight > pageHeight - 200) {
       safeAddPage();
-      const newY = STYLES.spacing.sectionTop + 40;
-      const adjustedRow = Math.floor(i / 2);
-      const adjustedY = newY + adjustedRow * (sigBoxHeight + sigSpacing);
-      const adjustedX = margin + col * (sigBoxWidth + sigSpacing);
-      drawBox(adjustedX, adjustedY);
+      currentPageStartY = STYLES.spacing.sectionTop + 40;
+      rowOnCurrentPage = 0;
+      const newSigY = currentPageStartY;
+      const newSigX = margin + col * (sigBoxWidth + sigSpacing);
+      drawBox(newSigX, newSigY);
+      doc.y = newSigY + sigBoxHeight;
     } else {
       drawBox(sigX, sigY);
+      doc.y = sigY + sigBoxHeight;
+    }
+
+    // Move to next row after rendering both columns (right column)
+    if (col === 1) {
+      rowOnCurrentPage++;
     }
   }
 
-  doc.y = sigBoxY + 2 * (sigBoxHeight + sigSpacing) + 30;
+  // Position after all signatures with spacing for compliance section
+  doc.y = doc.y + 30;
   const complianceY = doc.y;
 
   // ============================================

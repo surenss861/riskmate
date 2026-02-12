@@ -344,13 +344,12 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
 
     const logoUrl = organization?.logo_url || null
     const organizationName = organization?.name || 'Riskmate'
-    const isDraft = reportRun.status === 'draft' || reportRun.status === 'pending'
 
     if (debugMode) {
-      console.log('[PACKET-PRINT] Organization loaded:', {
+      console.log('[PACKET-PRINT] Organization loaded (before isDraft):', {
         name: organizationName,
         hasLogo: !!logoUrl,
-        isDraft
+        status: reportRun.status
       })
     }
     
@@ -434,6 +433,21 @@ export default async function PacketPrintPage({ params, searchParams }: PacketPr
     } catch (sigError: any) {
       console.warn('[PACKET-PRINT] Signatures fetch failed (non-fatal):', sigError?.message)
       signatures = []
+    }
+
+    // Compute isDraft: treat as draft if status is not final/complete/superseded OR if required roles are not fully signed
+    const requiredRoles = ['prepared_by', 'reviewed_by', 'approved_by']
+    const signedRoles = new Set(signatures.map((sig: any) => sig.signature_role))
+    const allRequiredRolesSigned = requiredRoles.every(role => signedRoles.has(role))
+    const isDraft = (reportRun.status !== 'complete' && reportRun.status !== 'final' && reportRun.status !== 'superseded') || !allRequiredRolesSigned
+
+    if (debugMode) {
+      console.log('[PACKET-PRINT] Draft status computed:', {
+        status: reportRun.status,
+        signedRoles: Array.from(signedRoles),
+        allRequiredRolesSigned,
+        isDraft
+      })
     }
 
     // Step 2: Build sectionsWithIntegrity with safe operations
