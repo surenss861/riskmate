@@ -407,8 +407,8 @@ export default function JobDetailPage() {
     let cancelled = false
     const fetchSignatureCount = async () => {
       try {
-        // Fetch the active insurance report run
-        const runsRes = await fetch(`/api/reports/runs?job_id=${jobId}&packet_type=insurance&limit=1`)
+        // Fetch all insurance report runs (not just limit=1) to find the active one
+        const runsRes = await fetch(`/api/reports/runs?job_id=${jobId}&packet_type=insurance`)
         if (!runsRes.ok || cancelled) return
         const { data: runs } = await runsRes.json()
         if (!runs?.length) {
@@ -416,9 +416,9 @@ export default function JobDetailPage() {
           if (!cancelled) setSignatureCount({ signed: 0, total: 3 })
           return
         }
-        // Use the first insurance run
-        const run = runs[0]
-        const sigRes = await fetch(`/api/reports/runs/${run.id}/signatures`)
+        // Find the latest non-superseded run (fallback to first if all superseded)
+        const activeRun = runs.find((r: { status: string }) => r.status !== 'superseded') || runs[0]
+        const sigRes = await fetch(`/api/reports/runs/${activeRun.id}/signatures`)
         if (!sigRes.ok || cancelled) return
         const { data: sigs } = await sigRes.json()
         // Count only required signatures (prepared_by, reviewed_by, approved_by)

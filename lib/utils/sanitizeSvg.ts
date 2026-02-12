@@ -1,19 +1,16 @@
-import DOMPurify from 'dompurify'
+import DOMPurify from 'isomorphic-dompurify'
 
 /**
  * Sanitizes SVG content to prevent XSS attacks while preserving safe SVG elements.
  * Removes scripts, event handlers, and other potentially dangerous content.
+ * Works on both server-side (SSR/PDF generation) and client-side.
  * 
  * @param svgString - The raw SVG string to sanitize
  * @returns Sanitized SVG string safe for rendering via dangerouslySetInnerHTML
  */
 export function sanitizeSvg(svgString: string): string {
-  if (typeof window === 'undefined') {
-    // Server-side: return empty string (SVG will be sanitized on client)
-    return ''
-  }
-
   // Configure DOMPurify to allow SVG elements but strip scripts and event handlers
+  // isomorphic-dompurify automatically uses JSDOM on the server and the browser DOM on the client
   const sanitized = DOMPurify.sanitize(svgString, {
     USE_PROFILES: { svg: true, svgFilters: true },
     ADD_TAGS: ['svg', 'path', 'g', 'circle', 'rect', 'line', 'polyline', 'polygon', 'ellipse', 'text'],
