@@ -21,6 +21,7 @@ interface Signature {
   signer_user_id?: string | null
   ip_address?: string | null
   user_agent?: string | null
+  attestation_text?: string | null
 }
 
 interface ReportRun {
@@ -320,6 +321,7 @@ export function TeamSignatures({
         signer_name: data.signerName,
         signer_title: data.signerTitle,
         attestationAccepted: true,
+        attestation_text: data.attestationText,
       }
 
       const response = await fetch(`/api/reports/runs/${reportRunId}/signatures`, {

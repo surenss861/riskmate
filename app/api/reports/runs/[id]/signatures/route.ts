@@ -33,11 +33,24 @@ export async function POST(
       signature_svg,
       signer_user_id = user.id, // Default to current user
       attestationAccepted = false, // Must be explicitly true
+      attestation_text: bodyAttestationText,
     } = body
 
     if (!signer_name || !signer_title || !signature_role || !signature_svg) {
       return NextResponse.json(
         { message: 'Missing required fields: signer_name, signer_title, signature_role, signature_svg' },
+        { status: 400 }
+      )
+    }
+
+    // Validate attestation_text: must be non-empty string (signer-accepted wording persisted for proof)
+    const attestationText =
+      typeof bodyAttestationText === 'string' && bodyAttestationText.trim().length > 0
+        ? bodyAttestationText.trim()
+        : null
+    if (!attestationText) {
+      return NextResponse.json(
+        { message: 'attestation_text is required and must be a non-empty string' },
         { status: 400 }
       )
     }
@@ -235,9 +248,7 @@ export async function POST(
       signerEmail = signerUser?.email || null
     }
 
-    // Create signature
-    // Store the exact attestation text for tamper-evident proof
-    const attestationText = 'I attest this report is accurate to the best of my knowledge.'
+    // Create signature (attestation_text validated above; store signer-accepted wording for tamper-evident proof)
     const { data: signature, error: createError } = await supabase
       .from('report_signatures')
       .insert({
@@ -264,10 +275,11 @@ export async function POST(
       )
     }
 
-    // Attach email to response
+    // Attach email and ensure attestation_text is in response for downstream views (e.g. SignatureProofSection)
     const signatureWithEmail = {
       ...signature,
       signer_email: signerEmail,
+      attestation_text: signature?.attestation_text ?? attestationText,
     }
 
     // Log signature creation

@@ -10,6 +10,8 @@ export interface SignatureData {
   signatureSvg: string
   signerName: string
   signerTitle: string
+  /** Exact attestation statement text the signer accepted (persisted for proof). */
+  attestationText: string
 }
 
 interface SignatureCaptureProps {
@@ -29,6 +31,9 @@ const ROLE_LABELS: Record<string, string> = {
   approved_by: 'Approved By',
   other: 'Signature',
 }
+
+/** Attestation statement shown to and accepted by the signer; sent to API and stored for proof. */
+const ATTESTATION_STATEMENT = 'I attest this report is accurate to the best of my knowledge.'
 
 export function SignatureCapture({
   onSave,
@@ -213,6 +218,7 @@ export function SignatureCapture({
       signatureSvg: svg,
       signerName: signerName.trim(),
       signerTitle: signerTitle.trim(),
+      attestationText: ATTESTATION_STATEMENT,
     })
   }
 
@@ -293,7 +299,7 @@ export function SignatureCapture({
                 required
               />
               <label htmlFor="attestation" className="text-sm text-white/90 flex-1">
-                <span className="font-medium">I attest this report is accurate to the best of my knowledge.</span>
+                <span className="font-medium">{ATTESTATION_STATEMENT}</span>
                 <span className="text-white/60 block mt-1">
                   By signing, you confirm the information in this report run reflects the conditions observed and documented.
                 </span>
