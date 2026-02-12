@@ -131,7 +131,7 @@ async function buildSectionData({
     case 'table_of_contents':
       // Generate TOC from packet definition sections
       const tocSections = packetDef.sections
-        .filter((s: SectionType) => s !== 'table_of_contents' && s !== 'integrity_verification')
+        .filter((s: SectionType) => s !== 'table_of_contents' && s !== 'integrity_verification' && s !== 'signature_proof')
         .map((sectionType: SectionType) => {
           // Map section types to titles
           const titleMap: Record<string, string> = {
@@ -154,6 +154,7 @@ async function buildSectionData({
             accountability_timeline: 'Accountability Timeline',
             mitigation_checklist: 'Mitigation Checklist',
             requirements_evidence_matrix: 'Requirements vs Evidence',
+            signature_proof: 'Signature Proof & Attestation',
           }
           const safeSectionType = String(sectionType || '')
           return {
@@ -603,6 +604,32 @@ async function buildSectionData({
           emptyMessage: 'No checklist items defined for this job.',
         },
       }
+
+    case 'signature_proof': {
+      // Fetch signatures from report_runs - only if we have a report run context
+      // This section requires report run ID which isn't available during packet build
+      // The print page will need to inject this data or we mark it empty for now
+      
+      // For now, return empty section structure - print page will populate with actual data
+      // when rendering from a specific report run context
+      return {
+        type: 'signature_proof',
+        data: {
+          reportRunId: '', // Will be set by print page from report_run
+          reportRunHash: '', // Will be set by print page from report_run
+          reportRunCreatedAt: '', // Will be set by print page from report_run
+          signatures: [], // Will be fetched by print page from report_signatures table
+          isDraft: true, // Will be determined by print page based on status
+          requiredRoles: ['prepared_by', 'reviewed_by', 'approved_by'], // Default required roles
+          pdfGeneratedAt: '', // Will be set by print page
+        },
+        meta: {
+          title: 'Signature Proof & Attestation',
+          empty: true, // Mark empty until print page populates with real data
+          emptyMessage: 'Signature proof section will be populated when report is generated from a report run.',
+        },
+      }
+    }
 
     case 'integrity_verification':
       // This section will be populated by the print page with run ID and hash

@@ -5,6 +5,7 @@
 
 import { formatPdfTimestamp } from '@/lib/utils/pdfFormatUtils'
 import { pdfTheme } from '@/lib/design-system/pdfTheme'
+import { sanitizeSvg } from '@/lib/utils/sanitizeSvg'
 
 interface Signature {
   signer_name: string
@@ -275,7 +276,7 @@ export function SignatureProofSection({ data }: SignatureProofSectionProps) {
                   justifyContent: 'center',
                 }}>
                   <div
-                    dangerouslySetInnerHTML={{ __html: sig.signature_svg }}
+                    dangerouslySetInnerHTML={{ __html: sanitizeSvg(sig.signature_svg) }}
                     style={{
                       width: '240pt',
                       height: '60pt',

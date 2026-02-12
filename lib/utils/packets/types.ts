@@ -64,6 +64,7 @@ export const PACKETS: Record<PacketType, PacketDefinition> = {
       'mitigations',
       'audit_timeline',
       'attachments_index',
+      'signature_proof',
       'integrity_verification',
     ],
     clientFacingOnly: false, // Insurance may include internal notes
