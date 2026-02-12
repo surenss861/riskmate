@@ -423,7 +423,7 @@ export default function JobDetailPage() {
         // Count only required signatures (prepared_by, reviewed_by, approved_by)
         const requiredRoles = ['prepared_by', 'reviewed_by', 'approved_by']
         const signed = Array.isArray(sigs) 
-          ? sigs.filter((sig: { role: string }) => requiredRoles.includes(sig.role)).length 
+          ? sigs.filter((sig: { signature_role: string }) => requiredRoles.includes(sig.signature_role)).length 
           : 0
         if (!cancelled) setSignatureCount({ signed, total: 3 })
       } catch {
