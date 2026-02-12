@@ -54,6 +54,8 @@ export function renderSignaturesAndCompliance(
   const sigBoxHeight = 100;
   const sigBoxWidth = (pageWidth - margin * 2 - 20) / 2;
   const sigSpacing = 20;
+  let currentPageStartY = sigBoxY;
+  let rowOnCurrentPage = 0;
   // Map signatures by role; use fixed slots for required roles, placeholders for missing
   const signaturesByRole = new Map<string, PdfSignatureData>();
   if (signatures?.length) {
@@ -78,9 +80,8 @@ export function renderSignaturesAndCompliance(
     const slot = slots[i];
     const sig = slot?.sig;
     const role = slot?.role ?? 'other';
-    const row = Math.floor(i / 2);
     const col = i % 2;
-    const sigY = sigBoxY + row * (sigBoxHeight + sigSpacing);
+    const sigY = currentPageStartY + rowOnCurrentPage * (sigBoxHeight + sigSpacing);
     const sigX = margin + col * (sigBoxWidth + sigSpacing);
 
     const drawBox = (x: number, y: number) => {
@@ -173,19 +174,23 @@ export function renderSignaturesAndCompliance(
 
     if (sigY + sigBoxHeight > pageHeight - 200) {
       safeAddPage(estimatedTotalPages);
-      const newY = STYLES.spacing.sectionTop + 40;
-      const adjustedRow = Math.floor(i / 2);
-      const adjustedY = newY + adjustedRow * (sigBoxHeight + sigSpacing);
-      const adjustedX = margin + col * (sigBoxWidth + sigSpacing);
-      drawBox(adjustedX, adjustedY);
+      currentPageStartY = STYLES.spacing.sectionTop + 40;
+      rowOnCurrentPage = 0;
+      const newSigY = currentPageStartY;
+      const newSigX = margin + col * (sigBoxWidth + sigSpacing);
+      drawBox(newSigX, newSigY);
+      doc.y = newSigY + sigBoxHeight;
     } else {
       drawBox(sigX, sigY);
+      doc.y = sigY + sigBoxHeight;
+    }
+
+    if (col === 1) {
+      rowOnCurrentPage++;
     }
   }
 
-  // Calculate actual number of rows rendered and advance doc.y accordingly
-  const actualRows = Math.ceil(count / 2);
-  doc.y = sigBoxY + actualRows * (sigBoxHeight + sigSpacing) + 40;
+  doc.y = doc.y + 40;
   const complianceY = doc.y;
 
   doc
