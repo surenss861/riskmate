@@ -407,18 +407,24 @@ export default function JobDetailPage() {
     let cancelled = false
     const fetchSignatureCount = async () => {
       try {
-        const runsRes = await fetch(`/api/reports/runs?job_id=${jobId}&limit=1`)
+        // Fetch multiple runs to reliably find a non-superseded one
+        const runsRes = await fetch(`/api/reports/runs?job_id=${jobId}&limit=5`)
         if (!runsRes.ok || cancelled) return
         const { data: runs } = await runsRes.json()
         if (!runs?.length) {
           if (!cancelled) setSignatureCount({ signed: 0, total: 3 })
           return
         }
+        // Select first non-superseded run, or fall back to first run
         const run = runs.find((r: { status: string }) => r.status !== 'superseded') || runs[0]
         const sigRes = await fetch(`/api/reports/runs/${run.id}/signatures`)
         if (!sigRes.ok || cancelled) return
         const { data: sigs } = await sigRes.json()
-        const signed = Array.isArray(sigs) ? sigs.length : 0
+        // Count only required signatures (prepared_by, reviewed_by, approved_by)
+        const requiredRoles = ['prepared_by', 'reviewed_by', 'approved_by']
+        const signed = Array.isArray(sigs) 
+          ? sigs.filter((sig: { role: string }) => requiredRoles.includes(sig.role)).length 
+          : 0
         if (!cancelled) setSignatureCount({ signed, total: 3 })
       } catch {
         if (!cancelled) setSignatureCount({ signed: 0, total: 3 })
