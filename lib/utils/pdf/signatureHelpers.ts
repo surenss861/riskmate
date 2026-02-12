@@ -28,22 +28,27 @@ export function extractAllPathDs(svg: string): string[] {
   return result;
 }
 
-/** Parse viewBox from SVG to get full dimensions (e.g. viewBox="minX minY width height") */
-export function getViewBox(svg: string): { minX: number; minY: number; w: number; h: number } | null {
+/** Parse viewBox from SVG to get dimensions (returns only width and height for backward compatibility) */
+export function getViewBox(svg: string): { w: number; h: number } | null {
   const match = svg.match(/viewBox\s*=\s*["']?\s*([\d.-]+)\s+([\d.-]+)\s+([\d.]+)\s+([\d.]+)["']?/i);
   if (!match) return null;
-  const minX = parseFloat(match[1]);
-  const minY = parseFloat(match[2]);
   const w = parseFloat(match[3]);
   const h = parseFloat(match[4]);
-  return Number.isFinite(minX) &&
-    Number.isFinite(minY) &&
-    Number.isFinite(w) &&
-    Number.isFinite(h) &&
-    w > 0 &&
-    h > 0
-    ? { minX, minY, w, h }
+  return Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0
+    ? { w, h }
     : null;
+}
+
+/** Parse viewBox minX and minY for handling non-zero origins */
+function getViewBoxOrigin(svg: string): { minX: number; minY: number } {
+  const match = svg.match(/viewBox\s*=\s*["']?\s*([\d.-]+)\s+([\d.-]+)\s+([\d.]+)\s+([\d.]+)["']?/i);
+  if (!match) return { minX: 0, minY: 0 };
+  const minX = parseFloat(match[1]);
+  const minY = parseFloat(match[2]);
+  return {
+    minX: Number.isFinite(minX) ? minX : 0,
+    minY: Number.isFinite(minY) ? minY : 0,
+  };
 }
 
 /**
@@ -66,8 +71,7 @@ export function drawSignatureSvgPath(
   if (pathDs.length === 0) return;
 
   const viewBox = getViewBox(signatureSvg);
-  const minX = viewBox?.minX ?? 0;
-  const minY = viewBox?.minY ?? 0;
+  const { minX, minY } = getViewBoxOrigin(signatureSvg);
   const srcW = viewBox?.w ?? 400;
   const srcH = viewBox?.h ?? 100;
   const pad = 2;

@@ -183,7 +183,9 @@ export function renderSignaturesAndCompliance(
     }
   }
 
-  doc.y = sigBoxY + 2 * (sigBoxHeight + sigSpacing) + 40;
+  // Calculate actual number of rows rendered and advance doc.y accordingly
+  const actualRows = Math.ceil(count / 2);
+  doc.y = sigBoxY + actualRows * (sigBoxHeight + sigSpacing) + 40;
   const complianceY = doc.y;
 
   doc
