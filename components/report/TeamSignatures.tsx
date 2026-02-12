@@ -153,7 +153,9 @@ export function TeamSignatures({
   // Notify parent of signature count for tab badge (updates when signatures load or change)
   useEffect(() => {
     if (!loading && onSignaturesChange) {
-      const signed = signatures.filter((s) => REQUIRED_ROLES.includes(s.signature_role)).length
+      const signed = signatures.filter((s) => 
+        REQUIRED_ROLES.includes(s.signature_role as 'prepared_by' | 'reviewed_by' | 'approved_by')
+      ).length
       onSignaturesChange(signed, REQUIRED_ROLES.length)
     }
   }, [loading, signatures, onSignaturesChange])
