@@ -67,6 +67,22 @@ export function validateSignatureSvg(svg: string): ValidationResult {
     }
   }
 
+  // Check polyline points length (if present) – same threshold as path data
+  const polylineMatch = svg.match(/<polyline[^>]*points=["']([^"']+)["']/gi)
+  if (polylineMatch) {
+    const totalPolylineLength = polylineMatch.reduce((sum, match) => {
+      const pointsMatch = match.match(/points=["']([^"']+)["']/i)
+      return sum + (pointsMatch ? pointsMatch[1].length : 0)
+    }, 0)
+
+    if (totalPolylineLength > MAX_PATH_LENGTH) {
+      return {
+        valid: false,
+        error: `Polyline points data exceeds maximum length of ${MAX_PATH_LENGTH} characters`,
+      }
+    }
+  }
+
   return { valid: true }
 }
 

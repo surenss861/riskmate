@@ -113,17 +113,25 @@ export function renderSignaturesAndCompliance(
     const slot = slots[i];
     const sig = 'placeholder' in slot ? undefined : slot;
     const col = i % 2;
-    
+    const sigValidation = sig?.signature_svg ? validateSignatureSvg(sig.signature_svg) : null;
+
     // Calculate position based on current page context
     const sigY = currentPageStartY + rowOnCurrentPage * (sigBoxHeight + sigSpacing);
     const sigX = margin + col * (sigBoxWidth + sigSpacing);
 
     const drawBox = (x: number, y: number) => {
+      let boxFill = STYLES.colors.sectionBg;
+      let boxStroke = STYLES.colors.borderGray;
+      if (sigValidation && !sigValidation.valid) {
+        boxFill = STYLES.colors.accentLight;
+        boxStroke = STYLES.colors.riskCritical;
+      }
       doc
         .rect(x, y, sigBoxWidth, sigBoxHeight)
-        .fill(STYLES.colors.sectionBg)
-        .stroke(STYLES.colors.borderGray)
-        .lineWidth(1.5);
+        .fill(boxFill)
+        .strokeColor(boxStroke)
+        .lineWidth(1.5)
+        .stroke();
 
       doc
         .strokeColor(STYLES.colors.secondaryText)
@@ -141,6 +149,9 @@ export function renderSignaturesAndCompliance(
           ? `${sig.signature_hash.substring(0, 12)}…${sig.signature_hash.substring(sig.signature_hash.length - 8)}`
           : '';
 
+        const signatureValid = sigValidation?.valid ?? false;
+        const signatureInvalid = sigValidation && !sigValidation.valid;
+
         doc
           .fillColor(STYLES.colors.secondaryText)
           .fontSize(STYLES.sizes.caption)
@@ -152,48 +163,50 @@ export function renderSignaturesAndCompliance(
           .font(STYLES.fonts.body)
           .text(sig.signer_name, x + 15, y + 38, { width: sigBoxWidth - 30 })
           .text(sig.signer_title, x + 15, y + 52, { width: sigBoxWidth - 30 });
-        let signatureValid = false;
-        if (sig.signature_svg) {
-          // Validate signature before rendering
-          const validation = validateSignatureSvg(sig.signature_svg);
-          if (validation.valid) {
-            signatureValid = true;
-            const pathBoxX = x + 15;
-            const pathBoxY = y + 54;
-            const pathBoxW = sigBoxWidth - 30;
-            const pathBoxH = 16;
-            drawSignatureSvgPath(
-              doc,
-              sig.signature_svg,
-              pathBoxX,
-              pathBoxY,
-              pathBoxW,
-              pathBoxH,
-              STYLES.colors.primaryText,
-              1
-            );
+
+        if (sig.signature_svg && signatureValid) {
+          const pathBoxX = x + 15;
+          const pathBoxY = y + 54;
+          const pathBoxW = sigBoxWidth - 30;
+          const pathBoxH = 16;
+          drawSignatureSvgPath(
+            doc,
+            sig.signature_svg,
+            pathBoxX,
+            pathBoxY,
+            pathBoxW,
+            pathBoxH,
+            STYLES.colors.primaryText,
+            1
+          );
+        }
+
+        if (signatureInvalid) {
+          doc
+            .fillColor(STYLES.colors.riskCritical)
+            .fontSize(STYLES.sizes.caption)
+            .font(STYLES.fonts.body)
+            .text('Signature invalid or unavailable', x + 15, y + 54, { width: sigBoxWidth - 30 });
+        } else {
+          doc
+            .fillColor(STYLES.colors.primaryText)
+            .fontSize(STYLES.sizes.body)
+            .font(STYLES.fonts.body)
+            .text(`Signed: ${dateStr}`, x + 15, y + 72, { width: sigBoxWidth - 30 });
+          if (hashStr) {
+            doc
+              .fillColor(STYLES.colors.secondaryText)
+              .fontSize(8)
+              .font(STYLES.fonts.light)
+              .text(`Hash: ${hashStr}`, x + 15, y + 78, { width: sigBoxWidth - 30 });
           }
-          // If invalid, signature box is rendered without SVG path (placeholder behavior)
-        }
-        doc
-          .fillColor(STYLES.colors.primaryText)
-          .fontSize(STYLES.sizes.body)
-          .font(STYLES.fonts.body)
-          .text(`Signed: ${dateStr}`, x + 15, y + 72, { width: sigBoxWidth - 30 });
-        if (hashStr) {
-          doc
-            .fillColor(STYLES.colors.secondaryText)
-            .fontSize(8)
-            .font(STYLES.fonts.light)
-            .text(`Hash: ${hashStr}`, x + 15, y + 78, { width: sigBoxWidth - 30 });
-        }
-        // Only show "Signature captured" status when SVG is valid
-        if (signatureValid) {
-          doc
-            .fillColor(STYLES.colors.secondaryText)
-            .fontSize(8)
-            .font(STYLES.fonts.light)
-            .text('Signature captured (SVG on file)', x + 15, y + 86, { width: sigBoxWidth - 30 });
+          if (signatureValid) {
+            doc
+              .fillColor(STYLES.colors.secondaryText)
+              .fontSize(8)
+              .font(STYLES.fonts.light)
+              .text('Signature captured (SVG on file)', x + 15, y + 86, { width: sigBoxWidth - 30 });
+          }
         }
       } else {
         // Render placeholder with role label if available

@@ -81,15 +81,23 @@ export function renderSignaturesAndCompliance(
     const sig = slot?.sig;
     const role = slot?.role ?? 'other';
     const col = i % 2;
+    const sigValidation = sig?.signature_svg ? validateSignatureSvg(sig.signature_svg) : null;
     const sigY = currentPageStartY + rowOnCurrentPage * (sigBoxHeight + sigSpacing);
     const sigX = margin + col * (sigBoxWidth + sigSpacing);
 
     const drawBox = (x: number, y: number) => {
+      let boxFill = STYLES.colors.sectionBg;
+      let boxStroke = STYLES.colors.borderGray;
+      if (sigValidation && !sigValidation.valid) {
+        boxFill = STYLES.colors.accentLight;
+        boxStroke = STYLES.colors.riskCritical;
+      }
       doc
         .rect(x, y, sigBoxWidth, sigBoxHeight)
-        .fill(STYLES.colors.sectionBg)
-        .stroke(STYLES.colors.borderGray)
-        .lineWidth(1.5);
+        .fill(boxFill)
+        .strokeColor(boxStroke)
+        .lineWidth(1.5)
+        .stroke();
 
       doc
         .strokeColor(STYLES.colors.secondaryText)
@@ -119,40 +127,45 @@ export function renderSignaturesAndCompliance(
           .text(sig.signer_name, x + 15, y + 40, { width: sigBoxWidth - 30 })
           .text(sig.signer_title, x + 15, y + 54, { width: sigBoxWidth - 30 });
 
-        // Render actual signature SVG path(s) in place of placeholder
-        if (sig.signature_svg) {
-          // Validate signature before rendering
-          const validation = validateSignatureSvg(sig.signature_svg);
-          if (validation.valid) {
-            const pathBoxX = x + 15;
-            const pathBoxY = y + 56;
-            const pathBoxW = sigBoxWidth - 30;
-            const pathBoxH = 22;
-            drawSignatureSvgPath(
-              doc,
-              sig.signature_svg,
-              pathBoxX,
-              pathBoxY,
-              pathBoxW,
-              pathBoxH,
-              STYLES.colors.primaryText,
-              1
-            );
-          }
-          // If invalid, signature box is rendered without SVG path (placeholder behavior)
+        const signatureValid = sigValidation?.valid ?? false;
+        const signatureInvalid = sigValidation && !sigValidation.valid;
+
+        if (sig.signature_svg && signatureValid) {
+          const pathBoxX = x + 15;
+          const pathBoxY = y + 56;
+          const pathBoxW = sigBoxWidth - 30;
+          const pathBoxH = 22;
+          drawSignatureSvgPath(
+            doc,
+            sig.signature_svg,
+            pathBoxX,
+            pathBoxY,
+            pathBoxW,
+            pathBoxH,
+            STYLES.colors.primaryText,
+            1
+          );
         }
 
-        doc
-          .fillColor(STYLES.colors.secondaryText)
-          .fontSize(STYLES.sizes.caption)
-          .font(STYLES.fonts.light)
-          .text(`Signed: ${dateStr}`, x + 15, y + 80, { width: sigBoxWidth - 30 });
-        if (hashStr) {
+        if (signatureInvalid) {
+          doc
+            .fillColor(STYLES.colors.riskCritical)
+            .fontSize(STYLES.sizes.caption)
+            .font(STYLES.fonts.body)
+            .text('Signature invalid or unavailable', x + 15, y + 58, { width: sigBoxWidth - 30 });
+        } else {
           doc
             .fillColor(STYLES.colors.secondaryText)
-            .fontSize(8)
+            .fontSize(STYLES.sizes.caption)
             .font(STYLES.fonts.light)
-            .text(`Hash: ${hashStr}`, x + 15, y + 90, { width: sigBoxWidth - 30 });
+            .text(`Signed: ${dateStr}`, x + 15, y + 80, { width: sigBoxWidth - 30 });
+          if (hashStr) {
+            doc
+              .fillColor(STYLES.colors.secondaryText)
+              .fontSize(8)
+              .font(STYLES.fonts.light)
+              .text(`Hash: ${hashStr}`, x + 15, y + 90, { width: sigBoxWidth - 30 });
+          }
         }
       } else {
         doc
