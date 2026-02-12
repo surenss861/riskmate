@@ -20,7 +20,7 @@ import {
   renderSignaturesAndCompliance,
   type PdfSignatureData,
 } from './sections/signatures';
-import { supabase } from '../lib/supabaseClient';
+import { supabase } from '../../lib/supabaseClient';
 
 // ============================================
 // MAIN GENERATOR
@@ -51,7 +51,7 @@ export async function generateRiskSnapshotPDF(
         .from('report_signatures')
         .select('signer_name, signer_title, signature_role, signature_svg, signed_at, signature_hash')
         .eq('report_run_id', reportRunId)
-        .eq('revoked', false)
+        .is('revoked_at', null)
         .order('signed_at', { ascending: true });
 
       if (signatureError) {

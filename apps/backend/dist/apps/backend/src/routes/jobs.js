@@ -2208,7 +2208,9 @@ exports.jobsRouter.post("/:id/proof-pack", auth_1.authenticate, async (req, res)
         // For now, use the existing PDF generation
         // TODO: Create pack-specific PDF templates
         const { generateRiskSnapshotPDF } = await Promise.resolve().then(() => __importStar(require("../utils/pdf")));
-        const pdfBuffer = await generateRiskSnapshotPDF(reportData.job, reportData.risk_score, reportData.mitigations || [], reportData.organization ?? { id: organization_id, name: reportData.job?.client_name ?? "Organization" }, photos, reportData.audit || []);
+        const pdfBuffer = await generateRiskSnapshotPDF(reportData.job, reportData.risk_score, reportData.mitigations || [], reportData.organization ?? { id: organization_id, name: reportData.job?.client_name ?? "Organization" }, photos, reportData.audit || [], undefined, // signatures - not used by this proof-pack route
+        undefined // reportRunId - not used by this proof-pack route (no report_run created here)
+        );
         const pdfBase64 = pdfBuffer.toString("base64");
         // Log audit event
         // Extract client metadata from request

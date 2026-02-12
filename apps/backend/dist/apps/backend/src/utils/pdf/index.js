@@ -15,15 +15,50 @@ const controlsApplied_1 = require("./sections/controlsApplied");
 const timeline_1 = require("./sections/timeline");
 const photos_1 = require("./sections/photos");
 const signatures_1 = require("./sections/signatures");
+const supabaseClient_1 = require("../../lib/supabaseClient");
 // ============================================
 // MAIN GENERATOR
 // ============================================
-async function generateRiskSnapshotPDF(job, riskScore, mitigationItems, organization, photos = [], auditLogs = []) {
+async function generateRiskSnapshotPDF(job, riskScore, mitigationItems, organization, photos = [], auditLogs = [], 
+/** When provided (e.g. from report_signatures for a report run), actual signatures are rendered in the PDF */
+signatures, 
+/** Report run ID to fetch signatures from report_signatures table */
+reportRunId) {
     const accent = organization.accent_color || '#F97316';
     const logoBuffer = await (0, utils_1.fetchLogoBuffer)(organization.logo_url);
     const reportGeneratedAt = new Date();
     const jobStartDate = job.start_date ? new Date(job.start_date) : null;
     const jobEndDate = job.end_date ? new Date(job.end_date) : null;
+    // Fetch signatures from report_signatures table if reportRunId is provided
+    let fetchedSignatures = [];
+    if (reportRunId) {
+        try {
+            const { data: signatureData, error: signatureError } = await supabaseClient_1.supabase
+                .from('report_signatures')
+                .select('signer_name, signer_title, signature_role, signature_svg, signed_at, signature_hash')
+                .eq('report_run_id', reportRunId)
+                .is('revoked_at', null)
+                .order('signed_at', { ascending: true });
+            if (signatureError) {
+                console.warn('Failed to fetch signatures for PDF:', signatureError);
+            }
+            else if (signatureData && signatureData.length > 0) {
+                fetchedSignatures = signatureData.map((sig) => ({
+                    signer_name: sig.signer_name,
+                    signer_title: sig.signer_title,
+                    signature_role: sig.signature_role,
+                    signature_svg: sig.signature_svg,
+                    signed_at: sig.signed_at,
+                    signature_hash: sig.signature_hash,
+                }));
+            }
+        }
+        catch (err) {
+            console.warn('Error fetching signatures for PDF:', err);
+        }
+    }
+    // Use fetched signatures if available, otherwise use passed-in signatures, or empty array
+    const finalSignatures = fetchedSignatures.length > 0 ? fetchedSignatures : (signatures || []);
     return new Promise((resolve, reject) => {
         const doc = new pdfkit_1.default({
             size: 'LETTER',
@@ -79,7 +114,7 @@ async function generateRiskSnapshotPDF(job, riskScore, mitigationItems, organiza
         (0, controlsApplied_1.renderControlsApplied)(doc, mitigationItems, accent, pageWidth, pageHeight, margin, safeAddPage, estimatedTotalPages);
         (0, timeline_1.renderTimeline)(doc, auditLogs, pageWidth, pageHeight, margin, safeAddPage, estimatedTotalPages);
         (0, photos_1.renderPhotosSection)(doc, photos, job.start_date, job.end_date, pageWidth, pageHeight, margin, safeAddPage, estimatedTotalPages);
-        (0, signatures_1.renderSignaturesAndCompliance)(doc, pageWidth, pageHeight, margin, safeAddPage, estimatedTotalPages);
+        (0, signatures_1.renderSignaturesAndCompliance)(doc, pageWidth, pageHeight, margin, safeAddPage, estimatedTotalPages, finalSignatures);
         // Final footer for last page
         (0, helpers_1.addFooterInline)(doc, organization, job.id, reportGeneratedAt, pageCount, pageCount);
         doc.end();
