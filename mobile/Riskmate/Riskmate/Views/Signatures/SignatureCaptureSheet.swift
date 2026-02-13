@@ -10,6 +10,12 @@ struct SignatureCaptureData {
     var attestationText: String
 }
 
+/// A single point in a signature stroke with optional pressure-derived width (for Apple Pencil and 3D Touch).
+struct SignaturePoint {
+    var location: CGPoint
+    var width: CGFloat
+}
+
 /// Attestation statement shown to and accepted by the signer; sent to API and stored for proof.
 private let attestationStatement = "I attest this report is accurate to the best of my knowledge."
 
@@ -29,8 +35,8 @@ struct SignatureCaptureSheet: View {
     @State private var signerName: String = ""
     @State private var signerTitle: String = ""
     @State private var attestationAccepted: Bool = false
-    @State private var paths: [[CGPoint]] = []
-    @State private var currentPath: [CGPoint] = []
+    @State private var paths: [[SignaturePoint]] = []
+    @State private var currentPath: [SignaturePoint] = []
     @State private var isDrawing: Bool = false
     @State private var canvasSize: CGSize = .zero
     @State private var copiedHash: Bool = false
@@ -38,9 +44,9 @@ struct SignatureCaptureSheet: View {
     @State private var isSubmitting: Bool = false
 
     /// Paths with at least two points (valid strokes). Single-point paths are discarded to avoid degenerate SVG rejected by backend.
-    private var allPaths: [[CGPoint]] {
+    private var allPaths: [[SignaturePoint]] {
         let validPaths = paths.filter { $0.count >= 2 }
-        let validCurrent = (currentPath.count >= 2) ? [currentPath] : [] as [[CGPoint]]
+        let validCurrent = (currentPath.count >= 2) ? [currentPath] : [] as [[SignaturePoint]]
         return validPaths + validCurrent
     }
 
@@ -201,7 +207,7 @@ struct SignatureCaptureSheet: View {
                 .font(RMTheme.Typography.caption)
                 .foregroundColor(RMTheme.Colors.textTertiary)
 
-            SignaturePadView(
+            PressureSignaturePadView(
                 paths: $paths,
                 currentPath: $currentPath,
                 isDrawing: $isDrawing,
@@ -287,7 +293,7 @@ struct SignatureCaptureSheet: View {
 
         let width = canvasSize.width > 0 ? canvasSize.width : 400
         let height = canvasSize.height > 0 ? canvasSize.height : 180
-        let svg = exportPathsToSvg(paths: validPaths, width: width, height: height)
+        let svg = exportPathsToSvg(strokes: validPaths, width: width, height: height)
         guard !svg.isEmpty else {
             errorMessage = "Could not generate signature."
             return
@@ -304,84 +310,205 @@ struct SignatureCaptureSheet: View {
         dismiss()
     }
 
-    private func exportPathsToSvg(paths: [[CGPoint]], width: CGFloat, height: CGFloat) -> String {
-        let validPaths = paths.filter { $0.count >= 2 }
-        guard !validPaths.isEmpty else { return "" }
+    /// Exports strokes to SVG with per-segment stroke width (pressure-sensitive).
+    private func exportPathsToSvg(strokes: [[SignaturePoint]], width: CGFloat, height: CGFloat) -> String {
+        let valid = strokes.filter { $0.count >= 2 }
+        guard !valid.isEmpty else { return "" }
         let w = Int(width)
         let h = Int(height)
         var pathElements: String = ""
-        for path in validPaths {
-            var d = "M \(path[0].x) \(path[0].y)"
-            for i in 1..<path.count {
-                d += " L \(path[i].x) \(path[i].y)"
+        for stroke in valid {
+            for i in 0..<(stroke.count - 1) {
+                let a = stroke[i]
+                let b = stroke[i + 1]
+                let segWidth = (a.width + b.width) / 2
+                let d = "M \(a.location.x) \(a.location.y) L \(b.location.x) \(b.location.y)"
+                pathElements += "<path d=\"\(d)\" fill=\"none\" stroke=\"#000000\" stroke-width=\"\(segWidth)\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>"
             }
-            pathElements += "<path d=\"\(d)\" fill=\"none\" stroke=\"#000000\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>"
         }
         return "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"\(w)\" height=\"\(h)\" viewBox=\"0 0 \(w) \(h)\">\(pathElements)</svg>"
     }
 }
 
-// MARK: - Signature pad (drawing)
+// MARK: - Pressure-sensitive signature pad (UIViewRepresentable + UITouch)
 
-private struct SignaturePadView: View {
-    @Binding var paths: [[CGPoint]]
-    @Binding var currentPath: [CGPoint]
-    @Binding var isDrawing: Bool
-    @Binding var canvasSize: CGSize
+private final class PressureSignatureCanvasView: UIView {
+    var strokes: [[SignaturePoint]] = []
+    var currentStroke: [SignaturePoint] = []
+    var onStrokeUpdated: (() -> Void)?
+    var onStrokeEnded: (() -> Void)?
 
-    var body: some View {
-        GeometryReader { geo in
-            let size = geo.size
-            ZStack {
-                Color.white
-                signaturePathsView(allPaths: paths + (currentPath.isEmpty ? [] : [currentPath]), size: size)
-                    .allowsHitTesting(false)
+    private let minStrokeWidth: CGFloat = 1
+    private let maxStrokeWidth: CGFloat = 6
+    private let defaultStrokeWidth: CGFloat = 2
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        isMultipleTouchEnabled = false
+        backgroundColor = .white
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    private func strokeWidth(for touch: UITouch) -> CGFloat {
+        var width: CGFloat
+        if touch.force > 0 {
+            width = minStrokeWidth + touch.force * (maxStrokeWidth - minStrokeWidth)
+        } else {
+            width = defaultStrokeWidth
+        }
+        if touch.type == .pencil || touch.type == .stylus {
+            let altitude = touch.altitudeAngle
+            width *= max(0.3, cos(altitude))
+        }
+        return max(minStrokeWidth, min(maxStrokeWidth, width))
+    }
+
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        guard let touch = touches.first else { return }
+        let loc = touch.location(in: self)
+        let width = strokeWidth(for: touch)
+        currentStroke = [SignaturePoint(location: loc, width: width)]
+        onStrokeUpdated?()
+        setNeedsDisplay()
+    }
+
+    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
+        guard let touch = touches.first else { return }
+        let loc = touch.location(in: self)
+        let width = strokeWidth(for: touch)
+        currentStroke.append(SignaturePoint(location: loc, width: width))
+        onStrokeUpdated?()
+        setNeedsDisplay()
+    }
+
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
+        guard let touch = touches.first else { return }
+        let loc = touch.location(in: self)
+        let width = strokeWidth(for: touch)
+        currentStroke.append(SignaturePoint(location: loc, width: width))
+        onStrokeUpdated?()
+        setNeedsDisplay()
+        onStrokeEnded?()
+    }
+
+    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
+        currentStroke = []
+        onStrokeUpdated?()
+        setNeedsDisplay()
+        onStrokeEnded?()
+    }
+
+    override func draw(_ rect: CGRect) {
+        guard let ctx = UIGraphicsGetCurrentContext() else { return }
+        ctx.setStrokeColor(UIColor.black.cgColor)
+        ctx.setLineCap(.round)
+        ctx.setLineJoin(.round)
+
+        for stroke in strokes where stroke.count >= 2 {
+            for i in 0..<(stroke.count - 1) {
+                let a = stroke[i]
+                let b = stroke[i + 1]
+                ctx.setLineWidth((a.width + b.width) / 2)
+                ctx.move(to: a.location)
+                ctx.addLine(to: b.location)
+                ctx.strokePath()
             }
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { value in
-                        let loc = value.location
-                        if !isDrawing {
-                            isDrawing = true
-                            currentPath = [loc]
-                        } else {
-                            currentPath.append(loc)
-                        }
-                    }
-                    .onEnded { _ in
-                        if !currentPath.isEmpty {
-                            paths.append(currentPath)
-                            currentPath = []
-                        }
-                        isDrawing = false
-                    }
-            )
-            .onAppear {
-                canvasSize = size
-            }
-            .onChange(of: geo.size) {
-                canvasSize = geo.size
+        }
+        if currentStroke.count >= 2 {
+            for i in 0..<(currentStroke.count - 1) {
+                let a = currentStroke[i]
+                let b = currentStroke[i + 1]
+                ctx.setLineWidth((a.width + b.width) / 2)
+                ctx.move(to: a.location)
+                ctx.addLine(to: b.location)
+                ctx.strokePath()
             }
         }
     }
 
-    private func signaturePathsView(allPaths: [[CGPoint]], size: CGSize) -> some View {
-        Canvas { context, canvasSize in
-            for path in allPaths where path.count >= 2 {
-                var p = Path()
-                p.move(to: path[0])
-                for i in 1..<path.count {
-                    p.addLine(to: path[i])
-                }
-                context.stroke(
-                    p,
-                    with: .color(.black),
-                    style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round)
-                )
-            }
+    func commitCurrentStroke() {
+        if currentStroke.count >= 2 {
+            strokes.append(currentStroke)
         }
-        .frame(width: size.width, height: size.height)
+        currentStroke = []
+        setNeedsDisplay()
+    }
+
+    func clearAll() {
+        strokes = []
+        currentStroke = []
+        setNeedsDisplay()
+    }
+}
+
+private struct PressureSignaturePadView: UIViewRepresentable {
+    @Binding var paths: [[SignaturePoint]]
+    @Binding var currentPath: [SignaturePoint]
+    @Binding var isDrawing: Bool
+    @Binding var canvasSize: CGSize
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(
+            paths: $paths,
+            currentPath: $currentPath,
+            isDrawing: $isDrawing,
+            canvasSize: $canvasSize
+        )
+    }
+
+    func makeUIView(context: Context) -> PressureSignatureCanvasView {
+        let view = PressureSignatureCanvasView()
+        let coordinator = context.coordinator
+        view.onStrokeUpdated = { coordinator.syncFromView(view) }
+        view.onStrokeEnded = { coordinator.endStroke(view) }
+        return view
+    }
+
+    func updateUIView(_ uiView: PressureSignatureCanvasView, context: Context) {
+        context.coordinator.canvasSize.wrappedValue = uiView.bounds.size
+        if paths.isEmpty && currentPath.isEmpty {
+            uiView.clearAll()
+        } else {
+            uiView.strokes = paths
+            uiView.currentStroke = currentPath
+        }
+        uiView.setNeedsDisplay()
+        context.coordinator.lastKnownPathsCount = paths.count
+        context.coordinator.lastKnownCurrentCount = currentPath.count
+    }
+
+    final class Coordinator {
+        @Binding var paths: [[SignaturePoint]]
+        @Binding var currentPath: [SignaturePoint]
+        @Binding var isDrawing: Bool
+        @Binding var canvasSize: CGSize
+        var lastKnownPathsCount: Int = 0
+        var lastKnownCurrentCount: Int = 0
+
+        init(paths: Binding<[[SignaturePoint]]>, currentPath: Binding<[SignaturePoint]>,
+             isDrawing: Binding<Bool>, canvasSize: Binding<CGSize>) {
+            _paths = paths
+            _currentPath = currentPath
+            _isDrawing = isDrawing
+            _canvasSize = canvasSize
+        }
+
+        func syncFromView(_ view: PressureSignatureCanvasView) {
+            isDrawing = !view.currentStroke.isEmpty
+            currentPath = view.currentStroke
+        }
+
+        func endStroke(_ view: PressureSignatureCanvasView) {
+            if view.currentStroke.count >= 2 {
+                paths.append(view.currentStroke)
+            }
+            currentPath = []
+            isDrawing = false
+            view.commitCurrentStroke()
+        }
     }
 }
 
