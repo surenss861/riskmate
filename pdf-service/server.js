@@ -15,11 +15,16 @@ if (!SECRET) {
 app.use(cors())
 app.use(express.json())
 
-// HMAC authentication middleware
+// HMAC authentication middleware (token bound to URL to prevent replay to arbitrary URLs)
 function authenticate(req, res, next) {
   const authHeader = req.headers.authorization
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Missing or invalid Authorization header' })
+  }
+
+  const url = req.body?.url
+  if (!url || typeof url !== 'string') {
+    return res.status(401).json({ error: 'Missing or invalid url in body; required for HMAC verification' })
   }
 
   const token = authHeader.substring(7)
@@ -35,9 +40,9 @@ function authenticate(req, res, next) {
     return res.status(401).json({ error: 'Token expired or invalid timestamp' })
   }
 
-  // Verify HMAC
+  // Verify HMAC (includes URL so token cannot be replayed for a different URL)
   const requestId = req.body?.requestId || 'default'
-  const message = `${requestId}:${timestamp}`
+  const message = `${requestId}:${url}:${timestamp}`
   const expectedHmac = crypto.createHmac('sha256', SECRET).update(message).digest('hex')
 
   if (hmac !== expectedHmac) {

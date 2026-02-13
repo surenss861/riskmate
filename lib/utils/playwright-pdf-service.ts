@@ -27,8 +27,8 @@ export async function generatePdfFromService({ url, jobId, organizationId, reque
         throw new Error(`[${logRequestId}][stage] pdf_service_missing_secret: PDF_SERVICE_SECRET environment variable is required`)
     }
 
-    // Generate HMAC auth token
-    const authToken = generatePdfServiceAuthToken(serviceSecret, logRequestId)
+    // Generate HMAC auth token (bound to url to prevent replay to other URLs)
+    const authToken = generatePdfServiceAuthToken(serviceSecret, logRequestId, url)
     
     // Debug logging for auth (helps verify format matches service expectations)
     const [timestamp, hmac] = authToken.split(':')

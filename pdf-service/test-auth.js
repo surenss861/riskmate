@@ -10,9 +10,9 @@ const SECRET = process.argv[2] || '151bf8598584fbfe2dd4753d1fa56ec1939af8dc0efde
 const SERVICE_URL = process.env.PDF_SERVICE_URL || 'https://pdf-service-dawn-silence-4921.fly.dev'
 const TEST_URL = process.argv[3] || 'https://example.com'
 
-function generateToken(secret, requestId) {
+function generateToken(secret, requestId, url) {
   const timestamp = Date.now().toString()
-  const message = `${requestId}:${timestamp}`
+  const message = `${requestId}:${url}:${timestamp}`
   const hmac = crypto.createHmac('sha256', secret).update(message).digest('hex')
   return `${timestamp}:${hmac}`
 }
@@ -28,7 +28,7 @@ async function testHealth() {
 async function testAuth() {
   console.log('\nTesting authentication...')
   const requestId = 'test-' + Date.now()
-  const token = generateToken(SECRET, requestId)
+  const token = generateToken(SECRET, requestId, TEST_URL)
   
   console.log(`Request ID: ${requestId}`)
   console.log(`Token format: ${token.substring(0, 30)}...`)
