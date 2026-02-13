@@ -46,6 +46,7 @@ export async function renderSignaturesAndCompliance(
   estimatedTotalPages: number,
   options?: {
     reportRunId?: string;
+    documentId?: string;
     fetchSignaturesForRun?: FetchSignaturesForRun;
   }
 ): Promise<void> {
@@ -57,5 +58,6 @@ export async function renderSignaturesAndCompliance(
 
   renderSignaturesCore(doc, pageWidth, pageHeight, margin, safeAddPage, signatures, {
     estimatedTotalPages,
+    documentId: options?.documentId,
   });
 }

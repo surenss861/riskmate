@@ -225,8 +225,9 @@ export function renderSignaturesAndCompliance(
       addPage();
       currentPageStartY = STYLES.spacing.sectionTop + 40;
       rowOnCurrentPage = 0;
+      const colForNewPage = 0;
       const newSigY = currentPageStartY;
-      const newSigX = margin + col * (sigBoxWidth + sigSpacing);
+      const newSigX = margin + colForNewPage * (sigBoxWidth + sigSpacing);
       drawBox(newSigX, newSigY);
       doc.y = newSigY + sigBoxHeight;
     } else {

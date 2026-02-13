@@ -185,7 +185,7 @@ export async function generateRiskSnapshotPDF(
           margin,
           safeAddPage,
           estimatedTotalPages,
-          reportRunId != null ? { reportRunId } : undefined
+          { reportRunId, documentId: job.id }
         );
 
         // Final footer for last page
