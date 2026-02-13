@@ -799,7 +799,51 @@ class APIClient {
         }
         let _: CreateExportResponse = try await request(endpoint: path, method: "POST")
     }
-    
+
+    // MARK: - Report Runs / Signatures API
+
+    /// Create a signature for a report run (team signatures flow).
+    /// Requires signer name, title, role, SVG signature, and attestation text/acceptance.
+    func createSignature(
+        reportRunId: String,
+        signerName: String,
+        signerTitle: String,
+        signatureRole: SignatureRole,
+        signatureSvg: String,
+        attestationText: String
+    ) async throws -> ReportSignature {
+        struct CreateSignatureRequest: Encodable {
+            let signer_name: String
+            let signer_title: String
+            let signature_role: String
+            let signature_svg: String
+            let attestation_text: String
+            let attestationAccepted: Bool
+        }
+        let body = try JSONEncoder().encode(CreateSignatureRequest(
+            signer_name: signerName.trimmingCharacters(in: .whitespacesAndNewlines),
+            signer_title: signerTitle.trimmingCharacters(in: .whitespacesAndNewlines),
+            signature_role: signatureRole.rawValue,
+            signature_svg: signatureSvg,
+            attestation_text: attestationText,
+            attestationAccepted: true
+        ))
+        let response: ReportSignatureResponse = try await request(
+            endpoint: "/api/reports/runs/\(reportRunId)/signatures",
+            method: "POST",
+            body: body
+        )
+        return response.data
+    }
+
+    /// Fetch all signatures for a report run.
+    func getSignatures(reportRunId: String) async throws -> [ReportSignature] {
+        let response: ReportSignaturesListResponse = try await request(
+            endpoint: "/api/reports/runs/\(reportRunId)/signatures"
+        )
+        return response.data
+    }
+
     /// Generate Risk Snapshot PDF
     func generateRiskSnapshot(jobId: String) async throws -> URL {
         // Check if backend returns URL or base64
@@ -961,6 +1005,89 @@ struct CreateExportResponse: Codable {
     struct CreateExportData: Codable {
         let id: String
     }
+}
+
+// MARK: - Report Signatures
+
+/// Signature role for team report signing (matches API: prepared_by, reviewed_by, approved_by, other).
+enum SignatureRole: String, CaseIterable, Codable {
+    case preparedBy = "prepared_by"
+    case reviewedBy = "reviewed_by"
+    case approvedBy = "approved_by"
+    case other = "other"
+
+    var displayTitle: String {
+        switch self {
+        case .preparedBy: return "Prepared By"
+        case .reviewedBy: return "Reviewed By"
+        case .approvedBy: return "Approved By"
+        case .other: return "Signature"
+        }
+    }
+}
+
+struct ReportSignature: Codable, Identifiable {
+    let id: String
+    let reportRunId: String
+    let signerName: String
+    let signerTitle: String
+    let signatureRole: String
+    let signatureSvg: String?
+    let signedAt: Date?
+    let attestationText: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case reportRunId = "report_run_id"
+        case signerName = "signer_name"
+        case signerTitle = "signer_title"
+        case signatureRole = "signature_role"
+        case signatureSvg = "signature_svg"
+        case signedAt = "signed_at"
+        case attestationText = "attestation_text"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        reportRunId = try c.decode(String.self, forKey: .reportRunId)
+        signerName = try c.decode(String.self, forKey: .signerName)
+        signerTitle = try c.decode(String.self, forKey: .signerTitle)
+        signatureRole = try c.decode(String.self, forKey: .signatureRole)
+        signatureSvg = try c.decodeIfPresent(String.self, forKey: .signatureSvg)
+        attestationText = try c.decodeIfPresent(String.self, forKey: .attestationText)
+        if let dateString = try c.decodeIfPresent(String.self, forKey: .signedAt) {
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            signedAt = formatter.date(from: dateString) ?? ISO8601DateFormatter().date(from: dateString)
+        } else {
+            signedAt = nil
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(reportRunId, forKey: .reportRunId)
+        try c.encode(signerName, forKey: .signerName)
+        try c.encode(signerTitle, forKey: .signerTitle)
+        try c.encode(signatureRole, forKey: .signatureRole)
+        try c.encodeIfPresent(signatureSvg, forKey: .signatureSvg)
+        try c.encodeIfPresent(attestationText, forKey: .attestationText)
+        if let signedAt = signedAt {
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            try c.encode(formatter.string(from: signedAt), forKey: .signedAt)
+        }
+    }
+}
+
+struct ReportSignatureResponse: Codable {
+    let data: ReportSignature
+}
+
+struct ReportSignaturesListResponse: Codable {
+    let data: [ReportSignature]
 }
 
 struct HazardsResponse: Codable {
