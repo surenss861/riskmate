@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 // MARK: - Signature data (matches web SignatureCapture output)
 

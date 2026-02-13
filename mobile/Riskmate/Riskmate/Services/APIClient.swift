@@ -819,6 +819,15 @@ class APIClient {
             let signature_svg: String
             let attestation_text: String
             let attestationAccepted: Bool
+
+            enum CodingKeys: String, CodingKey {
+                case signer_name
+                case signer_title
+                case signature_role
+                case signature_svg
+                case attestation_text
+                case attestationAccepted = "attestation_accepted"
+            }
         }
         let body = try JSONEncoder().encode(CreateSignatureRequest(
             signer_name: signerName.trimmingCharacters(in: .whitespacesAndNewlines),
