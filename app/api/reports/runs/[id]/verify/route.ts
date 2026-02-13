@@ -4,7 +4,7 @@ import { buildJobReport } from '@/lib/utils/jobReport'
 import { buildJobPacket } from '@/lib/utils/packets/builder'
 import { computeCanonicalHash } from '@/lib/utils/canonicalJson'
 import { isValidPacketType } from '@/lib/utils/packets/types'
-import { createHash } from 'crypto'
+import { computeSignatureHash } from '@/lib/utils/signatureHash'
 
 export const runtime = 'nodejs'
 
@@ -89,14 +89,16 @@ export async function GET(
     const activeSignatures = signatures?.filter((s) => !s.revoked_at) || []
     const revokedSignatures = signatures?.filter((s) => s.revoked_at) || []
 
-    // Recompute each signature's hash (same contract as POST /api/reports/runs/[id]/signatures: signature_svg, signer_name, signer_title, signature_role only)
+    // Recompute each signature's hash (same contract as POST /signatures: data_hash + reportRunId + signature fields)
     const signatureVerifications = activeSignatures.map((sig) => {
-      const recomputedSignatureHash = createHash('sha256')
-        .update(sig.signature_svg ?? '')
-        .update(sig.signer_name ?? '')
-        .update(sig.signer_title ?? '')
-        .update(sig.signature_role ?? '')
-        .digest('hex')
+      const recomputedSignatureHash = computeSignatureHash({
+        dataHash: reportRun.data_hash,
+        reportRunId,
+        signatureSvg: sig.signature_svg ?? '',
+        signerName: sig.signer_name ?? '',
+        signerTitle: sig.signer_title ?? '',
+        signatureRole: sig.signature_role ?? '',
+      })
       const hashMatches = recomputedSignatureHash === sig.signature_hash
       const mismatchReason = hashMatches ? null : 'Signature hash mismatch; data may have been tampered'
       return {

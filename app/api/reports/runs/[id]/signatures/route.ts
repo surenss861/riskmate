@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
-import { createHash } from 'crypto'
+import { computeSignatureHash } from '@/lib/utils/signatureHash'
 import { validateSignatureSvg } from '@/lib/utils/signatureValidation'
 
 export const runtime = 'nodejs'
@@ -224,13 +224,16 @@ export async function POST(
       }
     }
 
-    // Compute signature hash per contract: signature_svg, signer_name, signer_title, signature_role only
-    const signatureHash = createHash('sha256')
-      .update(signature_svg)
-      .update(signer_name)
-      .update(signer_title)
-      .update(signature_role)
-      .digest('hex')
+    // Compute signature hash bound to sealed payload and run (data_hash + reportRunId + signature fields).
+    // Clients verifying signatures must use the same inputs; see computeSignatureHash in lib/utils/signatureHash.
+    const signatureHash = computeSignatureHash({
+      dataHash: reportRun.data_hash,
+      reportRunId,
+      signatureSvg: signature_svg,
+      signerName: signer_name,
+      signerTitle: signer_title,
+      signatureRole: signature_role,
+    })
 
     // Get IP and user agent for audit trail
     const ipAddress = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || null

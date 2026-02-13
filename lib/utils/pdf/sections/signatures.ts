@@ -1,8 +1,7 @@
 import PDFDocument from 'pdfkit';
 import { STYLES } from '../styles';
-import { addSectionHeader } from '../helpers';
-import { formatDate } from '../utils';
-import type { JobData } from '../types';
+import { addSectionHeader } from '../sectionHeader';
+import { formatDate } from '../formatDate';
 import { drawSignatureSvgPath } from '../signatureHelpers';
 import { validateSignatureSvg } from '../../signatureValidation';
 
@@ -16,6 +15,14 @@ export interface PdfSignatureData {
   signature_hash?: string | null;
 }
 
+/** Options for the shared Signatures & Compliance section */
+export interface RenderSignaturesOptions {
+  /** When set, renders "Prepared by Riskmate" and "Document ID: ..." above Crew Signatures */
+  documentId?: string;
+  /** When set, passed to safeAddPage(estimatedTotalPages) for footer page numbering */
+  estimatedTotalPages?: number;
+}
+
 const ROLE_LABELS: Record<string, string> = {
   prepared_by: 'Prepared By',
   reviewed_by: 'Reviewed By',
@@ -23,39 +30,47 @@ const ROLE_LABELS: Record<string, string> = {
   other: 'Signature',
 };
 
+const REQUIRED_ROLES: Array<'prepared_by' | 'reviewed_by' | 'approved_by'> = [
+  'prepared_by',
+  'reviewed_by',
+  'approved_by',
+];
+
 /**
- * Signatures & Compliance - Legal/Compliance Style
- *
- * When signatures array is provided, renders actual signer name/title, timestamp, signature hash,
- * and indicates signature captured (SVG stored). Otherwise renders placeholder boxes.
+ * Signatures & Compliance - shared implementation for web and backend PDF generators.
+ * Renders layout, validation, SVG via drawSignatureSvgPath. Callers supply signatures
+ * (e.g. from report_signatures for a run). Optional documentId shows "Prepared by Riskmate" / Document ID.
  */
 export function renderSignaturesAndCompliance(
   doc: PDFKit.PDFDocument,
-  job: JobData,
   pageWidth: number,
   pageHeight: number,
   margin: number,
-  safeAddPage: () => void,
-  signatures?: PdfSignatureData[]
-) {
-  safeAddPage();
+  safeAddPage: (estimatedPages?: number) => void,
+  signatures: PdfSignatureData[],
+  options?: RenderSignaturesOptions
+): void {
+  const addPage = () => {
+    if (options?.estimatedTotalPages != null) {
+      safeAddPage(options.estimatedTotalPages);
+    } else {
+      safeAddPage();
+    }
+  };
+
+  addPage();
   addSectionHeader(doc, 'Signatures & Compliance');
 
-  // ============================================
-  // PREPARED BY & DOCUMENT ID
-  // ============================================
-  doc
-    .fillColor(STYLES.colors.secondaryText)
-    .fontSize(9)
-    .font(STYLES.fonts.body)
-    .text('Prepared by Riskmate', margin, doc.y)
-    .text(`Document ID: ${job.id.substring(0, 8).toUpperCase()}`, margin, doc.y + 12);
+  if (options?.documentId != null) {
+    doc
+      .fillColor(STYLES.colors.secondaryText)
+      .fontSize(9)
+      .font(STYLES.fonts.body)
+      .text('Prepared by Riskmate', margin, doc.y)
+      .text(`Document ID: ${options.documentId.substring(0, 8).toUpperCase()}`, margin, doc.y + 12);
+    doc.moveDown(2);
+  }
 
-  doc.moveDown(2);
-
-  // ============================================
-  // CREW SIGNATURES (actual data or placeholders)
-  // ============================================
   doc
     .fillColor(STYLES.colors.primaryText)
     .fontSize(14)
@@ -69,45 +84,24 @@ export function renderSignaturesAndCompliance(
   const sigBoxWidth = (pageWidth - margin * 2 - 20) / 2;
   const sigSpacing = 20;
 
-  // Map signatures by role for easy lookup
   const sigsByRole = new Map<string, PdfSignatureData>();
-  if (signatures) {
-    for (const sig of signatures) {
-      sigsByRole.set(sig.signature_role, sig);
-    }
+  for (const sig of signatures) {
+    sigsByRole.set(sig.signature_role, sig);
   }
 
-  // Build fixed slot list: always show required roles first, then 'other' signatures
-  const requiredRoles: Array<'prepared_by' | 'reviewed_by' | 'approved_by'> = [
-    'prepared_by',
-    'reviewed_by',
-    'approved_by',
-  ];
   const slots: Array<PdfSignatureData | { role: string; placeholder: true }> = [];
-
-  // Add required roles (with signature or placeholder)
-  for (const role of requiredRoles) {
+  for (const role of REQUIRED_ROLES) {
     const sig = sigsByRole.get(role);
-    if (sig) {
-      slots.push(sig);
-    } else {
-      slots.push({ role, placeholder: true });
-    }
+    if (sig) slots.push(sig);
+    else slots.push({ role, placeholder: true });
+  }
+  for (const sig of signatures) {
+    if (sig.signature_role === 'other') slots.push(sig);
   }
 
-  // Add 'other' signatures after required roles
-  if (signatures) {
-    for (const sig of signatures) {
-      if (sig.signature_role === 'other') {
-        slots.push(sig);
-      }
-    }
-  }
-
-  // Render all slots (dynamically add pages as needed)
   const count = slots.length;
-  let currentPageStartY = sigBoxY; // Track where signatures start on current page
-  let rowOnCurrentPage = 0; // Track row number relative to current page
+  let currentPageStartY = sigBoxY;
+  let rowOnCurrentPage = 0;
 
   for (let i = 0; i < count; i++) {
     const slot = slots[i];
@@ -115,7 +109,6 @@ export function renderSignaturesAndCompliance(
     const col = i % 2;
     const sigValidation = sig?.signature_svg ? validateSignatureSvg(sig.signature_svg) : null;
 
-    // Calculate position based on current page context
     const sigY = currentPageStartY + rowOnCurrentPage * (sigBoxHeight + sigSpacing);
     const sigX = margin + col * (sigBoxWidth + sigSpacing);
 
@@ -165,17 +158,13 @@ export function renderSignaturesAndCompliance(
           .text(sig.signer_title, x + 15, y + 52, { width: sigBoxWidth - 30 });
 
         if (sig.signature_svg && signatureValid) {
-          const pathBoxX = x + 15;
-          const pathBoxY = y + 54;
-          const pathBoxW = sigBoxWidth - 30;
-          const pathBoxH = 16;
           drawSignatureSvgPath(
             doc,
             sig.signature_svg,
-            pathBoxX,
-            pathBoxY,
-            pathBoxW,
-            pathBoxH,
+            x + 15,
+            y + 54,
+            sigBoxWidth - 30,
+            16,
             STYLES.colors.primaryText,
             1
           );
@@ -209,7 +198,6 @@ export function renderSignaturesAndCompliance(
           }
         }
       } else {
-        // Render placeholder with role label if available
         const placeholderSlot = slots[i];
         const roleLabel =
           'placeholder' in placeholderSlot && placeholderSlot.role
@@ -233,9 +221,8 @@ export function renderSignaturesAndCompliance(
       }
     };
 
-    // Check if we need a new page before drawing
     if (sigY + sigBoxHeight > pageHeight - 200) {
-      safeAddPage();
+      addPage();
       currentPageStartY = STYLES.spacing.sectionTop + 40;
       rowOnCurrentPage = 0;
       const newSigY = currentPageStartY;
@@ -247,19 +234,14 @@ export function renderSignaturesAndCompliance(
       doc.y = sigY + sigBoxHeight;
     }
 
-    // Move to next row after rendering both columns (right column)
     if (col === 1) {
       rowOnCurrentPage++;
     }
   }
 
-  // Position after all signatures with spacing for compliance section
   doc.y = doc.y + 30;
   const complianceY = doc.y;
 
-  // ============================================
-  // COMPLIANCE STATEMENT (Bordered Callout Block)
-  // ============================================
   doc
     .fillColor(STYLES.colors.primaryText)
     .fontSize(14)

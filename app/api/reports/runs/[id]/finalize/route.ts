@@ -4,7 +4,7 @@ import { buildJobReport } from '@/lib/utils/jobReport'
 import { buildJobPacket } from '@/lib/utils/packets/builder'
 import { computeCanonicalHash } from '@/lib/utils/canonicalJson'
 import { isValidPacketType } from '@/lib/utils/packets/types'
-import { createHash } from 'crypto'
+import { computeSignatureHash } from '@/lib/utils/signatureHash'
 
 export const runtime = 'nodejs'
 
@@ -107,12 +107,14 @@ export async function POST(
 
     const activeSignaturesForVerify = signaturesForVerify?.filter((s) => !s.revoked_at) || []
     for (const sig of activeSignaturesForVerify) {
-      const recomputedSignatureHash = createHash('sha256')
-        .update(sig.signature_svg ?? '')
-        .update(sig.signer_name ?? '')
-        .update(sig.signer_title ?? '')
-        .update(sig.signature_role ?? '')
-        .digest('hex')
+      const recomputedSignatureHash = computeSignatureHash({
+        dataHash: reportRun.data_hash,
+        reportRunId,
+        signatureSvg: sig.signature_svg ?? '',
+        signerName: sig.signer_name ?? '',
+        signerTitle: sig.signer_title ?? '',
+        signatureRole: sig.signature_role ?? '',
+      })
       if (recomputedSignatureHash !== sig.signature_hash) {
         return NextResponse.json(
           {

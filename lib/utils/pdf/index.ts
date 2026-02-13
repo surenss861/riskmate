@@ -191,12 +191,12 @@ export async function generateRiskSnapshotPDF(
 
     renderSignaturesAndCompliance(
       doc,
-      job,
       pageWidth,
       pageHeight,
       margin,
       safeAddPage,
-      finalSignatures
+      finalSignatures,
+      { documentId: job.id }
     );
 
     // ============================================
