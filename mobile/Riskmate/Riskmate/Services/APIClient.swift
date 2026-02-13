@@ -853,6 +853,26 @@ class APIClient {
         return response.data
     }
 
+    /// Fetch report runs for a job (optional packet_type; default insurance).
+    func getReportRuns(jobId: String, packetType: String = "insurance", limit: Int = 20, offset: Int = 0, status: String? = nil) async throws -> [ReportRun] {
+        var query = "job_id=\(jobId)&packet_type=\(packetType)&limit=\(limit)&offset=\(offset)"
+        if let status = status, !status.isEmpty {
+            query += "&status=\(status)"
+        }
+        let response: ReportRunsListResponse = try await request(
+            endpoint: "/api/reports/runs?\(query)"
+        )
+        return response.data
+    }
+
+    /// Fetch a single report run by ID.
+    func getReportRun(reportRunId: String) async throws -> ReportRun {
+        let response: ReportRunResponse = try await request(
+            endpoint: "/api/reports/runs/\(reportRunId)"
+        )
+        return response.data
+    }
+
     /// Generate Risk Snapshot PDF
     func generateRiskSnapshot(jobId: String) async throws -> URL {
         // Check if backend returns URL or base64
@@ -1014,6 +1034,62 @@ struct CreateExportResponse: Codable {
     struct CreateExportData: Codable {
         let id: String
     }
+}
+
+// MARK: - Report Runs
+
+struct ReportRun: Codable, Identifiable {
+    let id: String
+    let jobId: String
+    let organizationId: String
+    let status: String
+    let dataHash: String
+    let generatedAt: Date
+    let packetType: String?
+    let pdfGeneratedAt: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case jobId = "job_id"
+        case organizationId = "organization_id"
+        case status
+        case dataHash = "data_hash"
+        case generatedAt = "generated_at"
+        case packetType = "packet_type"
+        case pdfGeneratedAt = "pdf_generated_at"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        jobId = try c.decode(String.self, forKey: .jobId)
+        organizationId = try c.decode(String.self, forKey: .organizationId)
+        status = try c.decode(String.self, forKey: .status)
+        dataHash = try c.decode(String.self, forKey: .dataHash)
+        if let dateString = try c.decodeIfPresent(String.self, forKey: .generatedAt) {
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            generatedAt = formatter.date(from: dateString) ?? ISO8601DateFormatter().date(from: dateString) ?? Date()
+        } else {
+            generatedAt = Date()
+        }
+        packetType = try c.decodeIfPresent(String.self, forKey: .packetType)
+        if let dateString = try c.decodeIfPresent(String.self, forKey: .pdfGeneratedAt) {
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            pdfGeneratedAt = formatter.date(from: dateString) ?? ISO8601DateFormatter().date(from: dateString)
+        } else {
+            pdfGeneratedAt = nil
+        }
+    }
+}
+
+struct ReportRunResponse: Codable {
+    let data: ReportRun
+}
+
+struct ReportRunsListResponse: Codable {
+    let data: [ReportRun]
 }
 
 // MARK: - Report Signatures

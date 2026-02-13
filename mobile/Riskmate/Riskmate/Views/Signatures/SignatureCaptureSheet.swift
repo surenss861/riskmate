@@ -37,8 +37,15 @@ struct SignatureCaptureSheet: View {
     @State private var errorMessage: String?
     @State private var isSubmitting: Bool = false
 
+    /// Paths with at least two points (valid strokes). Single-point paths are discarded to avoid degenerate SVG rejected by backend.
+    private var allPaths: [[CGPoint]] {
+        let validPaths = paths.filter { $0.count >= 2 }
+        let validCurrent = (currentPath.count >= 2) ? [currentPath] : [] as [[CGPoint]]
+        return validPaths + validCurrent
+    }
+
     private var hasSignature: Bool {
-        !paths.isEmpty || !currentPath.isEmpty
+        !allPaths.isEmpty
     }
 
     private var canSubmit: Bool {
@@ -272,16 +279,15 @@ struct SignatureCaptureSheet: View {
             return
         }
 
-        var allPaths = paths
-        if !currentPath.isEmpty { allPaths.append(currentPath) }
-        guard !allPaths.isEmpty else {
-            errorMessage = "Please provide a signature."
+        let validPaths = allPaths
+        guard !validPaths.isEmpty else {
+            errorMessage = "Please draw a signature with at least one stroke of two or more points."
             return
         }
 
         let width = canvasSize.width > 0 ? canvasSize.width : 400
         let height = canvasSize.height > 0 ? canvasSize.height : 180
-        let svg = exportPathsToSvg(paths: allPaths, width: width, height: height)
+        let svg = exportPathsToSvg(paths: validPaths, width: width, height: height)
         guard !svg.isEmpty else {
             errorMessage = "Could not generate signature."
             return
@@ -299,11 +305,12 @@ struct SignatureCaptureSheet: View {
     }
 
     private func exportPathsToSvg(paths: [[CGPoint]], width: CGFloat, height: CGFloat) -> String {
-        guard !paths.isEmpty else { return "" }
+        let validPaths = paths.filter { $0.count >= 2 }
+        guard !validPaths.isEmpty else { return "" }
         let w = Int(width)
         let h = Int(height)
         var pathElements: String = ""
-        for path in paths where path.count >= 1 {
+        for path in validPaths {
             var d = "M \(path[0].x) \(path[0].y)"
             for i in 1..<path.count {
                 d += " L \(path[i].x) \(path[i].y)"
