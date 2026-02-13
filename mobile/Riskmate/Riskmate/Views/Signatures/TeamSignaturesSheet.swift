@@ -125,7 +125,7 @@ struct TeamSignaturesSheet: View {
                             Haptics.tap()
                             signingContext = SigningContext(run: run, role: role)
                         },
-                        canSign: run.status == "ready_for_signatures"
+                        canSign: run.status == "draft" || run.status == "ready_for_signatures"
                     )
                 }
             }
@@ -145,10 +145,17 @@ struct TeamSignaturesSheet: View {
                 limit: 20,
                 status: nil
             )
-            // Prefer runs ready for signatures at top
+            // Prefer signable runs (draft, ready_for_signatures) at top; then by date
             runs.sort { r1, r2 in
-                if r1.status == "ready_for_signatures", r2.status != "ready_for_signatures" { return true }
-                if r1.status != "ready_for_signatures", r2.status == "ready_for_signatures" { return false }
+                let signable1 = r1.status == "draft" || r1.status == "ready_for_signatures"
+                let signable2 = r2.status == "draft" || r2.status == "ready_for_signatures"
+                if signable1, !signable2 { return true }
+                if !signable1, signable2 { return false }
+                if signable1, signable2 {
+                    // Within signable: ready_for_signatures before draft, then newest first
+                    if r1.status == "ready_for_signatures", r2.status != "ready_for_signatures" { return true }
+                    if r1.status != "ready_for_signatures", r2.status == "ready_for_signatures" { return false }
+                }
                 return r1.generatedAt > r2.generatedAt
             }
             for run in runs {
