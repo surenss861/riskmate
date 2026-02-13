@@ -83,6 +83,16 @@ export function validateSignatureSvg(svg: string): ValidationResult {
     }
   }
 
+  // Require at least one path with non-empty d or polyline with non-empty points
+  const hasPathWithD = /<path[^>]*d=["']([^"']+)["']/i.test(svg)
+  const hasPolylineWithPoints = /<polyline[^>]*points=["']([^"']+)["']/i.test(svg)
+  if (!hasPathWithD && !hasPolylineWithPoints) {
+    return {
+      valid: false,
+      error: 'Signature must contain at least one path or polyline with drawing data',
+    }
+  }
+
   return { valid: true }
 }
 
