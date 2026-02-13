@@ -102,7 +102,7 @@ export async function POST(
     // Re-verify each active signature's signature_hash (same logic as verify route)
     const { data: signaturesForVerify } = await supabase
       .from('report_signatures')
-      .select('id, signature_role, signature_hash, signature_svg, signer_name, signer_title, revoked_at')
+      .select('id, signature_role, signature_hash, signature_svg, signer_name, signer_title, attestation_text, revoked_at')
       .eq('report_run_id', reportRunId)
 
     const activeSignaturesForVerify = signaturesForVerify?.filter((s) => !s.revoked_at) || []
@@ -114,6 +114,7 @@ export async function POST(
         signerName: sig.signer_name ?? '',
         signerTitle: sig.signer_title ?? '',
         signatureRole: sig.signature_role ?? '',
+        attestationText: sig.attestation_text ?? '',
       })
       if (recomputedSignatureHash !== sig.signature_hash) {
         return NextResponse.json(

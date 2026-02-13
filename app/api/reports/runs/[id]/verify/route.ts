@@ -80,16 +80,16 @@ export async function GET(
       ? null
       : 'Report data has changed since this run was created'
 
-    // Get signatures (need signature_svg, signer_name, signer_title for hash recomputation)
+    // Get signatures (need signature_svg, signer_name, signer_title, attestation_text for hash recomputation)
     const { data: signatures } = await supabase
       .from('report_signatures')
-      .select('id, signature_role, signature_hash, signature_svg, signer_name, signer_title, signed_at, revoked_at')
+      .select('id, signature_role, signature_hash, signature_svg, signer_name, signer_title, attestation_text, signed_at, revoked_at')
       .eq('report_run_id', reportRunId)
 
     const activeSignatures = signatures?.filter((s) => !s.revoked_at) || []
     const revokedSignatures = signatures?.filter((s) => s.revoked_at) || []
 
-    // Recompute each signature's hash (same contract as POST /signatures: data_hash + reportRunId + signature fields)
+    // Recompute each signature's hash (same contract as POST /signatures: data_hash + reportRunId + signature fields + attestation_text)
     const signatureVerifications = activeSignatures.map((sig) => {
       const recomputedSignatureHash = computeSignatureHash({
         dataHash: reportRun.data_hash,
@@ -98,6 +98,7 @@ export async function GET(
         signerName: sig.signer_name ?? '',
         signerTitle: sig.signer_title ?? '',
         signatureRole: sig.signature_role ?? '',
+        attestationText: sig.attestation_text ?? '',
       })
       const hashMatches = recomputedSignatureHash === sig.signature_hash
       const mismatchReason = hashMatches ? null : 'Signature hash mismatch; data may have been tampered'

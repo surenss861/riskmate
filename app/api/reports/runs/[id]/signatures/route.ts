@@ -224,7 +224,7 @@ export async function POST(
       }
     }
 
-    // Compute signature hash bound to sealed payload and run (data_hash + reportRunId + signature fields).
+    // Compute signature hash bound to sealed payload, run, and attestation (data_hash + reportRunId + signature fields + attestation_text).
     // Clients verifying signatures must use the same inputs; see computeSignatureHash in lib/utils/signatureHash.
     const signatureHash = computeSignatureHash({
       dataHash: reportRun.data_hash,
@@ -233,6 +233,7 @@ export async function POST(
       signerName: signer_name,
       signerTitle: signer_title,
       signatureRole: signature_role,
+      attestationText: attestationText,
     })
 
     // Get IP and user agent for audit trail
