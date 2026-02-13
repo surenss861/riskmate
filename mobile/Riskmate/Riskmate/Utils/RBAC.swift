@@ -120,4 +120,18 @@ struct RBAC {
     var isOperationsReadOnly: Bool {
         role == "executive"
     }
+
+    // MARK: - Report Signatures
+
+    /// Whether the current user can sign a report run as the given signature role (prepared_by, reviewed_by, approved_by).
+    /// Prepared By = field/preparer; Reviewed By = safety lead; Approved By = admin/owner final sign-off.
+    func canSignAsReportRole(_ signatureRole: String) -> Bool {
+        switch role {
+        case "auditor", "executive": return false
+        case "owner", "admin": return true
+        case "safety_lead": return ["prepared_by", "reviewed_by"].contains(signatureRole)
+        case "member": return signatureRole == "prepared_by"
+        default: return false
+        }
+    }
 }

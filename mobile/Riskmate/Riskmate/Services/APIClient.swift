@@ -873,6 +873,17 @@ class APIClient {
         return response.data
     }
 
+    /// Get or create an active (non-superseded, signable) report run for a job.
+    /// With forceNew: false, returns existing active run if any; otherwise creates one. With forceNew: true, supersedes prior and creates new.
+    func getActiveReportRun(jobId: String, packetType: String = "insurance", forceNew: Bool = false) async throws -> (run: ReportRun, created: Bool) {
+        var query = "job_id=\(jobId)&packet_type=\(packetType)"
+        if forceNew { query += "&force_new=true" }
+        let response: ReportRunActiveResponse = try await request(
+            endpoint: "/api/reports/runs/active?\(query)"
+        )
+        return (response.data, response.created)
+    }
+
     /// Generate Risk Snapshot PDF
     func generateRiskSnapshot(jobId: String) async throws -> URL {
         // Check if backend returns URL or base64
@@ -1086,6 +1097,11 @@ struct ReportRun: Codable, Identifiable {
 
 struct ReportRunResponse: Codable {
     let data: ReportRun
+}
+
+struct ReportRunActiveResponse: Codable {
+    let data: ReportRun
+    let created: Bool
 }
 
 struct ReportRunsListResponse: Codable {
@@ -1673,6 +1689,12 @@ extension APIError {
         case .decodingError:
             return .client
         }
+    }
+
+    /// HTTP status code when error is .httpError(statusCode:message:); nil otherwise.
+    var statusCode: Int? {
+        if case .httpError(let code, _) = self { return code }
+        return nil
     }
 }
 

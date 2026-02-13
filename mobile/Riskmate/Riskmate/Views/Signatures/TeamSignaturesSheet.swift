@@ -2,6 +2,7 @@ import SwiftUI
 
 /// Sheet that lists report runs for a job and presents SignatureCaptureSheet to add signatures.
 /// Save handler calls APIClient.createSignature to persist the signature.
+/// Sign-as buttons are gated by role/entitlement (RBAC); 403/409 from createSignature show an error and keep the sheet open.
 struct TeamSignaturesSheet: View {
     let jobId: String
     let onDismiss: () -> Void
@@ -14,8 +15,17 @@ struct TeamSignaturesSheet: View {
     /// When non-nil, SignatureCaptureSheet is presented for this run and role.
     @State private var signingContext: SigningContext?
     @State private var isSubmitting = false
+    /// Get-or-create active run (empty state or when no run exists).
+    @State private var isCreatingRun = false
 
     private let packetType = "insurance"
+    private var rbac: RBAC {
+        let role = EntitlementsManager.shared.getEntitlements()?.role
+        return RBAC(role: role)
+    }
+    private func canSignAs(_ role: SignatureRole) -> Bool {
+        rbac.canSignAsReportRole(role.rawValue)
+    }
     private let dateFormatter: DateFormatter = {
         let f = DateFormatter()
         f.dateStyle = .medium
@@ -53,12 +63,7 @@ struct TeamSignaturesSheet: View {
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if runs.isEmpty {
-                    RMEmptyState(
-                        icon: "doc.badge.plus",
-                        title: "No Report Runs",
-                        message: "Generate a Risk Snapshot report from the Export section to create a report run, then add signatures here."
-                    )
-                    .padding(RMTheme.Spacing.pagePadding)
+                    emptyStateView
                 } else {
                     runsList
                 }
@@ -113,6 +118,52 @@ struct TeamSignaturesSheet: View {
         }
     }
 
+    private var emptyStateView: some View {
+        VStack(spacing: RMTheme.Spacing.lg) {
+            RMEmptyState(
+                icon: "doc.badge.plus",
+                title: "No Report Runs",
+                message: "Create a report run to add team signatures, or generate a Risk Snapshot from the Export section."
+            )
+            Button {
+                Haptics.tap()
+                Task { await ensureActiveRunThenRefresh() }
+            } label: {
+                HStack {
+                    if isCreatingRun {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                    } else {
+                        Text("Create report run")
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, RMTheme.Spacing.sm)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(RMTheme.Colors.accent)
+            .disabled(isCreatingRun)
+            // Optional: "Sign as …" when no run exists — get-or-create then open capture sheet for selected role
+            HStack(spacing: RMTheme.Spacing.sm) {
+                ForEach([SignatureRole.preparedBy, .reviewedBy, .approvedBy], id: \.self) { role in
+                    if canSignAs(role) {
+                        Button {
+                            Haptics.tap()
+                            Task { await ensureActiveRunThenSignAs(role) }
+                        } label: {
+                            Text("Sign as \(role.displayTitle)")
+                                .font(RMTheme.Typography.captionBold)
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(RMTheme.Colors.accent)
+                        .disabled(isCreatingRun)
+                    }
+                }
+            }
+        }
+        .padding(RMTheme.Spacing.pagePadding)
+    }
+
     private var runsList: some View {
         ScrollView(showsIndicators: false) {
             LazyVStack(spacing: RMTheme.Spacing.md) {
@@ -125,11 +176,40 @@ struct TeamSignaturesSheet: View {
                             Haptics.tap()
                             signingContext = SigningContext(run: run, role: role)
                         },
-                        canSign: run.status == "draft" || run.status == "ready_for_signatures"
+                        canSign: run.status == "draft" || run.status == "ready_for_signatures",
+                        canSignAsRole: canSignAs
                     )
                 }
             }
             .padding(RMTheme.Spacing.pagePadding)
+        }
+    }
+
+    @MainActor
+    private func ensureActiveRunThenRefresh() async {
+        isCreatingRun = true
+        errorMessage = nil
+        defer { isCreatingRun = false }
+        do {
+            _ = try await APIClient.shared.getActiveReportRun(jobId: jobId, packetType: packetType, forceNew: false)
+            await loadRuns()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    /// Get-or-create active run then present SignatureCaptureSheet for the given role (e.g. from empty state "Sign as …").
+    @MainActor
+    private func ensureActiveRunThenSignAs(_ role: SignatureRole) async {
+        isCreatingRun = true
+        errorMessage = nil
+        defer { isCreatingRun = false }
+        do {
+            let (run, _) = try await APIClient.shared.getActiveReportRun(jobId: jobId, packetType: packetType, forceNew: false)
+            await loadRuns()
+            signingContext = SigningContext(run: run, role: role)
+        } catch {
+            errorMessage = error.localizedDescription
         }
     }
 
@@ -171,10 +251,7 @@ struct TeamSignaturesSheet: View {
     @MainActor
     private func submitSignature(reportRunId: String, role: SignatureRole, data: SignatureCaptureData) async {
         isSubmitting = true
-        defer {
-            isSubmitting = false
-            signingContext = nil
-        }
+        defer { isSubmitting = false }
         do {
             _ = try await APIClient.shared.createSignature(
                 reportRunId: reportRunId,
@@ -184,10 +261,21 @@ struct TeamSignaturesSheet: View {
                 signatureSvg: data.signatureSvg,
                 attestationText: data.attestationText
             )
+            signingContext = nil
             ToastCenter.shared.show("Signature saved", systemImage: "checkmark.circle.fill", style: .success)
             await loadRuns()
+        } catch let error as APIError {
+            let code = error.statusCode ?? 0
+            if code == 403 || code == 409 {
+                errorMessage = error.localizedDescription
+                // Keep signing sheet open; do not update runs list
+                return
+            }
+            errorMessage = error.localizedDescription
+            signingContext = nil
         } catch {
             errorMessage = error.localizedDescription
+            signingContext = nil
         }
     }
 }
@@ -208,6 +296,8 @@ private struct ReportRunCard: View {
     let dateFormatter: DateFormatter
     let onSignAs: (SignatureRole) -> Void
     let canSign: Bool
+    /// When provided, each "Sign as" button is only enabled when this returns true for that role (and not already signed).
+    var canSignAsRole: ((SignatureRole) -> Bool) = { _ in true }
 
     var body: some View {
         VStack(alignment: .leading, spacing: RMTheme.Spacing.sm) {
@@ -235,15 +325,18 @@ private struct ReportRunCard: View {
                 HStack(spacing: RMTheme.Spacing.sm) {
                     ForEach([SignatureRole.preparedBy, .reviewedBy, .approvedBy], id: \.self) { role in
                         let alreadySigned = signatures.contains { $0.signatureRole == role.rawValue }
-                        Button {
-                            onSignAs(role)
-                        } label: {
-                            Text("Sign as \(role.displayTitle)")
-                                .font(RMTheme.Typography.captionBold)
+                        let allowed = canSignAsRole(role)
+                        if allowed {
+                            Button {
+                                onSignAs(role)
+                            } label: {
+                                Text("Sign as \(role.displayTitle)")
+                                    .font(RMTheme.Typography.captionBold)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .tint(RMTheme.Colors.accent)
+                            .disabled(alreadySigned)
                         }
-                        .buttonStyle(.borderedProminent)
-                        .tint(RMTheme.Colors.accent)
-                        .disabled(alreadySigned)
                     }
                 }
             } else {
