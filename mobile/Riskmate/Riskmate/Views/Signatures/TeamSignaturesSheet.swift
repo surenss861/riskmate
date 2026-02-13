@@ -81,7 +81,10 @@ struct TeamSignaturesSheet: View {
                     .foregroundColor(RMTheme.Colors.accent)
                 }
             }
-            .alert("Team Signatures", isPresented: .constant(errorMessage != nil)) {
+            .alert("Team Signatures", isPresented: Binding(
+                get: { errorMessage != nil },
+                set: { if !$0 { errorMessage = nil } }
+            )) {
                 Button("OK") { errorMessage = nil }
             } message: {
                 if let msg = errorMessage {

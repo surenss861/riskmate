@@ -97,7 +97,10 @@ struct SignatureCaptureSheet: View {
                     .disabled(!canSubmit)
                 }
             }
-            .alert("Signature", isPresented: .constant(errorMessage != nil)) {
+            .alert("Signature", isPresented: Binding(
+                get: { errorMessage != nil },
+                set: { if !$0 { errorMessage = nil } }
+            )) {
                 Button("OK") { errorMessage = nil }
             } message: {
                 if let msg = errorMessage {
