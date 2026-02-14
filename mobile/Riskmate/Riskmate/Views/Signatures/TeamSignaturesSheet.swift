@@ -12,6 +12,8 @@ struct TeamSignaturesSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var runs: [ReportRun] = []
     @State private var signaturesByRunId: [String: [ReportSignature]] = [:]
+    /// Per-run signature fetch failures; runs in this map should not allow signing until retry succeeds.
+    @State private var signaturesErrorByRunId: [String: String] = [:]
     @State private var isLoading = true
     @State private var errorMessage: String?
     /// When non-nil, SignatureCaptureSheet is presented for this run and role.
@@ -206,12 +208,13 @@ struct TeamSignaturesSheet: View {
                     ReportRunCard(
                         run: run,
                         signatures: signaturesByRunId[run.id] ?? [],
+                        signaturesLoadFailed: signaturesErrorByRunId[run.id],
                         dateFormatter: dateFormatter,
                         onSignAs: { role in
                             Haptics.tap()
                             signingContext = SigningContext(run: run, role: role)
                         },
-                        canSign: run.status == "draft" || run.status == "ready_for_signatures",
+                        canSign: (run.status == "draft" || run.status == "ready_for_signatures") && (signaturesErrorByRunId[run.id] == nil),
                         canSignAsRole: { canSignAs($0, existingSignatures: signaturesByRunId[run.id] ?? []) }
                     )
                 }
@@ -297,21 +300,34 @@ struct TeamSignaturesSheet: View {
                 return r1.generatedAt > r2.generatedAt
             }
             var collected: [String: [ReportSignature]] = [:]
-            await withTaskGroup(of: (String, [ReportSignature]).self) { group in
+            var errorsByRunId: [String: String] = [:]
+            await withTaskGroup(of: (String, Result<[ReportSignature], Error>).self) { group in
                 for run in runs {
                     group.addTask {
-                        let sigs = (try? await APIClient.shared.getSignatures(reportRunId: run.id)) ?? []
-                        return (run.id, sigs)
+                        do {
+                            let sigs = try await APIClient.shared.getSignatures(reportRunId: run.id)
+                            return (run.id, .success(sigs))
+                        } catch {
+                            return (run.id, .failure(error))
+                        }
                     }
                 }
-                for await (runId, sigs) in group {
-                    collected[runId] = sigs
+                for await (runId, result) in group {
+                    switch result {
+                    case .success(let sigs):
+                        collected[runId] = sigs
+                    case .failure(let error):
+                        errorsByRunId[runId] = error.localizedDescription
+                    }
                 }
             }
             signaturesByRunId = collected
+            signaturesErrorByRunId = errorsByRunId
         } catch {
             errorMessage = error.localizedDescription
             runs = []
+            signaturesByRunId = [:]
+            signaturesErrorByRunId = [:]
         }
     }
 
@@ -361,6 +377,8 @@ private struct SigningContext: Identifiable {
 private struct ReportRunCard: View {
     let run: ReportRun
     let signatures: [ReportSignature]
+    /// When non-nil, signatures failed to load for this run; Sign as buttons are not shown and signing is blocked.
+    let signaturesLoadFailed: String?
     let dateFormatter: DateFormatter
     let onSignAs: (SignatureRole) -> Void
     let canSign: Bool
@@ -380,6 +398,17 @@ private struct ReportRunCard: View {
                 }
                 Spacer()
                 statusBadge
+            }
+
+            if let err = signaturesLoadFailed {
+                HStack(spacing: RMTheme.Spacing.xs) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 14))
+                        .foregroundColor(RMTheme.Colors.error)
+                    Text("Signatures could not be loaded: \(err)")
+                        .font(RMTheme.Typography.captionSmall)
+                        .foregroundColor(RMTheme.Colors.error)
+                }
             }
 
             if !signatures.isEmpty {

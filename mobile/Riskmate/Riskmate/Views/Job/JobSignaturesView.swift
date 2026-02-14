@@ -276,7 +276,8 @@ struct JobSignaturesView: View {
     }
 
     private func signatureCard(role: SignatureRole, signature: ReportSignature?, run: ReportRun) -> some View {
-        let canSign = (run.status == "draft" || run.status == "ready_for_signatures") && canSignAsReportRole(role, existingSignatures: signatures)
+        let signaturesUnavailable = signaturesErrorMessage != nil || isLoadingSignatures
+        let canSign = !signaturesUnavailable && (run.status == "draft" || run.status == "ready_for_signatures") && canSignAsReportRole(role, existingSignatures: signatures)
         let alreadySigned = signature != nil
 
         return RMGlassCard {
