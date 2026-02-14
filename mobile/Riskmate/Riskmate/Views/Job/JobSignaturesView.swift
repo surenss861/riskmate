@@ -426,7 +426,7 @@ struct JobSignaturesView: View {
             signaturesErrorMessage = nil
         } catch {
             signaturesErrorMessage = error.localizedDescription
-            signatures = []
+            // Keep existing signatures so export-complete state is not falsely cleared when data is temporarily unavailable.
         }
     }
 
@@ -443,7 +443,7 @@ struct JobSignaturesView: View {
             signaturesErrorMessage = nil
         } catch {
             signaturesErrorMessage = error.localizedDescription
-            signatures = []
+            // Keep existing signatures so export-complete state is not falsely cleared when data is temporarily unavailable.
         }
     }
 
