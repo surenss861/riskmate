@@ -241,10 +241,19 @@ struct TeamSignaturesSheet: View {
                 }
                 return r1.generatedAt > r2.generatedAt
             }
-            for run in runs {
-                let sigs = (try? await APIClient.shared.getSignatures(reportRunId: run.id)) ?? []
-                signaturesByRunId[run.id] = sigs
+            var collected: [String: [ReportSignature]] = [:]
+            await withTaskGroup(of: (String, [ReportSignature]).self) { group in
+                for run in runs {
+                    group.addTask {
+                        let sigs = (try? await APIClient.shared.getSignatures(reportRunId: run.id)) ?? []
+                        return (run.id, sigs)
+                    }
+                }
+                for await (runId, sigs) in group {
+                    collected[runId] = sigs
+                }
             }
+            signaturesByRunId = collected
         } catch {
             errorMessage = error.localizedDescription
             runs = []

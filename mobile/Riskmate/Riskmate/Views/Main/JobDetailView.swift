@@ -13,7 +13,6 @@ struct JobDetailView: View {
     @State private var pdfURL: URL?
     @State private var showExportProofSheet = false
     @State private var showExportHistory = false
-    @State private var showTeamSignaturesSheet = false
     @State private var hasFailedExport = false
     @State private var hazardsCount: Int = 0
     @State private var controlsCount: Int = 0
@@ -142,12 +141,6 @@ struct JobDetailView: View {
                         }
                         Button {
                             Haptics.tap()
-                            showTeamSignaturesSheet = true
-                        } label: {
-                            Label("Team Signatures", systemImage: "signature")
-                        }
-                        Button {
-                            Haptics.tap()
                             WebAppURL.openWebApp(jobId: jobId)
                         } label: {
                             Label("Open in Web App", systemImage: "globe")
@@ -179,11 +172,6 @@ struct JobDetailView: View {
             .sheet(isPresented: $showExportHistory) {
                 ExportHistorySheet(jobId: jobId)
                     .environmentObject(quickAction)
-            }
-            .sheet(isPresented: $showTeamSignaturesSheet) {
-                TeamSignaturesSheet(jobId: jobId) {
-                    showTeamSignaturesSheet = false
-                }
             }
             .onChange(of: showExportHistory) { _, isShowing in
                 if !isShowing {
