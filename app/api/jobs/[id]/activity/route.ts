@@ -364,11 +364,13 @@ export async function GET(
       const actorId = event.actor_id as string | undefined
       if (actorId) {
         const actor = actorMap.get(actorId)
-        if (actor) {
-          out.actor_name = actor.full_name ?? 'Unknown'
-          out.actor_email = actor.email ?? ''
-          out.actor_role = actor.role ?? 'member'
-        }
+        out.actor_name = actor ? (actor.full_name ?? 'Unknown') : 'Unknown'
+        out.actor_email = actor ? (actor.email ?? '') : ''
+        out.actor_role = actor ? (actor.role ?? 'member') : 'member'
+      } else {
+        out.actor_name = 'Unknown'
+        out.actor_email = ''
+        out.actor_role = 'member'
       }
       return out
     })
