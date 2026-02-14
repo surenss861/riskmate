@@ -28,7 +28,8 @@ struct SignatureCaptureSheet: View {
     var reportRunId: String?
     var reportRunHash: String?
     var reportRunCreatedAt: String?
-    let onSave: (SignatureCaptureData) -> Void
+    /// Completion: call with .success(()) on save success, .failure(error) on API/validation error. Sheet dismisses only on success.
+    let onSave: (SignatureCaptureData, @escaping (Result<Void, Error>) -> Void) -> Void
     let onCancel: () -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -281,15 +282,19 @@ struct SignatureCaptureSheet: View {
     private func submitSignature() {
         guard canSubmit else { return }
 
+        isSubmitting = true
+
         let name = signerName.trimmingCharacters(in: .whitespacesAndNewlines)
         let title = signerTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty, !title.isEmpty else {
+            isSubmitting = false
             errorMessage = "Please enter your full legal name and title."
             return
         }
 
         let validPaths = allPaths
         guard !validPaths.isEmpty else {
+            isSubmitting = false
             errorMessage = "Please draw a signature with at least one stroke of two or more points."
             return
         }
@@ -298,6 +303,7 @@ struct SignatureCaptureSheet: View {
         let height = canvasSize.height > 0 ? canvasSize.height : 180
         let svg = exportPathsToSvg(strokes: validPaths, width: width, height: height)
         guard !svg.isEmpty else {
+            isSubmitting = false
             errorMessage = "Could not generate signature."
             return
         }
@@ -309,8 +315,15 @@ struct SignatureCaptureSheet: View {
             attestationText: attestationStatement
         )
         Haptics.success()
-        onSave(data)
-        dismiss()
+        onSave(data) { result in
+            isSubmitting = false
+            switch result {
+            case .success:
+                dismiss()
+            case .failure(let error):
+                errorMessage = error.localizedDescription
+            }
+        }
     }
 
     /// Exports strokes to SVG with per-segment stroke width (pressure-sensitive).
@@ -523,7 +536,7 @@ private struct PressureSignaturePadView: UIViewRepresentable {
         reportRunId: nil,
         reportRunHash: nil,
         reportRunCreatedAt: nil,
-        onSave: { _ in },
+        onSave: { _, completion in completion(.success(())) },
         onCancel: { }
     )
 }

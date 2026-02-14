@@ -97,9 +97,9 @@ struct TeamSignaturesSheet: View {
                     reportRunId: ctx.run.id,
                     reportRunHash: ctx.run.dataHash,
                     reportRunCreatedAt: dateFormatter.string(from: ctx.run.generatedAt),
-                    onSave: { data in
+                    onSave: { data, completion in
                         Task {
-                            await submitSignature(reportRunId: ctx.run.id, role: ctx.role, data: data)
+                            await submitSignature(reportRunId: ctx.run.id, role: ctx.role, data: data, completion: completion)
                         }
                     },
                     onCancel: {
@@ -261,7 +261,7 @@ struct TeamSignaturesSheet: View {
     }
 
     @MainActor
-    private func submitSignature(reportRunId: String, role: SignatureRole, data: SignatureCaptureData) async {
+    private func submitSignature(reportRunId: String, role: SignatureRole, data: SignatureCaptureData, completion: @escaping (Result<Void, Error>) -> Void) async {
         isSubmitting = true
         defer { isSubmitting = false }
         do {
@@ -276,18 +276,21 @@ struct TeamSignaturesSheet: View {
             signingContext = nil
             ToastCenter.shared.show("Signature saved", systemImage: "checkmark.circle.fill", style: .success)
             await loadRuns()
+            completion(.success(()))
         } catch let error as APIError {
             let code = error.statusCode ?? 0
             if code == 403 || code == 409 {
                 errorMessage = error.localizedDescription
-                // Keep signing sheet open; do not update runs list
+                completion(.failure(error))
                 return
             }
             errorMessage = error.localizedDescription
             signingContext = nil
+            completion(.failure(error))
         } catch {
             errorMessage = error.localizedDescription
             signingContext = nil
+            completion(.failure(error))
         }
     }
 }
