@@ -32,6 +32,9 @@ struct TeamSignaturesSheet: View {
         f.timeStyle = .short
         return f
     }()
+    private var hasSignableRun: Bool {
+        runs.contains { $0.status == "draft" || $0.status == "ready_for_signatures" }
+    }
 
     var body: some View {
         NavigationStack {
@@ -170,6 +173,26 @@ struct TeamSignaturesSheet: View {
     private var runsList: some View {
         ScrollView(showsIndicators: false) {
             LazyVStack(spacing: RMTheme.Spacing.md) {
+                if !hasSignableRun && !runs.isEmpty {
+                    Button {
+                        Haptics.tap()
+                        Task { await createNewSignableRun() }
+                    } label: {
+                        HStack {
+                            if isCreatingRun {
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle(tint: RMTheme.Colors.accent))
+                            } else {
+                                Text("Create new signable run")
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, RMTheme.Spacing.sm)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(RMTheme.Colors.accent)
+                    .disabled(isCreatingRun)
+                }
                 ForEach(runs) { run in
                     ReportRunCard(
                         run: run,
@@ -201,16 +224,39 @@ struct TeamSignaturesSheet: View {
         }
     }
 
+    /// Create a new signable run when existing runs are non-signable (Manage Runs sheet). Refreshes runs and signatures via loadRuns().
+    @MainActor
+    private func createNewSignableRun() async {
+        isCreatingRun = true
+        errorMessage = nil
+        defer { isCreatingRun = false }
+        do {
+            _ = try await APIClient.shared.getActiveReportRun(jobId: jobId, packetType: packetType, forceNew: true)
+            await loadRuns()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     /// Get-or-create active run then present SignatureCaptureSheet for the given role (e.g. from empty state "Sign as …").
+    /// If the fetched run is not signable (e.g. finalized), creates a new signable run with forceNew: true and uses that.
     @MainActor
     private func ensureActiveRunThenSignAs(_ role: SignatureRole) async {
         isCreatingRun = true
         errorMessage = nil
         defer { isCreatingRun = false }
         do {
-            let (run, _) = try await APIClient.shared.getActiveReportRun(jobId: jobId, packetType: packetType, forceNew: false)
+            var (run, _) = try await APIClient.shared.getActiveReportRun(jobId: jobId, packetType: packetType, forceNew: false)
+            let isSignable = run.status == "draft" || run.status == "ready_for_signatures"
+            if !isSignable {
+                (run, _) = try await APIClient.shared.getActiveReportRun(jobId: jobId, packetType: packetType, forceNew: true)
+            }
             await loadRuns()
-            signingContext = SigningContext(run: run, role: role)
+            if run.status == "draft" || run.status == "ready_for_signatures" {
+                signingContext = SigningContext(run: run, role: role)
+            } else {
+                ToastCenter.shared.show("Could not create a signable run", systemImage: "exclamationmark.triangle", style: .error)
+            }
         } catch {
             errorMessage = error.localizedDescription
         }
