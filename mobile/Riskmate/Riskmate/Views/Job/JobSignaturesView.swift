@@ -12,6 +12,8 @@ struct JobSignaturesView: View {
     @State private var signatures: [ReportSignature] = []
     @State private var isLoading = true
     @State private var errorMessage: String?
+    @State private var signaturesErrorMessage: String?
+    @State private var isLoadingSignatures = false
     @State private var signingContext: SigningContext?
     @State private var isCreatingRun = false
     @State private var showManageRunsSheet = false
@@ -69,6 +71,11 @@ struct JobSignaturesView: View {
                     reportRunBanner(run: run)
                     if !isRunSignable(run.status) {
                         createNewRunSection
+                    }
+                    if let sigErr = signaturesErrorMessage {
+                        signaturesErrorBanner(message: sigErr, isLoading: isLoadingSignatures) {
+                            Task { await retrySignaturesFetch() }
+                        }
                     }
                     ForEach([SignatureRole.preparedBy, .reviewedBy, .approvedBy], id: \.self) { role in
                         signatureCard(
@@ -194,6 +201,35 @@ struct JobSignaturesView: View {
             .disabled(isCreatingRun)
         }
         .padding(.vertical, RMTheme.Spacing.xl)
+    }
+
+    private func signaturesErrorBanner(message: String, isLoading: Bool, onRetry: @escaping () -> Void) -> some View {
+        RMGlassCard {
+            VStack(alignment: .leading, spacing: RMTheme.Spacing.sm) {
+                HStack(alignment: .center, spacing: RMTheme.Spacing.sm) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 20))
+                        .foregroundColor(RMTheme.Colors.error)
+                    Text(message)
+                        .font(RMTheme.Typography.bodySmall)
+                        .foregroundColor(RMTheme.Colors.textSecondary)
+                        .multilineTextAlignment(.leading)
+                    Spacer(minLength: 0)
+                    Button("Retry") {
+                        Haptics.tap()
+                        onRetry()
+                    }
+                    .font(RMTheme.Typography.bodySmallBold)
+                    .foregroundColor(RMTheme.Colors.accent)
+                    .disabled(isLoading)
+                }
+                if isLoading {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: RMTheme.Colors.accent))
+                        .frame(maxWidth: .infinity)
+                }
+            }
+        }
     }
 
     private func reportRunBanner(run: ReportRun) -> some View {
@@ -359,15 +395,42 @@ struct JobSignaturesView: View {
     private func loadData() async {
         isLoading = true
         errorMessage = nil
+        signaturesErrorMessage = nil
         defer { isLoading = false }
+        let run: ReportRun
         do {
-            let (run, _) = try await APIClient.shared.getActiveReportRun(jobId: jobId, packetType: packetType, forceNew: false)
+            let (fetchedRun, _) = try await APIClient.shared.getActiveReportRun(jobId: jobId, packetType: packetType, forceNew: false)
+            run = fetchedRun
             activeRun = run
-            let sigs = try await APIClient.shared.getSignatures(reportRunId: run.id)
-            signatures = sigs
         } catch {
             errorMessage = error.localizedDescription
             activeRun = nil
+            signatures = []
+            return
+        }
+        do {
+            let sigs = try await APIClient.shared.getSignatures(reportRunId: run.id)
+            signatures = sigs
+            signaturesErrorMessage = nil
+        } catch {
+            signaturesErrorMessage = error.localizedDescription
+            signatures = []
+        }
+    }
+
+    /// Retry only the signatures fetch; keeps activeRun and main view usable.
+    @MainActor
+    private func retrySignaturesFetch() async {
+        guard let run = activeRun else { return }
+        isLoadingSignatures = true
+        signaturesErrorMessage = nil
+        defer { isLoadingSignatures = false }
+        do {
+            let sigs = try await APIClient.shared.getSignatures(reportRunId: run.id)
+            signatures = sigs
+            signaturesErrorMessage = nil
+        } catch {
+            signaturesErrorMessage = error.localizedDescription
             signatures = []
         }
     }
