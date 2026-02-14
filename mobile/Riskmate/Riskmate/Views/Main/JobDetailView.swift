@@ -234,7 +234,7 @@ struct JobDetailView: View {
             case .activity:
                 JobActivityView(jobId: jobId)
             case .signatures:
-                TeamSignaturesSheet(jobId: jobId) { }
+                JobSignaturesView(jobId: jobId, onExportTapped: { showExportProofSheet = true })
             case .evidence:
                 EvidenceTab(jobId: jobId)
             }
