@@ -143,7 +143,16 @@ struct RBAC {
         existingSignatures: [SignatureInfo]
     ) -> Bool {
         switch role {
-        case "auditor", "executive":
+        case "auditor":
+            return false
+        case "executive":
+            if signatureRole == "prepared_by" { return false }
+            if signatureRole == "approved_by" { return false }
+            if signatureRole == "reviewed_by" {
+                let preparerUserId = existingSignatures.first { $0.signatureRole == "prepared_by" }?.signerUserId
+                if let pid = preparerUserId, pid == currentUserId { return false }
+                return true
+            }
             return false
         case "owner", "admin":
             if signatureRole == "approved_by" { return true }
