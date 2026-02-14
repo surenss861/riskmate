@@ -285,11 +285,9 @@ struct TeamSignaturesSheet: View {
                 return
             }
             errorMessage = error.localizedDescription
-            signingContext = nil
             completion(.failure(error))
         } catch {
             errorMessage = error.localizedDescription
-            signingContext = nil
             completion(.failure(error))
         }
     }
