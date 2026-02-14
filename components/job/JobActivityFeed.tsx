@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { format, isAfter } from 'date-fns'
 import { jobsApi } from '@/lib/api'
 import { subscribeToJobActivity } from '@/lib/realtime/eventSubscription'
 import { getEventMapping } from '@/lib/audit/eventMapper'
@@ -46,6 +47,7 @@ const DEBOUNCE_MS = 1000
 const HIGHLIGHT_DURATION_MS = 2000
 const SCROLL_THRESHOLD_PX = 80
 type FilterType = typeof FILTER_ALL | typeof FILTER_STATUS | typeof FILTER_DOCUMENTS | typeof FILTER_TEAM
+type ActiveFilterState = { filter: FilterType; startDate: string | null; endDate: string | null }
 
 const STATUS_EVENT_TYPES = ['status_changed', 'job.updated', 'job.status_changed', 'job.created']
 const DOCUMENT_EVENT_TYPES = ['document.uploaded', 'photo.uploaded', 'evidence.approved', 'evidence.rejected', 'proof_pack.generated', 'permit_pack.generated']
@@ -64,6 +66,14 @@ function filterEventsByType(events: AuditEvent[], filter: FilterType): AuditEven
     return events.filter((e) => TEAM_EVENT_TYPES.some((t) => eventType(e).includes(t.split('.')[0])))
   }
   return events
+}
+
+function eventMatchesDateRange(event: AuditEvent, startDate: string | null, endDate: string | null): boolean {
+  if (!startDate && !endDate) return true
+  const eventDate = event.created_at.slice(0, 10)
+  if (startDate && eventDate < startDate) return false
+  if (endDate && eventDate > endDate) return false
+  return true
 }
 
 function formatEventTime(iso: string): string {
@@ -101,8 +111,11 @@ export function JobActivityFeed({
   const [total, setTotal] = useState(0)
   const [hasMore, setHasMore] = useState(false)
   const [filter, setFilter] = useState<FilterType>(FILTER_ALL)
-  const filterRef = useRef<FilterType>(filter)
-  filterRef.current = filter
+  const [showDateFilter, setShowDateFilter] = useState(false)
+  const [startDate, setStartDate] = useState<string | null>(null)
+  const [endDate, setEndDate] = useState<string | null>(null)
+  const filterRef = useRef<ActiveFilterState>({ filter, startDate, endDate })
+  filterRef.current = { filter, startDate, endDate }
   const [subscribeContext, setSubscribeContext] = useState<{ channelId: string; organizationId: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [realtimeStatus, setRealtimeStatus] = useState<'idle' | 'connecting' | 'connected' | 'error'>('idle')
@@ -115,6 +128,8 @@ export function JobActivityFeed({
   const eventsRef = useRef<AuditEvent[]>([])
   const actorCacheRef = useRef<Map<string, { actor_name: string; actor_email: string; actor_role: string }>>(new Map())
   const actorFetchPromiseRef = useRef<Map<string, Promise<{ actor_name: string; actor_email: string; actor_role: string } | null>>>(new Map())
+  const today = format(new Date(), 'yyyy-MM-dd')
+  const dateValidationError = startDate && endDate && isAfter(new Date(startDate), new Date(endDate)) ? 'Start date cannot be after end date.' : null
 
   useEffect(() => {
     eventsRef.current = events
@@ -165,6 +180,8 @@ export function JobActivityFeed({
           limit: PAGE_SIZE,
           offset: off,
           ...(eventTypes?.length ? { event_types: eventTypes } : {}),
+          ...(startDate ? { start_date: startDate } : {}),
+          ...(endDate ? { end_date: endDate } : {}),
         })
         const data = res.data as { events: AuditEvent[]; total: number; has_more: boolean }
         const list = data?.events ?? []
@@ -187,13 +204,14 @@ export function JobActivityFeed({
         setLoadingMore(false)
       }
     },
-    [jobId, filter, getEventTypesForFilter]
+    [jobId, filter, getEventTypesForFilter, startDate, endDate]
   )
 
   useEffect(() => {
     if (!jobId) return
+    if (dateValidationError) return
     fetchPage(0, false, filter)
-  }, [jobId, filter, fetchPage])
+  }, [jobId, filter, startDate, endDate, dateValidationError, fetchPage])
 
   useEffect(() => {
     if (!enableRealtime || !jobId) return
@@ -281,9 +299,11 @@ export function JobActivityFeed({
           target_id: row.target_id as string,
           metadata: row.metadata as Record<string, unknown>,
         }
-        const currentFilter = filterRef.current
-        const matches = filterEventsByType([newEvent], currentFilter)
-        if (matches.length > 0) {
+        const currentFilters = filterRef.current
+        const matchesType = filterEventsByType([newEvent], currentFilters.filter)
+        const matchesDate = eventMatchesDateRange(newEvent, currentFilters.startDate, currentFilters.endDate)
+        const matches = matchesType.length > 0 && matchesDate
+        if (matches) {
           pendingEventsRef.current.push(newEvent)
           if (!flushTimerRef.current) {
             flushTimerRef.current = setTimeout(flushPendingEvents, DEBOUNCE_MS)
@@ -311,6 +331,13 @@ export function JobActivityFeed({
     scrollContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
   }, [])
 
+  const clearDates = useCallback(() => {
+    setStartDate(null)
+    setEndDate(null)
+  }, [])
+
+  const dateFilterActive = Boolean(startDate || endDate)
+  const dateRangeLabel = startDate && endDate ? `${startDate} to ${endDate}` : startDate ? `From ${startDate}` : endDate ? `Until ${endDate}` : 'Date Range'
   const filteredEvents = events
   const showLoadMore = hasMore && !loading && !loadingMore
 
@@ -332,43 +359,100 @@ export function JobActivityFeed({
   return (
     <div className="space-y-4">
       {showFilters && (
-        <div className="flex flex-wrap items-center gap-2 justify-between">
-          {[
-            { key: FILTER_ALL, label: 'All Events', icon: Activity },
-            { key: FILTER_STATUS, label: 'Status Changes', icon: Clock },
-            { key: FILTER_DOCUMENTS, label: 'Documents', icon: FileText },
-            { key: FILTER_TEAM, label: 'Team Actions', icon: Users },
-          ].map(({ key, label, icon: Icon }) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => setFilter(key as FilterType)}
-              className={
-                filter === key
-                  ? `${tabStyles.item} ${tabStyles.active} flex items-center gap-2 rounded-lg border border-[#F97316]/30 bg-[#F97316]/10 px-3 py-2 text-sm font-medium text-[#F97316]`
-                  : `${tabStyles.item} ${tabStyles.inactive} flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-white/70 hover:bg-white/10 hover:text-white`
-              }
-            >
-              <Icon className="h-4 w-4" />
-              {label}
-            </button>
-          ))}
-          {enableRealtime && realtimeStatus !== 'idle' && (
-            <span
-              className="flex items-center gap-2 text-xs text-white/60"
-              title={realtimeStatus === 'connected' ? 'Live updates enabled' : realtimeStatus === 'error' ? 'Connection lost' : 'Connecting...'}
-            >
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center gap-2 justify-between">
+            <div className="flex flex-wrap items-center gap-2">
+              {[
+                { key: FILTER_ALL, label: 'All Events', icon: Activity },
+                { key: FILTER_STATUS, label: 'Status Changes', icon: Clock },
+                { key: FILTER_DOCUMENTS, label: 'Documents', icon: FileText },
+                { key: FILTER_TEAM, label: 'Team Actions', icon: Users },
+              ].map(({ key, label, icon: Icon }) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setFilter(key as FilterType)}
+                  className={
+                    filter === key
+                      ? `${tabStyles.item} ${tabStyles.active} flex items-center gap-2 rounded-lg border border-[#F97316]/30 bg-[#F97316]/10 px-3 py-2 text-sm font-medium text-[#F97316]`
+                      : `${tabStyles.item} ${tabStyles.inactive} flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-white/70 hover:bg-white/10 hover:text-white`
+                  }
+                >
+                  <Icon className="h-4 w-4" />
+                  {label}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => setShowDateFilter((prev) => !prev)}
+                className={
+                  showDateFilter || dateFilterActive
+                    ? `${tabStyles.item} ${tabStyles.active} flex items-center gap-2 rounded-lg border border-[#F97316]/30 bg-[#F97316]/10 px-3 py-2 text-sm font-medium text-[#F97316]`
+                    : `${tabStyles.item} ${tabStyles.inactive} flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-white/70 hover:bg-white/10 hover:text-white`
+                }
+                aria-expanded={showDateFilter}
+              >
+                <Calendar className="h-4 w-4" />
+                {dateRangeLabel}
+              </button>
+              {dateFilterActive && (
+                <span className={`${badgeStyles.base} border-[#F97316]/30 bg-[#F97316]/10 text-[#F97316]`}>Filtered by date</span>
+              )}
+            </div>
+            {enableRealtime && realtimeStatus !== 'idle' && (
               <span
-                className={`h-2 w-2 rounded-full ${
-                  realtimeStatus === 'connected'
-                    ? 'bg-green-500 animate-pulse'
-                    : realtimeStatus === 'error'
-                      ? 'bg-red-500'
-                      : 'bg-amber-500'
-                }`}
-              />
-              {realtimeStatus === 'connected' ? 'Live' : realtimeStatus === 'error' ? 'Disconnected' : 'Connecting'}
-            </span>
+                className="flex items-center gap-2 text-xs text-white/60"
+                title={realtimeStatus === 'connected' ? 'Live updates enabled' : realtimeStatus === 'error' ? 'Connection lost' : 'Connecting...'}
+              >
+                <span
+                  className={`h-2 w-2 rounded-full ${
+                    realtimeStatus === 'connected'
+                      ? 'bg-green-500 animate-pulse'
+                      : realtimeStatus === 'error'
+                        ? 'bg-red-500'
+                        : 'bg-amber-500'
+                  }`}
+                />
+                {realtimeStatus === 'connected' ? 'Live' : realtimeStatus === 'error' ? 'Disconnected' : 'Connecting'}
+              </span>
+            )}
+          </div>
+          {showDateFilter && (
+            <div className={`${cardStyles.base} ${cardStyles.padding.sm} space-y-3`}>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                <label className="flex-1 min-w-[160px] space-y-1">
+                  <span className={`${typography.label} text-white/70`}>Start date</span>
+                  <input
+                    type="date"
+                    max={endDate || today}
+                    value={startDate ?? ''}
+                    onChange={(e) => setStartDate(e.target.value || null)}
+                    className="w-full rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:border-[#F97316]/50"
+                  />
+                </label>
+                <label className="flex-1 min-w-[160px] space-y-1">
+                  <span className={`${typography.label} text-white/70`}>End date</span>
+                  <input
+                    type="date"
+                    min={startDate || undefined}
+                    max={today}
+                    value={endDate ?? ''}
+                    onChange={(e) => setEndDate(e.target.value || null)}
+                    className="w-full rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:border-[#F97316]/50"
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={clearDates}
+                  className="rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-sm font-medium text-white/80 hover:bg-white/10"
+                >
+                  Clear dates
+                </button>
+              </div>
+              {dateValidationError && (
+                <p className="text-sm text-red-400">{dateValidationError}</p>
+              )}
+            </div>
           )}
         </div>
       )}
@@ -384,7 +468,9 @@ export function JobActivityFeed({
           <Calendar className="mx-auto mb-3 h-10 w-10 text-white/40" />
           <p className={emptyStateStyles.title}>No activity yet</p>
           <p className={emptyStateStyles.description}>
-            {filter !== FILTER_ALL
+            {dateFilterActive
+              ? 'No events match this date range. Try expanding or clearing the dates.'
+              : filter !== FILTER_ALL
               ? 'No events match this filter. Try "All Events".'
               : 'Updates to this job will appear here—status changes, documents, and team actions.'}
           </p>
