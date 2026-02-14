@@ -5,6 +5,8 @@ import SwiftUI
 /// Sign-as buttons are gated by role/entitlement (RBAC); 403/409 from createSignature show an error and keep the sheet open.
 struct TeamSignaturesSheet: View {
     let jobId: String
+    /// Job creator user id (job.createdBy). Used so only creator or admins can sign as Prepared By.
+    var jobCreatorId: String? = nil
     let onDismiss: () -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -23,8 +25,15 @@ struct TeamSignaturesSheet: View {
         let role = EntitlementsManager.shared.getEntitlements()?.role
         return RBAC(role: role)
     }
-    private func canSignAs(_ role: SignatureRole) -> Bool {
-        rbac.canSignAsReportRole(role.rawValue)
+    private var currentUserId: String {
+        SessionManager.shared.currentUser?.id ?? ""
+    }
+    private func signatureInfos(from sigs: [ReportSignature]) -> [RBAC.SignatureInfo] {
+        sigs.map { RBAC.SignatureInfo(signatureRole: $0.signatureRole, signerUserId: $0.signerUserId) }
+    }
+    /// Whether the current user can sign as the given role for a run with the given existing signatures.
+    private func canSignAs(_ role: SignatureRole, existingSignatures: [ReportSignature]) -> Bool {
+        rbac.canSignAsReportRole(role.rawValue, currentUserId: currentUserId, jobCreatorId: jobCreatorId, existingSignatures: signatureInfos(from: existingSignatures))
     }
     private let dateFormatter: DateFormatter = {
         let f = DateFormatter()
@@ -152,7 +161,7 @@ struct TeamSignaturesSheet: View {
             // Optional: "Sign as …" when no run exists — get-or-create then open capture sheet for selected role
             HStack(spacing: RMTheme.Spacing.sm) {
                 ForEach([SignatureRole.preparedBy, .reviewedBy, .approvedBy], id: \.self) { role in
-                    if canSignAs(role) {
+                    if canSignAs(role, existingSignatures: []) {
                         Button {
                             Haptics.tap()
                             Task { await ensureActiveRunThenSignAs(role) }
@@ -203,7 +212,7 @@ struct TeamSignaturesSheet: View {
                             signingContext = SigningContext(run: run, role: role)
                         },
                         canSign: run.status == "draft" || run.status == "ready_for_signatures",
-                        canSignAsRole: canSignAs
+                        canSignAsRole: { canSignAs($0, existingSignatures: signaturesByRunId[run.id] ?? []) }
                     )
                 }
             }

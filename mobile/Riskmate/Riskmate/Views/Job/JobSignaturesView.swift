@@ -5,6 +5,8 @@ import WebKit
 /// report run banner, Sign Now → SignatureCaptureSheet, SVG display, role-based permissions.
 struct JobSignaturesView: View {
     let jobId: String
+    /// Job creator user id (job.createdBy). Used so only creator or admins can sign as Prepared By.
+    var jobCreatorId: String? = nil
     /// When all three roles are signed, call to open export (e.g. Proof Pack).
     var onExportTapped: (() -> Void)? = nil
 
@@ -22,6 +24,15 @@ struct JobSignaturesView: View {
     private var rbac: RBAC {
         let role = EntitlementsManager.shared.getEntitlements()?.role
         return RBAC(role: role)
+    }
+    private var currentUserId: String {
+        SessionManager.shared.currentUser?.id ?? ""
+    }
+    private func signatureInfos(from sigs: [ReportSignature]) -> [RBAC.SignatureInfo] {
+        sigs.map { RBAC.SignatureInfo(signatureRole: $0.signatureRole, signerUserId: $0.signerUserId) }
+    }
+    private func canSignAsReportRole(_ role: SignatureRole, existingSignatures: [ReportSignature]) -> Bool {
+        rbac.canSignAsReportRole(role.rawValue, currentUserId: currentUserId, jobCreatorId: jobCreatorId, existingSignatures: signatureInfos(from: existingSignatures))
     }
     private let dateFormatter: DateFormatter = {
         let f = DateFormatter()
@@ -118,7 +129,7 @@ struct JobSignaturesView: View {
             }
         }
         .sheet(isPresented: $showManageRunsSheet) {
-            TeamSignaturesSheet(jobId: jobId) {
+            TeamSignaturesSheet(jobId: jobId, jobCreatorId: jobCreatorId) {
                 showManageRunsSheet = false
                 Task { await loadData() }
             }
@@ -265,7 +276,7 @@ struct JobSignaturesView: View {
     }
 
     private func signatureCard(role: SignatureRole, signature: ReportSignature?, run: ReportRun) -> some View {
-        let canSign = (run.status == "draft" || run.status == "ready_for_signatures") && rbac.canSignAsReportRole(role.rawValue)
+        let canSign = (run.status == "draft" || run.status == "ready_for_signatures") && canSignAsReportRole(role, existingSignatures: signatures)
         let alreadySigned = signature != nil
 
         return RMGlassCard {

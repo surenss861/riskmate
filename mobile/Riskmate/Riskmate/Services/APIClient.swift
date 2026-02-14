@@ -1136,6 +1136,8 @@ struct ReportSignature: Codable, Identifiable {
     let signatureSvg: String?
     let signedAt: Date?
     let attestationText: String?
+    /// Signer's user id when present (from API signer_user_id). Used so reviewer cannot be the preparer.
+    let signerUserId: String?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -1146,6 +1148,7 @@ struct ReportSignature: Codable, Identifiable {
         case signatureSvg = "signature_svg"
         case signedAt = "signed_at"
         case attestationText = "attestation_text"
+        case signerUserId = "signer_user_id"
     }
 
     init(from decoder: Decoder) throws {
@@ -1157,6 +1160,7 @@ struct ReportSignature: Codable, Identifiable {
         signatureRole = try c.decode(String.self, forKey: .signatureRole)
         signatureSvg = try c.decodeIfPresent(String.self, forKey: .signatureSvg)
         attestationText = try c.decodeIfPresent(String.self, forKey: .attestationText)
+        signerUserId = try c.decodeIfPresent(String.self, forKey: .signerUserId)
         if let dateString = try c.decodeIfPresent(String.self, forKey: .signedAt) {
             let formatter = ISO8601DateFormatter()
             formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -1180,6 +1184,7 @@ struct ReportSignature: Codable, Identifiable {
             formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
             try c.encode(formatter.string(from: signedAt), forKey: .signedAt)
         }
+        try c.encodeIfPresent(signerUserId, forKey: .signerUserId)
     }
 }
 

@@ -11,6 +11,8 @@ struct Job: Identifiable, Codable, Hashable {
     let riskLevel: String?
     let createdAt: String
     let updatedAt: String?
+    /// Job creator user id (from API created_by). Used for report signature RBAC (prepared_by).
+    let createdBy: String?
     /// Optional: from list API when backend includes readiness summary
     let evidenceCount: Int?
     let evidenceRequired: Int?
@@ -28,6 +30,7 @@ struct Job: Identifiable, Codable, Hashable {
         case riskLevel = "risk_level"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
+        case createdBy = "created_by"
         case evidenceCount = "evidence_count"
         case evidenceRequired = "evidence_required"
         case controlsCompleted = "controls_completed"
@@ -46,6 +49,7 @@ struct Job: Identifiable, Codable, Hashable {
         riskLevel = try container.decodeIfPresent(String.self, forKey: .riskLevel)
         createdAt = try container.decode(String.self, forKey: .createdAt)
         updatedAt = try container.decodeIfPresent(String.self, forKey: .updatedAt)
+        createdBy = try container.decodeIfPresent(String.self, forKey: .createdBy)
         evidenceCount = try container.decodeIfPresent(Int.self, forKey: .evidenceCount)
         evidenceRequired = try container.decodeIfPresent(Int.self, forKey: .evidenceRequired)
         controlsCompleted = try container.decodeIfPresent(Int.self, forKey: .controlsCompleted)
