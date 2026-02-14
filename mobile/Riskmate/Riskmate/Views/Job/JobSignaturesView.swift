@@ -14,6 +14,7 @@ struct JobSignaturesView: View {
     @State private var errorMessage: String?
     @State private var signingContext: SigningContext?
     @State private var isCreatingRun = false
+    @State private var showManageRunsSheet = false
 
     private let packetType = "insurance"
     private var rbac: RBAC {
@@ -66,6 +67,9 @@ struct JobSignaturesView: View {
                     emptyStateView
                 } else if let run = activeRun {
                     reportRunBanner(run: run)
+                    if !isRunSignable(run.status) {
+                        createNewRunSection
+                    }
                     ForEach([SignatureRole.preparedBy, .reviewedBy, .approvedBy], id: \.self) { role in
                         signatureCard(
                             role: role,
@@ -106,6 +110,15 @@ struct JobSignaturesView: View {
                 signingContext = nil
             }
         }
+        .sheet(isPresented: $showManageRunsSheet) {
+            TeamSignaturesSheet(jobId: jobId) {
+                showManageRunsSheet = false
+                Task { await loadData() }
+            }
+        }
+        .onChange(of: showManageRunsSheet) { _, showing in
+            if !showing { Task { await loadData() } }
+        }
         .alert("Signatures", isPresented: Binding(
             get: { errorMessage != nil },
             set: { if !$0 { errorMessage = nil } }
@@ -116,6 +129,35 @@ struct JobSignaturesView: View {
                 Text(msg)
             }
         }
+    }
+
+    private func isRunSignable(_ status: String) -> Bool {
+        status == "draft" || status == "ready_for_signatures"
+    }
+
+    private var createNewRunSection: some View {
+        Button {
+            Haptics.tap()
+            Task { await createNewRunAndRefresh() }
+        } label: {
+            HStack {
+                if isCreatingRun {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                } else {
+                    Image(systemName: "arrow.clockwise")
+                    Text("Create new run")
+                        .font(RMTheme.Typography.bodySmallBold)
+                }
+            }
+            .foregroundColor(.black)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, RMTheme.Spacing.sm)
+            .background(RMTheme.Colors.accent)
+            .clipShape(RoundedRectangle(cornerRadius: RMTheme.Radius.sm))
+        }
+        .buttonStyle(.plain)
+        .disabled(isCreatingRun)
     }
 
     private var allSigned: Bool {
@@ -162,6 +204,15 @@ struct JobSignaturesView: View {
                         .font(RMTheme.Typography.captionSmall)
                         .foregroundColor(RMTheme.Colors.textTertiary)
                     Spacer()
+                    Button {
+                        Haptics.tap()
+                        showManageRunsSheet = true
+                    } label: {
+                        Text("Manage runs")
+                            .font(RMTheme.Typography.captionSmall)
+                            .foregroundColor(RMTheme.Colors.accent)
+                    }
+                    .buttonStyle(.plain)
                     Text(run.status.replacingOccurrences(of: "_", with: " "))
                         .font(RMTheme.Typography.captionSmall)
                         .foregroundColor(statusColor(run.status))
@@ -331,6 +382,23 @@ struct JobSignaturesView: View {
             activeRun = run
             let sigs = try await APIClient.shared.getSignatures(reportRunId: run.id)
             signatures = sigs
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    /// Force-create a new report run when current run is non-signable (e.g. final/complete), then refresh.
+    @MainActor
+    private func createNewRunAndRefresh() async {
+        isCreatingRun = true
+        errorMessage = nil
+        defer { isCreatingRun = false }
+        do {
+            let (run, _) = try await APIClient.shared.getActiveReportRun(jobId: jobId, packetType: packetType, forceNew: true)
+            activeRun = run
+            let sigs = try await APIClient.shared.getSignatures(reportRunId: run.id)
+            signatures = sigs
+            ToastCenter.shared.show("New report run created", systemImage: "checkmark.circle.fill", style: .success)
         } catch {
             errorMessage = error.localizedDescription
         }
