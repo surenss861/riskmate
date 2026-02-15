@@ -109,6 +109,7 @@ final class SyncEngine: ObservableObject {
                         db.deletePendingJob(id: localTempId)
                         if let serverId = result.serverId {
                             remapJobInStore(from: localTempId, to: serverId, opData: op?.data)
+                            db.remapJobIdInQueuedOperations(tempJobId: localTempId, serverJobId: serverId)
                         }
                     case .updateJob:
                         db.deletePendingUpdatesForEntity(entityType: "job", entityId: localTempId)
@@ -356,6 +357,7 @@ final class SyncEngine: ObservableObject {
         switch type {
         case .createHazard:
             db.deletePendingHazard(id: tempId)
+            db.remapHazardIdInQueuedOperations(tempHazardId: tempId, serverHazardId: serverId)
             if let jobId = extractJobId(from: opData) {
                 DispatchQueue.main.async {
                     NotificationCenter.default.post(

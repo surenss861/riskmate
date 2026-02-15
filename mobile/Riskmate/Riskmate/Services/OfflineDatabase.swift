@@ -471,6 +471,193 @@ final class OfflineDatabase {
         }
     }
 
+    // MARK: - ID Remapping (for offline-created entities after server assigns IDs)
+
+    /// Remap temporary job ID to server job ID in sync_queue, pending_hazards, and pending_controls.
+    /// Call after create_job succeeds so queued hazard/control ops reference valid server IDs before the next batch.
+    func remapJobIdInQueuedOperations(tempJobId: String, serverJobId: String) {
+        queue.sync { [weak self] in
+            guard let self = self, let db = self.db else { return }
+            // 1. sync_queue: update entity_id for updateJob/deleteJob; update data JSON for hazard/control ops
+            let syncSql = "SELECT operation_id, type, entity_id, priority, retry_count, last_attempt, data, client_timestamp FROM sync_queue"
+            var stmt: OpaquePointer?
+            defer { sqlite3_finalize(stmt) }
+            guard sqlite3_prepare_v2(db, syncSql, -1, &stmt, nil) == SQLITE_OK else { return }
+            var rowsToUpdate: [(String, String, String)] = [] // (operation_id, new_entity_id, new_data_json)
+            while sqlite3_step(stmt) == SQLITE_ROW {
+                let opId = String(cString: sqlite3_column_text(stmt, 0))
+                let typeStr = String(cString: sqlite3_column_text(stmt, 1))
+                let entityId = String(cString: sqlite3_column_text(stmt, 2))
+                let dataStr = String(cString: sqlite3_column_text(stmt, 6))
+                var newEntityId = entityId
+                var newDataStr = dataStr
+                // Update entity_id for job ops
+                if (typeStr == "updateJob" || typeStr == "deleteJob") && entityId == tempJobId {
+                    newEntityId = serverJobId
+                }
+                // Update job_id in data JSON for hazard/control ops
+                if let data = dataStr.data(using: .utf8),
+                   var dict = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+                   let currentJobId = dict["job_id"] as? String ?? dict["jobId"] as? String,
+                   currentJobId == tempJobId {
+                    dict["job_id"] = serverJobId
+                    dict["jobId"] = serverJobId
+                    newDataStr = (try? JSONSerialization.data(withJSONObject: dict)).flatMap { String(data: $0, encoding: .utf8) } ?? dataStr
+                }
+                if newEntityId != entityId || newDataStr != dataStr {
+                    rowsToUpdate.append((opId, newEntityId, newDataStr))
+                }
+            }
+            sqlite3_finalize(stmt)
+            stmt = nil
+            for (opId, newEntityId, newDataStr) in rowsToUpdate {
+                var updStmt: OpaquePointer?
+                defer { sqlite3_finalize(updStmt) }
+                guard sqlite3_prepare_v2(db, "UPDATE sync_queue SET entity_id = ?, data = ? WHERE operation_id = ?", -1, &updStmt, nil) == SQLITE_OK else { continue }
+                sqlite3_bind_text(updStmt, 1, (newEntityId as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(updStmt, 2, (newDataStr as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(updStmt, 3, (opId as NSString).utf8String, -1, nil)
+                sqlite3_step(updStmt)
+            }
+            DispatchQueue.main.async { NotificationCenter.default.post(name: Self.syncQueueDidChangeNotification, object: nil) }
+
+            // 2. pending_hazards: update job_id column and data JSON
+            let phUpdateCol = "UPDATE pending_hazards SET job_id = ? WHERE job_id = ?"
+            var phStmt: OpaquePointer?
+            defer { sqlite3_finalize(phStmt) }
+            guard sqlite3_prepare_v2(db, phUpdateCol, -1, &phStmt, nil) == SQLITE_OK else { return }
+            sqlite3_bind_text(phStmt, 1, (serverJobId as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(phStmt, 2, (tempJobId as NSString).utf8String, -1, nil)
+            sqlite3_step(phStmt)
+            sqlite3_finalize(phStmt)
+            phStmt = nil
+            // Also rewrite data JSON for pending_hazards that had job_id = temp
+            let phSelSql = "SELECT id, data FROM pending_hazards WHERE job_id = ?"
+            guard sqlite3_prepare_v2(db, phSelSql, -1, &phStmt, nil) == SQLITE_OK else { return }
+            sqlite3_bind_text(phStmt, 1, (serverJobId as NSString).utf8String, -1, nil)
+            while sqlite3_step(phStmt) == SQLITE_ROW {
+                let id = String(cString: sqlite3_column_text(phStmt, 0))
+                let dataStr2 = String(cString: sqlite3_column_text(phStmt, 1))
+                if let data = dataStr2.data(using: .utf8),
+                   var dict = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+                   (dict["job_id"] as? String ?? dict["jobId"] as? String) != nil {
+                    dict["job_id"] = serverJobId
+                    dict["jobId"] = serverJobId
+                    if let newData = try? JSONSerialization.data(withJSONObject: dict),
+                       let newStr = String(data: newData, encoding: .utf8) {
+                        var updStmt: OpaquePointer?
+                        defer { sqlite3_finalize(updStmt) }
+                        if sqlite3_prepare_v2(db, "UPDATE pending_hazards SET data = ? WHERE id = ?", -1, &updStmt, nil) == SQLITE_OK {
+                            sqlite3_bind_text(updStmt, 1, (newStr as NSString).utf8String, -1, nil)
+                            sqlite3_bind_text(updStmt, 2, (id as NSString).utf8String, -1, nil)
+                            sqlite3_step(updStmt)
+                        }
+                    }
+                }
+            }
+
+            // 3. pending_controls: update data JSON (job_id is embedded; hazard_id is column)
+            let pcSelSql = "SELECT id, hazard_id, data FROM pending_controls"
+            var pcStmt: OpaquePointer?
+            defer { sqlite3_finalize(pcStmt) }
+            guard sqlite3_prepare_v2(db, pcSelSql, -1, &pcStmt, nil) == SQLITE_OK else { return }
+            while sqlite3_step(pcStmt) == SQLITE_ROW {
+                let id = String(cString: sqlite3_column_text(pcStmt, 0))
+                let dataStr2 = String(cString: sqlite3_column_text(pcStmt, 2))
+                guard let data = dataStr2.data(using: .utf8),
+                      var dict = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+                      let currentJobId = dict["job_id"] as? String ?? dict["jobId"] as? String,
+                      currentJobId == tempJobId else { continue }
+                dict["job_id"] = serverJobId
+                dict["jobId"] = serverJobId
+                guard let newData = try? JSONSerialization.data(withJSONObject: dict),
+                      let newStr = String(data: newData, encoding: .utf8) else { continue }
+                var updStmt: OpaquePointer?
+                defer { sqlite3_finalize(updStmt) }
+                if sqlite3_prepare_v2(db, "UPDATE pending_controls SET data = ? WHERE id = ?", -1, &updStmt, nil) == SQLITE_OK {
+                    sqlite3_bind_text(updStmt, 1, (newStr as NSString).utf8String, -1, nil)
+                    sqlite3_bind_text(updStmt, 2, (id as NSString).utf8String, -1, nil)
+                    sqlite3_step(updStmt)
+                }
+            }
+        }
+    }
+
+    /// Remap temporary hazard ID to server hazard ID in sync_queue and pending_controls.
+    /// Call after create_hazard succeeds so queued control ops reference valid server IDs before the next batch.
+    func remapHazardIdInQueuedOperations(tempHazardId: String, serverHazardId: String) {
+        queue.sync { [weak self] in
+            guard let self = self, let db = self.db else { return }
+            // 1. sync_queue: update data JSON for control ops (createControl, updateControl, deleteControl)
+            let syncSql = "SELECT operation_id, type, entity_id, priority, retry_count, last_attempt, data, client_timestamp FROM sync_queue"
+            var stmt: OpaquePointer?
+            defer { sqlite3_finalize(stmt) }
+            guard sqlite3_prepare_v2(db, syncSql, -1, &stmt, nil) == SQLITE_OK else { return }
+            var rowsToUpdate: [(String, String)] = [] // (operation_id, new_data_json)
+            while sqlite3_step(stmt) == SQLITE_ROW {
+                let opId = String(cString: sqlite3_column_text(stmt, 0))
+                let typeStr = String(cString: sqlite3_column_text(stmt, 1))
+                let dataStr = String(cString: sqlite3_column_text(stmt, 6))
+                guard typeStr == "createControl" || typeStr == "updateControl" || typeStr == "deleteControl" else { continue }
+                guard let data = dataStr.data(using: .utf8),
+                      var dict = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+                      let currentHazardId = dict["hazard_id"] as? String ?? dict["hazardId"] as? String,
+                      currentHazardId == tempHazardId else { continue }
+                dict["hazard_id"] = serverHazardId
+                dict["hazardId"] = serverHazardId
+                guard let newData = try? JSONSerialization.data(withJSONObject: dict),
+                      let newStr = String(data: newData, encoding: .utf8) else { continue }
+                rowsToUpdate.append((opId, newStr))
+            }
+            sqlite3_finalize(stmt)
+            stmt = nil
+            for (opId, newDataStr) in rowsToUpdate {
+                var updStmt: OpaquePointer?
+                defer { sqlite3_finalize(updStmt) }
+                if sqlite3_prepare_v2(db, "UPDATE sync_queue SET data = ? WHERE operation_id = ?", -1, &updStmt, nil) == SQLITE_OK {
+                    sqlite3_bind_text(updStmt, 1, (newDataStr as NSString).utf8String, -1, nil)
+                    sqlite3_bind_text(updStmt, 2, (opId as NSString).utf8String, -1, nil)
+                    sqlite3_step(updStmt)
+                }
+            }
+            DispatchQueue.main.async { NotificationCenter.default.post(name: Self.syncQueueDidChangeNotification, object: nil) }
+
+            // 2. pending_controls: update hazard_id column and data JSON
+            let pcUpdateCol = "UPDATE pending_controls SET hazard_id = ? WHERE hazard_id = ?"
+            var pcStmt: OpaquePointer?
+            defer { sqlite3_finalize(pcStmt) }
+            guard sqlite3_prepare_v2(db, pcUpdateCol, -1, &pcStmt, nil) == SQLITE_OK else { return }
+            sqlite3_bind_text(pcStmt, 1, (serverHazardId as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(pcStmt, 2, (tempHazardId as NSString).utf8String, -1, nil)
+            sqlite3_step(pcStmt)
+            sqlite3_finalize(pcStmt)
+            pcStmt = nil
+            let pcSelSql = "SELECT id, data FROM pending_controls WHERE hazard_id = ?"
+            guard sqlite3_prepare_v2(db, pcSelSql, -1, &pcStmt, nil) == SQLITE_OK else { return }
+            sqlite3_bind_text(pcStmt, 1, (serverHazardId as NSString).utf8String, -1, nil)
+            while sqlite3_step(pcStmt) == SQLITE_ROW {
+                let id = String(cString: sqlite3_column_text(pcStmt, 0))
+                let dataStr2 = String(cString: sqlite3_column_text(pcStmt, 1))
+                if let data = dataStr2.data(using: .utf8),
+                   var dict = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+                   (dict["hazard_id"] as? String ?? dict["hazardId"] as? String) != nil {
+                    dict["hazard_id"] = serverHazardId
+                    dict["hazardId"] = serverHazardId
+                    if let newData = try? JSONSerialization.data(withJSONObject: dict),
+                       let newStr = String(data: newData, encoding: .utf8) {
+                        var updStmt: OpaquePointer?
+                        defer { sqlite3_finalize(updStmt) }
+                        if sqlite3_prepare_v2(db, "UPDATE pending_controls SET data = ? WHERE id = ?", -1, &updStmt, nil) == SQLITE_OK {
+                            sqlite3_bind_text(updStmt, 1, (newStr as NSString).utf8String, -1, nil)
+                            sqlite3_bind_text(updStmt, 2, (id as NSString).utf8String, -1, nil)
+                            sqlite3_step(updStmt)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // MARK: - Pending Updates (field-level changes for offline job edits)
 
     /// Insert or replace a pending update for an entity field
