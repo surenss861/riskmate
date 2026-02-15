@@ -287,6 +287,7 @@ final class JobsStore: ObservableObject {
             addJob(job)
             pendingJobIds = pendingJobIds.union([jobId])
             OfflineCache.shared.refreshSyncState()
+            ToastCenter.shared.show("Saved offline", systemImage: "wifi.slash", style: .info)
             return job
         }
 

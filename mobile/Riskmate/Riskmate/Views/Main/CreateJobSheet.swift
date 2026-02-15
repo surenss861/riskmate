@@ -97,11 +97,10 @@ struct CreateJobSheet: View {
         do {
             let job = try await jobsStore.createJob(clientName: name, jobType: type, location: loc)
             Haptics.success()
-            if isOffline {
-                ToastCenter.shared.show("Saved offline", systemImage: "wifi.slash", style: .info)
-            } else {
+            if !isOffline {
                 ToastCenter.shared.show("Job created", systemImage: "checkmark.circle.fill", style: .success)
             }
+            // "Saved offline" toast is shown by JobsStore.createJob for the offline path
             dismiss()
             Analytics.shared.trackJobCreated(jobId: job.id, wasOffline: isOffline)
         } catch {
