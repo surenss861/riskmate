@@ -400,6 +400,66 @@ final class OfflineDatabase {
         }
     }
 
+    func deletePendingHazard(id: String) {
+        queue.async { [weak self] in
+            guard let self = self, let db = self.db else { return }
+            let sql = "DELETE FROM pending_hazards WHERE id = ?"
+            var stmt: OpaquePointer?
+            defer { sqlite3_finalize(stmt) }
+            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
+            sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, nil)
+            sqlite3_step(stmt)
+        }
+    }
+
+    func deletePendingControl(id: String) {
+        queue.async { [weak self] in
+            guard let self = self, let db = self.db else { return }
+            let sql = "DELETE FROM pending_controls WHERE id = ?"
+            var stmt: OpaquePointer?
+            defer { sqlite3_finalize(stmt) }
+            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
+            sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, nil)
+            sqlite3_step(stmt)
+        }
+    }
+
+    func getPendingHazards(jobId: String) -> [Data] {
+        queue.sync {
+            guard let db = db else { return [] }
+            let sql = "SELECT data FROM pending_hazards WHERE job_id = ? ORDER BY created_at ASC"
+            var stmt: OpaquePointer?
+            defer { sqlite3_finalize(stmt) }
+            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return [] }
+            sqlite3_bind_text(stmt, 1, (jobId as NSString).utf8String, -1, nil)
+            var result: [Data] = []
+            while sqlite3_step(stmt) == SQLITE_ROW {
+                let dataStr = String(cString: sqlite3_column_text(stmt, 0))
+                if let d = dataStr.data(using: .utf8) { result.append(d) }
+            }
+            return result
+        }
+    }
+
+    func getPendingControls(jobId: String) -> [Data] {
+        queue.sync {
+            guard let db = db else { return [] }
+            let sql = "SELECT data FROM pending_controls ORDER BY created_at ASC"
+            var stmt: OpaquePointer?
+            defer { sqlite3_finalize(stmt) }
+            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return [] }
+            var result: [Data] = []
+            while sqlite3_step(stmt) == SQLITE_ROW {
+                let dataStr = String(cString: sqlite3_column_text(stmt, 0))
+                guard let d = dataStr.data(using: .utf8),
+                      let dict = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any],
+                      (dict["job_id"] as? String) == jobId else { continue }
+                result.append(d)
+            }
+            return result
+        }
+    }
+
     func pendingOperationsCount() -> Int {
         queue.sync {
             guard let db = db else { return 0 }

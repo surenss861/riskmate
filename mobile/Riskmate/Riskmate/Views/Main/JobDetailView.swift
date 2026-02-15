@@ -1032,6 +1032,17 @@ struct Control: Identifiable, Codable {
     let createdAt: String?
     let updatedAt: String?
     
+    init(id: String, title: String?, description: String, status: String, done: Bool?, isCompleted: Bool?, createdAt: String?, updatedAt: String?) {
+        self.id = id
+        self.title = title
+        self.description = description
+        self.status = status
+        self.done = done
+        self.isCompleted = isCompleted
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+    
     enum CodingKeys: String, CodingKey {
         case id
         case title
@@ -1148,8 +1159,10 @@ struct ControlCard: View {
     }
     
     private var isPendingSync: Bool {
-        return cache.queuedItems.contains { item in
+        cache.queuedItems.contains { item in
             item.type == .control && (item.itemId == control.id || item.id == control.id)
+        } || OfflineDatabase.shared.getSyncQueue().contains { op in
+            (op.type == .updateControl || op.type == .createControl) && op.entityId == control.id
         }
     }
     
@@ -1178,7 +1191,39 @@ struct ControlCard: View {
         // Track analytics
         Analytics.shared.trackControlCompleted(controlId: control.id, wasOffline: isOffline)
         
-        // TODO: Call API to update control
+        if isOffline {
+            let updatedControl = Control(
+                id: control.id,
+                title: control.title,
+                description: control.description,
+                status: newStatus,
+                done: !wasCompleted,
+                isCompleted: !wasCompleted,
+                createdAt: control.createdAt,
+                updatedAt: ISO8601DateFormatter().string(from: Date())
+            )
+            SyncEngine.shared.queueUpdateControl(updatedControl, jobId: jobId)
+            OfflineCache.shared.refreshSyncState()
+            } else {
+                do {
+                try await APIClient.shared.updateMitigation(jobId: jobId, mitigationId: control.id, done: !wasCompleted)
+                // Refresh is handled by parent via .onChange or pull-to-refresh
+            } catch {
+                // On API failure, queue for retry
+                let updatedControl = Control(
+                    id: control.id,
+                    title: control.title,
+                    description: control.description,
+                    status: newStatus,
+                    done: !wasCompleted,
+                    isCompleted: !wasCompleted,
+                    createdAt: control.createdAt,
+                    updatedAt: ISO8601DateFormatter().string(from: Date())
+                )
+                SyncEngine.shared.queueUpdateControl(updatedControl, jobId: jobId)
+                OfflineCache.shared.refreshSyncState()
+            }
+        }
     }
 }
 

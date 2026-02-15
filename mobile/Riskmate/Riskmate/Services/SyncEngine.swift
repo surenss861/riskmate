@@ -53,10 +53,25 @@ final class SyncEngine: ObservableObject {
                 switch result.status {
                 case "success":
                     succeeded += 1
+                    let op = ops.first { $0.id == result.operationId }
+                    let localTempId = op?.entityId ?? result.operationId
                     db.removeSyncOperation(id: result.operationId)
-                    if let serverId = result.serverId {
-                        // Could update local ID mapping here (e.g. temp -> server id)
-                        _ = serverId
+                    // For job create/update/delete: remove pending job, remap to server id when present
+                    switch op?.type {
+                    case .createJob:
+                        db.deletePendingJob(id: localTempId)
+                        if let serverId = result.serverId {
+                            remapJobInStore(from: localTempId, to: serverId, opData: op?.data)
+                        }
+                    case .updateJob:
+                        break // Job id unchanged; sync op removal suffices
+                    case .deleteJob:
+                        db.deletePendingJob(id: localTempId)
+                        removeJobFromStore(id: localTempId)
+                    default:
+                        if let serverId = result.serverId, let opType = op?.type {
+                            handleNonJobSyncSuccess(type: opType, tempId: localTempId, serverId: serverId, opData: op?.data)
+                        }
                     }
                 case "conflict":
                     if let c = result.conflict {
@@ -90,6 +105,8 @@ final class SyncEngine: ObservableObject {
                     }
                 }
             }
+            // After processing batch: refresh pending job IDs so offline badge and duplicates clear
+            JobsStore.shared.refreshPendingJobs()
         } catch {
             errors.append(error.localizedDescription)
             // Retry with exponential backoff for entire batch
@@ -177,6 +194,64 @@ final class SyncEngine: ObservableObject {
         db.deletePendingJob(id: jobId)
     }
 
+    // MARK: - Hazard Queue Helpers
+
+    func queueCreateHazard(_ hazard: Hazard, jobId: String) {
+        guard let data = try? JSONEncoder().encode(hazard) else { return }
+        let op = SyncOperation(type: .createHazard, entityId: hazard.id, data: data, priority: 9)
+        db.enqueueOperation(op)
+        var payload = data
+        if var dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            dict["job_id"] = jobId
+            payload = (try? JSONSerialization.data(withJSONObject: dict)) ?? data
+        }
+        db.insertPendingHazard(id: hazard.id, jobId: jobId, data: payload)
+    }
+
+    func queueUpdateHazard(_ hazard: Hazard, jobId: String) {
+        guard let data = try? JSONEncoder().encode(hazard) else { return }
+        let op = SyncOperation(type: .updateHazard, entityId: hazard.id, data: data, priority: 4)
+        db.enqueueOperation(op)
+    }
+
+    func queueDeleteHazard(hazardId: String, jobId: String) {
+        let data = (try? JSONEncoder().encode(["id": hazardId, "job_id": jobId])) ?? Data()
+        let op = SyncOperation(type: .deleteHazard, entityId: hazardId, data: data, priority: 1)
+        db.enqueueOperation(op)
+        db.deletePendingHazard(id: hazardId)
+    }
+
+    // MARK: - Control Queue Helpers
+
+    func queueCreateControl(_ control: Control, hazardId: String, jobId: String) {
+        guard let data = try? JSONEncoder().encode(control) else { return }
+        let op = SyncOperation(type: .createControl, entityId: control.id, data: data, priority: 9)
+        db.enqueueOperation(op)
+        var payload = data
+        if var dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            dict["hazard_id"] = hazardId
+            dict["job_id"] = jobId
+            payload = (try? JSONSerialization.data(withJSONObject: dict)) ?? data
+        }
+        db.insertPendingControl(id: control.id, hazardId: hazardId, data: payload)
+    }
+
+    func queueUpdateControl(_ control: Control, jobId: String) {
+        guard let encoded = try? JSONEncoder().encode(control),
+              var dict = try? JSONSerialization.jsonObject(with: encoded) as? [String: Any] else { return }
+        dict["job_id"] = jobId
+        let data = (try? JSONSerialization.data(withJSONObject: dict)) ?? Data()
+        let op = SyncOperation(type: .updateControl, entityId: control.id, data: data, priority: 5)
+        db.enqueueOperation(op)
+    }
+
+    func queueDeleteControl(controlId: String, hazardId: String, jobId: String) {
+        let data = (try? JSONEncoder().encode(["id": controlId, "hazard_id": hazardId, "job_id": jobId])) ?? Data()
+        let op = SyncOperation(type: .deleteControl, entityId: controlId, data: data, priority: 1)
+        db.enqueueOperation(op)
+        db.deletePendingControl(id: controlId)
+    }
+
     /// Resolve a conflict via backend
     func resolveConflict(operationId: String, strategy: ConflictResolutionStrategy) async throws {
         try await APIClient.shared.resolveSyncConflict(operationId: operationId, strategy: strategy)
@@ -196,5 +271,30 @@ final class SyncEngine: ObservableObject {
 
     func pendingCount() -> Int {
         db.pendingOperationsCount()
+    }
+
+    // MARK: - Post-sync Helpers
+
+    private func remapJobInStore(from tempId: String, to serverId: String, opData: Data?) {
+        JobsStore.shared.remapJob(from: tempId, to: serverId, jobData: opData)
+    }
+
+    private func removeJobFromStore(id: String) {
+        JobsStore.shared.removeJob(id: id)
+    }
+
+    private func handleNonJobSyncSuccess(type: OperationType, tempId: String, serverId: String, opData: Data?) {
+        switch type {
+        case .createHazard:
+            db.deletePendingHazard(id: tempId)
+        case .updateHazard, .deleteHazard:
+            db.deletePendingHazard(id: tempId)
+        case .createControl:
+            db.deletePendingControl(id: tempId)
+        case .updateControl, .deleteControl:
+            db.deletePendingControl(id: tempId)
+        default:
+            break
+        }
     }
 }

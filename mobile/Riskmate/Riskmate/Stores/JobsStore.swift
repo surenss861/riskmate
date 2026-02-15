@@ -207,6 +207,42 @@ final class JobsStore: ObservableObject {
         OfflineCache.shared.cacheJobs(jobs)
     }
 
+    /// Remove job from list (e.g. after successful delete sync)
+    func removeJob(id: String) {
+        jobs.removeAll { $0.id == id }
+        pendingJobIds = pendingJobIds.filter { $0 != id }
+        OfflineCache.shared.cacheJobs(jobs)
+    }
+
+    /// Remap temp-id job to server id after successful create sync
+    func remapJob(from tempId: String, to serverId: String, jobData: Data?) {
+        guard let data = jobData,
+              let job = try? JSONDecoder().decode(Job.self, from: data) else {
+            removeJob(id: tempId)
+            return
+        }
+        jobs.removeAll { $0.id == tempId }
+        pendingJobIds = pendingJobIds.filter { $0 != tempId }
+        let serverJob = Job(
+            id: serverId,
+            clientName: job.clientName,
+            jobType: job.jobType,
+            location: job.location,
+            status: job.status,
+            riskScore: job.riskScore,
+            riskLevel: job.riskLevel,
+            createdAt: job.createdAt,
+            updatedAt: job.updatedAt,
+            createdBy: job.createdBy,
+            evidenceCount: job.evidenceCount,
+            evidenceRequired: job.evidenceRequired,
+            controlsCompleted: job.controlsCompleted,
+            controlsTotal: job.controlsTotal
+        )
+        jobs.insert(serverJob, at: 0)
+        OfflineCache.shared.cacheJobs(jobs)
+    }
+
     /// Create job - online: API; offline: save to OfflineDatabase, add to store, queue sync
     func createJob(clientName: String, jobType: String, location: String) async throws -> Job {
         let isOffline = !ServerStatusManager.shared.isOnline

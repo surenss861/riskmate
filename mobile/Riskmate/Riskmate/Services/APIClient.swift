@@ -741,6 +741,20 @@ class APIClient {
         return response.data
     }
 
+    /// Update mitigation (control) completion status - PATCH /api/jobs/:id/mitigations/:mitigationId
+    func updateMitigation(jobId: String, mitigationId: String, done: Bool) async throws {
+        struct UpdateMitigationBody: Encodable {
+            let done: Bool
+        }
+        let body = UpdateMitigationBody(done: done)
+        let data = try JSONEncoder().encode(body)
+        let _: EmptyResponse = try await request(
+            endpoint: "/api/jobs/\(jobId)/mitigations/\(mitigationId)",
+            method: "PATCH",
+            body: data
+        )
+    }
+
     /// POST /api/jobs/[id]/activity/subscribe — returns channelId and organizationId for Supabase Realtime.
     /// Use the returned channelId as the Realtime channel name and filter audit_logs with the same org/job.
     func subscribeToJobActivity(jobId: String) async throws -> (channelId: String, organizationId: String) {

@@ -257,9 +257,28 @@ class OfflineCache: ObservableObject {
             case .delete:
                 try await APIClient.shared.deleteEvidence(evidence.id)
             }
-        case .control, .hazard:
-            // TODO: Implement control/hazard sync
-            break
+        case .control:
+            switch item.action {
+            case .create:
+                throw NSError(domain: "OfflineCache", code: -1, userInfo: [NSLocalizedDescriptionKey: "Control create: use sync queue"])
+            case .update:
+                guard let dict = try? JSONSerialization.jsonObject(with: item.data) as? [String: Any],
+                      let jobId = dict["job_id"] as? String else {
+                    throw NSError(domain: "OfflineCache", code: -1, userInfo: [NSLocalizedDescriptionKey: "Control update requires job_id in data"])
+                }
+                let control = try decoder.decode(Control.self, from: item.data)
+                let done = control.isCompleted ?? control.done ?? false
+                try await APIClient.shared.updateMitigation(jobId: jobId, mitigationId: control.id, done: done)
+            case .delete:
+                throw NSError(domain: "OfflineCache", code: -1, userInfo: [NSLocalizedDescriptionKey: "Control delete: use sync queue"])
+            }
+        case .hazard:
+            let hazard = try decoder.decode(Hazard.self, from: item.data)
+            switch item.action {
+            case .create, .update, .delete:
+                // Hazard ops go via sync batch (SyncEngine)
+                throw NSError(domain: "OfflineCache", code: -1, userInfo: [NSLocalizedDescriptionKey: "Hazard sync: use sync queue"])
+            }
         }
     }
     

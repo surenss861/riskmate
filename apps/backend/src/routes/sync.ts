@@ -281,13 +281,109 @@ syncRouter.post(
             }
 
             case "create_hazard":
+            case "create_control": {
+              const data = op.data || {};
+              const jobId = data.job_id ?? data.jobId;
+              if (!jobId) {
+                baseResult.status = "error";
+                baseResult.error = "job_id required for create hazard/control";
+                results.push(baseResult);
+                break;
+              }
+              const { data: job } = await supabase
+                .from("jobs")
+                .select("id")
+                .eq("id", jobId)
+                .eq("organization_id", organization_id)
+                .single();
+              if (!job) {
+                baseResult.status = "error";
+                baseResult.error = "Job not found";
+                results.push(baseResult);
+                break;
+              }
+              const title = data.title ?? data.name ?? "Untitled";
+              const description = data.description ?? "";
+              const { data: riskFactors } = await supabase
+                .from("risk_factors")
+                .select("id")
+                .eq("is_active", true)
+                .limit(1);
+              const riskFactorId = riskFactors?.[0]?.id ?? null;
+              const insertPayload: Record<string, any> = {
+                job_id: jobId,
+                title,
+                description: description || null,
+                done: false,
+                is_completed: false,
+                organization_id: organization_id,
+              };
+              if (riskFactorId) insertPayload.risk_factor_id = riskFactorId;
+              const { data: inserted, error: insertErr } = await supabase
+                .from("mitigation_items")
+                .insert(insertPayload)
+                .select("id")
+                .single();
+              if (insertErr) {
+                baseResult.status = "error";
+                baseResult.error = insertErr.message;
+              } else if (inserted) {
+                baseResult.server_id = inserted.id;
+              }
+              results.push(baseResult);
+              break;
+            }
             case "update_hazard":
+            case "update_control": {
+              const mitigationId = op.entity_id;
+              const data = op.data || {};
+              const jobId = data.job_id ?? data.jobId;
+              if (!jobId) {
+                baseResult.status = "error";
+                baseResult.error = "job_id required for hazard/control update";
+                results.push(baseResult);
+                break;
+              }
+              const done = data.done ?? data.is_completed ?? data.isCompleted ?? false;
+              const { data: updated, error: updateErr } = await supabase
+                .from("mitigation_items")
+                .update({ done, is_completed: done, completed_at: done ? new Date().toISOString() : null })
+                .eq("id", mitigationId)
+                .eq("job_id", jobId)
+                .eq("organization_id", organization_id)
+                .select("id")
+                .single();
+              if (updateErr) {
+                baseResult.status = "error";
+                baseResult.error = updateErr.message;
+              } else {
+                baseResult.server_id = mitigationId;
+              }
+              results.push(baseResult);
+              break;
+            }
             case "delete_hazard":
-            case "create_control":
-            case "update_control":
             case "delete_control": {
-              baseResult.status = "error";
-              baseResult.error = `Operation type ${op.type} not yet implemented`;
+              const mitigationId = op.entity_id;
+              const data = op.data || {};
+              const jobId = data.job_id ?? data.jobId;
+              if (!jobId) {
+                baseResult.status = "error";
+                baseResult.error = "job_id required for hazard/control delete";
+                results.push(baseResult);
+                break;
+              }
+              const { error: deleteErr } = await supabase
+                .from("mitigation_items")
+                .delete()
+                .eq("id", mitigationId)
+                .eq("job_id", jobId);
+              if (deleteErr) {
+                baseResult.status = "error";
+                baseResult.error = deleteErr.message;
+              } else {
+                baseResult.server_id = mitigationId;
+              }
               results.push(baseResult);
               break;
             }
