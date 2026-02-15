@@ -540,7 +540,8 @@ syncRouter.post(
   }
 );
 
-// GET /api/sync/changes?since={timestamp} - Incremental sync
+// GET /api/sync/changes?since={timestamp}&limit={n}&offset={n} - Incremental sync with pagination
+// Supports limit + offset pagination; client should page until has_more is false to avoid missing updates
 syncRouter.get(
   "/changes",
   authenticate,
@@ -549,6 +550,8 @@ syncRouter.get(
     try {
       const { organization_id } = authReq.user;
       const sinceStr = req.query.since as string;
+      const limit = Math.min(Math.max(parseInt(req.query.limit as string, 10) || 500, 1), 1000);
+      const offset = Math.max(parseInt(req.query.offset as string, 10) || 0, 0);
 
       if (!sinceStr) {
         return res.status(400).json({
@@ -570,7 +573,7 @@ syncRouter.get(
         .is("deleted_at", null)
         .gte("updated_at", since.toISOString())
         .order("updated_at", { ascending: true })
-        .limit(500);
+        .range(offset, offset + limit - 1);
 
       if (error) {
         throw error;
@@ -589,7 +592,18 @@ syncRouter.get(
         created_by: j.created_by,
       }));
 
-      res.json({ data: normalized });
+      const hasMore = (jobs || []).length === limit;
+      const nextOffset = hasMore ? offset + limit : null;
+
+      res.json({
+        data: normalized,
+        pagination: {
+          limit,
+          offset,
+          has_more: hasMore,
+          next_offset: nextOffset,
+        },
+      });
     } catch (err: any) {
       console.error("[Sync] Changes failed:", err);
       res.status(500).json({ message: "Failed to fetch changes" });

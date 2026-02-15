@@ -642,17 +642,28 @@ class APIClient {
         return response
     }
 
-    /// GET /api/sync/changes?since=... - Incremental sync
+    /// GET /api/sync/changes?since=... - Incremental sync with pagination
+    /// Pages through all results until has_more is false so no updates are missed
     func getSyncChanges(since: Date) async throws -> [Job] {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         formatter.timeZone = TimeZone(identifier: "UTC")
         let sinceStr = formatter.string(from: since)
         let encoded = sinceStr.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? sinceStr
-        let response: SyncChangesResponse = try await request(
-            endpoint: "/api/sync/changes?since=\(encoded)"
-        )
-        return response.data
+        var allJobs: [Job] = []
+        var offset = 0
+        let limit = 500
+        repeat {
+            let url = "/api/sync/changes?since=\(encoded)&limit=\(limit)&offset=\(offset)"
+            let response: SyncChangesResponse = try await request(endpoint: url)
+            allJobs.append(contentsOf: response.data)
+            if let pagination = response.pagination, pagination.hasMore {
+                offset = pagination.nextOffset ?? (offset + limit)
+            } else {
+                break
+            }
+        } while true
+        return allJobs
     }
 
     /// POST /api/sync/resolve-conflict - Submit conflict resolution
@@ -1513,6 +1524,19 @@ struct BatchConflictDetail: Codable {
 
 struct SyncChangesResponse: Codable {
     let data: [Job]
+    let pagination: SyncChangesPagination?
+}
+
+struct SyncChangesPagination: Codable {
+    let limit: Int
+    let offset: Int
+    let hasMore: Bool
+    let nextOffset: Int?
+    enum CodingKeys: String, CodingKey {
+        case limit, offset
+        case hasMore = "has_more"
+        case nextOffset = "next_offset"
+    }
 }
 
 /// Type-erased Codable for conflict values (server_value, local_value can be any JSON type)

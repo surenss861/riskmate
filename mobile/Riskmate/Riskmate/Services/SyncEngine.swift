@@ -53,11 +53,16 @@ final class SyncEngine: ObservableObject {
         // 1. Upload local changes (batch)
         let ops = prioritizeOperations()
         guard !ops.isEmpty else {
-            // No pending ops - optionally fetch server changes
+            // No pending ops - fetch server changes; advance timestamp only on success
             if let since = db.getLastSyncTimestamp() {
-                let _ = try? await fetchChanges(since: since)
+                do {
+                    _ = try await fetchChanges(since: since)
+                    db.setLastSyncTimestamp(Date())
+                } catch {
+                    lastResult = SyncResult(succeeded: 0, failed: 0, conflicts: [], errors: [error.localizedDescription])
+                    throw error
+                }
             }
-            db.setLastSyncTimestamp(Date())
             lastResult = SyncResult(succeeded: 0, failed: 0, conflicts: [], errors: [])
             return lastResult!
         }
@@ -79,6 +84,7 @@ final class SyncEngine: ObservableObject {
                             remapJobInStore(from: localTempId, to: serverId, opData: op?.data)
                         }
                     case .updateJob:
+                        db.deletePendingUpdatesForEntity(entityType: "job", entityId: localTempId)
                         break // Job id unchanged; sync op removal suffices
                     case .deleteJob:
                         db.deletePendingJob(id: localTempId)
@@ -126,13 +132,24 @@ final class SyncEngine: ObservableObject {
             errors.append(error.localizedDescription)
             // Retry with exponential backoff for entire batch
             try await retryFailedOperations()
+            let result = SyncResult(succeeded: succeeded, failed: failed, conflicts: conflicts, errors: errors)
+            lastResult = result
+            throw error
         }
 
-        // 2. Download incremental changes
+        // 2. Download incremental changes - advance timestamp only after fetch succeeds
         if let since = db.getLastSyncTimestamp() {
-            _ = try? await fetchChanges(since: since)
+            do {
+                _ = try await fetchChanges(since: since)
+                db.setLastSyncTimestamp(Date())
+            } catch {
+                let result = SyncResult(succeeded: succeeded, failed: failed, conflicts: conflicts, errors: errors + [error.localizedDescription])
+                lastResult = result
+                throw error
+            }
+        } else {
+            db.setLastSyncTimestamp(Date())
         }
-        db.setLastSyncTimestamp(Date())
 
         let result = SyncResult(succeeded: succeeded, failed: failed, conflicts: conflicts, errors: errors)
         lastResult = result

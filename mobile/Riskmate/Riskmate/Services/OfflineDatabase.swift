@@ -471,6 +471,72 @@ final class OfflineDatabase {
         }
     }
 
+    // MARK: - Pending Updates (field-level changes for offline job edits)
+
+    /// Insert or replace a pending update for an entity field
+    func insertOrUpdatePendingUpdate(entityType: String, entityId: String, field: String, oldValue: String?, newValue: String, timestamp: Date = Date()) {
+        queue.async { [weak self] in
+            guard let self = self, let db = self.db else { return }
+            let id = "\(entityType):\(entityId):\(field)"
+            let sql = """
+                INSERT OR REPLACE INTO pending_updates (id, entity_type, entity_id, field, old_value, new_value, timestamp, sync_status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')
+            """
+            var stmt: OpaquePointer?
+            defer { sqlite3_finalize(stmt) }
+            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
+            let ts = Int64(timestamp.timeIntervalSince1970 * 1000)
+            sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 2, (entityType as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 3, (entityId as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 4, (field as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 5, (oldValue as NSString?)?.utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 6, (newValue as NSString).utf8String, -1, nil)
+            sqlite3_bind_int64(stmt, 7, ts)
+            sqlite3_step(stmt)
+        }
+    }
+
+    /// Get pending updates for an entity
+    func getPendingUpdates(entityType: String, entityId: String) -> [PendingUpdateRow] {
+        queue.sync {
+            guard let db = db else { return [] }
+            let sql = "SELECT id, entity_type, entity_id, field, old_value, new_value, timestamp, sync_status FROM pending_updates WHERE entity_type = ? AND entity_id = ? ORDER BY timestamp ASC"
+            var stmt: OpaquePointer?
+            defer { sqlite3_finalize(stmt) }
+            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return [] }
+            sqlite3_bind_text(stmt, 1, (entityType as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 2, (entityId as NSString).utf8String, -1, nil)
+            var rows: [PendingUpdateRow] = []
+            while sqlite3_step(stmt) == SQLITE_ROW {
+                let id = String(cString: sqlite3_column_text(stmt, 0))
+                let entityTypeCol = String(cString: sqlite3_column_text(stmt, 1))
+                let entityIdCol = String(cString: sqlite3_column_text(stmt, 2))
+                let field = String(cString: sqlite3_column_text(stmt, 3))
+                let oldVal = sqlite3_column_type(stmt, 4) == SQLITE_NULL ? nil : String(cString: sqlite3_column_text(stmt, 4))
+                let newVal = String(cString: sqlite3_column_text(stmt, 5))
+                let ts = Int64(sqlite3_column_int64(stmt, 6))
+                let status = String(cString: sqlite3_column_text(stmt, 7))
+                rows.append(PendingUpdateRow(id: id, entityType: entityTypeCol, entityId: entityIdCol, field: field, oldValue: oldVal, newValue: newVal, timestamp: Date(timeIntervalSince1970: Double(ts) / 1000), syncStatus: status))
+            }
+            return rows
+        }
+    }
+
+    /// Delete pending updates for an entity (called when sync succeeds)
+    func deletePendingUpdatesForEntity(entityType: String, entityId: String) {
+        queue.async { [weak self] in
+            guard let self = self, let db = self.db else { return }
+            let sql = "DELETE FROM pending_updates WHERE entity_type = ? AND entity_id = ?"
+            var stmt: OpaquePointer?
+            defer { sqlite3_finalize(stmt) }
+            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
+            sqlite3_bind_text(stmt, 1, (entityType as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 2, (entityId as NSString).utf8String, -1, nil)
+            sqlite3_step(stmt)
+        }
+    }
+
     func pendingOperationsCount() -> Int {
         queue.sync {
             guard let db = db else { return 0 }
@@ -499,6 +565,17 @@ struct ConflictLogRow {
     let serverVersion: String?
     let localVersion: String?
     let resolutionStrategy: String?
+}
+
+struct PendingUpdateRow {
+    let id: String
+    let entityType: String
+    let entityId: String
+    let field: String
+    let oldValue: String?
+    let newValue: String
+    let timestamp: Date
+    let syncStatus: String
 }
 
 enum OfflineDatabaseError: Error {

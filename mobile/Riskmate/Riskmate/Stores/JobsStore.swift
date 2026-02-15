@@ -279,11 +279,12 @@ final class JobsStore: ObservableObject {
         return created
     }
 
-    /// Save job changes - online: API; offline: queue update, optimistic UI
+    /// Save job changes - online: API; offline: queue update, persist to pending_updates, optimistic UI
     func saveJobUpdate(_ job: Job) async throws {
         let isOffline = !ServerStatusManager.shared.isOnline
         if isOffline {
             SyncEngine.shared.queueUpdateJob(job)
+            persistJobEditsToPendingUpdates(job)
             updateJob(job) // optimistic
             OfflineCache.shared.refreshSyncState()
             return
@@ -302,6 +303,31 @@ final class JobsStore: ObservableObject {
     /// Refresh jobs list including pending offline jobs
     func refreshPendingJobs() {
         loadFromCache()
+    }
+
+    /// Persist edited job fields to pending_updates for offline durability (per ticket requirement)
+    private func persistJobEditsToPendingUpdates(_ job: Job) {
+        guard let previous = jobs.first(where: { $0.id == job.id }) else { return }
+        let timestamp = Date()
+        func persistIfChanged(field: String, old: String?, new: String?) {
+            let o = old ?? ""
+            let n = new ?? ""
+            if n != o {
+                OfflineDatabase.shared.insertOrUpdatePendingUpdate(
+                    entityType: "job",
+                    entityId: job.id,
+                    field: field,
+                    oldValue: old,
+                    newValue: n,
+                    timestamp: timestamp
+                )
+            }
+        }
+        persistIfChanged(field: "client_name", old: previous.clientName, new: job.clientName)
+        persistIfChanged(field: "job_type", old: previous.jobType, new: job.jobType)
+        persistIfChanged(field: "location", old: previous.location, new: job.location)
+        persistIfChanged(field: "status", old: previous.status, new: job.status)
+        persistIfChanged(field: "updated_at", old: previous.updatedAt, new: job.updatedAt)
     }
 
     func clear() {
