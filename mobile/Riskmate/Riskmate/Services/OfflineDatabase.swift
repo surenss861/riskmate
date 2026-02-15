@@ -497,6 +497,31 @@ final class OfflineDatabase {
         }
     }
 
+    /// Get all job IDs that have pending updates (sync queue update_job ops or pending_updates rows)
+    func getJobIdsWithPendingUpdates() -> Set<String> {
+        queue.sync {
+            guard let db = db else { return [] }
+            var ids = Set<String>()
+            var stmt: OpaquePointer?
+            defer { sqlite3_finalize(stmt) }
+            // From sync_queue: update_job operations (rawValue is "updateJob")
+            if sqlite3_prepare_v2(db, "SELECT DISTINCT entity_id FROM sync_queue WHERE type = 'updateJob'", -1, &stmt, nil) == SQLITE_OK {
+                while sqlite3_step(stmt) == SQLITE_ROW {
+                    ids.insert(String(cString: sqlite3_column_text(stmt, 0)))
+                }
+                sqlite3_finalize(stmt)
+                stmt = nil
+            }
+            // From pending_updates: entity_type = 'job'
+            if sqlite3_prepare_v2(db, "SELECT DISTINCT entity_id FROM pending_updates WHERE entity_type = 'job'", -1, &stmt, nil) == SQLITE_OK {
+                while sqlite3_step(stmt) == SQLITE_ROW {
+                    ids.insert(String(cString: sqlite3_column_text(stmt, 0)))
+                }
+            }
+            return ids
+        }
+    }
+
     /// Get pending updates for an entity
     func getPendingUpdates(entityType: String, entityId: String) -> [PendingUpdateRow] {
         queue.sync {

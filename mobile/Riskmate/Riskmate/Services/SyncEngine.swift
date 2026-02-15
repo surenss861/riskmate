@@ -21,8 +21,11 @@ final class SyncEngine: ObservableObject {
     private let db = OfflineDatabase.shared
     private let maxRetries = 3
     private var queueObserver: NSObjectProtocol?
+    private var reachabilityCancellable: AnyCancellable?
+    private var wasOffline: Bool
 
     private init() {
+        wasOffline = !ServerStatusManager.shared.isOnline
         refreshPendingOperations()
         queueObserver = NotificationCenter.default.addObserver(
             forName: OfflineDatabase.syncQueueDidChangeNotification,
@@ -30,6 +33,30 @@ final class SyncEngine: ObservableObject {
             queue: .main
         ) { [weak self] _ in
             self?.refreshPendingOperations()
+        }
+        // Auto-sync when backend becomes reachable after being offline
+        reachabilityCancellable = ServerStatusManager.shared.$isOnline
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] isOnline in
+                guard let self = self else { return }
+                if self.wasOffline && isOnline {
+                    self.wasOffline = false
+                    Task { @MainActor in
+                        await self.autoSyncOnReconnect()
+                    }
+                } else if !isOnline {
+                    self.wasOffline = true
+                }
+            }
+    }
+
+    private func autoSyncOnReconnect() async {
+        guard db.pendingOperationsCount() > 0 else { return }
+        do {
+            _ = try await syncPendingOperations()
+            JobsStore.shared.refreshPendingJobs()
+        } catch {
+            print("[SyncEngine] Auto-sync on reconnect failed: \(error.localizedDescription)")
         }
     }
 

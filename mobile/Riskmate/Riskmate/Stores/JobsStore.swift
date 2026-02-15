@@ -19,10 +19,20 @@ final class JobsStore: ObservableObject {
     private var currentPage: Int = 1
     private let pageSize: Int = 25
     private var isInitialLoad: Bool = true
+    private var syncQueueObserver: NSObjectProtocol?
 
     private init() {
         // Load from cache immediately for instant launch
         loadFromCache()
+        syncQueueObserver = NotificationCenter.default.addObserver(
+            forName: OfflineDatabase.syncQueueDidChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.refreshPendingJobIds()
+            }
+        }
     }
 
     /// Load jobs from local cache + merge pending offline jobs
@@ -42,7 +52,14 @@ final class JobsStore: ObservableObject {
         if all != self.jobs {
             self.jobs = all
         }
-        pendingJobIds = Set(OfflineDatabase.shared.getPendingJobs().map { $0.id })
+        refreshPendingJobIds()
+    }
+
+    /// Refresh combined pending set: created-offline jobs + jobs with pending updates
+    private func refreshPendingJobIds() {
+        let created = Set(OfflineDatabase.shared.getPendingJobs().map { $0.id })
+        let withUpdates = OfflineDatabase.shared.getJobIdsWithPendingUpdates()
+        pendingJobIds = created.union(withUpdates)
     }
 
     /// Initial fetch: cache-first, then refresh in background
@@ -300,7 +317,7 @@ final class JobsStore: ObservableObject {
         }
     }
 
-    /// Refresh jobs list including pending offline jobs
+    /// Refresh jobs list including pending offline jobs and pending update badge state
     func refreshPendingJobs() {
         loadFromCache()
     }

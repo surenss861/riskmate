@@ -22,6 +22,7 @@ struct JobDetailView: View {
     @State private var evidenceRequiredForExport: Int = 5
     @State private var showEditJobSheet = false
     @StateObject private var jobsStore = JobsStore.shared
+    @StateObject private var statusManager = ServerStatusManager.shared
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var quickAction: QuickActionRouter
     
@@ -65,12 +66,12 @@ struct JobDetailView: View {
                     .padding(RMTheme.Spacing.pagePadding)
                 } else if let job = job {
                     VStack(spacing: 0) {
-                        // Changes will sync banner when job has pending updates
-                        if jobsStore.hasPendingUpdate(jobId: job.id) {
+                        // Changes will sync banner when offline or when job has pending updates
+                        if !statusManager.isOnline || jobsStore.pendingJobIds.contains(job.id) {
                             HStack(spacing: RMTheme.Spacing.sm) {
                                 Image(systemName: "clock.fill")
                                     .foregroundColor(RMTheme.Colors.warning)
-                                Text("Changes will sync when online")
+                                Text("Changes will sync")
                                     .font(RMTheme.Typography.bodySmall)
                                     .foregroundColor(RMTheme.Colors.textSecondary)
                             }
@@ -320,13 +321,70 @@ struct JobDetailView: View {
         
         do {
             job = try await APIClient.shared.getJob(jobId)
-            errorMessage = nil // Clear any previous error
+            errorMessage = nil
+            job = mergePendingUpdatesIntoJob(job!)
         } catch {
-            let errorDesc = error.localizedDescription
-            print("[JobDetailView] ❌ Failed to load job: \(errorDesc)")
-            errorMessage = errorDesc
-            job = nil // Clear job on error - never show stale data
+            // Fall back to cached or pending offline data instead of clearing
+            var fallbackJob: Job?
+            if let cached = OfflineCache.shared.getCachedJobs(),
+               let found = cached.first(where: { $0.id == jobId }) {
+                fallbackJob = found
+            }
+            if fallbackJob == nil {
+                for row in OfflineDatabase.shared.getPendingJobs() {
+                    if let decoded = try? JSONDecoder().decode(Job.self, from: row.data), decoded.id == jobId {
+                        fallbackJob = decoded
+                        break
+                    }
+                }
+            }
+            if var fb = fallbackJob {
+                fb = mergePendingUpdatesIntoJob(fb)
+                job = fb
+                errorMessage = nil
+            } else {
+                job = nil
+                errorMessage = error.localizedDescription
+            }
+            print("[JobDetailView] ⚠️ API failed, using offline fallback: \(fallbackJob != nil)")
         }
+    }
+
+    /// Merge pending job updates from OfflineDatabase into the displayed job
+    private func mergePendingUpdatesIntoJob(_ base: Job) -> Job {
+        let rows = OfflineDatabase.shared.getPendingUpdates(entityType: "job", entityId: base.id)
+        guard !rows.isEmpty else { return base }
+        var clientName = base.clientName
+        var jobType = base.jobType
+        var location = base.location
+        var status = base.status
+        var updatedAt = base.updatedAt
+        for row in rows {
+            switch row.field {
+            case "client_name": clientName = row.newValue
+            case "job_type": jobType = row.newValue
+            case "location": location = row.newValue
+            case "status": status = row.newValue
+            case "updated_at": updatedAt = row.newValue
+            default: break
+            }
+        }
+        return Job(
+            id: base.id,
+            clientName: clientName,
+            jobType: jobType,
+            location: location,
+            status: status,
+            riskScore: base.riskScore,
+            riskLevel: base.riskLevel,
+            createdAt: base.createdAt,
+            updatedAt: updatedAt,
+            createdBy: base.createdBy,
+            evidenceCount: base.evidenceCount,
+            evidenceRequired: base.evidenceRequired,
+            controlsCompleted: base.controlsCompleted,
+            controlsTotal: base.controlsTotal
+        )
     }
 }
 
