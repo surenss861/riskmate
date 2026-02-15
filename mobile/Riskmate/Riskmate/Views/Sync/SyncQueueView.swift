@@ -9,6 +9,8 @@ struct SyncQueueView: View {
     @StateObject private var statusManager = ServerStatusManager.shared
     @Environment(\.dismiss) private var dismiss
     @State private var isRetryingUploads = false
+    @State private var conflictToResolve: SyncConflict?
+    @State private var showConflictHistory = false
 
     private var pendingOps: [SyncOperation] {
         syncEngine.pendingOperations
@@ -151,6 +153,16 @@ struct SyncQueueView: View {
                         }
                         .foregroundColor(RMTheme.Colors.accent)
                     }
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button {
+                            Haptics.tap()
+                            showConflictHistory = true
+                        } label: {
+                            Label("Conflicts", systemImage: "arrow.triangle.2.circlepath")
+                                .font(RMTheme.Typography.caption)
+                        }
+                        .foregroundColor(RMTheme.Colors.textSecondary)
+                    }
                     ToolbarItem(placement: .primaryAction) {
                         if hasPendingItems {
                             if statusManager.isOnline {
@@ -218,9 +230,57 @@ struct SyncQueueView: View {
                         JobsStore.shared.refreshPendingJobs()
                     }
                 }
+                .onChange(of: syncEngine.pendingConflicts) { _, new in
+                    if conflictToResolve == nil, let first = new.first {
+                        conflictToResolve = first
+                    }
+                }
                 .onAppear {
                     syncEngine.refreshPendingOperations()
+                    syncEngine.refreshPendingConflictsFromDB()
+                    if conflictToResolve == nil, let first = syncEngine.pendingConflicts.first {
+                        conflictToResolve = first
+                    }
                 }
+                .sheet(item: $conflictToResolve) { conflict in
+                    ConflictResolutionSheet(
+                        conflict: conflict,
+                        entityLabel: entityLabel(for: conflict),
+                        onResolve: { strategy in
+                            Task { @MainActor in
+                                do {
+                                    try await syncEngine.resolveConflict(operationId: conflict.id, strategy: strategy)
+                                    conflictToResolve = syncEngine.pendingConflicts.first
+                                    _ = try? await syncEngine.syncPendingOperations()
+                                    JobsStore.shared.refreshPendingJobs()
+                                    NotificationCenter.default.post(name: .syncConflictHistoryDidChange, object: nil)
+                                    ToastCenter.shared.show("Conflict resolved", systemImage: "checkmark.circle", style: .success)
+                                } catch {
+                                    ToastCenter.shared.show(
+                                        error.localizedDescription,
+                                        systemImage: "exclamationmark.triangle",
+                                        style: .error
+                                    )
+                                }
+                            }
+                        },
+                        onCancel: {
+                            conflictToResolve = nil
+                        }
+                    )
+                }
+                .sheet(isPresented: $showConflictHistory) {
+                    ConflictHistoryView()
+                }
+        }
+    }
+
+    private func entityLabel(for conflict: SyncConflict) -> String {
+        switch conflict.entityType {
+        case "job": return "job"
+        case "hazard": return "hazard"
+        case "control": return "control"
+        default: return conflict.entityType
         }
     }
 }

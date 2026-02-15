@@ -402,16 +402,44 @@ final class OfflineDatabase {
         }
     }
 
-    func markConflictResolved(id: String) {
+    func markConflictResolved(id: String, resolutionStrategy: String? = nil) {
         queue.async { [weak self] in
             guard let self = self, let db = self.db else { return }
-            let sql = "UPDATE conflict_log SET resolved_at = ? WHERE id = ?"
+            let sql = "UPDATE conflict_log SET resolved_at = ?, resolution_strategy = COALESCE(?, resolution_strategy) WHERE id = ?"
             var stmt: OpaquePointer?
             defer { sqlite3_finalize(stmt) }
             guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
             sqlite3_bind_int64(stmt, 1, Int64(Date().timeIntervalSince1970 * 1000))
-            sqlite3_bind_text(stmt, 2, (id as NSString).utf8String, -1, nil)
+            if let s = resolutionStrategy {
+                sqlite3_bind_text(stmt, 2, (s as NSString).utf8String, -1, nil)
+            } else {
+                sqlite3_bind_null(stmt, 2)
+            }
+            sqlite3_bind_text(stmt, 3, (id as NSString).utf8String, -1, nil)
             sqlite3_step(stmt)
+        }
+    }
+
+    /// All conflicts for history view (unresolved first, then resolved by date)
+    func getAllConflicts() -> [ConflictHistoryRow] {
+        queue.sync {
+            guard let db = db else { return [] }
+            let sql = "SELECT id, entity_type, entity_id, server_version, local_version, resolution_strategy, resolved_at FROM conflict_log ORDER BY resolved_at IS NULL DESC, resolved_at DESC"
+            var stmt: OpaquePointer?
+            defer { sqlite3_finalize(stmt) }
+            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return [] }
+            var rows: [ConflictHistoryRow] = []
+            while sqlite3_step(stmt) == SQLITE_ROW {
+                let id = String(cString: sqlite3_column_text(stmt, 0))
+                let entityType = String(cString: sqlite3_column_text(stmt, 1))
+                let entityId = String(cString: sqlite3_column_text(stmt, 2))
+                let serverV = sqlite3_column_type(stmt, 3) == SQLITE_NULL ? nil : String(cString: sqlite3_column_text(stmt, 3))
+                let localV = sqlite3_column_type(stmt, 4) == SQLITE_NULL ? nil : String(cString: sqlite3_column_text(stmt, 4))
+                let strat = sqlite3_column_type(stmt, 5) == SQLITE_NULL ? nil : String(cString: sqlite3_column_text(stmt, 5))
+                let resolvedAt = sqlite3_column_type(stmt, 6) == SQLITE_NULL ? nil : Date(timeIntervalSince1970: Double(sqlite3_column_int64(stmt, 6)) / 1000)
+                rows.append(ConflictHistoryRow(id: id, entityType: entityType, entityId: entityId, serverVersion: serverV, localVersion: localV, resolutionStrategy: strat, resolvedAt: resolvedAt))
+            }
+            return rows
         }
     }
 
@@ -918,6 +946,16 @@ struct ConflictLogRow {
     let serverVersion: String?
     let localVersion: String?
     let resolutionStrategy: String?
+}
+
+struct ConflictHistoryRow {
+    let id: String
+    let entityType: String
+    let entityId: String
+    let serverVersion: String?
+    let localVersion: String?
+    let resolutionStrategy: String?
+    let resolvedAt: Date?
 }
 
 struct PendingUpdateRow {

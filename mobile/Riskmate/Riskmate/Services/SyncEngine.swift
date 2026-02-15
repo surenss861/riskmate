@@ -17,6 +17,8 @@ final class SyncEngine: ObservableObject {
     @Published private(set) var isSyncing: Bool = false
     @Published private(set) var lastResult: SyncResult?
     @Published private(set) var pendingOperations: [SyncOperation] = []
+    /// Conflicts from last sync or from DB; UI shows resolution sheet when non-empty
+    @Published private(set) var pendingConflicts: [SyncConflict] = []
 
     private let db = OfflineDatabase.shared
     private let maxRetries = 3
@@ -161,6 +163,7 @@ final class SyncEngine: ObservableObject {
             try await retryFailedOperations()
             let result = SyncResult(succeeded: succeeded, failed: failed, conflicts: conflicts, errors: errors)
             lastResult = result
+            if !conflicts.isEmpty { pendingConflicts = conflicts }
             throw error
         }
 
@@ -177,7 +180,32 @@ final class SyncEngine: ObservableObject {
 
         let result = SyncResult(succeeded: succeeded, failed: failed, conflicts: conflicts, errors: errors)
         lastResult = result
+        if !conflicts.isEmpty {
+            pendingConflicts = conflicts
+        }
         return result
+    }
+
+    /// Clear a single conflict from pending after user resolves it
+    func clearPendingConflict(operationId: String) {
+        pendingConflicts.removeAll { $0.id == operationId }
+    }
+
+    /// Refresh pending conflicts from DB (e.g. when opening Sync Queue) so user can resolve any left from a previous session
+    func refreshPendingConflictsFromDB() {
+        let rows = db.getUnresolvedConflicts()
+        pendingConflicts = rows.map { row in
+            SyncConflict(
+                id: row.id,
+                entityType: row.entityType,
+                entityId: row.entityId,
+                field: "data",
+                serverValue: row.serverVersion as? AnyHashable,
+                localValue: row.localVersion as? AnyHashable,
+                serverTimestamp: Date(),
+                localTimestamp: Date()
+            )
+        }
     }
 
     /// Detect conflicts by comparing local and server data
@@ -319,7 +347,8 @@ final class SyncEngine: ObservableObject {
     func resolveConflict(operationId: String, strategy: ConflictResolutionStrategy) async throws {
         try await APIClient.shared.resolveSyncConflict(operationId: operationId, strategy: strategy)
         db.removeSyncOperation(id: operationId)
-        db.markConflictResolved(id: operationId)
+        db.markConflictResolved(id: operationId, resolutionStrategy: strategy.rawValue)
+        clearPendingConflict(operationId: operationId)
     }
 
     /// Fetch incremental changes from server (jobs + hazards/controls)
