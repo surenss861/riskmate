@@ -80,7 +80,7 @@ export function renderSignaturesAndCompliance(
   doc.moveDown(0.8);
 
   const sigBoxY = doc.y;
-  const sigBoxHeight = 90;
+  const sigBoxHeight = 115;
   const sigBoxWidth = (pageWidth - margin * 2 - 20) / 2;
   const sigSpacing = 20;
 
@@ -138,9 +138,7 @@ export function renderSignaturesAndCompliance(
       if (sig) {
         const roleLabel = ROLE_LABELS[sig.signature_role] ?? sig.signature_role;
         const dateStr = formatDate(sig.signed_at);
-        const hashStr = sig.signature_hash
-          ? `${sig.signature_hash.substring(0, 12)}…${sig.signature_hash.substring(sig.signature_hash.length - 8)}`
-          : '';
+        const hashStr = sig.signature_hash ?? '';
 
         const signatureValid = sigValidation?.valid ?? false;
         const signatureInvalid = sigValidation && !sigValidation.valid;
@@ -185,16 +183,17 @@ export function renderSignaturesAndCompliance(
           if (hashStr) {
             doc
               .fillColor(STYLES.colors.secondaryText)
-              .fontSize(8)
+              .fontSize(7)
               .font(STYLES.fonts.light)
               .text(`Hash: ${hashStr}`, x + 15, y + 78, { width: sigBoxWidth - 30 });
           }
           if (signatureValid) {
+            const afterHashY = hashStr ? doc.y + 4 : y + 78;
             doc
               .fillColor(STYLES.colors.secondaryText)
               .fontSize(8)
               .font(STYLES.fonts.light)
-              .text('Signature captured (SVG on file)', x + 15, y + 86, { width: sigBoxWidth - 30 });
+              .text('Signature captured (SVG on file)', x + 15, afterHashY, { width: sigBoxWidth - 30 });
           }
         }
       } else {
@@ -221,6 +220,7 @@ export function renderSignaturesAndCompliance(
       }
     };
 
+    let didPageBreak = false;
     if (sigY + sigBoxHeight > pageHeight - 200) {
       addPage();
       currentPageStartY = STYLES.spacing.sectionTop + 40;
@@ -230,12 +230,13 @@ export function renderSignaturesAndCompliance(
       const newSigX = margin + colForNewPage * (sigBoxWidth + sigSpacing);
       drawBox(newSigX, newSigY);
       doc.y = newSigY + sigBoxHeight;
+      didPageBreak = true;
     } else {
       drawBox(sigX, sigY);
       doc.y = sigY + sigBoxHeight;
     }
 
-    if (col === 1) {
+    if (col === 1 && !didPageBreak) {
       rowOnCurrentPage++;
     }
   }
