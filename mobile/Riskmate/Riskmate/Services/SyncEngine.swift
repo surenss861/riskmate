@@ -144,14 +144,14 @@ final class SyncEngine: ObservableObject {
                         )
                     }
                     failed += 1
+                    let errMsg = "Conflict: \(result.conflict?.field ?? "unknown")"
+                    db.recordSyncOperationError(operationId: result.operationId, error: errMsg)
                 default:
                     failed += 1
-                    errors.append(result.error ?? "Unknown error")
-                    if RetryManager.shouldRetry(error: NSError(domain: "Sync", code: -1, userInfo: [NSLocalizedDescriptionKey: result.error ?? "sync failed"]), attempt: 0, maxAttempts: maxRetries) {
-                        db.incrementRetryCount(operationId: result.operationId)
-                    } else {
-                        db.removeSyncOperation(id: result.operationId)
-                    }
+                    let errMsg = result.error ?? "Unknown error"
+                    errors.append(errMsg)
+                    db.incrementRetryCount(operationId: result.operationId, lastError: errMsg)
+                    // Keep failed ops in queue until user retries or clears - do NOT remove
                 }
             }
             // After processing batch: refresh pending job IDs so offline badge and duplicates clear
@@ -326,18 +326,56 @@ final class SyncEngine: ObservableObject {
         db.markConflictResolved(id: operationId)
     }
 
-    /// Fetch incremental changes from server
+    /// Fetch incremental changes from server (jobs + hazards/controls)
     private func fetchChanges(since: Date) async throws -> [Job] {
-        let jobs = try await APIClient.shared.getSyncChanges(since: since)
-        // Merge into local cache (OfflineCache) - caller can refresh JobsStore
-        if !jobs.isEmpty {
-            OfflineCache.shared.cacheJobs(jobs)
+        let result = try await APIClient.shared.getSyncChanges(since: since)
+        if !result.jobs.isEmpty {
+            OfflineCache.shared.cacheJobs(result.jobs)
         }
-        return jobs
+        if !result.mitigationItems.isEmpty {
+            let byJob = Dictionary(grouping: result.mitigationItems, by: { $0.jobId })
+            var toMerge: [(jobId: String, hazards: [Hazard], controls: [Control])] = []
+            for (jobId, items) in byJob {
+                var hazards: [Hazard] = []
+                var controls: [Control] = []
+                for item in items {
+                    if item.entityType == "hazard", let h = item.data.asHazard {
+                        hazards.append(h)
+                    } else if item.entityType == "control", let c = item.data.asControl {
+                        controls.append(c)
+                    }
+                }
+                if !hazards.isEmpty || !controls.isEmpty {
+                    toMerge.append((jobId, hazards, controls))
+                }
+            }
+            if !toMerge.isEmpty {
+                OfflineCache.shared.mergeCachedMitigationItems(synced: toMerge)
+            }
+        }
+        return result.jobs
     }
 
     func pendingCount() -> Int {
         db.pendingOperationsCount()
+    }
+
+    /// Retry a specific failed operation: reset its state and run sync
+    func retryOperation(operationId: String) {
+        db.resetOperationForRetry(operationId: operationId)
+        refreshPendingOperations()
+        Task {
+            do {
+                _ = try await syncPendingOperations()
+                JobsStore.shared.refreshPendingJobs()
+            } catch {
+                ToastCenter.shared.show(
+                    error.localizedDescription,
+                    systemImage: "exclamationmark.triangle",
+                    style: .error
+                )
+            }
+        }
     }
 
     // MARK: - Post-sync Helpers

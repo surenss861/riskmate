@@ -27,7 +27,7 @@ final class OfflineDatabase {
 
     // MARK: - Schema
 
-    private let schemaVersion: Int32 = 1
+    private let schemaVersion: Int32 = 2
 
     private func openDatabase() {
         guard sqlite3_open(dbPath, &db) == SQLITE_OK else {
@@ -38,12 +38,17 @@ final class OfflineDatabase {
     }
 
     private func runMigrations() {
-        queue.async { [weak self] in
+        queue.sync { [weak self] in
             guard let self = self, let db = self.db else { return }
-            let current = self.getSchemaVersion(db)
+            var current = self.getSchemaVersion(db)
             if current < 1 {
                 self.createTables(db)
                 self.setSchemaVersion(db, 1)
+                current = 1
+            }
+            if current < 2 {
+                sqlite3_exec(db, "ALTER TABLE sync_queue ADD COLUMN last_error TEXT", nil, nil, nil)
+                self.setSchemaVersion(db, 2)
             }
         }
     }
@@ -108,6 +113,7 @@ final class OfflineDatabase {
                 priority INTEGER DEFAULT 0,
                 retry_count INTEGER DEFAULT 0,
                 last_attempt INTEGER,
+                last_error TEXT,
                 data TEXT NOT NULL,
                 client_timestamp INTEGER NOT NULL
             )
@@ -211,8 +217,8 @@ final class OfflineDatabase {
         queue.async { [weak self] in
             guard let self = self, let db = self.db else { return }
             let sql = """
-                INSERT OR REPLACE INTO sync_queue (operation_id, type, entity_id, priority, retry_count, last_attempt, data, client_timestamp)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT OR REPLACE INTO sync_queue (operation_id, type, entity_id, priority, retry_count, last_attempt, last_error, data, client_timestamp)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """
             var stmt: OpaquePointer?
             defer { sqlite3_finalize(stmt) }
@@ -229,8 +235,13 @@ final class OfflineDatabase {
             } else {
                 sqlite3_bind_null(stmt, 6)
             }
-            sqlite3_bind_text(stmt, 7, (dataStr as NSString).utf8String, -1, nil)
-            sqlite3_bind_int64(stmt, 8, clientTs)
+            if let err = op.lastError {
+                sqlite3_bind_text(stmt, 7, (err as NSString).utf8String, -1, nil)
+            } else {
+                sqlite3_bind_null(stmt, 7)
+            }
+            sqlite3_bind_text(stmt, 8, (dataStr as NSString).utf8String, -1, nil)
+            sqlite3_bind_int64(stmt, 9, clientTs)
             sqlite3_step(stmt)
             DispatchQueue.main.async {
                 NotificationCenter.default.post(name: Self.syncQueueDidChangeNotification, object: nil)
@@ -241,7 +252,7 @@ final class OfflineDatabase {
     func getSyncQueue() -> [SyncOperation] {
         queue.sync {
             guard let db = db else { return [] }
-            let sql = "SELECT operation_id, type, entity_id, priority, retry_count, last_attempt, data, client_timestamp FROM sync_queue ORDER BY priority DESC, client_timestamp ASC"
+            let sql = "SELECT operation_id, type, entity_id, priority, retry_count, last_attempt, last_error, data, client_timestamp FROM sync_queue ORDER BY priority DESC, client_timestamp ASC"
             var stmt: OpaquePointer?
             defer { sqlite3_finalize(stmt) }
             guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return [] }
@@ -253,8 +264,9 @@ final class OfflineDatabase {
                 let priority = Int(sqlite3_column_int(stmt, 3))
                 let retryCount = Int(sqlite3_column_int(stmt, 4))
                 let lastAttempt: Date? = sqlite3_column_type(stmt, 5) == SQLITE_NULL ? nil : Date(timeIntervalSince1970: Double(sqlite3_column_int64(stmt, 5)) / 1000)
-                let dataStr = String(cString: sqlite3_column_text(stmt, 6))
-                let clientTs = Date(timeIntervalSince1970: Double(sqlite3_column_int64(stmt, 7)) / 1000)
+                let lastError: String? = sqlite3_column_type(stmt, 6) == SQLITE_NULL ? nil : String(cString: sqlite3_column_text(stmt, 6))
+                let dataStr = String(cString: sqlite3_column_text(stmt, 7))
+                let clientTs = Date(timeIntervalSince1970: Double(sqlite3_column_int64(stmt, 8)) / 1000)
                 let data = dataStr.data(using: .utf8) ?? Data()
                 guard let type = OperationType(rawValue: typeStr) else { continue }
                 ops.append(SyncOperation(
@@ -265,6 +277,7 @@ final class OfflineDatabase {
                     priority: priority,
                     retryCount: retryCount,
                     lastAttempt: lastAttempt,
+                    lastError: lastError,
                     clientTimestamp: clientTs
                 ))
             }
@@ -287,15 +300,54 @@ final class OfflineDatabase {
         }
     }
 
-    func incrementRetryCount(operationId: String) {
+    func incrementRetryCount(operationId: String, lastError: String? = nil) {
         queue.async { [weak self] in
             guard let self = self, let db = self.db else { return }
-            let sql = "UPDATE sync_queue SET retry_count = retry_count + 1, last_attempt = ? WHERE operation_id = ?"
+            let sql = "UPDATE sync_queue SET retry_count = retry_count + 1, last_attempt = ?, last_error = ? WHERE operation_id = ?"
             var stmt: OpaquePointer?
             defer { sqlite3_finalize(stmt) }
             guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
             sqlite3_bind_int64(stmt, 1, Int64(Date().timeIntervalSince1970 * 1000))
-            sqlite3_bind_text(stmt, 2, (operationId as NSString).utf8String, -1, nil)
+            if let err = lastError {
+                sqlite3_bind_text(stmt, 2, (err as NSString).utf8String, -1, nil)
+            } else {
+                sqlite3_bind_null(stmt, 2)
+            }
+            sqlite3_bind_text(stmt, 3, (operationId as NSString).utf8String, -1, nil)
+            sqlite3_step(stmt)
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(name: Self.syncQueueDidChangeNotification, object: nil)
+            }
+        }
+    }
+
+    /// Record error and keep op in queue (failed ops stay until user retries or clears)
+    func recordSyncOperationError(operationId: String, error: String) {
+        queue.async { [weak self] in
+            guard let self = self, let db = self.db else { return }
+            let sql = "UPDATE sync_queue SET last_attempt = ?, last_error = ? WHERE operation_id = ?"
+            var stmt: OpaquePointer?
+            defer { sqlite3_finalize(stmt) }
+            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
+            sqlite3_bind_int64(stmt, 1, Int64(Date().timeIntervalSince1970 * 1000))
+            sqlite3_bind_text(stmt, 2, (error as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 3, (operationId as NSString).utf8String, -1, nil)
+            sqlite3_step(stmt)
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(name: Self.syncQueueDidChangeNotification, object: nil)
+            }
+        }
+    }
+
+    /// Reset retry state for manual retry - clears error and optionally retry count
+    func resetOperationForRetry(operationId: String) {
+        queue.async { [weak self] in
+            guard let self = self, let db = self.db else { return }
+            let sql = "UPDATE sync_queue SET retry_count = 0, last_attempt = NULL, last_error = NULL WHERE operation_id = ?"
+            var stmt: OpaquePointer?
+            defer { sqlite3_finalize(stmt) }
+            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
+            sqlite3_bind_text(stmt, 1, (operationId as NSString).utf8String, -1, nil)
             sqlite3_step(stmt)
             DispatchQueue.main.async {
                 NotificationCenter.default.post(name: Self.syncQueueDidChangeNotification, object: nil)

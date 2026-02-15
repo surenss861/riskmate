@@ -78,7 +78,54 @@ class OfflineCache: ObservableObject {
         guard let data = try? Data(contentsOf: fileURL) else { return nil }
         return try? decoder.decode([Job].self, from: data)
     }
-    
+
+    // MARK: - Cache Mitigation Items (hazards + controls from sync)
+
+    private var mitigationCacheFile: URL {
+        cacheDirectory.appendingPathComponent("mitigation-cache.json")
+    }
+
+    /// Merge synced hazards and controls into per-job cache (upsert by id)
+    func mergeCachedMitigationItems(synced: [(jobId: String, hazards: [Hazard], controls: [Control])]) {
+        struct MitigationCache: Codable {
+            var hazards: [Hazard]
+            var controls: [Control]
+        }
+        var cache: [String: MitigationCache] = [:]
+        if let data = try? Data(contentsOf: mitigationCacheFile),
+           let existing = try? decoder.decode([String: MitigationCache].self, from: data) {
+            cache = existing
+        }
+        for (jobId, hazards, controls) in synced {
+            var entry = cache[jobId] ?? MitigationCache(hazards: [], controls: [])
+            for h in hazards {
+                entry.hazards.removeAll { $0.id == h.id }
+                entry.hazards.append(h)
+            }
+            for c in controls {
+                entry.controls.removeAll { $0.id == c.id }
+                entry.controls.append(c)
+            }
+            cache[jobId] = entry
+        }
+        if let data = try? encoder.encode(cache) {
+            try? data.write(to: mitigationCacheFile)
+        }
+    }
+
+    func getCachedMitigationItems(jobId: String) -> (hazards: [Hazard], controls: [Control]) {
+        struct MitigationCache: Codable {
+            var hazards: [Hazard]
+            var controls: [Control]
+        }
+        guard let data = try? Data(contentsOf: mitigationCacheFile),
+              let cache = try? decoder.decode([String: MitigationCache].self, from: data),
+              let entry = cache[jobId] else {
+            return ([], [])
+        }
+        return (entry.hazards, entry.controls)
+    }
+
     // MARK: - Cache Readiness
     
     func cacheReadiness(_ readiness: ReadinessResponse) {

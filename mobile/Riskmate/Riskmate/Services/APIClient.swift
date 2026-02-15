@@ -643,27 +643,35 @@ class APIClient {
     }
 
     /// GET /api/sync/changes?since=... - Incremental sync with pagination
-    /// Pages through all results until has_more is false so no updates are missed
-    func getSyncChanges(since: Date) async throws -> [Job] {
+    /// Pages through jobs and mitigation_items (entity param) until has_more is false for each
+    func getSyncChanges(since: Date) async throws -> SyncChangesResult {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         formatter.timeZone = TimeZone(identifier: "UTC")
         let sinceStr = formatter.string(from: since)
         let encoded = sinceStr.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? sinceStr
-        var allJobs: [Job] = []
-        var offset = 0
         let limit = 500
+        var allJobs: [Job] = []
+        var allMitigation: [SyncMitigationItem] = []
+        var offset = 0
         repeat {
-            let url = "/api/sync/changes?since=\(encoded)&limit=\(limit)&offset=\(offset)"
+            let url = "/api/sync/changes?since=\(encoded)&limit=\(limit)&offset=\(offset)&entity=jobs"
             let response: SyncChangesResponse = try await request(endpoint: url)
             allJobs.append(contentsOf: response.data)
-            if let pagination = response.pagination, pagination.hasMore {
-                offset = pagination.nextOffset ?? (offset + limit)
-            } else {
-                break
-            }
+            guard let pag = response.pagination, pag.hasMore, let next = pag.nextOffset else { break }
+            offset = next
         } while true
-        return allJobs
+        offset = 0
+        repeat {
+            let url = "/api/sync/changes?since=\(encoded)&limit=\(limit)&offset=\(offset)&entity=mitigation_items"
+            let response: SyncChangesResponse = try await request(endpoint: url)
+            if let items = response.mitigationItems {
+                allMitigation.append(contentsOf: items)
+            }
+            guard let pag = response.pagination, pag.hasMore, let next = pag.nextOffset else { break }
+            offset = next
+        } while true
+        return SyncChangesResult(jobs: allJobs, mitigationItems: allMitigation)
     }
 
     /// POST /api/sync/resolve-conflict - Submit conflict resolution
@@ -1524,7 +1532,107 @@ struct BatchConflictDetail: Codable {
 
 struct SyncChangesResponse: Codable {
     let data: [Job]
+    let mitigationItems: [SyncMitigationItem]?
     let pagination: SyncChangesPagination?
+
+    enum CodingKeys: String, CodingKey {
+        case data
+        case mitigationItems = "mitigation_items"
+        case pagination
+    }
+}
+
+/// Hazard or control from sync changes
+struct SyncMitigationItem: Codable {
+    let entityType: String
+    let jobId: String
+    let data: SyncMitigationData
+
+    enum CodingKeys: String, CodingKey {
+        case entityType = "entity_type"
+        case jobId = "job_id"
+        case data
+    }
+}
+
+/// Polymorphic data: Hazard-like (name, code) or Control-like (title, hazardId, done)
+struct SyncMitigationData: Codable {
+    let id: String
+    let title: String?
+    let name: String?
+    let description: String?
+    let status: String?
+    let done: Bool?
+    let isCompleted: Bool?
+    let hazardId: String?
+    let code: String?
+    let severity: String?
+    let createdAt: String?
+    let updatedAt: String?
+    let created_at: String?
+    let updated_at: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, title, name, description, status, done, code, severity
+        case isCompleted = "isCompleted"
+        case hazardId = "hazardId"
+        case createdAt = "createdAt"
+        case updatedAt = "updatedAt"
+        case created_at
+        case updated_at
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        title = try c.decodeIfPresent(String.self, forKey: .title)
+        name = try c.decodeIfPresent(String.self, forKey: .name)
+        description = try c.decodeIfPresent(String.self, forKey: .description)
+        status = try c.decodeIfPresent(String.self, forKey: .status)
+        done = try c.decodeIfPresent(Bool.self, forKey: .done)
+        isCompleted = try c.decodeIfPresent(Bool.self, forKey: .isCompleted)
+        hazardId = try c.decodeIfPresent(String.self, forKey: .hazardId)
+        code = try c.decodeIfPresent(String.self, forKey: .code)
+        severity = try c.decodeIfPresent(String.self, forKey: .severity)
+        createdAt = try c.decodeIfPresent(String.self, forKey: .createdAt)
+        updatedAt = try c.decodeIfPresent(String.self, forKey: .updatedAt)
+        created_at = try c.decodeIfPresent(String.self, forKey: .created_at)
+        updated_at = try c.decodeIfPresent(String.self, forKey: .updated_at)
+    }
+
+    var asHazard: Hazard? {
+        guard let n = name ?? title, !n.isEmpty else { return nil }
+        return Hazard(
+            id: id,
+            code: code ?? "UNKNOWN",
+            name: n,
+            description: description ?? "",
+            severity: severity ?? "medium",
+            status: status ?? "open",
+            createdAt: createdAt ?? created_at ?? ISO8601DateFormatter().string(from: Date()),
+            updatedAt: updatedAt ?? updated_at ?? ISO8601DateFormatter().string(from: Date())
+        )
+    }
+
+    var asControl: Control? {
+        Control(
+            id: id,
+            title: title ?? name,
+            description: description ?? "",
+            status: status ?? "Pending",
+            done: done ?? isCompleted,
+            isCompleted: isCompleted ?? done,
+            hazardId: hazardId,
+            createdAt: createdAt ?? created_at,
+            updatedAt: updatedAt ?? updated_at
+        )
+    }
+}
+
+/// Result of getSyncChanges - jobs and mitigation items (hazards + controls) for offline merge
+struct SyncChangesResult {
+    let jobs: [Job]
+    let mitigationItems: [SyncMitigationItem]
 }
 
 struct SyncChangesPagination: Codable {
@@ -1532,6 +1640,7 @@ struct SyncChangesPagination: Codable {
     let offset: Int
     let hasMore: Bool
     let nextOffset: Int?
+
     enum CodingKeys: String, CodingKey {
         case limit, offset
         case hasMore = "has_more"

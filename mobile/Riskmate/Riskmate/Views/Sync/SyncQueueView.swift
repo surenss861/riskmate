@@ -60,11 +60,7 @@ struct SyncQueueView: View {
                                     ForEach(pendingOps) { op in
                                         SyncQueueItemRow(
                                             operation: op,
-                                            onRetry: {
-                                                Task {
-                                                    try? await syncEngine.syncPendingOperations()
-                                                }
-                                            }
+                                            onRetry: { syncEngine.retryOperation(operationId: op.id) }
                                         )
                                         .listRowBackground(Color.clear)
                                         .listRowInsets(EdgeInsets(
@@ -178,14 +174,20 @@ struct SyncQueueItemRow: View {
     }
 
     private var statusLabel: String {
-        if let last = operation.lastAttempt, operation.retryCount > 0 {
-            return "Retry \(operation.retryCount)x"
+        if operation.isFailed {
+            if let err = operation.lastError, !err.isEmpty {
+                return "Failed"
+            }
+            if operation.retryCount > 0 {
+                return "Retry \(operation.retryCount)x"
+            }
+            return "Failed"
         }
         return "Pending"
     }
 
     private var statusColor: Color {
-        operation.retryCount > 0 ? RMTheme.Colors.warning : RMTheme.Colors.textSecondary
+        operation.isFailed ? RMTheme.Colors.error : RMTheme.Colors.textSecondary
     }
 
     var body: some View {
@@ -208,7 +210,13 @@ struct SyncQueueItemRow: View {
                     .font(RMTheme.Typography.caption)
                     .foregroundColor(RMTheme.Colors.textSecondary)
                     .lineLimit(1)
-                if operation.retryCount > 0 {
+                if let err = operation.lastError, !err.isEmpty {
+                    Text(err)
+                        .font(RMTheme.Typography.captionSmall)
+                        .foregroundColor(RMTheme.Colors.error)
+                        .lineLimit(2)
+                }
+                if operation.isFailed {
                     Button {
                         Haptics.tap()
                         onRetry()

@@ -22,7 +22,11 @@ struct SyncOperation: Codable, Identifiable {
     let priority: Int
     let retryCount: Int
     let lastAttempt: Date?
+    let lastError: String?
     let clientTimestamp: Date
+
+    /// True when the operation has failed (has lastError or retryCount > 0)
+    var isFailed: Bool { (lastError != nil && !(lastError?.isEmpty ?? true)) || retryCount > 0 }
 
     init(
         id: String = UUID().uuidString,
@@ -32,6 +36,7 @@ struct SyncOperation: Codable, Identifiable {
         priority: Int = 0,
         retryCount: Int = 0,
         lastAttempt: Date? = nil,
+        lastError: String? = nil,
         clientTimestamp: Date = Date()
     ) {
         self.id = id
@@ -41,6 +46,7 @@ struct SyncOperation: Codable, Identifiable {
         self.priority = priority
         self.retryCount = retryCount
         self.lastAttempt = lastAttempt
+        self.lastError = lastError
         self.clientTimestamp = clientTimestamp
     }
 

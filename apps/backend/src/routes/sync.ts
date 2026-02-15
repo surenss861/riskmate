@@ -540,8 +540,9 @@ syncRouter.post(
   }
 );
 
-// GET /api/sync/changes?since={timestamp}&limit={n}&offset={n} - Incremental sync with pagination
-// Supports limit + offset pagination; client should page until has_more is false to avoid missing updates
+// GET /api/sync/changes?since={ts}&limit={n}&offset={n}&entity={jobs|mitigation_items}
+// entity=jobs: jobs only. entity=mitigation_items: hazards/controls only. Omit for both.
+// Client pages until has_more is false for each entity type.
 syncRouter.get(
   "/changes",
   authenticate,
@@ -550,6 +551,7 @@ syncRouter.get(
     try {
       const { organization_id } = authReq.user;
       const sinceStr = req.query.since as string;
+      const entity = (req.query.entity as string) || "all";
       const limit = Math.min(Math.max(parseInt(req.query.limit as string, 10) || 500, 1), 1000);
       const offset = Math.max(parseInt(req.query.offset as string, 10) || 0, 0);
 
@@ -566,20 +568,38 @@ syncRouter.get(
         });
       }
 
-      const { data: jobs, error } = await supabase
-        .from("jobs")
-        .select("id, client_name, job_type, location, status, risk_score, risk_level, created_at, updated_at, created_by")
-        .eq("organization_id", organization_id)
-        .is("deleted_at", null)
-        .gte("updated_at", since.toISOString())
-        .order("updated_at", { ascending: true })
-        .range(offset, offset + limit - 1);
+      const fetchJobs = entity === "all" || entity === "jobs";
+      const fetchMitigation = entity === "all" || entity === "mitigation_items";
 
-      if (error) {
-        throw error;
+      let jobs: any[] = [];
+      let mitigationItems: any[] = [];
+
+      if (fetchJobs) {
+        const { data, error } = await supabase
+          .from("jobs")
+          .select("id, client_name, job_type, location, status, risk_score, risk_level, created_at, updated_at, created_by")
+          .eq("organization_id", organization_id)
+          .is("deleted_at", null)
+          .gte("updated_at", since.toISOString())
+          .order("updated_at", { ascending: true })
+          .range(offset, offset + limit - 1);
+        if (error) throw error;
+        jobs = data || [];
       }
 
-      const normalized = (jobs || []).map((j: any) => ({
+      if (fetchMitigation) {
+        const { data, error } = await supabase
+          .from("mitigation_items")
+          .select("id, job_id, hazard_id, title, description, done, is_completed, created_at, updated_at")
+          .eq("organization_id", organization_id)
+          .gte("updated_at", since.toISOString())
+          .order("updated_at", { ascending: true })
+          .range(offset, offset + limit - 1);
+        if (error) throw error;
+        mitigationItems = data || [];
+      }
+
+      const normalizedJobs = jobs.map((j: any) => ({
         id: j.id,
         client_name: j.client_name,
         job_type: j.job_type,
@@ -592,16 +612,56 @@ syncRouter.get(
         created_by: j.created_by,
       }));
 
-      const hasMore = (jobs || []).length === limit;
-      const nextOffset = hasMore ? offset + limit : null;
+      const normalizeMitigationItem = (item: any) => {
+        const isHazard = item.hazard_id == null;
+        const code = item.title ? (item.title.match(/^([A-Z0-9_]+)/)?.[1] ?? item.title.substring(0, 10).toUpperCase().replace(/\s+/g, "_") : "UNKNOWN";
+        const status = item.done || item.is_completed ? (isHazard ? "resolved" : "Completed") : (isHazard ? "open" : "Pending");
+        if (isHazard) {
+          return {
+            entity_type: "hazard" as const,
+            job_id: item.job_id,
+            data: {
+              id: item.id,
+              code,
+              name: item.title || "Unknown Hazard",
+              description: item.description || "",
+              severity: "medium",
+              status,
+              created_at: item.created_at || new Date().toISOString(),
+              updated_at: item.updated_at ?? item.created_at ?? new Date().toISOString(),
+            },
+          };
+        }
+        return {
+          entity_type: "control" as const,
+          job_id: item.job_id,
+          data: {
+            id: item.id,
+            title: item.title || "Unknown Control",
+            description: item.description || "",
+            status,
+            done: item.done || item.is_completed || false,
+            isCompleted: item.is_completed ?? item.done ?? false,
+            hazardId: item.hazard_id,
+            createdAt: item.created_at || new Date().toISOString(),
+            updatedAt: item.updated_at ?? item.created_at ?? new Date().toISOString(),
+          },
+        };
+      };
+
+      const normalizedMitigation = mitigationItems.map(normalizeMitigationItem);
+
+      const jobsHasMore = fetchJobs && jobs.length === limit;
+      const mitigationHasMore = fetchMitigation && mitigationItems.length === limit;
 
       res.json({
-        data: normalized,
+        data: normalizedJobs,
+        mitigation_items: normalizedMitigation,
         pagination: {
           limit,
           offset,
-          has_more: hasMore,
-          next_offset: nextOffset,
+          has_more: jobsHasMore || mitigationHasMore,
+          next_offset: (jobsHasMore || mitigationHasMore) ? offset + limit : null,
         },
       });
     } catch (err: any) {

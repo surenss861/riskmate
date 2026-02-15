@@ -1005,12 +1005,15 @@ struct HazardsTab: View {
             }
             hazards = apiHazards + pendingHazards
         } catch {
+            let (cachedHazards, _) = OfflineCache.shared.getCachedMitigationItems(jobId: jobId)
             let pendingData = OfflineDatabase.shared.getPendingHazards(jobId: jobId)
             let pendingHazards: [Hazard] = pendingData.compactMap { data in
                 guard let hazard = try? JSONDecoder().decode(Hazard.self, from: data) else { return nil }
                 return hazard
             }
-            hazards = pendingHazards
+            let pendingIds = Set(pendingHazards.map(\.id))
+            let fromCache = cachedHazards.filter { !pendingIds.contains($0.id) }
+            hazards = fromCache + pendingHazards
         }
     }
 }
@@ -1398,11 +1401,14 @@ struct ControlsTab: View {
             let pendingHazards: [Hazard] = pending.compactMap { (try? JSONDecoder().decode(Hazard.self, from: $0)) }
             hazards.append(contentsOf: pendingHazards)
         } catch {
+            let (cachedHazards, _) = OfflineCache.shared.getCachedMitigationItems(jobId: jobId)
             let pending = OfflineDatabase.shared.getPendingHazards(jobId: jobId)
-            hazards = pending.compactMap { (try? JSONDecoder().decode(Hazard.self, from: $0)) }
+            let pendingHazards: [Hazard] = pending.compactMap { (try? JSONDecoder().decode(Hazard.self, from: $0)) }
+            let pendingIds = Set(pendingHazards.map(\.id))
+            hazards = cachedHazards.filter { !pendingIds.contains($0.id) } + pendingHazards
         }
     }
-    
+
     private func loadControls() async {
         isLoading = true
         defer { isLoading = false }
@@ -1416,12 +1422,15 @@ struct ControlsTab: View {
             }
             controls = apiControls + pendingControls
         } catch {
+            let (_, cachedControls) = OfflineCache.shared.getCachedMitigationItems(jobId: jobId)
             let pendingData = OfflineDatabase.shared.getPendingControls(jobId: jobId)
             let pendingControls: [Control] = pendingData.compactMap { data in
                 guard let control = try? JSONDecoder().decode(Control.self, from: data) else { return nil }
                 return control
             }
-            controls = pendingControls
+            let pendingIds = Set(pendingControls.map(\.id))
+            let fromCache = cachedControls.filter { !pendingIds.contains($0.id) }
+            controls = fromCache + pendingControls
         }
     }
 }
