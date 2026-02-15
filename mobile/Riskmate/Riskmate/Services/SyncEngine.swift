@@ -411,8 +411,8 @@ final class SyncEngine: ObservableObject {
                 }
             }
         case .createControl:
+            db.deletePendingControl(id: tempId)
             db.remapControlIdInQueuedOperations(tempControlId: tempId, serverControlId: serverId)
-            db.deletePendingControl(id: serverId)
             if let jobId = extractJobId(from: opData) {
                 DispatchQueue.main.async {
                     NotificationCenter.default.post(

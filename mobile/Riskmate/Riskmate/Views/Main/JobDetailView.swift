@@ -67,7 +67,7 @@ struct JobDetailView: View {
                 } else if let job = job {
                     VStack(spacing: 0) {
                         // Changes will sync banner when offline or when job has pending updates
-                        if !ServerStatusManager.shared.isOnline || !OfflineDatabase.shared.getPendingUpdates(entityType: "job", entityId: jobId).isEmpty {
+                        if !statusManager.isOnline || !OfflineDatabase.shared.getPendingUpdates(entityType: "job", entityId: jobId).isEmpty {
                             HStack(spacing: RMTheme.Spacing.sm) {
                                 Image(systemName: "clock.fill")
                                     .foregroundColor(RMTheme.Colors.warning)

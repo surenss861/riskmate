@@ -27,6 +27,9 @@ struct EditJobSheet: View {
     }
 
     private var isOffline: Bool { !statusManager.isOnline }
+    private var hasPendingJobUpdates: Bool {
+        !OfflineDatabase.shared.getPendingUpdates(entityType: "job", entityId: job.id).isEmpty
+    }
     private var canSave: Bool {
         !clientName.trimmingCharacters(in: .whitespaces).isEmpty &&
         !jobType.trimmingCharacters(in: .whitespaces).isEmpty &&
@@ -36,11 +39,11 @@ struct EditJobSheet: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                if isOffline {
+                if isOffline || hasPendingJobUpdates {
                     HStack(spacing: RMTheme.Spacing.sm) {
-                        Image(systemName: "wifi.slash")
+                        Image(systemName: isOffline ? "wifi.slash" : "clock.fill")
                             .foregroundColor(RMTheme.Colors.warning)
-                        Text("Changes will sync when you're back online.")
+                        Text("Changes will sync when online")
                             .font(RMTheme.Typography.bodySmall)
                             .foregroundColor(RMTheme.Colors.textSecondary)
                     }
