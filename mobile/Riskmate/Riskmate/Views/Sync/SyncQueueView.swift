@@ -249,7 +249,28 @@ struct SyncQueueView: View {
                         onResolve: { strategy in
                             Task { @MainActor in
                                 do {
-                                    try await syncEngine.resolveConflict(operationId: conflict.id, strategy: strategy)
+                                    let op = syncEngine.pendingOperations.first { $0.id == conflict.id }
+                                    var resolvedValue: [String: Any]?
+                                    var entityType: String?
+                                    var entityId: String?
+                                    var operationType: String?
+                                    entityType = conflict.entityType
+                                    entityId = conflict.entityId
+                                    if strategy == .localWins, let op = op,
+                                       let dict = try? JSONSerialization.jsonObject(with: op.data) as? [String: Any] {
+                                        resolvedValue = dict
+                                        entityType = entityType ?? entityTypeFromOperation(op.type)
+                                        entityId = entityId ?? op.entityId
+                                        operationType = op.type.apiTypeString
+                                    }
+                                    try await syncEngine.resolveConflict(
+                                        operationId: conflict.id,
+                                        strategy: strategy,
+                                        resolvedValue: resolvedValue,
+                                        entityType: entityType,
+                                        entityId: entityId,
+                                        operationType: operationType
+                                    )
                                     conflictToResolve = syncEngine.pendingConflicts.first
                                     _ = try? await syncEngine.syncPendingOperations()
                                     JobsStore.shared.refreshPendingJobs()
@@ -281,6 +302,14 @@ struct SyncQueueView: View {
         case "hazard": return "hazard"
         case "control": return "control"
         default: return conflict.entityType
+        }
+    }
+
+    private func entityTypeFromOperation(_ type: OperationType) -> String {
+        switch type {
+        case .createJob, .updateJob, .deleteJob: return "job"
+        case .createHazard, .updateHazard, .deleteHazard: return "hazard"
+        case .createControl, .updateControl, .deleteControl: return "control"
         }
     }
 }

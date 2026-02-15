@@ -343,12 +343,117 @@ final class SyncEngine: ObservableObject {
         db.deletePendingControl(id: controlId)
     }
 
-    /// Resolve a conflict via backend
-    func resolveConflict(operationId: String, strategy: ConflictResolutionStrategy) async throws {
-        try await APIClient.shared.resolveSyncConflict(operationId: operationId, strategy: strategy)
+    /// Resolve a conflict via backend.
+    /// For local_wins/merge, pass resolvedValue (entity payload), entityType, entityId, operationType so the server can apply the resolution.
+    /// After success: server_wins → refresh entity from response; local_wins/merge → update local cache with resolved/response data.
+    /// Only after applying the strategy do we remove the op and mark the conflict resolved.
+    func resolveConflict(
+        operationId: String,
+        strategy: ConflictResolutionStrategy,
+        resolvedValue: [String: Any]? = nil,
+        entityType: String? = nil,
+        entityId: String? = nil,
+        operationType: String? = nil
+    ) async throws {
+        let response = try await APIClient.shared.resolveSyncConflict(
+            operationId: operationId,
+            strategy: strategy,
+            resolvedValue: resolvedValue,
+            entityType: entityType,
+            entityId: entityId,
+            operationType: operationType
+        )
+
+        let op = db.getSyncQueue().first { $0.id == operationId }
+        let effectiveEntityType = entityType ?? op.flatMap { entityTypeFromOperation($0.type) }
+        let effectiveEntityId = entityId ?? op?.entityId
+
+        switch strategy {
+        case .serverWins:
+            if let job = response.updatedJob {
+                OfflineCache.shared.mergeCachedJobs(synced: [job], deletedIds: [])
+            }
+            if let mit = response.updatedMitigationItem,
+               let jobId = mit.jobIdFromData ?? extractJobId(from: op?.data) {
+                if mit.hazardId == nil, let hazard = mit.asHazard {
+                    OfflineCache.shared.mergeCachedMitigationItems(
+                        synced: [(jobId, [hazard], [])],
+                        deletedIds: []
+                    )
+                } else if let control = mit.asControl {
+                    OfflineCache.shared.mergeCachedMitigationItems(
+                        synced: [(jobId, [], [control])],
+                        deletedIds: []
+                    )
+                }
+            }
+            if response.updatedJob == nil, response.updatedMitigationItem == nil {
+                _ = try await fetchChanges(since: Date().addingTimeInterval(-3600))
+            }
+        case .localWins, .merge:
+            if let job = response.updatedJob {
+                OfflineCache.shared.mergeCachedJobs(synced: [job], deletedIds: [])
+            } else if let resolved = resolvedValue, effectiveEntityType == "job", let effectiveEntityId = effectiveEntityId {
+                if let job = try? decodeJob(from: resolved) {
+                    OfflineCache.shared.mergeCachedJobs(synced: [job], deletedIds: [])
+                }
+            }
+            if let mit = response.updatedMitigationItem,
+               let jobId = mit.jobIdFromData ?? extractJobId(from: op?.data) {
+                if mit.hazardId == nil, let hazard = mit.asHazard {
+                    OfflineCache.shared.mergeCachedMitigationItems(
+                        synced: [(jobId, [hazard], [])],
+                        deletedIds: []
+                    )
+                } else if let control = mit.asControl {
+                    OfflineCache.shared.mergeCachedMitigationItems(
+                        synced: [(jobId, [], [control])],
+                        deletedIds: []
+                    )
+                }
+            } else if let resolved = resolvedValue, let jobId = resolved["job_id"] as? String ?? resolved["jobId"] as? String {
+                if effectiveEntityType == "hazard", let hazard = try? decodeHazard(from: resolved) {
+                    OfflineCache.shared.mergeCachedMitigationItems(
+                        synced: [(jobId, [hazard], [])],
+                        deletedIds: []
+                    )
+                } else if effectiveEntityType == "control", let control = try? decodeControl(from: resolved) {
+                    OfflineCache.shared.mergeCachedMitigationItems(
+                        synced: [(jobId, [], [control])],
+                        deletedIds: []
+                    )
+                }
+            }
+        case .askUser:
+            break
+        }
+
         db.removeSyncOperation(id: operationId)
         db.markConflictResolved(id: operationId, resolutionStrategy: strategy.rawValue)
         clearPendingConflict(operationId: operationId)
+    }
+
+    private func entityTypeFromOperation(_ type: OperationType) -> String? {
+        switch type {
+        case .createJob, .updateJob, .deleteJob: return "job"
+        case .createHazard, .updateHazard, .deleteHazard: return "hazard"
+        case .createControl, .updateControl, .deleteControl: return "control"
+        }
+    }
+
+    private func decodeJob(from dict: [String: Any]) throws -> Job? {
+        let data = try JSONSerialization.data(withJSONObject: dict)
+        return try? JSONDecoder().decode(Job.self, from: data)
+    }
+
+    private func decodeHazard(from dict: [String: Any]) throws -> Hazard? {
+        let data = try JSONSerialization.data(withJSONObject: dict)
+        return try? JSONDecoder().decode(Hazard.self, from: data)
+    }
+
+    private func decodeControl(from dict: [String: Any]) throws -> Control? {
+        let data = try JSONSerialization.data(withJSONObject: dict)
+        return try? JSONDecoder().decode(Control.self, from: data)
     }
 
     /// Fetch incremental changes from server (jobs + hazards/controls)

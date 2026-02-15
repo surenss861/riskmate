@@ -418,9 +418,20 @@ exports.syncRouter.post("/batch", auth_1.authenticate, requireWriteAccess_1.requ
                             }
                             done = existing.done ?? existing.is_completed ?? false;
                         }
+                        const updates = {
+                            done,
+                            is_completed: done,
+                            completed_at: done ? new Date().toISOString() : null,
+                        };
+                        if (data.title !== undefined)
+                            updates.title = data.title;
+                        else if (data.name !== undefined)
+                            updates.title = data.name;
+                        if (data.description !== undefined)
+                            updates.description = data.description;
                         const { data: updated, error: updateErr } = await supabaseClient_1.supabase
                             .from("mitigation_items")
-                            .update({ done, is_completed: done, completed_at: done ? new Date().toISOString() : null })
+                            .update(updates)
                             .eq("id", mitigationId)
                             .eq("job_id", jobId)
                             .eq("organization_id", organization_id)
@@ -485,9 +496,20 @@ exports.syncRouter.post("/batch", auth_1.authenticate, requireWriteAccess_1.requ
                             }
                             done = existing.done ?? existing.is_completed ?? false;
                         }
+                        const updates = {
+                            done,
+                            is_completed: done,
+                            completed_at: done ? new Date().toISOString() : null,
+                        };
+                        if (data.title !== undefined)
+                            updates.title = data.title;
+                        else if (data.name !== undefined)
+                            updates.title = data.name;
+                        if (data.description !== undefined)
+                            updates.description = data.description;
                         const { data: updated, error: updateErr } = await supabaseClient_1.supabase
                             .from("mitigation_items")
-                            .update({ done, is_completed: done, completed_at: done ? new Date().toISOString() : null })
+                            .update(updates)
                             .eq("id", mitigationId)
                             .eq("job_id", jobId)
                             .eq("hazard_id", hazardId)
@@ -572,25 +594,34 @@ exports.syncRouter.post("/batch", auth_1.authenticate, requireWriteAccess_1.requ
                             results.push(baseResult);
                             break;
                         }
-                        // Record deletion for offline sync tombstones
-                        await supabaseClient_1.supabase.from("sync_mitigation_deletions").insert({
-                            mitigation_item_id: mitigationId,
-                            job_id: jobId,
-                            hazard_id: hazardId,
-                            organization_id: organization_id,
-                        });
-                        const { error: deleteErr } = await supabaseClient_1.supabase
+                        // Delete first; only write tombstone after confirming a row was deleted (no phantom removals on failure)
+                        const { data: deletedRows, error: deleteErr } = await supabaseClient_1.supabase
                             .from("mitigation_items")
                             .delete()
                             .eq("id", mitigationId)
                             .eq("job_id", jobId)
                             .eq("hazard_id", hazardId)
-                            .eq("organization_id", organization_id);
+                            .eq("organization_id", organization_id)
+                            .select("id");
                         if (deleteErr) {
                             baseResult.status = "error";
                             baseResult.error = deleteErr.message;
+                            results.push(baseResult);
+                            break;
                         }
-                        else {
+                        if (deletedRows && deletedRows.length > 0) {
+                            const { error: tombstoneErr } = await supabaseClient_1.supabase.from("sync_mitigation_deletions").insert({
+                                mitigation_item_id: mitigationId,
+                                job_id: jobId,
+                                hazard_id: hazardId,
+                                organization_id: organization_id,
+                            });
+                            if (tombstoneErr) {
+                                baseResult.status = "error";
+                                baseResult.error = tombstoneErr.message;
+                                results.push(baseResult);
+                                break;
+                            }
                             baseResult.server_id = mitigationId;
                             const clientMetadata = (0, audit_1.extractClientMetadata)(req);
                             await (0, audit_2.recordAuditLog)({
@@ -718,7 +749,7 @@ exports.syncRouter.get("/changes", auth_1.authenticate, async (req, res) => {
         const normalizeMitigationItem = (item) => {
             const isHazard = item.hazard_id == null;
             const match = item.title ? item.title.match(/^([A-Z0-9_]+)/) : null;
-            const code = match ? match[1] : (item.title ? item.title.substring(0, 10).toUpperCase().replace(/\s+/g, "_") : "UNKNOWN");
+            const code = match && match[1] ? match[1] : (item.title ? item.title.substring(0, 10).toUpperCase().replace(/\s+/g, "_") : "UNKNOWN");
             const status = item.done || item.is_completed ? (isHazard ? "resolved" : "Completed") : (isHazard ? "open" : "Pending");
             if (isHazard) {
                 return {
@@ -794,7 +825,7 @@ exports.syncRouter.post("/resolve-conflict", auth_1.authenticate, requireWriteAc
     const authReq = req;
     try {
         const { organization_id, id: userId } = authReq.user;
-        const { operation_id, strategy, resolved_value } = req.body;
+        const { operation_id, strategy, resolved_value, entity_type, entity_id, operation_type } = req.body;
         if (!operation_id || !strategy) {
             return res.status(400).json({
                 message: "operation_id and strategy are required",
@@ -806,10 +837,190 @@ exports.syncRouter.post("/resolve-conflict", auth_1.authenticate, requireWriteAc
                 message: `Invalid strategy. Must be one of: ${validStrategies.join(", ")}`,
             });
         }
-        if (strategy === "local_wins" && resolved_value === undefined) {
+        if ((strategy === "local_wins" || strategy === "merge") && resolved_value === undefined) {
             return res.status(400).json({
-                message: "resolved_value required when strategy is local_wins",
+                message: "resolved_value required when strategy is local_wins or merge",
             });
+        }
+        if ((strategy === "local_wins" || strategy === "merge") && (!entity_type || !entity_id || !operation_type)) {
+            return res.status(400).json({
+                message: "entity_type, entity_id, and operation_type required when strategy is local_wins or merge",
+            });
+        }
+        let updatedJob = null;
+        let updatedMitigationItem = null;
+        if (strategy === "server_wins") {
+            if (entity_type && entity_id) {
+                if (entity_type === "job") {
+                    const { data } = await supabaseClient_1.supabase
+                        .from("jobs")
+                        .select("id, client_name, job_type, location, status, risk_score, risk_level, created_at, updated_at, created_by")
+                        .eq("id", entity_id)
+                        .eq("organization_id", organization_id)
+                        .is("deleted_at", null)
+                        .single();
+                    if (data)
+                        updatedJob = data;
+                }
+                else if (entity_type === "hazard" || entity_type === "control") {
+                    const { data } = await supabaseClient_1.supabase
+                        .from("mitigation_items")
+                        .select("id, job_id, hazard_id, title, description, done, is_completed, created_at, updated_at")
+                        .eq("id", entity_id)
+                        .eq("organization_id", organization_id)
+                        .single();
+                    if (data)
+                        updatedMitigationItem = data;
+                }
+            }
+        }
+        else if (strategy === "local_wins" || strategy === "merge") {
+            const data = resolved_value;
+            const targetId = entity_id;
+            const opType = operation_type;
+            if (opType === "update_job") {
+                const keyMap = {
+                    client_name: "client_name",
+                    clientName: "client_name",
+                    client_type: "client_type",
+                    clientType: "client_type",
+                    job_type: "job_type",
+                    jobType: "job_type",
+                    location: "location",
+                    description: "description",
+                    status: "status",
+                    start_date: "start_date",
+                    startDate: "start_date",
+                    end_date: "end_date",
+                    endDate: "end_date",
+                    has_subcontractors: "has_subcontractors",
+                    subcontractor_count: "subcontractor_count",
+                    insurance_status: "insurance_status",
+                };
+                const updates = {};
+                for (const [src, dest] of Object.entries(keyMap)) {
+                    if (data[src] !== undefined)
+                        updates[dest] = data[src];
+                }
+                if (Object.keys(updates).length > 0) {
+                    const { data: job, error } = await supabaseClient_1.supabase
+                        .from("jobs")
+                        .update(updates)
+                        .eq("id", targetId)
+                        .eq("organization_id", organization_id)
+                        .select("id, client_name, job_type, location, status, risk_score, risk_level, created_at, updated_at, created_by")
+                        .single();
+                    if (!error)
+                        updatedJob = job;
+                }
+            }
+            else if (opType === "update_hazard") {
+                const jobId = data.job_id ?? data.jobId;
+                if (!jobId) {
+                    return res.status(400).json({ message: "job_id required for hazard update" });
+                }
+                const updates = {
+                    done: data.done ?? data.is_completed ?? data.isCompleted ?? false,
+                    is_completed: data.done ?? data.is_completed ?? data.isCompleted ?? false,
+                    completed_at: data.done || data.is_completed || data.isCompleted ? new Date().toISOString() : null,
+                };
+                if (data.title !== undefined)
+                    updates.title = data.title;
+                else if (data.name !== undefined)
+                    updates.title = data.name;
+                if (data.description !== undefined)
+                    updates.description = data.description;
+                const { data: mit, error } = await supabaseClient_1.supabase
+                    .from("mitigation_items")
+                    .update(updates)
+                    .eq("id", targetId)
+                    .eq("job_id", jobId)
+                    .is("hazard_id", null)
+                    .eq("organization_id", organization_id)
+                    .select("id, job_id, hazard_id, title, description, done, is_completed, created_at, updated_at")
+                    .single();
+                if (!error)
+                    updatedMitigationItem = mit;
+            }
+            else if (opType === "update_control") {
+                const jobId = data.job_id ?? data.jobId;
+                const hazardId = data.hazard_id ?? data.hazardId;
+                if (!jobId || !hazardId) {
+                    return res.status(400).json({ message: "job_id and hazard_id required for control update" });
+                }
+                const updates = {
+                    done: data.done ?? data.is_completed ?? data.isCompleted ?? false,
+                    is_completed: data.done ?? data.is_completed ?? data.isCompleted ?? false,
+                    completed_at: data.done || data.is_completed || data.isCompleted ? new Date().toISOString() : null,
+                };
+                if (data.title !== undefined)
+                    updates.title = data.title;
+                else if (data.name !== undefined)
+                    updates.title = data.name;
+                if (data.description !== undefined)
+                    updates.description = data.description;
+                const { data: mit, error } = await supabaseClient_1.supabase
+                    .from("mitigation_items")
+                    .update(updates)
+                    .eq("id", targetId)
+                    .eq("job_id", jobId)
+                    .eq("hazard_id", hazardId)
+                    .eq("organization_id", organization_id)
+                    .select("id, job_id, hazard_id, title, description, done, is_completed, created_at, updated_at")
+                    .single();
+                if (!error)
+                    updatedMitigationItem = mit;
+            }
+            else if (opType === "delete_job") {
+                const { data: existing } = await supabaseClient_1.supabase
+                    .from("jobs")
+                    .select("id, status")
+                    .eq("id", targetId)
+                    .eq("organization_id", organization_id)
+                    .single();
+                if (existing?.status === "draft") {
+                    await supabaseClient_1.supabase
+                        .from("jobs")
+                        .update({ deleted_at: new Date().toISOString() })
+                        .eq("id", targetId)
+                        .eq("organization_id", organization_id);
+                }
+            }
+            else if (opType === "delete_hazard" || opType === "delete_control") {
+                const jobId = data.job_id ?? data.jobId;
+                const hazardId = opType === "delete_control" ? (data.hazard_id ?? data.hazardId) : null;
+                if (!jobId) {
+                    return res.status(400).json({ message: "job_id required for delete" });
+                }
+                if (opType === "delete_hazard") {
+                    const { error } = await supabaseClient_1.supabase.rpc("sync_delete_hazard", {
+                        p_organization_id: organization_id,
+                        p_job_id: jobId,
+                        p_hazard_id: targetId,
+                    });
+                    if (error) {
+                        return res.status(500).json({ message: error.message });
+                    }
+                }
+                else {
+                    if (!hazardId) {
+                        return res.status(400).json({ message: "hazard_id required for control delete" });
+                    }
+                    await supabaseClient_1.supabase
+                        .from("mitigation_items")
+                        .delete()
+                        .eq("id", targetId)
+                        .eq("job_id", jobId)
+                        .eq("hazard_id", hazardId)
+                        .eq("organization_id", organization_id);
+                    await supabaseClient_1.supabase.from("sync_mitigation_deletions").insert({
+                        mitigation_item_id: targetId,
+                        job_id: jobId,
+                        hazard_id: hazardId,
+                        organization_id: organization_id,
+                    });
+                }
+            }
         }
         const clientMetadata = (0, audit_1.extractClientMetadata)(req);
         await (0, audit_2.recordAuditLog)({
@@ -818,13 +1029,15 @@ exports.syncRouter.post("/resolve-conflict", auth_1.authenticate, requireWriteAc
             eventName: "sync.conflict_resolved",
             targetType: "system",
             targetId: operation_id,
-            metadata: { strategy, resolved_value },
+            metadata: { strategy, resolved_value, entity_type, entity_id, operation_type },
             ...clientMetadata,
         });
         res.json({
             ok: true,
             operation_id,
             strategy,
+            ...(updatedJob && { updated_job: updatedJob }),
+            ...(updatedMitigationItem && { updated_mitigation_item: updatedMitigationItem }),
         });
     }
     catch (err) {

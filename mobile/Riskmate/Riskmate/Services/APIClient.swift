@@ -683,13 +683,37 @@ class APIClient {
     }
 
     /// POST /api/sync/resolve-conflict - Submit conflict resolution
-    func resolveSyncConflict(operationId: String, strategy: ConflictResolutionStrategy) async throws {
-        let body: [String: Any] = [
+    /// - Parameters:
+    ///   - resolvedValue: Required for local_wins and merge - the entity payload to apply server-side
+    ///   - entityType: Required for local_wins and merge - e.g. "job", "hazard", "control"
+    ///   - entityId: Required for local_wins and merge - target entity id
+    ///   - operationType: Required for local_wins and merge - e.g. "update_job", "update_hazard"
+    func resolveSyncConflict(
+        operationId: String,
+        strategy: ConflictResolutionStrategy,
+        resolvedValue: [String: Any]? = nil,
+        entityType: String? = nil,
+        entityId: String? = nil,
+        operationType: String? = nil
+    ) async throws -> ResolveConflictResponse {
+        var body: [String: Any] = [
             "operation_id": operationId,
             "strategy": strategy.rawValue,
         ]
+        if let resolvedValue = resolvedValue {
+            body["resolved_value"] = resolvedValue
+        }
+        if let entityType = entityType {
+            body["entity_type"] = entityType
+        }
+        if let entityId = entityId {
+            body["entity_id"] = entityId
+        }
+        if let operationType = operationType {
+            body["operation_type"] = operationType
+        }
         let data = try JSONSerialization.data(withJSONObject: body)
-        let _: EmptyResponse = try await request(
+        return try await request(
             endpoint: "/api/sync/resolve-conflict",
             method: "POST",
             body: data
@@ -1577,6 +1601,7 @@ struct SyncMitigationData: Codable {
     let done: Bool?
     let isCompleted: Bool?
     let hazardId: String?
+    let jobId: String?
     let code: String?
     let severity: String?
     let createdAt: String?
@@ -1587,7 +1612,11 @@ struct SyncMitigationData: Codable {
     enum CodingKeys: String, CodingKey {
         case id, title, name, description, status, done, code, severity
         case isCompleted = "isCompleted"
+        case is_completed
         case hazardId = "hazardId"
+        case hazard_id
+        case jobId = "jobId"
+        case job_id
         case createdAt = "createdAt"
         case updatedAt = "updatedAt"
         case created_at
@@ -1603,7 +1632,12 @@ struct SyncMitigationData: Codable {
         status = try c.decodeIfPresent(String.self, forKey: .status)
         done = try c.decodeIfPresent(Bool.self, forKey: .done)
         isCompleted = try c.decodeIfPresent(Bool.self, forKey: .isCompleted)
-        hazardId = try c.decodeIfPresent(String.self, forKey: .hazardId)
+            ?? try? c.decode(Bool.self, forKey: .is_completed)
+        let hazardIdVal = try c.decodeIfPresent(String.self, forKey: .hazardId)
+            ?? try? c.decode(String.self, forKey: .hazard_id)
+        hazardId = hazardIdVal
+        jobId = try c.decodeIfPresent(String.self, forKey: .jobId)
+            ?? try? c.decode(String.self, forKey: .job_id)
         code = try c.decodeIfPresent(String.self, forKey: .code)
         severity = try c.decodeIfPresent(String.self, forKey: .severity)
         createdAt = try c.decodeIfPresent(String.self, forKey: .createdAt)
@@ -1611,6 +1645,8 @@ struct SyncMitigationData: Codable {
         created_at = try c.decodeIfPresent(String.self, forKey: .created_at)
         updated_at = try c.decodeIfPresent(String.self, forKey: .updated_at)
     }
+
+    var jobIdFromData: String? { jobId }
 
     var asHazard: Hazard? {
         guard let n = name ?? title, !n.isEmpty else { return nil }
@@ -1960,6 +1996,24 @@ struct EvidenceResponse: Codable {
 }
 
 struct EmptyResponse: Codable {}
+
+/// Response from POST /api/sync/resolve-conflict
+struct ResolveConflictResponse: Codable {
+    let ok: Bool?
+    let operationId: String?
+    let strategy: String?
+    /// Updated entity for server_wins (client refreshes from this) or local_wins/merge
+    let updatedJob: Job?
+    let updatedMitigationItem: SyncMitigationData?
+
+    enum CodingKeys: String, CodingKey {
+        case ok
+        case operationId = "operation_id"
+        case strategy
+        case updatedJob = "updated_job"
+        case updatedMitigationItem = "updated_mitigation_item"
+    }
+}
 
 // Backend health response (different from ServerStatusManager's HealthResponse)
 struct BackendHealthResponse: Codable {
