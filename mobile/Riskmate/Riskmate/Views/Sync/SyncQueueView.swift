@@ -256,9 +256,10 @@ struct SyncQueueView: View {
                                     var operationType: String?
                                     entityType = conflict.entityType
                                     entityId = conflict.entityId
-                                    if strategy == .localWins, let op = op,
-                                       let dict = try? JSONSerialization.jsonObject(with: op.data) as? [String: Any] {
-                                        resolvedValue = dict
+                                    if strategy == .localWins || strategy == .merge, let op = op {
+                                        if let dict = try? JSONSerialization.jsonObject(with: op.data) as? [String: Any] {
+                                            resolvedValue = dict
+                                        }
                                         entityType = entityType ?? entityTypeFromOperation(op.type)
                                         entityId = entityId ?? op.entityId
                                         operationType = op.type.apiTypeString
