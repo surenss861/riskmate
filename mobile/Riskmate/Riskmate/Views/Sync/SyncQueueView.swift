@@ -8,7 +8,7 @@ struct SyncQueueView: View {
     @Environment(\.dismiss) private var dismiss
 
     private var pendingOps: [SyncOperation] {
-        OfflineDatabase.shared.getSyncQueue()
+        syncEngine.pendingOperations
     }
 
     private var estimatedSyncTime: String {
@@ -135,8 +135,12 @@ struct SyncQueueView: View {
                 }
                 .onChange(of: syncEngine.isSyncing) { _, isSyncing in
                     if !isSyncing {
+                        syncEngine.refreshPendingOperations()
                         JobsStore.shared.refreshPendingJobs()
                     }
+                }
+                .onAppear {
+                    syncEngine.refreshPendingOperations()
                 }
         }
     }

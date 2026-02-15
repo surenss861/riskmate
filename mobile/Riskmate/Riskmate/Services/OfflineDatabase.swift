@@ -205,6 +205,8 @@ final class OfflineDatabase {
 
     // MARK: - Sync Queue
 
+    static let syncQueueDidChangeNotification = Notification.Name("OfflineDatabaseSyncQueueDidChange")
+
     func enqueueOperation(_ op: SyncOperation) {
         queue.async { [weak self] in
             guard let self = self, let db = self.db else { return }
@@ -230,6 +232,9 @@ final class OfflineDatabase {
             sqlite3_bind_text(stmt, 7, (dataStr as NSString).utf8String, -1, nil)
             sqlite3_bind_int64(stmt, 8, clientTs)
             sqlite3_step(stmt)
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(name: Self.syncQueueDidChangeNotification, object: nil)
+            }
         }
     }
 
@@ -276,6 +281,9 @@ final class OfflineDatabase {
             guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
             sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, nil)
             sqlite3_step(stmt)
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(name: Self.syncQueueDidChangeNotification, object: nil)
+            }
         }
     }
 
@@ -289,6 +297,9 @@ final class OfflineDatabase {
             sqlite3_bind_int64(stmt, 1, Int64(Date().timeIntervalSince1970 * 1000))
             sqlite3_bind_text(stmt, 2, (operationId as NSString).utf8String, -1, nil)
             sqlite3_step(stmt)
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(name: Self.syncQueueDidChangeNotification, object: nil)
+            }
         }
     }
 

@@ -16,11 +16,26 @@ final class SyncEngine: ObservableObject {
 
     @Published private(set) var isSyncing: Bool = false
     @Published private(set) var lastResult: SyncResult?
+    @Published private(set) var pendingOperations: [SyncOperation] = []
 
     private let db = OfflineDatabase.shared
     private let maxRetries = 3
+    private var queueObserver: NSObjectProtocol?
 
-    private init() {}
+    private init() {
+        refreshPendingOperations()
+        queueObserver = NotificationCenter.default.addObserver(
+            forName: OfflineDatabase.syncQueueDidChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.refreshPendingOperations()
+        }
+    }
+
+    func refreshPendingOperations() {
+        pendingOperations = db.getSyncQueue()
+    }
 
     /// Sync all pending operations: upload first, then download changes
     func syncPendingOperations() async throws -> SyncResult {
@@ -236,10 +251,13 @@ final class SyncEngine: ObservableObject {
         db.insertPendingControl(id: control.id, hazardId: hazardId, data: payload)
     }
 
-    func queueUpdateControl(_ control: Control, jobId: String) {
+    func queueUpdateControl(_ control: Control, jobId: String, hazardId: String? = nil) {
         guard let encoded = try? JSONEncoder().encode(control),
               var dict = try? JSONSerialization.jsonObject(with: encoded) as? [String: Any] else { return }
         dict["job_id"] = jobId
+        if let hazardId = hazardId {
+            dict["hazard_id"] = hazardId
+        }
         let data = (try? JSONSerialization.data(withJSONObject: dict)) ?? Data()
         let op = SyncOperation(type: .updateControl, entityId: control.id, data: data, priority: 5)
         db.enqueueOperation(op)

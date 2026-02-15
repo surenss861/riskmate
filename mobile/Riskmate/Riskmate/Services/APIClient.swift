@@ -741,6 +741,39 @@ class APIClient {
         return response.data
     }
 
+    /// Create a hazard for a job (online only)
+    func createHazard(jobId: String, title: String, description: String = "") async throws -> Hazard {
+        struct CreateHazardBody: Encodable {
+            let title: String
+            let description: String
+        }
+        let body = CreateHazardBody(title: title, description: description)
+        let data = try JSONEncoder().encode(body)
+        let response: HazardResponse = try await request(
+            endpoint: "/api/jobs/\(jobId)/hazards",
+            method: "POST",
+            body: data
+        )
+        return response.data
+    }
+
+    /// Create a control for a job linked to a hazard (online only)
+    func createControl(jobId: String, hazardId: String, title: String, description: String = "") async throws -> Control {
+        struct CreateControlBody: Encodable {
+            let hazard_id: String
+            let title: String
+            let description: String
+        }
+        let body = CreateControlBody(hazard_id: hazardId, title: title, description: description)
+        let data = try JSONEncoder().encode(body)
+        let response: ControlResponse = try await request(
+            endpoint: "/api/jobs/\(jobId)/controls",
+            method: "POST",
+            body: data
+        )
+        return response.data
+    }
+
     /// Update mitigation (control) completion status - PATCH /api/jobs/:id/mitigations/:mitigationId
     func updateMitigation(jobId: String, mitigationId: String, done: Bool) async throws {
         struct UpdateMitigationBody: Encodable {
@@ -1255,8 +1288,16 @@ struct HazardsResponse: Codable {
     let data: [Hazard]
 }
 
+struct HazardResponse: Codable {
+    let data: Hazard
+}
+
 struct ControlsResponse: Codable {
     let data: [Control]
+}
+
+struct ControlResponse: Codable {
+    let data: Control
 }
 
 // MARK: - Job Activity API

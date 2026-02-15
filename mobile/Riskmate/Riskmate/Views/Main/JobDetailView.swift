@@ -260,9 +260,9 @@ struct JobDetailView: View {
             case .overview:
                 OverviewTab(job: job, showManagedOnWebCard: hazardsCount == 0 && controlsCount == 0, onRefresh: { await refreshJobDetail() })
             case .hazards:
-                HazardsTab(jobId: jobId)
+                HazardsTab(jobId: jobId, onRefresh: { await refreshJobDetail() })
             case .controls:
-                ControlsTab(jobId: jobId)
+                ControlsTab(jobId: jobId, onRefresh: { await refreshJobDetail() })
             case .activity:
                 JobActivityView(jobId: jobId)
             case .signatures:
@@ -284,11 +284,15 @@ struct JobDetailView: View {
             async let hazards = APIClient.shared.getHazards(jobId: jobId)
             async let controls = APIClient.shared.getControls(jobId: jobId)
             let (h, c) = try await (hazards, controls)
-            hazardsCount = h.count
-            controlsCount = c.count
+            let pendingHazards = OfflineDatabase.shared.getPendingHazards(jobId: jobId).count
+            let pendingControls = OfflineDatabase.shared.getPendingControls(jobId: jobId).count
+            hazardsCount = h.count + pendingHazards
+            controlsCount = c.count + pendingControls
         } catch {
-            hazardsCount = 0
-            controlsCount = 0
+            let pendingHazards = OfflineDatabase.shared.getPendingHazards(jobId: jobId).count
+            let pendingControls = OfflineDatabase.shared.getPendingControls(jobId: jobId).count
+            hazardsCount = pendingHazards
+            controlsCount = pendingControls
         }
     }
     
@@ -826,22 +830,57 @@ struct BlockersCard: View {
 
 struct HazardsTab: View {
     let jobId: String
+    var onRefresh: (() async -> Void)? = nil
     @State private var hazards: [Hazard] = []
     @State private var isLoading = true
-    @State private var didLoad = false // Deduplication gate
+    @State private var didLoad = false
+    @State private var showAddHazardSheet = false
     @EnvironmentObject private var quickAction: QuickActionRouter
+    
+    private var pendingHazardIds: Set<String> {
+        Set(OfflineDatabase.shared.getPendingHazards(jobId: jobId).compactMap { data -> String? in
+            (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["id"] as? String
+        })
+    }
     
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: RMTheme.Spacing.sectionSpacing) {
+                if !EntitlementsManager.shared.isAuditor() {
+                    HStack {
+                        Text("Hazards")
+                            .rmSectionHeader()
+                        Spacer()
+                        Button {
+                            Haptics.tap()
+                            showAddHazardSheet = true
+                        } label: {
+                            Label("Add Hazard", systemImage: "plus.circle.fill")
+                                .font(RMTheme.Typography.bodySmallBold)
+                                .foregroundColor(RMTheme.Colors.accent)
+                        }
+                    }
+                    .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                }
+                
                 if hazards.isEmpty {
                     VStack(spacing: RMTheme.Spacing.md) {
                         RMEmptyState(
                             icon: "exclamationmark.triangle",
                             title: "No Hazards",
-                            message: "Hazards are configured on the web. Evidence added here will attach to controls automatically."
+                            message: "Add a hazard or configure on the web."
                         )
                         HStack(spacing: RMTheme.Spacing.lg) {
+                            if !EntitlementsManager.shared.isAuditor() {
+                                Button {
+                                    Haptics.tap()
+                                    showAddHazardSheet = true
+                                } label: {
+                                    Label("Add Hazard", systemImage: "plus.circle.fill")
+                                        .font(RMTheme.Typography.bodySmallBold)
+                                        .foregroundColor(RMTheme.Colors.accent)
+                                }
+                            }
                             Button {
                                 Haptics.tap()
                                 quickAction.requestSwitchToWorkRecords(filter: nil)
@@ -863,15 +902,28 @@ struct HazardsTab: View {
                     .padding(.top, RMTheme.Spacing.xxl)
                 } else {
                     ForEach(hazards) { hazard in
-                        HazardCard(hazard: hazard)
+                        HazardCard(hazard: hazard, isOfflinePending: pendingHazardIds.contains(hazard.id))
                             .padding(.horizontal, RMTheme.Spacing.pagePadding)
                     }
                 }
             }
             .padding(.vertical, RMTheme.Spacing.lg)
         }
-        .task(id: jobId) { // Use task(id:) to prevent re-fetch on unrelated re-renders
-            guard !didLoad else { return } // Deduplication gate
+        .sheet(isPresented: $showAddHazardSheet) {
+            AddHazardSheet(jobId: jobId) { newHazard in
+                hazards.insert(newHazard, at: 0)
+                OfflineCache.shared.refreshSyncState()
+                showAddHazardSheet = false
+                await onRefresh?()
+            }
+        }
+        .onChange(of: showAddHazardSheet) { _, isShowing in
+            if !isShowing {
+                Task { await loadHazards() }
+            }
+        }
+        .task(id: jobId) {
+            guard !didLoad else { return }
             didLoad = true
             await loadHazards()
         }
@@ -882,11 +934,102 @@ struct HazardsTab: View {
         defer { isLoading = false }
         
         do {
-            hazards = try await APIClient.shared.getHazards(jobId: jobId)
+            var apiHazards = try await APIClient.shared.getHazards(jobId: jobId)
+            let pendingData = OfflineDatabase.shared.getPendingHazards(jobId: jobId)
+            let pendingHazards: [Hazard] = pendingData.compactMap { data in
+                guard let hazard = try? JSONDecoder().decode(Hazard.self, from: data) else { return nil }
+                return hazard
+            }
+            hazards = apiHazards + pendingHazards
         } catch {
-            // On error, show empty (no demo data)
-            print("[HazardsTab] ❌ Failed to load hazards: \(error.localizedDescription)")
-            hazards = []
+            let pendingData = OfflineDatabase.shared.getPendingHazards(jobId: jobId)
+            let pendingHazards: [Hazard] = pendingData.compactMap { data in
+                guard let hazard = try? JSONDecoder().decode(Hazard.self, from: data) else { return nil }
+                return hazard
+            }
+            hazards = pendingHazards
+        }
+    }
+}
+
+// MARK: - Add Hazard Sheet
+
+struct AddHazardSheet: View {
+    let jobId: String
+    let onCreated: (Hazard) async -> Void
+    @State private var title = ""
+    @State private var description = ""
+    @State private var isSubmitting = false
+    @State private var errorMessage: String?
+    @Environment(\.dismiss) private var dismiss
+    
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField("Title", text: $title)
+                    TextField("Description", text: $description, axis: .vertical)
+                        .lineLimit(3...6)
+                }
+                if let err = errorMessage {
+                    Section {
+                        Text(err)
+                            .font(RMTheme.Typography.caption)
+                            .foregroundColor(RMTheme.Colors.error)
+                    }
+                }
+            }
+            .navigationTitle("Add Hazard")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Add") {
+                        Task { await submit() }
+                    }
+                    .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty || isSubmitting)
+                }
+            }
+        }
+    }
+    
+    private func submit() async {
+        let t = title.trimmingCharacters(in: .whitespaces)
+        guard !t.isEmpty else { return }
+        isSubmitting = true
+        errorMessage = nil
+        defer { isSubmitting = false }
+        
+        let now = ISO8601DateFormatter().string(from: Date())
+        let hazard = Hazard(
+            id: UUID().uuidString,
+            code: String(t.prefix(8)).uppercased().replacingOccurrences(of: " ", with: "_"),
+            name: t,
+            description: description.trimmingCharacters(in: .whitespaces),
+            severity: "Medium",
+            status: "open",
+            createdAt: now,
+            updatedAt: now
+        )
+        
+        if ServerStatusManager.shared.isOnline {
+            do {
+                let created = try await APIClient.shared.createHazard(jobId: jobId, title: t, description: description)
+                await onCreated(created)
+                dismiss()
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        } else {
+            SyncEngine.shared.queueCreateHazard(hazard, jobId: jobId)
+            OfflineDatabase.shared.insertPendingHazard(id: hazard.id, jobId: jobId, data: (try? JSONEncoder().encode(hazard)) ?? Data())
+            OfflineCache.shared.refreshSyncState()
+            await onCreated(hazard)
+            dismiss()
         }
     }
 }
@@ -915,6 +1058,7 @@ struct Hazard: Identifiable, Codable {
 
 struct HazardCard: View {
     let hazard: Hazard
+    var isOfflinePending: Bool = false
     
     var body: some View {
         RMGlassCard {
@@ -929,6 +1073,16 @@ struct HazardCard: View {
                         .clipShape(Capsule())
                     
                     Spacer()
+                    
+                    if isOfflinePending {
+                        HStack(spacing: 4) {
+                            Image(systemName: "clock.fill")
+                                .font(.system(size: 10))
+                            Text("Pending sync")
+                                .font(RMTheme.Typography.captionSmall)
+                        }
+                        .foregroundColor(RMTheme.Colors.warning)
+                    }
                     
                     Text(hazard.severity)
                         .font(RMTheme.Typography.caption)
@@ -953,26 +1107,165 @@ struct HazardCard: View {
     }
 }
 
+// MARK: - Add Control Sheet
+
+struct AddControlSheet: View {
+    let jobId: String
+    let hazards: [Hazard]
+    let onCreated: (Control) async -> Void
+    @State private var title = ""
+    @State private var description = ""
+    @State private var selectedHazardId: String?
+    @State private var isSubmitting = false
+    @State private var errorMessage: String?
+    @Environment(\.dismiss) private var dismiss
+    
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Hazard") {
+                    Picker("Link to hazard", selection: $selectedHazardId) {
+                        Text("Select a hazard").tag(nil as String?)
+                        ForEach(hazards) { h in
+                            Text(h.name).tag(h.id as String?)
+                        }
+                    }
+                }
+                Section {
+                    TextField("Title", text: $title)
+                    TextField("Description", text: $description, axis: .vertical)
+                        .lineLimit(3...6)
+                }
+                if let err = errorMessage {
+                    Section {
+                        Text(err)
+                            .font(RMTheme.Typography.caption)
+                            .foregroundColor(RMTheme.Colors.error)
+                    }
+                }
+            }
+            .navigationTitle("Add Control")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Add") {
+                        Task { await submit() }
+                    }
+                    .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty || selectedHazardId == nil || isSubmitting)
+                }
+            }
+            .onAppear {
+                if selectedHazardId == nil, let first = hazards.first {
+                    selectedHazardId = first.id
+                }
+            }
+        }
+    }
+    
+    private func submit() async {
+        let t = title.trimmingCharacters(in: .whitespaces)
+        guard !t.isEmpty, let hazardId = selectedHazardId else { return }
+        isSubmitting = true
+        errorMessage = nil
+        defer { isSubmitting = false }
+        
+        let now = ISO8601DateFormatter().string(from: Date())
+        let control = Control(
+            id: UUID().uuidString,
+            title: t,
+            description: description.trimmingCharacters(in: .whitespaces),
+            status: "Pending",
+            done: false,
+            isCompleted: false,
+            hazardId: hazardId,
+            createdAt: now,
+            updatedAt: now
+        )
+        
+        if ServerStatusManager.shared.isOnline {
+            do {
+                let created = try await APIClient.shared.createControl(jobId: jobId, hazardId: hazardId, title: t, description: description)
+                await onCreated(created)
+                dismiss()
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        } else {
+            SyncEngine.shared.queueCreateControl(control, hazardId: hazardId, jobId: jobId)
+            OfflineCache.shared.refreshSyncState()
+            await onCreated(control)
+            dismiss()
+        }
+    }
+}
+
 // MARK: - Controls Tab
 
 struct ControlsTab: View {
     let jobId: String
+    var onRefresh: (() async -> Void)? = nil
     @State private var controls: [Control] = []
+    @State private var hazards: [Hazard] = []
     @State private var isLoading = true
-    @State private var didLoad = false // Deduplication gate
+    @State private var didLoad = false
+    @State private var showAddControlSheet = false
     @EnvironmentObject private var quickAction: QuickActionRouter
+    
+    private var pendingControlIds: Set<String> {
+        Set(OfflineDatabase.shared.getPendingControls(jobId: jobId).compactMap { data -> String? in
+            (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["id"] as? String
+        })
+    }
+    
+    private var canAddControl: Bool {
+        !hazards.isEmpty && !EntitlementsManager.shared.isAuditor()
+    }
     
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: RMTheme.Spacing.sectionSpacing) {
+                if canAddControl {
+                    HStack {
+                        Text("Controls")
+                            .rmSectionHeader()
+                        Spacer()
+                        Button {
+                            Haptics.tap()
+                            showAddControlSheet = true
+                        } label: {
+                            Label("Add Control", systemImage: "plus.circle.fill")
+                                .font(RMTheme.Typography.bodySmallBold)
+                                .foregroundColor(RMTheme.Colors.accent)
+                        }
+                    }
+                    .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                }
+                
                 if controls.isEmpty {
                     VStack(spacing: RMTheme.Spacing.md) {
                         RMEmptyState(
                             icon: "checkmark.shield",
                             title: "No Controls",
-                            message: "Controls are derived from hazards on the web. Evidence added here will attach to controls automatically."
+                            message: hazards.isEmpty
+                                ? "Add a hazard first, then add controls. Or configure on the web."
+                                : "Add a control or configure on the web."
                         )
                         HStack(spacing: RMTheme.Spacing.lg) {
+                            if canAddControl {
+                                Button {
+                                    Haptics.tap()
+                                    showAddControlSheet = true
+                                } label: {
+                                    Label("Add Control", systemImage: "plus.circle.fill")
+                                        .font(RMTheme.Typography.bodySmallBold)
+                                        .foregroundColor(RMTheme.Colors.accent)
+                                }
+                            }
                             Button {
                                 Haptics.tap()
                                 quickAction.requestSwitchToWorkRecords(filter: nil)
@@ -994,17 +1287,56 @@ struct ControlsTab: View {
                     .padding(.top, RMTheme.Spacing.xxl)
                 } else {
                     ForEach(controls) { control in
-                        ControlCard(control: control, jobId: jobId)
-                            .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                        ControlCard(
+                            control: control,
+                            jobId: jobId,
+                            hazardId: control.hazardId,
+                            isOfflinePending: pendingControlIds.contains(control.id),
+                            onControlUpdated: { updated in
+                                if let idx = controls.firstIndex(where: { $0.id == updated.id }) {
+                                    controls[idx] = updated
+                                }
+                            }
+                        )
+                        .padding(.horizontal, RMTheme.Spacing.pagePadding)
                     }
                 }
             }
             .padding(.vertical, RMTheme.Spacing.lg)
         }
-        .task(id: jobId) { // Use task(id:) to prevent re-fetch on unrelated re-renders
-            guard !didLoad else { return } // Deduplication gate
+        .sheet(isPresented: $showAddControlSheet) {
+            AddControlSheet(jobId: jobId, hazards: hazards) { newControl in
+                controls.insert(newControl, at: 0)
+                OfflineCache.shared.refreshSyncState()
+                showAddControlSheet = false
+                await onRefresh?()
+            }
+        }
+        .onChange(of: showAddControlSheet) { _, isShowing in
+            if !isShowing {
+                Task {
+                    await loadControls()
+                    await loadHazards()
+                }
+            }
+        }
+        .task(id: jobId) {
+            guard !didLoad else { return }
             didLoad = true
+            await loadHazards()
             await loadControls()
+        }
+    }
+    
+    private func loadHazards() async {
+        do {
+            hazards = try await APIClient.shared.getHazards(jobId: jobId)
+            let pending = OfflineDatabase.shared.getPendingHazards(jobId: jobId)
+            let pendingHazards: [Hazard] = pending.compactMap { (try? JSONDecoder().decode(Hazard.self, from: $0)) }
+            hazards.append(contentsOf: pendingHazards)
+        } catch {
+            let pending = OfflineDatabase.shared.getPendingHazards(jobId: jobId)
+            hazards = pending.compactMap { (try? JSONDecoder().decode(Hazard.self, from: $0)) }
         }
     }
     
@@ -1013,11 +1345,20 @@ struct ControlsTab: View {
         defer { isLoading = false }
         
         do {
-            controls = try await APIClient.shared.getControls(jobId: jobId)
+            var apiControls = try await APIClient.shared.getControls(jobId: jobId)
+            let pendingData = OfflineDatabase.shared.getPendingControls(jobId: jobId)
+            let pendingControls: [Control] = pendingData.compactMap { data in
+                guard let control = try? JSONDecoder().decode(Control.self, from: data) else { return nil }
+                return control
+            }
+            controls = apiControls + pendingControls
         } catch {
-            // On error, show empty (no demo data)
-            print("[ControlsTab] ❌ Failed to load controls: \(error.localizedDescription)")
-            controls = []
+            let pendingData = OfflineDatabase.shared.getPendingControls(jobId: jobId)
+            let pendingControls: [Control] = pendingData.compactMap { data in
+                guard let control = try? JSONDecoder().decode(Control.self, from: data) else { return nil }
+                return control
+            }
+            controls = pendingControls
         }
     }
 }
@@ -1029,16 +1370,18 @@ struct Control: Identifiable, Codable {
     let status: String
     let done: Bool?
     let isCompleted: Bool?
+    let hazardId: String?
     let createdAt: String?
     let updatedAt: String?
     
-    init(id: String, title: String?, description: String, status: String, done: Bool?, isCompleted: Bool?, createdAt: String?, updatedAt: String?) {
+    init(id: String, title: String?, description: String, status: String, done: Bool?, isCompleted: Bool?, hazardId: String? = nil, createdAt: String?, updatedAt: String?) {
         self.id = id
         self.title = title
         self.description = description
         self.status = status
         self.done = done
         self.isCompleted = isCompleted
+        self.hazardId = hazardId
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }
@@ -1050,6 +1393,8 @@ struct Control: Identifiable, Codable {
         case status
         case done
         case isCompleted
+        case hazardId
+        case hazard_id
         case createdAt
         case updatedAt
     }
@@ -1062,6 +1407,8 @@ struct Control: Identifiable, Codable {
         status = try container.decodeIfPresent(String.self, forKey: .status) ?? "Pending"
         done = try container.decodeIfPresent(Bool.self, forKey: .done)
         isCompleted = try container.decodeIfPresent(Bool.self, forKey: .isCompleted)
+        hazardId = try container.decodeIfPresent(String.self, forKey: .hazardId)
+            ?? container.decodeIfPresent(String.self, forKey: .hazard_id)
         createdAt = try container.decodeIfPresent(String.self, forKey: .createdAt)
         updatedAt = try container.decodeIfPresent(String.self, forKey: .updatedAt)
     }
@@ -1074,6 +1421,7 @@ struct Control: Identifiable, Codable {
         try container.encode(status, forKey: .status)
         try container.encodeIfPresent(done, forKey: .done)
         try container.encodeIfPresent(isCompleted, forKey: .isCompleted)
+        try container.encodeIfPresent(hazardId, forKey: .hazardId)
         try container.encodeIfPresent(createdAt, forKey: .createdAt)
         try container.encodeIfPresent(updatedAt, forKey: .updatedAt)
     }
@@ -1082,6 +1430,9 @@ struct Control: Identifiable, Codable {
 struct ControlCard: View {
     let control: Control
     let jobId: String
+    var hazardId: String? = nil
+    var isOfflinePending: Bool = false
+    var onControlUpdated: ((Control) -> Void)? = nil
     @StateObject private var cache = OfflineCache.shared
     @State private var showTrustReceipt = false
     @State private var trustAction: TrustAction?
@@ -1112,7 +1463,7 @@ struct ControlCard: View {
                             .foregroundColor(RMTheme.Colors.textSecondary)
                     }
                     
-                    if isPendingSync {
+                    if isPendingSync || isOfflinePending {
                         HStack(spacing: 4) {
                             Image(systemName: "clock.fill")
                                 .font(.system(size: 10))
@@ -1170,14 +1521,30 @@ struct ControlCard: View {
         let isOffline = !ServerStatusManager.shared.isOnline
         let wasCompleted = control.status == "Completed"
         let newStatus = wasCompleted ? "Pending" : "Completed"
+        let now = ISO8601DateFormatter().string(from: Date())
+        
+        let updatedControl = Control(
+            id: control.id,
+            title: control.title,
+            description: control.description,
+            status: newStatus,
+            done: !wasCompleted,
+            isCompleted: !wasCompleted,
+            hazardId: control.hazardId ?? hazardId,
+            createdAt: control.createdAt,
+            updatedAt: now
+        )
+        
+        // Propagate to view state immediately so UI reflects change instantly (Comment 3)
+        onControlUpdated?(updatedControl)
         
         // Create trust action
         trustAction = TrustAction(
             id: UUID().uuidString,
             type: .controlCompleted,
             title: "Control \(newStatus.lowercased())",
-            actor: "Current User", // TODO: Get from session
-            role: nil, // TODO: Get from session
+            actor: "Current User",
+            role: nil,
             timestamp: Date(),
             jobId: jobId,
             jobTitle: nil,
@@ -1188,39 +1555,16 @@ struct ControlCard: View {
         
         showTrustReceipt = true
         
-        // Track analytics
         Analytics.shared.trackControlCompleted(controlId: control.id, wasOffline: isOffline)
         
         if isOffline {
-            let updatedControl = Control(
-                id: control.id,
-                title: control.title,
-                description: control.description,
-                status: newStatus,
-                done: !wasCompleted,
-                isCompleted: !wasCompleted,
-                createdAt: control.createdAt,
-                updatedAt: ISO8601DateFormatter().string(from: Date())
-            )
-            SyncEngine.shared.queueUpdateControl(updatedControl, jobId: jobId)
+            SyncEngine.shared.queueUpdateControl(updatedControl, jobId: jobId, hazardId: hazardId)
             OfflineCache.shared.refreshSyncState()
-            } else {
-                do {
+        } else {
+            do {
                 try await APIClient.shared.updateMitigation(jobId: jobId, mitigationId: control.id, done: !wasCompleted)
-                // Refresh is handled by parent via .onChange or pull-to-refresh
             } catch {
-                // On API failure, queue for retry
-                let updatedControl = Control(
-                    id: control.id,
-                    title: control.title,
-                    description: control.description,
-                    status: newStatus,
-                    done: !wasCompleted,
-                    isCompleted: !wasCompleted,
-                    createdAt: control.createdAt,
-                    updatedAt: ISO8601DateFormatter().string(from: Date())
-                )
-                SyncEngine.shared.queueUpdateControl(updatedControl, jobId: jobId)
+                SyncEngine.shared.queueUpdateControl(updatedControl, jobId: jobId, hazardId: hazardId)
                 OfflineCache.shared.refreshSyncState()
             }
         }

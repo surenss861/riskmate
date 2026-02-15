@@ -836,6 +836,84 @@ jobsRouter.get("/:id/hazards", authenticate, async (req: express.Request, res: e
   }
 });
 
+// POST /api/jobs/:id/hazards
+// Create a new hazard (mitigation item) for a job
+jobsRouter.post("/:id/hazards", authenticate, requireWriteAccess, async (req: express.Request, res: express.Response) => {
+  const authReq = req as AuthenticatedRequest;
+  try {
+    const { organization_id, id: userId } = authReq.user;
+    const jobId = req.params.id;
+    const { title, name, description } = req.body || {};
+
+    const { data: job, error: jobError } = await supabase
+      .from("jobs")
+      .select("id")
+      .eq("id", jobId)
+      .eq("organization_id", organization_id)
+      .single();
+
+    if (jobError || !job) {
+      return res.status(404).json({ message: "Job not found or does not belong to your organization" });
+    }
+
+    const displayTitle = title || name || "Untitled";
+    const { data: riskFactors } = await supabase
+      .from("risk_factors")
+      .select("id")
+      .eq("is_active", true)
+      .limit(1);
+    const riskFactorId = riskFactors?.[0]?.id ?? null;
+
+    const insertPayload: Record<string, any> = {
+      job_id: jobId,
+      title: displayTitle,
+      description: description ?? "",
+      done: false,
+      is_completed: false,
+      organization_id: organization_id,
+    };
+    if (riskFactorId) insertPayload.risk_factor_id = riskFactorId;
+
+    const { data: inserted, error: insertErr } = await supabase
+      .from("mitigation_items")
+      .insert(insertPayload)
+      .select("id, title, description, severity, status, created_at, updated_at")
+      .single();
+
+    if (insertErr) {
+      console.error("[Jobs] Hazard create failed:", insertErr);
+      return res.status(500).json({ message: insertErr.message });
+    }
+
+    const clientMetadata = extractClientMetadata(req);
+    await recordAuditLog({
+      organizationId: organization_id,
+      actorId: userId,
+      eventName: "hazard.created",
+      targetType: "hazard",
+      targetId: inserted.id,
+      metadata: { job_id: jobId, sync_direct: true },
+      ...clientMetadata,
+    });
+
+    res.status(201).json({
+      data: {
+        id: inserted.id,
+        code: (String(inserted?.id ?? "")).substring(0, 8).toUpperCase(),
+        name: inserted.title,
+        description: inserted.description ?? "",
+        severity: "medium",
+        status: "open",
+        created_at: inserted.created_at,
+        updated_at: inserted.updated_at ?? inserted.created_at,
+      },
+    });
+  } catch (err: any) {
+    console.error("[Jobs] Hazard create failed:", err);
+    res.status(500).json({ message: "Failed to create hazard" });
+  }
+});
+
 // GET /api/jobs/:id/controls
 // Returns all controls (mitigation items) for a job
 // NOTE: Must be before /:id route to match correctly
@@ -877,6 +955,7 @@ jobsRouter.get("/:id/controls", authenticate, async (req: express.Request, res: 
       status: item.done || item.is_completed ? "Completed" : (item.blocked ? "Blocked" : "Pending"),
       done: item.done || item.is_completed || false,
       isCompleted: item.is_completed || item.done || false,
+      hazardId: item.hazard_id ?? null,
       createdAt: item.created_at || new Date().toISOString(),
       updatedAt: item.updated_at || item.completed_at || item.created_at || new Date().toISOString(),
     }));
@@ -885,6 +964,103 @@ jobsRouter.get("/:id/controls", authenticate, async (req: express.Request, res: 
   } catch (err: any) {
     console.error("[Jobs] Controls fetch failed:", err);
     res.status(500).json({ message: "Failed to fetch controls" });
+  }
+});
+
+// POST /api/jobs/:id/controls
+// Create a new control (mitigation item) for a job, linked to a hazard
+jobsRouter.post("/:id/controls", authenticate, requireWriteAccess, async (req: express.Request, res: express.Response) => {
+  const authReq = req as AuthenticatedRequest;
+  try {
+    const { organization_id, id: userId } = authReq.user;
+    const jobId = req.params.id;
+    const { title, name, description, hazard_id: hazardId } = req.body || {};
+
+    if (!hazardId) {
+      return res.status(400).json({ message: "hazard_id is required for control creation" });
+    }
+
+    const { data: job, error: jobError } = await supabase
+      .from("jobs")
+      .select("id")
+      .eq("id", jobId)
+      .eq("organization_id", organization_id)
+      .single();
+
+    if (jobError || !job) {
+      return res.status(404).json({ message: "Job not found or does not belong to your organization" });
+    }
+
+    const { data: hazard } = await supabase
+      .from("mitigation_items")
+      .select("id")
+      .eq("id", hazardId)
+      .eq("job_id", jobId)
+      .eq("organization_id", organization_id)
+      .single();
+
+    if (!hazard) {
+      return res.status(404).json({ message: "Hazard not found or does not belong to this job and organization" });
+    }
+
+    const displayTitle = title || name || "Untitled";
+    const { data: riskFactors } = await supabase
+      .from("risk_factors")
+      .select("id")
+      .eq("is_active", true)
+      .limit(1);
+    const riskFactorId = riskFactors?.[0]?.id ?? null;
+
+    const insertPayload: Record<string, any> = {
+      job_id: jobId,
+      hazard_id: hazardId,
+      title: displayTitle,
+      description: description ?? "",
+      done: false,
+      is_completed: false,
+      organization_id: organization_id,
+    };
+    if (riskFactorId) insertPayload.risk_factor_id = riskFactorId;
+
+    const { data: inserted, error: insertErr } = await supabase
+      .from("mitigation_items")
+      .insert(insertPayload)
+      .select("id, title, description, done, is_completed, hazard_id, created_at, updated_at")
+      .single();
+
+    if (insertErr) {
+      console.error("[Jobs] Control create failed:", insertErr);
+      return res.status(500).json({ message: insertErr.message });
+    }
+
+    const clientMetadata = extractClientMetadata(req);
+    await recordAuditLog({
+      organizationId: organization_id,
+      actorId: userId,
+      eventName: "control.created",
+      targetType: "control",
+      targetId: inserted.id,
+      metadata: { job_id: jobId, hazard_id: hazardId, sync_direct: true },
+      ...clientMetadata,
+    });
+
+    res.status(201).json({
+      data: {
+        id: inserted.id,
+        title: inserted.title,
+        description: inserted.description ?? "",
+        status: "Pending",
+        done: false,
+        isCompleted: false,
+        hazard_id: inserted.hazard_id ?? hazardId,
+        hazardId: inserted.hazard_id ?? hazardId,
+        created_at: inserted.created_at,
+        updated_at: inserted.updated_at ?? inserted.created_at,
+      },
+    });
+  } catch (err: any) {
+    console.error("[Jobs] Control create failed:", err);
+    res.status(500).json({ message: "Failed to create control" });
   }
 });
 
