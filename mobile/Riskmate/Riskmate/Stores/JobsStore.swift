@@ -8,6 +8,7 @@ final class JobsStore: ObservableObject {
     static let shared = JobsStore()
 
     @Published private(set) var jobs: [Job] = []
+    @Published private(set) var pendingJobIds: Set<String> = []
     @Published private(set) var isLoading: Bool = false
     @Published private(set) var isLoadingMore: Bool = false
     @Published private(set) var lastSyncDate: Date?
@@ -24,12 +25,24 @@ final class JobsStore: ObservableObject {
         loadFromCache()
     }
 
-    /// Load jobs from local cache (instant launch)
+    /// Load jobs from local cache + merge pending offline jobs
     private func loadFromCache() {
+        var all: [Job] = []
         if let cached = OfflineCache.shared.getCachedJobs(), !cached.isEmpty {
-            self.jobs = cached
+            all = cached
             print("[JobsStore] ✅ Loaded \(cached.count) jobs from cache")
         }
+        // Merge pending offline jobs (created while offline)
+        let pendingIds = Set(all.map { $0.id })
+        for row in OfflineDatabase.shared.getPendingJobs() {
+            if let job = try? JSONDecoder().decode(Job.self, from: row.data), !pendingIds.contains(job.id) {
+                all.insert(job, at: 0)
+            }
+        }
+        if all != self.jobs {
+            self.jobs = all
+        }
+        pendingJobIds = Set(OfflineDatabase.shared.getPendingJobs().map { $0.id })
     }
 
     /// Initial fetch: cache-first, then refresh in background
@@ -192,6 +205,67 @@ final class JobsStore: ObservableObject {
     func addJob(_ job: Job) {
         jobs.insert(job, at: 0)
         OfflineCache.shared.cacheJobs(jobs)
+    }
+
+    /// Create job - online: API; offline: save to OfflineDatabase, add to store, queue sync
+    func createJob(clientName: String, jobType: String, location: String) async throws -> Job {
+        let isOffline = !ServerStatusManager.shared.isOnline
+        let now = ISO8601DateFormatter().string(from: Date())
+        let jobId = UUID().uuidString
+        let job = Job(
+            id: jobId,
+            clientName: clientName,
+            jobType: jobType,
+            location: location,
+            status: "draft",
+            riskScore: nil,
+            riskLevel: nil,
+            createdAt: now,
+            updatedAt: now,
+            createdBy: nil,
+            evidenceCount: nil,
+            evidenceRequired: nil,
+            controlsCompleted: nil,
+            controlsTotal: nil
+        )
+
+        if isOffline {
+            SyncEngine.shared.queueCreateJob(job)
+            addJob(job)
+            pendingJobIds = pendingJobIds.union([jobId])
+            OfflineCache.shared.refreshSyncState()
+            return job
+        }
+
+        let created = try await APIClient.shared.createJob(job)
+        addJob(created)
+        OfflineCache.shared.cacheJobs(jobs)
+        return created
+    }
+
+    /// Save job changes - online: API; offline: queue update, optimistic UI
+    func saveJobUpdate(_ job: Job) async throws {
+        let isOffline = !ServerStatusManager.shared.isOnline
+        if isOffline {
+            SyncEngine.shared.queueUpdateJob(job)
+            updateJob(job) // optimistic
+            OfflineCache.shared.refreshSyncState()
+            return
+        }
+        let updated = try await APIClient.shared.updateJob(job)
+        updateJob(updated)
+    }
+
+    /// Check if a job has pending updates in the sync queue
+    func hasPendingUpdate(jobId: String) -> Bool {
+        OfflineDatabase.shared.getSyncQueue().contains { op in
+            op.type == .updateJob && op.entityId == jobId
+        }
+    }
+
+    /// Refresh jobs list including pending offline jobs
+    func refreshPendingJobs() {
+        loadFromCache()
     }
 
     func clear() {

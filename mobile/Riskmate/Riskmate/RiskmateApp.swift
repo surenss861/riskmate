@@ -5,6 +5,7 @@ struct RiskmateApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var sessionManager = SessionManager.shared
     @StateObject private var quickAction = QuickActionRouter.shared
+    @StateObject private var serverStatus = ServerStatusManager.shared
     
     init() {
         // Migrate legacy UserDefaults keys to namespaced format
@@ -62,6 +63,15 @@ struct RiskmateApp: App {
                     .onChange(of: scenePhase) { oldPhase, newPhase in
                         // Handle app lifecycle
                         handleScenePhaseChange(from: oldPhase, to: newPhase)
+                    }
+                    .onChange(of: serverStatus.isOnline) { wasOnline, isOnline in
+                        // Auto-sync when network restored
+                        if !wasOnline && isOnline {
+                            Task {
+                                await OfflineCache.shared.sync()
+                                JobsStore.shared.refreshPendingJobs()
+                            }
+                        }
                     }
                 
                 // Global toast container

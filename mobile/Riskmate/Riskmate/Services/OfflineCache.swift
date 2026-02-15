@@ -286,6 +286,11 @@ class OfflineCache: ObservableObject {
             syncState = .queued(total)
         }
     }
+
+    /// Call when pending operations change (e.g. after offline job creation)
+    func refreshSyncState() {
+        updateSyncState()
+    }
 }
 
 // MARK: - Supporting Types

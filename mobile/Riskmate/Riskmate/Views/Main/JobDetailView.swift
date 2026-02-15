@@ -20,6 +20,8 @@ struct JobDetailView: View {
     @State private var isLoadingControls = false
     @State private var evidenceCountForExport: Int = 0
     @State private var evidenceRequiredForExport: Int = 5
+    @State private var showEditJobSheet = false
+    @StateObject private var jobsStore = JobsStore.shared
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var quickAction: QuickActionRouter
     
@@ -63,6 +65,21 @@ struct JobDetailView: View {
                     .padding(RMTheme.Spacing.pagePadding)
                 } else if let job = job {
                     VStack(spacing: 0) {
+                        // Changes will sync banner when job has pending updates
+                        if jobsStore.hasPendingUpdate(jobId: job.id) {
+                            HStack(spacing: RMTheme.Spacing.sm) {
+                                Image(systemName: "clock.fill")
+                                    .foregroundColor(RMTheme.Colors.warning)
+                                Text("Changes will sync when online")
+                                    .font(RMTheme.Typography.bodySmall)
+                                    .foregroundColor(RMTheme.Colors.textSecondary)
+                            }
+                            .padding(RMTheme.Spacing.md)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(RMTheme.Colors.warning.opacity(0.15))
+                            .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                            .padding(.top, RMTheme.Spacing.md)
+                        }
                         // Read-only banner for auditors
                         if EntitlementsManager.shared.isAuditor() {
                             ReadOnlyBanner()
@@ -113,6 +130,14 @@ struct JobDetailView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
+                        if !EntitlementsManager.shared.isAuditor() {
+                            Button {
+                                Haptics.tap()
+                                showEditJobSheet = true
+                            } label: {
+                                Label("Edit Job", systemImage: "pencil")
+                            }
+                        }
                         Button {
                             Haptics.tap()
                             dismiss()
@@ -158,6 +183,13 @@ struct JobDetailView: View {
                         }
                     }
                     .accessibilityLabel("More actions for this job")
+                }
+            }
+            .sheet(isPresented: $showEditJobSheet) {
+                if let job = job {
+                    EditJobSheet(job: job, jobBinding: $job) { updatedJob in
+                        try await jobsStore.saveJobUpdate(updatedJob)
+                    }
                 }
             }
             .sheet(isPresented: $showExportProofSheet) {

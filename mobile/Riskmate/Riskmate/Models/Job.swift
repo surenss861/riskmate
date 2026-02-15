@@ -55,6 +55,39 @@ struct Job: Identifiable, Codable, Hashable {
         controlsCompleted = try container.decodeIfPresent(Int.self, forKey: .controlsCompleted)
         controlsTotal = try container.decodeIfPresent(Int.self, forKey: .controlsTotal)
     }
+
+    /// Memberwise init for creating jobs (e.g. offline creation)
+    init(
+        id: String,
+        clientName: String,
+        jobType: String,
+        location: String,
+        status: String = "draft",
+        riskScore: Int? = nil,
+        riskLevel: String? = nil,
+        createdAt: String,
+        updatedAt: String? = nil,
+        createdBy: String? = nil,
+        evidenceCount: Int? = nil,
+        evidenceRequired: Int? = nil,
+        controlsCompleted: Int? = nil,
+        controlsTotal: Int? = nil
+    ) {
+        self.id = id
+        self.clientName = clientName
+        self.jobType = jobType
+        self.location = location
+        self.status = status
+        self.riskScore = riskScore
+        self.riskLevel = riskLevel
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.createdBy = createdBy
+        self.evidenceCount = evidenceCount
+        self.evidenceRequired = evidenceRequired
+        self.controlsCompleted = controlsCompleted
+        self.controlsTotal = controlsTotal
+    }
 }
 
 extension Job {

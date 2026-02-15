@@ -3,8 +3,9 @@ import SwiftUI
 /// System-native job card with clear hierarchy and risk emphasis
 struct JobCard: View {
     let job: Job
+    var isOffline: Bool = false
     let onTap: () -> Void
-    
+
     var riskColor: Color {
         let level = (job.riskLevel ?? "").lowercased()
         if level.contains("critical") { return RMSystemTheme.Colors.critical }
@@ -29,9 +30,23 @@ struct JobCard: View {
     var body: some View {
         RMCard {
             HStack(spacing: RMSystemTheme.Spacing.md) {
-                // Risk Pill + Compliance Badge (external compliance view)
+                // Risk Pill + Compliance Badge (external compliance view) + Offline indicator
                 VStack(alignment: .leading, spacing: 8) {
-                    RiskPill(text: (job.riskLevel ?? "RISK").uppercased(), color: riskColor)
+                    HStack(spacing: RMTheme.Spacing.xs) {
+                        RiskPill(text: (job.riskLevel ?? "RISK").uppercased(), color: riskColor)
+                        if isOffline {
+                            HStack(spacing: 4) {
+                                Image(systemName: "wifi.slash")
+                                Text("OFFLINE")
+                                    .font(.system(size: 9, weight: .semibold))
+                            }
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.orange)
+                            .clipShape(Capsule())
+                        }
+                    }
                     if let status = job.complianceStatusOptional {
                         ComplianceBadge(status: status)
                     }

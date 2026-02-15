@@ -16,7 +16,8 @@ struct JobsListView: View {
     @State private var isRefreshing = false
     @State private var showExportProofSheet = false
     @State private var exportProofJobId: String? = nil
-    
+    @State private var showCreateJobSheet = false
+
     init(initialFilter: String? = nil) {
         self.initialFilter = initialFilter
     }
@@ -160,9 +161,12 @@ struct JobsListView: View {
                                 icon: searchText.isEmpty ? "doc.text" : "magnifyingglass",
                                 title: searchText.isEmpty ? "No active jobs yet" : "No Results",
                                 message: searchText.isEmpty
-                                    ? "Job creation is available on the web app. Use the Ledger and Operations tabs to view and add evidence to existing jobs."
+                                    ? (isAuditor ? "Job creation is available on the web app. Use the Ledger and Operations tabs to view and add evidence to existing jobs." : "Create your first job below or use Ledger and Operations to add evidence.")
                                     : "Try adjusting your search, filters, or time range. No jobs match your criteria.",
-                                action: nil
+                                action: searchText.isEmpty && !isAuditor ? RMEmptyStateAction(
+                                    title: "Create Job",
+                                    action: { showCreateJobSheet = true }
+                                ) : nil
                             )
                             if searchText.isEmpty && jobs.isEmpty {
                                 VStack(spacing: RMTheme.Spacing.sm) {
@@ -184,7 +188,7 @@ struct JobsListView: View {
                             Section {
                             ForEach(filteredJobs) { job in
                                 NavigationLink(value: job) {
-                                    JobCard(job: job) {
+                                    JobCard(job: job, isOffline: jobsStore.pendingJobIds.contains(job.id)) {
                                         // Navigation handled by NavigationLink
                                     }
                                 }
@@ -284,6 +288,20 @@ struct JobsListView: View {
             }
             .rmNavigationBar(title: "Work Records")
             .syncStatusChip()
+            .toolbar {
+                if !isAuditor {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button {
+                            Haptics.tap()
+                            showCreateJobSheet = true
+                        } label: {
+                            Image(systemName: "plus.circle.fill")
+                                .foregroundColor(RMTheme.Colors.accent)
+                        }
+                        .accessibilityLabel("Create new job")
+                    }
+                }
+            }
             .onAppear {
                 // Apply initial filter if provided
                 if let filter = initialFilter {
@@ -334,6 +352,9 @@ struct JobsListView: View {
                 if let id = exportProofJobId {
                     ExportProofSheet(jobId: id, isPresented: $showExportProofSheet)
                 }
+            }
+            .sheet(isPresented: $showCreateJobSheet) {
+                CreateJobSheet()
             }
     }
     

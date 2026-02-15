@@ -25,7 +25,14 @@ class Analytics {
     func trackJobOpened(jobId: String) {
         trackEvent("job_opened", metadata: ["job_id": jobId])
     }
-    
+
+    func trackJobCreated(jobId: String, wasOffline: Bool) {
+        trackEvent("job_created", metadata: [
+            "job_id": jobId,
+            "offline": String(wasOffline)
+        ])
+    }
+
     // MARK: - Control Events
     
     func trackControlCompleted(controlId: String, wasOffline: Bool) {
