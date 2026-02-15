@@ -234,6 +234,11 @@ struct JobDetailView: View {
             .task(id: jobId) {
                 await checkForFailedExports()
             }
+            .onReceive(NotificationCenter.default.publisher(for: SyncEngine.hazardsControlsSyncDidSucceedNotification)) { notification in
+                guard let notifJobId = notification.userInfo?["jobId"] as? String,
+                      notifJobId == jobId || notifJobId == job?.id else { return }
+                Task { await refreshJobDetail() }
+            }
     }
 
     private func checkForFailedExports() async {

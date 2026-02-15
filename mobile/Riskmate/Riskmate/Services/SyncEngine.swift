@@ -230,13 +230,13 @@ final class SyncEngine: ObservableObject {
 
     func queueCreateHazard(_ hazard: Hazard, jobId: String) {
         guard let data = try? JSONEncoder().encode(hazard) else { return }
-        let op = SyncOperation(type: .createHazard, entityId: hazard.id, data: data, priority: 9)
-        db.enqueueOperation(op)
         var payload = data
         if var dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
             dict["job_id"] = jobId
             payload = (try? JSONSerialization.data(withJSONObject: dict)) ?? data
         }
+        let op = SyncOperation(type: .createHazard, entityId: hazard.id, data: payload, priority: 9)
+        db.enqueueOperation(op)
         db.insertPendingHazard(id: hazard.id, jobId: jobId, data: payload)
     }
 
@@ -257,14 +257,14 @@ final class SyncEngine: ObservableObject {
 
     func queueCreateControl(_ control: Control, hazardId: String, jobId: String) {
         guard let data = try? JSONEncoder().encode(control) else { return }
-        let op = SyncOperation(type: .createControl, entityId: control.id, data: data, priority: 9)
-        db.enqueueOperation(op)
         var payload = data
         if var dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
             dict["hazard_id"] = hazardId
             dict["job_id"] = jobId
             payload = (try? JSONSerialization.data(withJSONObject: dict)) ?? data
         }
+        let op = SyncOperation(type: .createControl, entityId: control.id, data: payload, priority: 9)
+        db.enqueueOperation(op)
         db.insertPendingControl(id: control.id, hazardId: hazardId, data: payload)
     }
 
@@ -318,18 +318,63 @@ final class SyncEngine: ObservableObject {
         JobsStore.shared.removeJob(id: id)
     }
 
+    /// Posted when a hazard or control create sync succeeds; userInfo["jobId"] contains the affected job
+    static let hazardsControlsSyncDidSucceedNotification = Notification.Name("SyncEngineHazardsControlsSyncDidSucceed")
+
     private func handleNonJobSyncSuccess(type: OperationType, tempId: String, serverId: String, opData: Data?) {
         switch type {
         case .createHazard:
             db.deletePendingHazard(id: tempId)
+            if let jobId = extractJobId(from: opData) {
+                DispatchQueue.main.async {
+                    NotificationCenter.default.post(
+                        name: Self.hazardsControlsSyncDidSucceedNotification,
+                        object: nil,
+                        userInfo: ["jobId": jobId]
+                    )
+                }
+            }
         case .updateHazard, .deleteHazard:
             db.deletePendingHazard(id: tempId)
+            if let jobId = extractJobId(from: opData) {
+                DispatchQueue.main.async {
+                    NotificationCenter.default.post(
+                        name: Self.hazardsControlsSyncDidSucceedNotification,
+                        object: nil,
+                        userInfo: ["jobId": jobId]
+                    )
+                }
+            }
         case .createControl:
             db.deletePendingControl(id: tempId)
+            if let jobId = extractJobId(from: opData) {
+                DispatchQueue.main.async {
+                    NotificationCenter.default.post(
+                        name: Self.hazardsControlsSyncDidSucceedNotification,
+                        object: nil,
+                        userInfo: ["jobId": jobId]
+                    )
+                }
+            }
         case .updateControl, .deleteControl:
             db.deletePendingControl(id: tempId)
+            if let jobId = extractJobId(from: opData) {
+                DispatchQueue.main.async {
+                    NotificationCenter.default.post(
+                        name: Self.hazardsControlsSyncDidSucceedNotification,
+                        object: nil,
+                        userInfo: ["jobId": jobId]
+                    )
+                }
+            }
         default:
             break
         }
+    }
+
+    private func extractJobId(from opData: Data?) -> String? {
+        guard let data = opData,
+              let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        return dict["job_id"] as? String ?? dict["jobId"] as? String
     }
 }
