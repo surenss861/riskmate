@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { format, isAfter } from 'date-fns'
+import { format, isAfter, subDays, startOfMonth, endOfMonth } from 'date-fns'
 import { jobsApi } from '@/lib/api'
 import { subscribeToJobActivity } from '@/lib/realtime/eventSubscription'
 import { getEventMapping } from '@/lib/audit/eventMapper'
@@ -262,7 +262,9 @@ export function JobActivityFeed({
       clearTimeout(flushTimerRef.current)
       flushTimerRef.current = null
     }
-    const ids = new Set(pending.map((e) => e.id))
+    const { startDate, endDate } = filterRef.current
+    const inRange = pending.filter((e) => eventMatchesDateRange(e, startDate, endDate))
+    const ids = new Set(inRange.map((e) => e.id))
     setNewEventIds((prev) => new Set([...prev, ...ids]))
     setTimeout(() => {
       setNewEventIds((prev) => {
@@ -273,7 +275,7 @@ export function JobActivityFeed({
     }, HIGHLIGHT_DURATION_MS)
     setEvents((prev) => {
       const existingIds = new Set(prev.map((e) => e.id))
-      const toPrepend = pending.filter((e) => !existingIds.has(e.id))
+      const toPrepend = inRange.filter((e) => !existingIds.has(e.id))
       if (toPrepend.length === 0) return prev
       setTotal((t) => t + toPrepend.length)
       setOffset((o) => o + toPrepend.length)
@@ -382,8 +384,37 @@ export function JobActivityFeed({
     setEndDate(null)
   }, [])
 
+  const applyDatePreset = useCallback((preset: 'today' | 'last7' | 'last30' | 'thismonth') => {
+    const now = new Date()
+    const todayStr = format(now, 'yyyy-MM-dd')
+    switch (preset) {
+      case 'today':
+        setStartDate(todayStr)
+        setEndDate(todayStr)
+        break
+      case 'last7':
+        setStartDate(format(subDays(now, 6), 'yyyy-MM-dd'))
+        setEndDate(todayStr)
+        break
+      case 'last30':
+        setStartDate(format(subDays(now, 29), 'yyyy-MM-dd'))
+        setEndDate(todayStr)
+        break
+      case 'thismonth':
+        setStartDate(format(startOfMonth(now), 'yyyy-MM-dd'))
+        setEndDate(format(endOfMonth(now), 'yyyy-MM-dd'))
+        break
+    }
+  }, [])
+
   const dateFilterActive = Boolean(startDate || endDate)
-  const dateRangeLabel = startDate && endDate ? `${startDate} to ${endDate}` : startDate ? `From ${startDate}` : endDate ? `Until ${endDate}` : 'Date Range'
+  const dateRangeLabel = startDate && endDate
+    ? `${format(new Date(startDate), 'MMM d, yyyy')} to ${format(new Date(endDate), 'MMM d, yyyy')}`
+    : startDate
+      ? `From ${format(new Date(startDate), 'MMM d, yyyy')}`
+      : endDate
+        ? `Until ${format(new Date(endDate), 'MMM d, yyyy')}`
+        : 'Date Range'
   const filteredEvents = filterEventsByType(events, filter).filter((e) => eventMatchesDateRange(e, startDate, endDate))
   const showLoadMore = hasMore && !loading && !loadingMore
 
@@ -465,6 +496,23 @@ export function JobActivityFeed({
           </div>
           {showDateFilter && (
             <div className={`${cardStyles.base} ${cardStyles.padding.sm} space-y-3`}>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { key: 'today' as const, label: 'Today' },
+                  { key: 'last7' as const, label: 'Last 7 days' },
+                  { key: 'last30' as const, label: 'Last 30 days' },
+                  { key: 'thismonth' as const, label: 'This month' },
+                ].map(({ key, label }) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => applyDatePreset(key)}
+                    className="rounded-lg border border-white/20 bg-white/5 px-3 py-1.5 text-xs font-medium text-white/80 hover:bg-white/10 hover:text-white"
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
                 <label className="flex-1 min-w-[160px] space-y-1">
                   <span className={`${typography.label} text-white/70`}>Start date</span>
