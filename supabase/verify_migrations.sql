@@ -87,3 +87,26 @@ SELECT
 --   NULL::UUID  -- reassign_to
 -- );
 
+-- ============================================================================
+-- 5. MITIGATION ITEMS: hazard_id COLUMN AND BACKFILL
+-- ============================================================================
+-- Verify hazard_id column exists on mitigation_items (controls reference parent hazard)
+SELECT
+  CASE
+    WHEN EXISTS (SELECT 1 FROM information_schema.columns
+                 WHERE table_name = 'mitigation_items' AND column_name = 'hazard_id')
+    THEN '✅ mitigation_items.hazard_id exists'
+    ELSE '❌ mitigation_items.hazard_id MISSING - apply migration 20260215000000'
+  END AS hazard_id_column;
+
+-- Verify controls (hazard_id IS NOT NULL) have valid parent hazard references
+SELECT
+  COALESCE(COUNT(*), 0) AS controls_with_invalid_hazard,
+  CASE
+    WHEN COALESCE(COUNT(*), 0) = 0 THEN '✅ All controls reference valid hazards'
+    ELSE '⚠️ Some controls have hazard_id pointing to non-existent or deleted hazards'
+  END AS backfill_status
+FROM mitigation_items mi
+WHERE mi.hazard_id IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM mitigation_items p WHERE p.id = mi.hazard_id AND p.job_id = mi.job_id);
+

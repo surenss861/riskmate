@@ -44,6 +44,19 @@ struct RMOfflineBanner: View {
         return pendingCount > 0 ? "\(pendingCount) pending sync" : ""
     }
 
+    private var syncStatusSubtitle: String {
+        if syncEngine.isSyncing {
+            return "Uploading changes..."
+        }
+        if statusManager.backendDown {
+            return pendingCount > 0 ? "\(pendingCount) changes will sync when online" : "No connection"
+        }
+        if pendingCount > 0 {
+            return "Tap to view and retry"
+        }
+        return "Last sync: \(lastSyncText)"
+    }
+
     var body: some View {
         if shouldShow {
             Button {
@@ -66,7 +79,7 @@ struct RMOfflineBanner: View {
                             .font(RMTheme.Typography.bodySmallBold)
                             .foregroundColor(RMTheme.Colors.textPrimary)
 
-                        Text(syncEngine.isSyncing ? "Uploading changes..." : "Last sync: \(lastSyncText)")
+                        Text(syncStatusSubtitle)
                             .font(RMTheme.Typography.caption)
                             .foregroundColor(RMTheme.Colors.textSecondary)
                     }

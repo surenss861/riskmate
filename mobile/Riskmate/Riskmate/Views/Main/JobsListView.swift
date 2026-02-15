@@ -7,6 +7,7 @@ struct JobsListView: View {
     
     @StateObject private var jobsStore = JobsStore.shared
     @StateObject private var entitlements = EntitlementsManager.shared
+    @StateObject private var statusManager = ServerStatusManager.shared
     @EnvironmentObject private var quickAction: QuickActionRouter
     @State private var searchText = ""
     @State private var debouncedSearchText = ""
@@ -177,6 +178,17 @@ struct JobsListView: View {
                                         .foregroundColor(RMTheme.Colors.textTertiary)
                                         .multilineTextAlignment(.center)
                                         .padding(.horizontal, RMTheme.Spacing.md)
+                                    if !statusManager.isOnline && !isAuditor {
+                                        HStack(spacing: RMTheme.Spacing.xs) {
+                                            Image(systemName: "wifi.slash")
+                                                .foregroundColor(RMTheme.Colors.warning)
+                                            Text("Create jobs offline — they'll sync when you're back online.")
+                                                .font(RMTheme.Typography.caption)
+                                                .foregroundColor(RMTheme.Colors.textSecondary)
+                                        }
+                                        .padding(.horizontal, RMTheme.Spacing.md)
+                                        .padding(.top, RMTheme.Spacing.xs)
+                                    }
                                 }
                                 .padding(.top, RMTheme.Spacing.md)
                             }
@@ -248,9 +260,20 @@ struct JobsListView: View {
                             }
                             } header: {
                                 VStack(alignment: .leading, spacing: 4) {
-                                    Text("Proof Records")
-                                        .font(.system(size: 15, weight: .semibold))
-                                        .foregroundColor(RMTheme.Colors.textPrimary)
+                                    HStack(spacing: RMTheme.Spacing.sm) {
+                                        Text("Proof Records")
+                                            .font(.system(size: 15, weight: .semibold))
+                                            .foregroundColor(RMTheme.Colors.textPrimary)
+                                        if !jobsStore.pendingJobIds.isEmpty {
+                                            Text("\(jobsStore.pendingJobIds.count) pending")
+                                                .font(RMTheme.Typography.caption)
+                                                .foregroundColor(RMTheme.Colors.warning)
+                                                .padding(.horizontal, RMTheme.Spacing.sm)
+                                                .padding(.vertical, 2)
+                                                .background(RMTheme.Colors.warning.opacity(0.2))
+                                                .clipShape(Capsule())
+                                        }
+                                    }
                                     Text("Not yet anchored")
                                         .font(RMTheme.Typography.caption)
                                         .foregroundColor(RMTheme.Colors.textTertiary)

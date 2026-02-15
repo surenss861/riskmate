@@ -792,12 +792,13 @@ jobsRouter.get("/:id/hazards", authenticate, async (req: express.Request, res: e
       return res.status(404).json({ message: "Job not found" });
     }
 
-    // Fetch mitigation items (hazards/controls) for this job
+    // Fetch mitigation items that are hazards only (hazard_id IS NULL)
     const { data: mitigationItems, error: mitigationError } = await supabase
       .from("mitigation_items")
       .select("*")
       .eq("job_id", jobId)
       .eq("organization_id", organization_id)
+      .is("hazard_id", null)
       .order("created_at", { ascending: false });
 
     if (mitigationError) {
@@ -935,12 +936,13 @@ jobsRouter.get("/:id/controls", authenticate, async (req: express.Request, res: 
       return res.status(404).json({ message: "Job not found" });
     }
 
-    // Fetch mitigation items (controls) for this job
+    // Fetch mitigation items that are controls only (hazard_id IS NOT NULL)
     const { data: mitigationItems, error: mitigationError } = await supabase
       .from("mitigation_items")
       .select("*")
       .eq("job_id", jobId)
       .eq("organization_id", organization_id)
+      .not("hazard_id", "is", null)
       .order("created_at", { ascending: false });
 
     if (mitigationError) {

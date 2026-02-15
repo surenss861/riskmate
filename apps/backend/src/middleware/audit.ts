@@ -4,6 +4,8 @@ import { invalidateExecutiveCache } from "../routes/executive";
 export type AuditTargetType =
   | "job"
   | "mitigation"
+  | "hazard"
+  | "control"
   | "document"
   | "report"
   | "subscription"
