@@ -456,9 +456,17 @@ syncRouter.post(
                 }
                 done = existing.done ?? existing.is_completed ?? false;
               }
+              const updates: Record<string, any> = {
+                done,
+                is_completed: done,
+                completed_at: done ? new Date().toISOString() : null,
+              };
+              if (data.title !== undefined) updates.title = data.title;
+              else if (data.name !== undefined) updates.title = data.name;
+              if (data.description !== undefined) updates.description = data.description;
               const { data: updated, error: updateErr } = await supabase
                 .from("mitigation_items")
-                .update({ done, is_completed: done, completed_at: done ? new Date().toISOString() : null })
+                .update(updates)
                 .eq("id", mitigationId)
                 .eq("job_id", jobId)
                 .eq("organization_id", organization_id)
@@ -522,9 +530,17 @@ syncRouter.post(
                 }
                 done = existing.done ?? existing.is_completed ?? false;
               }
+              const updates: Record<string, any> = {
+                done,
+                is_completed: done,
+                completed_at: done ? new Date().toISOString() : null,
+              };
+              if (data.title !== undefined) updates.title = data.title;
+              else if (data.name !== undefined) updates.title = data.name;
+              if (data.description !== undefined) updates.description = data.description;
               const { data: updated, error: updateErr } = await supabase
                 .from("mitigation_items")
-                .update({ done, is_completed: done, completed_at: done ? new Date().toISOString() : null })
+                .update(updates)
                 .eq("id", mitigationId)
                 .eq("job_id", jobId)
                 .eq("hazard_id", hazardId)
@@ -624,12 +640,19 @@ syncRouter.post(
                 break;
               }
               if (deletedRows && deletedRows.length > 0) {
-                await supabase.from("sync_mitigation_deletions").insert({
+                const { error: tombstoneErr } = await supabase.from("sync_mitigation_deletions").insert({
                   mitigation_item_id: mitigationId,
                   job_id: jobId,
                   hazard_id: hazardId,
                   organization_id: organization_id,
                 });
+                if (tombstoneErr) {
+                  baseResult.status = "error";
+                  baseResult.error = tombstoneErr.message;
+                  results.push(baseResult);
+                  break;
+                }
+                baseResult.server_id = mitigationId;
                 const clientMetadata = extractClientMetadata(req);
                 await recordAuditLog({
                   organizationId: organization_id,
@@ -646,7 +669,6 @@ syncRouter.post(
                   ...clientMetadata,
                 });
               }
-              baseResult.server_id = mitigationId;
               results.push(baseResult);
               break;
             }
