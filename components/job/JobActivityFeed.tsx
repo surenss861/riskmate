@@ -127,6 +127,7 @@ export function JobActivityFeed({
   const lastToastAtRef = useRef<number>(0)
   const prevRealtimeStatusRef = useRef<'idle' | 'connecting' | 'connected' | 'error'>('idle')
   const retryTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const effectCancelledRef = useRef(false)
   const [subscriptionRetryKey, setSubscriptionRetryKey] = useState(0)
   const eventsRef = useRef<AuditEvent[]>([])
   const actorCacheRef = useRef<Map<string, { actor_name: string; actor_email: string; actor_role: string }>>(new Map())
@@ -218,6 +219,7 @@ export function JobActivityFeed({
 
   useEffect(() => {
     if (!enableRealtime || !jobId) return
+    effectCancelledRef.current = false
     setRealtimeStatus('connecting')
     let cancelled = false
     jobsApi
@@ -236,12 +238,17 @@ export function JobActivityFeed({
         if (retryTimerRef.current) clearTimeout(retryTimerRef.current)
         retryTimerRef.current = setTimeout(() => {
           retryTimerRef.current = null
-          setSubscriptionRetryKey((k) => k + 1)
+          if (!effectCancelledRef.current) setSubscriptionRetryKey((k) => k + 1)
         }, 3000)
         console.warn('subscribeJobActivity failed:', err)
       })
     return () => {
       cancelled = true
+      effectCancelledRef.current = true
+      if (retryTimerRef.current) {
+        clearTimeout(retryTimerRef.current)
+        retryTimerRef.current = null
+      }
       setSubscribeContext(null)
       setRealtimeStatus('idle')
     }
@@ -282,7 +289,10 @@ export function JobActivityFeed({
   }, [])
 
   useEffect(() => {
-    if (!subscribeContext) return
+    if (!enableRealtime || !subscribeContext) {
+      setRealtimeStatus('idle')
+      return
+    }
     const { channelId, organizationId } = subscribeContext
     const unsubscribe = subscribeToJobActivity(jobId, organizationId, {
       channelIdOverride: channelId,
@@ -324,7 +334,7 @@ export function JobActivityFeed({
         const newEvent: AuditEvent = {
           id: row.id as string,
           event_name: row.event_name as string,
-          event_type: row.event_name as string,
+          event_type: (row.event_type ?? row.event_name) as string,
           created_at: row.created_at as string,
           category: row.category as string,
           severity: row.severity as AuditEvent['severity'],
@@ -353,8 +363,9 @@ export function JobActivityFeed({
       }
       pendingEventsRef.current = []
       unsubscribe()
+      setRealtimeStatus('idle')
     }
-  }, [jobId, subscribeContext, flushPendingEvents, subscriptionRetryKey])
+  }, [jobId, enableRealtime, subscribeContext, flushPendingEvents, subscriptionRetryKey])
 
   const handleScroll = useCallback(() => {
     const el = scrollContainerRef.current
