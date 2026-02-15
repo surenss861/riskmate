@@ -275,12 +275,12 @@ export async function GET(
       }
     }
 
-    // Include rows where target is the job OR metadata.job_id references this job (e.g. document.uploaded)
+    // Include rows where target is the job, metadata.job_id references this job (e.g. document.uploaded), or audit_logs.job_id column
     let query = supabase
       .from('audit_logs')
       .select('*', { count: 'exact' })
       .eq('organization_id', organization_id)
-      .or(`and(target_type.eq.job,target_id.eq.${jobId}),metadata->>job_id.eq.${jobId}`)
+      .or(`and(target_type.eq.job,target_id.eq.${jobId}),metadata->>job_id.eq.${jobId},job_id.eq.${jobId}`)
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1)
 

@@ -20,10 +20,15 @@ describe('Job activity feed: metadata.job_id and realtime', () => {
     it('returns valid PostgREST realtime filter: and(organization_id.eq..., or(...)), no query-param &', () => {
       const filter = getJobActivityRealtimeFilter(ORG_ID, JOB_ID)
       const expected =
-        `and(organization_id.eq.${ORG_ID},or(and(target_type.eq.job,target_id.eq.${JOB_ID}),metadata->>job_id.eq.${JOB_ID}))`
+        `and(organization_id.eq.${ORG_ID},or(and(target_type.eq.job,target_id.eq.${JOB_ID}),metadata->>job_id.eq.${JOB_ID},job_id.eq.${JOB_ID}))`
       expect(filter).toBe(expected)
       expect(filter).not.toContain('&')
       expect(filter).toMatch(/^and\(/)
+    })
+
+    it('includes job_id.eq in the OR predicate for indexed column', () => {
+      const filter = getJobActivityRealtimeFilter(ORG_ID, JOB_ID)
+      expect(filter).toContain('job_id.eq.' + JOB_ID)
     })
   })
 
@@ -57,6 +62,17 @@ describe('Job activity feed: metadata.job_id and realtime', () => {
       expect(isJobActivityRow(row, JOB_ID)).toBe(true)
     })
 
+    it('accepts audit row with audit_logs.job_id column equal to jobId', () => {
+      const row = {
+        target_type: 'document',
+        target_id: DOC_ID,
+        event_name: 'document.uploaded',
+        job_id: JOB_ID,
+        organization_id: ORG_ID,
+      }
+      expect(isJobActivityRow(row, JOB_ID)).toBe(true)
+    })
+
     it('rejects row with unrelated metadata and target', () => {
       const row = {
         target_type: 'document',
@@ -73,7 +89,7 @@ describe('Job activity feed: metadata.job_id and realtime', () => {
   })
 
   describe('GET /api/jobs/[id]/activity route', () => {
-    it('uses combined or predicate (target_type/target_id and metadata->>job_id)', () => {
+    it('uses combined or predicate (target_type/target_id, metadata->>job_id, job_id)', () => {
       const routePath = path.join(
         process.cwd(),
         'app',
@@ -86,6 +102,7 @@ describe('Job activity feed: metadata.job_id and realtime', () => {
       const source = fs.readFileSync(routePath, 'utf-8')
       expect(source).toContain('.or(')
       expect(source).toContain('metadata->>job_id.eq.')
+      expect(source).toContain('job_id.eq.')
       expect(source).toContain('target_type.eq.job')
       expect(source).toContain('target_id.eq.')
     })
