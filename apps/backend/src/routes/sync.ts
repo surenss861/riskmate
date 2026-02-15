@@ -328,6 +328,16 @@ syncRouter.post(
                 baseResult.error = insertErr.message;
               } else if (inserted) {
                 baseResult.server_id = inserted.id;
+                const clientMetadata = extractClientMetadata(req);
+                await recordAuditLog({
+                  organizationId: organization_id,
+                  actorId: userId,
+                  eventName: "hazard.created",
+                  targetType: "hazard",
+                  targetId: inserted.id,
+                  metadata: { job_id: jobId, sync_batch: true, operation_id: op.id },
+                  ...clientMetadata,
+                });
               }
               results.push(baseResult);
               break;
@@ -401,6 +411,16 @@ syncRouter.post(
                 baseResult.error = insertErr.message;
               } else if (inserted) {
                 baseResult.server_id = inserted.id;
+                const clientMetadata = extractClientMetadata(req);
+                await recordAuditLog({
+                  organizationId: organization_id,
+                  actorId: userId,
+                  eventName: "control.created",
+                  targetType: "control",
+                  targetId: inserted.id,
+                  metadata: { job_id: jobId, hazard_id: hazardId, sync_batch: true, operation_id: op.id },
+                  ...clientMetadata,
+                });
               }
               results.push(baseResult);
               break;
@@ -415,7 +435,27 @@ syncRouter.post(
                 results.push(baseResult);
                 break;
               }
-              const done = data.done ?? data.is_completed ?? data.isCompleted ?? false;
+              const hasCompletion =
+                data.done !== undefined || data.is_completed !== undefined || data.isCompleted !== undefined;
+              let done: boolean;
+              if (hasCompletion) {
+                done = data.done ?? data.is_completed ?? data.isCompleted ?? false;
+              } else {
+                const { data: existing, error: fetchErr } = await supabase
+                  .from("mitigation_items")
+                  .select("done, is_completed")
+                  .eq("id", mitigationId)
+                  .eq("job_id", jobId)
+                  .eq("organization_id", organization_id)
+                  .single();
+                if (fetchErr || !existing) {
+                  baseResult.status = "error";
+                  baseResult.error = fetchErr?.message ?? "Hazard not found";
+                  results.push(baseResult);
+                  break;
+                }
+                done = existing.done ?? existing.is_completed ?? false;
+              }
               const { data: updated, error: updateErr } = await supabase
                 .from("mitigation_items")
                 .update({ done, is_completed: done, completed_at: done ? new Date().toISOString() : null })
@@ -429,6 +469,16 @@ syncRouter.post(
                 baseResult.error = updateErr.message;
               } else {
                 baseResult.server_id = mitigationId;
+                const clientMetadata = extractClientMetadata(req);
+                await recordAuditLog({
+                  organizationId: organization_id,
+                  actorId: userId,
+                  eventName: "hazard.updated",
+                  targetType: "hazard",
+                  targetId: mitigationId,
+                  metadata: { job_id: jobId, sync_batch: true, operation_id: op.id },
+                  ...clientMetadata,
+                });
               }
               results.push(baseResult);
               break;
@@ -443,14 +493,37 @@ syncRouter.post(
                 results.push(baseResult);
                 break;
               }
-              const done = data.done ?? data.is_completed ?? data.isCompleted ?? false;
+              const hazardId = data.hazard_id ?? data.hazardId;
+              const hasCompletion =
+                data.done !== undefined || data.is_completed !== undefined || data.isCompleted !== undefined;
+              let done: boolean;
+              if (hasCompletion) {
+                done = data.done ?? data.is_completed ?? data.isCompleted ?? false;
+              } else {
+                let fetchQuery = supabase
+                  .from("mitigation_items")
+                  .select("done, is_completed")
+                  .eq("id", mitigationId)
+                  .eq("job_id", jobId)
+                  .eq("organization_id", organization_id);
+                if (hazardId) {
+                  fetchQuery = fetchQuery.eq("hazard_id", hazardId);
+                }
+                const { data: existing, error: fetchErr } = await fetchQuery.single();
+                if (fetchErr || !existing) {
+                  baseResult.status = "error";
+                  baseResult.error = fetchErr?.message ?? "Control not found";
+                  results.push(baseResult);
+                  break;
+                }
+                done = existing.done ?? existing.is_completed ?? false;
+              }
               let updateQuery = supabase
                 .from("mitigation_items")
                 .update({ done, is_completed: done, completed_at: done ? new Date().toISOString() : null })
                 .eq("id", mitigationId)
                 .eq("job_id", jobId)
                 .eq("organization_id", organization_id);
-              const hazardId = data.hazard_id ?? data.hazardId;
               if (hazardId) {
                 updateQuery = updateQuery.eq("hazard_id", hazardId);
               }
@@ -460,6 +533,21 @@ syncRouter.post(
                 baseResult.error = updateErr.message;
               } else {
                 baseResult.server_id = mitigationId;
+                const clientMetadata = extractClientMetadata(req);
+                await recordAuditLog({
+                  organizationId: organization_id,
+                  actorId: userId,
+                  eventName: "control.updated",
+                  targetType: "control",
+                  targetId: mitigationId,
+                  metadata: {
+                    job_id: jobId,
+                    hazard_id: hazardId ?? undefined,
+                    sync_batch: true,
+                    operation_id: op.id,
+                  },
+                  ...clientMetadata,
+                });
               }
               results.push(baseResult);
               break;
@@ -485,6 +573,16 @@ syncRouter.post(
                 baseResult.error = deleteErr.message;
               } else {
                 baseResult.server_id = mitigationId;
+                const clientMetadata = extractClientMetadata(req);
+                await recordAuditLog({
+                  organizationId: organization_id,
+                  actorId: userId,
+                  eventName: "hazard.deleted",
+                  targetType: "hazard",
+                  targetId: mitigationId,
+                  metadata: { job_id: jobId, sync_batch: true, operation_id: op.id },
+                  ...clientMetadata,
+                });
               }
               results.push(baseResult);
               break;
@@ -515,6 +613,21 @@ syncRouter.post(
                 baseResult.error = deleteErr.message;
               } else {
                 baseResult.server_id = mitigationId;
+                const clientMetadata = extractClientMetadata(req);
+                await recordAuditLog({
+                  organizationId: organization_id,
+                  actorId: userId,
+                  eventName: "control.deleted",
+                  targetType: "control",
+                  targetId: mitigationId,
+                  metadata: {
+                    job_id: jobId,
+                    hazard_id: hazardId ?? undefined,
+                    sync_batch: true,
+                    operation_id: op.id,
+                  },
+                  ...clientMetadata,
+                });
               }
               results.push(baseResult);
               break;
