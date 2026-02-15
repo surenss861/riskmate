@@ -241,7 +241,11 @@ final class SyncEngine: ObservableObject {
     }
 
     func queueUpdateHazard(_ hazard: Hazard, jobId: String) {
-        guard let data = try? JSONEncoder().encode(hazard) else { return }
+        guard let encoded = try? JSONEncoder().encode(hazard),
+              var dict = try? JSONSerialization.jsonObject(with: encoded) as? [String: Any] else { return }
+        dict["job_id"] = jobId
+        dict["hazard_id"] = hazard.id
+        let data = (try? JSONSerialization.data(withJSONObject: dict)) ?? Data()
         let op = SyncOperation(type: .updateHazard, entityId: hazard.id, data: data, priority: 4)
         db.enqueueOperation(op)
     }
