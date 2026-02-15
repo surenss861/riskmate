@@ -231,6 +231,9 @@ export function renderSignaturesAndCompliance(
       drawBox(newSigX, newSigY);
       doc.y = newSigY + sigBoxHeight;
       didPageBreak = true;
+      if (col === 1) {
+        rowOnCurrentPage++;
+      }
     } else {
       drawBox(sigX, sigY);
       doc.y = sigY + sigBoxHeight;
