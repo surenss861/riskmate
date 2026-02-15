@@ -289,7 +289,12 @@ export async function GET(
     else if (event_type) query = query.eq('event_name', event_type)
     if (category) query = query.eq('category', category)
     if (start_date) query = query.gte('created_at', start_date)
-    if (end_date) query = query.lte('created_at', end_date)
+    if (end_date) {
+      const endDate = new Date(end_date)
+      const exclusiveUpperBound = new Date(endDate)
+      exclusiveUpperBound.setUTCDate(exclusiveUpperBound.getUTCDate() + 1)
+      query = query.lt('created_at', exclusiveUpperBound.toISOString())
+    }
 
     const { data: events, error, count } = await query
 
