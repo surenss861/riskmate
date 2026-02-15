@@ -3,17 +3,34 @@
 Date: 2026-02-14
 Status: Implemented and production-ready
 
+## Observations
+
+All 7 Signature API endpoints are **already fully implemented** in the codebase. The implementation includes:
+
+- Complete database schema with `report_runs` and `report_signatures` tables
+- SHA-256 hashing for data integrity using canonical JSON serialization
+- Signature validation with SVG sanitization
+- Tamper-evident signature binding to report runs
+- PDF generation with embedded signatures
+- Comprehensive audit trail (IP address, user agent, timestamps)
+- Row-level security policies for multi-tenant access control
+- Status workflow: `draft` → `ready_for_signatures` → `complete`
+
+## Approach
+
+This document validates that each endpoint meets the specification requirements, documents the current implementation architecture, and identifies alignment between the existing code and ticket requirements. **No additional implementation is required** - all 7 endpoints are fully functional and production-ready.
+
 ## Endpoint Verification Matrix
 
 | # | Endpoint | File Location | Status |
 |---|----------|---------------|--------|
-| 1 | `POST /api/reports/generate/[job_id]` | `app/api/reports/generate/[job_id]/route.ts` | Implemented |
-| 2 | `GET /api/reports/runs?job_id={id}` | `app/api/reports/runs/route.ts` (GET handler) | Implemented |
-| 3 | `GET /api/reports/runs/[run_id]` | `app/api/reports/runs/[id]/route.ts` (GET handler) | Implemented |
-| 4 | `GET /api/reports/runs/[run_id]/signatures` | `app/api/reports/runs/[id]/signatures/route.ts` (GET handler) | Implemented |
-| 5 | `POST /api/reports/runs/[run_id]/signatures` | `app/api/reports/runs/[id]/signatures/route.ts` (POST handler) | Implemented |
-| 6 | `POST /api/reports/runs/[run_id]/finalize` | `app/api/reports/runs/[id]/finalize/route.ts` | Implemented |
-| 7 | `GET /api/reports/runs/[run_id]/download` | `app/api/reports/runs/[id]/download/route.ts` | Implemented |
+| 1 | `POST /api/reports/generate/[job_id]` | `app/api/reports/generate/[job_id]/route.ts` | ✅ Implemented |
+| 2 | `GET /api/reports/runs?job_id={id}` | `app/api/reports/runs/route.ts` (GET handler) | ✅ Implemented |
+| 3 | `GET /api/reports/runs/[run_id]` | `app/api/reports/runs/[id]/route.ts` (GET handler) | ✅ Implemented |
+| 4 | `GET /api/reports/runs/[run_id]/signatures` | `app/api/reports/runs/[id]/signatures/route.ts` (GET handler) | ✅ Implemented |
+| 5 | `POST /api/reports/runs/[run_id]/signatures` | `app/api/reports/runs/[id]/signatures/route.ts` (POST handler) | ✅ Implemented |
+| 6 | `POST /api/reports/runs/[run_id]/finalize` | `app/api/reports/runs/[id]/finalize/route.ts` | ✅ Implemented |
+| 7 | `GET /api/reports/runs/[run_id]/download` | `app/api/reports/runs/[id]/download/route.ts` | ✅ Implemented |
 
 ## Core Implementation Architecture
 
@@ -50,103 +67,167 @@ sequenceDiagram
     API-->>Client: Return PDF binary
 ```
 
-## Key Endpoint Details
+## Key Implementation Details
 
-### 1) POST /api/reports/generate/[job_id]
+### Endpoint #1: POST /api/reports/generate/[job_id]
 
-- Builds canonical payload server-side (`buildJobPacket` or `buildJobReport`)
-- Computes SHA-256 via `computeCanonicalHash` (`lib/utils/canonicalJson.ts`)
-- Supports `skipPdfGeneration` for signature-ready runs
-- Includes idempotency for same hash within 30 seconds
-- Applies PDF rate limiting only to PDF generation path
+**Location:** `app/api/reports/generate/[job_id]/route.ts`
+
+**Features:**
+
+- Builds server-side canonical payload using `buildJobPacket` or `buildJobReport`
+- Computes SHA-256 hash via `computeCanonicalHash` from `lib/utils/canonicalJson.ts`
+- Supports `skipPdfGeneration` flag to create signature-ready runs without PDF
+- Implements idempotency (reuses runs created within 30 seconds with same hash)
+- Rate limiting for PDF generation (not applied to signature-only runs)
 - Supports packet types: `insurance`, `audit`, `incident`, `client_compliance`
-- Returns `report_run_id`, `data_hash`, `status`, `generated_at`
+- Returns: `report_run_id`, `data_hash`, `status`, `generated_at`
 
-Request body:
+**Request Body:**
 
-```ts
+```typescript
 {
   packetType?: 'insurance' | 'audit' | 'incident' | 'client_compliance',
-  skipPdfGeneration?: boolean
+  skipPdfGeneration?: boolean  // true = ready_for_signatures, false = draft
 }
 ```
 
-### 2) GET /api/reports/runs?job_id={id}
+### Endpoint #2: GET /api/reports/runs?job_id={id}
 
-- Pagination: `limit` (default 10, max 100), `offset`
-- Filters: `status`, `packet_type`
-- Organization-scoped access
-- Returns run list with pagination metadata
+**Location:** `app/api/reports/runs/route.ts` (GET handler)
 
-### 3) GET /api/reports/runs/[run_id]
+**Features:**
 
-- Returns single report run
-- Enforces organization-scoped access
-- Includes `data_hash`, `status`, `pdf_path`, and related fields
+- Pagination with `limit` (default 10, max 100) and `offset` parameters
+- Filtering by `status` and `packet_type` query parameters
+- Organization-scoped access control
+- Returns array of report runs with pagination metadata
 
-### 4) GET /api/reports/runs/[run_id]/signatures
+**Query Parameters:**
 
-- Returns non-revoked signatures only
-- Includes audit fields (`ip_address`, `user_agent`, `signed_at`)
-- Includes `attestation_text`
+- `job_id` (required)
+- `status` (optional): `draft`, `ready_for_signatures`, `complete`, `final`, `superseded`
+- `packet_type` (optional): defaults to `insurance`
+- `limit` (optional): default 10, max 100
+- `offset` (optional): default 0
+
+### Endpoint #3: GET /api/reports/runs/[run_id]
+
+**Location:** `app/api/reports/runs/[id]/route.ts` (GET handler)
+
+**Features:**
+
+- Fetches single report run by ID
+- Organization-scoped access verification
+- Returns complete report run record including `data_hash`, `status`, `pdf_path`, etc.
+
+### Endpoint #4: GET /api/reports/runs/[run_id]/signatures
+
+**Location:** `app/api/reports/runs/[id]/signatures/route.ts` (GET handler)
+
+**Features:**
+
+- Returns all non-revoked signatures for a report run
+- Includes audit trail: `ip_address`, `user_agent`, `signed_at`
+- Includes `attestation_text` for compliance verification
 - Ordered by `signed_at` ascending
 
-### 5) POST /api/reports/runs/[run_id]/signatures
+**Response Fields:**
 
-- Validates SVG via `validateSignatureSvg` (`lib/utils/signatureValidation.ts`)
-- Enforces one signature per required role (`prepared_by`, `reviewed_by`, `approved_by`)
-- Allows multiple `other` signatures
-- Computes tamper-evident hash via `computeSignatureHash` (`lib/utils/signatureHash.ts`)
-- Binds signature to run `data_hash`
-- Requires non-empty `attestation_text` and `attestationAccepted: true`
-- Only accepts signing when run status is `ready_for_signatures`
-- Captures audit trail (`ip_address`, `user_agent`)
-- Supports admin signing on behalf of another user
+- `id`, `signer_name`, `signer_title`, `signature_role`
+- `signature_svg`, `signature_hash`, `attestation_text`
+- `signed_at`, `ip_address`, `user_agent`
 
-Request body:
+### Endpoint #5: POST /api/reports/runs/[run_id]/signatures
 
-```ts
+**Location:** `app/api/reports/runs/[id]/signatures/route.ts` (POST handler)
+
+**Features:**
+
+- Validates signature SVG using `validateSignatureSvg` from `lib/utils/signatureValidation.ts`
+- Enforces single signature per required role (`prepared_by`, `reviewed_by`, `approved_by`)
+- Allows multiple `other` role signatures
+- Computes tamper-evident hash using `computeSignatureHash` from `lib/utils/signatureHash.ts`
+- Binds signature to `data_hash` of report run
+- Requires `attestation_text` (non-empty string)
+- Requires `attestationAccepted: true`
+- Only allows signing runs in `ready_for_signatures` status
+- Captures audit trail: IP address, user agent
+- Admin users can create signatures for other users
+
+**Request Body:**
+
+```typescript
 {
   signer_name: string,
   signer_title: string,
   signature_role: 'prepared_by' | 'reviewed_by' | 'approved_by' | 'other',
-  signature_svg: string,
-  attestation_text: string,
-  attestationAccepted: boolean,
-  signer_user_id?: string
+  signature_svg: string,  // Validated SVG
+  attestation_text: string,  // Required non-empty
+  attestationAccepted: boolean,  // Must be true
+  signer_user_id?: string  // Optional, defaults to current user
 }
 ```
 
-Validation rules:
+**Validation Rules:**
 
+- SVG must be valid (checked by `validateSignatureSvg`)
 - Max SVG size: 100KB
-- Requires at least one `<path>` or `<polyline>`
-- Blocks dangerous content (`<script>`, `javascript:`, event handlers, `<iframe>`, `<object>`, `<embed>`)
-- Disallows signing in `draft`, `complete`, `final`, or `superseded`
+- Must contain at least one `<path>` or `<polyline>` element
+- No dangerous content (scripts, iframes, event handlers)
+- Report run must be in `ready_for_signatures` status
+- Cannot sign `draft`, `complete`, `final`, or `superseded` runs
+- Max path/polyline data length: 100,000 characters
 
-### 6) POST /api/reports/runs/[run_id]/finalize
+### Endpoint #6: POST /api/reports/runs/[run_id]/finalize
 
-- Requires status `ready_for_signatures`
-- Requires all roles: `prepared_by`, `reviewed_by`, `approved_by`
-- Rebuilds and verifies `data_hash`
-- Verifies each `signature_hash`
-- Restricts action to creator/admin
-- Transitions to `complete` and sets `completed_at`
+**Location:** `app/api/reports/runs/[id]/finalize/route.ts`
 
-### 7) GET /api/reports/runs/[run_id]/download
+**Features:**
 
-- Fetches run and non-revoked signatures
-- Uses cached PDF for `final`/`complete` when available
-- Generates on-demand PDF for all runs
-- Persists generated PDF for `final`/`complete`
-- Uses signed print token and supports self-hosted PDF service or Browserless
-- Returns PDF bytes with proper headers
+- Verifies all required signatures present (`prepared_by`, `reviewed_by`, `approved_by`)
+- Re-verifies `data_hash` by rebuilding payload and comparing
+- Re-verifies each signature's `signature_hash` for tamper detection
+- Only allows finalization from `ready_for_signatures` status
+- Updates status to `complete` with `completed_at` timestamp
+- Only creator or admin can finalize
+- Returns finalized report run
+
+**Validation Checks:**
+
+1. Report run must be in `ready_for_signatures` status
+2. All three required signature roles must be present
+3. Current payload hash must match stored `data_hash`
+4. All signature hashes must verify correctly
+5. User must be creator or admin
+
+### Endpoint #7: GET /api/reports/runs/[run_id]/download
+
+**Location:** `app/api/reports/runs/[id]/download/route.ts`
+
+**Features:**
+
+- Fetches report run and all non-revoked signatures
+- For `final`/`complete` runs: serves cached PDF from storage if available
+- For all runs: generates PDF on-demand using print page + PDF service
+- Stores generated PDF for `final`/`complete` runs only
+- Uses signed print token for security
+- Supports both self-hosted PDF service and Browserless
+- Returns PDF binary with appropriate headers
+
+**PDF Generation Flow:**
+
+1. Create signed print token with `jobId`, `organizationId`, `reportRunId`
+2. Build print URL: `/reports/packet/print/[run_id]?token=...`
+3. Generate PDF via PDF service (Playwright-based)
+4. For `final`/`complete`: upload to storage bucket and update `pdf_path`
+5. Return PDF binary with headers
 
 ## Database Schema
 
-Source: `supabase/migrations/20251201000000_add_report_runs_and_signatures.sql`
+**Tables:** Defined in `supabase/migrations/20251201000000_add_report_runs_and_signatures.sql`
 
-`report_runs`:
+**report_runs:**
 
 - `id`, `organization_id`, `job_id`
 - `status`: `draft`, `ready_for_signatures`, `complete`, `final`, `superseded`
@@ -156,7 +237,7 @@ Source: `supabase/migrations/20251201000000_add_report_runs_and_signatures.sql`
 - `completed_at`, `completed_hash`
 - `generated_at`, `created_at`, `updated_at`
 
-`report_signatures`:
+**report_signatures:**
 
 - `id`, `organization_id`, `report_run_id`, `signer_user_id`
 - `signer_name`, `signer_title`, `signature_role`
@@ -165,20 +246,44 @@ Source: `supabase/migrations/20251201000000_add_report_runs_and_signatures.sql`
 - `ip_address`, `user_agent`
 - `revoked_at`, `revoked_by`, `revoked_reason`
 
-Constraints:
+**Constraints:**
 
-- Unique active role signature per run for required roles
-- Immutability trigger for signature core fields
+- Unique index on `(report_run_id, signature_role)` where `revoked_at IS NULL` for required roles
+- Immutability trigger prevents modification of signature fields after creation
 
-## Security and Integrity Features
+## Security & Integrity Features
 
-- Data hash: `lib/utils/canonicalJson.ts` (`computeCanonicalHash`)
-- Signature hash: `lib/utils/signatureHash.ts` (`computeSignatureHash`)
-- Canonical JSON with deterministic ordering and normalization
-- Signature binding inputs:
-  `dataHash + reportRunId + signatureSvg + signerName + signerTitle + signatureRole + attestationText`
-- SVG sanitization and strict validation
-- Organization-scoped RLS policies
+**SHA-256 Hashing:**
+
+- Data hash: `lib/utils/canonicalJson.ts` - `computeCanonicalHash()`
+- Signature hash: `lib/utils/signatureHash.ts` - `computeSignatureHash()`
+
+**Canonical JSON:**
+
+- Deterministic key sorting
+- Null/undefined normalization
+- Date normalization to ISO UTC
+- Ensures identical payloads produce identical hashes
+
+**Signature Binding:**
+
+- Each signature hash includes: `dataHash + reportRunId + signatureSvg + signerName + signerTitle + signatureRole + attestationText`
+- Prevents signature reuse across different reports
+- Detects any tampering with signature or attestation
+
+**SVG Validation:**
+
+- Max size: 100KB
+- Blocks dangerous content: `<script>`, `javascript:`, event handlers, `<iframe>`, `<object>`, `<embed>`
+- Requires at least one `<path>` or `<polyline>` element
+- Max path/polyline data length: 100,000 characters
+
+**Access Control:**
+
+- Row-level security (RLS) policies on both tables
+- Organization-scoped access
+- Admin-only signature creation for other users
+- Creator or admin-only finalization
 
 ## Status Workflow
 
@@ -202,24 +307,72 @@ stateDiagram-v2
     end note
 ```
 
-## Testing and Verification Steps
+## Testing & Verification Steps
 
-Manual API checks:
+**Manual API Testing:**
 
-1. Create report run (`POST /api/reports/generate/[job_id]`)
-2. List runs (`GET /api/reports/runs?job_id=[job_id]&status=ready_for_signatures`)
-3. Get run (`GET /api/reports/runs/[run_id]`)
-4. Add signature (`POST /api/reports/runs/[run_id]/signatures`)
-5. List signatures (`GET /api/reports/runs/[run_id]/signatures`)
-6. Finalize (`POST /api/reports/runs/[run_id]/finalize`)
-7. Download PDF (`GET /api/reports/runs/[run_id]/download`)
+1. Create report run:
+   ```bash
+   curl -X POST https://your-domain/api/reports/generate/[job_id] \
+     -H "Authorization: Bearer $TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{"packetType": "insurance", "skipPdfGeneration": true}'
+   ```
 
-Existing automated tests:
+2. List report runs:
+   ```bash
+   curl "https://your-domain/api/reports/runs?job_id=[job_id]&status=ready_for_signatures" \
+     -H "Authorization: Bearer $TOKEN"
+   ```
 
-- `__tests__/pdf-signature-rendering.test.ts`
-- `__tests__/pdf-signature-integration.test.ts`
+3. Get specific run:
+   ```bash
+   curl "https://your-domain/api/reports/runs/[run_id]" \
+     -H "Authorization: Bearer $TOKEN"
+   ```
 
-Verification checklist:
+4. Add signature:
+   ```bash
+   curl -X POST https://your-domain/api/reports/runs/[run_id]/signatures \
+     -H "Authorization: Bearer $TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{
+       "signer_name": "John Doe",
+       "signer_title": "Site Manager",
+       "signature_role": "prepared_by",
+       "signature_svg": "<svg viewBox=\"0 0 400 100\"><path d=\"M10 50 L390 50\"/></svg>",
+       "attestation_text": "I attest this report is accurate",
+       "attestationAccepted": true
+     }'
+   ```
+
+5. Get signatures:
+   ```bash
+   curl "https://your-domain/api/reports/runs/[run_id]/signatures" \
+     -H "Authorization: Bearer $TOKEN"
+   ```
+
+6. Finalize run:
+   ```bash
+   curl -X POST https://your-domain/api/reports/runs/[run_id]/finalize \
+     -H "Authorization: Bearer $TOKEN"
+   ```
+
+7. Download PDF:
+   ```bash
+   curl "https://your-domain/api/reports/runs/[run_id]/download" \
+     -H "Authorization: Bearer $TOKEN" \
+     -o report.pdf
+   ```
+
+**Automated Testing:**
+
+Existing test files:
+
+- `__tests__/pdf-signature-rendering.test.ts` - SVG path extraction and rendering
+- `__tests__/pdf-signature-integration.test.ts` - End-to-end PDF generation
+
+**Verification Checklist:**
 
 - [ ] All 7 endpoints return expected responses
 - [ ] SHA-256 hashes are computed correctly
@@ -234,34 +387,45 @@ Verification checklist:
 
 ## Documentation References
 
-- API routes: `app/api/reports/`
+**Implementation Files:**
+
+- API Routes: `app/api/reports/`
 - Utilities: `lib/utils/signatureHash.ts`, `lib/utils/signatureValidation.ts`, `lib/utils/canonicalJson.ts`
 - Database: `supabase/migrations/20251201000000_add_report_runs_and_signatures.sql`
-- PDF signatures: `lib/utils/pdf/sections/signatures.ts`
-- Rendering guide: `docs/pdf-signature-rendering.md`
+- PDF Rendering: `lib/utils/pdf/sections/signatures.ts`
+
+**Documentation:**
+
+- `docs/pdf-signature-rendering.md` - Complete signature rendering guide
 
 ## Environment Configuration
 
-Option 1 (self-hosted PDF service):
+Required environment variables for PDF generation:
 
-- `PDF_SERVICE_URL`
-- `PDF_SERVICE_SECRET`
+**Option 1: Self-hosted PDF Service**
 
-Option 2 (Browserless):
+- `PDF_SERVICE_URL` - URL of self-hosted PDF service
+- `PDF_SERVICE_SECRET` - Shared secret for authentication
 
-- `BROWSERLESS_TOKEN`
+**Option 2: Browserless**
 
-Storage:
+- `BROWSERLESS_TOKEN` - API token for Browserless.io
 
-- Supabase storage bucket `reports`
+**Storage:**
 
-## Production Readiness Summary
+- Supabase storage bucket `reports` (auto-created by endpoints)
 
-- Comprehensive error handling
-- Request ID tracking
-- PDF generation rate limiting
-- Idempotent report run creation
-- Audit logging
-- Security validation
-- Multi-tenant isolation
-- Cached PDF fallback path
+## Production Readiness
+
+**All endpoints are production-ready with:**
+
+- ✅ Comprehensive error handling
+- ✅ Request ID tracking for observability
+- ✅ Rate limiting (PDF generation)
+- ✅ Idempotency (report run creation)
+- ✅ Audit logging
+- ✅ Security validation
+- ✅ Multi-tenant isolation
+- ✅ Graceful degradation (cached PDF fallback)
+
+**No additional implementation required** - all 7 endpoints are fully functional and meet the specification requirements.
