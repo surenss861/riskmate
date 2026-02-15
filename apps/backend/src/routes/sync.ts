@@ -487,29 +487,33 @@ syncRouter.post(
               const mitigationId = op.entity_id;
               const data = op.data || {};
               const jobId = data.job_id ?? data.jobId;
+              const hazardId = data.hazard_id ?? data.hazardId;
               if (!jobId) {
                 baseResult.status = "error";
                 baseResult.error = "job_id required for control update";
                 results.push(baseResult);
                 break;
               }
-              const hazardId = data.hazard_id ?? data.hazardId;
+              if (!hazardId) {
+                baseResult.status = "error";
+                baseResult.error = "hazard_id required for control update";
+                results.push(baseResult);
+                break;
+              }
               const hasCompletion =
                 data.done !== undefined || data.is_completed !== undefined || data.isCompleted !== undefined;
               let done: boolean;
               if (hasCompletion) {
                 done = data.done ?? data.is_completed ?? data.isCompleted ?? false;
               } else {
-                let fetchQuery = supabase
+                const { data: existing, error: fetchErr } = await supabase
                   .from("mitigation_items")
                   .select("done, is_completed")
                   .eq("id", mitigationId)
                   .eq("job_id", jobId)
-                  .eq("organization_id", organization_id);
-                if (hazardId) {
-                  fetchQuery = fetchQuery.eq("hazard_id", hazardId);
-                }
-                const { data: existing, error: fetchErr } = await fetchQuery.single();
+                  .eq("hazard_id", hazardId)
+                  .eq("organization_id", organization_id)
+                  .single();
                 if (fetchErr || !existing) {
                   baseResult.status = "error";
                   baseResult.error = fetchErr?.message ?? "Control not found";
@@ -518,16 +522,15 @@ syncRouter.post(
                 }
                 done = existing.done ?? existing.is_completed ?? false;
               }
-              let updateQuery = supabase
+              const { data: updated, error: updateErr } = await supabase
                 .from("mitigation_items")
                 .update({ done, is_completed: done, completed_at: done ? new Date().toISOString() : null })
                 .eq("id", mitigationId)
                 .eq("job_id", jobId)
-                .eq("organization_id", organization_id);
-              if (hazardId) {
-                updateQuery = updateQuery.eq("hazard_id", hazardId);
-              }
-              const { data: updated, error: updateErr } = await updateQuery.select("id").single();
+                .eq("hazard_id", hazardId)
+                .eq("organization_id", organization_id)
+                .select("id")
+                .single();
               if (updateErr) {
                 baseResult.status = "error";
                 baseResult.error = updateErr.message;
@@ -542,7 +545,7 @@ syncRouter.post(
                   targetId: mitigationId,
                   metadata: {
                     job_id: jobId,
-                    hazard_id: hazardId ?? undefined,
+                    hazard_id: hazardId,
                     sync_batch: true,
                     operation_id: op.id,
                   },
@@ -562,6 +565,13 @@ syncRouter.post(
                 results.push(baseResult);
                 break;
               }
+              // Record deletion for offline sync tombstones
+              await supabase.from("sync_mitigation_deletions").insert({
+                mitigation_item_id: mitigationId,
+                job_id: jobId,
+                hazard_id: null,
+                organization_id: organization_id,
+              });
               const { error: deleteErr } = await supabase
                 .from("mitigation_items")
                 .delete()
@@ -591,23 +601,33 @@ syncRouter.post(
               const mitigationId = op.entity_id;
               const data = op.data || {};
               const jobId = data.job_id ?? data.jobId;
+              const hazardId = data.hazard_id ?? data.hazardId;
               if (!jobId) {
                 baseResult.status = "error";
                 baseResult.error = "job_id required for control delete";
                 results.push(baseResult);
                 break;
               }
-              let deleteQuery = supabase
+              if (!hazardId) {
+                baseResult.status = "error";
+                baseResult.error = "hazard_id required for control delete";
+                results.push(baseResult);
+                break;
+              }
+              // Record deletion for offline sync tombstones
+              await supabase.from("sync_mitigation_deletions").insert({
+                mitigation_item_id: mitigationId,
+                job_id: jobId,
+                hazard_id: hazardId,
+                organization_id: organization_id,
+              });
+              const { error: deleteErr } = await supabase
                 .from("mitigation_items")
                 .delete()
                 .eq("id", mitigationId)
                 .eq("job_id", jobId)
+                .eq("hazard_id", hazardId)
                 .eq("organization_id", organization_id);
-              const hazardId = data.hazard_id ?? data.hazardId;
-              if (hazardId) {
-                deleteQuery = deleteQuery.eq("hazard_id", hazardId);
-              }
-              const { error: deleteErr } = await deleteQuery;
               if (deleteErr) {
                 baseResult.status = "error";
                 baseResult.error = deleteErr.message;
@@ -622,7 +642,7 @@ syncRouter.post(
                   targetId: mitigationId,
                   metadata: {
                     job_id: jobId,
-                    hazard_id: hazardId ?? undefined,
+                    hazard_id: hazardId,
                     sync_batch: true,
                     operation_id: op.id,
                   },
@@ -700,6 +720,7 @@ syncRouter.get(
         jobs = data || [];
       }
 
+      let deletedMitigationIds: string[] = [];
       if (fetchMitigation) {
         const { data, error } = await supabase
           .from("mitigation_items")
@@ -710,6 +731,14 @@ syncRouter.get(
           .range(offset, offset + limit - 1);
         if (error) throw error;
         mitigationItems = data || [];
+
+        // Fetch deletion tombstones so offline caches can remove deleted hazards/controls
+        const { data: deletions } = await supabase
+          .from("sync_mitigation_deletions")
+          .select("mitigation_item_id")
+          .eq("organization_id", organization_id)
+          .gte("deleted_at", since.toISOString());
+        deletedMitigationIds = (deletions || []).map((d: { mitigation_item_id: string }) => d.mitigation_item_id);
       }
 
       const normalizedJobs = jobs.map((j: any) => ({
@@ -770,6 +799,7 @@ syncRouter.get(
       res.json({
         data: normalizedJobs,
         mitigation_items: normalizedMitigation,
+        deleted_mitigation_ids: deletedMitigationIds,
         pagination: {
           limit,
           offset,

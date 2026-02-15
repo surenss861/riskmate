@@ -85,8 +85,9 @@ class OfflineCache: ObservableObject {
         cacheDirectory.appendingPathComponent("mitigation-cache.json")
     }
 
-    /// Merge synced hazards and controls into per-job cache (upsert by id)
-    func mergeCachedMitigationItems(synced: [(jobId: String, hazards: [Hazard], controls: [Control])]) {
+    /// Merge synced hazards and controls into per-job cache (upsert by id).
+    /// Drops items whose IDs appear in deletedIds (tombstones from server).
+    func mergeCachedMitigationItems(synced: [(jobId: String, hazards: [Hazard], controls: [Control])], deletedIds: Set<String> = []) {
         struct MitigationCache: Codable {
             var hazards: [Hazard]
             var controls: [Control]
@@ -95,6 +96,15 @@ class OfflineCache: ObservableObject {
         if let data = try? Data(contentsOf: mitigationCacheFile),
            let existing = try? decoder.decode([String: MitigationCache].self, from: data) {
             cache = existing
+        }
+        // Remove deleted items from cache (server tombstones)
+        if !deletedIds.isEmpty {
+            for jobId in cache.keys {
+                guard var entry = cache[jobId] else { continue }
+                entry.hazards.removeAll { deletedIds.contains($0.id) }
+                entry.controls.removeAll { deletedIds.contains($0.id) }
+                cache[jobId] = entry
+            }
         }
         for (jobId, hazards, controls) in synced {
             var entry = cache[jobId] ?? MitigationCache(hazards: [], controls: [])

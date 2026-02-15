@@ -332,7 +332,7 @@ final class SyncEngine: ObservableObject {
         if !result.jobs.isEmpty {
             OfflineCache.shared.cacheJobs(result.jobs)
         }
-        if !result.mitigationItems.isEmpty {
+        if !result.mitigationItems.isEmpty || !result.deletedMitigationIds.isEmpty {
             let byJob = Dictionary(grouping: result.mitigationItems, by: { $0.jobId })
             var toMerge: [(jobId: String, hazards: [Hazard], controls: [Control])] = []
             for (jobId, items) in byJob {
@@ -349,9 +349,7 @@ final class SyncEngine: ObservableObject {
                     toMerge.append((jobId, hazards, controls))
                 }
             }
-            if !toMerge.isEmpty {
-                OfflineCache.shared.mergeCachedMitigationItems(synced: toMerge)
-            }
+            OfflineCache.shared.mergeCachedMitigationItems(synced: toMerge, deletedIds: result.deletedMitigationIds)
         }
         return result.jobs
     }

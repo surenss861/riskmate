@@ -662,16 +662,20 @@ class APIClient {
             offset = next
         } while true
         offset = 0
+        var allDeletedIds: Set<String> = []
         repeat {
             let url = "/api/sync/changes?since=\(encoded)&limit=\(limit)&offset=\(offset)&entity=mitigation_items"
             let response: SyncChangesResponse = try await request(endpoint: url)
             if let items = response.mitigationItems {
                 allMitigation.append(contentsOf: items)
             }
+            if let ids = response.deletedMitigationIds {
+                allDeletedIds.formUnion(ids)
+            }
             guard let pag = response.pagination, pag.hasMore, let next = pag.nextOffset else { break }
             offset = next
         } while true
-        return SyncChangesResult(jobs: allJobs, mitigationItems: allMitigation)
+        return SyncChangesResult(jobs: allJobs, mitigationItems: allMitigation, deletedMitigationIds: allDeletedIds)
     }
 
     /// POST /api/sync/resolve-conflict - Submit conflict resolution
@@ -1533,11 +1537,13 @@ struct BatchConflictDetail: Codable {
 struct SyncChangesResponse: Codable {
     let data: [Job]
     let mitigationItems: [SyncMitigationItem]?
+    let deletedMitigationIds: [String]?
     let pagination: SyncChangesPagination?
 
     enum CodingKeys: String, CodingKey {
         case data
         case mitigationItems = "mitigation_items"
+        case deletedMitigationIds = "deleted_mitigation_ids"
         case pagination
     }
 }
@@ -1633,6 +1639,8 @@ struct SyncMitigationData: Codable {
 struct SyncChangesResult {
     let jobs: [Job]
     let mitigationItems: [SyncMitigationItem]
+    /// IDs of hazards/controls deleted on server since last sync; offline cache should drop these
+    let deletedMitigationIds: Set<String>
 }
 
 struct SyncChangesPagination: Codable {
