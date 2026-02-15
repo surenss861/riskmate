@@ -1,18 +1,49 @@
 import SwiftUI
 
 /// Shows all pending sync operations - status, retry for failed, manual sync, estimated time
+/// Includes queued/uploading evidence from BackgroundUploadManager so banner count matches queue view
 struct SyncQueueView: View {
     @StateObject private var syncEngine = SyncEngine.shared
+    @StateObject private var uploadManager = BackgroundUploadManager.shared
     @StateObject private var cache = OfflineCache.shared
     @StateObject private var statusManager = ServerStatusManager.shared
     @Environment(\.dismiss) private var dismiss
+    @State private var isRetryingUploads = false
 
     private var pendingOps: [SyncOperation] {
         syncEngine.pendingOperations
     }
 
+    /// Queued/uploading evidence items (same set the banner counts)
+    private var queuedUploads: [UploadTask] {
+        uploadManager.uploads.filter { upload in
+            if case .queued = upload.state { return true }
+            if case .uploading = upload.state { return true }
+            if case .failed = upload.state { return true }
+            return false
+        }
+    }
+
+    private var hasPendingItems: Bool {
+        !pendingOps.isEmpty || !queuedUploads.isEmpty
+    }
+
+    /// Uploads that Sync Now can act on: failed (retry) or queued (start)
+    private var actionableUploads: [UploadTask] {
+        queuedUploads.filter { upload in
+            if case .failed = upload.state { return true }
+            if case .queued = upload.state { return true }
+            return false
+        }
+    }
+
+    /// Show Sync Now only when it will act on something (pending ops or actionable uploads)
+    private var canSyncNow: Bool {
+        !pendingOps.isEmpty || !actionableUploads.isEmpty
+    }
+
     private var estimatedSyncTime: String {
-        let count = pendingOps.count
+        let count = pendingOps.count + queuedUploads.count
         if count == 0 { return "" }
         let seconds = max(2, count * 2) // ~2 seconds per operation
         if seconds < 60 { return "~\(seconds)s" }
@@ -25,7 +56,7 @@ struct SyncQueueView: View {
             RMBackground()
                 .overlay {
                     Group {
-                        if pendingOps.isEmpty {
+                        if !hasPendingItems {
                             VStack(spacing: RMTheme.Spacing.lg) {
                                 Image(systemName: "checkmark.circle.fill")
                                     .font(.system(size: 48))
@@ -73,6 +104,38 @@ struct SyncQueueView: View {
                                 } header: {
                                     Text("Pending (\(pendingOps.count))")
                                 }
+
+                                if !queuedUploads.isEmpty {
+                                    Section {
+                                        ForEach(queuedUploads) { upload in
+                                            SyncQueueUploadRow(
+                                                upload: upload,
+                                                onRetry: {
+                                                    Task {
+                                                        do {
+                                                            try await uploadManager.retryUpload(upload)
+                                                        } catch {
+                                                            ToastCenter.shared.show(
+                                                                error.localizedDescription,
+                                                                systemImage: "exclamationmark.triangle",
+                                                                style: .error
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                            )
+                                            .listRowBackground(Color.clear)
+                                            .listRowInsets(EdgeInsets(
+                                                top: RMTheme.Spacing.sm,
+                                                leading: RMTheme.Spacing.pagePadding,
+                                                bottom: RMTheme.Spacing.sm,
+                                                trailing: RMTheme.Spacing.pagePadding
+                                            ))
+                                        }
+                                    } header: {
+                                        Text("Evidence uploads (\(queuedUploads.count))")
+                                    }
+                                }
                             }
                             .listStyle(.plain)
                             .scrollContentBackground(.hidden)
@@ -89,33 +152,53 @@ struct SyncQueueView: View {
                         .foregroundColor(RMTheme.Colors.accent)
                     }
                     ToolbarItem(placement: .primaryAction) {
-                        if !pendingOps.isEmpty {
+                        if hasPendingItems {
                             if statusManager.isOnline {
-                                Button {
-                                    Haptics.tap()
-                                    Task {
-                                        do {
-                                            _ = try await syncEngine.syncPendingOperations()
-                                            JobsStore.shared.refreshPendingJobs()
-                                        } catch {
-                                            ToastCenter.shared.show(
-                                                error.localizedDescription,
-                                                systemImage: "exclamationmark.triangle",
-                                                style: .error
-                                            )
+                                if canSyncNow {
+                                    Button {
+                                        Haptics.tap()
+                                        Task {
+                                            // 1. Sync pending operations (jobs, hazards, controls)
+                                            do {
+                                                _ = try await syncEngine.syncPendingOperations()
+                                                JobsStore.shared.refreshPendingJobs()
+                                            } catch {
+                                                ToastCenter.shared.show(
+                                                    error.localizedDescription,
+                                                    systemImage: "exclamationmark.triangle",
+                                                    style: .error
+                                                )
+                                            }
+                                            // 2. Retry failed uploads and start queued ones
+                                            let toProcess = actionableUploads
+                                            if !toProcess.isEmpty {
+                                                isRetryingUploads = true
+                                                defer { isRetryingUploads = false }
+                                                for upload in toProcess {
+                                                    do {
+                                                        try await uploadManager.retryUpload(upload)
+                                                    } catch {
+                                                        ToastCenter.shared.show(
+                                                            error.localizedDescription,
+                                                            systemImage: "exclamationmark.triangle",
+                                                            style: .error
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    } label: {
+                                        if syncEngine.isSyncing || isRetryingUploads {
+                                            ProgressView()
+                                                .scaleEffect(0.9)
+                                        } else {
+                                            Text("Sync Now")
+                                                .fontWeight(.semibold)
                                         }
                                     }
-                                } label: {
-                                    if syncEngine.isSyncing {
-                                        ProgressView()
-                                            .scaleEffect(0.9)
-                                    } else {
-                                        Text("Sync Now")
-                                            .fontWeight(.semibold)
-                                    }
+                                    .disabled(syncEngine.isSyncing || isRetryingUploads)
+                                    .foregroundColor(RMTheme.Colors.accent)
                                 }
-                                .disabled(syncEngine.isSyncing)
-                                .foregroundColor(RMTheme.Colors.accent)
                             } else {
                                 Button {
                                     Haptics.tap()
@@ -234,6 +317,79 @@ struct SyncQueueItemRow: View {
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .short
         return formatter.localizedString(for: date, relativeTo: Date())
+    }
+}
+
+/// Row for a queued/uploading/failed evidence upload
+struct SyncQueueUploadRow: View {
+    let upload: UploadTask
+    let onRetry: () -> Void
+
+    private var statusLabel: String {
+        switch upload.state {
+        case .queued: return "Queued"
+        case .uploading:
+            if upload.progress > 0, upload.progress < 1 {
+                return "Uploading \(Int(upload.progress * 100))%"
+            }
+            return "Uploading"
+        case .synced: return "Synced"
+        case .failed: return "Failed"
+        }
+    }
+
+    private var statusColor: Color {
+        switch upload.state {
+        case .queued, .uploading: return RMTheme.Colors.textSecondary
+        case .synced: return RMTheme.Colors.success
+        case .failed: return RMTheme.Colors.error
+        }
+    }
+
+    private var errorMessage: String? {
+        if case .failed(let err) = upload.state { return err }
+        return nil
+    }
+
+    var body: some View {
+        RMGlassCard {
+            VStack(alignment: .leading, spacing: RMTheme.Spacing.sm) {
+                HStack {
+                    Text("Evidence: \(upload.fileName)")
+                        .font(RMTheme.Typography.bodySmallBold)
+                        .foregroundColor(RMTheme.Colors.textPrimary)
+                    Spacer()
+                    Text(statusLabel)
+                        .font(RMTheme.Typography.caption)
+                        .foregroundColor(statusColor)
+                        .padding(.horizontal, RMTheme.Spacing.sm)
+                        .padding(.vertical, 4)
+                        .background(statusColor.opacity(0.2))
+                        .clipShape(Capsule())
+                }
+                if upload.retryCount > 0 {
+                    Text("Retry \(upload.retryCount)x")
+                        .font(RMTheme.Typography.captionSmall)
+                        .foregroundColor(RMTheme.Colors.textSecondary)
+                }
+                if let err = errorMessage {
+                    Text(err)
+                        .font(RMTheme.Typography.captionSmall)
+                        .foregroundColor(RMTheme.Colors.error)
+                        .lineLimit(2)
+                }
+                if case .failed = upload.state {
+                    Button {
+                        Haptics.tap()
+                        onRetry()
+                    } label: {
+                        Label("Retry", systemImage: "arrow.clockwise")
+                            .font(RMTheme.Typography.captionBold)
+                            .foregroundColor(RMTheme.Colors.accent)
+                    }
+                }
+            }
+        }
     }
 }
 

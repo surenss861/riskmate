@@ -990,6 +990,11 @@ struct HazardsTab: View {
             didLoad = true
             await loadHazards()
         }
+        .onReceive(NotificationCenter.default.publisher(for: SyncEngine.hazardsControlsSyncDidSucceedNotification)) { notification in
+            guard let notifJobId = notification.userInfo?["jobId"] as? String,
+                  notifJobId == jobId else { return }
+            Task { await loadHazards() }
+        }
     }
     
     private func loadHazards() async {
@@ -1027,11 +1032,29 @@ struct AddHazardSheet: View {
     @State private var description = ""
     @State private var isSubmitting = false
     @State private var errorMessage: String?
+    @StateObject private var statusManager = ServerStatusManager.shared
     @Environment(\.dismiss) private var dismiss
-    
+
+    private var isOffline: Bool { !statusManager.isOnline }
+
     var body: some View {
         NavigationStack {
-            Form {
+            VStack(spacing: 0) {
+                if isOffline {
+                    HStack(spacing: RMTheme.Spacing.sm) {
+                        Image(systemName: "wifi.slash")
+                            .foregroundColor(RMTheme.Colors.warning)
+                        Text("You're offline. This hazard will sync when you're back online.")
+                            .font(RMTheme.Typography.bodySmall)
+                            .foregroundColor(RMTheme.Colors.textSecondary)
+                    }
+                    .padding(RMTheme.Spacing.md)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(RMTheme.Colors.warning.opacity(0.15))
+                    .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                    .padding(.top, RMTheme.Spacing.sm)
+                }
+                Form {
                 Section {
                     TextField("Title", text: $title)
                     TextField("Description", text: $description, axis: .vertical)
@@ -1044,7 +1067,10 @@ struct AddHazardSheet: View {
                             .foregroundColor(RMTheme.Colors.error)
                     }
                 }
+                }
+                .scrollContentBackground(.hidden)
             }
+            .background(RMTheme.Colors.background)
             .navigationTitle("Add Hazard")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -1054,7 +1080,7 @@ struct AddHazardSheet: View {
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Add") {
+                    Button(isOffline ? "Add Offline" : "Add") {
                         Task { await submit() }
                     }
                     .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty || isSubmitting)
@@ -1093,6 +1119,7 @@ struct AddHazardSheet: View {
         } else {
             SyncEngine.shared.queueCreateHazard(hazard, jobId: jobId)
             OfflineCache.shared.refreshSyncState()
+            ToastCenter.shared.show("Saved offline", systemImage: "wifi.slash", style: .info)
             await onCreated(hazard)
             dismiss()
         }
@@ -1183,11 +1210,29 @@ struct AddControlSheet: View {
     @State private var selectedHazardId: String?
     @State private var isSubmitting = false
     @State private var errorMessage: String?
+    @StateObject private var statusManager = ServerStatusManager.shared
     @Environment(\.dismiss) private var dismiss
-    
+
+    private var isOffline: Bool { !statusManager.isOnline }
+
     var body: some View {
         NavigationStack {
-            Form {
+            VStack(spacing: 0) {
+                if isOffline {
+                    HStack(spacing: RMTheme.Spacing.sm) {
+                        Image(systemName: "wifi.slash")
+                            .foregroundColor(RMTheme.Colors.warning)
+                        Text("You're offline. This control will sync when you're back online.")
+                            .font(RMTheme.Typography.bodySmall)
+                            .foregroundColor(RMTheme.Colors.textSecondary)
+                    }
+                    .padding(RMTheme.Spacing.md)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(RMTheme.Colors.warning.opacity(0.15))
+                    .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                    .padding(.top, RMTheme.Spacing.sm)
+                }
+                Form {
                 Section("Hazard") {
                     Picker("Link to hazard", selection: $selectedHazardId) {
                         Text("Select a hazard").tag(nil as String?)
@@ -1208,7 +1253,10 @@ struct AddControlSheet: View {
                             .foregroundColor(RMTheme.Colors.error)
                     }
                 }
+                }
+                .scrollContentBackground(.hidden)
             }
+            .background(RMTheme.Colors.background)
             .navigationTitle("Add Control")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -1218,7 +1266,7 @@ struct AddControlSheet: View {
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Add") {
+                    Button(isOffline ? "Add Offline" : "Add") {
                         Task { await submit() }
                     }
                     .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty || selectedHazardId == nil || isSubmitting)
@@ -1263,6 +1311,7 @@ struct AddControlSheet: View {
         } else {
             SyncEngine.shared.queueCreateControl(control, hazardId: hazardId, jobId: jobId)
             OfflineCache.shared.refreshSyncState()
+            ToastCenter.shared.show("Saved offline", systemImage: "wifi.slash", style: .info)
             await onCreated(control)
             dismiss()
         }
@@ -1390,6 +1439,14 @@ struct ControlsTab: View {
             didLoad = true
             await loadHazards()
             await loadControls()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: SyncEngine.hazardsControlsSyncDidSucceedNotification)) { notification in
+            guard let notifJobId = notification.userInfo?["jobId"] as? String,
+                  notifJobId == jobId else { return }
+            Task {
+                await loadHazards()
+                await loadControls()
+            }
         }
     }
     

@@ -21,10 +21,12 @@ struct RMOfflineBanner: View {
         OfflineDatabase.shared.pendingOperationsCount() + queuedUploadsCount
     }
 
+    /// Queued/uploading/failed evidence uploads (matches SyncQueueView display)
     private var queuedUploadsCount: Int {
         uploadManager.uploads.filter { upload in
             if case .queued = upload.state { return true }
             if case .uploading = upload.state { return true }
+            if case .failed = upload.state { return true }
             return false
         }.count
     }

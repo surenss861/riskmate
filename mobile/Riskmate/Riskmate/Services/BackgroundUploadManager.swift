@@ -198,7 +198,7 @@ class BackgroundUploadManager: NSObject, ObservableObject {
         }
         var searchStart = data.startIndex
         while searchStart < data.endIndex {
-            guard let range = data.range(of: boundaryDelimData, range: searchStart..<data.endIndex) else {
+            guard let range = data.range(of: boundaryDelimData, in: searchStart..<data.endIndex) else {
                 break
             }
             let partStart = range.upperBound
