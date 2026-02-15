@@ -220,16 +220,32 @@ export function JobActivityFeed({
     if (!enableRealtime || !jobId) return
     setRealtimeStatus('connecting')
     let cancelled = false
-    jobsApi.subscribeJobActivity(jobId).then((ctx) => {
-      if (!cancelled && ctx) setSubscribeContext(ctx)
-      else if (!cancelled) setRealtimeStatus('idle')
-    })
+    jobsApi
+      .subscribeJobActivity(jobId)
+      .then((ctx) => {
+        if (!cancelled && ctx) setSubscribeContext(ctx)
+        else if (!cancelled) setRealtimeStatus('idle')
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return
+        cancelled = true
+        setSubscribeContext(null)
+        setRealtimeStatus('error')
+        prevRealtimeStatusRef.current = 'error'
+        toast.error('Live updates disconnected. Reconnecting…')
+        if (retryTimerRef.current) clearTimeout(retryTimerRef.current)
+        retryTimerRef.current = setTimeout(() => {
+          retryTimerRef.current = null
+          setSubscriptionRetryKey((k) => k + 1)
+        }, 3000)
+        console.warn('subscribeJobActivity failed:', err)
+      })
     return () => {
       cancelled = true
       setSubscribeContext(null)
       setRealtimeStatus('idle')
     }
-  }, [enableRealtime, jobId])
+  }, [enableRealtime, jobId, subscriptionRetryKey])
 
   const flushPendingEvents = useCallback(() => {
     const pending = pendingEventsRef.current
@@ -320,15 +336,9 @@ export function JobActivityFeed({
           target_id: row.target_id as string,
           metadata: row.metadata as Record<string, unknown>,
         }
-        const currentFilters = filterRef.current
-        const matchesType = filterEventsByType([newEvent], currentFilters.filter)
-        const matchesDate = eventMatchesDateRange(newEvent, currentFilters.startDate, currentFilters.endDate)
-        const matches = matchesType.length > 0 && matchesDate
-        if (matches) {
-          pendingEventsRef.current.push(newEvent)
-          if (!flushTimerRef.current) {
-            flushTimerRef.current = setTimeout(flushPendingEvents, DEBOUNCE_MS)
-          }
+        pendingEventsRef.current.push(newEvent)
+        if (!flushTimerRef.current) {
+          flushTimerRef.current = setTimeout(flushPendingEvents, DEBOUNCE_MS)
         }
       },
     })
@@ -363,7 +373,7 @@ export function JobActivityFeed({
 
   const dateFilterActive = Boolean(startDate || endDate)
   const dateRangeLabel = startDate && endDate ? `${startDate} to ${endDate}` : startDate ? `From ${startDate}` : endDate ? `Until ${endDate}` : 'Date Range'
-  const filteredEvents = events
+  const filteredEvents = filterEventsByType(events, filter).filter((e) => eventMatchesDateRange(e, startDate, endDate))
   const showLoadMore = hasMore && !loading && !loadingMore
 
   if (loading && events.length === 0) {
