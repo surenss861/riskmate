@@ -116,6 +116,13 @@ export function JobActivityFeed({
   const [endDate, setEndDate] = useState<string | null>(null)
   const filterRef = useRef<ActiveFilterState>({ filter, startDate, endDate })
   filterRef.current = { filter, startDate, endDate }
+  const sentinelRef = useRef<HTMLDivElement | null>(null)
+  const hasMoreRef = useRef(hasMore)
+  const loadingMoreRef = useRef(loadingMore)
+  const offsetRef = useRef(offset)
+  hasMoreRef.current = hasMore
+  loadingMoreRef.current = loadingMore
+  offsetRef.current = offset
   const [subscribeContext, setSubscribeContext] = useState<{ channelId: string; organizationId: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [realtimeStatus, setRealtimeStatus] = useState<'idle' | 'connecting' | 'connected' | 'error'>('idle')
@@ -369,6 +376,29 @@ export function JobActivityFeed({
     }
   }, [jobId, enableRealtime, subscribeContext, flushPendingEvents, subscriptionRetryKey])
 
+  useEffect(() => {
+    const scrollEl = scrollContainerRef.current
+    const sentinelEl = sentinelRef.current
+    if (!scrollEl || !sentinelEl) return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0]
+        if (!entry?.isIntersecting) return
+        if (!hasMoreRef.current || loadingMoreRef.current) return
+        const { filter: f } = filterRef.current
+        fetchPage(offsetRef.current, true, f)
+      },
+      {
+        root: scrollEl,
+        rootMargin: '100px',
+        threshold: 0,
+      }
+    )
+    observer.observe(sentinelEl)
+    return () => observer.disconnect()
+  }, [filter, startDate, endDate, fetchPage, filteredEvents.length > 0])
+
   const handleScroll = useCallback(() => {
     const el = scrollContainerRef.current
     if (!el) return
@@ -416,7 +446,6 @@ export function JobActivityFeed({
         ? `Until ${format(new Date(endDate), 'MMM d, yyyy')}`
         : 'Date Range'
   const filteredEvents = filterEventsByType(events, filter).filter((e) => eventMatchesDateRange(e, startDate, endDate))
-  const showLoadMore = hasMore && !loading && !loadingMore
 
   if (loading && events.length === 0) {
     return (
@@ -641,6 +670,8 @@ export function JobActivityFeed({
               )
             })}
           </ul>
+            {/* Sentinel for infinite scroll - when it enters viewport, load next page */}
+            <div ref={sentinelRef} className="h-1 shrink-0" aria-hidden />
           </div>
           <AnimatePresence>
             {showScrollToTop && (
@@ -661,23 +692,9 @@ export function JobActivityFeed({
         </div>
       )}
 
-      {showLoadMore && (
-        <div className="flex justify-center pt-4">
-          <button
-            type="button"
-            onClick={() => fetchPage(offset, true, filter)}
-            disabled={loadingMore}
-            className="rounded-lg border border-white/20 bg-white/5 px-4 py-2 text-sm font-medium text-white/90 hover:bg-white/10 disabled:opacity-50"
-          >
-            {loadingMore ? (
-              <>
-                <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-[#F97316] border-t-transparent mr-2 align-middle" />
-                Loading...
-              </>
-            ) : (
-              'Load more'
-            )}
-          </button>
+      {hasMore && loadingMore && (
+        <div className="flex justify-center py-3">
+          <span className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-[#F97316] border-t-transparent" aria-label="Loading more" />
         </div>
       )}
     </div>
