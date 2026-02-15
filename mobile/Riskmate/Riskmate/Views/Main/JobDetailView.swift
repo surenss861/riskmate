@@ -1092,7 +1092,6 @@ struct AddHazardSheet: View {
             }
         } else {
             SyncEngine.shared.queueCreateHazard(hazard, jobId: jobId)
-            OfflineDatabase.shared.insertPendingHazard(id: hazard.id, jobId: jobId, data: (try? JSONEncoder().encode(hazard)) ?? Data())
             OfflineCache.shared.refreshSyncState()
             await onCreated(hazard)
             dismiss()
