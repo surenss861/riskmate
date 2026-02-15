@@ -129,16 +129,20 @@ class OfflineCache: ObservableObject {
     func queueJob(_ job: Job, action: QueuedItem.Action) {
         guard let data = try? encoder.encode(job) else { return }
         
-        let item = QueuedItem(
-            id: UUID().uuidString,
-            type: .job,
-            action: action,
-            data: data,
-            createdAt: Date()
-        )
+        // Jobs go to OfflineDatabase for offline-first sync (handled by SyncEngine)
+        let opType: OperationType
+        switch action {
+        case .create: opType = .createJob
+        case .update: opType = .updateJob
+        case .delete: opType = .deleteJob
+        }
+        let op = SyncOperation(type: opType, entityId: job.id, data: data)
+        OfflineDatabase.shared.enqueueOperation(op)
+        if action == .create {
+            OfflineDatabase.shared.insertPendingJob(id: job.id, data: data, createdAt: Date())
+        }
         
-        queuedItems.append(item)
-        saveQueue()
+        // Non-job types (evidence, etc.) still use queuedItems
         updateSyncState()
     }
     
@@ -167,13 +171,24 @@ class OfflineCache: ObservableObject {
     // MARK: - Sync
     
     func sync() async {
-        guard !queuedItems.isEmpty else {
+        // Include pending ops from OfflineDatabase in "has work" check
+        let dbPending = OfflineDatabase.shared.pendingOperationsCount()
+        guard !queuedItems.isEmpty || dbPending > 0 else {
             syncState = .synced
             return
         }
         
         let startTime = Date()
         syncState = .syncing
+
+        // 1. Run SyncEngine for database-backed operations (jobs, etc.)
+        if dbPending > 0 {
+            do {
+                _ = try await SyncEngine.shared.syncPendingOperations()
+            } catch {
+                print("[OfflineCache] SyncEngine failed: \(error.localizedDescription)")
+            }
+        }
         
         var failedItems: [QueuedItem] = []
         
@@ -263,10 +278,12 @@ class OfflineCache: ObservableObject {
     }
     
     private func updateSyncState() {
-        if queuedItems.isEmpty {
+        let dbCount = OfflineDatabase.shared.pendingOperationsCount()
+        let total = queuedItems.count + dbCount
+        if total == 0 {
             syncState = .synced
         } else {
-            syncState = .queued(queuedItems.count)
+            syncState = .queued(total)
         }
     }
 }

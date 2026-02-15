@@ -627,6 +627,47 @@ class APIClient {
             await EntitlementsManager.shared.refresh()
         }
     }
+
+    // MARK: - Sync API (offline batch sync)
+
+    /// POST /api/sync/batch - Upload pending operations
+    func syncBatch(operations: [SyncOperation]) async throws -> BatchSyncResponse {
+        let items = operations.map { $0.toBatchRequestItem() }
+        let body = try JSONSerialization.data(withJSONObject: ["operations": items])
+        let response: BatchSyncResponse = try await request(
+            endpoint: "/api/sync/batch",
+            method: "POST",
+            body: body
+        )
+        return response
+    }
+
+    /// GET /api/sync/changes?since=... - Incremental sync
+    func getSyncChanges(since: Date) async throws -> [Job] {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        formatter.timeZone = TimeZone(identifier: "UTC")
+        let sinceStr = formatter.string(from: since)
+        let encoded = sinceStr.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? sinceStr
+        let response: SyncChangesResponse = try await request(
+            endpoint: "/api/sync/changes?since=\(encoded)"
+        )
+        return response.data
+    }
+
+    /// POST /api/sync/resolve-conflict - Submit conflict resolution
+    func resolveSyncConflict(operationId: String, strategy: ConflictResolutionStrategy) async throws {
+        let body: [String: Any] = [
+            "operation_id": operationId,
+            "strategy": strategy.rawValue,
+        ]
+        let data = try JSONSerialization.data(withJSONObject: body)
+        let _: EmptyResponse = try await request(
+            endpoint: "/api/sync/resolve-conflict",
+            method: "POST",
+            body: data
+        )
+    }
     
     // MARK: - Evidence API
     
@@ -1362,6 +1403,94 @@ struct ZIPResponse: Codable {
 struct JobsListResponse: Codable {
     let data: [Job]
     let pagination: JobsPagination?
+}
+
+// MARK: - Sync API Response Models
+
+struct BatchSyncResponse: Codable {
+    let results: [BatchOperationResult]
+}
+
+struct BatchOperationResult: Codable {
+    let operationId: String
+    let status: String
+    let serverId: String?
+    let error: String?
+    let conflict: BatchConflictDetail?
+
+    enum CodingKeys: String, CodingKey {
+        case operationId = "operation_id"
+        case status
+        case serverId = "server_id"
+        case error
+        case conflict
+    }
+}
+
+struct BatchConflictDetail: Codable {
+    let entityType: String?
+    let entityId: String?
+    let field: String?
+    let serverValue: AnyCodable?
+    let localValue: AnyCodable?
+    let serverTimestampStr: String?
+    let localTimestampStr: String?
+
+    enum CodingKeys: String, CodingKey {
+        case entityType = "entity_type"
+        case entityId = "entity_id"
+        case field
+        case serverValue = "server_value"
+        case localValue = "local_value"
+        case serverTimestampStr = "server_timestamp"
+        case localTimestampStr = "local_timestamp"
+    }
+
+    var serverTimestamp: Date? {
+        guard let s = serverTimestampStr else { return nil }
+        return ISO8601DateFormatter().date(from: s)
+    }
+    var localTimestamp: Date? {
+        guard let s = localTimestampStr else { return nil }
+        return ISO8601DateFormatter().date(from: s)
+    }
+
+    var entity_type: String? { entityType }
+    var entity_id: String? { entityId }
+    var server_value: AnyCodable? { serverValue }
+    var local_value: AnyCodable? { localValue }
+}
+
+struct SyncChangesResponse: Codable {
+    let data: [Job]
+}
+
+/// Type-erased Codable for conflict values (server_value, local_value can be any JSON type)
+struct AnyCodable: Codable {
+    let value: Any
+    init(_ value: Any) { self.value = value }
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if container.decodeNil() { value = NSNull(); return }
+        if let b = try? container.decode(Bool.self) { value = b; return }
+        if let i = try? container.decode(Int.self) { value = i; return }
+        if let d = try? container.decode(Double.self) { value = d; return }
+        if let s = try? container.decode(String.self) { value = s; return }
+        if let a = try? container.decode([AnyCodable].self) { value = a.map { $0.value }; return }
+        if let o = try? container.decode([String: AnyCodable].self) { value = Dictionary(uniqueKeysWithValues: o.map { ($0.key, $0.value.value) }); return }
+        value = NSNull()
+    }
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        switch value {
+        case is NSNull: try container.encodeNil()
+        case let b as Bool: try container.encode(b)
+        case let i as Int: try container.encode(i)
+        case let d as Double: try container.encode(d)
+        case let s as String: try container.encode(s)
+        default: try container.encodeNil()
+        }
+    }
 }
 
 struct JobsPagination: Codable {
