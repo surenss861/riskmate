@@ -126,8 +126,7 @@ exports.reportsRouter.post("/generate/:jobId", auth_1.authenticate, (async (req,
             pdfBuffer = await (0, pdf_1.generateRiskSnapshotPDF)(reportData.job, reportData.risk_score, reportData.mitigations || [], reportData.organization ?? {
                 id: organization_id,
                 name: reportData.job?.client_name ?? "Organization",
-            }, photos, reportData.audit || [], undefined, // signatures - not used by this legacy route
-            undefined // reportRunId - not used by this legacy route (no report_run created here)
+            }, photos, reportData.audit || [], undefined // reportRunId - not used by this legacy route (no report_run created here)
             );
         }
         catch (pdfError) {

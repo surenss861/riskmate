@@ -665,7 +665,7 @@ async function getFailureReason(exportJob, err) {
                 const missing = evidenceRequired - actual;
                 return `Missing ${missing} evidence item${missing === 1 ? '' : 's'}. Upload photos before generating proof pack.`;
             }
-            const hazardsCount = await countHazards(jobId);
+            const hazardsCount = await countHazards(organization_id, jobId);
             if (hazardsCount === 0) {
                 return 'No hazards configured. Add hazards in web app before generating report.';
             }
@@ -698,12 +698,14 @@ async function countEvidence(orgId, workRecordId) {
         .eq('work_record_id', workRecordId);
     return count ?? 0;
 }
-async function countHazards(jobId) {
+async function countHazards(organizationId, jobId) {
     try {
         const { count } = await supabaseClient_1.supabase
-            .from('hazards')
+            .from('mitigation_items')
             .select('*', { count: 'exact', head: true })
-            .eq('job_id', jobId);
+            .eq('job_id', jobId)
+            .eq('organization_id', organizationId)
+            .is('hazard_id', null);
         return count ?? 0;
     }
     catch {

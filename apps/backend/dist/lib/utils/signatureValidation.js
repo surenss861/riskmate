@@ -56,6 +56,29 @@ function validateSignatureSvg(svg) {
             };
         }
     }
+    // Check polyline points length (if present) – same threshold as path data
+    const polylineMatch = svg.match(/<polyline[^>]*points=["']([^"']+)["']/gi);
+    if (polylineMatch) {
+        const totalPolylineLength = polylineMatch.reduce((sum, match) => {
+            const pointsMatch = match.match(/points=["']([^"']+)["']/i);
+            return sum + (pointsMatch ? pointsMatch[1].length : 0);
+        }, 0);
+        if (totalPolylineLength > MAX_PATH_LENGTH) {
+            return {
+                valid: false,
+                error: `Polyline points data exceeds maximum length of ${MAX_PATH_LENGTH} characters`,
+            };
+        }
+    }
+    // Require at least one path with non-empty d or polyline with non-empty points
+    const hasPathWithD = /<path[^>]*d=["']([^"']+)["']/i.test(svg);
+    const hasPolylineWithPoints = /<polyline[^>]*points=["']([^"']+)["']/i.test(svg);
+    if (!hasPathWithD && !hasPolylineWithPoints) {
+        return {
+            valid: false,
+            error: 'Signature must contain at least one path or polyline with drawing data',
+        };
+    }
     return { valid: true };
 }
 //# sourceMappingURL=signatureValidation.js.map

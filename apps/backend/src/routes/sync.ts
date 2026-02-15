@@ -565,65 +565,29 @@ syncRouter.post(
                 results.push(baseResult);
                 break;
               }
-              // Cascade: fetch and delete all controls for this hazard, with tombstones, before deleting the hazard
-              const { data: controls } = await supabase
-                .from("mitigation_items")
-                .select("id")
-                .eq("job_id", jobId)
-                .eq("hazard_id", mitigationId)
-                .eq("organization_id", organization_id);
-              const controlIds = (controls || []).map((c: { id: string }) => c.id);
-              for (const controlId of controlIds) {
-                await supabase.from("sync_mitigation_deletions").insert({
-                  mitigation_item_id: controlId,
-                  job_id: jobId,
-                  hazard_id: mitigationId,
-                  organization_id: organization_id,
-                });
-              }
-              if (controlIds.length > 0) {
-                const { error: controlsDeleteErr } = await supabase
-                  .from("mitigation_items")
-                  .delete()
-                  .eq("job_id", jobId)
-                  .eq("hazard_id", mitigationId)
-                  .eq("organization_id", organization_id);
-                if (controlsDeleteErr) {
-                  baseResult.status = "error";
-                  baseResult.error = controlsDeleteErr.message;
-                  results.push(baseResult);
-                  break;
-                }
-              }
-              // Record hazard deletion for offline sync tombstones
-              await supabase.from("sync_mitigation_deletions").insert({
-                mitigation_item_id: mitigationId,
-                job_id: jobId,
-                hazard_id: null,
-                organization_id: organization_id,
+              // Atomic: deletes first, tombstones only after deletes succeed (transaction via RPC)
+              const { data: rpcResult, error: rpcErr } = await supabase.rpc("sync_delete_hazard", {
+                p_organization_id: organization_id,
+                p_job_id: jobId,
+                p_hazard_id: mitigationId,
               });
-              const { error: deleteErr } = await supabase
-                .from("mitigation_items")
-                .delete()
-                .eq("id", mitigationId)
-                .eq("job_id", jobId)
-                .eq("organization_id", organization_id);
-              if (deleteErr) {
+              if (rpcErr) {
                 baseResult.status = "error";
-                baseResult.error = deleteErr.message;
-              } else {
-                baseResult.server_id = mitigationId;
-                const clientMetadata = extractClientMetadata(req);
-                await recordAuditLog({
-                  organizationId: organization_id,
-                  actorId: userId,
-                  eventName: "hazard.deleted",
-                  targetType: "hazard",
-                  targetId: mitigationId,
-                  metadata: { job_id: jobId, sync_batch: true, operation_id: op.id },
-                  ...clientMetadata,
-                });
+                baseResult.error = rpcErr.message;
+                results.push(baseResult);
+                break;
               }
+              baseResult.server_id = mitigationId;
+              const clientMetadata = extractClientMetadata(req);
+              await recordAuditLog({
+                organizationId: organization_id,
+                actorId: userId,
+                eventName: "hazard.deleted",
+                targetType: "hazard",
+                targetId: mitigationId,
+                metadata: { job_id: jobId, sync_batch: true, operation_id: op.id },
+                ...clientMetadata,
+              });
               results.push(baseResult);
               break;
             }
@@ -703,9 +667,10 @@ syncRouter.post(
   }
 );
 
-// GET /api/sync/changes?since={ts}&limit={n}&offset={n}&entity={jobs|mitigation_items}
+// GET /api/sync/changes?since={ts}&limit={n}&jobs_offset={n}&mitigation_offset={n}&entity={jobs|mitigation_items}
 // entity=jobs: jobs only. entity=mitigation_items: hazards/controls only. Omit for both.
-// Client pages until has_more is false for each entity type.
+// Jobs and mitigation_items are paginated independently. Use jobs_offset and mitigation_offset
+// (or offset as fallback when entity is specific) so clients never skip items when one entity fills a page.
 syncRouter.get(
   "/changes",
   authenticate,
@@ -716,7 +681,11 @@ syncRouter.get(
       const sinceStr = req.query.since as string;
       const entity = (req.query.entity as string) || "all";
       const limit = Math.min(Math.max(parseInt(req.query.limit as string, 10) || 500, 1), 1000);
-      const offset = Math.max(parseInt(req.query.offset as string, 10) || 0, 0);
+      const fallbackOffset = Math.max(parseInt(req.query.offset as string, 10) || 0, 0);
+      const jobsOffsetParam = parseInt(req.query.jobs_offset as string, 10);
+      const mitigationOffsetParam = parseInt(req.query.mitigation_offset as string, 10);
+      const jobsOffset = Math.max(Number.isNaN(jobsOffsetParam) ? fallbackOffset : jobsOffsetParam, 0);
+      const mitigationOffset = Math.max(Number.isNaN(mitigationOffsetParam) ? fallbackOffset : mitigationOffsetParam, 0);
 
       if (!sinceStr) {
         return res.status(400).json({
@@ -746,7 +715,7 @@ syncRouter.get(
           .is("deleted_at", null)
           .gte("updated_at", since.toISOString())
           .order("updated_at", { ascending: true })
-          .range(offset, offset + limit - 1);
+          .range(jobsOffset, jobsOffset + limit - 1);
         if (error) throw error;
         jobs = data || [];
 
@@ -768,7 +737,7 @@ syncRouter.get(
           .eq("organization_id", organization_id)
           .gte("updated_at", since.toISOString())
           .order("updated_at", { ascending: true })
-          .range(offset, offset + limit - 1);
+          .range(mitigationOffset, mitigationOffset + limit - 1);
         if (error) throw error;
         mitigationItems = data || [];
 
@@ -796,7 +765,8 @@ syncRouter.get(
 
       const normalizeMitigationItem = (item: any) => {
         const isHazard = item.hazard_id == null;
-        const code = item.title ? (item.title.match(/^([A-Z0-9_]+)/)?.[1] ?? item.title.substring(0, 10).toUpperCase().replace(/\s+/g, "_") : "UNKNOWN";
+        const match = item.title ? item.title.match(/^([A-Z0-9_]+)/) : null;
+        const code = match && match[1] ? match[1] : (item.title ? item.title.substring(0, 10).toUpperCase().replace(/\s+/g, "_") : "UNKNOWN");
         const status = item.done || item.is_completed ? (isHazard ? "resolved" : "Completed") : (isHazard ? "open" : "Pending");
         if (isHazard) {
           return {
@@ -836,17 +806,34 @@ syncRouter.get(
       const jobsHasMore = fetchJobs && jobs.length === limit;
       const mitigationHasMore = fetchMitigation && mitigationItems.length === limit;
 
+      const jobsNextOffset = jobsHasMore ? jobsOffset + limit : null;
+      const mitigationNextOffset = mitigationHasMore ? mitigationOffset + limit : null;
+      const pagination: Record<string, any> = {
+        limit,
+        offset: entity === "jobs" ? jobsOffset : (entity === "mitigation_items" ? mitigationOffset : 0),
+        jobs: {
+          limit,
+          offset: jobsOffset,
+          has_more: jobsHasMore,
+          next_offset: jobsNextOffset,
+        },
+        mitigation_items: {
+          limit,
+          offset: mitigationOffset,
+          has_more: mitigationHasMore,
+          next_offset: mitigationNextOffset,
+        },
+      };
+      // Top-level for backward compat (entity=jobs uses jobs pagination, entity=mitigation_items uses mitigation)
+      pagination.has_more = entity === "jobs" ? jobsHasMore : entity === "mitigation_items" ? mitigationHasMore : jobsHasMore || mitigationHasMore;
+      pagination.next_offset = entity === "jobs" ? jobsNextOffset : (entity === "mitigation_items" ? mitigationNextOffset : null);
+
       res.json({
         data: normalizedJobs,
         mitigation_items: normalizedMitigation,
         deleted_mitigation_ids: deletedMitigationIds,
         deleted_job_ids: deletedJobIds,
-        pagination: {
-          limit,
-          offset,
-          has_more: jobsHasMore || mitigationHasMore,
-          next_offset: (jobsHasMore || mitigationHasMore) ? offset + limit : null,
-        },
+        pagination,
       });
     } catch (err: any) {
       console.error("[Sync] Changes failed:", err);
