@@ -125,6 +125,9 @@ export function JobActivityFeed({
   const pendingEventsRef = useRef<AuditEvent[]>([])
   const flushTimerRef = useRef<NodeJS.Timeout | null>(null)
   const lastToastAtRef = useRef<number>(0)
+  const prevRealtimeStatusRef = useRef<'idle' | 'connecting' | 'connected' | 'error'>('idle')
+  const retryTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const [subscriptionRetryKey, setSubscriptionRetryKey] = useState(0)
   const eventsRef = useRef<AuditEvent[]>([])
   const actorCacheRef = useRef<Map<string, { actor_name: string; actor_email: string; actor_role: string }>>(new Map())
   const actorFetchPromiseRef = useRef<Map<string, Promise<{ actor_name: string; actor_email: string; actor_role: string } | null>>>(new Map())
@@ -268,7 +271,25 @@ export function JobActivityFeed({
     const unsubscribe = subscribeToJobActivity(jobId, organizationId, {
       channelIdOverride: channelId,
       onStatusChange: (status) => {
-        setRealtimeStatus(status === 'SUBSCRIBED' ? 'connected' : status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' ? 'error' : 'idle')
+        const wasConnected = prevRealtimeStatusRef.current === 'connected'
+        const nextStatus: 'idle' | 'connecting' | 'connected' | 'error' =
+          status === 'SUBSCRIBED'
+            ? 'connected'
+            : status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED'
+              ? 'error'
+              : 'idle'
+        setRealtimeStatus(nextStatus)
+        prevRealtimeStatusRef.current = nextStatus
+
+        // Toast and auto-retry when disconnected (channel closed/error)
+        if (nextStatus === 'error' && wasConnected) {
+          toast.error('Live updates disconnected. Reconnecting…')
+          if (retryTimerRef.current) clearTimeout(retryTimerRef.current)
+          retryTimerRef.current = setTimeout(() => {
+            retryTimerRef.current = null
+            setSubscriptionRetryKey((k) => k + 1)
+          }, 3000)
+        }
       },
       onEvent: async (payload) => {
         const row = payload.new as Record<string, unknown>
@@ -316,10 +337,14 @@ export function JobActivityFeed({
         clearTimeout(flushTimerRef.current)
         flushTimerRef.current = null
       }
+      if (retryTimerRef.current) {
+        clearTimeout(retryTimerRef.current)
+        retryTimerRef.current = null
+      }
       pendingEventsRef.current = []
       unsubscribe()
     }
-  }, [jobId, subscribeContext, flushPendingEvents])
+  }, [jobId, subscribeContext, flushPendingEvents, subscriptionRetryKey])
 
   const handleScroll = useCallback(() => {
     const el = scrollContainerRef.current
