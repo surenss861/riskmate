@@ -710,6 +710,95 @@ final class OfflineDatabase {
         }
     }
 
+    /// Remap temporary control ID to server control ID in sync_queue and pending_controls.
+    /// Call after create_control succeeds so subsequent queued updates/deletes target the server ID.
+    func remapControlIdInQueuedOperations(tempControlId: String, serverControlId: String) {
+        queue.sync { [weak self] in
+            guard let self = self, let db = self.db else { return }
+            // 1. sync_queue: update entity_id and data JSON for updateControl, deleteControl
+            let syncSql = "SELECT operation_id, type, entity_id, priority, retry_count, last_attempt, data, client_timestamp FROM sync_queue"
+            var stmt: OpaquePointer?
+            defer { sqlite3_finalize(stmt) }
+            guard sqlite3_prepare_v2(db, syncSql, -1, &stmt, nil) == SQLITE_OK else { return }
+            var rowsToUpdate: [(String, String, String)] = [] // (operation_id, new_entity_id, new_data_json)
+            while sqlite3_step(stmt) == SQLITE_ROW {
+                let opId = String(cString: sqlite3_column_text(stmt, 0))
+                let typeStr = String(cString: sqlite3_column_text(stmt, 1))
+                let entityId = String(cString: sqlite3_column_text(stmt, 2))
+                let dataStr = String(cString: sqlite3_column_text(stmt, 6))
+                guard typeStr == "updateControl" || typeStr == "deleteControl" else { continue }
+                var newEntityId = entityId
+                var newDataStr = dataStr
+                if entityId == tempControlId {
+                    newEntityId = serverControlId
+                }
+                if let data = dataStr.data(using: .utf8),
+                   var dict = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] {
+                    var changed = false
+                    if (dict["id"] as? String) == tempControlId {
+                        dict["id"] = serverControlId
+                        changed = true
+                    }
+                    if (dict["entity_id"] as? String) == tempControlId {
+                        dict["entity_id"] = serverControlId
+                        changed = true
+                    }
+                    if changed, let newData = try? JSONSerialization.data(withJSONObject: dict),
+                       let newStr = String(data: newData, encoding: .utf8) {
+                        newDataStr = newStr
+                    }
+                }
+                if newEntityId != entityId || newDataStr != dataStr {
+                    rowsToUpdate.append((opId, newEntityId, newDataStr))
+                }
+            }
+            sqlite3_finalize(stmt)
+            stmt = nil
+            for (opId, newEntityId, newDataStr) in rowsToUpdate {
+                var updStmt: OpaquePointer?
+                defer { sqlite3_finalize(updStmt) }
+                guard sqlite3_prepare_v2(db, "UPDATE sync_queue SET entity_id = ?, data = ? WHERE operation_id = ?", -1, &updStmt, nil) == SQLITE_OK else { continue }
+                sqlite3_bind_text(updStmt, 1, (newEntityId as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(updStmt, 2, (newDataStr as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(updStmt, 3, (opId as NSString).utf8String, -1, nil)
+                sqlite3_step(updStmt)
+            }
+            DispatchQueue.main.async { NotificationCenter.default.post(name: Self.syncQueueDidChangeNotification, object: nil) }
+
+            // 2. pending_controls: update id (primary key) and data JSON so row is keyed by server ID
+            let pcSelSql = "SELECT id, data FROM pending_controls WHERE id = ?"
+            var pcStmt: OpaquePointer?
+            defer { sqlite3_finalize(pcStmt) }
+            guard sqlite3_prepare_v2(db, pcSelSql, -1, &pcStmt, nil) == SQLITE_OK else { return }
+            sqlite3_bind_text(pcStmt, 1, (tempControlId as NSString).utf8String, -1, nil)
+            if sqlite3_step(pcStmt) == SQLITE_ROW {
+                let dataStr2 = String(cString: sqlite3_column_text(pcStmt, 1))
+                var newDataStr = dataStr2
+                if let data = dataStr2.data(using: .utf8),
+                   var dict = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] {
+                    if (dict["id"] as? String) == tempControlId {
+                        dict["id"] = serverControlId
+                    }
+                    if let newData = try? JSONSerialization.data(withJSONObject: dict),
+                       let s = String(data: newData, encoding: .utf8) {
+                        newDataStr = s
+                    }
+                }
+                sqlite3_finalize(pcStmt)
+                pcStmt = nil
+                // Update row: set new id and data (SQLite allows PK update)
+                var updStmt: OpaquePointer?
+                defer { sqlite3_finalize(updStmt) }
+                if sqlite3_prepare_v2(db, "UPDATE pending_controls SET id = ?, data = ? WHERE id = ?", -1, &updStmt, nil) == SQLITE_OK {
+                    sqlite3_bind_text(updStmt, 1, (serverControlId as NSString).utf8String, -1, nil)
+                    sqlite3_bind_text(updStmt, 2, (newDataStr as NSString).utf8String, -1, nil)
+                    sqlite3_bind_text(updStmt, 3, (tempControlId as NSString).utf8String, -1, nil)
+                    sqlite3_step(updStmt)
+                }
+            }
+        }
+    }
+
     // MARK: - Pending Updates (field-level changes for offline job edits)
 
     /// Insert or replace a pending update for an entity field

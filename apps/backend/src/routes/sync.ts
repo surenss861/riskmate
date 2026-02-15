@@ -608,25 +608,28 @@ syncRouter.post(
                 results.push(baseResult);
                 break;
               }
-              // Record deletion for offline sync tombstones
-              await supabase.from("sync_mitigation_deletions").insert({
-                mitigation_item_id: mitigationId,
-                job_id: jobId,
-                hazard_id: hazardId,
-                organization_id: organization_id,
-              });
-              const { error: deleteErr } = await supabase
+              // Delete first; only write tombstone after confirming a row was deleted (no phantom removals on failure)
+              const { data: deletedRows, error: deleteErr } = await supabase
                 .from("mitigation_items")
                 .delete()
                 .eq("id", mitigationId)
                 .eq("job_id", jobId)
                 .eq("hazard_id", hazardId)
-                .eq("organization_id", organization_id);
+                .eq("organization_id", organization_id)
+                .select("id");
               if (deleteErr) {
                 baseResult.status = "error";
                 baseResult.error = deleteErr.message;
-              } else {
-                baseResult.server_id = mitigationId;
+                results.push(baseResult);
+                break;
+              }
+              if (deletedRows && deletedRows.length > 0) {
+                await supabase.from("sync_mitigation_deletions").insert({
+                  mitigation_item_id: mitigationId,
+                  job_id: jobId,
+                  hazard_id: hazardId,
+                  organization_id: organization_id,
+                });
                 const clientMetadata = extractClientMetadata(req);
                 await recordAuditLog({
                   organizationId: organization_id,
@@ -643,6 +646,7 @@ syncRouter.post(
                   ...clientMetadata,
                 });
               }
+              baseResult.server_id = mitigationId;
               results.push(baseResult);
               break;
             }

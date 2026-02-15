@@ -86,4 +86,3 @@ WHERE category IN ('operational_actions', 'work', 'job');
 
 -- Note: This migration is idempotent - running it multiple times is safe
 -- Events that already have correct categories will not be updated
-
