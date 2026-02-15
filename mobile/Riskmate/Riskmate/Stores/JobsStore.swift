@@ -9,6 +9,8 @@ final class JobsStore: ObservableObject {
 
     @Published private(set) var jobs: [Job] = []
     @Published private(set) var pendingJobIds: Set<String> = []
+    @Published private(set) var pendingCreatedJobIds: Set<String> = []
+    @Published private(set) var pendingUpdateJobIds: Set<String> = []
     @Published private(set) var isLoading: Bool = false
     @Published private(set) var isLoadingMore: Bool = false
     @Published private(set) var lastSyncDate: Date?
@@ -59,6 +61,8 @@ final class JobsStore: ObservableObject {
     private func refreshPendingJobIds() {
         let created = Set(OfflineDatabase.shared.getPendingJobs().map { $0.id })
         let withUpdates = OfflineDatabase.shared.getJobIdsWithPendingUpdates()
+        pendingCreatedJobIds = created
+        pendingUpdateJobIds = withUpdates
         pendingJobIds = created.union(withUpdates)
     }
 
@@ -228,6 +232,8 @@ final class JobsStore: ObservableObject {
     func removeJob(id: String) {
         jobs.removeAll { $0.id == id }
         pendingJobIds = pendingJobIds.filter { $0 != id }
+        pendingCreatedJobIds = pendingCreatedJobIds.filter { $0 != id }
+        pendingUpdateJobIds = pendingUpdateJobIds.filter { $0 != id }
         OfflineCache.shared.cacheJobs(jobs)
     }
 
@@ -240,6 +246,8 @@ final class JobsStore: ObservableObject {
         }
         jobs.removeAll { $0.id == tempId }
         pendingJobIds = pendingJobIds.filter { $0 != tempId }
+        pendingCreatedJobIds = pendingCreatedJobIds.filter { $0 != tempId }
+        pendingUpdateJobIds = pendingUpdateJobIds.filter { $0 != tempId }
         let serverJob = Job(
             id: serverId,
             clientName: job.clientName,
@@ -286,6 +294,7 @@ final class JobsStore: ObservableObject {
             SyncEngine.shared.queueCreateJob(job)
             addJob(job)
             pendingJobIds = pendingJobIds.union([jobId])
+            pendingCreatedJobIds = pendingCreatedJobIds.union([jobId])
             OfflineCache.shared.refreshSyncState()
             ToastCenter.shared.show("Saved offline", systemImage: "wifi.slash", style: .info)
             return job

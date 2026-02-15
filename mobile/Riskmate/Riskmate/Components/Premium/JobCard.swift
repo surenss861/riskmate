@@ -3,8 +3,17 @@ import SwiftUI
 /// System-native job card with clear hierarchy and risk emphasis
 struct JobCard: View {
     let job: Job
+    /// True when job was created offline (not yet on server)
     var isOffline: Bool = false
+    /// True when job has pending edits queued for sync (online job with unsynced changes)
+    var isUnsynced: Bool = false
     let onTap: () -> Void
+
+    private var pendingBadge: (label: String, color: Color)? {
+        if isOffline { return ("OFFLINE", Color.orange) }
+        if isUnsynced { return ("Unsynced", Color.orange) }
+        return nil
+    }
 
     var riskColor: Color {
         let level = (job.riskLevel ?? "").lowercased()
@@ -34,16 +43,16 @@ struct JobCard: View {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: RMTheme.Spacing.xs) {
                         RiskPill(text: (job.riskLevel ?? "RISK").uppercased(), color: riskColor)
-                        if isOffline {
+                        if let badge = pendingBadge {
                             HStack(spacing: 4) {
-                                Image(systemName: "wifi.slash")
-                                Text("OFFLINE")
+                                Image(systemName: badge.label == "OFFLINE" ? "wifi.slash" : "arrow.triangle.2.circlepath")
+                                Text(badge.label)
                                     .font(.system(size: 9, weight: .semibold))
                             }
                             .foregroundColor(.white)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
-                            .background(Color.orange)
+                            .background(badge.color)
                             .clipShape(Capsule())
                         }
                     }

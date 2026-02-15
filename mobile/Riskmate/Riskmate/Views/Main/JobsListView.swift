@@ -200,7 +200,11 @@ struct JobsListView: View {
                             Section {
                             ForEach(filteredJobs) { job in
                                 NavigationLink(value: job) {
-                                    JobCard(job: job, isOffline: jobsStore.pendingJobIds.contains(job.id)) {
+                                    JobCard(
+                                        job: job,
+                                        isOffline: jobsStore.pendingCreatedJobIds.contains(job.id),
+                                        isUnsynced: jobsStore.pendingUpdateJobIds.contains(job.id) && !jobsStore.pendingCreatedJobIds.contains(job.id)
+                                    ) {
                                         // Navigation handled by NavigationLink
                                     }
                                 }
