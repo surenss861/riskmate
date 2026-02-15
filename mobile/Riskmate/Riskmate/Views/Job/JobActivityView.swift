@@ -69,6 +69,7 @@ struct JobActivityView: View {
             guard let event = newEvent else { return }
             defer { realtimeService.clearNewEvent() }
             guard eventMatchesFilters(event, appliedFilters) else { return }
+            guard !events.contains(where: { $0.id == event.id }) else { return }
             events.insert(event, at: 0)
             offset += 1
             Task { await loadActorsIfNeeded() }
