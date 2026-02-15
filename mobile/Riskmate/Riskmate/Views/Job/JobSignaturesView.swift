@@ -408,6 +408,7 @@ struct JobSignaturesView: View {
         isLoading = true
         errorMessage = nil
         signaturesErrorMessage = nil
+        let previousRunId = activeRun?.id
         defer { isLoading = false }
         let run: ReportRun
         do {
@@ -420,13 +421,19 @@ struct JobSignaturesView: View {
             signatures = []
             return
         }
+        if run.id != previousRunId {
+            signatures = []
+            signaturesErrorMessage = nil
+        }
         do {
             let sigs = try await APIClient.shared.getSignatures(reportRunId: run.id)
             signatures = sigs
             signaturesErrorMessage = nil
         } catch {
             signaturesErrorMessage = error.localizedDescription
-            // Keep existing signatures so export-complete state is not falsely cleared when data is temporarily unavailable.
+            if run.id != previousRunId {
+                signatures = []
+            }
         }
     }
 
@@ -451,14 +458,24 @@ struct JobSignaturesView: View {
     private func ensureActiveRun() async {
         isCreatingRun = true
         errorMessage = nil
+        let previousRunId = activeRun?.id
         defer { isCreatingRun = false }
         do {
             let (run, _) = try await APIClient.shared.getActiveReportRun(jobId: jobId, packetType: packetType, forceNew: false)
             activeRun = run
+            if run.id != previousRunId {
+                signatures = []
+                signaturesErrorMessage = nil
+            }
             let sigs = try await APIClient.shared.getSignatures(reportRunId: run.id)
             signatures = sigs
+            signaturesErrorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
+            if activeRun?.id != previousRunId {
+                signatures = []
+                signaturesErrorMessage = nil
+            }
         }
     }
 
@@ -467,15 +484,25 @@ struct JobSignaturesView: View {
     private func createNewRunAndRefresh() async {
         isCreatingRun = true
         errorMessage = nil
+        let previousRunId = activeRun?.id
         defer { isCreatingRun = false }
         do {
             let (run, _) = try await APIClient.shared.getActiveReportRun(jobId: jobId, packetType: packetType, forceNew: true)
             activeRun = run
+            if run.id != previousRunId {
+                signatures = []
+                signaturesErrorMessage = nil
+            }
             let sigs = try await APIClient.shared.getSignatures(reportRunId: run.id)
             signatures = sigs
+            signaturesErrorMessage = nil
             ToastCenter.shared.show("New report run created", systemImage: "checkmark.circle.fill", style: .success)
         } catch {
             errorMessage = error.localizedDescription
+            if activeRun?.id != previousRunId {
+                signatures = []
+                signaturesErrorMessage = nil
+            }
         }
     }
 
