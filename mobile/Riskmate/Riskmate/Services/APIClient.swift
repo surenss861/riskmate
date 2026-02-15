@@ -1454,11 +1454,6 @@ struct BatchConflictDetail: Codable {
         guard let s = localTimestampStr else { return nil }
         return ISO8601DateFormatter().date(from: s)
     }
-
-    var entity_type: String? { entityType }
-    var entity_id: String? { entityId }
-    var server_value: AnyCodable? { serverValue }
-    var local_value: AnyCodable? { localValue }
 }
 
 struct SyncChangesResponse: Codable {

@@ -65,8 +65,8 @@ final class SyncEngine: ObservableObject {
                             entityType: c.entityType ?? "job",
                             entityId: c.entityId ?? result.operationId,
                             field: c.field ?? "unknown",
-                            serverValue: c.server_value?.value,
-                            localValue: c.local_value?.value,
+                            serverValue: c.serverValue?.value,
+                            localValue: c.localValue?.value,
                             serverTimestamp: c.serverTimestamp ?? Date(),
                             localTimestamp: c.localTimestamp ?? Date()
                         ))
