@@ -11,8 +11,8 @@ export const maxDuration = 60
 
 /**
  * GET /api/reports/runs/[id]/download
- * Fetches report run (snapshot) and its signatures, passes them to the PDF generation flow,
- * and returns the generated PDF for all runs (draft, final, complete). Never returns JSON for drafts.
+ * Fetches report run (snapshot) and returns the generated PDF for all runs (draft, final, complete).
+ * The print page loads signatures itself when rendering; no server-side signature fetch is needed here.
  */
 export async function GET(
   request: NextRequest,
@@ -58,14 +58,6 @@ export async function GET(
         { status: 403 }
       )
     }
-
-    // Gather signatures for this run (report_signatures by run_id) — used by print page and for audit
-    const { data: signatures } = await supabase
-      .from('report_signatures')
-      .select('id, signer_name, signer_title, signature_role, signature_svg, signed_at, signature_hash, attestation_text')
-      .eq('report_run_id', reportRunId)
-      .is('revoked_at', null)
-      .order('signed_at', { ascending: true })
 
     const jobId = reportRun.job_id
     const organizationId = reportRun.organization_id

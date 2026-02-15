@@ -187,20 +187,25 @@ export async function GET(request: NextRequest) {
     const offset = Math.max(0, Number.isNaN(rawOffset) ? 0 : rawOffset)
 
     const statusFilter = searchParams.get('status') ?? null
-    
-    // Parse and validate packet_type (default to 'insurance')
+
+    // Parse packet_type: when absent or 'all', return runs for all packet types;
+    // when a specific packet_type is supplied, validate and filter to that type only
     const rawPacketType = searchParams.get('packet_type')
     const validPacketTypes = ['insurance', 'audit', 'incident', 'client_compliance']
-    const packetType = rawPacketType && validPacketTypes.includes(rawPacketType) ? rawPacketType : 'insurance'
+    const filterByPacketType = rawPacketType && rawPacketType !== 'all' && validPacketTypes.includes(rawPacketType)
+    const packetType = filterByPacketType ? rawPacketType : null
 
     // Build base query for both count and data (same filters)
-    const baseFilter = supabase
+    let baseFilter = supabase
       .from('report_runs')
       .select('*', { count: 'exact' })
       .eq('job_id', jobId)
       .eq('organization_id', userData.organization_id)
-      .eq('packet_type', packetType)
       .order('generated_at', { ascending: false })
+
+    if (packetType) {
+      baseFilter = baseFilter.eq('packet_type', packetType)
+    }
 
     let query = baseFilter
     if (statusFilter && ['draft', 'ready_for_signatures', 'final', 'complete', 'superseded'].includes(statusFilter)) {
