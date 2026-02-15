@@ -48,9 +48,8 @@ const truncateMetadata = (metadata: Record<string, unknown> | undefined) => {
 };
 
 // Helper to determine category from event name
-// Maps to DB-allowed categories: 'governance', 'operations', 'access'
-// The constraint only allows these three values, so we normalize all internal categories to these
-function getCategoryFromEventName(eventName: string): 'governance' | 'operations' | 'access' {
+// Maps to DB-allowed categories: governance, operations, access, review_queue, incident_review, attestations, system, access_review
+function getCategoryFromEventName(eventName: string): 'governance' | 'operations' | 'access' | 'review_queue' | 'incident_review' | 'attestations' | 'system' | 'access_review' {
   // Governance enforcement events (policy violations, auth blocks)
   if (eventName.includes('auth.') || eventName.includes('violation') || eventName.includes('policy.')) {
     return 'governance'

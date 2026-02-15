@@ -1169,7 +1169,7 @@ export const auditApi = {
   },
 
   getEvents: async (params?: {
-    category?: 'governance' | 'operations' | 'access'
+    category?: 'governance' | 'operations' | 'access' | 'review_queue' | 'incident_review' | 'attestations' | 'system' | 'access_review'
     site_id?: string
     job_id?: string
     actor_id?: string
@@ -1217,7 +1217,7 @@ export const auditApi = {
   },
   export: async (params: {
     format: 'pdf' | 'csv' | 'json'
-    category?: 'governance' | 'operations' | 'access'
+    category?: 'governance' | 'operations' | 'access' | 'review_queue' | 'incident_review' | 'attestations' | 'system' | 'access_review'
     site_id?: string
     job_id?: string
     actor_id?: string

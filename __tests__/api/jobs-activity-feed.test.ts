@@ -106,5 +106,32 @@ describe('Job activity feed: metadata.job_id and realtime', () => {
       expect(source).toContain('target_type.eq.job')
       expect(source).toContain('target_id.eq.')
     })
+
+    it('accepts all API-supported audit log categories including review_queue and incident_review', () => {
+      const routePath = path.join(
+        process.cwd(),
+        'app',
+        'api',
+        'jobs',
+        '[id]',
+        'activity',
+        'route.ts'
+      )
+      const source = fs.readFileSync(routePath, 'utf-8')
+      const validCategories = [
+        'governance',
+        'operations',
+        'access',
+        'review_queue',
+        'incident_review',
+        'attestations',
+        'system',
+        'access_review',
+      ]
+      validCategories.forEach((cat) => {
+        expect(source).toContain(`'${cat}'`)
+      })
+      expect(source).toContain('VALID_CATEGORIES')
+    })
   })
 })

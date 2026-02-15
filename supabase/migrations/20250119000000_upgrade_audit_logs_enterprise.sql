@@ -3,7 +3,7 @@
 
 -- Add new standardized fields
 ALTER TABLE audit_logs
-  ADD COLUMN IF NOT EXISTS category TEXT CHECK (category IN ('governance', 'operations', 'access')),
+  ADD COLUMN IF NOT EXISTS category TEXT CHECK (category IN ('governance', 'operations', 'access', 'review_queue', 'incident_review', 'attestations', 'system', 'access_review')),
   ADD COLUMN IF NOT EXISTS action TEXT,
   ADD COLUMN IF NOT EXISTS outcome TEXT CHECK (outcome IN ('allowed', 'blocked')),
   ADD COLUMN IF NOT EXISTS severity TEXT CHECK (severity IN ('info', 'material', 'critical')),
@@ -178,7 +178,7 @@ CREATE POLICY "Users can view audit logs from their organization"
 
 -- Add comments for documentation
 COMMENT ON TABLE audit_logs IS 'Immutable audit trail with tamper-evident hash chain. All events are append-only.';
-COMMENT ON COLUMN audit_logs.category IS 'Event category: governance (enforcement), operations (job actions), access (security/team)';
+COMMENT ON COLUMN audit_logs.category IS 'Event category: governance, operations, access, review_queue, incident_review, attestations, system, access_review';
 COMMENT ON COLUMN audit_logs.outcome IS 'Action outcome: allowed or blocked';
 COMMENT ON COLUMN audit_logs.severity IS 'Event severity: info, material, critical';
 COMMENT ON COLUMN audit_logs.hash IS 'SHA256 hash of event + previous hash for tamper detection';
