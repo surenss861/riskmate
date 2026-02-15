@@ -297,6 +297,8 @@ export function JobActivityFeed({
     })
   }, [])
 
+  const filteredEvents = filterEventsByType(events, filter).filter((e) => eventMatchesDateRange(e, startDate, endDate))
+
   useEffect(() => {
     if (!enableRealtime || !subscribeContext) {
       setRealtimeStatus('idle')
@@ -445,7 +447,6 @@ export function JobActivityFeed({
       : endDate
         ? `Until ${format(new Date(endDate), 'MMM d, yyyy')}`
         : 'Date Range'
-  const filteredEvents = filterEventsByType(events, filter).filter((e) => eventMatchesDateRange(e, startDate, endDate))
 
   if (loading && events.length === 0) {
     return (
