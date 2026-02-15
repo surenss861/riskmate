@@ -329,8 +329,8 @@ final class SyncEngine: ObservableObject {
     /// Fetch incremental changes from server (jobs + hazards/controls)
     private func fetchChanges(since: Date) async throws -> [Job] {
         let result = try await APIClient.shared.getSyncChanges(since: since)
-        if !result.jobs.isEmpty {
-            OfflineCache.shared.cacheJobs(result.jobs)
+        if !result.jobs.isEmpty || !result.deletedJobIds.isEmpty {
+            OfflineCache.shared.mergeCachedJobs(synced: result.jobs, deletedIds: result.deletedJobIds)
         }
         if !result.mitigationItems.isEmpty || !result.deletedMitigationIds.isEmpty {
             let byJob = Dictionary(grouping: result.mitigationItems, by: { $0.jobId })

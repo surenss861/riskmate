@@ -652,17 +652,21 @@ class APIClient {
         let encoded = sinceStr.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? sinceStr
         let limit = 500
         var allJobs: [Job] = []
+        var allDeletedJobIds: Set<String> = []
         var allMitigation: [SyncMitigationItem] = []
+        var allDeletedMitigationIds: Set<String> = []
         var offset = 0
         repeat {
             let url = "/api/sync/changes?since=\(encoded)&limit=\(limit)&offset=\(offset)&entity=jobs"
             let response: SyncChangesResponse = try await request(endpoint: url)
             allJobs.append(contentsOf: response.data)
+            if let ids = response.deletedJobIds {
+                allDeletedJobIds.formUnion(ids)
+            }
             guard let pag = response.pagination, pag.hasMore, let next = pag.nextOffset else { break }
             offset = next
         } while true
         offset = 0
-        var allDeletedIds: Set<String> = []
         repeat {
             let url = "/api/sync/changes?since=\(encoded)&limit=\(limit)&offset=\(offset)&entity=mitigation_items"
             let response: SyncChangesResponse = try await request(endpoint: url)
@@ -670,12 +674,12 @@ class APIClient {
                 allMitigation.append(contentsOf: items)
             }
             if let ids = response.deletedMitigationIds {
-                allDeletedIds.formUnion(ids)
+                allDeletedMitigationIds.formUnion(ids)
             }
             guard let pag = response.pagination, pag.hasMore, let next = pag.nextOffset else { break }
             offset = next
         } while true
-        return SyncChangesResult(jobs: allJobs, mitigationItems: allMitigation, deletedMitigationIds: allDeletedIds)
+        return SyncChangesResult(jobs: allJobs, mitigationItems: allMitigation, deletedMitigationIds: allDeletedMitigationIds, deletedJobIds: allDeletedJobIds)
     }
 
     /// POST /api/sync/resolve-conflict - Submit conflict resolution
@@ -1538,12 +1542,14 @@ struct SyncChangesResponse: Codable {
     let data: [Job]
     let mitigationItems: [SyncMitigationItem]?
     let deletedMitigationIds: [String]?
+    let deletedJobIds: [String]?
     let pagination: SyncChangesPagination?
 
     enum CodingKeys: String, CodingKey {
         case data
         case mitigationItems = "mitigation_items"
         case deletedMitigationIds = "deleted_mitigation_ids"
+        case deletedJobIds = "deleted_job_ids"
         case pagination
     }
 }
@@ -1641,6 +1647,8 @@ struct SyncChangesResult {
     let mitigationItems: [SyncMitigationItem]
     /// IDs of hazards/controls deleted on server since last sync; offline cache should drop these
     let deletedMitigationIds: Set<String>
+    /// IDs of jobs deleted on server since last sync; offline cache should drop these
+    let deletedJobIds: Set<String>
 }
 
 struct SyncChangesPagination: Codable {

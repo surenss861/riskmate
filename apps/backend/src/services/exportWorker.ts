@@ -725,7 +725,7 @@ async function getFailureReason(exportJob: any, err: any): Promise<string> {
         const missing = evidenceRequired - actual
         return `Missing ${missing} evidence item${missing === 1 ? '' : 's'}. Upload photos before generating proof pack.`
       }
-      const hazardsCount = await countHazards(jobId)
+      const hazardsCount = await countHazards(organization_id, jobId)
       if (hazardsCount === 0) {
         return 'No hazards configured. Add hazards in web app before generating report.'
       }
@@ -761,12 +761,14 @@ async function countEvidence(orgId: string, workRecordId: string): Promise<numbe
   return count ?? 0
 }
 
-async function countHazards(jobId: string): Promise<number> {
+async function countHazards(organizationId: string, jobId: string): Promise<number> {
   try {
     const { count } = await supabase
-      .from('hazards')
+      .from('mitigation_items')
       .select('*', { count: 'exact', head: true })
       .eq('job_id', jobId)
+      .eq('organization_id', organizationId)
+      .is('hazard_id', null)
     return count ?? 0
   } catch {
     return 0

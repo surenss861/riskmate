@@ -565,7 +565,37 @@ syncRouter.post(
                 results.push(baseResult);
                 break;
               }
-              // Record deletion for offline sync tombstones
+              // Cascade: fetch and delete all controls for this hazard, with tombstones, before deleting the hazard
+              const { data: controls } = await supabase
+                .from("mitigation_items")
+                .select("id")
+                .eq("job_id", jobId)
+                .eq("hazard_id", mitigationId)
+                .eq("organization_id", organization_id);
+              const controlIds = (controls || []).map((c: { id: string }) => c.id);
+              for (const controlId of controlIds) {
+                await supabase.from("sync_mitigation_deletions").insert({
+                  mitigation_item_id: controlId,
+                  job_id: jobId,
+                  hazard_id: mitigationId,
+                  organization_id: organization_id,
+                });
+              }
+              if (controlIds.length > 0) {
+                const { error: controlsDeleteErr } = await supabase
+                  .from("mitigation_items")
+                  .delete()
+                  .eq("job_id", jobId)
+                  .eq("hazard_id", mitigationId)
+                  .eq("organization_id", organization_id);
+                if (controlsDeleteErr) {
+                  baseResult.status = "error";
+                  baseResult.error = controlsDeleteErr.message;
+                  results.push(baseResult);
+                  break;
+                }
+              }
+              // Record hazard deletion for offline sync tombstones
               await supabase.from("sync_mitigation_deletions").insert({
                 mitigation_item_id: mitigationId,
                 job_id: jobId,
@@ -707,6 +737,7 @@ syncRouter.get(
       let jobs: any[] = [];
       let mitigationItems: any[] = [];
 
+      let deletedJobIds: string[] = [];
       if (fetchJobs) {
         const { data, error } = await supabase
           .from("jobs")
@@ -718,6 +749,15 @@ syncRouter.get(
           .range(offset, offset + limit - 1);
         if (error) throw error;
         jobs = data || [];
+
+        // Tombstones: jobs deleted since sync timestamp so offline clients can purge them
+        const { data: deletedJobs } = await supabase
+          .from("jobs")
+          .select("id")
+          .eq("organization_id", organization_id)
+          .not("deleted_at", "is", null)
+          .gte("deleted_at", since.toISOString());
+        deletedJobIds = (deletedJobs || []).map((d: { id: string }) => d.id);
       }
 
       let deletedMitigationIds: string[] = [];
@@ -800,6 +840,7 @@ syncRouter.get(
         data: normalizedJobs,
         mitigation_items: normalizedMitigation,
         deleted_mitigation_ids: deletedMitigationIds,
+        deleted_job_ids: deletedJobIds,
         pagination: {
           limit,
           offset,

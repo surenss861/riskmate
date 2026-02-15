@@ -72,6 +72,19 @@ class OfflineCache: ObservableObject {
             try? data.write(to: fileURL)
         }
     }
+
+    /// Merge synced jobs into cache, removing deleted job IDs (tombstones from server).
+    func mergeCachedJobs(synced: [Job], deletedIds: Set<String> = []) {
+        var current = getCachedJobs() ?? []
+        if !deletedIds.isEmpty {
+            current.removeAll { deletedIds.contains($0.id) }
+        }
+        for job in synced {
+            current.removeAll { $0.id == job.id }
+            current.append(job)
+        }
+        cacheJobs(current)
+    }
     
     func getCachedJobs() -> [Job]? {
         let fileURL = cacheDirectory.appendingPathComponent("jobs.json")
