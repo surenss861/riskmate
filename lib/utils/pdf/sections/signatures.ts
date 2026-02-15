@@ -101,15 +101,16 @@ export function renderSignaturesAndCompliance(
 
   const count = slots.length;
   let currentPageStartY = sigBoxY;
-  let rowOnCurrentPage = 0;
+  let pageItemIndex = 0;
 
   for (let i = 0; i < count; i++) {
     const slot = slots[i];
     const sig = 'placeholder' in slot ? undefined : slot;
-    const col = i % 2;
+    const col = pageItemIndex % 2;
+    const row = Math.floor(pageItemIndex / 2);
     const sigValidation = sig?.signature_svg ? validateSignatureSvg(sig.signature_svg) : null;
 
-    const sigY = currentPageStartY + rowOnCurrentPage * (sigBoxHeight + sigSpacing);
+    const sigY = currentPageStartY + row * (sigBoxHeight + sigSpacing);
     const sigX = margin + col * (sigBoxWidth + sigSpacing);
 
     const drawBox = (x: number, y: number) => {
@@ -220,28 +221,22 @@ export function renderSignaturesAndCompliance(
       }
     };
 
-    let didPageBreak = false;
     if (sigY + sigBoxHeight > pageHeight - 200) {
       addPage();
       currentPageStartY = STYLES.spacing.sectionTop + 40;
-      rowOnCurrentPage = 0;
-      const colForNewPage = 0;
-      const newSigY = currentPageStartY;
-      const newSigX = margin + colForNewPage * (sigBoxWidth + sigSpacing);
+      pageItemIndex = 0;
+      const newCol = 0;
+      const newRow = 0;
+      const newSigY = currentPageStartY + newRow * (sigBoxHeight + sigSpacing);
+      const newSigX = margin + newCol * (sigBoxWidth + sigSpacing);
       drawBox(newSigX, newSigY);
       doc.y = newSigY + sigBoxHeight;
-      didPageBreak = true;
-      if (col === 1) {
-        rowOnCurrentPage++;
-      }
     } else {
       drawBox(sigX, sigY);
       doc.y = sigY + sigBoxHeight;
     }
 
-    if (col === 1 && !didPageBreak) {
-      rowOnCurrentPage++;
-    }
+    pageItemIndex++;
   }
 
   doc.y = doc.y + 30;
