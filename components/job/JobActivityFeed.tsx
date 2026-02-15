@@ -297,9 +297,9 @@ export function JobActivityFeed({
         setRealtimeStatus(nextStatus)
         prevRealtimeStatusRef.current = nextStatus
 
-        // Toast and auto-retry when disconnected (channel closed/error)
-        if (nextStatus === 'error' && wasConnected) {
-          toast.error('Live updates disconnected. Reconnecting…')
+        // Always auto-retry on error status so initial connection failures recover
+        if (nextStatus === 'error') {
+          if (wasConnected) toast.error('Live updates disconnected. Reconnecting…')
           if (retryTimerRef.current) clearTimeout(retryTimerRef.current)
           retryTimerRef.current = setTimeout(() => {
             retryTimerRef.current = null
