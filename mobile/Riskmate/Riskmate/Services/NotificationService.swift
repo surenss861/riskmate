@@ -91,17 +91,33 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
     // MARK: - Notification tap (deep link)
 
     /// Handle user tapping a notification. Parse payload and route via DeepLinkRouter.
-    /// Supports Expo payload structure (deepLink inside userInfo["data"]) and top-level deepLink.
-    /// Marks notifications as read and refreshes badge when user engages with the notification.
+    /// Supports Expo payload structure (deepLink and id inside userInfo["data"]) and top-level deepLink.
+    /// Marks only the tapped notification as read (using data.id); then refreshes badge and routes.
     func handleNotificationTap(_ notification: UNNotification) async {
-        await markAsReadAndRefreshBadge()
         let userInfo = notification.request.content.userInfo
+        var notificationId: String?
         var deepLinkString: String?
-        if let data = userInfo["data"] as? [AnyHashable: Any],
-           let link = data["deepLink"] as? String {
+        if let data = userInfo["data"] as? [AnyHashable: Any] {
+            notificationId = data["id"] as? String
+            deepLinkString = data["deepLink"] as? String
+        }
+        if deepLinkString == nil, let link = userInfo["deepLink"] as? String {
             deepLinkString = link
-        } else if let link = userInfo["deepLink"] as? String {
-            deepLinkString = link
+        }
+        if let id = notificationId {
+            do {
+                try await APIClient.shared.markNotificationsAsRead(ids: [id])
+            } catch {
+                // Non-fatal: e.g. network or not authenticated
+            }
+            do {
+                let count = try await APIClient.shared.getUnreadNotificationCount()
+                await MainActor.run {
+                    setBadgeCount(count)
+                }
+            } catch {
+                clearBadge()
+            }
         }
         if let deepLink = deepLinkString,
            let url = URL(string: deepLink) {

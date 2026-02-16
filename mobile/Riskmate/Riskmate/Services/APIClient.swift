@@ -790,13 +790,14 @@ class APIClient {
         )
     }
 
-    /// Notification item from GET /api/notifications.
+    /// Notification item from GET /api/notifications. deepLink is used for navigation on row tap.
     struct NotificationItem: Decodable {
         let id: String
         let type: String
         let content: String
         let is_read: Bool
         let created_at: String
+        let deepLink: String?
     }
 
     /// List notifications (GET /api/notifications). Supports pagination via limit and offset.

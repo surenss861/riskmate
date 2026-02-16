@@ -227,35 +227,52 @@ export async function getUnreadNotificationCount(userId: string): Promise<number
   return typeof count === "number" ? count : 0;
 }
 
-/** Create a notification record so unread count and badge stay in sync. */
+/** Create a notification record so unread count and badge stay in sync. Returns the new notification id for push payload (data.id). */
 export async function createNotificationRecord(
   userId: string,
   type: string,
-  content: string
-): Promise<void> {
-  const { error } = await supabase.from("notifications").insert({
-    user_id: userId,
-    type,
-    content,
-    is_read: false,
-  });
+  content: string,
+  deepLink?: string | null
+): Promise<string | null> {
+  const { data: inserted, error } = await supabase
+    .from("notifications")
+    .insert({
+      user_id: userId,
+      type,
+      content,
+      is_read: false,
+      ...(deepLink != null && deepLink !== "" && { deep_link: deepLink }),
+    })
+    .select("id")
+    .single();
 
   if (error) {
     console.error("Failed to create notification record:", error);
+    return null;
   }
+  return inserted?.id ?? null;
 }
 
-/** List notifications for a user with pagination (newest first). */
+/** List notifications for a user with pagination (newest first). Includes deepLink for navigation. */
 export async function listNotifications(
   userId: string,
   options: { limit?: number; offset?: number } = {}
-): Promise<{ data: Array<{ id: string; type: string; content: string; is_read: boolean; created_at: string }> }> {
+): Promise<{
+  data: Array<{
+    id: string;
+    type: string;
+    content: string;
+    is_read: boolean;
+    created_at: string;
+    deepLink?: string | null;
+  }>;
+}> {
   const limit = Math.min(Math.max(options.limit ?? 50, 1), 100);
   const offset = Math.max(options.offset ?? 0, 0);
 
   const { data, error } = await supabase
     .from("notifications")
-    .select("id, type, content, is_read, created_at")
+    .select("id, type, content, is_read, created_at, deep_link")
     .eq("user_id", userId)
     .order("created_at", { ascending: false })
     .range(offset, offset + limit - 1);
@@ -271,6 +288,7 @@ export async function listNotifications(
       content: row.content,
       is_read: !!row.is_read,
       created_at: row.created_at,
+      deepLink: row.deep_link ?? null,
     })),
   };
 }
@@ -557,9 +575,22 @@ async function sendToUser(userId: string, payload: PushPayload) {
   // Always create notification record and update badge so Notification Center and badges stay in sync.
   const notificationType =
     typeof payload.data?.type === "string" ? (payload.data.type as string) : "push";
-  await createNotificationRecord(userId, notificationType, payload.body);
+  const deepLink =
+    typeof payload.data?.deepLink === "string" ? (payload.data.deepLink as string) : undefined;
+  const notificationId = await createNotificationRecord(
+    userId,
+    notificationType,
+    payload.body,
+    deepLink
+  );
 
   const badge = await getUnreadNotificationCount(userId);
+
+  // Include notification id in push payload so tap marks only this one as read; include deepLink for routing.
+  const pushData = {
+    ...payload.data,
+    ...(notificationId && { id: notificationId }),
+  };
 
   // Gate only push delivery (Expo/APNs) on push_enabled; in-app history is always recorded.
   if (prefs.push_enabled) {
@@ -568,7 +599,7 @@ async function sendToUser(userId: string, payload: PushPayload) {
       await sendPush(tokens, {
         title: payload.title,
         body: payload.body,
-        data: payload.data,
+        data: pushData,
         sound: "default",
         channelId: payload.categoryId ?? "riskmate-alerts",
         badge,

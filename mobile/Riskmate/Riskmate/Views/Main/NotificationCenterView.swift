@@ -84,7 +84,7 @@ struct NotificationCenterView: View {
                 ForEach(items, id: \.id) { item in
                     NotificationRow(
                         item: item,
-                        onTap: { Task { await markAsReadAndRefreshBadge(ids: [item.id]) } }
+                        onTap: { Task { await handleRowTap(item) } }
                     )
                 }
                 if hasMore && !items.isEmpty {
@@ -134,6 +134,16 @@ struct NotificationCenterView: View {
         await load(offset: items.count)
     }
 
+    /// On row tap: navigate via deep link if present, then mark this notification read and refresh badge.
+    private func handleRowTap(_ item: APIClient.NotificationItem) async {
+        if let link = item.deepLink, !link.isEmpty, let url = URL(string: link) {
+            await MainActor.run {
+                DeepLinkRouter.shared.handle(url)
+            }
+        }
+        await markAsReadAndRefreshBadge(ids: [item.id])
+    }
+
     private func markAsReadAndRefreshBadge(ids: [String]) async {
         do {
             try await APIClient.shared.markNotificationsAsRead(ids: ids)
@@ -149,7 +159,8 @@ struct NotificationCenterView: View {
                         type: $0.type,
                         content: $0.content,
                         is_read: true,
-                        created_at: $0.created_at
+                        created_at: $0.created_at,
+                        deepLink: $0.deepLink
                     )
                 } else {
                     $0
@@ -181,7 +192,8 @@ struct NotificationCenterView: View {
                     type: $0.type,
                     content: $0.content,
                     is_read: true,
-                    created_at: $0.created_at
+                    created_at: $0.created_at,
+                    deepLink: $0.deepLink
                 )
             }
         }
