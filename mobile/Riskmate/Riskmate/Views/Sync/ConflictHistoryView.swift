@@ -87,8 +87,7 @@ struct ConflictHistoryView: View {
                             if outcome.strategy == .localWins || outcome.strategy == .merge {
                                 if let op = op {
                                     guard let dict = try? JSONSerialization.jsonObject(with: op.data) as? [String: Any] else {
-                                        ToastCenter.shared.show("Cannot resolve: invalid operation data", systemImage: "exclamationmark.triangle", style: .error)
-                                        return
+                                        throw NSError(domain: "ConflictResolution", code: 1, userInfo: [NSLocalizedDescriptionKey: "Cannot resolve: invalid operation data"])
                                     }
                                     resolvedValue = dict
                                     if let perField = outcome.perFieldResolvedValues, !perField.isEmpty {
@@ -103,22 +102,19 @@ struct ConflictHistoryView: View {
                                     let et = conflict.entityType
                                     let eid = conflict.entityId
                                     guard !et.isEmpty, !eid.isEmpty else {
-                                        ToastCenter.shared.show("Cannot resolve: missing entity info", systemImage: "exclamationmark.triangle", style: .error)
-                                        return
+                                        throw NSError(domain: "ConflictResolution", code: 2, userInfo: [NSLocalizedDescriptionKey: "Cannot resolve: missing entity info"])
                                     }
                                     resolvedValue = syncEngine.getLocalPayloadForConflict(entityType: et, entityId: eid)
                                     entityType = et
                                     entityId = eid
                                     operationType = operationTypeFromEntityType(et)
                                     if resolvedValue == nil {
-                                        ToastCenter.shared.show("Cannot resolve: local data no longer available", systemImage: "exclamationmark.triangle", style: .error)
-                                        return
+                                        throw NSError(domain: "ConflictResolution", code: 3, userInfo: [NSLocalizedDescriptionKey: "Cannot resolve: local data no longer available"])
                                     }
                                 }
 
                                 guard resolvedValue != nil, entityType != nil, entityId != nil else {
-                                    ToastCenter.shared.show("Cannot resolve: missing required data", systemImage: "exclamationmark.triangle", style: .error)
-                                    return
+                                    throw NSError(domain: "ConflictResolution", code: 4, userInfo: [NSLocalizedDescriptionKey: "Cannot resolve: missing required data"])
                                 }
                             }
 

@@ -247,25 +247,42 @@ struct SyncQueueView: View {
                         conflict: conflict,
                         entityLabel: entityLabel(for: conflict),
                         onResolve: { outcome in
-                            let op = syncEngine.pendingOperations.first { $0.id == conflict.id }
+                            var op = syncEngine.pendingOperations.first { $0.id == conflict.id }
+                            if op == nil {
+                                op = OfflineDatabase.shared.getSyncQueue().first { $0.id == conflict.id }
+                            }
                             var resolvedValue: [String: Any]?
-                            var entityType: String?
-                            var entityId: String?
+                            var entityType: String? = conflict.entityType
+                            var entityId: String? = conflict.entityId
                             var operationType: String?
-                            entityType = conflict.entityType
-                            entityId = conflict.entityId
-                            if outcome.strategy == .localWins || outcome.strategy == .merge, let op = op {
-                                if let dict = try? JSONSerialization.jsonObject(with: op.data) as? [String: Any] {
-                                    resolvedValue = dict
-                                    if let perField = outcome.perFieldResolvedValues, !perField.isEmpty {
-                                        var merged = dict
-                                        for (k, v) in perField { merged[k] = v }
-                                        resolvedValue = merged
+                            if outcome.strategy == .localWins || outcome.strategy == .merge {
+                                if let op = op {
+                                    if let dict = try? JSONSerialization.jsonObject(with: op.data) as? [String: Any] {
+                                        resolvedValue = dict
+                                        if let perField = outcome.perFieldResolvedValues, !perField.isEmpty {
+                                            var merged = dict
+                                            for (k, v) in perField { merged[k] = v }
+                                            resolvedValue = merged
+                                        }
                                     }
+                                    entityType = entityType ?? entityTypeFromOperation(op.type)
+                                    entityId = entityId ?? op.entityId
+                                    operationType = op.type.apiTypeString
+                                } else {
+                                    // Queued op not found: reconstruct local payload from storage
+                                    let et = conflict.entityType
+                                    let eid = conflict.entityId
+                                    guard !et.isEmpty, !eid.isEmpty else {
+                                        throw NSError(domain: "ConflictResolution", code: 1, userInfo: [NSLocalizedDescriptionKey: "Cannot resolve: missing entity info"])
+                                    }
+                                    resolvedValue = syncEngine.getLocalPayloadForConflict(entityType: et, entityId: eid)
+                                    entityType = et
+                                    entityId = eid
+                                    operationType = operationTypeFromEntityType(et)
                                 }
-                                entityType = entityType ?? entityTypeFromOperation(op.type)
-                                entityId = entityId ?? op.entityId
-                                operationType = op.type.apiTypeString
+                                guard resolvedValue != nil, entityType != nil, entityId != nil else {
+                                    throw NSError(domain: "ConflictResolution", code: 2, userInfo: [NSLocalizedDescriptionKey: "Cannot resolve: payload or required metadata missing"])
+                                }
                             }
                             try await syncEngine.resolveConflict(
                                 operationId: conflict.id,
@@ -306,6 +323,15 @@ struct SyncQueueView: View {
         case .createJob, .updateJob, .deleteJob: return "job"
         case .createHazard, .updateHazard, .deleteHazard: return "hazard"
         case .createControl, .updateControl, .deleteControl: return "control"
+        }
+    }
+
+    private func operationTypeFromEntityType(_ entityType: String) -> String {
+        switch entityType {
+        case "job": return "update_job"
+        case "hazard": return "update_hazard"
+        case "control": return "update_control"
+        default: return "update_job"
         }
     }
 }
