@@ -3,7 +3,7 @@ import { supabase } from "../lib/supabaseClient";
 import { authenticate, AuthenticatedRequest } from "../middleware/auth";
 import { recordAuditLog, extractClientMetadata } from "../middleware/audit";
 import { calculateRiskScore, generateMitigationItems } from "../utils/riskScoring";
-import { notifyHighRiskJob, sendHazardAddedNotification, sendJobAssignedNotification } from "../services/notifications";
+import { notifyHighRiskJob, sendHazardAddedNotification, sendJobAssignedNotification, sendMentionNotification } from "../services/notifications";
 import { buildJobReport } from "../utils/jobReport";
 import { enforceJobLimit, requireFeature } from "../middleware/limits";
 import { RequestWithId } from "../middleware/requestId";
@@ -2922,6 +2922,40 @@ jobsRouter.post("/:id/signoffs", authenticate, requireWriteAccess, async (req: e
         signer_role: signerRole,
       },
     });
+
+    // Trigger mention notifications when comments contain @mentions
+    if (comments && typeof comments === "string" && comments.trim().length > 0) {
+      const mentionMatches = [...comments.matchAll(/@(\S+)/g)];
+      const handles = [...new Set(mentionMatches.map((m) => m[1].trim().toLowerCase()))];
+      if (handles.length > 0) {
+        const { data: memberRows } = await supabase
+          .from("organization_members")
+          .select("user_id")
+          .eq("organization_id", organization_id);
+        const userIds = (memberRows || []).map((r) => r.user_id).filter((id) => id !== userId);
+        if (userIds.length > 0) {
+          const { data: usersData } = await supabase
+            .from("users")
+            .select("id, email, full_name")
+            .in("id", userIds);
+          const resolved = new Set<string>();
+          for (const u of usersData || []) {
+            const email = (u.email || "").toLowerCase();
+            const name = (u.full_name || "").toLowerCase();
+            const matched = handles.some(
+              (h) => email === h || name.includes(h) || name.split(/\s+/).some((p: string) => p === h)
+            );
+            if (matched) resolved.add(u.id);
+          }
+          const signoffContext = "Mentioned in a sign-off comment.";
+          for (const mentionedUserId of resolved) {
+            sendMentionNotification(mentionedUserId, data.id, signoffContext).catch((err) =>
+              console.error("Mention notification failed:", err)
+            );
+          }
+        }
+      }
+    }
 
     res.json({ data });
   } catch (err: any) {

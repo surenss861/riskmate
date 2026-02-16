@@ -17,6 +17,7 @@ struct ContentView: View {
     @State private var showJobFromDeepLink = false
     @State private var deepLinkJobId: String?
     @State private var deepLinkJobTab: JobDetailTab?
+    @State private var deepLinkHazardId: String?
     @State private var showReportFromDeepLink = false
     @State private var deepLinkReportRunId: String?
     
@@ -110,6 +111,7 @@ struct ContentView: View {
             guard let jobId = new else { return }
             deepLinkJobId = jobId
             deepLinkJobTab = deepLinkRouter.pendingJobTab.flatMap(JobDetailTab.init(rawValue:))
+            deepLinkHazardId = deepLinkRouter.pendingHazardId
             showJobFromDeepLink = true
         }
         .onChange(of: deepLinkRouter.pendingReportRunId) { _, new in
@@ -141,11 +143,12 @@ struct ContentView: View {
             deepLinkRouter.clearPending()
             deepLinkJobId = nil
             deepLinkJobTab = nil
+            deepLinkHazardId = nil
             showJobFromDeepLink = false
         }) {
             Group {
                 if let jobId = deepLinkJobId {
-                    JobDetailView(jobId: jobId, initialTab: deepLinkJobTab)
+                    JobDetailView(jobId: jobId, initialTab: deepLinkJobTab, initialHazardId: deepLinkHazardId)
                         .environmentObject(quickAction)
                 } else {
                     EmptyView()

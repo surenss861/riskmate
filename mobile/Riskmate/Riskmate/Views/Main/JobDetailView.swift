@@ -7,6 +7,8 @@ struct JobDetailView: View {
     let jobId: String
     /// When set (e.g. from deep link), select this tab when the view appears.
     var initialTab: JobDetailTab? = nil
+    /// When set (e.g. from riskmate://jobs/{id}/hazards/{hazardId}), scroll/focus this hazard when the hazards tab is shown.
+    var initialHazardId: String? = nil
     @State private var selectedTab: JobDetailTab = .overview
     @State private var job: Job?
     @State private var isLoading = true
@@ -273,7 +275,7 @@ struct JobDetailView: View {
             case .overview:
                 OverviewTab(job: job, showManagedOnWebCard: hazardsCount == 0 && controlsCount == 0, onRefresh: { await refreshJobDetail() })
             case .hazards:
-                HazardsTab(jobId: jobId, onRefresh: { await refreshJobDetail() })
+                HazardsTab(jobId: jobId, initialHazardId: initialHazardId, onRefresh: { await refreshJobDetail() })
             case .controls:
                 ControlsTab(jobId: jobId, onRefresh: { await refreshJobDetail() })
             case .activity:
@@ -900,11 +902,14 @@ struct BlockersCard: View {
 
 struct HazardsTab: View {
     let jobId: String
+    /// When set (e.g. from deep link), scroll to and focus this hazard once hazards are loaded.
+    var initialHazardId: String? = nil
     var onRefresh: (() async -> Void)? = nil
     @State private var hazards: [Hazard] = []
     @State private var isLoading = true
     @State private var didLoad = false
     @State private var showAddHazardSheet = false
+    @State private var didScrollToInitialHazard = false
     @EnvironmentObject private var quickAction: QuickActionRouter
     
     private var pendingHazardIds: Set<String> {
@@ -914,70 +919,83 @@ struct HazardsTab: View {
     }
     
     var body: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(spacing: RMTheme.Spacing.sectionSpacing) {
-                if !EntitlementsManager.shared.isAuditor() {
-                    HStack {
-                        Text("Hazards")
-                            .rmSectionHeader()
-                        Spacer()
-                        Button {
-                            Haptics.tap()
-                            showAddHazardSheet = true
-                        } label: {
-                            Label("Add Hazard", systemImage: "plus.circle.fill")
-                                .font(RMTheme.Typography.bodySmallBold)
-                                .foregroundColor(RMTheme.Colors.accent)
+        ScrollViewReader { proxy in
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: RMTheme.Spacing.sectionSpacing) {
+                    if !EntitlementsManager.shared.isAuditor() {
+                        HStack {
+                            Text("Hazards")
+                                .rmSectionHeader()
+                            Spacer()
+                            Button {
+                                Haptics.tap()
+                                showAddHazardSheet = true
+                            } label: {
+                                Label("Add Hazard", systemImage: "plus.circle.fill")
+                                    .font(RMTheme.Typography.bodySmallBold)
+                                    .foregroundColor(RMTheme.Colors.accent)
+                            }
                         }
+                        .padding(.horizontal, RMTheme.Spacing.pagePadding)
                     }
-                    .padding(.horizontal, RMTheme.Spacing.pagePadding)
-                }
-                
-                if hazards.isEmpty {
-                    VStack(spacing: RMTheme.Spacing.md) {
-                        RMEmptyState(
-                            icon: "exclamationmark.triangle",
-                            title: "No Hazards",
-                            message: "Add a hazard or configure on the web."
-                        )
-                        HStack(spacing: RMTheme.Spacing.lg) {
-                            if !EntitlementsManager.shared.isAuditor() {
+                    
+                    if hazards.isEmpty {
+                        VStack(spacing: RMTheme.Spacing.md) {
+                            RMEmptyState(
+                                icon: "exclamationmark.triangle",
+                                title: "No Hazards",
+                                message: "Add a hazard or configure on the web."
+                            )
+                            HStack(spacing: RMTheme.Spacing.lg) {
+                                if !EntitlementsManager.shared.isAuditor() {
+                                    Button {
+                                        Haptics.tap()
+                                        showAddHazardSheet = true
+                                    } label: {
+                                        Label("Add Hazard", systemImage: "plus.circle.fill")
+                                            .font(RMTheme.Typography.bodySmallBold)
+                                            .foregroundColor(RMTheme.Colors.accent)
+                                    }
+                                }
                                 Button {
                                     Haptics.tap()
-                                    showAddHazardSheet = true
+                                    quickAction.requestSwitchToWorkRecords(filter: nil)
                                 } label: {
-                                    Label("Add Hazard", systemImage: "plus.circle.fill")
+                                    Label("View Work Records", systemImage: "doc.text.fill")
+                                        .font(RMTheme.Typography.bodySmallBold)
+                                        .foregroundColor(RMTheme.Colors.accent)
+                                }
+                                Button {
+                                    Haptics.tap()
+                                    WebAppURL.openWebApp(jobId: jobId)
+                                } label: {
+                                    Label("Open in Web App", systemImage: "globe")
                                         .font(RMTheme.Typography.bodySmallBold)
                                         .foregroundColor(RMTheme.Colors.accent)
                                 }
                             }
-                            Button {
-                                Haptics.tap()
-                                quickAction.requestSwitchToWorkRecords(filter: nil)
-                            } label: {
-                                Label("View Work Records", systemImage: "doc.text.fill")
-                                    .font(RMTheme.Typography.bodySmallBold)
-                                    .foregroundColor(RMTheme.Colors.accent)
-                            }
-                            Button {
-                                Haptics.tap()
-                                WebAppURL.openWebApp(jobId: jobId)
-                            } label: {
-                                Label("Open in Web App", systemImage: "globe")
-                                    .font(RMTheme.Typography.bodySmallBold)
-                                    .foregroundColor(RMTheme.Colors.accent)
-                            }
+                        }
+                        .padding(.top, RMTheme.Spacing.xxl)
+                    } else {
+                        ForEach(hazards) { hazard in
+                            HazardCard(hazard: hazard, isOfflinePending: pendingHazardIds.contains(hazard.id))
+                                .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                                .id(hazard.id)
                         }
                     }
-                    .padding(.top, RMTheme.Spacing.xxl)
-                } else {
-                    ForEach(hazards) { hazard in
-                        HazardCard(hazard: hazard, isOfflinePending: pendingHazardIds.contains(hazard.id))
-                            .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                }
+                .padding(.vertical, RMTheme.Spacing.lg)
+            }
+            .onChange(of: hazards.count) { _, _ in
+                if didScrollToInitialHazard { return }
+                guard let id = initialHazardId, hazards.contains(where: { $0.id == id }) else { return }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        proxy.scrollTo(id, anchor: .center)
                     }
                 }
+                didScrollToInitialHazard = true
             }
-            .padding(.vertical, RMTheme.Spacing.lg)
         }
         .sheet(isPresented: $showAddHazardSheet) {
             AddHazardSheet(jobId: jobId) { newHazard in
