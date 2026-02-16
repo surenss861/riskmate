@@ -61,9 +61,10 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
     }
 
     /// Register device token only if user is authenticated (e.g. after token arrives at launch).
+    /// Token is always stored first so it can be registered later via registerStoredTokenIfNeeded() after session restore.
     func registerDeviceTokenIfAuthenticated(_ token: Data) async {
-        guard SessionManager.shared.isAuthenticated else { return }
         setDeviceToken(token)
+        guard SessionManager.shared.isAuthenticated else { return }
         do {
             try await registerDeviceToken(token)
         } catch {

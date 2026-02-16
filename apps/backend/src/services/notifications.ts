@@ -505,6 +505,7 @@ export async function notifyHighRiskJob(params: {
     data: {
       type: "high_risk_job",
       jobId: params.jobId,
+      deepLink: `riskmate://jobs/${params.jobId}`,
     },
     priority: "default",
   };
@@ -529,6 +530,7 @@ export async function notifyReportReady(params: {
       type: "report_ready",
       jobId: params.jobId,
       pdfUrl: params.pdfUrl,
+      deepLink: `riskmate://jobs/${params.jobId}`,
     },
     priority: "default",
   };
