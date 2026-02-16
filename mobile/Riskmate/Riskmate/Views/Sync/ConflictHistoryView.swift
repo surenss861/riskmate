@@ -110,9 +110,14 @@ struct ConflictHistoryView: View {
                                     guard !et.isEmpty, !eid.isEmpty else {
                                         throw NSError(domain: "ConflictResolution", code: 2, userInfo: [NSLocalizedDescriptionKey: "Cannot resolve: missing entity info"])
                                     }
-                                    let isDivergent = conflict.id.hasPrefix("divergent:")
-                                    if isDivergent {
-                                        // Divergent conflicts: no queued op; pass reconstructed payload and operationType nil; SyncEngine divergent branch handles it.
+                                    let isEvidenceOrPhoto = (et == "evidence" || et == "photo")
+                                    if isEvidenceOrPhoto {
+                                        resolvedValue = [:]
+                                        entityType = et
+                                        entityId = eid
+                                        operationType = nil
+                                    } else if conflict.id.hasPrefix("divergent:") {
+                                        // Divergent conflicts: pass reconstructed payload and inferred operationType so backend validation passes.
                                         var base = syncEngine.getLocalPayloadForConflict(entityType: et, entityId: eid)
                                         if outcome.strategy == .merge && (et == "hazard" || et == "control"), var localDict = base {
                                             base = SyncConflictMerge.mergeHazardControlPayload(
@@ -128,7 +133,7 @@ struct ConflictHistoryView: View {
                                         resolvedValue = base
                                         entityType = et
                                         entityId = eid
-                                        operationType = nil
+                                        operationType = inferredOperationTypeForEntityType(et)
                                         if resolvedValue == nil {
                                             throw NSError(domain: "ConflictResolution", code: 3, userInfo: [NSLocalizedDescriptionKey: "Cannot resolve: local data no longer available"])
                                         }
@@ -220,6 +225,7 @@ struct ConflictHistoryView: View {
         case "job": return "job"
         case "hazard": return "hazard"
         case "control": return "control"
+        case "evidence", "photo": return "photo"
         default: return conflict.entityType
         }
     }
@@ -232,6 +238,15 @@ struct ConflictHistoryView: View {
         }
     }
 
+    /// Infer backend operation_type for divergent conflicts so resolve-conflict validation passes.
+    private func inferredOperationTypeForEntityType(_ entityType: String) -> String? {
+        switch entityType {
+        case "job": return "update_job"
+        case "hazard": return "update_hazard"
+        case "control": return "update_control"
+        default: return nil
+        }
+    }
 }
 
 private struct ConflictHistoryRowView: View {
@@ -242,6 +257,7 @@ private struct ConflictHistoryRowView: View {
         case "job": return "Job"
         case "hazard": return "Hazard"
         case "control": return "Control"
+        case "evidence", "photo": return "Photo"
         default: return row.entityType.capitalized
         }
     }

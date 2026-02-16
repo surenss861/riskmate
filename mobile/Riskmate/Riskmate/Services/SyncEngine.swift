@@ -23,6 +23,7 @@ final class SyncEngine: ObservableObject {
     private let db = OfflineDatabase.shared
     private let maxRetries = 3
     private var queueObserver: NSObjectProtocol?
+    private var conflictHistoryObserver: NSObjectProtocol?
     private var reachabilityCancellable: AnyCancellable?
     private var wasOffline: Bool
 
@@ -35,6 +36,13 @@ final class SyncEngine: ObservableObject {
             queue: .main
         ) { [weak self] _ in
             self?.refreshPendingOperations()
+        }
+        conflictHistoryObserver = NotificationCenter.default.addObserver(
+            forName: .syncConflictHistoryDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.refreshPendingConflictsFromDB()
         }
         // Auto-sync when backend becomes reachable after being offline
         reachabilityCancellable = ServerStatusManager.shared.$isOnline
@@ -537,6 +545,31 @@ final class SyncEngine: ObservableObject {
             case .askUser:
                 return
             }
+            return
+        }
+
+        // Photo/evidence conflict (server deleted vs offline upload): backend records resolution; client applies server_wins (discard upload) or local_wins (retry).
+        if (effectiveEntityType == "evidence" || effectiveEntityType == "photo"), let eid = effectiveEntityId {
+            _ = try await APIClient.shared.resolveSyncConflict(
+                operationId: operationId,
+                strategy: strategy,
+                resolvedValue: (strategy == .localWins || strategy == .merge) ? (resolvedValue ?? [:]) : nil,
+                entityType: effectiveEntityType,
+                entityId: eid,
+                operationType: nil
+            )
+            switch strategy {
+            case .serverWins:
+                BackgroundUploadManager.shared.removeUpload(id: eid)
+            case .localWins, .merge:
+                if let upload = BackgroundUploadManager.shared.upload(id: eid) {
+                    try? await BackgroundUploadManager.shared.retryUpload(upload)
+                }
+            case .askUser:
+                break
+            }
+            db.markConflictResolved(id: operationId, resolutionStrategy: strategy.rawValue)
+            clearPendingConflict(operationId: operationId)
             return
         }
 

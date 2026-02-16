@@ -348,6 +348,18 @@ class BackgroundUploadManager: NSObject, ObservableObject {
         saveTaskMappings(mappings)
     }
     
+    /// Remove an upload by id (e.g. when user resolves evidence conflict with "Use Server Version").
+    func removeUpload(id uploadId: String) {
+        removeTaskMapping(forUploadId: uploadId)
+        uploads.removeAll { $0.id == uploadId }
+        saveUploads()
+    }
+
+    /// Get upload by id (e.g. for retry when resolving evidence conflict with "Use My Version").
+    func upload(id uploadId: String) -> UploadTask? {
+        uploads.first { $0.id == uploadId }
+    }
+
     // MARK: - State Management
     
     private func updateUploadState(_ uploadId: String, state: UploadState, progress: Double? = nil) {
@@ -436,6 +448,8 @@ extension BackgroundUploadManager: URLSessionTaskDelegate {
     nonisolated func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
         guard let uploadId = getUploadId(for: task.taskIdentifier) else { return }
         
+        let httpStatus = (task.response as? HTTPURLResponse)?.statusCode
+        
         Task { @MainActor [weak self] in
             guard let self = self else { return }
             
@@ -448,6 +462,27 @@ extension BackgroundUploadManager: URLSessionTaskDelegate {
                 self.updateUploadState(uploadId, state: .failed(errorMessage))
                 Analytics.shared.trackEvidenceUploadFailed(evidenceId: uploadId, error: errorMessage)
                 CrashReporting.shared.captureError(error)
+            } else if httpStatus == 404 || httpStatus == 410 {
+                // Server deleted job or evidence while we had an offline upload (server-deleted vs offline-upload conflict)
+                let conflictId = "evidence:\(jobId):\(uploadId)"
+                OfflineDatabase.shared.insertConflict(
+                    id: conflictId,
+                    entityType: "evidence",
+                    entityId: uploadId,
+                    field: "upload",
+                    serverVersion: "deleted",
+                    localVersion: "pending_upload",
+                    serverTimestamp: Date(),
+                    localTimestamp: upload?.createdAt ?? Date(),
+                    resolutionStrategy: nil,
+                    operationType: nil,
+                    serverActor: nil,
+                    localActor: nil,
+                    serverPayload: nil,
+                    localPayload: (try? JSONSerialization.data(withJSONObject: ["job_id": jobId])).flatMap { String(data: $0, encoding: .utf8) }
+                )
+                self.updateUploadState(uploadId, state: .failed("Job or evidence was deleted on server. Resolve in Sync → Conflicts."))
+                NotificationCenter.default.post(name: Notification.Name("SyncConflictHistoryDidChange"), object: nil)
             } else {
                 // Clean up temp file only on success; keep on failure for retry
                 if let upload = upload,

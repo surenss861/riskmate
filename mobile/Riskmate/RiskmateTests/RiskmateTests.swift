@@ -285,6 +285,28 @@ struct RiskmateTests {
         #expect(strategy == nil)
     }
 
+    /// Server-deleted vs offline-uploaded photo: conflict id format and resolve payload (entity_type evidence, no operation_type)
+    @Test func evidenceConflictIdFormatAndResolvePayload() async throws {
+        let jobId = "job-abc"
+        let evidenceId = "evidence-xyz"
+        let conflictId = "evidence:\(jobId):\(evidenceId)"
+        #expect(conflictId.hasPrefix("evidence:"))
+        #expect(conflictId.contains(jobId))
+        #expect(conflictId.contains(evidenceId))
+
+        // Resolve request for evidence: entity_type and entity_id required; operation_type omitted (backend accepts for evidence/photo)
+        let body: [String: Any] = [
+            "operation_id": conflictId,
+            "strategy": ConflictResolutionStrategy.serverWins.rawValue,
+            "entity_type": "evidence",
+            "entity_id": evidenceId,
+        ]
+        #expect(body["operation_type"] == nil)
+        #expect(body["entity_type"] as? String == "evidence")
+        #expect(body["entity_id"] as? String == evidenceId)
+        #expect(body["strategy"] as? String == "server_wins")
+    }
+
     /// Conflict modal: presents server/local values for user decision
     @Test func acceptanceConflictModalPresentsServerLocalValues() async throws {
         let conflict = SyncConflict(

@@ -927,9 +927,28 @@ syncRouter.post(
         });
       }
 
-      if ((strategy === "local_wins" || strategy === "merge") && (!entity_type || !entity_id || !operation_type)) {
+      // For server_wins or divergent conflicts, operation_type is optional. For divergent + local_wins/merge, derive from entity_type.
+      const isDivergent = typeof operation_id === "string" && operation_id.startsWith("divergent:");
+      let effectiveOperationType = operation_type;
+      if ((strategy === "local_wins" || strategy === "merge") && !effectiveOperationType && isDivergent && entity_type) {
+        effectiveOperationType =
+          entity_type === "job"
+            ? "update_job"
+            : entity_type === "hazard"
+              ? "update_hazard"
+              : entity_type === "control"
+                ? "update_control"
+                : undefined;
+      }
+      if ((strategy === "local_wins" || strategy === "merge") && (!entity_type || !entity_id)) {
         return res.status(400).json({
-          message: "entity_type, entity_id, and operation_type required when strategy is local_wins or merge",
+          message: "entity_type and entity_id are required when strategy is local_wins or merge",
+        });
+      }
+      if ((strategy === "local_wins" || strategy === "merge") && !effectiveOperationType && entity_type !== "evidence" && entity_type !== "photo") {
+        return res.status(400).json({
+          message:
+            "operation_type required when strategy is local_wins or merge (or use divergent: prefix with entity_type job/hazard/control)",
         });
       }
 
@@ -957,10 +976,10 @@ syncRouter.post(
             if (data) updatedMitigationItem = data;
           }
         }
-      } else if (strategy === "local_wins" || strategy === "merge") {
+      } else if ((strategy === "local_wins" || strategy === "merge") && entity_type !== "evidence" && entity_type !== "photo") {
         const data = resolved_value!;
         const targetId = entity_id!;
-        const opType = operation_type!;
+        const opType = effectiveOperationType!;
 
         if (opType === "create_job") {
           const client_name = data.client_name ?? data.clientName;
@@ -1401,7 +1420,7 @@ syncRouter.post(
         eventName: "sync.conflict_resolved",
         targetType: "system",
         targetId: operation_id,
-        metadata: { strategy, resolved_value, entity_type, entity_id, operation_type },
+        metadata: { strategy, resolved_value, entity_type, entity_id, operation_type: effectiveOperationType ?? operation_type },
         ...clientMetadata,
       });
 
