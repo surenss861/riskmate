@@ -104,7 +104,12 @@ struct ConflictHistoryView: View {
                                     guard !et.isEmpty, !eid.isEmpty else {
                                         throw NSError(domain: "ConflictResolution", code: 2, userInfo: [NSLocalizedDescriptionKey: "Cannot resolve: missing entity info"])
                                     }
-                                    resolvedValue = syncEngine.getLocalPayloadForConflict(entityType: et, entityId: eid)
+                                    var base = syncEngine.getLocalPayloadForConflict(entityType: et, entityId: eid)
+                                    if let perField = outcome.perFieldResolvedValues, !perField.isEmpty, var merged = base {
+                                        for (k, v) in perField { merged[k] = v }
+                                        base = merged
+                                    }
+                                    resolvedValue = base
                                     entityType = et
                                     entityId = eid
                                     operationType = operationTypeFromEntityType(et)
