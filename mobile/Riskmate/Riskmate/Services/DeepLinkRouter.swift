@@ -23,7 +23,10 @@ final class DeepLinkRouter: ObservableObject {
     /// - Parameter url: e.g. riskmate://jobs/123, riskmate://jobs/123/signatures, riskmate://notifications
     func handle(_ url: URL) -> AnyView? {
         guard url.scheme?.lowercased() == "riskmate" else { return nil }
-        let path = (url.host ?? "").trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        let hostPart = url.host ?? ""
+        let pathPart = url.path
+        let combined = hostPart + pathPart
+        let path = combined.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         let pathComponents = path.split(separator: "/").map(String.init)
 
         if pathComponents.isEmpty { return nil }
@@ -83,7 +86,8 @@ final class DeepLinkRouter: ObservableObject {
     /// Parse job ID from a riskmate URL (e.g. riskmate://jobs/123 -> "123").
     func parseJobId(from url: URL) -> String? {
         guard url.scheme?.lowercased() == "riskmate" else { return nil }
-        let path = (url.host ?? "").trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        let combined = (url.host ?? "") + url.path
+        let path = combined.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         let components = path.split(separator: "/").map(String.init)
         guard components.count >= 2, components[0].lowercased() == "jobs" else { return nil }
         return components[1]
@@ -92,7 +96,8 @@ final class DeepLinkRouter: ObservableObject {
     /// Parse tab from URL (signatures, evidence, or nil for overview).
     func parseTab(from url: URL) -> String? {
         guard url.scheme?.lowercased() == "riskmate" else { return nil }
-        let path = (url.host ?? "").trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        let combined = (url.host ?? "") + url.path
+        let path = combined.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         let components = path.split(separator: "/").map(String.init)
         guard components.count >= 3, components[0].lowercased() == "jobs" else { return nil }
         let sub = components[2].lowercased()

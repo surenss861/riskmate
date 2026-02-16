@@ -91,9 +91,17 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
     // MARK: - Notification tap (deep link)
 
     /// Handle user tapping a notification. Parse payload and route via DeepLinkRouter.
+    /// Supports Expo payload structure (deepLink inside userInfo["data"]) and top-level deepLink.
     func handleNotificationTap(_ notification: UNNotification) async {
         let userInfo = notification.request.content.userInfo
-        if let deepLink = userInfo["deepLink"] as? String,
+        var deepLinkString: String?
+        if let data = userInfo["data"] as? [AnyHashable: Any],
+           let link = data["deepLink"] as? String {
+            deepLinkString = link
+        } else if let link = userInfo["deepLink"] as? String {
+            deepLinkString = link
+        }
+        if let deepLink = deepLinkString,
            let url = URL(string: deepLink) {
             await MainActor.run {
                 DeepLinkRouter.shared.handle(url)
