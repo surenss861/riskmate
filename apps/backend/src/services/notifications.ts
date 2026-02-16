@@ -116,17 +116,36 @@ async function fetchOrgUserIdsWithPreference(
     .select("user_id, push_enabled, " + prefKey)
     .in("user_id", userIds);
 
-  const prefsByUser = new Map(
-    (prefsData || []).map((r: any) => [
-      r.user_id,
-      r.push_enabled !== false && r[prefKey] !== false,
-    ])
+  const prefsByUser = new Map<
+    string,
+    { push_enabled: boolean; prefValue: boolean }
+  >(
+    (prefsData || []).map((r: any) => {
+      const push_enabled = r.push_enabled ?? true;
+      const prefValue =
+        prefKey === "weekly_summary_enabled"
+          ? (r[prefKey] ?? false)
+          : (r[prefKey] ?? true);
+      return [r.user_id, { push_enabled, prefValue }];
+    })
   );
-  return [...new Set(
-    tokensData
-      .filter((r) => prefsByUser.get(r.user_id) !== false)
-      .map((r) => r.user_id)
-  )];
+
+  return [
+    ...new Set(
+      tokensData
+        .filter((r) => {
+          const effective = prefsByUser.get(r.user_id);
+          const push_enabled = effective
+            ? effective.push_enabled
+            : DEFAULT_NOTIFICATION_PREFERENCES.push_enabled;
+          const prefEnabled = effective
+            ? effective.prefValue
+            : DEFAULT_NOTIFICATION_PREFERENCES[prefKey];
+          return push_enabled && prefEnabled;
+        })
+        .map((r) => r.user_id)
+    ),
+  ];
 }
 
 /** Default notification preferences. Master toggles on; weekly_summary off per spec; others on. */
