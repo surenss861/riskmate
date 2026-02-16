@@ -546,6 +546,14 @@ final class SyncEngine: ObservableObject {
                     )
                 }
             }
+            // Delete resolution (localWins/merge): purge offline cache and clear pending so deleted item disappears immediately
+            if operationType == "delete_hazard", let hazardId = effectiveEntityId {
+                OfflineCache.shared.mergeCachedMitigationItems(synced: [], deletedIds: [hazardId])
+                db.deletePendingHazard(id: hazardId)
+            } else if operationType == "delete_control", let controlId = effectiveEntityId {
+                OfflineCache.shared.mergeCachedMitigationItems(synced: [], deletedIds: [controlId])
+                db.deletePendingControl(id: controlId)
+            }
         case .askUser:
             break
         }
