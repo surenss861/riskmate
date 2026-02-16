@@ -1250,6 +1250,23 @@ exports.jobsRouter.post("/:id/assign", auth_1.authenticate, requireWriteAccess_1
         if (jobError || !job) {
             return res.status(404).json({ message: "Job not found" });
         }
+        const { data: assignee } = await supabaseClient_1.supabase
+            .from("users")
+            .select("id, organization_id")
+            .eq("id", assigneeId)
+            .single();
+        if (!assignee) {
+            return res.status(404).json({
+                message: "Assignee not found",
+                code: "ASSIGNEE_NOT_FOUND",
+            });
+        }
+        if (assignee.organization_id !== job.organization_id) {
+            return res.status(400).json({
+                message: "Assignee is not a member of this job's organization",
+                code: "ASSIGNEE_ORG_MISMATCH",
+            });
+        }
         const { error: insertError } = await supabaseClient_1.supabase.from("job_assignments").insert({
             job_id: jobId,
             user_id: assigneeId,

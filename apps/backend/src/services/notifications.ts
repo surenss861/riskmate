@@ -1,6 +1,38 @@
+import apn from "apn";
 import { supabase } from "../lib/supabaseClient";
 
 const EXPO_PUSH_ENDPOINT = "https://exp.host/--/api/v2/push/send";
+
+/** Expo push token format (ExponentPushToken[xxx]). */
+function isExpoToken(token: string): boolean {
+  return (
+    typeof token === "string" &&
+    token.startsWith("ExponentPushToken[") &&
+    token.endsWith("]")
+  );
+}
+
+/** APNs device token: 64 hex chars. Used when backend sends via APNs directly. */
+function isAPNsToken(token: string): boolean {
+  return (
+    typeof token === "string" &&
+    /^[a-fA-F0-9]{64}$/.test(token.trim())
+  );
+}
+
+/** Validate token format. Backend accepts Expo tokens or APNs tokens. */
+export function validatePushToken(token: string): {
+  valid: boolean;
+  type: "expo" | "apns" | "invalid";
+} {
+  if (!token || typeof token !== "string" || !token.trim()) {
+    return { valid: false, type: "invalid" };
+  }
+  const t = token.trim();
+  if (isExpoToken(t)) return { valid: true, type: "expo" };
+  if (isAPNsToken(t)) return { valid: true, type: "apns" };
+  return { valid: false, type: "invalid" };
+}
 
 type DeviceTokenPayload = {
   userId: string;
@@ -16,6 +48,11 @@ export async function registerDeviceToken({
   platform,
 }: DeviceTokenPayload) {
   if (!token) return;
+
+  const { valid } = validatePushToken(token);
+  if (!valid) {
+    throw new Error("INVALID_TOKEN");
+  }
 
   const { error } = await supabase
     .from("device_tokens")
@@ -75,6 +112,66 @@ export async function fetchUserTokens(userId: string): Promise<string[]> {
   return (data || []).map((row) => row.token);
 }
 
+let apnProvider: apn.Provider | null = null;
+
+function getAPnProvider(): apn.Provider | null {
+  if (apnProvider) return apnProvider;
+  const keyPath = process.env.APNS_KEY_PATH;
+  const keyId = process.env.APNS_KEY_ID;
+  const teamId = process.env.APNS_TEAM_ID;
+  if (!keyPath || !keyId || !teamId) {
+    return null;
+  }
+  try {
+    apnProvider = new apn.Provider({
+      token: {
+        key: keyPath,
+        keyId,
+        teamId,
+      },
+      production: process.env.APNS_PRODUCTION === "true",
+    });
+    return apnProvider;
+  } catch (err) {
+    console.error("APNs provider init failed:", err);
+    return null;
+  }
+}
+
+async function sendAPNs(
+  tokens: string[],
+  payload: { title: string; body: string; data?: Record<string, unknown> }
+) {
+  if (!tokens.length) return;
+  const provider = getAPnProvider();
+  if (!provider) {
+    if (tokens.length > 0) {
+      console.warn(
+        "[Notifications] APNs tokens present but APNs not configured (APNS_KEY_PATH, APNS_KEY_ID, APNS_TEAM_ID). iOS push will not be delivered."
+      );
+    }
+    return;
+  }
+  const bundleId = process.env.APNS_BUNDLE_ID || "com.riskmate.Riskmate";
+  for (const token of tokens) {
+    try {
+      const notification = new apn.Notification();
+      notification.alert = { title: payload.title, body: payload.body };
+      notification.sound = "default";
+      notification.topic = bundleId;
+      if (payload.data) {
+        notification.payload = payload.data;
+      }
+      const result = await provider.send(notification, token);
+      if (result.failed.length > 0) {
+        console.warn("[Notifications] APNs send failed for token:", result.failed[0].response?.reason);
+      }
+    } catch (err) {
+      console.error("[Notifications] APNs exception:", err);
+    }
+  }
+}
+
 async function sendExpoPush(tokens: string[], message: Record<string, unknown>) {
   if (!tokens.length) return;
 
@@ -105,6 +202,48 @@ async function sendExpoPush(tokens: string[], message: Record<string, unknown>) 
   }
 }
 
+/** Split tokens by type and send via appropriate channel (Expo vs APNs). */
+async function sendPush(
+  tokens: string[],
+  payload: {
+    title: string;
+    body: string;
+    data?: Record<string, unknown>;
+    sound?: string;
+    channelId?: string;
+  }
+) {
+  const expoTokens: string[] = [];
+  const apnsTokens: string[] = [];
+  for (const t of tokens) {
+    const { valid, type } = validatePushToken(t);
+    if (!valid) continue;
+    if (type === "expo") expoTokens.push(t);
+    else if (type === "apns") apnsTokens.push(t);
+  }
+
+  if (expoTokens.length > 0) {
+    await sendExpoPush(
+      expoTokens,
+      {
+        title: payload.title,
+        body: payload.body,
+        sound: payload.sound ?? "default",
+        channelId: payload.channelId ?? "riskmate-alerts",
+        data: payload.data,
+      }
+    );
+  }
+
+  if (apnsTokens.length > 0) {
+    await sendAPNs(apnsTokens, {
+      title: payload.title,
+      body: payload.body,
+      data: payload.data,
+    });
+  }
+}
+
 const chunkArray = <T,>(arr: T[], size: number): T[][] => {
   const chunks: T[][] = [];
   for (let i = 0; i < arr.length; i += size) {
@@ -122,7 +261,7 @@ export async function notifyHighRiskJob(params: {
   if (params.riskScore < 75) return;
 
   const tokens = await fetchOrgTokens(params.organizationId);
-  await sendExpoPush(tokens, {
+  await sendPush(tokens, {
     title: "⚠️ High-risk job detected",
     body: `${params.clientName} scored ${params.riskScore}. Review mitigation plan now.`,
     data: {
@@ -138,7 +277,7 @@ export async function notifyReportReady(params: {
   pdfUrl?: string | null;
 }) {
   const tokens = await fetchOrgTokens(params.organizationId);
-  await sendExpoPush(tokens, {
+  await sendPush(tokens, {
     title: "📄 Risk report ready",
     body: "Your Riskmate PDF report is ready to view.",
     data: {
@@ -154,7 +293,7 @@ export async function notifyWeeklySummary(params: {
   message: string;
 }) {
   const tokens = await fetchOrgTokens(params.organizationId);
-  await sendExpoPush(tokens, {
+  await sendPush(tokens, {
     title: "📈 Weekly compliance summary",
     body: params.message,
     data: {
@@ -177,11 +316,12 @@ type PushPayload = {
 async function sendToUser(userId: string, payload: PushPayload) {
   const tokens = await fetchUserTokens(userId);
   if (!tokens.length) return;
-  await sendExpoPush(tokens, {
-    ...payload,
+  await sendPush(tokens, {
+    title: payload.title,
+    body: payload.body,
+    data: payload.data,
     sound: "default",
     channelId: payload.categoryId ?? "riskmate-alerts",
-    priority: payload.priority ?? "high",
   });
 }
 

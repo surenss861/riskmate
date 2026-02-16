@@ -4,6 +4,7 @@ import {
   registerDeviceToken,
   unregisterDeviceToken,
   sendEvidenceUploadedNotification,
+  validatePushToken,
 } from "../services/notifications";
 import { requireFeature } from "../middleware/limits";
 
@@ -21,7 +22,21 @@ notificationsRouter.post(
       if (!token || typeof token !== "string") {
         return res
           .status(400)
-          .json({ message: "Missing Expo push token", code: "INVALID_TOKEN" });
+          .json({
+            message: "Missing push token. Provide Expo (ExponentPushToken[...]) or APNs (64-char hex) token.",
+            code: "INVALID_TOKEN",
+          });
+      }
+
+      const { valid } = validatePushToken(token);
+      if (!valid) {
+        return res
+          .status(400)
+          .json({
+            message:
+              "Invalid token format. Must be Expo (ExponentPushToken[...]) or APNs (64-char hex).",
+            code: "INVALID_TOKEN",
+          });
       }
 
       await registerDeviceToken({

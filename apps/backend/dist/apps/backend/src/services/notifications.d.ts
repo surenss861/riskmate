@@ -1,3 +1,8 @@
+/** Validate token format. Backend accepts Expo tokens or APNs tokens. */
+export declare function validatePushToken(token: string): {
+    valid: boolean;
+    type: "expo" | "apns" | "invalid";
+};
 type DeviceTokenPayload = {
     userId: string;
     organizationId: string;

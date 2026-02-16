@@ -241,6 +241,51 @@ exports.reportsRouter.post("/generate/:jobId", auth_1.authenticate, (async (req,
         });
     }
 }));
+// POST /api/reports/notify-signature-request
+// Sends signature request notifications to intended signers. Call after persisting a report run
+// (e.g. when moving to ready_for_signatures). Body: { reportRunId, intendedSignerUserIds, jobTitle? }.
+exports.reportsRouter.post("/notify-signature-request", auth_1.authenticate, async (req, res) => {
+    const authReq = req;
+    try {
+        const { organization_id } = authReq.user;
+        const body = req.body;
+        const { reportRunId, intendedSignerUserIds = [], jobTitle } = body;
+        if (!reportRunId || !Array.isArray(intendedSignerUserIds) || intendedSignerUserIds.length === 0) {
+            return res.status(400).json({ message: "reportRunId and non-empty intendedSignerUserIds required" });
+        }
+        let jobTitleOrClientName = jobTitle;
+        if (jobTitleOrClientName == null) {
+            const { data: run } = await supabaseClient_1.supabase
+                .from("report_runs")
+                .select("job_id")
+                .eq("id", reportRunId)
+                .eq("organization_id", organization_id)
+                .single();
+            if (run?.job_id) {
+                const { data: job } = await supabaseClient_1.supabase
+                    .from("jobs")
+                    .select("client_name")
+                    .eq("id", run.job_id)
+                    .eq("organization_id", organization_id)
+                    .single();
+                jobTitleOrClientName = job?.client_name ?? undefined;
+            }
+        }
+        for (const userId of intendedSignerUserIds) {
+            try {
+                await (0, notifications_1.sendSignatureRequestNotification)(userId, reportRunId, jobTitleOrClientName);
+            }
+            catch (err) {
+                console.error("sendSignatureRequestNotification failed for user", userId, err);
+            }
+        }
+        res.status(204).end();
+    }
+    catch (err) {
+        console.error("notify-signature-request failed:", err);
+        res.status(500).json({ message: "Failed to send signature request notifications" });
+    }
+});
 exports.reportsRouter.post("/share/:jobId", 
 // @ts-ignore - TypeScript doesn't recognize that authenticate middleware adds user property
 auth_1.authenticate, (0, limits_1.requireFeature)("share_links"), async (req, res) => {
