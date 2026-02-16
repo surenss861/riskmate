@@ -16,6 +16,8 @@ struct SyncConflict: Identifiable {
     let serverActor: String?
     /// User/actor identifier for the local version (who made the local change)
     let localActor: String?
+    /// Raw server value (e.g. full payload dict) for manual merge; preserved when creating from API, nil when loading from DB.
+    let serverValueForMerge: Any?
 
     /// Display string for server value (for UI)
     var serverValueDisplay: String {
@@ -51,6 +53,7 @@ struct SyncConflict: Identifiable {
         self.operationType = operationType
         self.serverActor = serverActor
         self.localActor = localActor
+        self.serverValueForMerge = nil
     }
 
     /// Create from backend conflict response (accepts Any and converts to Hashable where possible)
@@ -78,6 +81,7 @@ struct SyncConflict: Identifiable {
         self.operationType = operationType
         self.serverActor = serverActor
         self.localActor = localActor
+        self.serverValueForMerge = serverValue
     }
 }
 

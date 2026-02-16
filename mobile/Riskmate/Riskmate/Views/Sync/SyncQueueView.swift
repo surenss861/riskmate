@@ -258,12 +258,18 @@ struct SyncQueueView: View {
                             if outcome.strategy == .localWins || outcome.strategy == .merge {
                                 if let op = op {
                                     if let dict = try? JSONSerialization.jsonObject(with: op.data) as? [String: Any] {
-                                        resolvedValue = dict
-                                        if let perField = outcome.perFieldResolvedValues, !perField.isEmpty {
-                                            var merged = dict
-                                            for (k, v) in perField { merged[k] = v }
-                                            resolvedValue = merged
+                                        var base = dict
+                                        if outcome.strategy == .merge && (entityType == "hazard" || entityType == "control") {
+                                            base = SyncConflictMerge.mergeHazardControlPayload(
+                                                localDict: dict,
+                                                serverValue: conflict.serverValueForMerge ?? (conflict.serverValue as Any?),
+                                                conflictField: conflict.field
+                                            )
                                         }
+                                        if let perField = outcome.perFieldResolvedValues, !perField.isEmpty {
+                                            for (k, v) in perField { base[k] = v }
+                                        }
+                                        resolvedValue = base
                                     }
                                     entityType = entityType ?? entityTypeFromOperation(op.type)
                                     entityId = entityId ?? op.entityId
@@ -279,6 +285,13 @@ struct SyncQueueView: View {
                                     if isDivergent {
                                         // Divergent conflicts: pass reconstructed payload and operationType nil; SyncEngine divergent branch handles it.
                                         var base = syncEngine.getLocalPayloadForConflict(entityType: et, entityId: eid)
+                                        if outcome.strategy == .merge && (et == "hazard" || et == "control"), var localDict = base {
+                                            base = SyncConflictMerge.mergeHazardControlPayload(
+                                                localDict: localDict,
+                                                serverValue: conflict.serverValueForMerge ?? (conflict.serverValue as Any?),
+                                                conflictField: conflict.field
+                                            )
+                                        }
                                         if let perField = outcome.perFieldResolvedValues, !perField.isEmpty, var merged = base {
                                             for (k, v) in perField { merged[k] = v }
                                             base = merged
@@ -292,6 +305,13 @@ struct SyncQueueView: View {
                                             throw NSError(domain: "ConflictResolution", code: 3, userInfo: [NSLocalizedDescriptionKey: "Cannot resolve: original operation type is unknown. The pending operation may have been cleared."])
                                         }
                                         var base = syncEngine.getLocalPayloadForConflict(entityType: et, entityId: eid)
+                                        if outcome.strategy == .merge && (et == "hazard" || et == "control"), var localDict = base {
+                                            base = SyncConflictMerge.mergeHazardControlPayload(
+                                                localDict: localDict,
+                                                serverValue: conflict.serverValueForMerge ?? (conflict.serverValue as Any?),
+                                                conflictField: conflict.field
+                                            )
+                                        }
                                         if let perField = outcome.perFieldResolvedValues, !perField.isEmpty, var merged = base {
                                             for (k, v) in perField { merged[k] = v }
                                             base = merged
