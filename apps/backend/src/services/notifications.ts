@@ -183,6 +183,39 @@ export async function fetchUserTokens(userId: string): Promise<string[]> {
   return (data || []).map((row) => row.token);
 }
 
+/** Get unread notification count for a user (for badge in push payloads). */
+export async function getUnreadNotificationCount(userId: string): Promise<number> {
+  const { count, error } = await supabase
+    .from("notifications")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .eq("is_read", false);
+
+  if (error) {
+    console.error("Failed to get unread notification count:", error);
+    return 0;
+  }
+  return typeof count === "number" ? count : 0;
+}
+
+/** Create a notification record so unread count and badge stay in sync. */
+export async function createNotificationRecord(
+  userId: string,
+  type: string,
+  content: string
+): Promise<void> {
+  const { error } = await supabase.from("notifications").insert({
+    user_id: userId,
+    type,
+    content,
+    is_read: false,
+  });
+
+  if (error) {
+    console.error("Failed to create notification record:", error);
+  }
+}
+
 let apnProvider: apn.Provider | null = null;
 
 function getAPnProvider(): apn.Provider | null {
@@ -211,7 +244,14 @@ function getAPnProvider(): apn.Provider | null {
 
 async function sendAPNs(
   tokens: string[],
-  payload: { title: string; body: string; data?: Record<string, unknown> }
+  payload: {
+    title: string;
+    body: string;
+    data?: Record<string, unknown>;
+    badge?: number;
+    priority?: "high" | "default";
+    categoryId?: string;
+  }
 ) {
   if (!tokens.length) return;
   const provider = getAPnProvider();
@@ -230,6 +270,17 @@ async function sendAPNs(
       notification.alert = { title: payload.title, body: payload.body };
       notification.sound = "default";
       notification.topic = bundleId;
+      if (typeof payload.badge === "number") {
+        notification.badge = payload.badge;
+      }
+      if (payload.priority === "high") {
+        notification.priority = 10;
+      } else if (payload.priority === "default") {
+        notification.priority = 5;
+      }
+      if (payload.categoryId) {
+        notification.aps = { ...(notification.aps || {}), category: payload.categoryId };
+      }
       if (payload.data) {
         notification.payload = payload.data;
       }
@@ -243,7 +294,10 @@ async function sendAPNs(
   }
 }
 
-async function sendExpoPush(tokens: string[], message: Record<string, unknown>) {
+async function sendExpoPush(
+  tokens: string[],
+  message: Record<string, unknown> & { badge?: number; categoryId?: string }
+) {
   if (!tokens.length) return;
 
   for (const chunk of chunkArray(tokens, 50)) {
@@ -257,7 +311,9 @@ async function sendExpoPush(tokens: string[], message: Record<string, unknown>) 
           chunk.map((token) => ({
             to: token,
             sound: "default",
-            channelId: "riskmate-alerts",
+            channelId: message.channelId ?? "riskmate-alerts",
+            ...(typeof message.badge === "number" && { badge: message.badge }),
+            ...(message.categoryId && { categoryId: message.categoryId }),
             ...message,
           }))
         ),
@@ -282,6 +338,9 @@ async function sendPush(
     data?: Record<string, unknown>;
     sound?: string;
     channelId?: string;
+    badge?: number;
+    priority?: "high" | "default";
+    categoryId?: string;
   }
 ) {
   const expoTokens: string[] = [];
@@ -294,16 +353,15 @@ async function sendPush(
   }
 
   if (expoTokens.length > 0) {
-    await sendExpoPush(
-      expoTokens,
-      {
-        title: payload.title,
-        body: payload.body,
-        sound: payload.sound ?? "default",
-        channelId: payload.channelId ?? "riskmate-alerts",
-        data: payload.data,
-      }
-    );
+    await sendExpoPush(expoTokens, {
+      title: payload.title,
+      body: payload.body,
+      sound: payload.sound ?? "default",
+      channelId: payload.channelId ?? payload.categoryId ?? "riskmate-alerts",
+      categoryId: payload.categoryId,
+      ...(typeof payload.badge === "number" && { badge: payload.badge }),
+      data: payload.data,
+    });
   }
 
   if (apnsTokens.length > 0) {
@@ -311,6 +369,9 @@ async function sendPush(
       title: payload.title,
       body: payload.body,
       data: payload.data,
+      ...(typeof payload.badge === "number" && { badge: payload.badge }),
+      ...(payload.priority && { priority: payload.priority }),
+      ...(payload.categoryId && { categoryId: payload.categoryId }),
     });
   }
 }
@@ -394,6 +455,11 @@ type PushPayload = {
 };
 
 async function sendToUser(userId: string, payload: PushPayload) {
+  const notificationType =
+    typeof payload.data?.type === "string" ? (payload.data.type as string) : "push";
+  await createNotificationRecord(userId, notificationType, payload.body);
+
+  const badge = await getUnreadNotificationCount(userId);
   const tokens = await fetchUserTokens(userId);
   if (!tokens.length) return;
   await sendPush(tokens, {
@@ -402,6 +468,9 @@ async function sendToUser(userId: string, payload: PushPayload) {
     data: payload.data,
     sound: "default",
     channelId: payload.categoryId ?? "riskmate-alerts",
+    badge,
+    priority: payload.priority ?? "default",
+    categoryId: payload.categoryId,
   });
 }
 
@@ -424,6 +493,7 @@ export async function sendJobAssignedNotification(
       deepLink: `riskmate://jobs/${jobId}`,
     },
     categoryId: "job_assigned",
+    priority: "default",
   });
 }
 
@@ -446,6 +516,7 @@ export async function sendSignatureRequestNotification(
       deepLink: `riskmate://reports/${reportRunId}`,
     },
     categoryId: "signature_request",
+    priority: "high",
   });
 }
 
@@ -467,6 +538,7 @@ export async function sendEvidenceUploadedNotification(
       deepLink: `riskmate://jobs/${jobId}/evidence`,
     },
     categoryId: "evidence_uploaded",
+    priority: "default",
   });
 }
 
@@ -488,6 +560,7 @@ export async function sendHazardAddedNotification(
       deepLink: `riskmate://jobs/${jobId}/hazards/${hazardId}`,
     },
     categoryId: "hazard_added",
+    priority: "default",
   });
 }
 
@@ -517,6 +590,7 @@ export async function sendDeadlineNotification(
       deepLink: `riskmate://jobs/${jobId}`,
     },
     categoryId: "deadline",
+    priority: "high",
   });
 }
 
@@ -537,6 +611,7 @@ export async function sendMentionNotification(
       deepLink: "riskmate://notifications",
     },
     categoryId: "mention",
+    priority: "high",
   });
 }
 

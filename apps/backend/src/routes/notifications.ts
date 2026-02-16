@@ -6,6 +6,7 @@ import {
   sendEvidenceUploadedNotification,
   validatePushToken,
   getNotificationPreferences,
+  getUnreadNotificationCount,
   DEFAULT_NOTIFICATION_PREFERENCES,
   type NotificationPreferences,
 } from "../services/notifications";
@@ -77,6 +78,22 @@ notificationsRouter.delete(
     } catch (err: any) {
       console.error("Device token unregister failed:", err);
       res.status(500).json({ message: "Failed to unregister device token" });
+    }
+  }
+);
+
+/** GET /api/notifications/unread-count — unread count for badge (e.g. after fetching notifications). */
+notificationsRouter.get(
+  "/unread-count",
+  authenticate as unknown as express.RequestHandler,
+  async (req: express.Request, res: express.Response) => {
+    const authReq = req as AuthenticatedRequest;
+    try {
+      const count = await getUnreadNotificationCount(authReq.user.id);
+      res.json({ count });
+    } catch (err: any) {
+      console.error("Get unread count failed:", err);
+      res.status(500).json({ message: "Failed to get unread count" });
     }
   }
 );

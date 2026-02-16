@@ -26,6 +26,20 @@ struct NotificationCenterView: View {
             }
         }
         .rmNavigationBar(title: "Notifications")
+        .task {
+            await refreshBadgeFromUnreadCount()
+        }
+    }
+
+    private func refreshBadgeFromUnreadCount() async {
+        do {
+            let count = try await APIClient.shared.getUnreadNotificationCount()
+            await MainActor.run {
+                NotificationService.shared.setBadgeCount(count)
+            }
+        } catch {
+            // Non-fatal: badge may already be set from push payload
+        }
     }
 }
 

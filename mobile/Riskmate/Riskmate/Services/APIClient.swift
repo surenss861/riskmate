@@ -790,6 +790,17 @@ class APIClient {
         )
     }
 
+    /// Unread notification count for badge (GET /api/notifications/unread-count).
+    func getUnreadNotificationCount() async throws -> Int {
+        struct UnreadCountResponse: Decodable {
+            let count: Int
+        }
+        let response: UnreadCountResponse = try await request(
+            endpoint: "/api/notifications/unread-count"
+        )
+        return response.count
+    }
+
     /// Update photo category (before/during/after) for a document or evidence item.
     /// docId may be a document id or evidence id (PATCH /api/jobs/:id/documents/:docId).
     func updateDocumentCategory(jobId: String, docId: String, category: String) async throws {

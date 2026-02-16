@@ -92,7 +92,9 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
 
     /// Handle user tapping a notification. Parse payload and route via DeepLinkRouter.
     /// Supports Expo payload structure (deepLink inside userInfo["data"]) and top-level deepLink.
+    /// Clears app icon badge when user engages with the notification.
     func handleNotificationTap(_ notification: UNNotification) async {
+        clearBadge()
         let userInfo = notification.request.content.userInfo
         var deepLinkString: String?
         if let data = userInfo["data"] as? [AnyHashable: Any],
@@ -106,6 +108,19 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
             await MainActor.run {
                 DeepLinkRouter.shared.handle(url)
             }
+        }
+    }
+
+    /// Update app icon badge from push payload (APNs aps.badge or Expo data.badge).
+    func updateBadgeFromPayload(_ userInfo: [AnyHashable: Any]) {
+        if let aps = userInfo["aps"] as? [AnyHashable: Any],
+           let badge = aps["badge"] as? Int {
+            setBadgeCount(badge)
+            return
+        }
+        if let data = userInfo["data"] as? [AnyHashable: Any],
+           let badge = data["badge"] as? Int {
+            setBadgeCount(badge)
         }
     }
 
@@ -133,6 +148,7 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
+        updateBadgeFromPayload(notification.request.content.userInfo)
         completionHandler([.banner, .sound, .badge, .list])
     }
 
@@ -142,6 +158,7 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
         didReceive response: UNNotificationResponse,
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
+        updateBadgeFromPayload(response.notification.request.content.userInfo)
         Task {
             await handleNotificationTap(response.notification)
             completionHandler()
