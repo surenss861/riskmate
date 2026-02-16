@@ -193,8 +193,13 @@ struct ConflictHistoryView: View {
         history = OfflineDatabase.shared.getAllConflicts()
     }
 
+    /// Build SyncConflict from conflict_log row so serverValueForMerge is populated from server_payload when present,
+    /// enabling mergeHazardControlPayload to merge correctly when resolving from history or after relaunch.
     private func syncConflict(from row: ConflictHistoryRow) -> SyncConflict {
-        SyncConflict(
+        let serverValueForMerge: Any? = row.serverPayload.flatMap { str in
+            try? JSONSerialization.jsonObject(with: Data(str.utf8))
+        }
+        return SyncConflict(
             id: row.id,
             entityType: row.entityType,
             entityId: row.entityId,
@@ -205,7 +210,8 @@ struct ConflictHistoryView: View {
             localTimestamp: row.localTimestamp ?? Date(),
             operationType: row.operationType,
             serverActor: row.serverActor,
-            localActor: row.localActor
+            localActor: row.localActor,
+            serverValueForMerge: serverValueForMerge
         )
     }
 

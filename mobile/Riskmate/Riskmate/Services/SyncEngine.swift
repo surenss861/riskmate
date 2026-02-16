@@ -139,12 +139,14 @@ final class SyncEngine: ObservableObject {
                                     resolvedValue = dict
                                 }
                             }
-                            // Insert conflict_log row before auto resolution so history records it
+                            // Insert conflict_log row before auto resolution so history records it (full payloads for merge-capable)
                             if let c = result.conflict {
                                 let opType = op?.type.apiTypeString
+                                let et = c.entityType ?? "job"
+                                let (serverPayload, localPayload) = rawPayloadsForConflictLog(entityType: et, serverValue: c.serverValue?.value, localValue: c.localValue?.value)
                                 db.insertConflict(
                                     id: result.operationId,
-                                    entityType: c.entityType ?? "job",
+                                    entityType: et,
                                     entityId: c.entityId ?? result.operationId,
                                     field: c.field,
                                     serverVersion: c.serverValue.map { "\($0)" },
@@ -154,7 +156,9 @@ final class SyncEngine: ObservableObject {
                                     resolutionStrategy: nil,
                                     operationType: opType,
                                     serverActor: c.serverActor,
-                                    localActor: c.localActor
+                                    localActor: c.localActor,
+                                    serverPayload: serverPayload,
+                                    localPayload: localPayload
                                 )
                             }
                             try await resolveConflict(
@@ -171,9 +175,11 @@ final class SyncEngine: ObservableObject {
                             errors.append(error.localizedDescription)
                             if let c = result.conflict {
                                 let opType = op?.type.apiTypeString
+                                let et = c.entityType ?? "job"
+                                // Preserve raw server/local payload in SyncConflict so merge flows get populated serverValueForMerge
                                 conflicts.append(SyncConflict(
                                     id: result.operationId,
-                                    entityType: c.entityType ?? "job",
+                                    entityType: et,
                                     entityId: c.entityId ?? result.operationId,
                                     field: c.field ?? "unknown",
                                     serverValue: c.serverValue?.value,
@@ -184,9 +190,10 @@ final class SyncEngine: ObservableObject {
                                     serverActor: c.serverActor,
                                     localActor: c.localActor
                                 ))
+                                let (serverPayload, localPayload) = rawPayloadsForConflictLog(entityType: et, serverValue: c.serverValue?.value, localValue: c.localValue?.value)
                                 db.insertConflict(
                                     id: result.operationId,
-                                    entityType: c.entityType ?? "job",
+                                    entityType: et,
                                     entityId: c.entityId ?? result.operationId,
                                     field: c.field,
                                     serverVersion: c.serverValue.map { "\($0)" },
@@ -196,7 +203,9 @@ final class SyncEngine: ObservableObject {
                                     resolutionStrategy: nil,
                                     operationType: opType,
                                     serverActor: c.serverActor,
-                                    localActor: c.localActor
+                                    localActor: c.localActor,
+                                    serverPayload: serverPayload,
+                                    localPayload: localPayload
                                 )
                             }
                             failed += 1
@@ -205,9 +214,10 @@ final class SyncEngine: ObservableObject {
                     } else {
                         if let c = result.conflict {
                             let opType = op?.type.apiTypeString
+                            let et = c.entityType ?? "job"
                             conflicts.append(SyncConflict(
                                 id: result.operationId,
-                                entityType: c.entityType ?? "job",
+                                entityType: et,
                                 entityId: c.entityId ?? result.operationId,
                                 field: c.field ?? "unknown",
                                 serverValue: c.serverValue?.value,
@@ -218,9 +228,10 @@ final class SyncEngine: ObservableObject {
                                 serverActor: c.serverActor,
                                 localActor: c.localActor
                             ))
+                            let (serverPayload, localPayload) = rawPayloadsForConflictLog(entityType: et, serverValue: c.serverValue?.value, localValue: c.localValue?.value)
                             db.insertConflict(
                                 id: result.operationId,
-                                entityType: c.entityType ?? "job",
+                                entityType: et,
                                 entityId: c.entityId ?? result.operationId,
                                 field: c.field,
                                 serverVersion: c.serverValue.map { "\($0)" },
@@ -230,7 +241,9 @@ final class SyncEngine: ObservableObject {
                                 resolutionStrategy: nil,
                                 operationType: opType,
                                 serverActor: c.serverActor,
-                                localActor: c.localActor
+                                localActor: c.localActor,
+                                serverPayload: serverPayload,
+                                localPayload: localPayload
                             )
                         }
                         failed += 1
@@ -269,7 +282,7 @@ final class SyncEngine: ObservableObject {
             for c in downloadConflicts {
                 if !conflicts.contains(where: { $0.id == c.id }) {
                     conflicts.append(c)
-                    // Divergent conflicts have no queued op; operation_type remains nil
+                    let (serverPayload, localPayload) = rawPayloadsForConflictLog(entityType: c.entityType, serverValue: c.serverValue as? Any, localValue: c.localValue as? Any)
                     db.insertConflict(
                         id: c.id,
                         entityType: c.entityType,
@@ -282,7 +295,9 @@ final class SyncEngine: ObservableObject {
                         resolutionStrategy: nil,
                         operationType: nil,
                         serverActor: c.serverActor,
-                        localActor: c.localActor
+                        localActor: c.localActor,
+                        serverPayload: serverPayload,
+                        localPayload: localPayload
                     )
                 }
             }
@@ -305,11 +320,13 @@ final class SyncEngine: ObservableObject {
         pendingConflicts.removeAll { $0.id == operationId }
     }
 
-    /// Refresh pending conflicts from DB (e.g. when opening Sync Queue) so user can resolve any left from a previous session
+    /// Refresh pending conflicts from DB (e.g. when opening Sync Queue) so user can resolve any left from a previous session.
+    /// Builds SyncConflict with serverValueForMerge from stored server_payload when present so merge can use server data.
     func refreshPendingConflictsFromDB() {
         let rows = db.getUnresolvedConflicts()
         pendingConflicts = rows.map { row in
-            SyncConflict(
+            let serverForMerge = row.serverPayload.flatMap { (try? JSONSerialization.jsonObject(with: Data($0.utf8))) }
+            return SyncConflict(
                 id: row.id,
                 entityType: row.entityType,
                 entityId: row.entityId,
@@ -320,7 +337,8 @@ final class SyncEngine: ObservableObject {
                 localTimestamp: row.localTimestamp ?? Date(),
                 operationType: row.operationType,
                 serverActor: row.serverActor,
-                localActor: row.localActor
+                localActor: row.localActor,
+                serverValueForMerge: serverForMerge
             )
         }
     }
@@ -625,6 +643,14 @@ final class SyncEngine: ObservableObject {
             serverValue: conflict.serverValue?.value,
             conflictField: conflict.field
         )
+    }
+
+    /// Produce JSON strings for conflict_log server_payload/local_payload so merge-capable conflicts can be re-hydrated with serverValueForMerge.
+    private func rawPayloadsForConflictLog(entityType: String, serverValue: Any?, localValue: Any?) -> (serverPayload: String?, localPayload: String?) {
+        let isMergeCapable = (entityType == "hazard" || entityType == "control")
+        let serverPayload: String? = isMergeCapable ? serverValue.flatMap { (try? JSONSerialization.data(withJSONObject: $0)).flatMap { String(data: $0, encoding: .utf8) } } : nil
+        let localPayload: String? = isMergeCapable ? localValue.flatMap { (try? JSONSerialization.data(withJSONObject: $0)).flatMap { String(data: $0, encoding: .utf8) } } : nil
+        return (serverPayload, localPayload)
     }
 
     private func entityTypeFromOperation(_ type: OperationType) -> String? {

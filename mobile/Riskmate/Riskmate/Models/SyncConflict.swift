@@ -56,7 +56,8 @@ struct SyncConflict: Identifiable {
         self.serverValueForMerge = nil
     }
 
-    /// Create from backend conflict response (accepts Any and converts to Hashable where possible)
+    /// Create from backend conflict response (accepts Any and converts to Hashable where possible).
+    /// Preserves raw server value in serverValueForMerge so merge flows can pass it to mergeHazardControlPayload.
     init(
         id: String,
         entityType: String,
@@ -82,6 +83,36 @@ struct SyncConflict: Identifiable {
         self.serverActor = serverActor
         self.localActor = localActor
         self.serverValueForMerge = serverValue
+    }
+
+    /// Create when hydrating from conflict_log with optional raw payloads (e.g. server_payload/local_payload JSON).
+    /// Use this so serverValueForMerge is populated and mergeHazardControlPayload can merge correctly when resolving from history.
+    init(
+        id: String,
+        entityType: String,
+        entityId: String,
+        field: String,
+        serverValue: AnyHashable?,
+        localValue: AnyHashable?,
+        serverTimestamp: Date,
+        localTimestamp: Date,
+        operationType: String?,
+        serverActor: String?,
+        localActor: String?,
+        serverValueForMerge: Any?
+    ) {
+        self.id = id
+        self.entityType = entityType
+        self.entityId = entityId
+        self.field = field
+        self.serverValue = serverValue
+        self.localValue = localValue
+        self.serverTimestamp = serverTimestamp
+        self.localTimestamp = localTimestamp
+        self.operationType = operationType
+        self.serverActor = serverActor
+        self.localActor = localActor
+        self.serverValueForMerge = serverValueForMerge
     }
 }
 

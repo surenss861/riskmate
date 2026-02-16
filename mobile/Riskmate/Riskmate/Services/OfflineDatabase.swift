@@ -27,7 +27,7 @@ final class OfflineDatabase {
 
     // MARK: - Schema
 
-    private let schemaVersion: Int32 = 5
+    private let schemaVersion: Int32 = 6
 
     private func openDatabase() {
         guard sqlite3_open(dbPath, &db) == SQLITE_OK else {
@@ -64,6 +64,11 @@ final class OfflineDatabase {
                 sqlite3_exec(db, "ALTER TABLE conflict_log ADD COLUMN server_actor TEXT", nil, nil, nil)
                 sqlite3_exec(db, "ALTER TABLE conflict_log ADD COLUMN local_actor TEXT", nil, nil, nil)
                 self.setSchemaVersion(db, 5)
+            }
+            if current < 6 {
+                sqlite3_exec(db, "ALTER TABLE conflict_log ADD COLUMN server_payload TEXT", nil, nil, nil)
+                sqlite3_exec(db, "ALTER TABLE conflict_log ADD COLUMN local_payload TEXT", nil, nil, nil)
+                self.setSchemaVersion(db, 6)
             }
         }
     }
@@ -384,11 +389,13 @@ final class OfflineDatabase {
         resolutionStrategy: String?,
         operationType: String? = nil,
         serverActor: String? = nil,
-        localActor: String? = nil
+        localActor: String? = nil,
+        serverPayload: String? = nil,
+        localPayload: String? = nil
     ) {
         queue.async { [weak self] in
             guard let self = self, let db = self.db else { return }
-            let sql = "INSERT OR REPLACE INTO conflict_log (id, entity_type, entity_id, field, server_version, local_version, server_timestamp, local_timestamp, resolution_strategy, operation_type, server_actor, local_actor) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+            let sql = "INSERT OR REPLACE INTO conflict_log (id, entity_type, entity_id, field, server_version, local_version, server_timestamp, local_timestamp, resolution_strategy, operation_type, server_actor, local_actor, server_payload, local_payload) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
             var stmt: OpaquePointer?
             defer { sqlite3_finalize(stmt) }
             guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
@@ -428,6 +435,16 @@ final class OfflineDatabase {
             } else {
                 sqlite3_bind_null(stmt, 12)
             }
+            if let sp = serverPayload {
+                sqlite3_bind_text(stmt, 13, (sp as NSString).utf8String, -1, nil)
+            } else {
+                sqlite3_bind_null(stmt, 13)
+            }
+            if let lp = localPayload {
+                sqlite3_bind_text(stmt, 14, (lp as NSString).utf8String, -1, nil)
+            } else {
+                sqlite3_bind_null(stmt, 14)
+            }
             sqlite3_step(stmt)
         }
     }
@@ -435,7 +452,7 @@ final class OfflineDatabase {
     func getUnresolvedConflicts() -> [ConflictLogRow] {
         queue.sync {
             guard let db = db else { return [] }
-            let sql = "SELECT id, entity_type, entity_id, field, server_version, local_version, server_timestamp, local_timestamp, resolution_strategy, operation_type, server_actor, local_actor FROM conflict_log WHERE resolved_at IS NULL"
+            let sql = "SELECT id, entity_type, entity_id, field, server_version, local_version, server_timestamp, local_timestamp, resolution_strategy, operation_type, server_actor, local_actor, server_payload, local_payload FROM conflict_log WHERE resolved_at IS NULL"
             var stmt: OpaquePointer?
             defer { sqlite3_finalize(stmt) }
             guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return [] }
@@ -453,7 +470,9 @@ final class OfflineDatabase {
                 let opType = sqlite3_column_type(stmt, 9) == SQLITE_NULL ? nil : String(cString: sqlite3_column_text(stmt, 9))
                 let serverActor = sqlite3_column_type(stmt, 10) == SQLITE_NULL ? nil : String(cString: sqlite3_column_text(stmt, 10))
                 let localActor = sqlite3_column_type(stmt, 11) == SQLITE_NULL ? nil : String(cString: sqlite3_column_text(stmt, 11))
-                rows.append(ConflictLogRow(id: id, entityType: entityType, entityId: entityId, field: field, serverVersion: serverV, localVersion: localV, serverTimestamp: serverTs, localTimestamp: localTs, resolutionStrategy: strat, operationType: opType, serverActor: serverActor, localActor: localActor))
+                let serverPayload = sqlite3_column_type(stmt, 12) == SQLITE_NULL ? nil : String(cString: sqlite3_column_text(stmt, 12))
+                let localPayload = sqlite3_column_type(stmt, 13) == SQLITE_NULL ? nil : String(cString: sqlite3_column_text(stmt, 13))
+                rows.append(ConflictLogRow(id: id, entityType: entityType, entityId: entityId, field: field, serverVersion: serverV, localVersion: localV, serverTimestamp: serverTs, localTimestamp: localTs, resolutionStrategy: strat, operationType: opType, serverActor: serverActor, localActor: localActor, serverPayload: serverPayload, localPayload: localPayload))
             }
             return rows
         }
@@ -481,7 +500,7 @@ final class OfflineDatabase {
     func getAllConflicts() -> [ConflictHistoryRow] {
         queue.sync {
             guard let db = db else { return [] }
-            let sql = "SELECT id, entity_type, entity_id, field, server_version, local_version, server_timestamp, local_timestamp, resolution_strategy, resolved_at, operation_type, server_actor, local_actor FROM conflict_log ORDER BY resolved_at IS NULL DESC, resolved_at DESC"
+            let sql = "SELECT id, entity_type, entity_id, field, server_version, local_version, server_timestamp, local_timestamp, resolution_strategy, resolved_at, operation_type, server_actor, local_actor, server_payload, local_payload FROM conflict_log ORDER BY resolved_at IS NULL DESC, resolved_at DESC"
             var stmt: OpaquePointer?
             defer { sqlite3_finalize(stmt) }
             guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return [] }
@@ -500,7 +519,9 @@ final class OfflineDatabase {
                 let opType = sqlite3_column_type(stmt, 10) == SQLITE_NULL ? nil : String(cString: sqlite3_column_text(stmt, 10))
                 let serverActor = sqlite3_column_type(stmt, 11) == SQLITE_NULL ? nil : String(cString: sqlite3_column_text(stmt, 11))
                 let localActor = sqlite3_column_type(stmt, 12) == SQLITE_NULL ? nil : String(cString: sqlite3_column_text(stmt, 12))
-                rows.append(ConflictHistoryRow(id: id, entityType: entityType, entityId: entityId, field: field, serverVersion: serverV, localVersion: localV, serverTimestamp: serverTs, localTimestamp: localTs, resolutionStrategy: strat, resolvedAt: resolvedAt, operationType: opType, serverActor: serverActor, localActor: localActor))
+                let serverPayload = sqlite3_column_type(stmt, 13) == SQLITE_NULL ? nil : String(cString: sqlite3_column_text(stmt, 13))
+                let localPayload = sqlite3_column_type(stmt, 14) == SQLITE_NULL ? nil : String(cString: sqlite3_column_text(stmt, 14))
+                rows.append(ConflictHistoryRow(id: id, entityType: entityType, entityId: entityId, field: field, serverVersion: serverV, localVersion: localV, serverTimestamp: serverTs, localTimestamp: localTs, resolutionStrategy: strat, resolvedAt: resolvedAt, operationType: opType, serverActor: serverActor, localActor: localActor, serverPayload: serverPayload, localPayload: localPayload))
             }
             return rows
         }
@@ -1076,6 +1097,10 @@ struct ConflictLogRow {
     let operationType: String?
     let serverActor: String?
     let localActor: String?
+    /// Raw server payload (JSON text) for merge-capable conflicts; used to populate serverValueForMerge when hydrating.
+    let serverPayload: String?
+    /// Raw local payload (JSON text) for merge-capable conflicts.
+    let localPayload: String?
 }
 
 struct ConflictHistoryRow {
@@ -1093,6 +1118,10 @@ struct ConflictHistoryRow {
     let operationType: String?
     let serverActor: String?
     let localActor: String?
+    /// Raw server payload (JSON text) for merge-capable conflicts; used to populate serverValueForMerge when hydrating.
+    let serverPayload: String?
+    /// Raw local payload (JSON text) for merge-capable conflicts.
+    let localPayload: String?
 }
 
 struct PendingUpdateRow {
