@@ -172,14 +172,20 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
 
     // MARK: - Foreground presentation
 
+    /// Returns presentation options for a notification received in foreground. Called by the delegate.
+    func handleForegroundNotification(_ notification: UNNotification) -> UNNotificationPresentationOptions {
+        updateBadgeFromPayload(notification.request.content.userInfo)
+        return [.banner, .sound, .badge, .list]
+    }
+
     /// Show notification when app is in foreground (banner + sound + badge).
     func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
-        updateBadgeFromPayload(notification.request.content.userInfo)
-        completionHandler([.banner, .sound, .badge, .list])
+        let options = handleForegroundNotification(notification)
+        completionHandler(options)
     }
 
     /// Handle notification tap (response).
@@ -188,10 +194,10 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
         didReceive response: UNNotificationResponse,
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
-        updateBadgeFromPayload(response.notification.request.content.userInfo)
+        completionHandler()
         Task {
+            updateBadgeFromPayload(response.notification.request.content.userInfo)
             await handleNotificationTap(response.notification)
-            completionHandler()
         }
     }
 }
