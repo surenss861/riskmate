@@ -434,14 +434,35 @@ final class SyncEngine: ObservableObject {
         let effectiveEntityType = entityType ?? op.flatMap { entityTypeFromOperation($0.type) }
         let effectiveEntityId = entityId ?? op?.entityId
 
-        // Divergent conflict (from detectConflicts): no operation on server; resolve locally when possible
+        // Divergent conflict (from detectConflicts): no operation on server; apply resolution before marking resolved
         if op == nil && operationId.hasPrefix("divergent:") {
-            if strategy == .serverWins, let et = effectiveEntityType, let eid = effectiveEntityId {
-                db.deletePendingUpdatesForEntity(entityType: et, entityId: eid)
-                _ = try? await fetchChanges(since: Date().addingTimeInterval(-3600))
+            let et = effectiveEntityType
+            let eid = effectiveEntityId
+            switch strategy {
+            case .serverWins:
+                if let et = et, let eid = eid {
+                    db.deletePendingUpdatesForEntity(entityType: et, entityId: eid)
+                    _ = try await fetchChanges(since: Date().addingTimeInterval(-3600))
+                }
+                db.markConflictResolved(id: operationId, resolutionStrategy: strategy.rawValue)
+                clearPendingConflict(operationId: operationId)
+            case .localWins, .merge:
+                // Reconstruct local payload from pending storage, re-enqueue sync op, run sync, then mark resolved
+                let payload = resolvedValue ?? getLocalPayloadForConflict(entityType: et ?? "job", entityId: eid ?? "")
+                guard let resolved = payload, let entityId = eid, let entityType = et else {
+                    throw NSError(domain: "SyncEngine", code: -1, userInfo: [NSLocalizedDescriptionKey: "Cannot resolve divergent conflict: missing local payload or entity id"])
+                }
+                if entityType == "job", let job = try? decodeJob(from: resolved) {
+                    queueUpdateJob(job)
+                    _ = try await syncPendingOperations()
+                } else {
+                    throw NSError(domain: "SyncEngine", code: -1, userInfo: [NSLocalizedDescriptionKey: "Divergent localWins/merge supports jobs only"])
+                }
+                db.markConflictResolved(id: operationId, resolutionStrategy: strategy.rawValue)
+                clearPendingConflict(operationId: operationId)
+            case .askUser:
+                return
             }
-            db.markConflictResolved(id: operationId, resolutionStrategy: strategy.rawValue)
-            clearPendingConflict(operationId: operationId)
             return
         }
 
@@ -698,5 +719,38 @@ final class SyncEngine: ObservableObject {
         guard let data = opData,
               let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
         return dict["job_id"] as? String ?? dict["jobId"] as? String
+    }
+
+    /// Reconstruct local payload from pending storage (for divergent conflicts or when resolving from history without original sync op)
+    func getLocalPayloadForConflict(entityType: String, entityId: String) -> [String: Any]? {
+        switch entityType {
+        case "job":
+            let pending = db.getPendingJobs().first { $0.id == entityId }
+            return pending.flatMap { (try? JSONSerialization.jsonObject(with: $0.data)) as? [String: Any] }
+        case "hazard":
+            for job in db.getPendingJobs() {
+                let hazards = db.getPendingHazards(jobId: job.id)
+                for data in hazards {
+                    if let dict = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+                       (dict["id"] as? String) == entityId {
+                        return dict
+                    }
+                }
+            }
+            return nil
+        case "control":
+            for job in db.getPendingJobs() {
+                let controls = db.getPendingControls(jobId: job.id)
+                for data in controls {
+                    if let dict = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+                       (dict["id"] as? String) == entityId {
+                        return dict
+                    }
+                }
+            }
+            return nil
+        default:
+            return nil
+        }
     }
 }
