@@ -562,11 +562,14 @@ final class SyncEngine: ObservableObject {
             let jobDetailFields = ["client_name", "clientName", "description", "address", "site_id", "siteId", "updated_at", "updatedAt"]
             if jobDetailFields.contains(field) { return .localWins }
         }
+        // Use localWins for hazard/control: we cannot merge server fields from batch conflict
+        // (conflict only has single-field server_value), so passing only op.data as resolvedValue
+        // would overwrite server changes. localWins correctly applies the local payload.
         if entityType == "hazard" {
-            return .merge
+            return .localWins
         }
         if entityType == "control" {
-            return .merge
+            return .localWins
         }
         return nil
     }

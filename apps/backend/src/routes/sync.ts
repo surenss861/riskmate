@@ -958,6 +958,10 @@ syncRouter.post(
             has_subcontractors: "has_subcontractors",
             subcontractor_count: "subcontractor_count",
             insurance_status: "insurance_status",
+            risk_score: "risk_score",
+            riskScore: "risk_score",
+            risk_level: "risk_level",
+            riskLevel: "risk_level",
           };
           const updates: Record<string, any> = {};
           for (const [src, dest] of Object.entries(keyMap)) {
