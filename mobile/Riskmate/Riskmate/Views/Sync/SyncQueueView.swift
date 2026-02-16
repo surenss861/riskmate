@@ -269,11 +269,14 @@ struct SyncQueueView: View {
                                     entityId = entityId ?? op.entityId
                                     operationType = op.type.apiTypeString
                                 } else {
-                                    // Queued op not found: use stored operation_type from conflict_log when available
+                                    // Queued op not found: use stored operation_type from conflict_log; do not default to update_*
                                     let et = conflict.entityType
                                     let eid = conflict.entityId
                                     guard !et.isEmpty, !eid.isEmpty else {
                                         throw NSError(domain: "ConflictResolution", code: 1, userInfo: [NSLocalizedDescriptionKey: "Cannot resolve: missing entity info"])
+                                    }
+                                    guard let storedOpType = conflict.operationType, !storedOpType.isEmpty else {
+                                        throw NSError(domain: "ConflictResolution", code: 3, userInfo: [NSLocalizedDescriptionKey: "Cannot resolve: original operation type is unknown. The pending operation may have been cleared."])
                                     }
                                     var base = syncEngine.getLocalPayloadForConflict(entityType: et, entityId: eid)
                                     if let perField = outcome.perFieldResolvedValues, !perField.isEmpty, var merged = base {
@@ -283,7 +286,7 @@ struct SyncQueueView: View {
                                     resolvedValue = base
                                     entityType = et
                                     entityId = eid
-                                    operationType = conflict.operationType ?? operationTypeFromEntityType(et)
+                                    operationType = storedOpType
                                 }
                                 guard resolvedValue != nil, entityType != nil, entityId != nil else {
                                     throw NSError(domain: "ConflictResolution", code: 2, userInfo: [NSLocalizedDescriptionKey: "Cannot resolve: payload or required metadata missing"])
@@ -333,15 +336,6 @@ struct SyncQueueView: View {
         case .createJob, .updateJob, .deleteJob: return "job"
         case .createHazard, .updateHazard, .deleteHazard: return "hazard"
         case .createControl, .updateControl, .deleteControl: return "control"
-        }
-    }
-
-    private func operationTypeFromEntityType(_ entityType: String) -> String {
-        switch entityType {
-        case "job": return "update_job"
-        case "hazard": return "update_hazard"
-        case "control": return "update_control"
-        default: return "update_job"
         }
     }
 }

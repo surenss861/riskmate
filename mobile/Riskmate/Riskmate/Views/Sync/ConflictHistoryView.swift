@@ -98,11 +98,14 @@ struct ConflictHistoryView: View {
                                     entityId = op.entityId
                                     operationType = op.type.apiTypeString
                                 } else {
-                                    // Original sync op removed (e.g. from history): use stored operation_type from conflict_log when available
+                                    // Original sync op removed (e.g. from history): use stored operation_type from conflict_log; do not default to update_*
                                     let et = conflict.entityType
                                     let eid = conflict.entityId
                                     guard !et.isEmpty, !eid.isEmpty else {
                                         throw NSError(domain: "ConflictResolution", code: 2, userInfo: [NSLocalizedDescriptionKey: "Cannot resolve: missing entity info"])
+                                    }
+                                    guard let storedOpType = conflict.operationType, !storedOpType.isEmpty else {
+                                        throw NSError(domain: "ConflictResolution", code: 5, userInfo: [NSLocalizedDescriptionKey: "Cannot resolve: original operation type is unknown. Resolve this conflict from Sync Queue while the pending operation is still available."])
                                     }
                                     var base = syncEngine.getLocalPayloadForConflict(entityType: et, entityId: eid)
                                     if let perField = outcome.perFieldResolvedValues, !perField.isEmpty, var merged = base {
@@ -112,7 +115,7 @@ struct ConflictHistoryView: View {
                                     resolvedValue = base
                                     entityType = et
                                     entityId = eid
-                                    operationType = conflict.operationType ?? operationTypeFromEntityType(et)
+                                    operationType = storedOpType
                                     if resolvedValue == nil {
                                         throw NSError(domain: "ConflictResolution", code: 3, userInfo: [NSLocalizedDescriptionKey: "Cannot resolve: local data no longer available"])
                                     }
@@ -185,14 +188,6 @@ struct ConflictHistoryView: View {
         }
     }
 
-    private func operationTypeFromEntityType(_ entityType: String) -> String {
-        switch entityType {
-        case "job": return "update_job"
-        case "hazard": return "update_hazard"
-        case "control": return "update_control"
-        default: return "update_job"
-        }
-    }
 }
 
 private struct ConflictHistoryRowView: View {

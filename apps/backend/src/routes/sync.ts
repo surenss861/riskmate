@@ -954,7 +954,177 @@ syncRouter.post(
         const targetId = entity_id!;
         const opType = operation_type!;
 
-        if (opType === "update_job") {
+        if (opType === "create_job") {
+          const client_name = data.client_name ?? data.clientName;
+          const client_type = data.client_type ?? data.clientType ?? "other";
+          const job_type = data.job_type ?? data.jobType;
+          const location = data.location;
+          if (!client_name || !job_type || !location) {
+            return res.status(400).json({
+              message: "resolved_value must include client_name, job_type, and location for create_job",
+            });
+          }
+          const { data: job, error: jobError } = await supabase
+            .from("jobs")
+            .insert({
+              organization_id,
+              created_by: userId,
+              client_name,
+              client_type: client_type || "other",
+              job_type,
+              location,
+              description: data.description ?? null,
+              start_date: data.start_date ?? data.startDate ?? null,
+              end_date: data.end_date ?? data.endDate ?? null,
+              status: data.status ?? "draft",
+              has_subcontractors: data.has_subcontractors ?? false,
+              subcontractor_count: data.subcontractor_count ?? 0,
+              insurance_status: data.insurance_status ?? "pending",
+            })
+            .select("id, client_name, job_type, location, status, risk_score, risk_level, created_at, updated_at, created_by")
+            .single();
+          if (jobError) {
+            return res.status(500).json({ message: jobError.message });
+          }
+          updatedJob = job;
+          const clientMetadataJob = extractClientMetadata(req);
+          await recordAuditLog({
+            organizationId: organization_id,
+            actorId: userId,
+            eventName: "job.created",
+            targetType: "job",
+            targetId: job.id,
+            metadata: { sync_resolve_conflict: true, operation_id: operation_id },
+            ...clientMetadataJob,
+          });
+        } else if (opType === "create_hazard") {
+          const jobId = data.job_id ?? data.jobId;
+          if (!jobId) {
+            return res.status(400).json({
+              message: "resolved_value must include job_id for create_hazard",
+            });
+          }
+          const { data: job } = await supabase
+            .from("jobs")
+            .select("id")
+            .eq("id", jobId)
+            .eq("organization_id", organization_id)
+            .single();
+          if (!job) {
+            return res.status(400).json({
+              message: "Job not found or does not belong to your organization",
+            });
+          }
+          const title = data.title ?? data.name ?? "Untitled";
+          const description = data.description ?? "";
+          const { data: riskFactors } = await supabase
+            .from("risk_factors")
+            .select("id")
+            .eq("is_active", true)
+            .limit(1);
+          const riskFactorId = riskFactors?.[0]?.id ?? null;
+          const insertPayload: Record<string, any> = {
+            job_id: jobId,
+            title,
+            description: description || null,
+            done: false,
+            is_completed: false,
+            organization_id: organization_id,
+          };
+          if (riskFactorId) insertPayload.risk_factor_id = riskFactorId;
+          const { data: inserted, error: insertErr } = await supabase
+            .from("mitigation_items")
+            .insert(insertPayload)
+            .select("id, job_id, hazard_id, title, description, done, is_completed, created_at, updated_at")
+            .single();
+          if (insertErr) {
+            return res.status(500).json({ message: insertErr.message });
+          }
+          updatedMitigationItem = inserted;
+          const clientMetadata = extractClientMetadata(req);
+          await recordAuditLog({
+            organizationId: organization_id,
+            actorId: userId,
+            eventName: "hazard.created",
+            targetType: "hazard",
+            targetId: inserted.id,
+            metadata: { job_id: jobId, sync_resolve_conflict: true, operation_id: operation_id },
+            ...clientMetadata,
+          });
+        } else if (opType === "create_control") {
+          const jobId = data.job_id ?? data.jobId;
+          const hazardId = data.hazard_id ?? data.hazardId;
+          if (!jobId) {
+            return res.status(400).json({
+              message: "resolved_value must include job_id for create_control",
+            });
+          }
+          if (!hazardId) {
+            return res.status(400).json({
+              message: "resolved_value must include hazard_id for create_control",
+            });
+          }
+          const { data: job } = await supabase
+            .from("jobs")
+            .select("id")
+            .eq("id", jobId)
+            .eq("organization_id", organization_id)
+            .single();
+          if (!job) {
+            return res.status(400).json({
+              message: "Job not found or does not belong to your organization",
+            });
+          }
+          const { data: hazard } = await supabase
+            .from("mitigation_items")
+            .select("id")
+            .eq("id", hazardId)
+            .eq("job_id", jobId)
+            .eq("organization_id", organization_id)
+            .single();
+          if (!hazard) {
+            return res.status(400).json({
+              message: "Hazard not found or does not belong to this job and organization",
+            });
+          }
+          const title = data.title ?? data.name ?? "Untitled";
+          const description = data.description ?? "";
+          const { data: riskFactors } = await supabase
+            .from("risk_factors")
+            .select("id")
+            .eq("is_active", true)
+            .limit(1);
+          const riskFactorId = riskFactors?.[0]?.id ?? null;
+          const insertPayload: Record<string, any> = {
+            job_id: jobId,
+            hazard_id: hazardId,
+            title,
+            description: description || null,
+            done: false,
+            is_completed: false,
+            organization_id: organization_id,
+          };
+          if (riskFactorId) insertPayload.risk_factor_id = riskFactorId;
+          const { data: inserted, error: insertErr } = await supabase
+            .from("mitigation_items")
+            .insert(insertPayload)
+            .select("id, job_id, hazard_id, title, description, done, is_completed, created_at, updated_at")
+            .single();
+          if (insertErr) {
+            return res.status(500).json({ message: insertErr.message });
+          }
+          updatedMitigationItem = inserted;
+          const clientMetadata = extractClientMetadata(req);
+          await recordAuditLog({
+            organizationId: organization_id,
+            actorId: userId,
+            eventName: "control.created",
+            targetType: "control",
+            targetId: inserted.id,
+            metadata: { job_id: jobId, hazard_id: hazardId, sync_resolve_conflict: true, operation_id: operation_id },
+            ...clientMetadata,
+          });
+        } else if (opType === "update_job") {
           const keyMap: Record<string, string> = {
             client_name: "client_name",
             clientName: "client_name",
@@ -1100,6 +1270,10 @@ syncRouter.post(
               organization_id: organization_id,
             });
           }
+        } else {
+          return res.status(400).json({
+            message: `Unsupported or missing operation_type for resolve: ${opType}. Supported: create_job, create_hazard, create_control, update_job, update_hazard, update_control, delete_job, delete_hazard, delete_control`,
+          });
         }
       }
 
