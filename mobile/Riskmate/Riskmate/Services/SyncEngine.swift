@@ -146,6 +146,7 @@ final class SyncEngine: ObservableObject {
                         } catch {
                             errors.append(error.localizedDescription)
                             if let c = result.conflict {
+                                let opType = op?.type.apiTypeString
                                 conflicts.append(SyncConflict(
                                     id: result.operationId,
                                     entityType: c.entityType ?? "job",
@@ -154,7 +155,8 @@ final class SyncEngine: ObservableObject {
                                     serverValue: c.serverValue?.value,
                                     localValue: c.localValue?.value,
                                     serverTimestamp: c.serverTimestamp ?? Date(),
-                                    localTimestamp: c.localTimestamp ?? Date()
+                                    localTimestamp: c.localTimestamp ?? Date(),
+                                    operationType: opType
                                 ))
                                 db.insertConflict(
                                     id: result.operationId,
@@ -165,7 +167,8 @@ final class SyncEngine: ObservableObject {
                                     localVersion: c.localValue.map { "\($0)" },
                                     serverTimestamp: c.serverTimestamp,
                                     localTimestamp: c.localTimestamp,
-                                    resolutionStrategy: nil
+                                    resolutionStrategy: nil,
+                                    operationType: opType
                                 )
                             }
                             failed += 1
@@ -173,6 +176,7 @@ final class SyncEngine: ObservableObject {
                         }
                     } else {
                         if let c = result.conflict {
+                            let opType = op?.type.apiTypeString
                             conflicts.append(SyncConflict(
                                 id: result.operationId,
                                 entityType: c.entityType ?? "job",
@@ -181,7 +185,8 @@ final class SyncEngine: ObservableObject {
                                 serverValue: c.serverValue?.value,
                                 localValue: c.localValue?.value,
                                 serverTimestamp: c.serverTimestamp ?? Date(),
-                                localTimestamp: c.localTimestamp ?? Date()
+                                localTimestamp: c.localTimestamp ?? Date(),
+                                operationType: opType
                             ))
                             db.insertConflict(
                                 id: result.operationId,
@@ -192,7 +197,8 @@ final class SyncEngine: ObservableObject {
                                 localVersion: c.localValue.map { "\($0)" },
                                 serverTimestamp: c.serverTimestamp,
                                 localTimestamp: c.localTimestamp,
-                                resolutionStrategy: nil
+                                resolutionStrategy: nil,
+                                operationType: opType
                             )
                         }
                         failed += 1
@@ -231,6 +237,7 @@ final class SyncEngine: ObservableObject {
             for c in downloadConflicts {
                 if !conflicts.contains(where: { $0.id == c.id }) {
                     conflicts.append(c)
+                    // Divergent conflicts have no queued op; operation_type remains nil
                     db.insertConflict(
                         id: c.id,
                         entityType: c.entityType,
@@ -240,7 +247,8 @@ final class SyncEngine: ObservableObject {
                         localVersion: c.localValue.map { "\($0)" },
                         serverTimestamp: c.serverTimestamp,
                         localTimestamp: c.localTimestamp,
-                        resolutionStrategy: nil
+                        resolutionStrategy: nil,
+                        operationType: nil
                     )
                 }
             }
@@ -275,7 +283,8 @@ final class SyncEngine: ObservableObject {
                 serverValue: row.serverVersion as? AnyHashable,
                 localValue: row.localVersion as? AnyHashable,
                 serverTimestamp: row.serverTimestamp ?? Date(),
-                localTimestamp: row.localTimestamp ?? Date()
+                localTimestamp: row.localTimestamp ?? Date(),
+                operationType: row.operationType
             )
         }
     }

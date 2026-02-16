@@ -10,6 +10,8 @@ struct SyncConflict: Identifiable {
     let localValue: AnyHashable?
     let serverTimestamp: Date
     let localTimestamp: Date
+    /// Original sync operation type when conflict was logged (create_job, update_job, delete_job, etc.); used when resolving without queued op
+    let operationType: String?
 
     /// Display string for server value (for UI)
     var serverValueDisplay: String {
@@ -29,7 +31,8 @@ struct SyncConflict: Identifiable {
         serverValue: AnyHashable?,
         localValue: AnyHashable?,
         serverTimestamp: Date,
-        localTimestamp: Date
+        localTimestamp: Date,
+        operationType: String? = nil
     ) {
         self.id = id
         self.entityType = entityType
@@ -39,6 +42,7 @@ struct SyncConflict: Identifiable {
         self.localValue = localValue
         self.serverTimestamp = serverTimestamp
         self.localTimestamp = localTimestamp
+        self.operationType = operationType
     }
 
     /// Create from backend conflict response (accepts Any and converts to Hashable where possible)
@@ -50,7 +54,8 @@ struct SyncConflict: Identifiable {
         serverValue: Any?,
         localValue: Any?,
         serverTimestamp: Date?,
-        localTimestamp: Date?
+        localTimestamp: Date?,
+        operationType: String? = nil
     ) {
         self.id = id
         self.entityType = entityType
@@ -60,6 +65,7 @@ struct SyncConflict: Identifiable {
         self.localValue = localValue as? AnyHashable
         self.serverTimestamp = serverTimestamp ?? Date()
         self.localTimestamp = localTimestamp ?? Date()
+        self.operationType = operationType
     }
 }
 

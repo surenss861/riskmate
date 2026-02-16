@@ -269,7 +269,7 @@ struct SyncQueueView: View {
                                     entityId = entityId ?? op.entityId
                                     operationType = op.type.apiTypeString
                                 } else {
-                                    // Queued op not found: reconstruct local payload from storage
+                                    // Queued op not found: use stored operation_type from conflict_log when available
                                     let et = conflict.entityType
                                     let eid = conflict.entityId
                                     guard !et.isEmpty, !eid.isEmpty else {
@@ -283,7 +283,7 @@ struct SyncQueueView: View {
                                     resolvedValue = base
                                     entityType = et
                                     entityId = eid
-                                    operationType = operationTypeFromEntityType(et)
+                                    operationType = conflict.operationType ?? operationTypeFromEntityType(et)
                                 }
                                 guard resolvedValue != nil, entityType != nil, entityId != nil else {
                                     throw NSError(domain: "ConflictResolution", code: 2, userInfo: [NSLocalizedDescriptionKey: "Cannot resolve: payload or required metadata missing"])

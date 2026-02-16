@@ -98,7 +98,7 @@ struct ConflictHistoryView: View {
                                     entityId = op.entityId
                                     operationType = op.type.apiTypeString
                                 } else {
-                                    // Original sync op removed (e.g. from history): refetch payload from storage
+                                    // Original sync op removed (e.g. from history): use stored operation_type from conflict_log when available
                                     let et = conflict.entityType
                                     let eid = conflict.entityId
                                     guard !et.isEmpty, !eid.isEmpty else {
@@ -112,7 +112,7 @@ struct ConflictHistoryView: View {
                                     resolvedValue = base
                                     entityType = et
                                     entityId = eid
-                                    operationType = operationTypeFromEntityType(et)
+                                    operationType = conflict.operationType ?? operationTypeFromEntityType(et)
                                     if resolvedValue == nil {
                                         throw NSError(domain: "ConflictResolution", code: 3, userInfo: [NSLocalizedDescriptionKey: "Cannot resolve: local data no longer available"])
                                     }
@@ -160,7 +160,8 @@ struct ConflictHistoryView: View {
             serverValue: row.serverVersion as? AnyHashable,
             localValue: row.localVersion as? AnyHashable,
             serverTimestamp: row.serverTimestamp ?? Date(),
-            localTimestamp: row.localTimestamp ?? Date()
+            localTimestamp: row.localTimestamp ?? Date(),
+            operationType: row.operationType
         )
     }
 
