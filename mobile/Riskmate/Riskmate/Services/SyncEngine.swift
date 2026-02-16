@@ -576,6 +576,8 @@ final class SyncEngine: ObservableObject {
             case .askUser:
                 break
             }
+            db.removeSyncOperation(id: operationId)
+            refreshPendingOperations()
             db.markConflictResolved(id: operationId, resolutionStrategy: strategy.rawValue)
             clearPendingConflict(operationId: operationId)
             return
