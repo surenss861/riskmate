@@ -99,4 +99,93 @@ struct RiskmateTests {
         #expect(merged["extra"] as? String == "server-only")
         #expect(merged["name"] as? String == "B")
     }
+
+    // MARK: - Auto Strategy Selection Tests (ticket-required)
+
+    @Test func autoStrategyJobStatusReturnsServerWins() async throws {
+        let strategy = SyncConflictMerge.autoStrategyForConflict(entityType: "job", field: "status")
+        #expect(strategy == .serverWins)
+    }
+
+    @Test func autoStrategyJobDetailsReturnsLocalWins() async throws {
+        for field in ["client_name", "clientName", "description", "address", "site_id", "siteId", "updated_at", "updatedAt"] {
+            let strategy = SyncConflictMerge.autoStrategyForConflict(entityType: "job", field: field)
+            #expect(strategy == .localWins, "Expected localWins for field \(field)")
+        }
+    }
+
+    @Test func autoStrategyHazardControlReturnsMerge() async throws {
+        #expect(SyncConflictMerge.autoStrategyForConflict(entityType: "hazard", field: "name") == .merge)
+        #expect(SyncConflictMerge.autoStrategyForConflict(entityType: "control", field: "title") == .merge)
+    }
+
+    @Test func autoStrategyEvidencePhotoReturnsAskUser() async throws {
+        #expect(SyncConflictMerge.autoStrategyForConflict(entityType: "evidence", field: "url") == nil)
+        #expect(SyncConflictMerge.autoStrategyForConflict(entityType: "job", field: "photo_deleted") == nil)
+        #expect(SyncConflictMerge.autoStrategyForConflict(entityType: "job", field: "evidence_id") == nil)
+    }
+
+    // MARK: - Hazard Dual-Add Merge Tests (merged payload)
+
+    @Test func hazardDualAddMergeProducesMergedPayload() async throws {
+        let local: [String: Any] = [
+            "id": "temp-hazard-1",
+            "job_id": "job-1",
+            "name": "Local Added Hazard",
+            "severity": "high",
+        ]
+        let serverValue: [String: Any] = [
+            "id": "server-hazard-1",
+            "name": "Server Added Hazard",
+            "description": "Server description",
+            "updated_at": "2025-01-15T12:00:00Z",
+        ]
+        let merged = SyncConflictMerge.mergeHazardControlPayload(
+            localDict: local,
+            serverValue: serverValue,
+            conflictField: "name"
+        )
+        #expect(merged["name"] as? String == "Server Added Hazard")
+        #expect(merged["description"] as? String == "Server description")
+        #expect(merged["severity"] as? String == "high")
+        #expect(merged["job_id"] as? String == "job-1")
+    }
+
+    // MARK: - Conflict Modal / Resolution Tests
+
+    @Test func syncConflictShowsServerLocalValues() async throws {
+        let conflict = SyncConflict(
+            entityType: "job",
+            entityId: "job-1",
+            field: "status",
+            serverValue: "in_progress" as AnyHashable,
+            localValue: "completed" as AnyHashable,
+            serverTimestamp: Date().addingTimeInterval(-3600),
+            localTimestamp: Date()
+        )
+        #expect(conflict.serverValueDisplay == "in_progress")
+        #expect(conflict.localValueDisplay == "completed")
+        #expect(conflict.field == "status")
+    }
+
+    @Test func conflictResolutionOutcomeAppliesMergeStrategy() async throws {
+        let perField: [String: Any] = ["name": "Merged Name"]
+        let outcome = ConflictResolutionOutcome(strategy: .merge, perFieldResolvedValues: perField)
+        #expect(outcome.strategy == .merge)
+        #expect(outcome.perFieldResolvedValues?["name"] as? String == "Merged Name")
+    }
+
+    @Test func conflictResolutionOutcomeAppliesChosenStrategy() async throws {
+        let serverOutcome = ConflictResolutionOutcome(strategy: .serverWins, perFieldResolvedValues: nil)
+        let localOutcome = ConflictResolutionOutcome(strategy: .localWins, perFieldResolvedValues: nil)
+        #expect(serverOutcome.strategy == .serverWins)
+        #expect(localOutcome.strategy == .localWins)
+    }
+
+    @Test func conflictResolutionStrategyRawValuesMatchAPI() async throws {
+        #expect(ConflictResolutionStrategy.serverWins.rawValue == "server_wins")
+        #expect(ConflictResolutionStrategy.localWins.rawValue == "local_wins")
+        #expect(ConflictResolutionStrategy.merge.rawValue == "merge")
+        #expect(ConflictResolutionStrategy.askUser.rawValue == "ask_user")
+    }
 }

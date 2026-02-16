@@ -101,6 +101,23 @@ struct ConflictResolutionOutcome {
 
 /// Builds a merged payload for hazard/control dual-add conflicts: start from local payload and selectively keep differing server fields.
 enum SyncConflictMerge {
+
+    /// Automatic strategy selection for given entity/field. Nil means ask_user (e.g. evidence/photo deletion).
+    /// Strategies: server wins for job status, local wins for job details, merge for hazard/control dual-add.
+    static func autoStrategyForConflict(entityType: String, field: String) -> ConflictResolutionStrategy? {
+        if entityType == "evidence" || field.contains("photo") || field.contains("evidence") {
+            return nil
+        }
+        if entityType == "job" {
+            if field == "status" { return .serverWins }
+            let jobDetailFields = ["client_name", "clientName", "description", "address", "site_id", "siteId", "updated_at", "updatedAt"]
+            if jobDetailFields.contains(field) { return .localWins }
+        }
+        if entityType == "hazard" || entityType == "control" {
+            return .merge
+        }
+        return nil
+    }
     static func mergeHazardControlPayload(
         localDict: [String: Any],
         serverValue: Any?,

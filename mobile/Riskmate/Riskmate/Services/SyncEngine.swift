@@ -139,6 +139,24 @@ final class SyncEngine: ObservableObject {
                                     resolvedValue = dict
                                 }
                             }
+                            // Insert conflict_log row before auto resolution so history records it
+                            if let c = result.conflict {
+                                let opType = op?.type.apiTypeString
+                                db.insertConflict(
+                                    id: result.operationId,
+                                    entityType: c.entityType ?? "job",
+                                    entityId: c.entityId ?? result.operationId,
+                                    field: c.field,
+                                    serverVersion: c.serverValue.map { "\($0)" },
+                                    localVersion: c.localValue.map { "\($0)" },
+                                    serverTimestamp: c.serverTimestamp,
+                                    localTimestamp: c.localTimestamp,
+                                    resolutionStrategy: nil,
+                                    operationType: opType,
+                                    serverActor: c.serverActor,
+                                    localActor: c.localActor
+                                )
+                            }
                             try await resolveConflict(
                                 operationId: result.operationId,
                                 strategy: strategy,
@@ -148,6 +166,7 @@ final class SyncEngine: ObservableObject {
                                 operationType: op?.type.apiTypeString
                             )
                             succeeded += 1
+                            NotificationCenter.default.post(name: .syncConflictHistoryDidChange, object: nil)
                         } catch {
                             errors.append(error.localizedDescription)
                             if let c = result.conflict {
@@ -588,22 +607,7 @@ final class SyncEngine: ObservableObject {
         guard let c = conflict else { return nil }
         let entityType = c.entityType ?? "job"
         let field = c.field ?? ""
-
-        // Ask user for server-deleted vs offline-uploaded photo/evidence
-        if entityType == "evidence" || field.contains("photo") || field.contains("evidence") {
-            return nil
-        }
-        if entityType == "job" {
-            if field == "status" { return .serverWins }
-            let jobDetailFields = ["client_name", "clientName", "description", "address", "site_id", "siteId", "updated_at", "updatedAt"]
-            if jobDetailFields.contains(field) { return .localWins }
-        }
-        // Use merge for hazard/control dual-add conflicts so both sides' changes are preserved
-        // (merged payload built from local + differing server fields)
-        if entityType == "hazard" || entityType == "control" {
-            return .merge
-        }
-        return nil
+        return SyncConflictMerge.autoStrategyForConflict(entityType: entityType, field: field)
     }
 
     /// Build a merged payload for hazard/control conflicts: start from local op payload and selectively keep differing server fields.
