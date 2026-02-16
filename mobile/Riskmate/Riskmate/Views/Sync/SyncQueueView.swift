@@ -289,19 +289,24 @@ struct SyncQueueView: View {
                                     throw NSError(domain: "ConflictResolution", code: 2, userInfo: [NSLocalizedDescriptionKey: "Cannot resolve: payload or required metadata missing"])
                                 }
                             }
-                            try await syncEngine.resolveConflict(
-                                operationId: conflict.id,
-                                strategy: outcome.strategy,
-                                resolvedValue: resolvedValue,
-                                entityType: entityType,
-                                entityId: entityId,
-                                operationType: operationType
-                            )
-                            conflictToResolve = syncEngine.pendingConflicts.first
-                            _ = try? await syncEngine.syncPendingOperations()
-                            JobsStore.shared.refreshPendingJobs()
-                            NotificationCenter.default.post(name: .syncConflictHistoryDidChange, object: nil)
-                            ToastCenter.shared.show("Conflict resolved", systemImage: "checkmark.circle", style: .success)
+                            do {
+                                try await syncEngine.resolveConflict(
+                                    operationId: conflict.id,
+                                    strategy: outcome.strategy,
+                                    resolvedValue: resolvedValue,
+                                    entityType: entityType,
+                                    entityId: entityId,
+                                    operationType: operationType
+                                )
+                                conflictToResolve = syncEngine.pendingConflicts.first
+                                _ = try? await syncEngine.syncPendingOperations()
+                                JobsStore.shared.refreshPendingJobs()
+                                NotificationCenter.default.post(name: .syncConflictHistoryDidChange, object: nil)
+                                ToastCenter.shared.show("Conflict resolved", systemImage: "checkmark.circle", style: .success)
+                            } catch {
+                                ToastCenter.shared.show(error.localizedDescription, systemImage: "exclamationmark.triangle", style: .error)
+                                throw error
+                            }
                         },
                         onCancel: {
                             conflictToResolve = nil

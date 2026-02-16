@@ -765,7 +765,8 @@ final class SyncEngine: ObservableObject {
         return dict["job_id"] as? String ?? dict["jobId"] as? String
     }
 
-    /// Reconstruct local payload from pending storage (for divergent conflicts or when resolving from history without original sync op)
+    /// Reconstruct local payload from pending storage or sync queue (for divergent conflicts or when resolving from history without original sync op).
+    /// Tries: (1) pending create tables, (2) sync_queue ops for update/delete.
     func getLocalPayloadForConflict(entityType: String, entityId: String) -> [String: Any]? {
         switch entityType {
         case "job":
@@ -781,7 +782,7 @@ final class SyncEngine: ObservableObject {
                     }
                 }
             }
-            return nil
+            return db.getSyncOperationPayloadForEntity(entityType: entityType, entityId: entityId)
         case "control":
             for job in db.getPendingJobs() {
                 let controls = db.getPendingControls(jobId: job.id)
@@ -792,7 +793,7 @@ final class SyncEngine: ObservableObject {
                     }
                 }
             }
-            return nil
+            return db.getSyncOperationPayloadForEntity(entityType: entityType, entityId: entityId)
         default:
             return nil
         }

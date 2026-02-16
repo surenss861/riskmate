@@ -136,7 +136,8 @@ struct ConflictHistoryView: View {
                                 NotificationCenter.default.post(name: .syncConflictHistoryDidChange, object: nil)
                                 ToastCenter.shared.show("Conflict resolved", systemImage: "checkmark.circle", style: .success)
                             } catch {
-                                ToastCenter.shared.show("Failed to resolve conflict", systemImage: "exclamationmark.triangle", style: .error)
+                                ToastCenter.shared.show(error.localizedDescription, systemImage: "exclamationmark.triangle", style: .error)
+                                throw error
                             }
                         },
                         onCancel: {

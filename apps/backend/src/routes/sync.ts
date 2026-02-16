@@ -1051,12 +1051,21 @@ syncRouter.post(
             .eq("id", targetId)
             .eq("organization_id", organization_id)
             .single();
-          if (existing?.status === "draft") {
-            await supabase
-              .from("jobs")
-              .update({ deleted_at: new Date().toISOString() })
-              .eq("id", targetId)
-              .eq("organization_id", organization_id);
+          if (existing?.status !== "draft") {
+            return res.status(409).json({
+              ok: false,
+              message: "Cannot delete job: job is not in draft status",
+              code: "DELETION_REJECTED",
+              deletion_performed: false,
+            });
+          }
+          const { error: deleteErr } = await supabase
+            .from("jobs")
+            .update({ deleted_at: new Date().toISOString() })
+            .eq("id", targetId)
+            .eq("organization_id", organization_id);
+          if (deleteErr) {
+            return res.status(500).json({ message: deleteErr.message });
           }
         } else if (opType === "delete_hazard" || opType === "delete_control") {
           const jobId = data.job_id ?? data.jobId;
