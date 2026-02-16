@@ -3,7 +3,7 @@ import { supabase } from "../lib/supabaseClient";
 import { authenticate, AuthenticatedRequest } from "../middleware/auth";
 import { recordAuditLog, extractClientMetadata } from "../middleware/audit";
 import { calculateRiskScore, generateMitigationItems } from "../utils/riskScoring";
-import { notifyHighRiskJob, sendHazardAddedNotification, sendJobAssignedNotification, sendMentionNotification } from "../services/notifications";
+import { notifyHighRiskJob, sendHazardAddedNotification, sendJobAssignedNotification, sendMentionNotification, sendEvidenceUploadedNotification } from "../services/notifications";
 import { buildJobReport } from "../utils/jobReport";
 import { enforceJobLimit, requireFeature } from "../middleware/limits";
 import { RequestWithId } from "../middleware/requestId";
@@ -1976,6 +1976,22 @@ jobsRouter.post("/:id/documents", authenticate, requireWriteAccess, async (req: 
         await supabase.from("documents").delete().eq("id", inserted.id);
         return res.status(500).json({ message: "Failed to save photo category" });
       }
+    }
+
+    // Notify job owner when uploader is not the owner (evidence upload notification)
+    try {
+      const { data: jobRow } = await supabase
+        .from("jobs")
+        .select("created_by")
+        .eq("id", jobId)
+        .eq("organization_id", organization_id)
+        .single();
+      const ownerId = jobRow?.created_by;
+      if (ownerId && ownerId !== userId) {
+        await sendEvidenceUploadedNotification(ownerId, jobId, inserted.id);
+      }
+    } catch (notifyErr: any) {
+      console.warn("Evidence upload notification failed:", notifyErr?.message ?? notifyErr);
     }
 
     const storageBucket = inserted.file_path?.startsWith("evidence/") ? "evidence" : "documents";
