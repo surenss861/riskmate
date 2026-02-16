@@ -11,6 +11,21 @@ type DeviceTokenPayload = {
 };
 export declare function registerDeviceToken({ userId, organizationId, token, platform, }: DeviceTokenPayload): Promise<void>;
 export declare function unregisterDeviceToken(token: string): Promise<void>;
+/** Default notification preferences (all enabled). */
+export declare const DEFAULT_NOTIFICATION_PREFERENCES: {
+    readonly mentions_enabled: true;
+    readonly job_assigned_enabled: true;
+    readonly signature_request_enabled: true;
+    readonly evidence_uploaded_enabled: true;
+    readonly hazard_added_enabled: true;
+    readonly deadline_enabled: true;
+    readonly weekly_summary_enabled: true;
+    readonly high_risk_job_enabled: true;
+    readonly report_ready_enabled: true;
+};
+export type NotificationPreferences = typeof DEFAULT_NOTIFICATION_PREFERENCES;
+/** Fetch notification preferences for a user; returns defaults if no row exists. */
+export declare function getNotificationPreferences(userId: string): Promise<NotificationPreferences>;
 /** Fetch push tokens for a single user (for targeted notifications). */
 export declare function fetchUserTokens(userId: string): Promise<string[]>;
 export declare function notifyHighRiskJob(params: {

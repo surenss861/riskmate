@@ -147,6 +147,7 @@ notificationsRouter.post(
         return res
           .status(400)
           .json({ message: "Missing userId, jobId, or photoId" });
+      }
       await sendEvidenceUploadedNotification(userId, jobId, photoId);
       res.status(204).end();
     } catch (err: any) {

@@ -3,9 +3,11 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.DEFAULT_NOTIFICATION_PREFERENCES = void 0;
 exports.validatePushToken = validatePushToken;
 exports.registerDeviceToken = registerDeviceToken;
 exports.unregisterDeviceToken = unregisterDeviceToken;
+exports.getNotificationPreferences = getNotificationPreferences;
 exports.fetchUserTokens = fetchUserTokens;
 exports.notifyHighRiskJob = notifyHighRiskJob;
 exports.notifyReportReady = notifyReportReady;
@@ -81,6 +83,61 @@ async function fetchOrgTokens(organizationId) {
         return [];
     }
     return (data || []).map((row) => row.token);
+}
+/** Fetch org device tokens only for users who have the given preference enabled. */
+async function fetchOrgTokensWithPreference(organizationId, prefKey) {
+    const { data: tokensData, error: tokensError } = await supabaseClient_1.supabase
+        .from("device_tokens")
+        .select("token, user_id")
+        .eq("organization_id", organizationId);
+    if (tokensError || !tokensData?.length)
+        return [];
+    const userIds = [...new Set(tokensData.map((r) => r.user_id))];
+    const { data: prefsData } = await supabaseClient_1.supabase
+        .from("notification_preferences")
+        .select("user_id, " + prefKey)
+        .in("user_id", userIds);
+    const prefsByUser = new Map((prefsData || []).map((r) => [r.user_id, r[prefKey] !== false]));
+    return tokensData
+        .filter((r) => prefsByUser.get(r.user_id) !== false)
+        .map((r) => r.token);
+}
+/** Default notification preferences (all enabled). */
+exports.DEFAULT_NOTIFICATION_PREFERENCES = {
+    mentions_enabled: true,
+    job_assigned_enabled: true,
+    signature_request_enabled: true,
+    evidence_uploaded_enabled: true,
+    hazard_added_enabled: true,
+    deadline_enabled: true,
+    weekly_summary_enabled: true,
+    high_risk_job_enabled: true,
+    report_ready_enabled: true,
+};
+/** Fetch notification preferences for a user; returns defaults if no row exists. */
+async function getNotificationPreferences(userId) {
+    const { data, error } = await supabaseClient_1.supabase
+        .from("notification_preferences")
+        .select("*")
+        .eq("user_id", userId)
+        .maybeSingle();
+    if (error) {
+        console.error("Failed to load notification preferences:", error);
+        return { ...exports.DEFAULT_NOTIFICATION_PREFERENCES };
+    }
+    if (!data)
+        return { ...exports.DEFAULT_NOTIFICATION_PREFERENCES };
+    return {
+        mentions_enabled: data.mentions_enabled ?? true,
+        job_assigned_enabled: data.job_assigned_enabled ?? true,
+        signature_request_enabled: data.signature_request_enabled ?? true,
+        evidence_uploaded_enabled: data.evidence_uploaded_enabled ?? true,
+        hazard_added_enabled: data.hazard_added_enabled ?? true,
+        deadline_enabled: data.deadline_enabled ?? true,
+        weekly_summary_enabled: data.weekly_summary_enabled ?? true,
+        high_risk_job_enabled: data.high_risk_job_enabled ?? true,
+        report_ready_enabled: data.report_ready_enabled ?? true,
+    };
 }
 /** Fetch push tokens for a single user (for targeted notifications). */
 async function fetchUserTokens(userId) {
@@ -217,7 +274,7 @@ const chunkArray = (arr, size) => {
 async function notifyHighRiskJob(params) {
     if (params.riskScore < 75)
         return;
-    const tokens = await fetchOrgTokens(params.organizationId);
+    const tokens = await fetchOrgTokensWithPreference(params.organizationId, "high_risk_job_enabled");
     await sendPush(tokens, {
         title: "⚠️ High-risk job detected",
         body: `${params.clientName} scored ${params.riskScore}. Review mitigation plan now.`,
@@ -228,7 +285,7 @@ async function notifyHighRiskJob(params) {
     });
 }
 async function notifyReportReady(params) {
-    const tokens = await fetchOrgTokens(params.organizationId);
+    const tokens = await fetchOrgTokensWithPreference(params.organizationId, "report_ready_enabled");
     await sendPush(tokens, {
         title: "📄 Risk report ready",
         body: "Your Riskmate PDF report is ready to view.",
@@ -240,7 +297,7 @@ async function notifyReportReady(params) {
     });
 }
 async function notifyWeeklySummary(params) {
-    const tokens = await fetchOrgTokens(params.organizationId);
+    const tokens = await fetchOrgTokensWithPreference(params.organizationId, "weekly_summary_enabled");
     await sendPush(tokens, {
         title: "📈 Weekly compliance summary",
         body: params.message,
@@ -263,6 +320,9 @@ async function sendToUser(userId, payload) {
 }
 /** Notify user when they are assigned to a job. */
 async function sendJobAssignedNotification(userId, jobId, jobTitle) {
+    const prefs = await getNotificationPreferences(userId);
+    if (!prefs.job_assigned_enabled)
+        return;
     await sendToUser(userId, {
         title: "Job Assigned",
         body: jobTitle
@@ -278,6 +338,9 @@ async function sendJobAssignedNotification(userId, jobId, jobTitle) {
 }
 /** Notify user when their signature is requested on a report run. */
 async function sendSignatureRequestNotification(userId, reportRunId, jobTitle) {
+    const prefs = await getNotificationPreferences(userId);
+    if (!prefs.signature_request_enabled)
+        return;
     await sendToUser(userId, {
         title: "Signature Requested",
         body: jobTitle
@@ -293,6 +356,9 @@ async function sendSignatureRequestNotification(userId, reportRunId, jobTitle) {
 }
 /** Notify user when evidence is uploaded to a job they care about. */
 async function sendEvidenceUploadedNotification(userId, jobId, photoId) {
+    const prefs = await getNotificationPreferences(userId);
+    if (!prefs.evidence_uploaded_enabled)
+        return;
     await sendToUser(userId, {
         title: "Evidence Uploaded",
         body: "New evidence was added to a job.",
@@ -307,6 +373,9 @@ async function sendEvidenceUploadedNotification(userId, jobId, photoId) {
 }
 /** Notify user when a hazard is added to a job. */
 async function sendHazardAddedNotification(userId, jobId, hazardId) {
+    const prefs = await getNotificationPreferences(userId);
+    if (!prefs.hazard_added_enabled)
+        return;
     await sendToUser(userId, {
         title: "Hazard Added",
         body: "A new hazard was added to a job.",
@@ -321,6 +390,9 @@ async function sendHazardAddedNotification(userId, jobId, hazardId) {
 }
 /** Notify user about an approaching job deadline. */
 async function sendDeadlineNotification(userId, jobId, hoursRemaining, jobTitle) {
+    const prefs = await getNotificationPreferences(userId);
+    if (!prefs.deadline_enabled)
+        return;
     const h = Math.round(hoursRemaining);
     const text = h <= 0
         ? "Due now"
@@ -341,6 +413,9 @@ async function sendDeadlineNotification(userId, jobId, hoursRemaining, jobTitle)
 }
 /** Notify user when they are mentioned in a comment. */
 async function sendMentionNotification(userId, commentId, contextLabel) {
+    const prefs = await getNotificationPreferences(userId);
+    if (!prefs.mentions_enabled)
+        return;
     await sendToUser(userId, {
         title: "You were mentioned",
         body: contextLabel ?? "Someone mentioned you in a comment.",
