@@ -221,9 +221,29 @@ final class SyncEngine: ObservableObject {
 
         // 2. Download incremental changes - use distant past when no prior timestamp (first sync)
         let since = db.getLastSyncTimestamp() ?? Date.distantPast
+        var fetchedJobs: [Job] = []
         do {
-            _ = try await fetchChanges(since: since)
+            fetchedJobs = try await fetchChanges(since: since)
             db.setLastSyncTimestamp(Date())
+
+            // Detect divergent records (local vs server) and log to conflict store
+            let downloadConflicts = detectConflicts(fetchedJobs)
+            for c in downloadConflicts {
+                if !conflicts.contains(where: { $0.id == c.id }) {
+                    conflicts.append(c)
+                    db.insertConflict(
+                        id: c.id,
+                        entityType: c.entityType,
+                        entityId: c.entityId,
+                        field: c.field,
+                        serverVersion: c.serverValue.map { "\($0)" },
+                        localVersion: c.localValue.map { "\($0)" },
+                        serverTimestamp: c.serverTimestamp,
+                        localTimestamp: c.localTimestamp,
+                        resolutionStrategy: nil
+                    )
+                }
+            }
         } catch {
             let result = SyncResult(succeeded: succeeded, failed: failed, conflicts: conflicts, errors: errors + [error.localizedDescription])
             lastResult = result
@@ -260,7 +280,8 @@ final class SyncEngine: ObservableObject {
         }
     }
 
-    /// Detect conflicts by comparing local and server data
+    /// Detect conflicts by comparing local and server data (divergent records during sync).
+    /// Each conflict gets a stable id so it can be persisted and resolved.
     func detectConflicts(_ serverData: [Job]) -> [SyncConflict] {
         let pending = db.getPendingJobs()
         var conflicts: [SyncConflict] = []
@@ -270,13 +291,15 @@ final class SyncEngine: ObservableObject {
             if let server = serverData.first(where: { $0.id == local.id || $0.id == jobData.id }) {
                 let serverUpdated = server.updatedAt ?? server.createdAt
                 if serverUpdated != localUpdated {
-                    // Timestamp conflict - server was updated after local
+                    let field = "updated_at"
+                    let conflictId = "divergent:job:\(server.id):\(field)"
                     let localDate = ISO8601DateFormatter().date(from: localUpdated) ?? Date()
                     let serverDate = ISO8601DateFormatter().date(from: serverUpdated) ?? Date()
                     conflicts.append(SyncConflict(
+                        id: conflictId,
                         entityType: "job",
                         entityId: server.id,
-                        field: "updated_at",
+                        field: field,
                         serverValue: serverUpdated as AnyHashable,
                         localValue: localUpdated as AnyHashable,
                         serverTimestamp: serverDate,
@@ -398,7 +421,7 @@ final class SyncEngine: ObservableObject {
     /// Resolve a conflict via backend.
     /// For local_wins/merge, pass resolvedValue (entity payload), entityType, entityId, operationType so the server can apply the resolution.
     /// After success: server_wins → refresh entity from response; local_wins/merge → update local cache with resolved/response data.
-    /// Only after applying the strategy do we remove the op and mark the conflict resolved.
+    /// For divergent conflicts (no op in queue, id prefix "divergent:"), apply serverWins locally and retry pending ops; only then mark resolved.
     func resolveConflict(
         operationId: String,
         strategy: ConflictResolutionStrategy,
@@ -407,6 +430,27 @@ final class SyncEngine: ObservableObject {
         entityId: String? = nil,
         operationType: String? = nil
     ) async throws {
+        var op = db.getSyncQueue().first { $0.id == operationId }
+        let effectiveEntityType = entityType ?? op.flatMap { entityTypeFromOperation($0.type) }
+        let effectiveEntityId = entityId ?? op?.entityId
+
+        // Divergent conflict (from detectConflicts): no operation on server; resolve locally when possible
+        if op == nil && operationId.hasPrefix("divergent:") {
+            if strategy == .serverWins, let et = effectiveEntityType, let eid = effectiveEntityId {
+                db.deletePendingUpdatesForEntity(entityType: et, entityId: eid)
+                _ = try? await fetchChanges(since: Date().addingTimeInterval(-3600))
+            }
+            db.markConflictResolved(id: operationId, resolutionStrategy: strategy.rawValue)
+            clearPendingConflict(operationId: operationId)
+            return
+        }
+
+        if op == nil {
+            op = db.getSyncQueue().first { o in
+                entityTypeMatches(o.type, effectiveEntityType ?? "") && o.entityId == (effectiveEntityId ?? "")
+            }
+        }
+
         let response = try await APIClient.shared.resolveSyncConflict(
             operationId: operationId,
             strategy: strategy,
@@ -415,10 +459,6 @@ final class SyncEngine: ObservableObject {
             entityId: entityId,
             operationType: operationType
         )
-
-        let op = db.getSyncQueue().first { $0.id == operationId }
-        let effectiveEntityType = entityType ?? op.flatMap { entityTypeFromOperation($0.type) }
-        let effectiveEntityId = entityId ?? op?.entityId
 
         switch strategy {
         case .serverWins:
@@ -485,12 +525,17 @@ final class SyncEngine: ObservableObject {
         clearPendingConflict(operationId: operationId)
     }
 
-    /// Automatic resolution for known-simple conflicts; nil means queue user prompt (e.g. photo delete vs offline upload).
+    /// Automatic resolution for known-simple conflicts; nil means queue user prompt (e.g. server-deleted vs offline-uploaded photo).
+    /// Strategies per ticket: server wins for job status, local wins for job details, merge for dual-added hazards/controls, ask user for evidence/photo.
     private func autoStrategy(for conflict: BatchConflictDetail?, operation: SyncOperation?) -> ConflictResolutionStrategy? {
         guard let c = conflict else { return nil }
         let entityType = c.entityType ?? "job"
         let field = c.field ?? ""
 
+        // Ask user for server-deleted vs offline-uploaded photo/evidence
+        if entityType == "evidence" || field.contains("photo") || field.contains("evidence") {
+            return nil
+        }
         if entityType == "job" {
             if field == "status" { return .serverWins }
             let jobDetailFields = ["client_name", "clientName", "description", "address", "site_id", "siteId", "updated_at", "updatedAt"]
@@ -511,6 +556,11 @@ final class SyncEngine: ObservableObject {
         case .createHazard, .updateHazard, .deleteHazard: return "hazard"
         case .createControl, .updateControl, .deleteControl: return "control"
         }
+    }
+
+    private func entityTypeMatches(_ type: OperationType, _ entityType: String) -> Bool {
+        guard let et = entityTypeFromOperation(type) else { return false }
+        return et == entityType
     }
 
     private func decodeJob(from dict: [String: Any]) throws -> Job? {

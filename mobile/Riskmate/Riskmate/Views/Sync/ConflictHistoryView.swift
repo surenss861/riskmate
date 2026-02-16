@@ -81,7 +81,10 @@ struct ConflictHistoryView: View {
                             }
 
                             var resolvedValue: [String: Any]?
-                            var entityType: String? = conflict.entityType ?? entityTypeFromOperation(op.type)
+                            var entityType: String? = conflict.entityType
+                            if entityType?.isEmpty == true {
+                                entityType = entityTypeFromOperation(op.type)
+                            }
                             var entityId: String? = conflict.entityId
                             var operationType: String?
 
