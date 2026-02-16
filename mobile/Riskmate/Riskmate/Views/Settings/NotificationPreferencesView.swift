@@ -105,6 +105,7 @@ struct NotificationPreferencesView: View {
         .disabled(isSaving)
     }
 
+    @MainActor
     private func load() async {
         isLoading = true
         errorMessage = nil
@@ -116,6 +117,7 @@ struct NotificationPreferencesView: View {
         isLoading = false
     }
 
+    @MainActor
     private func save(_ newPrefs: APIClient.NotificationPreferences) async {
         isSaving = true
         errorMessage = nil

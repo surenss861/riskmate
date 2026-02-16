@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 import UserNotifications
 
 /// Handles notification permissions, device token registration, badge, and notification presentation.
@@ -152,10 +153,14 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
 
     func setBadgeCount(_ count: Int) {
         Task { @MainActor in
-            UNUserNotificationCenter.current().setBadgeCount(count) { error in
-                if let error = error {
-                    print("[NotificationService] setBadgeCount failed: \(error.localizedDescription)")
+            if #available(iOS 17.0, *) {
+                UNUserNotificationCenter.current().setBadgeCount(count) { error in
+                    if let error = error {
+                        print("[NotificationService] setBadgeCount failed: \(error.localizedDescription)")
+                    }
                 }
+            } else {
+                UIApplication.shared.applicationIconBadgeNumber = count
             }
         }
     }
