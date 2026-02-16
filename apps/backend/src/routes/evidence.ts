@@ -5,6 +5,7 @@ import { RequestWithId } from '../middleware/requestId'
 import { createErrorResponse, logErrorForSupport } from '../utils/errorResponse'
 import { recordAuditLog, extractClientMetadata } from '../middleware/audit'
 import { getIdempotencyKey } from '../utils/idempotency'
+import { sendEvidenceUploadedNotification } from '../services/notifications'
 import { uploadRateLimiter } from '../middleware/rateLimiter'
 import { logWithRequest } from '../utils/structuredLog'
 import crypto from 'crypto'
@@ -491,6 +492,28 @@ evidenceRouter.post(
         },
         ...clientMetadata,
       })
+
+      // Notify job owner (if different from uploader) that evidence was uploaded
+      try {
+        const { data: jobRow } = await supabase
+          .from('jobs')
+          .select('created_by, client_name')
+          .eq('id', jobId)
+          .eq('organization_id', organization_id)
+          .single()
+        const jobOwnerId = jobRow?.created_by
+        if (jobOwnerId && jobOwnerId !== userId) {
+          await sendEvidenceUploadedNotification(
+            jobOwnerId,
+            jobId,
+            insertedEvidence.id
+          )
+        }
+      } catch (notifyErr) {
+        logWithRequest('warn', 'Evidence upload notification failed', requestId, {
+          error: (notifyErr as Error).message,
+        })
+      }
 
       // Create signed URL for download
       const { data: signedUrlData } = await supabase.storage

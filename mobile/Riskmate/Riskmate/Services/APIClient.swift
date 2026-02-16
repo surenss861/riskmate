@@ -761,6 +761,35 @@ class APIClient {
         return response.data
     }
 
+    // MARK: - Notifications (push token)
+
+    /// Register push token with backend (POST /api/notifications/register).
+    func registerPushToken(token: String, platform: String = "ios") async throws {
+        struct RegisterBody: Encodable {
+            let token: String
+            let platform: String
+        }
+        let body = try JSONEncoder().encode(RegisterBody(token: token, platform: platform))
+        let _: EmptyResponse = try await request(
+            endpoint: "/api/notifications/register",
+            method: "POST",
+            body: body
+        )
+    }
+
+    /// Unregister push token (DELETE /api/notifications/register with body).
+    func unregisterPushToken(token: String) async throws {
+        struct UnregisterBody: Encodable {
+            let token: String
+        }
+        let body = try JSONEncoder().encode(UnregisterBody(token: token))
+        let _: EmptyResponse = try await request(
+            endpoint: "/api/notifications/register",
+            method: "DELETE",
+            body: body
+        )
+    }
+
     /// Update photo category (before/during/after) for a document or evidence item.
     /// docId may be a document id or evidence id (PATCH /api/jobs/:id/documents/:docId).
     func updateDocumentCategory(jobId: String, docId: String, category: String) async throws {

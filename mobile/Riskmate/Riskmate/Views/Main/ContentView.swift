@@ -6,6 +6,7 @@ struct ContentView: View {
     @StateObject private var serverStatus = ServerStatusManager.shared
     @StateObject private var entitlements = EntitlementsManager.shared
     @EnvironmentObject private var quickAction: QuickActionRouter
+    @EnvironmentObject private var deepLinkRouter: DeepLinkRouter
     @State private var selectedTab: MainTab = .operations
     @State private var selectedSidebarItem: SidebarItem? = .operations
     @State private var showOnboarding = false
@@ -13,6 +14,9 @@ struct ContentView: View {
     @State private var backendHealthCheckComplete = false
     @State private var backendHealthError: String?
     @State private var workRecordsFilter: String? = nil
+    @State private var showJobFromDeepLink = false
+    @State private var deepLinkJobId: String?
+    @State private var deepLinkJobTab: JobDetailTab?
     
     private var isAuditor: Bool {
         entitlements.isAuditor()
@@ -60,10 +64,15 @@ struct ContentView: View {
                     TrustOnboardingView(isPresented: .constant(true))
                 } else {
                     // Device-aware navigation
-                    if UIDevice.current.userInterfaceIdiom == .pad {
-                        iPadNavigation
-                    } else {
-                        iPhoneNavigation
+                    Group {
+                        if UIDevice.current.userInterfaceIdiom == .pad {
+                            iPadNavigation
+                        } else {
+                            iPhoneNavigation
+                        }
+                    }
+                    .task {
+                        await requestNotificationPermissionsAndRegisterIfNeeded()
                     }
                 }
             } else {
@@ -95,8 +104,46 @@ struct ContentView: View {
         .onAppear {
             print("[ContentView] ✅ View appeared. isAuthenticated=\(sessionManager.isAuthenticated), isLoading=\(sessionManager.isLoading)")
         }
+        .onChange(of: deepLinkRouter.pendingJobId) { _, new in
+            guard let jobId = new else { return }
+            deepLinkJobId = jobId
+            deepLinkJobTab = deepLinkRouter.pendingJobTab.flatMap(JobDetailTab.init(rawValue:))
+            showJobFromDeepLink = true
+        }
+        .onChange(of: deepLinkRouter.openNotifications) { _, open in
+            if open {
+                selectedTab = .settings
+                deepLinkRouter.clearPending()
+            }
+        }
+        .fullScreenCover(isPresented: $showJobFromDeepLink, onDismiss: {
+            deepLinkRouter.clearPending()
+            deepLinkJobId = nil
+            deepLinkJobTab = nil
+            showJobFromDeepLink = false
+        }) {
+            Group {
+                if let jobId = deepLinkJobId {
+                    JobDetailView(jobId: jobId, initialTab: deepLinkJobTab)
+                        .environmentObject(quickAction)
+                } else {
+                    EmptyView()
+                }
+            }
+        }
     }
-    
+
+    private func requestNotificationPermissionsAndRegisterIfNeeded() async {
+        guard sessionManager.isAuthenticated else { return }
+        let shouldRequest = await NotificationService.shared.shouldRequestPermissions()
+        guard shouldRequest else {
+            await NotificationService.shared.registerStoredTokenIfNeeded()
+            return
+        }
+        _ = try? await NotificationService.shared.requestPermissions()
+        await NotificationService.shared.registerStoredTokenIfNeeded()
+    }
+
     private func checkBackendHealth() async {
         backendHealthCheckComplete = false
         backendHealthError = nil

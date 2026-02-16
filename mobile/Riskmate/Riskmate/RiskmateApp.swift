@@ -44,6 +44,7 @@ struct RiskmateApp: App {
                 ContentView()
                     .environmentObject(sessionManager)
                     .environmentObject(quickAction)
+                    .environmentObject(DeepLinkRouter.shared)
                     .preferredColorScheme(.dark)
                     .background(RMTheme.Colors.background)
                     #if DEBUG
@@ -59,6 +60,11 @@ struct RiskmateApp: App {
                                 }
                             }
                         )
+                    }
+                    .onOpenURL { url in
+                        Task { @MainActor in
+                            _ = DeepLinkRouter.shared.handle(url)
+                        }
                     }
                     .onChange(of: scenePhase) { oldPhase, newPhase in
                         // Handle app lifecycle
@@ -147,9 +153,36 @@ struct RiskmateApp: App {
     }
 }
 
-// MARK: - AppDelegate for Background URLSession
+// MARK: - AppDelegate (Background URLSession + Push)
 
 final class AppDelegate: NSObject, UIApplicationDelegate {
+
+    func application(
+        _ application: UIApplication,
+        didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
+    ) -> Bool {
+        UNUserNotificationCenter.current().delegate = NotificationService.shared
+        application.registerForRemoteNotifications()
+        return true
+    }
+
+    func application(
+        _ application: UIApplication,
+        didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
+    ) {
+        NotificationService.shared.setDeviceToken(deviceToken)
+        Task {
+            await NotificationService.shared.registerDeviceTokenIfAuthenticated(deviceToken)
+        }
+    }
+
+    func application(
+        _ application: UIApplication,
+        didFailToRegisterForRemoteNotificationsWithError error: Error
+    ) {
+        print("[AppDelegate] Remote notifications registration failed: \(error.localizedDescription)")
+    }
+
     func application(
         _ application: UIApplication,
         handleEventsForBackgroundURLSession identifier: String,

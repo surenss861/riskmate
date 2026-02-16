@@ -812,6 +812,22 @@ exports.jobsRouter.post("/:id/hazards", auth_1.authenticate, requireWriteAccess_
             metadata: { job_id: jobId, sync_direct: true },
             ...clientMetadata,
         });
+        // Notify job owner (if different from creator)
+        try {
+            const { data: jobRow } = await supabaseClient_1.supabase
+                .from("jobs")
+                .select("created_by")
+                .eq("id", jobId)
+                .eq("organization_id", organization_id)
+                .single();
+            const jobOwnerId = jobRow?.created_by;
+            if (jobOwnerId && jobOwnerId !== userId) {
+                await (0, notifications_1.sendHazardAddedNotification)(jobOwnerId, jobId, inserted.id);
+            }
+        }
+        catch (notifyErr) {
+            console.warn("[Jobs] Hazard added notification failed:", notifyErr);
+        }
         res.status(201).json({
             data: {
                 id: inserted.id,
@@ -1212,6 +1228,50 @@ exports.jobsRouter.post("/", auth_1.authenticate, requireWriteAccess_1.requireWr
     catch (err) {
         console.error("Job creation error:", err);
         res.status(500).json({ message: err.message || "Failed to create job" });
+    }
+});
+// POST /api/jobs/:id/assign
+// Assign a user to a job (insert job_assignments, send push notification)
+exports.jobsRouter.post("/:id/assign", auth_1.authenticate, requireWriteAccess_1.requireWriteAccess, async (req, res) => {
+    const authReq = req;
+    try {
+        const jobId = authReq.params.id;
+        const { organization_id, id: actorId } = authReq.user;
+        const { user_id: assigneeId, role = "inspector" } = req.body || {};
+        if (!assigneeId || typeof assigneeId !== "string") {
+            return res.status(400).json({ message: "user_id is required" });
+        }
+        const { data: job, error: jobError } = await supabaseClient_1.supabase
+            .from("jobs")
+            .select("id, organization_id, client_name")
+            .eq("id", jobId)
+            .eq("organization_id", organization_id)
+            .single();
+        if (jobError || !job) {
+            return res.status(404).json({ message: "Job not found" });
+        }
+        const { error: insertError } = await supabaseClient_1.supabase.from("job_assignments").insert({
+            job_id: jobId,
+            user_id: assigneeId,
+            role: String(role),
+        });
+        if (insertError) {
+            if (insertError.code === "23505") {
+                return res.status(409).json({ message: "User already assigned to this job" });
+            }
+            throw insertError;
+        }
+        try {
+            await (0, notifications_1.sendJobAssignedNotification)(assigneeId, jobId, job.client_name ?? undefined);
+        }
+        catch (notifyErr) {
+            console.warn("[Jobs] Job assigned notification failed:", notifyErr);
+        }
+        res.status(201).json({ status: "ok", message: "User assigned to job" });
+    }
+    catch (err) {
+        console.error("Job assign failed:", err);
+        res.status(500).json({ message: "Failed to assign user to job" });
     }
 });
 // PATCH /api/jobs/:id

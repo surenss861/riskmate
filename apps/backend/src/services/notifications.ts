@@ -60,6 +60,21 @@ async function fetchOrgTokens(organizationId: string) {
   return (data || []).map((row) => row.token);
 }
 
+/** Fetch push tokens for a single user (for targeted notifications). */
+export async function fetchUserTokens(userId: string): Promise<string[]> {
+  const { data, error } = await supabase
+    .from("device_tokens")
+    .select("token")
+    .eq("user_id", userId);
+
+  if (error) {
+    console.error("Failed to load user device tokens:", error);
+    return [];
+  }
+
+  return (data || []).map((row) => row.token);
+}
+
 async function sendExpoPush(tokens: string[], message: Record<string, unknown>) {
   if (!tokens.length) return;
 
@@ -145,6 +160,151 @@ export async function notifyWeeklySummary(params: {
     data: {
       type: "weekly_summary",
     },
+  });
+}
+
+// ----- Targeted (per-user) notifications with deep links -----
+
+type PushPayload = {
+  title: string;
+  body: string;
+  data: Record<string, unknown>;
+  badge?: number;
+  categoryId?: string;
+  priority?: "high" | "default";
+};
+
+async function sendToUser(userId: string, payload: PushPayload) {
+  const tokens = await fetchUserTokens(userId);
+  if (!tokens.length) return;
+  await sendExpoPush(tokens, {
+    ...payload,
+    sound: "default",
+    channelId: payload.categoryId ?? "riskmate-alerts",
+    priority: payload.priority ?? "high",
+  });
+}
+
+/** Notify user when they are assigned to a job. */
+export async function sendJobAssignedNotification(
+  userId: string,
+  jobId: string,
+  jobTitle?: string
+) {
+  await sendToUser(userId, {
+    title: "Job Assigned",
+    body: jobTitle
+      ? `You've been assigned to '${jobTitle}'`
+      : "You've been assigned to a new job.",
+    data: {
+      type: "job_assigned",
+      jobId,
+      deepLink: `riskmate://jobs/${jobId}`,
+    },
+    categoryId: "job_assigned",
+  });
+}
+
+/** Notify user when their signature is requested on a report run. */
+export async function sendSignatureRequestNotification(
+  userId: string,
+  reportRunId: string,
+  jobTitle?: string
+) {
+  await sendToUser(userId, {
+    title: "Signature Requested",
+    body: jobTitle
+      ? `Your signature is requested for '${jobTitle}'`
+      : "Your signature is requested for a report.",
+    data: {
+      type: "signature_request",
+      reportRunId,
+      deepLink: `riskmate://reports/${reportRunId}`,
+    },
+    categoryId: "signature_request",
+  });
+}
+
+/** Notify user when evidence is uploaded to a job they care about. */
+export async function sendEvidenceUploadedNotification(
+  userId: string,
+  jobId: string,
+  photoId: string
+) {
+  await sendToUser(userId, {
+    title: "Evidence Uploaded",
+    body: "New evidence was added to a job.",
+    data: {
+      type: "evidence_uploaded",
+      jobId,
+      photoId,
+      deepLink: `riskmate://jobs/${jobId}/evidence`,
+    },
+    categoryId: "evidence_uploaded",
+  });
+}
+
+/** Notify user when a hazard is added to a job. */
+export async function sendHazardAddedNotification(
+  userId: string,
+  jobId: string,
+  hazardId: string
+) {
+  await sendToUser(userId, {
+    title: "Hazard Added",
+    body: "A new hazard was added to a job.",
+    data: {
+      type: "hazard_added",
+      jobId,
+      hazardId,
+      deepLink: `riskmate://jobs/${jobId}/hazards/${hazardId}`,
+    },
+    categoryId: "hazard_added",
+  });
+}
+
+/** Notify user about an approaching job deadline. */
+export async function sendDeadlineNotification(
+  userId: string,
+  jobId: string,
+  hoursRemaining: number,
+  jobTitle?: string
+) {
+  const h = Math.round(hoursRemaining);
+  const text =
+    h <= 0
+      ? "Due now"
+      : h < 24
+        ? `Due in ${h} hour${h === 1 ? "" : "s"}`
+        : `Due in ${Math.round(h / 24)} day${Math.round(h / 24) === 1 ? "" : "s"}`;
+  await sendToUser(userId, {
+    title: "Deadline Approaching",
+    body: jobTitle ? `'${jobTitle}' – ${text}` : text,
+    data: {
+      type: "deadline",
+      jobId,
+      hoursRemaining,
+      deepLink: `riskmate://jobs/${jobId}`,
+    },
+    categoryId: "deadline",
+  });
+}
+
+/** Notify user when they are mentioned in a comment. */
+export async function sendMentionNotification(
+  userId: string,
+  commentId: string,
+  contextLabel?: string
+) {
+  await sendToUser(userId, {
+    title: "You were mentioned",
+    body: contextLabel ?? "Someone mentioned you in a comment.",
+    data: {
+      type: "mention",
+      commentId,
+      deepLink: "riskmate://notifications",
+    },
+    categoryId: "mention",
   });
 }
 

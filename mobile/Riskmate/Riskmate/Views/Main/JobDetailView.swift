@@ -5,6 +5,8 @@ import UserNotifications
 /// Job Detail screen: Overview + Evidence always; Hazards/Controls only when content exists. No Exports tab.
 struct JobDetailView: View {
     let jobId: String
+    /// When set (e.g. from deep link), select this tab when the view appears.
+    var initialTab: JobDetailTab? = nil
     @State private var selectedTab: JobDetailTab = .overview
     @State private var job: Job?
     @State private var isLoading = true
@@ -98,6 +100,11 @@ struct JobDetailView: View {
                         .accessibilityLabel("Job sections")
                         .accessibilityHint("Tabs: \(visibleTabs.map(\.title).joined(separator: ", "))")
                         .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                        .onAppear {
+                            if let tab = initialTab, visibleTabs.contains(tab) {
+                                selectedTab = tab
+                            }
+                        }
                         .padding(.vertical, RMTheme.Spacing.sm)
                         .background(RMTheme.Colors.background)
                         .onChange(of: tabValidationKey) { _, _ in

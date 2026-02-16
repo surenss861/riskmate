@@ -3,7 +3,7 @@ import { supabase } from "../lib/supabaseClient";
 import { authenticate, AuthenticatedRequest } from "../middleware/auth";
 import { recordAuditLog, extractClientMetadata } from "../middleware/audit";
 import { calculateRiskScore, generateMitigationItems } from "../utils/riskScoring";
-import { notifyHighRiskJob } from "../services/notifications";
+import { notifyHighRiskJob, sendHazardAddedNotification, sendJobAssignedNotification } from "../services/notifications";
 import { buildJobReport } from "../utils/jobReport";
 import { enforceJobLimit, requireFeature } from "../middleware/limits";
 import { RequestWithId } from "../middleware/requestId";
@@ -897,6 +897,26 @@ jobsRouter.post("/:id/hazards", authenticate, requireWriteAccess, async (req: ex
       ...clientMetadata,
     });
 
+    // Notify job owner (if different from creator)
+    try {
+      const { data: jobRow } = await supabase
+        .from("jobs")
+        .select("created_by")
+        .eq("id", jobId)
+        .eq("organization_id", organization_id)
+        .single();
+      const jobOwnerId = jobRow?.created_by;
+      if (jobOwnerId && jobOwnerId !== userId) {
+        await sendHazardAddedNotification(
+          jobOwnerId,
+          jobId,
+          inserted.id
+        );
+      }
+    } catch (notifyErr) {
+      console.warn("[Jobs] Hazard added notification failed:", notifyErr);
+    }
+
     res.status(201).json({
       data: {
         id: inserted.id,
@@ -1353,6 +1373,56 @@ jobsRouter.post("/", authenticate, requireWriteAccess, enforceJobLimit, async (r
   } catch (err: any) {
     console.error("Job creation error:", err);
     res.status(500).json({ message: err.message || "Failed to create job" });
+  }
+});
+
+// POST /api/jobs/:id/assign
+// Assign a user to a job (insert job_assignments, send push notification)
+jobsRouter.post("/:id/assign", authenticate, requireWriteAccess, async (req: express.Request, res: express.Response) => {
+  const authReq = req as AuthenticatedRequest;
+  try {
+    const jobId = authReq.params.id;
+    const { organization_id, id: actorId } = authReq.user;
+    const { user_id: assigneeId, role = "inspector" } = req.body || {};
+
+    if (!assigneeId || typeof assigneeId !== "string") {
+      return res.status(400).json({ message: "user_id is required" });
+    }
+
+    const { data: job, error: jobError } = await supabase
+      .from("jobs")
+      .select("id, organization_id, client_name")
+      .eq("id", jobId)
+      .eq("organization_id", organization_id)
+      .single();
+
+    if (jobError || !job) {
+      return res.status(404).json({ message: "Job not found" });
+    }
+
+    const { error: insertError } = await supabase.from("job_assignments").insert({
+      job_id: jobId,
+      user_id: assigneeId,
+      role: String(role),
+    });
+
+    if (insertError) {
+      if (insertError.code === "23505") {
+        return res.status(409).json({ message: "User already assigned to this job" });
+      }
+      throw insertError;
+    }
+
+    try {
+      await sendJobAssignedNotification(assigneeId, jobId, job.client_name ?? undefined);
+    } catch (notifyErr) {
+      console.warn("[Jobs] Job assigned notification failed:", notifyErr);
+    }
+
+    res.status(201).json({ status: "ok", message: "User assigned to job" });
+  } catch (err: any) {
+    console.error("Job assign failed:", err);
+    res.status(500).json({ message: "Failed to assign user to job" });
   }
 });
 

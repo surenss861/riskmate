@@ -10,6 +10,7 @@ const auth_1 = require("../middleware/auth");
 const errorResponse_1 = require("../utils/errorResponse");
 const audit_1 = require("../middleware/audit");
 const idempotency_1 = require("../utils/idempotency");
+const notifications_1 = require("../services/notifications");
 const rateLimiter_1 = require("../middleware/rateLimiter");
 const structuredLog_1 = require("../utils/structuredLog");
 const crypto_1 = __importDefault(require("crypto"));
@@ -440,6 +441,24 @@ exports.evidenceRouter.post('/jobs/:id/evidence/upload', auth_1.authenticate, ra
             },
             ...clientMetadata,
         });
+        // Notify job owner (if different from uploader) that evidence was uploaded
+        try {
+            const { data: jobRow } = await supabaseClient_1.supabase
+                .from('jobs')
+                .select('created_by, client_name')
+                .eq('id', jobId)
+                .eq('organization_id', organization_id)
+                .single();
+            const jobOwnerId = jobRow?.created_by;
+            if (jobOwnerId && jobOwnerId !== userId) {
+                await (0, notifications_1.sendEvidenceUploadedNotification)(jobOwnerId, jobId, insertedEvidence.id);
+            }
+        }
+        catch (notifyErr) {
+            (0, structuredLog_1.logWithRequest)('warn', 'Evidence upload notification failed', requestId, {
+                error: notifyErr.message,
+            });
+        }
         // Create signed URL for download
         const { data: signedUrlData } = await supabaseClient_1.supabase.storage
             .from('evidence')

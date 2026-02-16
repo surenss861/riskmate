@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.runWeeklySummaryJob = runWeeklySummaryJob;
+exports.runDeadlineCheck = runDeadlineCheck;
 const supabaseClient_1 = require("../lib/supabaseClient");
 const notifications_1 = require("../services/notifications");
 async function runWeeklySummaryJob() {
@@ -45,5 +46,35 @@ async function buildSummaryMessage(organizationId) {
     const completed = controls?.filter((item) => item.done).length ?? 0;
     const completionRate = totalControls === 0 ? 0 : Math.round((completed / totalControls) * 100);
     return `Last week: ${totalJobs} work records logged, ${highRiskJobs} flagged high-risk, controls completion ${completionRate}%.`;
+}
+/** Notify job owners about deadlines in the next 24 hours. Run daily (e.g. cron). */
+async function runDeadlineCheck() {
+    const now = new Date();
+    const in24h = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    const { data: jobs, error } = await supabaseClient_1.supabase
+        .from("jobs")
+        .select("id, client_name, due_date, created_by")
+        .not("due_date", "is", null)
+        .gte("due_date", now.toISOString())
+        .lte("due_date", in24h.toISOString());
+    if (error) {
+        console.error("Deadline check failed to load jobs:", error);
+        return;
+    }
+    if (!jobs?.length)
+        return;
+    for (const job of jobs) {
+        const due = job.due_date ? new Date(job.due_date) : null;
+        const createdBy = job.created_by;
+        if (!due || !createdBy)
+            continue;
+        const hoursRemaining = (due.getTime() - now.getTime()) / (60 * 60 * 1000);
+        try {
+            await (0, notifications_1.sendDeadlineNotification)(createdBy, job.id, hoursRemaining, job.client_name ?? undefined);
+        }
+        catch (err) {
+            console.error(`Deadline notification failed for job ${job.id}:`, err);
+        }
+    }
 }
 //# sourceMappingURL=notifications.js.map
