@@ -110,8 +110,8 @@ enum SyncConflictMerge {
         }
         if entityType == "job" {
             if field == "status" { return .serverWins }
-            let jobDetailFields = ["client_name", "clientName", "description", "address", "site_id", "siteId", "updated_at", "updatedAt"]
-            if jobDetailFields.contains(field) { return .localWins }
+            // All non-status job fields (job_type, location, risk_score, risk_level, client_name, description, etc.) default to local-wins.
+            return .localWins
         }
         if entityType == "hazard" || entityType == "control" {
             return .merge

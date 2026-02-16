@@ -24,6 +24,11 @@ struct ConflictResolutionSheet: View {
         return f
     }()
 
+    /// Merge is only allowed when the conflict is merge-capable (e.g. hazard/control dual-add). Hide for job-status, server-wins, etc.
+    private var isMergeCapable: Bool {
+        SyncConflictMerge.autoStrategyForConflict(entityType: conflict.entityType, field: conflict.field) == .merge
+    }
+
     enum FieldChoice: String, CaseIterable {
         case server = "Server"
         case local = "Local"
@@ -179,19 +184,21 @@ struct ConflictResolutionSheet: View {
             }
             .disabled(isResolving)
 
-            Button {
-                Haptics.tap()
-                resolve(with: .merge)
-            } label: {
-                Text("Merge")
-                    .font(RMTheme.Typography.bodySmallBold)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, RMTheme.Spacing.md)
-                    .background(RMTheme.Colors.surface)
-                    .foregroundColor(RMTheme.Colors.textPrimary)
-                    .clipShape(RoundedRectangle(cornerRadius: RMTheme.Radius.sm, style: .continuous))
+            if isMergeCapable {
+                Button {
+                    Haptics.tap()
+                    resolve(with: .merge)
+                } label: {
+                    Text("Merge")
+                        .font(RMTheme.Typography.bodySmallBold)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, RMTheme.Spacing.md)
+                        .background(RMTheme.Colors.surface)
+                        .foregroundColor(RMTheme.Colors.textPrimary)
+                        .clipShape(RoundedRectangle(cornerRadius: RMTheme.Radius.sm, style: .continuous))
+                }
+                .disabled(isResolving)
             }
-            .disabled(isResolving)
         }
         .padding(.horizontal, RMTheme.Spacing.pagePadding)
         .padding(.top, RMTheme.Spacing.sm)
