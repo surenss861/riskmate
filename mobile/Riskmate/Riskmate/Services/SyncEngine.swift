@@ -132,7 +132,12 @@ final class SyncEngine: ObservableObject {
                             let entityId = result.conflict?.entityId ?? op?.entityId
                             if strategy == .localWins || strategy == .merge, let op = op,
                                let dict = try? JSONSerialization.jsonObject(with: op.data) as? [String: Any] {
-                                resolvedValue = dict
+                                if strategy == .merge && (entityType == "hazard" || entityType == "control"),
+                                   let c = result.conflict {
+                                    resolvedValue = buildMergedPayloadForHazardControl(localDict: dict, conflict: c)
+                                } else {
+                                    resolvedValue = dict
+                                }
                             }
                             try await resolveConflict(
                                 operationId: result.operationId,
@@ -156,7 +161,9 @@ final class SyncEngine: ObservableObject {
                                     localValue: c.localValue?.value,
                                     serverTimestamp: c.serverTimestamp ?? Date(),
                                     localTimestamp: c.localTimestamp ?? Date(),
-                                    operationType: opType
+                                    operationType: opType,
+                                    serverActor: c.serverActor,
+                                    localActor: c.localActor
                                 ))
                                 db.insertConflict(
                                     id: result.operationId,
@@ -168,7 +175,9 @@ final class SyncEngine: ObservableObject {
                                     serverTimestamp: c.serverTimestamp,
                                     localTimestamp: c.localTimestamp,
                                     resolutionStrategy: nil,
-                                    operationType: opType
+                                    operationType: opType,
+                                    serverActor: c.serverActor,
+                                    localActor: c.localActor
                                 )
                             }
                             failed += 1
@@ -186,7 +195,9 @@ final class SyncEngine: ObservableObject {
                                 localValue: c.localValue?.value,
                                 serverTimestamp: c.serverTimestamp ?? Date(),
                                 localTimestamp: c.localTimestamp ?? Date(),
-                                operationType: opType
+                                operationType: opType,
+                                serverActor: c.serverActor,
+                                localActor: c.localActor
                             ))
                             db.insertConflict(
                                 id: result.operationId,
@@ -198,7 +209,9 @@ final class SyncEngine: ObservableObject {
                                 serverTimestamp: c.serverTimestamp,
                                 localTimestamp: c.localTimestamp,
                                 resolutionStrategy: nil,
-                                operationType: opType
+                                operationType: opType,
+                                serverActor: c.serverActor,
+                                localActor: c.localActor
                             )
                         }
                         failed += 1
@@ -248,7 +261,9 @@ final class SyncEngine: ObservableObject {
                         serverTimestamp: c.serverTimestamp,
                         localTimestamp: c.localTimestamp,
                         resolutionStrategy: nil,
-                        operationType: nil
+                        operationType: nil,
+                        serverActor: c.serverActor,
+                        localActor: c.localActor
                     )
                 }
             }
@@ -284,7 +299,9 @@ final class SyncEngine: ObservableObject {
                 localValue: row.localVersion as? AnyHashable,
                 serverTimestamp: row.serverTimestamp ?? Date(),
                 localTimestamp: row.localTimestamp ?? Date(),
-                operationType: row.operationType
+                operationType: row.operationType,
+                serverActor: row.serverActor,
+                localActor: row.localActor
             )
         }
     }
@@ -312,7 +329,9 @@ final class SyncEngine: ObservableObject {
                         serverValue: serverUpdated as AnyHashable,
                         localValue: localUpdated as AnyHashable,
                         serverTimestamp: serverDate,
-                        localTimestamp: localDate
+                        localTimestamp: localDate,
+                        serverActor: server.createdBy,
+                        localActor: nil
                     ))
                 }
             }
@@ -579,16 +598,21 @@ final class SyncEngine: ObservableObject {
             let jobDetailFields = ["client_name", "clientName", "description", "address", "site_id", "siteId", "updated_at", "updatedAt"]
             if jobDetailFields.contains(field) { return .localWins }
         }
-        // Use localWins for hazard/control: we cannot merge server fields from batch conflict
-        // (conflict only has single-field server_value), so passing only op.data as resolvedValue
-        // would overwrite server changes. localWins correctly applies the local payload.
-        if entityType == "hazard" {
-            return .localWins
-        }
-        if entityType == "control" {
-            return .localWins
+        // Use merge for hazard/control dual-add conflicts so both sides' changes are preserved
+        // (merged payload built from local + differing server fields)
+        if entityType == "hazard" || entityType == "control" {
+            return .merge
         }
         return nil
+    }
+
+    /// Build a merged payload for hazard/control conflicts: start from local op payload and selectively keep differing server fields.
+    private func buildMergedPayloadForHazardControl(localDict: [String: Any], conflict: BatchConflictDetail) -> [String: Any] {
+        SyncConflictMerge.mergeHazardControlPayload(
+            localDict: localDict,
+            serverValue: conflict.serverValue?.value,
+            conflictField: conflict.field
+        )
     }
 
     private func entityTypeFromOperation(_ type: OperationType) -> String? {

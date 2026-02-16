@@ -37,6 +37,8 @@ interface BatchOperationResult {
     local_value: any;
     server_timestamp?: string;
     local_timestamp?: string;
+    server_actor?: string;
+    local_actor?: string;
   };
 }
 
@@ -110,11 +112,19 @@ syncRouter.post(
 
               if (jobError) {
                 if (jobError.code === "23505") {
+                  const { data: existingJob } = await supabase
+                    .from("jobs")
+                    .select("created_by")
+                    .eq("id", op.entity_id)
+                    .eq("organization_id", organization_id)
+                    .single();
                   baseResult.status = "conflict";
                   baseResult.conflict = {
                     field: "id",
                     server_value: "exists",
                     local_value: op.entity_id,
+                    server_actor: existingJob?.created_by ?? undefined,
+                    local_actor: userId,
                   };
                 } else {
                   baseResult.status = "error";
@@ -143,7 +153,7 @@ syncRouter.post(
 
               const { data: existing, error: fetchError } = await supabase
                 .from("jobs")
-                .select("id, updated_at")
+                .select("id, updated_at, created_by")
                 .eq("id", jobId)
                 .eq("organization_id", organization_id)
                 .single();
@@ -166,6 +176,8 @@ syncRouter.post(
                   local_value: localUpdated,
                   server_timestamp: existing.updated_at,
                   local_timestamp: localUpdated,
+                  server_actor: existing.created_by ?? undefined,
+                  local_actor: userId,
                 };
                 results.push(baseResult);
                 continue;
@@ -229,7 +241,7 @@ syncRouter.post(
               const jobId = op.entity_id;
               const { data: existing, error: fetchError } = await supabase
                 .from("jobs")
-                .select("id, status")
+                .select("id, status, created_by")
                 .eq("id", jobId)
                 .eq("organization_id", organization_id)
                 .single();
@@ -249,6 +261,8 @@ syncRouter.post(
                   field: "status",
                   server_value: existing.status,
                   local_value: "deleted",
+                  server_actor: existing.created_by ?? undefined,
+                  local_actor: userId,
                 };
                 results.push(baseResult);
                 continue;

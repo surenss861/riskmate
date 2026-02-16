@@ -12,6 +12,10 @@ struct SyncConflict: Identifiable {
     let localTimestamp: Date
     /// Original sync operation type when conflict was logged (create_job, update_job, delete_job, etc.); used when resolving without queued op
     let operationType: String?
+    /// User/actor identifier for the server version (who last modified on server)
+    let serverActor: String?
+    /// User/actor identifier for the local version (who made the local change)
+    let localActor: String?
 
     /// Display string for server value (for UI)
     var serverValueDisplay: String {
@@ -32,7 +36,9 @@ struct SyncConflict: Identifiable {
         localValue: AnyHashable?,
         serverTimestamp: Date,
         localTimestamp: Date,
-        operationType: String? = nil
+        operationType: String? = nil,
+        serverActor: String? = nil,
+        localActor: String? = nil
     ) {
         self.id = id
         self.entityType = entityType
@@ -43,6 +49,8 @@ struct SyncConflict: Identifiable {
         self.serverTimestamp = serverTimestamp
         self.localTimestamp = localTimestamp
         self.operationType = operationType
+        self.serverActor = serverActor
+        self.localActor = localActor
     }
 
     /// Create from backend conflict response (accepts Any and converts to Hashable where possible)
@@ -55,7 +63,9 @@ struct SyncConflict: Identifiable {
         localValue: Any?,
         serverTimestamp: Date?,
         localTimestamp: Date?,
-        operationType: String? = nil
+        operationType: String? = nil,
+        serverActor: String? = nil,
+        localActor: String? = nil
     ) {
         self.id = id
         self.entityType = entityType
@@ -66,6 +76,8 @@ struct SyncConflict: Identifiable {
         self.serverTimestamp = serverTimestamp ?? Date()
         self.localTimestamp = localTimestamp ?? Date()
         self.operationType = operationType
+        self.serverActor = serverActor
+        self.localActor = localActor
     }
 }
 
@@ -83,4 +95,43 @@ struct ConflictResolutionOutcome {
     let strategy: ConflictResolutionStrategy
     /// For merge (or per-field resolution): field name -> resolved value. Passed to SyncEngine.resolveConflict(resolvedValue:).
     let perFieldResolvedValues: [String: Any]?
+}
+
+// MARK: - Hazard/Control Merge Helper (testable)
+
+/// Builds a merged payload for hazard/control dual-add conflicts: start from local payload and selectively keep differing server fields.
+enum SyncConflictMerge {
+    static func mergeHazardControlPayload(
+        localDict: [String: Any],
+        serverValue: Any?,
+        conflictField: String?
+    ) -> [String: Any] {
+        var merged = localDict
+        guard let serverValue = serverValue else { return merged }
+        if let serverDict = serverValue as? [String: Any] {
+            for (key, serverVal) in serverDict {
+                let localVal = merged[key]
+                if localVal == nil || !areEqual(localVal, serverVal) {
+                    merged[key] = serverVal
+                }
+            }
+        } else if let field = conflictField {
+            merged[field] = serverValue
+        }
+        return merged
+    }
+
+    static func areEqual(_ a: Any?, _ b: Any) -> Bool {
+        guard let a = a else { return false }
+        if let sa = a as? String, let sb = b as? String { return sa == sb }
+        if let na = a as? NSNumber, let nb = b as? NSNumber { return na.isEqual(nb) }
+        if let da = a as? [String: Any], let db = b as? [String: Any] {
+            guard da.keys.count == db.keys.count else { return false }
+            for (k, va) in da {
+                guard let vb = db[k], areEqual(va, vb) else { return false }
+            }
+            return true
+        }
+        return false
+    }
 }

@@ -87,12 +87,13 @@ struct ConflictResolutionSheet: View {
                 .textCase(.uppercase)
                 .padding(.horizontal, RMTheme.Spacing.pagePadding)
 
-            // Server version card with metadata (updated-at timestamp)
+            // Server version card with metadata (updated-at timestamp, actor)
             ConflictVersionCard(
                 title: "Server version",
                 value: conflict.serverValueDisplay,
                 timestamp: conflict.serverTimestamp,
-                subtitle: "Updated on server"
+                subtitle: "Updated on server",
+                actor: conflict.serverActor
             )
 
             // Local version card with metadata
@@ -100,7 +101,8 @@ struct ConflictResolutionSheet: View {
                 title: "Your version",
                 value: conflict.localValueDisplay,
                 timestamp: conflict.localTimestamp,
-                subtitle: "Your changes on this device"
+                subtitle: "Your changes on this device",
+                actor: conflict.localActor
             )
 
             // Per-field resolution choice
@@ -225,12 +227,13 @@ struct ConflictResolutionSheet: View {
     }
 }
 
-/// One version card (server or local) with value and metadata (updated-at timestamp)
+/// One version card (server or local) with value and metadata (updated-at timestamp, actor)
 private struct ConflictVersionCard: View {
     let title: String
     let value: String
     let timestamp: Date
     let subtitle: String
+    var actor: String?
 
     private static let dateFormatter: DateFormatter = {
         let f = DateFormatter()
@@ -253,6 +256,11 @@ private struct ConflictVersionCard: View {
                 Text(subtitle)
                     .font(RMTheme.Typography.captionSmall)
                     .foregroundColor(RMTheme.Colors.textSecondary)
+                if let actor = actor, !actor.isEmpty {
+                    Text("By \(actor)")
+                        .font(RMTheme.Typography.captionSmall)
+                        .foregroundColor(RMTheme.Colors.textTertiary)
+                }
                 Text("Updated at \(Self.dateFormatter.string(from: timestamp))")
                     .font(RMTheme.Typography.captionSmall)
                     .foregroundColor(RMTheme.Colors.textTertiary)

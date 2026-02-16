@@ -161,7 +161,9 @@ struct ConflictHistoryView: View {
             localValue: row.localVersion as? AnyHashable,
             serverTimestamp: row.serverTimestamp ?? Date(),
             localTimestamp: row.localTimestamp ?? Date(),
-            operationType: row.operationType
+            operationType: row.operationType,
+            serverActor: row.serverActor,
+            localActor: row.localActor
         )
     }
 

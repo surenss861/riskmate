@@ -1541,6 +1541,8 @@ struct BatchConflictDetail: Codable {
     let localValue: AnyCodable?
     let serverTimestampStr: String?
     let localTimestampStr: String?
+    let serverActor: String?
+    let localActor: String?
 
     enum CodingKeys: String, CodingKey {
         case entityType = "entity_type"
@@ -1550,6 +1552,8 @@ struct BatchConflictDetail: Codable {
         case localValue = "local_value"
         case serverTimestampStr = "server_timestamp"
         case localTimestampStr = "local_timestamp"
+        case serverActor = "server_actor"
+        case localActor = "local_actor"
     }
 
     var serverTimestamp: Date? {
