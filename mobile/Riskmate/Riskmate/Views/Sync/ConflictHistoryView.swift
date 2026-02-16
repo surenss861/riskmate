@@ -71,34 +71,55 @@ struct ConflictHistoryView: View {
                         conflict: conflict,
                         entityLabel: entityLabel(for: conflict),
                         onResolve: { outcome in
-                            let op = syncEngine.pendingOperations.first { $0.id == conflict.id }
+                            var op = syncEngine.pendingOperations.first { $0.id == conflict.id }
+                            if op == nil {
+                                op = OfflineDatabase.shared.getSyncQueue().first { $0.id == conflict.id }
+                            }
+                            guard let op else {
+                                ToastCenter.shared.show("Cannot resolve: sync operation not found", systemImage: "exclamationmark.triangle", style: .error)
+                                return
+                            }
+
                             var resolvedValue: [String: Any]?
-                            var entityType: String? = conflict.entityType
+                            var entityType: String? = conflict.entityType ?? entityTypeFromOperation(op.type)
                             var entityId: String? = conflict.entityId
                             var operationType: String?
-                            if outcome.strategy == .localWins || outcome.strategy == .merge, let op = op {
-                                if let dict = try? JSONSerialization.jsonObject(with: op.data) as? [String: Any] {
-                                    resolvedValue = dict
-                                    if let perField = outcome.perFieldResolvedValues, !perField.isEmpty {
-                                        var merged = dict
-                                        for (k, v) in perField { merged[k] = v }
-                                        resolvedValue = merged
-                                    }
+
+                            if outcome.strategy == .localWins || outcome.strategy == .merge {
+                                guard let dict = try? JSONSerialization.jsonObject(with: op.data) as? [String: Any] else {
+                                    ToastCenter.shared.show("Cannot resolve: invalid operation data", systemImage: "exclamationmark.triangle", style: .error)
+                                    return
+                                }
+                                resolvedValue = dict
+                                if let perField = outcome.perFieldResolvedValues, !perField.isEmpty {
+                                    var merged = dict
+                                    for (k, v) in perField { merged[k] = v }
+                                    resolvedValue = merged
                                 }
                                 entityId = op.entityId
                                 operationType = op.type.apiTypeString
+
+                                guard resolvedValue != nil, entityType != nil, entityId != nil, operationType != nil else {
+                                    ToastCenter.shared.show("Cannot resolve: missing required data", systemImage: "exclamationmark.triangle", style: .error)
+                                    return
+                                }
                             }
-                            try await syncEngine.resolveConflict(
-                                operationId: conflict.id,
-                                strategy: outcome.strategy,
-                                resolvedValue: resolvedValue,
-                                entityType: entityType,
-                                entityId: entityId,
-                                operationType: operationType
-                            )
-                            loadHistory()
-                            NotificationCenter.default.post(name: .syncConflictHistoryDidChange, object: nil)
-                            ToastCenter.shared.show("Conflict resolved", systemImage: "checkmark.circle", style: .success)
+
+                            do {
+                                try await syncEngine.resolveConflict(
+                                    operationId: conflict.id,
+                                    strategy: outcome.strategy,
+                                    resolvedValue: resolvedValue,
+                                    entityType: entityType,
+                                    entityId: entityId,
+                                    operationType: operationType
+                                )
+                                loadHistory()
+                                NotificationCenter.default.post(name: .syncConflictHistoryDidChange, object: nil)
+                                ToastCenter.shared.show("Conflict resolved", systemImage: "checkmark.circle", style: .success)
+                            } catch {
+                                ToastCenter.shared.show("Failed to resolve conflict", systemImage: "exclamationmark.triangle", style: .error)
+                            }
                         },
                         onCancel: {
                             selectedConflict = nil
@@ -131,6 +152,14 @@ struct ConflictHistoryView: View {
         case "hazard": return "hazard"
         case "control": return "control"
         default: return conflict.entityType
+        }
+    }
+
+    private func entityTypeFromOperation(_ type: OperationType) -> String {
+        switch type {
+        case .createJob, .updateJob, .deleteJob: return "job"
+        case .createHazard, .updateHazard, .deleteHazard: return "hazard"
+        case .createControl, .updateControl, .deleteControl: return "control"
         }
     }
 }
