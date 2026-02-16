@@ -52,6 +52,7 @@ struct ConflictHistoryView: View {
                 }
                 .navigationTitle("Conflict history")
                 .navigationBarTitleDisplayMode(.inline)
+                .accessibilityIdentifier("ConflictHistoryView")
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
                         Button("Done") {
@@ -178,6 +179,10 @@ struct ConflictHistoryView: View {
                                     entityId: entityId,
                                     operationType: operationType
                                 )
+                                // Resume sync and refresh dependent state so chosen resolution is applied immediately (mirror SyncQueueView)
+                                _ = try? await syncEngine.syncPendingOperations()
+                                syncEngine.refreshPendingOperations()
+                                JobsStore.shared.refreshPendingJobs()
                                 loadHistory()
                                 NotificationCenter.default.post(name: .syncConflictHistoryDidChange, object: nil)
                                 ToastCenter.shared.show("Conflict resolved", systemImage: "checkmark.circle", style: .success)

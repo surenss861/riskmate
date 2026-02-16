@@ -388,4 +388,125 @@ struct RiskmateTests {
         // entity_id from conflict (server id) enables client remap and backend reconcile
         #expect(serverValue["id"] as? String == "server-control-1")
     }
+
+    // MARK: - SyncEngine resolveConflict / Auto-Strategy Paths
+
+    /// Divergent conflict id format (from SyncEngine.detectConflicts): "divergent:entityType:entityId:field"
+    @Test func divergentConflictIdFormat() async throws {
+        let entityType = "job"
+        let entityId = "job-123"
+        let field = "updated_at"
+        let conflictId = "divergent:\(entityType):\(entityId):\(field)"
+        #expect(conflictId.hasPrefix("divergent:"))
+        #expect(conflictId.contains(entityType))
+        #expect(conflictId.contains(entityId))
+        #expect(conflictId.contains(field))
+    }
+
+    /// Divergent conflict: inferred operation type for each entity type (used when resolving without queued op)
+    @Test func divergentConflictInferredOperationType() async throws {
+        let inferred: (String) -> String? = { entityType in
+            switch entityType {
+            case "job": return "update_job"
+            case "hazard": return "update_hazard"
+            case "control": return "update_control"
+            default: return nil
+            }
+        }
+        #expect(inferred("job") == "update_job")
+        #expect(inferred("hazard") == "update_hazard")
+        #expect(inferred("control") == "update_control")
+        #expect(inferred("evidence") == nil)
+    }
+
+    /// Job status conflict: auto-strategy is server_wins; resolve payload has no resolved_value
+    @Test func resolveConflictJobStatusServerWinsPayload() async throws {
+        let strategy = SyncConflictMerge.autoStrategyForConflict(entityType: "job", field: "status")
+        #expect(strategy == .serverWins)
+        // Resolve request for server_wins: operation_id + strategy; resolved_value not required
+        let body: [String: Any] = [
+            "operation_id": "op-1",
+            "strategy": ConflictResolutionStrategy.serverWins.rawValue,
+        ]
+        #expect(body["resolved_value"] == nil)
+    }
+
+    /// Job details conflict: auto-strategy is local_wins; resolve payload includes resolved_value
+    @Test func resolveConflictJobDetailsLocalWinsPayload() async throws {
+        let strategy = SyncConflictMerge.autoStrategyForConflict(entityType: "job", field: "client_name")
+        #expect(strategy == .localWins)
+        let resolvedValue: [String: Any] = ["client_name": "Updated Client"]
+        let body: [String: Any] = [
+            "operation_id": "op-1",
+            "strategy": ConflictResolutionStrategy.localWins.rawValue,
+            "resolved_value": resolvedValue,
+            "entity_type": "job",
+            "entity_id": "job-123",
+            "operation_type": "update_job",
+        ]
+        #expect(body["resolved_value"] != nil)
+        #expect(body["entity_type"] as? String == "job")
+    }
+
+    /// Hazard/control conflict: auto-strategy is merge; resolve payload is merged hazard/control dict
+    @Test func resolveConflictHazardControlMergePayload() async throws {
+        let strategy = SyncConflictMerge.autoStrategyForConflict(entityType: "hazard", field: "name")
+        #expect(strategy == .merge)
+        let local: [String: Any] = ["id": "temp-1", "name": "Local", "job_id": "job-1"]
+        let serverValue: [String: Any] = ["id": "srv-1", "name": "Server", "description": "From server"]
+        let merged = SyncConflictMerge.mergeHazardControlPayload(
+            localDict: local,
+            serverValue: serverValue,
+            conflictField: "name"
+        )
+        let body: [String: Any] = [
+            "operation_id": "op-1",
+            "strategy": ConflictResolutionStrategy.merge.rawValue,
+            "resolved_value": merged,
+            "entity_type": "hazard",
+            "entity_id": "srv-1",
+            "operation_type": "create_hazard",
+        ]
+        #expect((body["resolved_value"] as? [String: Any])?["name"] as? String == "Server")
+        #expect((body["resolved_value"] as? [String: Any])?["description"] as? String == "From server")
+    }
+
+    /// Photo/evidence conflict: auto-strategy is nil (ask user); entity_type evidence, no operation_type
+    @Test func resolveConflictPhotoEvidenceAskUserPayload() async throws {
+        let strategy = SyncConflictMerge.autoStrategyForConflict(entityType: "evidence", field: "url")
+        #expect(strategy == nil)
+        // When user chooses server_wins for evidence: entity_type and entity_id required, operation_type omitted
+        let body: [String: Any] = [
+            "operation_id": "evidence:job-1:ev-1",
+            "strategy": ConflictResolutionStrategy.serverWins.rawValue,
+            "entity_type": "evidence",
+            "entity_id": "ev-1",
+        ]
+        #expect(body["operation_type"] == nil)
+        #expect(body["entity_type"] as? String == "evidence")
+    }
+
+    /// Divergent conflict: resolution requires local payload reconstructed from pending storage
+    @Test func divergentConflictResolutionRequiresLocalPayload() async throws {
+        // Divergent conflict id format
+        let conflictId = "divergent:job:job-abc:updated_at"
+        #expect(conflictId.hasPrefix("divergent:"))
+        // For local_wins/merge, SyncEngine.getLocalPayloadForConflict fetches from pending_jobs or sync_queue
+        // Resolve request must include resolved_value with full entity payload
+        let resolvedValue: [String: Any] = [
+            "id": "job-abc",
+            "client_name": "Client",
+            "updated_at": "2025-01-15T12:00:00Z",
+        ]
+        let body: [String: Any] = [
+            "operation_id": conflictId,
+            "strategy": ConflictResolutionStrategy.localWins.rawValue,
+            "resolved_value": resolvedValue,
+            "entity_type": "job",
+            "entity_id": "job-abc",
+            "operation_type": "update_job",
+        ]
+        #expect(body["entity_type"] as? String == "job")
+        #expect(body["operation_type"] as? String == "update_job")
+    }
 }

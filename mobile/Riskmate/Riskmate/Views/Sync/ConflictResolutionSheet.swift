@@ -64,6 +64,7 @@ struct ConflictResolutionSheet: View {
                 }
                 .navigationTitle("Resolve conflict")
                 .navigationBarTitleDisplayMode(.inline)
+                .accessibilityIdentifier("ConflictResolutionSheet")
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
                         Button("Cancel") {
@@ -169,6 +170,7 @@ struct ConflictResolutionSheet: View {
                 .clipShape(RoundedRectangle(cornerRadius: RMTheme.Radius.sm, style: .continuous))
             }
             .disabled(isResolving)
+            .accessibilityIdentifier("ConflictResolution_UseServerVersion")
 
             Button {
                 Haptics.tap()
@@ -183,6 +185,7 @@ struct ConflictResolutionSheet: View {
                     .clipShape(RoundedRectangle(cornerRadius: RMTheme.Radius.sm, style: .continuous))
             }
             .disabled(isResolving)
+            .accessibilityIdentifier("ConflictResolution_UseMyVersion")
 
             if isMergeCapable {
                 Button {
@@ -198,6 +201,7 @@ struct ConflictResolutionSheet: View {
                         .clipShape(RoundedRectangle(cornerRadius: RMTheme.Radius.sm, style: .continuous))
                 }
                 .disabled(isResolving)
+                .accessibilityIdentifier("ConflictResolution_Merge")
             }
         }
         .padding(.horizontal, RMTheme.Spacing.pagePadding)

@@ -77,6 +77,42 @@ struct RiskmateApp: App {
                 // Global toast container
                 ToastContainer()
             }
+            .sheet(isPresented: .constant(ProcessInfo.processInfo.arguments.contains("RISKMATE_UI_TEST_CONFLICT_SHEET"))) {
+                ConflictResolutionSheet(
+                    conflict: SyncConflict(
+                        entityType: "job",
+                        entityId: "job-1",
+                        field: "status",
+                        serverValue: "in_progress" as AnyHashable,
+                        localValue: "completed" as AnyHashable,
+                        serverTimestamp: Date().addingTimeInterval(-3600),
+                        localTimestamp: Date()
+                    ),
+                    entityLabel: "job",
+                    onResolve: { _ in },
+                    onCancel: {}
+                )
+            }
+            .sheet(isPresented: .constant(ProcessInfo.processInfo.arguments.contains("RISKMATE_UI_TEST_CONFLICT_HISTORY"))) {
+                ConflictHistoryView()
+            }
+            .sheet(isPresented: .constant(ProcessInfo.processInfo.arguments.contains("RISKMATE_UI_TEST_CONFLICT_SHEET_MERGE"))) {
+                // Hazard conflict is merge-capable: Merge button should be visible
+                ConflictResolutionSheet(
+                    conflict: SyncConflict(
+                        entityType: "hazard",
+                        entityId: "hazard-1",
+                        field: "name",
+                        serverValue: "Server Hazard" as AnyHashable,
+                        localValue: "Local Hazard" as AnyHashable,
+                        serverTimestamp: Date().addingTimeInterval(-3600),
+                        localTimestamp: Date()
+                    ),
+                    entityLabel: "hazard",
+                    onResolve: { _ in },
+                    onCancel: {}
+                )
+            }
         }
     }
     
