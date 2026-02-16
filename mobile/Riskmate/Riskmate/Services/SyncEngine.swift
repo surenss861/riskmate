@@ -507,7 +507,8 @@ final class SyncEngine: ObservableObject {
             case .serverWins:
                 if let et = et, let eid = eid {
                     db.deletePendingUpdatesForEntity(entityType: et, entityId: eid)
-                    _ = try await fetchChanges(since: Date().addingTimeInterval(-3600))
+                    let since = db.getLastSyncTimestamp() ?? Date.distantPast
+                    _ = try await fetchChanges(since: since)
                 }
                 db.markConflictResolved(id: operationId, resolutionStrategy: strategy.rawValue)
                 clearPendingConflict(operationId: operationId)

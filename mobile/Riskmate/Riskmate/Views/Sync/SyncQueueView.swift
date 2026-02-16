@@ -256,6 +256,10 @@ struct SyncQueueView: View {
                             var entityId: String? = conflict.entityId
                             var operationType: String?
                             if outcome.strategy == .localWins || outcome.strategy == .merge {
+                                // Normalize entityType before building payload: use op when conflict.entityType is nil or empty so backend validation passes
+                                if (entityType == nil || (entityType ?? "").isEmpty), let op = op {
+                                    entityType = entityTypeFromOperation(op.type)
+                                }
                                 if let op = op {
                                     if let dict = try? JSONSerialization.jsonObject(with: op.data) as? [String: Any] {
                                         var base = dict
@@ -322,7 +326,9 @@ struct SyncQueueView: View {
                                         operationType = storedOpType
                                     }
                                 }
-                                guard resolvedValue != nil, entityType != nil, entityId != nil else {
+                                guard let resolved = resolvedValue,
+                                      let et = entityType, !et.isEmpty,
+                                      let eid = entityId else {
                                     throw NSError(domain: "ConflictResolution", code: 2, userInfo: [NSLocalizedDescriptionKey: "Cannot resolve: payload or required metadata missing"])
                                 }
                             }
