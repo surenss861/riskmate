@@ -534,25 +534,30 @@ type PushPayload = {
 
 async function sendToUser(userId: string, payload: PushPayload) {
   const prefs = await getNotificationPreferences(userId);
-  if (!prefs.push_enabled) return;
 
+  // Always create notification record and update badge so Notification Center and badges stay in sync.
   const notificationType =
     typeof payload.data?.type === "string" ? (payload.data.type as string) : "push";
   await createNotificationRecord(userId, notificationType, payload.body);
 
   const badge = await getUnreadNotificationCount(userId);
-  const tokens = await fetchUserTokens(userId);
-  if (!tokens.length) return;
-  await sendPush(tokens, {
-    title: payload.title,
-    body: payload.body,
-    data: payload.data,
-    sound: "default",
-    channelId: payload.categoryId ?? "riskmate-alerts",
-    badge,
-    priority: payload.priority ?? "default",
-    categoryId: payload.categoryId,
-  });
+
+  // Gate only push delivery (Expo/APNs) on push_enabled; in-app history is always recorded.
+  if (prefs.push_enabled) {
+    const tokens = await fetchUserTokens(userId);
+    if (tokens.length > 0) {
+      await sendPush(tokens, {
+        title: payload.title,
+        body: payload.body,
+        data: payload.data,
+        sound: "default",
+        channelId: payload.categoryId ?? "riskmate-alerts",
+        badge,
+        priority: payload.priority ?? "default",
+        categoryId: payload.categoryId,
+      });
+    }
+  }
 }
 
 /** Notify user when they are assigned to a job. */

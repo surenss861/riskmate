@@ -2939,7 +2939,8 @@ jobsRouter.post("/:id/signoffs", authenticate, requireWriteAccess, async (req: e
       },
     });
 
-    // Trigger mention notifications when comments contain @mentions
+    // After successful DB commit: trigger mention notifications when comments contain @mentions
+    // (mentioned user id, signoff/comment id, and org scoping via organization_members below)
     if (comments && typeof comments === "string" && comments.trim().length > 0) {
       const mentionMatches = [...comments.matchAll(/@(\S+)/g)];
       const handles = [...new Set(mentionMatches.map((m) => m[1].trim().toLowerCase()))];
