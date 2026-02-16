@@ -110,7 +110,7 @@ export async function PATCH(
 
     const { data: reportRun, error: fetchError } = await supabase
       .from('report_runs')
-      .select('id, organization_id, status')
+      .select('id, organization_id, status, generated_by')
       .eq('id', reportRunId)
       .eq('organization_id', userData.organization_id)
       .single()
@@ -145,9 +145,19 @@ export async function PATCH(
       )
     }
 
-    const intendedSignerUserIds = Array.isArray(bodySignerIds)
+    // Trigger signature request notifications from report finalize/ready-for-signatures path
+    let intendedSignerUserIds = Array.isArray(bodySignerIds)
       ? (bodySignerIds as string[]).filter((id: unknown): id is string => typeof id === 'string')
       : []
+    if (intendedSignerUserIds.length === 0) {
+      const { data: memberRows } = await supabase
+        .from('organization_members')
+        .select('user_id')
+        .eq('organization_id', userData.organization_id)
+      intendedSignerUserIds = (memberRows || [])
+        .map((r: { user_id: string }) => r.user_id)
+        .filter((id): id is string => !!id && id !== reportRun.generated_by)
+    }
     if (intendedSignerUserIds.length > 0) {
       try {
         const token = await getSessionToken(request)

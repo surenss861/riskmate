@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import UIKit
 
 struct ContentView: View {
     @StateObject private var sessionManager = SessionManager.shared
@@ -20,7 +21,8 @@ struct ContentView: View {
     @State private var deepLinkHazardId: String?
     @State private var showReportFromDeepLink = false
     @State private var deepLinkReportRunId: String?
-    
+    @State private var showNotificationCenterFromDeepLink = false
+
     private var isAuditor: Bool {
         entitlements.isAuditor()
     }
@@ -122,7 +124,15 @@ struct ContentView: View {
         .onChange(of: deepLinkRouter.openNotifications) { _, open in
             if open {
                 selectedTab = .settings
+                showNotificationCenterFromDeepLink = true
                 deepLinkRouter.clearPending()
+            }
+        }
+        .fullScreenCover(isPresented: $showNotificationCenterFromDeepLink, onDismiss: {
+            showNotificationCenterFromDeepLink = false
+        }) {
+            NavigationStack {
+                NotificationCenterView()
             }
         }
         .fullScreenCover(isPresented: $showReportFromDeepLink, onDismiss: {
@@ -165,6 +175,13 @@ struct ContentView: View {
             return
         }
         _ = try? await NotificationService.shared.requestPermissions()
+        // After permission is granted, request APNs token immediately so push works without relaunch
+        let status = await NotificationService.shared.authorizationStatus()
+        if status == .authorized || status == .provisional {
+            await MainActor.run {
+                UIApplication.shared.registerForRemoteNotifications()
+            }
+        }
         await NotificationService.shared.registerStoredTokenIfNeeded()
     }
 

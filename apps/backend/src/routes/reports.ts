@@ -294,6 +294,89 @@ reportsRouter.post("/generate/:jobId", authenticate as unknown as RequestHandler
   }
 }) as RequestHandler);
 
+// POST /api/reports/runs/:reportRunId/ready-for-signatures
+// Moves a draft report run to ready_for_signatures and sends signature request notifications.
+// Body: { intendedSignerUserIds?: string[], jobTitle?: string }.
+// If intendedSignerUserIds is omitted or empty, org members (excluding run creator) are notified.
+reportsRouter.post(
+  "/runs/:reportRunId/ready-for-signatures",
+  authenticate as unknown as RequestHandler,
+  async (req, res) => {
+    const authReq = req as AuthenticatedRequest;
+    try {
+      const { organization_id, id: userId } = authReq.user;
+      const reportRunId = req.params.reportRunId;
+      const body = req.body as { intendedSignerUserIds?: string[]; jobTitle?: string };
+      let intendedSignerUserIds = Array.isArray(body?.intendedSignerUserIds)
+        ? (body.intendedSignerUserIds as string[]).filter((id): id is string => typeof id === "string")
+        : [];
+
+      const { data: reportRun, error: fetchError } = await supabase
+        .from("report_runs")
+        .select("id, organization_id, status, job_id, generated_by")
+        .eq("id", reportRunId)
+        .eq("organization_id", organization_id)
+        .single();
+
+      if (fetchError || !reportRun) {
+        return res.status(404).json({ message: "Report run not found" });
+      }
+      if (reportRun.status !== "draft") {
+        return res.status(400).json({
+          message: "Run is not in draft; only draft runs can be moved to ready_for_signatures",
+        });
+      }
+
+      const { data: updated, error: updateError } = await supabase
+        .from("report_runs")
+        .update({ status: "ready_for_signatures" })
+        .eq("id", reportRunId)
+        .eq("organization_id", organization_id)
+        .select()
+        .single();
+
+      if (updateError || !updated) {
+        console.error("ready-for-signatures update failed:", updateError);
+        return res.status(500).json({ message: "Failed to update report run" });
+      }
+
+      if (intendedSignerUserIds.length === 0) {
+        const { data: memberRows } = await supabase
+          .from("organization_members")
+          .select("user_id")
+          .eq("organization_id", organization_id);
+        intendedSignerUserIds = (memberRows || [])
+          .map((r: { user_id: string }) => r.user_id)
+          .filter((id) => id && id !== reportRun.generated_by);
+      }
+
+      let jobTitleOrClientName = body?.jobTitle;
+      if (jobTitleOrClientName == null && reportRun.job_id) {
+        const { data: job } = await supabase
+          .from("jobs")
+          .select("client_name")
+          .eq("id", reportRun.job_id)
+          .eq("organization_id", organization_id)
+          .single();
+        jobTitleOrClientName = job?.client_name ?? undefined;
+      }
+
+      for (const uid of intendedSignerUserIds) {
+        try {
+          await sendSignatureRequestNotification(uid, reportRunId, jobTitleOrClientName);
+        } catch (err) {
+          console.error("sendSignatureRequestNotification failed for user", uid, err);
+        }
+      }
+
+      res.json({ data: updated });
+    } catch (err: any) {
+      console.error("ready-for-signatures failed:", err);
+      res.status(500).json({ message: "Failed to move run to ready_for_signatures" });
+    }
+  }
+);
+
 // POST /api/reports/notify-signature-request
 // Sends signature request notifications to intended signers. Call after persisting a report run
 // (e.g. when moving to ready_for_signatures). Body: { reportRunId, intendedSignerUserIds, jobTitle? }.
@@ -330,11 +413,11 @@ reportsRouter.post(
         }
       }
 
-      for (const userId of intendedSignerUserIds) {
+      for (const uid of intendedSignerUserIds) {
         try {
-          await sendSignatureRequestNotification(userId, reportRunId, jobTitleOrClientName);
+          await sendSignatureRequestNotification(uid, reportRunId, jobTitleOrClientName);
         } catch (err) {
-          console.error("sendSignatureRequestNotification failed for user", userId, err);
+          console.error("sendSignatureRequestNotification failed for user", uid, err);
         }
       }
 
