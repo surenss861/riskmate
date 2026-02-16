@@ -7,6 +7,7 @@ import {
   validatePushToken,
   getNotificationPreferences,
   getUnreadNotificationCount,
+  listNotifications,
   markNotificationsAsRead,
   DEFAULT_NOTIFICATION_PREFERENCES,
   type NotificationPreferences,
@@ -79,6 +80,24 @@ notificationsRouter.delete(
     } catch (err: any) {
       console.error("Device token unregister failed:", err);
       res.status(500).json({ message: "Failed to unregister device token" });
+    }
+  }
+);
+
+/** GET /api/notifications — list notifications for current user (paginated). Query: limit (default 50), offset (default 0). */
+notificationsRouter.get(
+  "/",
+  authenticate as unknown as express.RequestHandler,
+  async (req: express.Request, res: express.Response) => {
+    const authReq = req as AuthenticatedRequest;
+    try {
+      const limit = req.query.limit != null ? parseInt(String(req.query.limit), 10) : 50;
+      const offset = req.query.offset != null ? parseInt(String(req.query.offset), 10) : 0;
+      const result = await listNotifications(authReq.user.id, { limit, offset });
+      res.json(result);
+    } catch (err: any) {
+      console.error("List notifications failed:", err);
+      res.status(500).json({ message: "Failed to list notifications" });
     }
   }
 );

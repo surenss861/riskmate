@@ -132,7 +132,9 @@ struct RiskmateApp: App {
         case .active:
             // Resume timers and check auth when app foregrounds
             ServerStatusManager.shared.resumeChecks()
-            NotificationService.shared.clearBadge()
+            Task {
+                await NotificationService.shared.refreshBadgeFromServer()
+            }
 
             // Check for auth expiry after long background (30+ min)
             Task {

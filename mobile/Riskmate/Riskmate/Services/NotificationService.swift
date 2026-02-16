@@ -140,6 +140,18 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
         setBadgeCount(0)
     }
 
+    /// Refresh app icon badge from server unread count (e.g. on foreground). Does not mark any notifications as read.
+    func refreshBadgeFromServer() async {
+        do {
+            let count = try await APIClient.shared.getUnreadNotificationCount()
+            await MainActor.run {
+                setBadgeCount(count)
+            }
+        } catch {
+            // Non-fatal: e.g. network or not authenticated; leave badge unchanged
+        }
+    }
+
     /// Mark all notifications as read and refresh badge from server (e.g. when opening notifications or tapping one).
     func markAsReadAndRefreshBadge() async {
         do {

@@ -790,6 +790,27 @@ class APIClient {
         )
     }
 
+    /// Notification item from GET /api/notifications.
+    struct NotificationItem: Decodable {
+        let id: String
+        let type: String
+        let content: String
+        let is_read: Bool
+        let created_at: String
+    }
+
+    /// List notifications (GET /api/notifications). Supports pagination via limit and offset.
+    func getNotifications(limit: Int = 50, offset: Int = 0) async throws -> [NotificationItem] {
+        struct ListResponse: Decodable {
+            let data: [NotificationItem]
+        }
+        let query = "limit=\(limit)&offset=\(offset)"
+        let response: ListResponse = try await request(
+            endpoint: "/api/notifications?\(query)"
+        )
+        return response.data
+    }
+
     /// Unread notification count for badge (GET /api/notifications/unread-count).
     func getUnreadNotificationCount() async throws -> Int {
         struct UnreadCountResponse: Decodable {

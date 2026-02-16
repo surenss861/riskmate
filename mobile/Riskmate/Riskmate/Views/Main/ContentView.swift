@@ -22,6 +22,7 @@ struct ContentView: View {
     @State private var showReportFromDeepLink = false
     @State private var deepLinkReportRunId: String?
     @State private var showNotificationCenterFromDeepLink = false
+    @State private var showNotificationPermissionPrompt = false
 
     private var isAuditor: Bool {
         entitlements.isAuditor()
@@ -78,6 +79,19 @@ struct ContentView: View {
                     }
                     .task {
                         await requestNotificationPermissionsAndRegisterIfNeeded()
+                    }
+                    .sheet(isPresented: $showNotificationPermissionPrompt) {
+                        NotificationPermissionEducationView(
+                            onEnable: {
+                                showNotificationPermissionPrompt = false
+                                Task {
+                                    await requestNotificationPermissionsAfterEducation()
+                                }
+                            },
+                            onNotNow: {
+                                showNotificationPermissionPrompt = false
+                            }
+                        )
                     }
                 }
             } else {
@@ -174,8 +188,15 @@ struct ContentView: View {
             await NotificationService.shared.registerStoredTokenIfNeeded()
             return
         }
+        // Show pre-permission education first; only request system permission after user taps Enable
+        await MainActor.run {
+            showNotificationPermissionPrompt = true
+        }
+    }
+
+    /// Called after user taps "Enable" in the notification permission education modal. Requests system authorization then registers token.
+    private func requestNotificationPermissionsAfterEducation() async {
         _ = try? await NotificationService.shared.requestPermissions()
-        // After permission is granted, request APNs token immediately so push works without relaunch
         let status = await NotificationService.shared.authorizationStatus()
         if status == .authorized || status == .provisional {
             await MainActor.run {
@@ -348,6 +369,57 @@ struct ContentView: View {
             case .settings: selectedSidebarItem = .account
             }
         }
+    }
+}
+
+// MARK: - Notification permission education (pre-prompt)
+
+/// Pre-permission modal shown when we would request notification authorization.
+/// Outlines benefits; only calls requestAuthorization after user taps "Enable".
+struct NotificationPermissionEducationView: View {
+    let onEnable: () -> Void
+    let onNotNow: () -> Void
+
+    var body: some View {
+        VStack(spacing: RMTheme.Spacing.xl) {
+            Image(systemName: "bell.badge.fill")
+                .font(.system(size: 56))
+                .foregroundColor(RMTheme.Colors.accent)
+
+            VStack(spacing: RMTheme.Spacing.sm) {
+                Text("Stay in the loop")
+                    .font(RMTheme.Typography.title2)
+                    .foregroundColor(RMTheme.Colors.textPrimary)
+                Text("Enable notifications to get job updates, signature requests, and important alerts from your team.")
+                    .font(RMTheme.Typography.body)
+                    .foregroundColor(RMTheme.Colors.textSecondary)
+                    .multilineTextAlignment(.center)
+            }
+
+            VStack(spacing: RMTheme.Spacing.md) {
+                Button {
+                    onEnable()
+                } label: {
+                    Text("Enable")
+                        .font(RMTheme.Typography.bodyBold)
+                        .foregroundColor(.black)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, RMTheme.Spacing.md)
+                        .background(RMTheme.Colors.accent)
+                        .clipShape(RoundedRectangle(cornerRadius: RMTheme.Radius.md))
+                }
+                Button {
+                    onNotNow()
+                } label: {
+                    Text("Not Now")
+                        .font(RMTheme.Typography.body)
+                        .foregroundColor(RMTheme.Colors.textSecondary)
+                }
+            }
+            .padding(.horizontal, RMTheme.Spacing.lg)
+        }
+        .padding(RMTheme.Spacing.xl)
+        .background(RMTheme.Colors.background)
     }
 }
 

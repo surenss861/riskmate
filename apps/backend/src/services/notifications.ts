@@ -218,6 +218,36 @@ export async function createNotificationRecord(
   }
 }
 
+/** List notifications for a user with pagination (newest first). */
+export async function listNotifications(
+  userId: string,
+  options: { limit?: number; offset?: number } = {}
+): Promise<{ data: Array<{ id: string; type: string; content: string; is_read: boolean; created_at: string }> }> {
+  const limit = Math.min(Math.max(options.limit ?? 50, 1), 100);
+  const offset = Math.max(options.offset ?? 0, 0);
+
+  const { data, error } = await supabase
+    .from("notifications")
+    .select("id, type, content, is_read, created_at")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .range(offset, offset + limit - 1);
+
+  if (error) {
+    console.error("Failed to list notifications:", error);
+    return { data: [] };
+  }
+  return {
+    data: (data || []).map((row: any) => ({
+      id: row.id,
+      type: row.type,
+      content: row.content,
+      is_read: !!row.is_read,
+      created_at: row.created_at,
+    })),
+  };
+}
+
 /** Mark notifications as read: all for the user, or by id(s). Updates is_read and updated_at. */
 export async function markNotificationsAsRead(
   userId: string,
