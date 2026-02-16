@@ -116,6 +116,18 @@ CREATE POLICY "Users can create their own device tokens"
     AND organization_id = get_user_organization_id()
   );
 
+DROP POLICY IF EXISTS "Users can update their own device tokens" ON device_tokens;
+CREATE POLICY "Users can update their own device tokens"
+  ON device_tokens FOR UPDATE
+  USING (
+    user_id = auth.uid()
+    AND organization_id = get_user_organization_id()
+  )
+  WITH CHECK (
+    user_id = auth.uid()
+    AND organization_id = get_user_organization_id()
+  );
+
 DROP POLICY IF EXISTS "Users can delete their own device tokens" ON device_tokens;
 CREATE POLICY "Users can delete their own device tokens"
   ON device_tokens FOR DELETE
