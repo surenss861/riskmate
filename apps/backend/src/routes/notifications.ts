@@ -3,6 +3,7 @@ import { authenticate, AuthenticatedRequest } from "../middleware/auth";
 import {
   registerDeviceToken,
   unregisterDeviceToken,
+  sendEvidenceUploadedNotification,
 } from "../services/notifications";
 import { requireFeature } from "../middleware/limits";
 
@@ -57,6 +58,27 @@ notificationsRouter.delete(
     } catch (err: any) {
       console.error("Device token unregister failed:", err);
       res.status(500).json({ message: "Failed to unregister device token" });
+    }
+  }
+);
+
+/** POST /api/notifications/evidence-uploaded — notify a user that evidence was uploaded to a job (e.g. job owner). */
+notificationsRouter.post(
+  "/evidence-uploaded",
+  authenticate as unknown as express.RequestHandler,
+  async (req: express.Request, res: express.Response) => {
+    try {
+      const { userId, jobId, photoId } = req.body || {};
+      if (!userId || !jobId || !photoId) {
+        return res
+          .status(400)
+          .json({ message: "Missing userId, jobId, or photoId" });
+      }
+      await sendEvidenceUploadedNotification(userId, jobId, photoId);
+      res.status(204).end();
+    } catch (err: any) {
+      console.error("Evidence uploaded notification failed:", err);
+      res.status(500).json({ message: "Failed to send notification" });
     }
   }
 );

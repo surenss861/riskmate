@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { getOrganizationContext, verifyJobOwnership } from '@/lib/utils/organizationGuard'
 import { getDefaultPhotoCategory } from '@/lib/utils/photoCategory'
+import { getSessionToken, BACKEND_URL } from '@/lib/api/proxy-helpers'
 
 export const runtime = 'nodejs'
 
@@ -271,6 +272,36 @@ export async function POST(
           { status: 500 }
         )
       }
+    }
+
+    // Notify job owner when uploader is not the owner (evidence upload notification)
+    try {
+      const { data: jobRow } = await supabase
+        .from('jobs')
+        .select('created_by')
+        .eq('id', jobId)
+        .eq('organization_id', organization_id)
+        .single()
+      const ownerId = jobRow?.created_by
+      if (ownerId && ownerId !== userId) {
+        const token = await getSessionToken(request)
+        if (token) {
+          await fetch(`${BACKEND_URL}/api/notifications/evidence-uploaded`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              userId: ownerId,
+              jobId,
+              photoId: inserted.id,
+            }),
+          })
+        }
+      }
+    } catch (notifyErr) {
+      console.error('Evidence upload notification failed:', notifyErr)
     }
 
     // Generate signed URL: use evidence bucket when file_path indicates evidence storage

@@ -6,7 +6,7 @@ import archiver from "archiver";
 import { Readable } from "stream";
 import { generateRiskSnapshotPDF } from "../utils/pdf";
 import crypto from "crypto";
-import { notifyReportReady } from "../services/notifications";
+import { notifyReportReady, sendSignatureRequestNotification } from "../services/notifications";
 import { buildJobReport } from "../utils/jobReport";
 import { requireFeature } from "../middleware/limits";
 
@@ -293,6 +293,58 @@ reportsRouter.post("/generate/:jobId", authenticate as unknown as RequestHandler
     });
   }
 }) as RequestHandler);
+
+// POST /api/reports/notify-signature-request
+// Sends signature request notifications to intended signers. Call after persisting a report run
+// (e.g. when moving to ready_for_signatures). Body: { reportRunId, intendedSignerUserIds, jobTitle? }.
+reportsRouter.post(
+  "/notify-signature-request",
+  authenticate as unknown as RequestHandler,
+  async (req, res) => {
+    const authReq = req as AuthenticatedRequest;
+    try {
+      const { organization_id } = authReq.user;
+      const body = req.body as { reportRunId?: string; intendedSignerUserIds?: string[]; jobTitle?: string };
+      const { reportRunId, intendedSignerUserIds = [], jobTitle } = body;
+
+      if (!reportRunId || !Array.isArray(intendedSignerUserIds) || intendedSignerUserIds.length === 0) {
+        return res.status(400).json({ message: "reportRunId and non-empty intendedSignerUserIds required" });
+      }
+
+      let jobTitleOrClientName = jobTitle;
+      if (jobTitleOrClientName == null) {
+        const { data: run } = await supabase
+          .from("report_runs")
+          .select("job_id")
+          .eq("id", reportRunId)
+          .eq("organization_id", organization_id)
+          .single();
+        if (run?.job_id) {
+          const { data: job } = await supabase
+            .from("jobs")
+            .select("client_name")
+            .eq("id", run.job_id)
+            .eq("organization_id", organization_id)
+            .single();
+          jobTitleOrClientName = job?.client_name ?? undefined;
+        }
+      }
+
+      for (const userId of intendedSignerUserIds) {
+        try {
+          await sendSignatureRequestNotification(userId, reportRunId, jobTitleOrClientName);
+        } catch (err) {
+          console.error("sendSignatureRequestNotification failed for user", userId, err);
+        }
+      }
+
+      res.status(204).end();
+    } catch (err: any) {
+      console.error("notify-signature-request failed:", err);
+      res.status(500).json({ message: "Failed to send signature request notifications" });
+    }
+  }
+);
 
 reportsRouter.post(
   "/share/:jobId",

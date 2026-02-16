@@ -17,6 +17,8 @@ struct ContentView: View {
     @State private var showJobFromDeepLink = false
     @State private var deepLinkJobId: String?
     @State private var deepLinkJobTab: JobDetailTab?
+    @State private var showReportFromDeepLink = false
+    @State private var deepLinkReportRunId: String?
     
     private var isAuditor: Bool {
         entitlements.isAuditor()
@@ -110,10 +112,29 @@ struct ContentView: View {
             deepLinkJobTab = deepLinkRouter.pendingJobTab.flatMap(JobDetailTab.init(rawValue:))
             showJobFromDeepLink = true
         }
+        .onChange(of: deepLinkRouter.pendingReportRunId) { _, new in
+            guard let runId = new else { return }
+            deepLinkReportRunId = runId
+            showReportFromDeepLink = true
+        }
         .onChange(of: deepLinkRouter.openNotifications) { _, open in
             if open {
                 selectedTab = .settings
                 deepLinkRouter.clearPending()
+            }
+        }
+        .fullScreenCover(isPresented: $showReportFromDeepLink, onDismiss: {
+            deepLinkRouter.clearPending()
+            deepLinkReportRunId = nil
+            showReportFromDeepLink = false
+        }) {
+            Group {
+                if let runId = deepLinkReportRunId {
+                    ReportRunDeepLinkView(reportRunId: runId)
+                        .environmentObject(quickAction)
+                } else {
+                    EmptyView()
+                }
             }
         }
         .fullScreenCover(isPresented: $showJobFromDeepLink, onDismiss: {
@@ -392,6 +413,56 @@ struct SidebarView: View {
         }
     }
 }
+
+// MARK: - Report run deep link
+
+private struct ReportRunDeepLinkView: View {
+    let reportRunId: String
+    @State private var jobId: String?
+    @State private var loadError: String?
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        Group {
+            if let jobId = jobId {
+                JobDetailView(jobId: jobId, initialTab: .signatures)
+                    .environmentObject(QuickActionRouter.shared)
+            } else if let error = loadError {
+                VStack(spacing: RMTheme.Spacing.lg) {
+                    Text("Could not load report")
+                        .font(RMTheme.Typography.headline)
+                    Text(error)
+                        .font(RMTheme.Typography.body)
+                        .foregroundColor(RMTheme.Colors.textSecondary)
+                        .multilineTextAlignment(.center)
+                    Button("Dismiss") {
+                        dismiss()
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+                .padding(RMTheme.Spacing.pagePadding)
+            } else {
+                VStack(spacing: RMTheme.Spacing.lg) {
+                    RMSkeletonView(width: 80, height: 80, cornerRadius: 12)
+                    Text("Loading report…")
+                        .font(RMTheme.Typography.body)
+                        .foregroundColor(RMTheme.Colors.textSecondary)
+                }
+            }
+        }
+        .task {
+            guard jobId == nil, loadError == nil else { return }
+            do {
+                let run = try await APIClient.shared.getReportRun(reportRunId: reportRunId)
+                jobId = run.jobId
+            } catch {
+                loadError = error.localizedDescription
+            }
+        }
+    }
+}
+
+// MARK: - Sidebar
 
 struct SidebarRow: View {
     let item: SidebarItem

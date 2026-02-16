@@ -247,6 +247,31 @@ export async function POST(
 
     // When skipPdfGeneration is true, return run id and hash only (no PDF) for signature workflow
     if (skipPdfGeneration) {
+      const intendedSignerUserIds = Array.isArray(body.intendedSignerUserIds)
+        ? (body.intendedSignerUserIds as string[]).filter((id): id is string => typeof id === 'string')
+        : []
+      if (intendedSignerUserIds.length > 0) {
+        try {
+          const { getSessionToken, BACKEND_URL } = await import('@/lib/api/proxy-helpers')
+          const token = await getSessionToken(request)
+          if (token) {
+            await fetch(`${BACKEND_URL}/api/reports/notify-signature-request`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify({
+                reportRunId: reportRun.id,
+                intendedSignerUserIds,
+                jobTitle: body.jobTitle ?? undefined,
+              }),
+            })
+          }
+        } catch (notifyErr) {
+          console.error(`[reports][${requestId}] notify-signature-request failed`, notifyErr)
+        }
+      }
       console.log(`[reports][${requestId}][stage] skip_pdf_returning_run`)
       return NextResponse.json(
         {

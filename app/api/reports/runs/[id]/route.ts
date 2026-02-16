@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { getSessionToken, BACKEND_URL } from '@/lib/api/proxy-helpers'
 
 export const runtime = 'nodejs'
 
@@ -97,7 +98,7 @@ export async function PATCH(
     }
 
     const body = await request.json().catch(() => ({}))
-    const { status: requestedStatus } = body
+    const { status: requestedStatus, intendedSignerUserIds: bodySignerIds } = body
 
     // Only allow promoting draft -> ready_for_signatures
     if (requestedStatus !== 'ready_for_signatures') {
@@ -142,6 +143,31 @@ export async function PATCH(
         { message: 'Failed to update report run', detail: updateError?.message },
         { status: 500 }
       )
+    }
+
+    const intendedSignerUserIds = Array.isArray(bodySignerIds)
+      ? (bodySignerIds as string[]).filter((id: unknown): id is string => typeof id === 'string')
+      : []
+    if (intendedSignerUserIds.length > 0) {
+      try {
+        const token = await getSessionToken(request)
+        if (token) {
+          await fetch(`${BACKEND_URL}/api/reports/notify-signature-request`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              reportRunId,
+              intendedSignerUserIds,
+              jobTitle: body.jobTitle ?? undefined,
+            }),
+          })
+        }
+      } catch (notifyErr) {
+        console.error('[reports/runs/[id]] notify-signature-request failed', notifyErr)
+      }
     }
 
     return NextResponse.json({ data: updated })
