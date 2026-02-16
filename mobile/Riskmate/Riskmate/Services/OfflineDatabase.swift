@@ -614,6 +614,38 @@ final class OfflineDatabase {
         }
     }
 
+    /// Returns stored JSON payload for a hazard by entity id from pending_hazards (for conflict resolution when queued op is gone).
+    func getPendingHazardPayload(entityId: String) -> [String: Any]? {
+        queue.sync {
+            guard let db = db else { return nil }
+            let sql = "SELECT data FROM pending_hazards WHERE id = ? LIMIT 1"
+            var stmt: OpaquePointer?
+            defer { sqlite3_finalize(stmt) }
+            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return nil }
+            sqlite3_bind_text(stmt, 1, (entityId as NSString).utf8String, -1, nil)
+            guard sqlite3_step(stmt) == SQLITE_ROW else { return nil }
+            let dataStr = String(cString: sqlite3_column_text(stmt, 0))
+            guard let d = dataStr.data(using: .utf8) else { return nil }
+            return (try? JSONSerialization.jsonObject(with: d)) as? [String: Any]
+        }
+    }
+
+    /// Returns stored JSON payload for a control by entity id from pending_controls (for conflict resolution when queued op is gone).
+    func getPendingControlPayload(entityId: String) -> [String: Any]? {
+        queue.sync {
+            guard let db = db else { return nil }
+            let sql = "SELECT data FROM pending_controls WHERE id = ? LIMIT 1"
+            var stmt: OpaquePointer?
+            defer { sqlite3_finalize(stmt) }
+            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return nil }
+            sqlite3_bind_text(stmt, 1, (entityId as NSString).utf8String, -1, nil)
+            guard sqlite3_step(stmt) == SQLITE_ROW else { return nil }
+            let dataStr = String(cString: sqlite3_column_text(stmt, 0))
+            guard let d = dataStr.data(using: .utf8) else { return nil }
+            return (try? JSONSerialization.jsonObject(with: d)) as? [String: Any]
+        }
+    }
+
     /// Returns payload from sync_queue for update/delete ops matching the entity.
     /// Used when resolving historical conflicts where the original queued op may have been removed.
     func getSyncOperationPayloadForEntity(entityType: String, entityId: String) -> [String: Any]? {

@@ -269,24 +269,38 @@ struct SyncQueueView: View {
                                     entityId = entityId ?? op.entityId
                                     operationType = op.type.apiTypeString
                                 } else {
-                                    // Queued op not found: use stored operation_type from conflict_log; do not default to update_*
+                                    // Queued op not found: divergent conflict or op cleared. Allow resolution when operationId is divergent or with stored operation_type.
                                     let et = conflict.entityType
                                     let eid = conflict.entityId
                                     guard !et.isEmpty, !eid.isEmpty else {
                                         throw NSError(domain: "ConflictResolution", code: 1, userInfo: [NSLocalizedDescriptionKey: "Cannot resolve: missing entity info"])
                                     }
-                                    guard let storedOpType = conflict.operationType, !storedOpType.isEmpty else {
-                                        throw NSError(domain: "ConflictResolution", code: 3, userInfo: [NSLocalizedDescriptionKey: "Cannot resolve: original operation type is unknown. The pending operation may have been cleared."])
+                                    let isDivergent = conflict.id.hasPrefix("divergent:")
+                                    if isDivergent {
+                                        // Divergent conflicts: pass reconstructed payload and operationType nil; SyncEngine divergent branch handles it.
+                                        var base = syncEngine.getLocalPayloadForConflict(entityType: et, entityId: eid)
+                                        if let perField = outcome.perFieldResolvedValues, !perField.isEmpty, var merged = base {
+                                            for (k, v) in perField { merged[k] = v }
+                                            base = merged
+                                        }
+                                        resolvedValue = base
+                                        entityType = et
+                                        entityId = eid
+                                        operationType = nil
+                                    } else {
+                                        guard let storedOpType = conflict.operationType, !storedOpType.isEmpty else {
+                                            throw NSError(domain: "ConflictResolution", code: 3, userInfo: [NSLocalizedDescriptionKey: "Cannot resolve: original operation type is unknown. The pending operation may have been cleared."])
+                                        }
+                                        var base = syncEngine.getLocalPayloadForConflict(entityType: et, entityId: eid)
+                                        if let perField = outcome.perFieldResolvedValues, !perField.isEmpty, var merged = base {
+                                            for (k, v) in perField { merged[k] = v }
+                                            base = merged
+                                        }
+                                        resolvedValue = base
+                                        entityType = et
+                                        entityId = eid
+                                        operationType = storedOpType
                                     }
-                                    var base = syncEngine.getLocalPayloadForConflict(entityType: et, entityId: eid)
-                                    if let perField = outcome.perFieldResolvedValues, !perField.isEmpty, var merged = base {
-                                        for (k, v) in perField { merged[k] = v }
-                                        base = merged
-                                    }
-                                    resolvedValue = base
-                                    entityType = et
-                                    entityId = eid
-                                    operationType = storedOpType
                                 }
                                 guard resolvedValue != nil, entityType != nil, entityId != nil else {
                                     throw NSError(domain: "ConflictResolution", code: 2, userInfo: [NSLocalizedDescriptionKey: "Cannot resolve: payload or required metadata missing"])

@@ -499,11 +499,19 @@ final class SyncEngine: ObservableObject {
                 guard let resolved = payload, let entityId = eid, let entityType = et else {
                     throw NSError(domain: "SyncEngine", code: -1, userInfo: [NSLocalizedDescriptionKey: "Cannot resolve divergent conflict: missing local payload or entity id"])
                 }
+                let jobId = resolved["job_id"] as? String ?? resolved["jobId"] as? String
                 if entityType == "job", let job = try? decodeJob(from: resolved) {
                     queueUpdateJob(job)
                     _ = try await syncPendingOperations()
+                } else if entityType == "hazard", let hazard = try? decodeHazard(from: resolved), let jobId = jobId {
+                    queueUpdateHazard(hazard, jobId: jobId)
+                    _ = try await syncPendingOperations()
+                } else if entityType == "control", let control = try? decodeControl(from: resolved), let jobId = jobId,
+                          let hazardId = resolved["hazard_id"] as? String ?? resolved["hazardId"] as? String {
+                    queueUpdateControl(control, jobId: jobId, hazardId: hazardId)
+                    _ = try await syncPendingOperations()
                 } else {
-                    throw NSError(domain: "SyncEngine", code: -1, userInfo: [NSLocalizedDescriptionKey: "Divergent localWins/merge supports jobs only"])
+                    throw NSError(domain: "SyncEngine", code: -1, userInfo: [NSLocalizedDescriptionKey: "Cannot resolve divergent conflict: unsupported entity type or missing job_id"])
                 }
                 db.markConflictResolved(id: operationId, resolutionStrategy: strategy.rawValue)
                 clearPendingConflict(operationId: operationId)
@@ -770,32 +778,20 @@ final class SyncEngine: ObservableObject {
     }
 
     /// Reconstruct local payload from pending storage or sync queue (for divergent conflicts or when resolving from history without original sync op).
-    /// Tries: (1) pending create tables, (2) sync_queue ops for update/delete.
+    /// Tries: (1) pending_hazards/pending_controls by entityId, (2) pending_jobs for jobs, (3) sync_queue for update/delete.
     func getLocalPayloadForConflict(entityType: String, entityId: String) -> [String: Any]? {
         switch entityType {
         case "job":
             let pending = db.getPendingJobs().first { $0.id == entityId }
             return pending.flatMap { (try? JSONSerialization.jsonObject(with: $0.data)) as? [String: Any] }
         case "hazard":
-            for job in db.getPendingJobs() {
-                let hazards = db.getPendingHazards(jobId: job.id)
-                for data in hazards {
-                    if let dict = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
-                       (dict["id"] as? String) == entityId {
-                        return dict
-                    }
-                }
+            if let payload = db.getPendingHazardPayload(entityId: entityId) {
+                return payload
             }
             return db.getSyncOperationPayloadForEntity(entityType: entityType, entityId: entityId)
         case "control":
-            for job in db.getPendingJobs() {
-                let controls = db.getPendingControls(jobId: job.id)
-                for data in controls {
-                    if let dict = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
-                       (dict["id"] as? String) == entityId {
-                        return dict
-                    }
-                }
+            if let payload = db.getPendingControlPayload(entityId: entityId) {
+                return payload
             }
             return db.getSyncOperationPayloadForEntity(entityType: entityType, entityId: entityId)
         default:

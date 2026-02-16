@@ -98,26 +98,44 @@ struct ConflictHistoryView: View {
                                     entityId = op.entityId
                                     operationType = op.type.apiTypeString
                                 } else {
-                                    // Original sync op removed (e.g. from history): use stored operation_type from conflict_log; do not default to update_*
+                                    // Original sync op removed (e.g. from history) or divergent conflict (operationId starts with "divergent:"): allow resolution with reconstructed payload.
                                     let et = conflict.entityType
                                     let eid = conflict.entityId
                                     guard !et.isEmpty, !eid.isEmpty else {
                                         throw NSError(domain: "ConflictResolution", code: 2, userInfo: [NSLocalizedDescriptionKey: "Cannot resolve: missing entity info"])
                                     }
-                                    guard let storedOpType = conflict.operationType, !storedOpType.isEmpty else {
-                                        throw NSError(domain: "ConflictResolution", code: 5, userInfo: [NSLocalizedDescriptionKey: "Cannot resolve: original operation type is unknown. Resolve this conflict from Sync Queue while the pending operation is still available."])
-                                    }
-                                    var base = syncEngine.getLocalPayloadForConflict(entityType: et, entityId: eid)
-                                    if let perField = outcome.perFieldResolvedValues, !perField.isEmpty, var merged = base {
-                                        for (k, v) in perField { merged[k] = v }
-                                        base = merged
-                                    }
-                                    resolvedValue = base
-                                    entityType = et
-                                    entityId = eid
-                                    operationType = storedOpType
-                                    if resolvedValue == nil {
-                                        throw NSError(domain: "ConflictResolution", code: 3, userInfo: [NSLocalizedDescriptionKey: "Cannot resolve: local data no longer available"])
+                                    let isDivergent = conflict.id.hasPrefix("divergent:")
+                                    if isDivergent {
+                                        // Divergent conflicts: no queued op; pass reconstructed payload and operationType nil; SyncEngine divergent branch handles it.
+                                        var base = syncEngine.getLocalPayloadForConflict(entityType: et, entityId: eid)
+                                        if let perField = outcome.perFieldResolvedValues, !perField.isEmpty, var merged = base {
+                                            for (k, v) in perField { merged[k] = v }
+                                            base = merged
+                                        }
+                                        resolvedValue = base
+                                        entityType = et
+                                        entityId = eid
+                                        operationType = nil
+                                        if resolvedValue == nil {
+                                            throw NSError(domain: "ConflictResolution", code: 3, userInfo: [NSLocalizedDescriptionKey: "Cannot resolve: local data no longer available"])
+                                        }
+                                    } else {
+                                        // Non-divergent but op missing: require stored operation_type from conflict_log.
+                                        guard let storedOpType = conflict.operationType, !storedOpType.isEmpty else {
+                                            throw NSError(domain: "ConflictResolution", code: 5, userInfo: [NSLocalizedDescriptionKey: "Cannot resolve: original operation type is unknown. Resolve this conflict from Sync Queue while the pending operation is still available."])
+                                        }
+                                        var base = syncEngine.getLocalPayloadForConflict(entityType: et, entityId: eid)
+                                        if let perField = outcome.perFieldResolvedValues, !perField.isEmpty, var merged = base {
+                                            for (k, v) in perField { merged[k] = v }
+                                            base = merged
+                                        }
+                                        resolvedValue = base
+                                        entityType = et
+                                        entityId = eid
+                                        operationType = storedOpType
+                                        if resolvedValue == nil {
+                                            throw NSError(domain: "ConflictResolution", code: 3, userInfo: [NSLocalizedDescriptionKey: "Cannot resolve: local data no longer available"])
+                                        }
                                     }
                                 }
 
