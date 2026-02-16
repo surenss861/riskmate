@@ -27,7 +27,7 @@ final class OfflineDatabase {
 
     // MARK: - Schema
 
-    private let schemaVersion: Int32 = 2
+    private let schemaVersion: Int32 = 3
 
     private func openDatabase() {
         guard sqlite3_open(dbPath, &db) == SQLITE_OK else {
@@ -49,6 +49,12 @@ final class OfflineDatabase {
             if current < 2 {
                 sqlite3_exec(db, "ALTER TABLE sync_queue ADD COLUMN last_error TEXT", nil, nil, nil)
                 self.setSchemaVersion(db, 2)
+            }
+            if current < 3 {
+                sqlite3_exec(db, "ALTER TABLE conflict_log ADD COLUMN field TEXT", nil, nil, nil)
+                sqlite3_exec(db, "ALTER TABLE conflict_log ADD COLUMN server_timestamp INTEGER", nil, nil, nil)
+                sqlite3_exec(db, "ALTER TABLE conflict_log ADD COLUMN local_timestamp INTEGER", nil, nil, nil)
+                self.setSchemaVersion(db, 3)
             }
         }
     }
@@ -361,22 +367,40 @@ final class OfflineDatabase {
         id: String,
         entityType: String,
         entityId: String,
+        field: String?,
         serverVersion: String?,
         localVersion: String?,
+        serverTimestamp: Date?,
+        localTimestamp: Date?,
         resolutionStrategy: String?
     ) {
         queue.async { [weak self] in
             guard let self = self, let db = self.db else { return }
-            let sql = "INSERT OR REPLACE INTO conflict_log (id, entity_type, entity_id, server_version, local_version, resolution_strategy) VALUES (?, ?, ?, ?, ?, ?)"
+            let sql = "INSERT OR REPLACE INTO conflict_log (id, entity_type, entity_id, field, server_version, local_version, server_timestamp, local_timestamp, resolution_strategy) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
             var stmt: OpaquePointer?
             defer { sqlite3_finalize(stmt) }
             guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
             sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, nil)
             sqlite3_bind_text(stmt, 2, (entityType as NSString).utf8String, -1, nil)
             sqlite3_bind_text(stmt, 3, (entityId as NSString).utf8String, -1, nil)
-            sqlite3_bind_text(stmt, 4, (serverVersion as NSString?)?.utf8String, -1, nil)
-            sqlite3_bind_text(stmt, 5, (localVersion as NSString?)?.utf8String, -1, nil)
-            sqlite3_bind_text(stmt, 6, (resolutionStrategy as NSString?)?.utf8String, -1, nil)
+            if let f = field {
+                sqlite3_bind_text(stmt, 4, (f as NSString).utf8String, -1, nil)
+            } else {
+                sqlite3_bind_null(stmt, 4)
+            }
+            sqlite3_bind_text(stmt, 5, (serverVersion as NSString?)?.utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 6, (localVersion as NSString?)?.utf8String, -1, nil)
+            if let t = serverTimestamp {
+                sqlite3_bind_int64(stmt, 7, Int64(t.timeIntervalSince1970 * 1000))
+            } else {
+                sqlite3_bind_null(stmt, 7)
+            }
+            if let t = localTimestamp {
+                sqlite3_bind_int64(stmt, 8, Int64(t.timeIntervalSince1970 * 1000))
+            } else {
+                sqlite3_bind_null(stmt, 8)
+            }
+            sqlite3_bind_text(stmt, 9, (resolutionStrategy as NSString?)?.utf8String, -1, nil)
             sqlite3_step(stmt)
         }
     }
@@ -384,7 +408,7 @@ final class OfflineDatabase {
     func getUnresolvedConflicts() -> [ConflictLogRow] {
         queue.sync {
             guard let db = db else { return [] }
-            let sql = "SELECT id, entity_type, entity_id, server_version, local_version, resolution_strategy FROM conflict_log WHERE resolved_at IS NULL"
+            let sql = "SELECT id, entity_type, entity_id, field, server_version, local_version, server_timestamp, local_timestamp, resolution_strategy FROM conflict_log WHERE resolved_at IS NULL"
             var stmt: OpaquePointer?
             defer { sqlite3_finalize(stmt) }
             guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return [] }
@@ -393,10 +417,13 @@ final class OfflineDatabase {
                 let id = String(cString: sqlite3_column_text(stmt, 0))
                 let entityType = String(cString: sqlite3_column_text(stmt, 1))
                 let entityId = String(cString: sqlite3_column_text(stmt, 2))
-                let serverV = sqlite3_column_type(stmt, 3) == SQLITE_NULL ? nil : String(cString: sqlite3_column_text(stmt, 3))
-                let localV = sqlite3_column_type(stmt, 4) == SQLITE_NULL ? nil : String(cString: sqlite3_column_text(stmt, 4))
-                let strat = sqlite3_column_type(stmt, 5) == SQLITE_NULL ? nil : String(cString: sqlite3_column_text(stmt, 5))
-                rows.append(ConflictLogRow(id: id, entityType: entityType, entityId: entityId, serverVersion: serverV, localVersion: localV, resolutionStrategy: strat))
+                let field = sqlite3_column_type(stmt, 3) == SQLITE_NULL ? nil : String(cString: sqlite3_column_text(stmt, 3))
+                let serverV = sqlite3_column_type(stmt, 4) == SQLITE_NULL ? nil : String(cString: sqlite3_column_text(stmt, 4))
+                let localV = sqlite3_column_type(stmt, 5) == SQLITE_NULL ? nil : String(cString: sqlite3_column_text(stmt, 5))
+                let serverTs = sqlite3_column_type(stmt, 6) == SQLITE_NULL ? nil : Date(timeIntervalSince1970: Double(sqlite3_column_int64(stmt, 6)) / 1000)
+                let localTs = sqlite3_column_type(stmt, 7) == SQLITE_NULL ? nil : Date(timeIntervalSince1970: Double(sqlite3_column_int64(stmt, 7)) / 1000)
+                let strat = sqlite3_column_type(stmt, 8) == SQLITE_NULL ? nil : String(cString: sqlite3_column_text(stmt, 8))
+                rows.append(ConflictLogRow(id: id, entityType: entityType, entityId: entityId, field: field, serverVersion: serverV, localVersion: localV, serverTimestamp: serverTs, localTimestamp: localTs, resolutionStrategy: strat))
             }
             return rows
         }
@@ -424,7 +451,7 @@ final class OfflineDatabase {
     func getAllConflicts() -> [ConflictHistoryRow] {
         queue.sync {
             guard let db = db else { return [] }
-            let sql = "SELECT id, entity_type, entity_id, server_version, local_version, resolution_strategy, resolved_at FROM conflict_log ORDER BY resolved_at IS NULL DESC, resolved_at DESC"
+            let sql = "SELECT id, entity_type, entity_id, field, server_version, local_version, server_timestamp, local_timestamp, resolution_strategy, resolved_at FROM conflict_log ORDER BY resolved_at IS NULL DESC, resolved_at DESC"
             var stmt: OpaquePointer?
             defer { sqlite3_finalize(stmt) }
             guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return [] }
@@ -433,11 +460,14 @@ final class OfflineDatabase {
                 let id = String(cString: sqlite3_column_text(stmt, 0))
                 let entityType = String(cString: sqlite3_column_text(stmt, 1))
                 let entityId = String(cString: sqlite3_column_text(stmt, 2))
-                let serverV = sqlite3_column_type(stmt, 3) == SQLITE_NULL ? nil : String(cString: sqlite3_column_text(stmt, 3))
-                let localV = sqlite3_column_type(stmt, 4) == SQLITE_NULL ? nil : String(cString: sqlite3_column_text(stmt, 4))
-                let strat = sqlite3_column_type(stmt, 5) == SQLITE_NULL ? nil : String(cString: sqlite3_column_text(stmt, 5))
-                let resolvedAt = sqlite3_column_type(stmt, 6) == SQLITE_NULL ? nil : Date(timeIntervalSince1970: Double(sqlite3_column_int64(stmt, 6)) / 1000)
-                rows.append(ConflictHistoryRow(id: id, entityType: entityType, entityId: entityId, serverVersion: serverV, localVersion: localV, resolutionStrategy: strat, resolvedAt: resolvedAt))
+                let field = sqlite3_column_type(stmt, 3) == SQLITE_NULL ? nil : String(cString: sqlite3_column_text(stmt, 3))
+                let serverV = sqlite3_column_type(stmt, 4) == SQLITE_NULL ? nil : String(cString: sqlite3_column_text(stmt, 4))
+                let localV = sqlite3_column_type(stmt, 5) == SQLITE_NULL ? nil : String(cString: sqlite3_column_text(stmt, 5))
+                let serverTs = sqlite3_column_type(stmt, 6) == SQLITE_NULL ? nil : Date(timeIntervalSince1970: Double(sqlite3_column_int64(stmt, 6)) / 1000)
+                let localTs = sqlite3_column_type(stmt, 7) == SQLITE_NULL ? nil : Date(timeIntervalSince1970: Double(sqlite3_column_int64(stmt, 7)) / 1000)
+                let strat = sqlite3_column_type(stmt, 8) == SQLITE_NULL ? nil : String(cString: sqlite3_column_text(stmt, 8))
+                let resolvedAt = sqlite3_column_type(stmt, 9) == SQLITE_NULL ? nil : Date(timeIntervalSince1970: Double(sqlite3_column_int64(stmt, 9)) / 1000)
+                rows.append(ConflictHistoryRow(id: id, entityType: entityType, entityId: entityId, field: field, serverVersion: serverV, localVersion: localV, serverTimestamp: serverTs, localTimestamp: localTs, resolutionStrategy: strat, resolvedAt: resolvedAt))
             }
             return rows
         }
@@ -943,8 +973,11 @@ struct ConflictLogRow {
     let id: String
     let entityType: String
     let entityId: String
+    let field: String?
     let serverVersion: String?
     let localVersion: String?
+    let serverTimestamp: Date?
+    let localTimestamp: Date?
     let resolutionStrategy: String?
 }
 
@@ -952,8 +985,11 @@ struct ConflictHistoryRow {
     let id: String
     let entityType: String
     let entityId: String
+    let field: String?
     let serverVersion: String?
     let localVersion: String?
+    let serverTimestamp: Date?
+    let localTimestamp: Date?
     let resolutionStrategy: String?
     let resolvedAt: Date?
 }

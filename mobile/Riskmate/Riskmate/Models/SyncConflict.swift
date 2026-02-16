@@ -71,3 +71,10 @@ enum ConflictResolutionStrategy: String, Codable {
     case merge = "merge"
     case askUser = "ask_user"
 }
+
+/// Result of user conflict resolution: strategy plus per-field resolved values for merge.
+struct ConflictResolutionOutcome {
+    let strategy: ConflictResolutionStrategy
+    /// For merge (or per-field resolution): field name -> resolved value. Passed to SyncEngine.resolveConflict(resolvedValue:).
+    let perFieldResolvedValues: [String: Any]?
+}

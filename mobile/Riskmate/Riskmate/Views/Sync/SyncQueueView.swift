@@ -246,45 +246,40 @@ struct SyncQueueView: View {
                     ConflictResolutionSheet(
                         conflict: conflict,
                         entityLabel: entityLabel(for: conflict),
-                        onResolve: { strategy in
-                            Task { @MainActor in
-                                do {
-                                    let op = syncEngine.pendingOperations.first { $0.id == conflict.id }
-                                    var resolvedValue: [String: Any]?
-                                    var entityType: String?
-                                    var entityId: String?
-                                    var operationType: String?
-                                    entityType = conflict.entityType
-                                    entityId = conflict.entityId
-                                    if strategy == .localWins || strategy == .merge, let op = op {
-                                        if let dict = try? JSONSerialization.jsonObject(with: op.data) as? [String: Any] {
-                                            resolvedValue = dict
-                                        }
-                                        entityType = entityType ?? entityTypeFromOperation(op.type)
-                                        entityId = entityId ?? op.entityId
-                                        operationType = op.type.apiTypeString
+                        onResolve: { outcome in
+                            let op = syncEngine.pendingOperations.first { $0.id == conflict.id }
+                            var resolvedValue: [String: Any]?
+                            var entityType: String?
+                            var entityId: String?
+                            var operationType: String?
+                            entityType = conflict.entityType
+                            entityId = conflict.entityId
+                            if outcome.strategy == .localWins || outcome.strategy == .merge, let op = op {
+                                if let dict = try? JSONSerialization.jsonObject(with: op.data) as? [String: Any] {
+                                    resolvedValue = dict
+                                    if let perField = outcome.perFieldResolvedValues, !perField.isEmpty {
+                                        var merged = dict
+                                        for (k, v) in perField { merged[k] = v }
+                                        resolvedValue = merged
                                     }
-                                    try await syncEngine.resolveConflict(
-                                        operationId: conflict.id,
-                                        strategy: strategy,
-                                        resolvedValue: resolvedValue,
-                                        entityType: entityType,
-                                        entityId: entityId,
-                                        operationType: operationType
-                                    )
-                                    conflictToResolve = syncEngine.pendingConflicts.first
-                                    _ = try? await syncEngine.syncPendingOperations()
-                                    JobsStore.shared.refreshPendingJobs()
-                                    NotificationCenter.default.post(name: .syncConflictHistoryDidChange, object: nil)
-                                    ToastCenter.shared.show("Conflict resolved", systemImage: "checkmark.circle", style: .success)
-                                } catch {
-                                    ToastCenter.shared.show(
-                                        error.localizedDescription,
-                                        systemImage: "exclamationmark.triangle",
-                                        style: .error
-                                    )
                                 }
+                                entityType = entityType ?? entityTypeFromOperation(op.type)
+                                entityId = entityId ?? op.entityId
+                                operationType = op.type.apiTypeString
                             }
+                            try await syncEngine.resolveConflict(
+                                operationId: conflict.id,
+                                strategy: outcome.strategy,
+                                resolvedValue: resolvedValue,
+                                entityType: entityType,
+                                entityId: entityId,
+                                operationType: operationType
+                            )
+                            conflictToResolve = syncEngine.pendingConflicts.first
+                            _ = try? await syncEngine.syncPendingOperations()
+                            JobsStore.shared.refreshPendingJobs()
+                            NotificationCenter.default.post(name: .syncConflictHistoryDidChange, object: nil)
+                            ToastCenter.shared.show("Conflict resolved", systemImage: "checkmark.circle", style: .success)
                         },
                         onCancel: {
                             conflictToResolve = nil

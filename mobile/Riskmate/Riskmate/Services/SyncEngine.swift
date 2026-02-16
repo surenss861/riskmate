@@ -124,29 +124,81 @@ final class SyncEngine: ObservableObject {
                         }
                     }
                 case "conflict":
-                    if let c = result.conflict {
-                        conflicts.append(SyncConflict(
-                            id: result.operationId,
-                            entityType: c.entityType ?? "job",
-                            entityId: c.entityId ?? result.operationId,
-                            field: c.field ?? "unknown",
-                            serverValue: c.serverValue?.value,
-                            localValue: c.localValue?.value,
-                            serverTimestamp: c.serverTimestamp ?? Date(),
-                            localTimestamp: c.localTimestamp ?? Date()
-                        ))
-                        db.insertConflict(
-                            id: result.operationId,
-                            entityType: c.entityType ?? "job",
-                            entityId: c.entityId ?? result.operationId,
-                            serverVersion: c.serverValue.map { "\($0)" },
-                            localVersion: c.localValue.map { "\($0)" },
-                            resolutionStrategy: nil
-                        )
+                    let op = ops.first { $0.id == result.operationId }
+                    if let strategy = autoStrategy(for: result.conflict, operation: op) {
+                        do {
+                            var resolvedValue: [String: Any]?
+                            let entityType = result.conflict?.entityType ?? op.flatMap { entityTypeFromOperation($0.type) }
+                            let entityId = result.conflict?.entityId ?? op?.entityId
+                            if strategy == .localWins || strategy == .merge, let op = op,
+                               let dict = try? JSONSerialization.jsonObject(with: op.data) as? [String: Any] {
+                                resolvedValue = dict
+                            }
+                            try await resolveConflict(
+                                operationId: result.operationId,
+                                strategy: strategy,
+                                resolvedValue: resolvedValue,
+                                entityType: entityType,
+                                entityId: entityId,
+                                operationType: op?.type.apiTypeString
+                            )
+                            succeeded += 1
+                        } catch {
+                            errors.append(error.localizedDescription)
+                            if let c = result.conflict {
+                                conflicts.append(SyncConflict(
+                                    id: result.operationId,
+                                    entityType: c.entityType ?? "job",
+                                    entityId: c.entityId ?? result.operationId,
+                                    field: c.field ?? "unknown",
+                                    serverValue: c.serverValue?.value,
+                                    localValue: c.localValue?.value,
+                                    serverTimestamp: c.serverTimestamp ?? Date(),
+                                    localTimestamp: c.localTimestamp ?? Date()
+                                ))
+                                db.insertConflict(
+                                    id: result.operationId,
+                                    entityType: c.entityType ?? "job",
+                                    entityId: c.entityId ?? result.operationId,
+                                    field: c.field,
+                                    serverVersion: c.serverValue.map { "\($0)" },
+                                    localVersion: c.localValue.map { "\($0)" },
+                                    serverTimestamp: c.serverTimestamp,
+                                    localTimestamp: c.localTimestamp,
+                                    resolutionStrategy: nil
+                                )
+                            }
+                            failed += 1
+                            db.recordSyncOperationError(operationId: result.operationId, error: error.localizedDescription)
+                        }
+                    } else {
+                        if let c = result.conflict {
+                            conflicts.append(SyncConflict(
+                                id: result.operationId,
+                                entityType: c.entityType ?? "job",
+                                entityId: c.entityId ?? result.operationId,
+                                field: c.field ?? "unknown",
+                                serverValue: c.serverValue?.value,
+                                localValue: c.localValue?.value,
+                                serverTimestamp: c.serverTimestamp ?? Date(),
+                                localTimestamp: c.localTimestamp ?? Date()
+                            ))
+                            db.insertConflict(
+                                id: result.operationId,
+                                entityType: c.entityType ?? "job",
+                                entityId: c.entityId ?? result.operationId,
+                                field: c.field,
+                                serverVersion: c.serverValue.map { "\($0)" },
+                                localVersion: c.localValue.map { "\($0)" },
+                                serverTimestamp: c.serverTimestamp,
+                                localTimestamp: c.localTimestamp,
+                                resolutionStrategy: nil
+                            )
+                        }
+                        failed += 1
+                        let errMsg = "Conflict: \(result.conflict?.field ?? "unknown")"
+                        db.recordSyncOperationError(operationId: result.operationId, error: errMsg)
                     }
-                    failed += 1
-                    let errMsg = "Conflict: \(result.conflict?.field ?? "unknown")"
-                    db.recordSyncOperationError(operationId: result.operationId, error: errMsg)
                 default:
                     failed += 1
                     let errMsg = result.error ?? "Unknown error"
@@ -199,11 +251,11 @@ final class SyncEngine: ObservableObject {
                 id: row.id,
                 entityType: row.entityType,
                 entityId: row.entityId,
-                field: "data",
+                field: row.field ?? "data",
                 serverValue: row.serverVersion as? AnyHashable,
                 localValue: row.localVersion as? AnyHashable,
-                serverTimestamp: Date(),
-                localTimestamp: Date()
+                serverTimestamp: row.serverTimestamp ?? Date(),
+                localTimestamp: row.localTimestamp ?? Date()
             )
         }
     }
@@ -431,6 +483,26 @@ final class SyncEngine: ObservableObject {
         db.removeSyncOperation(id: operationId)
         db.markConflictResolved(id: operationId, resolutionStrategy: strategy.rawValue)
         clearPendingConflict(operationId: operationId)
+    }
+
+    /// Automatic resolution for known-simple conflicts; nil means queue user prompt (e.g. photo delete vs offline upload).
+    private func autoStrategy(for conflict: BatchConflictDetail?, operation: SyncOperation?) -> ConflictResolutionStrategy? {
+        guard let c = conflict else { return nil }
+        let entityType = c.entityType ?? "job"
+        let field = c.field ?? ""
+
+        if entityType == "job" {
+            if field == "status" { return .serverWins }
+            let jobDetailFields = ["client_name", "clientName", "description", "address", "site_id", "siteId", "updated_at", "updatedAt"]
+            if jobDetailFields.contains(field) { return .localWins }
+        }
+        if entityType == "hazard" {
+            return .merge
+        }
+        if entityType == "control" {
+            return .merge
+        }
+        return nil
     }
 
     private func entityTypeFromOperation(_ type: OperationType) -> String? {
