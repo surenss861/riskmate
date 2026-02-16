@@ -27,15 +27,18 @@ CREATE INDEX IF NOT EXISTS idx_notification_preferences_user ON notification_pre
 
 ALTER TABLE notification_preferences ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can read own notification preferences" ON notification_preferences;
 CREATE POLICY "Users can read own notification preferences"
   ON notification_preferences FOR SELECT
   USING (user_id = auth.uid());
 
+DROP POLICY IF EXISTS "Users can update own notification preferences" ON notification_preferences;
 CREATE POLICY "Users can update own notification preferences"
   ON notification_preferences FOR UPDATE
   USING (user_id = auth.uid())
   WITH CHECK (user_id = auth.uid());
 
+DROP POLICY IF EXISTS "Users can insert own notification preferences" ON notification_preferences;
 CREATE POLICY "Users can insert own notification preferences"
   ON notification_preferences FOR INSERT
   WITH CHECK (user_id = auth.uid());
