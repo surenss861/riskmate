@@ -473,8 +473,11 @@ syncRouter.post(
               const updates: Record<string, any> = {
                 done,
                 is_completed: done,
-                completed_at: done ? new Date().toISOString() : null,
               };
+              if (done) {
+                updates.completed_at = data.completed_at ?? data.completedAt ?? new Date().toISOString();
+              }
+              // when done is false, omit completed_at to preserve existing timestamp
               if (data.title !== undefined) updates.title = data.title;
               else if (data.name !== undefined) updates.title = data.name;
               if (data.description !== undefined) updates.description = data.description;
@@ -547,8 +550,11 @@ syncRouter.post(
               const updates: Record<string, any> = {
                 done,
                 is_completed: done,
-                completed_at: done ? new Date().toISOString() : null,
               };
+              if (done) {
+                updates.completed_at = data.completed_at ?? data.completedAt ?? new Date().toISOString();
+              }
+              // when done is false, omit completed_at to preserve existing timestamp
               if (data.title !== undefined) updates.title = data.title;
               else if (data.name !== undefined) updates.title = data.name;
               if (data.description !== undefined) updates.description = data.description;
@@ -653,36 +659,40 @@ syncRouter.post(
                 results.push(baseResult);
                 break;
               }
-              if (deletedRows && deletedRows.length > 0) {
-                const { error: tombstoneErr } = await supabase.from("sync_mitigation_deletions").insert({
-                  mitigation_item_id: mitigationId,
+              if (!deletedRows || deletedRows.length === 0) {
+                baseResult.status = "error";
+                baseResult.error = "Control not found or already deleted";
+                results.push(baseResult);
+                break;
+              }
+              const { error: tombstoneErr } = await supabase.from("sync_mitigation_deletions").insert({
+                mitigation_item_id: mitigationId,
+                job_id: jobId,
+                hazard_id: hazardId,
+                organization_id: organization_id,
+              });
+              if (tombstoneErr) {
+                baseResult.status = "error";
+                baseResult.error = tombstoneErr.message;
+                results.push(baseResult);
+                break;
+              }
+              baseResult.server_id = mitigationId;
+              const clientMetadata = extractClientMetadata(req);
+              await recordAuditLog({
+                organizationId: organization_id,
+                actorId: userId,
+                eventName: "control.deleted",
+                targetType: "control",
+                targetId: mitigationId,
+                metadata: {
                   job_id: jobId,
                   hazard_id: hazardId,
-                  organization_id: organization_id,
-                });
-                if (tombstoneErr) {
-                  baseResult.status = "error";
-                  baseResult.error = tombstoneErr.message;
-                  results.push(baseResult);
-                  break;
-                }
-                baseResult.server_id = mitigationId;
-                const clientMetadata = extractClientMetadata(req);
-                await recordAuditLog({
-                  organizationId: organization_id,
-                  actorId: userId,
-                  eventName: "control.deleted",
-                  targetType: "control",
-                  targetId: mitigationId,
-                  metadata: {
-                    job_id: jobId,
-                    hazard_id: hazardId,
-                    sync_batch: true,
-                    operation_id: op.id,
-                  },
-                  ...clientMetadata,
-                });
-              }
+                  sync_batch: true,
+                  operation_id: op.id,
+                },
+                ...clientMetadata,
+              });
               results.push(baseResult);
               break;
             }
@@ -1172,7 +1182,10 @@ syncRouter.post(
             const done = data.done ?? data.is_completed ?? data.isCompleted ?? false;
             updates.done = done;
             updates.is_completed = done;
-            updates.completed_at = done ? new Date().toISOString() : null;
+            if (done) {
+              updates.completed_at = data.completed_at ?? data.completedAt ?? new Date().toISOString();
+            }
+            // when done is false, omit completed_at to preserve existing timestamp
           }
           if (data.title !== undefined) updates.title = data.title;
           else if (data.name !== undefined) updates.title = data.name;
@@ -1199,7 +1212,10 @@ syncRouter.post(
             const done = data.done ?? data.is_completed ?? data.isCompleted ?? false;
             updates.done = done;
             updates.is_completed = done;
-            updates.completed_at = done ? new Date().toISOString() : null;
+            if (done) {
+              updates.completed_at = data.completed_at ?? data.completedAt ?? new Date().toISOString();
+            }
+            // when done is false, omit completed_at to preserve existing timestamp
           }
           if (data.title !== undefined) updates.title = data.title;
           else if (data.name !== undefined) updates.title = data.name;
@@ -1256,19 +1272,32 @@ syncRouter.post(
             if (!hazardId) {
               return res.status(400).json({ message: "hazard_id required for control delete" });
             }
-            await supabase
+            const { data: deletedRows, error: deleteErr } = await supabase
               .from("mitigation_items")
               .delete()
               .eq("id", targetId)
               .eq("job_id", jobId)
               .eq("hazard_id", hazardId)
-              .eq("organization_id", organization_id);
-            await supabase.from("sync_mitigation_deletions").insert({
+              .eq("organization_id", organization_id)
+              .select("id");
+            if (deleteErr) {
+              return res.status(500).json({ message: deleteErr.message });
+            }
+            if (!deletedRows || deletedRows.length === 0) {
+              return res.status(404).json({
+                message: "Control not found or already deleted",
+                code: "CONTROL_NOT_FOUND",
+              });
+            }
+            const { error: tombstoneErr } = await supabase.from("sync_mitigation_deletions").insert({
               mitigation_item_id: targetId,
               job_id: jobId,
               hazard_id: hazardId,
               organization_id: organization_id,
             });
+            if (tombstoneErr) {
+              return res.status(500).json({ message: tombstoneErr.message });
+            }
           }
         } else {
           return res.status(400).json({
