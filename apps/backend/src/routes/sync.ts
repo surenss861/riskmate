@@ -644,7 +644,7 @@ syncRouter.post(
                 results.push(baseResult);
                 break;
               }
-              // Delete first; only write tombstone after confirming a row was deleted (no phantom removals on failure)
+              // Delete first; treat missing/already-deleted control as success (idempotent).
               const { data: deletedRows, error: deleteErr } = await supabase
                 .from("mitigation_items")
                 .delete()
@@ -659,12 +659,7 @@ syncRouter.post(
                 results.push(baseResult);
                 break;
               }
-              if (!deletedRows || deletedRows.length === 0) {
-                baseResult.status = "error";
-                baseResult.error = "Control not found or already deleted";
-                results.push(baseResult);
-                break;
-              }
+              // Missing or already-deleted control: treat as success, still write tombstone and audit.
               const { error: tombstoneErr } = await supabase.from("sync_mitigation_deletions").insert({
                 mitigation_item_id: mitigationId,
                 job_id: jobId,
@@ -672,10 +667,13 @@ syncRouter.post(
                 organization_id: organization_id,
               });
               if (tombstoneErr) {
-                baseResult.status = "error";
-                baseResult.error = tombstoneErr.message;
-                results.push(baseResult);
-                break;
+                // Duplicate tombstone (already deleted) is idempotent success
+                if (tombstoneErr.code !== "23505") {
+                  baseResult.status = "error";
+                  baseResult.error = tombstoneErr.message;
+                  results.push(baseResult);
+                  break;
+                }
               }
               baseResult.server_id = mitigationId;
               const clientMetadata = extractClientMetadata(req);
@@ -1366,6 +1364,7 @@ syncRouter.post(
             if (!hazardId) {
               return res.status(400).json({ message: "hazard_id required for control delete" });
             }
+            // Treat missing/already-deleted control as success (idempotent).
             const { data: deletedRows, error: deleteErr } = await supabase
               .from("mitigation_items")
               .delete()
@@ -1377,19 +1376,14 @@ syncRouter.post(
             if (deleteErr) {
               return res.status(500).json({ message: deleteErr.message });
             }
-            if (!deletedRows || deletedRows.length === 0) {
-              return res.status(404).json({
-                message: "Control not found or already deleted",
-                code: "CONTROL_NOT_FOUND",
-              });
-            }
+            // Still write tombstone so operation is idempotent and clears from queue.
             const { error: tombstoneErr } = await supabase.from("sync_mitigation_deletions").insert({
               mitigation_item_id: targetId,
               job_id: jobId,
               hazard_id: hazardId,
               organization_id: organization_id,
             });
-            if (tombstoneErr) {
+            if (tombstoneErr && tombstoneErr.code !== "23505") {
               return res.status(500).json({ message: tombstoneErr.message });
             }
           }
