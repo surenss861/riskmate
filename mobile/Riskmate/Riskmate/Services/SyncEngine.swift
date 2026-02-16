@@ -782,8 +782,11 @@ final class SyncEngine: ObservableObject {
     func getLocalPayloadForConflict(entityType: String, entityId: String) -> [String: Any]? {
         switch entityType {
         case "job":
-            let pending = db.getPendingJobs().first { $0.id == entityId }
-            return pending.flatMap { (try? JSONSerialization.jsonObject(with: $0.data)) as? [String: Any] }
+            if let pending = db.getPendingJobs().first(where: { $0.id == entityId }),
+               let dict = (try? JSONSerialization.jsonObject(with: pending.data)) as? [String: Any] {
+                return dict
+            }
+            return db.getSyncOperationPayloadForEntity(entityType: entityType, entityId: entityId)
         case "hazard":
             if let payload = db.getPendingHazardPayload(entityId: entityId) {
                 return payload

@@ -653,6 +653,7 @@ final class OfflineDatabase {
             guard let db = db else { return nil }
             let types: [String]
             switch entityType {
+            case "job": types = ["updateJob", "deleteJob"]
             case "hazard": types = ["updateHazard", "deleteHazard"]
             case "control": types = ["updateControl", "deleteControl"]
             default: return nil
