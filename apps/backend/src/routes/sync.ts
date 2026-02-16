@@ -978,11 +978,14 @@ syncRouter.post(
           if (!jobId) {
             return res.status(400).json({ message: "job_id required for hazard update" });
           }
-          const updates: Record<string, any> = {
-            done: data.done ?? data.is_completed ?? data.isCompleted ?? false,
-            is_completed: data.done ?? data.is_completed ?? data.isCompleted ?? false,
-            completed_at: data.done || data.is_completed || data.isCompleted ? new Date().toISOString() : null,
-          };
+          const updates: Record<string, any> = {};
+          const hasCompletion = data.done !== undefined || data.is_completed !== undefined || data.isCompleted !== undefined;
+          if (hasCompletion) {
+            const done = data.done ?? data.is_completed ?? data.isCompleted ?? false;
+            updates.done = done;
+            updates.is_completed = done;
+            updates.completed_at = done ? new Date().toISOString() : null;
+          }
           if (data.title !== undefined) updates.title = data.title;
           else if (data.name !== undefined) updates.title = data.name;
           if (data.description !== undefined) updates.description = data.description;
@@ -1002,11 +1005,14 @@ syncRouter.post(
           if (!jobId || !hazardId) {
             return res.status(400).json({ message: "job_id and hazard_id required for control update" });
           }
-          const updates: Record<string, any> = {
-            done: data.done ?? data.is_completed ?? data.isCompleted ?? false,
-            is_completed: data.done ?? data.is_completed ?? data.isCompleted ?? false,
-            completed_at: data.done || data.is_completed || data.isCompleted ? new Date().toISOString() : null,
-          };
+          const updates: Record<string, any> = {};
+          const hasCompletion = data.done !== undefined || data.is_completed !== undefined || data.isCompleted !== undefined;
+          if (hasCompletion) {
+            const done = data.done ?? data.is_completed ?? data.isCompleted ?? false;
+            updates.done = done;
+            updates.is_completed = done;
+            updates.completed_at = done ? new Date().toISOString() : null;
+          }
           if (data.title !== undefined) updates.title = data.title;
           else if (data.name !== undefined) updates.title = data.name;
           if (data.description !== undefined) updates.description = data.description;
