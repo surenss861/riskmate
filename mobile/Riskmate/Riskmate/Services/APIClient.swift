@@ -791,13 +791,54 @@ class APIClient {
     }
 
     /// Notification item from GET /api/notifications. deepLink is used for navigation on row tap.
-    struct NotificationItem: Decodable {
+    /// JSON keys: id, type, content, is_read, created_at, deep_link (maps to deepLink).
+    struct NotificationItem: Codable, Identifiable {
         let id: String
         let type: String
         let content: String
         let is_read: Bool
         let created_at: String
         let deepLink: String?
+
+        enum CodingKeys: String, CodingKey {
+            case id
+            case type
+            case content
+            case is_read
+            case created_at
+            case deepLink
+            case deepLinkSnake = "deep_link"
+        }
+
+        init(id: String, type: String, content: String, is_read: Bool, created_at: String, deepLink: String?) {
+            self.id = id
+            self.type = type
+            self.content = content
+            self.is_read = is_read
+            self.created_at = created_at
+            self.deepLink = deepLink
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            id = try c.decode(String.self, forKey: .id)
+            type = try c.decode(String.self, forKey: .type)
+            content = try c.decode(String.self, forKey: .content)
+            is_read = try c.decode(Bool.self, forKey: .is_read)
+            created_at = try c.decode(String.self, forKey: .created_at)
+            deepLink = try c.decodeIfPresent(String.self, forKey: .deepLink)
+                ?? (try? c.decodeIfPresent(String.self, forKey: .deepLinkSnake))
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var c = encoder.container(keyedBy: CodingKeys.self)
+            try c.encode(id, forKey: .id)
+            try c.encode(type, forKey: .type)
+            try c.encode(content, forKey: .content)
+            try c.encode(is_read, forKey: .is_read)
+            try c.encode(created_at, forKey: .created_at)
+            try c.encodeIfPresent(deepLink, forKey: .deepLink)
+        }
     }
 
     /// List notifications (GET /api/notifications). Supports pagination via limit and offset.
@@ -837,6 +878,7 @@ class APIClient {
     }
 
     /// Notification preferences (GET /api/notifications/preferences). Includes master toggles and per-type flags.
+    /// All JSON keys use snake_case (push_enabled, email_enabled, etc.).
     struct NotificationPreferences: Codable, Equatable {
         var push_enabled: Bool
         var email_enabled: Bool
@@ -849,6 +891,20 @@ class APIClient {
         var weekly_summary_enabled: Bool
         var high_risk_job_enabled: Bool
         var report_ready_enabled: Bool
+
+        enum CodingKeys: String, CodingKey {
+            case push_enabled
+            case email_enabled
+            case mentions_enabled
+            case job_assigned_enabled
+            case signature_request_enabled
+            case evidence_uploaded_enabled
+            case hazard_added_enabled
+            case deadline_enabled
+            case weekly_summary_enabled
+            case high_risk_job_enabled
+            case report_ready_enabled
+        }
     }
 
     /// Get current user's notification preferences (GET /api/notifications/preferences).
