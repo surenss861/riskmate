@@ -835,6 +835,36 @@ class APIClient {
         )
     }
 
+    /// Notification preferences (GET /api/notifications/preferences). Includes master toggles and per-type flags.
+    struct NotificationPreferences: Codable, Equatable {
+        var push_enabled: Bool
+        var email_enabled: Bool
+        var mentions_enabled: Bool
+        var job_assigned_enabled: Bool
+        var signature_request_enabled: Bool
+        var evidence_uploaded_enabled: Bool
+        var hazard_added_enabled: Bool
+        var deadline_enabled: Bool
+        var weekly_summary_enabled: Bool
+        var high_risk_job_enabled: Bool
+        var report_ready_enabled: Bool
+    }
+
+    /// Get current user's notification preferences (GET /api/notifications/preferences).
+    func getNotificationPreferences() async throws -> NotificationPreferences {
+        try await request(endpoint: "/api/notifications/preferences")
+    }
+
+    /// Update current user's notification preferences (PATCH /api/notifications/preferences).
+    func patchNotificationPreferences(_ prefs: NotificationPreferences) async throws -> NotificationPreferences {
+        let body = try JSONEncoder().encode(prefs)
+        return try await request(
+            endpoint: "/api/notifications/preferences",
+            method: "PATCH",
+            body: body
+        )
+    }
+
     /// Update photo category (before/during/after) for a document or evidence item.
     /// docId may be a document id or evidence id (PATCH /api/jobs/:id/documents/:docId).
     func updateDocumentCategory(jobId: String, docId: String, category: String) async throws {

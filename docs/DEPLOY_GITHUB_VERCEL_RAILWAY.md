@@ -92,8 +92,13 @@ In **Project → Variables** (or **Service → Variables**), add:
 | `STRIPE_WEBHOOK_SECRET` | `whsec_...` | For Stripe webhooks; use webhook URL from Railway |
 | `ALLOWED_ORIGINS` | `https://riskmate.dev,https://www.riskmate.dev` | Comma-separated; add your Vercel URL if different |
 | `DEV_AUTH_SECRET` | *(leave unset in production)* | Unset so `/v1/dev/*` is disabled |
+| `APNS_KEY_PATH` | `/path/to/AuthKey_XXXXXXXX.p8` | Path to Apple .p8 key file for APNs (optional; needed for iOS push) |
+| `APNS_KEY_ID` | Key ID from Apple Developer | Key ID for the .p8 key |
+| `APNS_TEAM_ID` | Apple Developer Team ID | Your team ID |
+| `APNS_BUNDLE_ID` | `com.riskmate.Riskmate` | App bundle ID for push topic |
+| `APNS_PRODUCTION` | `false` or `true` | Use `true` for production APNs, `false` for sandbox |
 
-Do **not** set `DEV_AUTH_SECRET` in production.
+Do **not** set `DEV_AUTH_SECRET` in production. For iOS push notifications, provide the APNs variables above; the backend reads the `.p8` file from `APNS_KEY_PATH` and uses it for token-based APNs authentication.
 
 ### Domain and webhook
 

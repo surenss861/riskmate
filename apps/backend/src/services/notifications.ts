@@ -1,3 +1,4 @@
+import fs from "fs";
 import apn from "apn";
 import { supabase } from "../lib/supabaseClient";
 
@@ -97,7 +98,7 @@ async function fetchOrgTokens(organizationId: string) {
   return (data || []).map((row) => row.token);
 }
 
-/** Fetch org user IDs who have the given preference enabled and at least one device token. */
+/** Fetch org user IDs who have the given preference enabled, push_enabled on, and at least one device token. */
 async function fetchOrgUserIdsWithPreference(
   organizationId: string,
   prefKey: keyof NotificationPreferences
@@ -112,11 +113,14 @@ async function fetchOrgUserIdsWithPreference(
   const userIds = [...new Set(tokensData.map((r) => r.user_id))];
   const { data: prefsData } = await supabase
     .from("notification_preferences")
-    .select("user_id, " + prefKey)
+    .select("user_id, push_enabled, " + prefKey)
     .in("user_id", userIds);
 
   const prefsByUser = new Map(
-    (prefsData || []).map((r: any) => [r.user_id, r[prefKey] !== false])
+    (prefsData || []).map((r: any) => [
+      r.user_id,
+      r.push_enabled !== false && r[prefKey] !== false,
+    ])
   );
   return [...new Set(
     tokensData
@@ -125,15 +129,17 @@ async function fetchOrgUserIdsWithPreference(
   )];
 }
 
-/** Default notification preferences (all enabled). */
+/** Default notification preferences. Master toggles on; weekly_summary off per spec; others on. */
 export const DEFAULT_NOTIFICATION_PREFERENCES = {
+  push_enabled: true,
+  email_enabled: true,
   mentions_enabled: true,
   job_assigned_enabled: true,
   signature_request_enabled: true,
   evidence_uploaded_enabled: true,
   hazard_added_enabled: true,
   deadline_enabled: true,
-  weekly_summary_enabled: true,
+  weekly_summary_enabled: false,
   high_risk_job_enabled: true,
   report_ready_enabled: true,
 } as const;
@@ -158,13 +164,15 @@ export async function getNotificationPreferences(
   if (!data) return { ...DEFAULT_NOTIFICATION_PREFERENCES };
 
   return {
+    push_enabled: data.push_enabled ?? true,
+    email_enabled: data.email_enabled ?? true,
     mentions_enabled: data.mentions_enabled ?? true,
     job_assigned_enabled: data.job_assigned_enabled ?? true,
     signature_request_enabled: data.signature_request_enabled ?? true,
     evidence_uploaded_enabled: data.evidence_uploaded_enabled ?? true,
     hazard_added_enabled: data.hazard_added_enabled ?? true,
     deadline_enabled: data.deadline_enabled ?? true,
-    weekly_summary_enabled: data.weekly_summary_enabled ?? true,
+    weekly_summary_enabled: data.weekly_summary_enabled ?? false,
     high_risk_job_enabled: data.high_risk_job_enabled ?? true,
     report_ready_enabled: data.report_ready_enabled ?? true,
   };
@@ -280,9 +288,14 @@ function getAPnProvider(): apn.Provider | null {
     return null;
   }
   try {
+    if (!fs.existsSync(keyPath)) {
+      console.error("[Notifications] APNs key file not found:", keyPath);
+      return null;
+    }
+    const keyContents = fs.readFileSync(keyPath, "utf8");
     apnProvider = new apn.Provider({
       token: {
-        key: keyPath,
+        key: keyContents,
         keyId,
         teamId,
       },
@@ -520,6 +533,9 @@ type PushPayload = {
 };
 
 async function sendToUser(userId: string, payload: PushPayload) {
+  const prefs = await getNotificationPreferences(userId);
+  if (!prefs.push_enabled) return;
+
   const notificationType =
     typeof payload.data?.type === "string" ? (payload.data.type as string) : "push";
   await createNotificationRecord(userId, notificationType, payload.body);

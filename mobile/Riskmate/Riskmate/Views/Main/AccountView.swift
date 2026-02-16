@@ -132,6 +132,17 @@ struct AccountView: View {
                     .listRowBackground(RMTheme.Colors.surface.opacity(0.5))
                     
                     NavigationLink {
+                        NotificationPreferencesView()
+                    } label: {
+                        HStack {
+                            Image(systemName: "bell.badge.fill")
+                            Text("Notification preferences")
+                        }
+                        .foregroundColor(RMTheme.Colors.textPrimary)
+                    }
+                    .listRowBackground(RMTheme.Colors.surface.opacity(0.5))
+                    
+                    NavigationLink {
                         PrivacyPolicyView()
                     } label: {
                         HStack {
