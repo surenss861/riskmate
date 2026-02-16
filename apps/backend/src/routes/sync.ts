@@ -1033,34 +1033,81 @@ syncRouter.post(
             .eq("is_active", true)
             .limit(1);
           const riskFactorId = riskFactors?.[0]?.id ?? null;
-          const insertPayload: Record<string, any> = {
-            job_id: jobId,
-            title,
-            description: description || null,
-            done: false,
-            is_completed: false,
-            organization_id: organization_id,
-          };
-          if (riskFactorId) insertPayload.risk_factor_id = riskFactorId;
-          const { data: inserted, error: insertErr } = await supabase
+
+          // Reconcile with server record when it exists: update instead of insert to avoid duplicates
+          const { data: existing } = await supabase
             .from("mitigation_items")
-            .insert(insertPayload)
-            .select("id, job_id, hazard_id, title, description, done, is_completed, created_at, updated_at")
+            .select("id")
+            .eq("id", targetId)
+            .eq("job_id", jobId)
+            .is("hazard_id", null)
+            .eq("organization_id", organization_id)
             .single();
-          if (insertErr) {
-            return res.status(500).json({ message: insertErr.message });
+
+          if (existing) {
+            const updatePayload: Record<string, any> = {
+              title,
+              description: description || null,
+              done: data.done ?? data.is_completed ?? data.isCompleted ?? false,
+              is_completed: data.done ?? data.is_completed ?? data.isCompleted ?? false,
+            };
+            if (riskFactorId) updatePayload.risk_factor_id = riskFactorId;
+            if (updatePayload.done) {
+              updatePayload.completed_at = data.completed_at ?? data.completedAt ?? new Date().toISOString();
+            }
+            const { data: updated, error: updateErr } = await supabase
+              .from("mitigation_items")
+              .update(updatePayload)
+              .eq("id", targetId)
+              .eq("job_id", jobId)
+              .is("hazard_id", null)
+              .eq("organization_id", organization_id)
+              .select("id, job_id, hazard_id, title, description, done, is_completed, created_at, updated_at")
+              .single();
+            if (updateErr) {
+              return res.status(500).json({ message: updateErr.message });
+            }
+            updatedMitigationItem = updated;
+            const clientMetadata = extractClientMetadata(req);
+            await recordAuditLog({
+              organizationId: organization_id,
+              actorId: userId,
+              eventName: "hazard.updated",
+              targetType: "hazard",
+              targetId: targetId,
+              metadata: { job_id: jobId, sync_resolve_conflict: true, operation_id: operation_id, reconciled: true },
+              ...clientMetadata,
+            });
+          } else {
+            const insertPayload: Record<string, any> = {
+              job_id: jobId,
+              title,
+              description: description || null,
+              done: false,
+              is_completed: false,
+              organization_id: organization_id,
+            };
+            if (riskFactorId) insertPayload.risk_factor_id = riskFactorId;
+            const { data: inserted, error: insertErr } = await supabase
+              .from("mitigation_items")
+              .insert(insertPayload)
+              .select("id, job_id, hazard_id, title, description, done, is_completed, created_at, updated_at")
+              .single();
+            if (insertErr) {
+              return res.status(500).json({ message: insertErr.message });
+            }
+            updatedMitigationItem = inserted;
+            const clientMetadata = extractClientMetadata(req);
+            await recordAuditLog({
+              organizationId: organization_id,
+              actorId: userId,
+              eventName: "hazard.created",
+              targetType: "hazard",
+              targetId: inserted.id,
+              metadata: { job_id: jobId, sync_resolve_conflict: true, operation_id: operation_id },
+              ...clientMetadata,
+            });
           }
-          updatedMitigationItem = inserted;
-          const clientMetadata = extractClientMetadata(req);
-          await recordAuditLog({
-            organizationId: organization_id,
-            actorId: userId,
-            eventName: "hazard.created",
-            targetType: "hazard",
-            targetId: inserted.id,
-            metadata: { job_id: jobId, sync_resolve_conflict: true, operation_id: operation_id },
-            ...clientMetadata,
-          });
         } else if (opType === "create_control") {
           const jobId = data.job_id ?? data.jobId;
           const hazardId = data.hazard_id ?? data.hazardId;
@@ -1105,35 +1152,82 @@ syncRouter.post(
             .eq("is_active", true)
             .limit(1);
           const riskFactorId = riskFactors?.[0]?.id ?? null;
-          const insertPayload: Record<string, any> = {
-            job_id: jobId,
-            hazard_id: hazardId,
-            title,
-            description: description || null,
-            done: false,
-            is_completed: false,
-            organization_id: organization_id,
-          };
-          if (riskFactorId) insertPayload.risk_factor_id = riskFactorId;
-          const { data: inserted, error: insertErr } = await supabase
+
+          // Reconcile with server record when it exists: update instead of insert to avoid duplicates
+          const { data: existing } = await supabase
             .from("mitigation_items")
-            .insert(insertPayload)
-            .select("id, job_id, hazard_id, title, description, done, is_completed, created_at, updated_at")
+            .select("id")
+            .eq("id", targetId)
+            .eq("job_id", jobId)
+            .eq("hazard_id", hazardId)
+            .eq("organization_id", organization_id)
             .single();
-          if (insertErr) {
-            return res.status(500).json({ message: insertErr.message });
+
+          if (existing) {
+            const updatePayload: Record<string, any> = {
+              title,
+              description: description || null,
+              done: data.done ?? data.is_completed ?? data.isCompleted ?? false,
+              is_completed: data.done ?? data.is_completed ?? data.isCompleted ?? false,
+            };
+            if (riskFactorId) updatePayload.risk_factor_id = riskFactorId;
+            if (updatePayload.done) {
+              updatePayload.completed_at = data.completed_at ?? data.completedAt ?? new Date().toISOString();
+            }
+            const { data: updated, error: updateErr } = await supabase
+              .from("mitigation_items")
+              .update(updatePayload)
+              .eq("id", targetId)
+              .eq("job_id", jobId)
+              .eq("hazard_id", hazardId)
+              .eq("organization_id", organization_id)
+              .select("id, job_id, hazard_id, title, description, done, is_completed, created_at, updated_at")
+              .single();
+            if (updateErr) {
+              return res.status(500).json({ message: updateErr.message });
+            }
+            updatedMitigationItem = updated;
+            const clientMetadata = extractClientMetadata(req);
+            await recordAuditLog({
+              organizationId: organization_id,
+              actorId: userId,
+              eventName: "control.updated",
+              targetType: "control",
+              targetId: targetId,
+              metadata: { job_id: jobId, hazard_id: hazardId, sync_resolve_conflict: true, operation_id: operation_id, reconciled: true },
+              ...clientMetadata,
+            });
+          } else {
+            const insertPayload: Record<string, any> = {
+              job_id: jobId,
+              hazard_id: hazardId,
+              title,
+              description: description || null,
+              done: false,
+              is_completed: false,
+              organization_id: organization_id,
+            };
+            if (riskFactorId) insertPayload.risk_factor_id = riskFactorId;
+            const { data: inserted, error: insertErr } = await supabase
+              .from("mitigation_items")
+              .insert(insertPayload)
+              .select("id, job_id, hazard_id, title, description, done, is_completed, created_at, updated_at")
+              .single();
+            if (insertErr) {
+              return res.status(500).json({ message: insertErr.message });
+            }
+            updatedMitigationItem = inserted;
+            const clientMetadata = extractClientMetadata(req);
+            await recordAuditLog({
+              organizationId: organization_id,
+              actorId: userId,
+              eventName: "control.created",
+              targetType: "control",
+              targetId: inserted.id,
+              metadata: { job_id: jobId, hazard_id: hazardId, sync_resolve_conflict: true, operation_id: operation_id },
+              ...clientMetadata,
+            });
           }
-          updatedMitigationItem = inserted;
-          const clientMetadata = extractClientMetadata(req);
-          await recordAuditLog({
-            organizationId: organization_id,
-            actorId: userId,
-            eventName: "control.created",
-            targetType: "control",
-            targetId: inserted.id,
-            metadata: { job_id: jobId, hazard_id: hazardId, sync_resolve_conflict: true, operation_id: operation_id },
-            ...clientMetadata,
-          });
         } else if (opType === "update_job") {
           const keyMap: Record<string, string> = {
             client_name: "client_name",
