@@ -218,6 +218,27 @@ export async function createNotificationRecord(
   }
 }
 
+/** Mark notifications as read: all for the user, or by id(s). Updates is_read and updated_at. */
+export async function markNotificationsAsRead(
+  userId: string,
+  ids?: string[]
+): Promise<void> {
+  const query = supabase
+    .from("notifications")
+    .update({ is_read: true, updated_at: new Date().toISOString() })
+    .eq("user_id", userId)
+    .eq("is_read", false);
+
+  if (ids?.length) {
+    query.in("id", ids);
+  }
+
+  const { error } = await query;
+  if (error) {
+    console.error("Failed to mark notifications as read:", error);
+  }
+}
+
 let apnProvider: apn.Provider | null = null;
 
 function getAPnProvider(): apn.Provider | null {

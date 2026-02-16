@@ -92,9 +92,9 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
 
     /// Handle user tapping a notification. Parse payload and route via DeepLinkRouter.
     /// Supports Expo payload structure (deepLink inside userInfo["data"]) and top-level deepLink.
-    /// Clears app icon badge when user engages with the notification.
+    /// Marks notifications as read and refreshes badge when user engages with the notification.
     func handleNotificationTap(_ notification: UNNotification) async {
-        clearBadge()
+        await markAsReadAndRefreshBadge()
         let userInfo = notification.request.content.userInfo
         var deepLinkString: String?
         if let data = userInfo["data"] as? [AnyHashable: Any],
@@ -138,6 +138,24 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
 
     func clearBadge() {
         setBadgeCount(0)
+    }
+
+    /// Mark all notifications as read and refresh badge from server (e.g. when opening notifications or tapping one).
+    func markAsReadAndRefreshBadge() async {
+        do {
+            try await APIClient.shared.markNotificationsAsRead(ids: nil)
+        } catch {
+            // Non-fatal: e.g. network or not authenticated
+        }
+        do {
+            let count = try await APIClient.shared.getUnreadNotificationCount()
+            await MainActor.run {
+                setBadgeCount(count)
+            }
+        } catch {
+            // Non-fatal: fallback to clearing badge
+            clearBadge()
+        }
     }
 
     // MARK: - Foreground presentation

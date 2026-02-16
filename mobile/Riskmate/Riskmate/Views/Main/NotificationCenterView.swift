@@ -27,11 +27,17 @@ struct NotificationCenterView: View {
         }
         .rmNavigationBar(title: "Notifications")
         .task {
-            await refreshBadgeFromUnreadCount()
+            await markAsReadAndRefreshBadge()
         }
     }
 
-    private func refreshBadgeFromUnreadCount() async {
+    /// Mark all notifications as read when user opens the center, then refresh badge from unread count.
+    private func markAsReadAndRefreshBadge() async {
+        do {
+            try await APIClient.shared.markNotificationsAsRead(ids: nil)
+        } catch {
+            // Non-fatal: e.g. network or auth
+        }
         do {
             let count = try await APIClient.shared.getUnreadNotificationCount()
             await MainActor.run {

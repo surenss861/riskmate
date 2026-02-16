@@ -801,6 +801,19 @@ class APIClient {
         return response.count
     }
 
+    /// Mark notifications as read (PATCH /api/notifications/read). Pass nil or empty to mark all for current user.
+    func markNotificationsAsRead(ids: [String]? = nil) async throws {
+        struct MarkReadBody: Encodable {
+            let ids: [String]?
+        }
+        let body = try JSONEncoder().encode(MarkReadBody(ids: ids))
+        let _: EmptyResponse = try await request(
+            endpoint: "/api/notifications/read",
+            method: "PATCH",
+            body: body
+        )
+    }
+
     /// Update photo category (before/during/after) for a document or evidence item.
     /// docId may be a document id or evidence id (PATCH /api/jobs/:id/documents/:docId).
     func updateDocumentCategory(jobId: String, docId: String, category: String) async throws {

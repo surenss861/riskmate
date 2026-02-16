@@ -7,6 +7,7 @@ import {
   validatePushToken,
   getNotificationPreferences,
   getUnreadNotificationCount,
+  markNotificationsAsRead,
   DEFAULT_NOTIFICATION_PREFERENCES,
   type NotificationPreferences,
 } from "../services/notifications";
@@ -94,6 +95,24 @@ notificationsRouter.get(
     } catch (err: any) {
       console.error("Get unread count failed:", err);
       res.status(500).json({ message: "Failed to get unread count" });
+    }
+  }
+);
+
+/** PATCH /api/notifications/read — mark notifications as read (all for current user, or by id(s)). */
+notificationsRouter.patch(
+  "/read",
+  authenticate as unknown as express.RequestHandler,
+  async (req: express.Request, res: express.Response) => {
+    const authReq = req as AuthenticatedRequest;
+    try {
+      const body = (req.body || {}) as { ids?: string[] };
+      const ids = Array.isArray(body.ids) ? body.ids : undefined;
+      await markNotificationsAsRead(authReq.user.id, ids);
+      res.json({ status: "ok" });
+    } catch (err: any) {
+      console.error("Mark notifications as read failed:", err);
+      res.status(500).json({ message: "Failed to mark notifications as read" });
     }
   }
 );

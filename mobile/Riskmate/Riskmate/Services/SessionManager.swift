@@ -51,6 +51,8 @@ class SessionManager: ObservableObject {
                     if let orgId = currentOrganization?.id {
                         await RealtimeEventService.shared.subscribe(organizationId: orgId)
                     }
+                    // Re-register stored device token after session restore
+                    await NotificationService.shared.registerStoredTokenIfNeeded()
                 }
             } else {
                 print("[SessionManager] No existing session found")
@@ -80,6 +82,8 @@ class SessionManager: ObservableObject {
             if let orgId = currentOrganization?.id {
                 await RealtimeEventService.shared.subscribe(organizationId: orgId)
             }
+            // Re-register stored device token after login
+            await NotificationService.shared.registerStoredTokenIfNeeded()
         } catch {
             errorMessage = error.localizedDescription
             throw error
@@ -129,6 +133,15 @@ class SessionManager: ObservableObject {
         
         // Unsubscribe from realtime events
         await RealtimeEventService.shared.unsubscribe()
+        
+        // Unregister device token before signing out (ignore benign errors)
+        if let token = NotificationService.shared.lastDeviceToken {
+            do {
+                try await NotificationService.shared.unregisterDeviceToken(token)
+            } catch {
+                // Benign: e.g. network, token already removed
+            }
+        }
         
         await authService.signOut()
         isAuthenticated = false
