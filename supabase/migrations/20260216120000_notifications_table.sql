@@ -21,6 +21,13 @@ ALTER TABLE notifications ALTER COLUMN updated_at SET DEFAULT NOW();
 UPDATE notifications SET updated_at = COALESCE(updated_at, created_at, NOW()) WHERE updated_at IS NULL;
 ALTER TABLE notifications ALTER COLUMN updated_at SET NOT NULL;
 
+-- Drop old policies before dropping organization_id (INSERT policy depends on it)
+DROP POLICY IF EXISTS "System can create notifications for users" ON notifications;
+DROP POLICY IF EXISTS "Users can view their own notifications" ON notifications;
+DROP POLICY IF EXISTS "Users can update their own notifications" ON notifications;
+DROP POLICY IF EXISTS "Users can read own notifications" ON notifications;
+DROP POLICY IF EXISTS "Users can update own notifications" ON notifications;
+
 -- Drop foreign key and legacy columns
 ALTER TABLE notifications DROP CONSTRAINT IF EXISTS notifications_organization_id_fkey;
 ALTER TABLE notifications DROP COLUMN IF EXISTS organization_id;
@@ -42,13 +49,6 @@ ALTER TABLE notifications ADD CONSTRAINT notifications_type_check CHECK (
 UPDATE notifications SET is_read = false WHERE is_read IS NULL;
 ALTER TABLE notifications ALTER COLUMN is_read SET DEFAULT false;
 ALTER TABLE notifications ALTER COLUMN is_read SET NOT NULL;
-
--- Drop old policies (including org-based INSERT)
-DROP POLICY IF EXISTS "Users can view their own notifications" ON notifications;
-DROP POLICY IF EXISTS "Users can update their own notifications" ON notifications;
-DROP POLICY IF EXISTS "System can create notifications for users" ON notifications;
-DROP POLICY IF EXISTS "Users can read own notifications" ON notifications;
-DROP POLICY IF EXISTS "Users can update own notifications" ON notifications;
 
 -- Recreate indexes
 DROP INDEX IF EXISTS idx_notifications_user;
