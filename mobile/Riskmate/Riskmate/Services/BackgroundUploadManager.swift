@@ -349,7 +349,13 @@ class BackgroundUploadManager: NSObject, ObservableObject {
     }
     
     /// Remove an upload by id (e.g. when user resolves evidence conflict with "Use Server Version").
+    /// Deletes the temp file from disk when present, then removes task mapping and upload from storage.
     func removeUpload(id uploadId: String) {
+        if let upload = uploads.first(where: { $0.id == uploadId }),
+           let filePath = upload.fileURL {
+            let fileURL = URL(fileURLWithPath: filePath)
+            try? FileManager.default.removeItem(at: fileURL)
+        }
         removeTaskMapping(forUploadId: uploadId)
         uploads.removeAll { $0.id == uploadId }
         saveUploads()

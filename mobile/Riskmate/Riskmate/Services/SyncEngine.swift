@@ -608,7 +608,21 @@ final class SyncEngine: ObservableObject {
                 }
             }
             if response.updatedJob == nil, response.updatedMitigationItem == nil {
-                _ = try await fetchChanges(since: Date().addingTimeInterval(-3600))
+                // Use last sync cursor so deletions/changes older than 1h are pulled; avoid stale entities after conflict resolution
+                let since = db.getLastSyncTimestamp() ?? Date.distantPast
+                _ = try await fetchChanges(since: since)
+                // When original operation was a delete, explicitly remove local entity from cache so it doesn't rely on fetch window
+                if operationType == "delete_hazard", let hazardId = effectiveEntityId {
+                    OfflineCache.shared.mergeCachedMitigationItems(synced: [], deletedIds: [hazardId])
+                    db.deletePendingHazard(id: hazardId)
+                } else if operationType == "delete_control", let controlId = effectiveEntityId {
+                    OfflineCache.shared.mergeCachedMitigationItems(synced: [], deletedIds: [controlId])
+                    db.deletePendingControl(id: controlId)
+                } else if operationType == "delete_job", let jobId = effectiveEntityId {
+                    OfflineCache.shared.mergeCachedJobs(synced: [], deletedIds: [jobId])
+                    db.deletePendingJob(id: jobId)
+                    removeJobFromStore(id: jobId)
+                }
             }
         case .localWins, .merge:
             if let job = response.updatedJob {
