@@ -39,14 +39,16 @@ async function buildSummaryMessage(organizationId: string) {
     .eq("organization_id", organizationId)
     .gte("created_at", oneWeekAgo.toISOString());
 
+  const jobIds = (jobs || []).map((job) => job.id);
+  if (jobIds.length === 0) {
+    return "Last week: 0 work records logged, 0 flagged high-risk, controls completion 0%.";
+  }
+
   const { data: controls } = await supabase
     .from("mitigation_items") // Table name unchanged (database schema)
     .select("id, done")
     .gte("created_at", oneWeekAgo.toISOString())
-    .in(
-      "job_id",
-      (jobs || []).map((job) => job.id)
-    );
+    .in("job_id", jobIds);
 
   const totalJobs = jobs?.length ?? 0;
   const highRiskJobs =

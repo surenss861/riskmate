@@ -97,8 +97,8 @@ async function fetchOrgTokens(organizationId: string) {
   return (data || []).map((row) => row.token);
 }
 
-/** Fetch org device tokens only for users who have the given preference enabled. */
-async function fetchOrgTokensWithPreference(
+/** Fetch org user IDs who have the given preference enabled and at least one device token. */
+async function fetchOrgUserIdsWithPreference(
   organizationId: string,
   prefKey: keyof NotificationPreferences
 ): Promise<string[]> {
@@ -118,9 +118,11 @@ async function fetchOrgTokensWithPreference(
   const prefsByUser = new Map(
     (prefsData || []).map((r: any) => [r.user_id, r[prefKey] !== false])
   );
-  return tokensData
-    .filter((r) => prefsByUser.get(r.user_id) !== false)
-    .map((r) => r.token);
+  return [...new Set(
+    tokensData
+      .filter((r) => prefsByUser.get(r.user_id) !== false)
+      .map((r) => r.user_id)
+  )];
 }
 
 /** Default notification preferences (all enabled). */
@@ -392,18 +394,22 @@ export async function notifyHighRiskJob(params: {
 }) {
   if (params.riskScore < 75) return;
 
-  const tokens = await fetchOrgTokensWithPreference(
+  const userIds = await fetchOrgUserIdsWithPreference(
     params.organizationId,
     "high_risk_job_enabled"
   );
-  await sendPush(tokens, {
+  const payload: PushPayload = {
     title: "⚠️ High-risk job detected",
     body: `${params.clientName} scored ${params.riskScore}. Review mitigation plan now.`,
     data: {
       type: "high_risk_job",
       jobId: params.jobId,
     },
-  });
+    priority: "default",
+  };
+  for (const userId of userIds) {
+    await sendToUser(userId, payload);
+  }
 }
 
 export async function notifyReportReady(params: {
@@ -411,11 +417,11 @@ export async function notifyReportReady(params: {
   jobId: string;
   pdfUrl?: string | null;
 }) {
-  const tokens = await fetchOrgTokensWithPreference(
+  const userIds = await fetchOrgUserIdsWithPreference(
     params.organizationId,
     "report_ready_enabled"
   );
-  await sendPush(tokens, {
+  const payload: PushPayload = {
     title: "📄 Risk report ready",
     body: "Your Riskmate PDF report is ready to view.",
     data: {
@@ -423,24 +429,32 @@ export async function notifyReportReady(params: {
       jobId: params.jobId,
       pdfUrl: params.pdfUrl,
     },
-  });
+    priority: "default",
+  };
+  for (const userId of userIds) {
+    await sendToUser(userId, payload);
+  }
 }
 
 export async function notifyWeeklySummary(params: {
   organizationId: string;
   message: string;
 }) {
-  const tokens = await fetchOrgTokensWithPreference(
+  const userIds = await fetchOrgUserIdsWithPreference(
     params.organizationId,
     "weekly_summary_enabled"
   );
-  await sendPush(tokens, {
+  const payload: PushPayload = {
     title: "📈 Weekly compliance summary",
     body: params.message,
     data: {
       type: "weekly_summary",
     },
-  });
+    priority: "default",
+  };
+  for (const userId of userIds) {
+    await sendToUser(userId, payload);
+  }
 }
 
 // ----- Targeted (per-user) notifications with deep links -----
