@@ -251,100 +251,15 @@ struct SyncQueueView: View {
                             if op == nil {
                                 op = OfflineDatabase.shared.getSyncQueue().first { $0.id == conflict.id }
                             }
-                            var resolvedValue: [String: Any]?
-                            var entityType: String? = conflict.entityType
-                            var entityId: String? = conflict.entityId
-                            var operationType: String?
-                            if outcome.strategy == .localWins || outcome.strategy == .merge {
-                                // Normalize entityType before building payload: use op when conflict.entityType is nil or empty so backend validation passes
-                                if (entityType == nil || (entityType ?? "").isEmpty), let op = op {
-                                    entityType = entityTypeFromOperation(op.type)
-                                }
-                                if let op = op {
-                                    if let dict = try? JSONSerialization.jsonObject(with: op.data) as? [String: Any] {
-                                        var base = dict
-                                        if outcome.strategy == .merge && (entityType == "hazard" || entityType == "control") {
-                                            base = SyncConflictMerge.mergeHazardControlPayload(
-                                                localDict: dict,
-                                                serverValue: conflict.serverValueForMerge ?? (conflict.serverValue as Any?),
-                                                conflictField: conflict.field
-                                            )
-                                        }
-                                        if let perField = outcome.perFieldResolvedValues, !perField.isEmpty {
-                                            for (k, v) in perField { base[k] = v }
-                                        }
-                                        resolvedValue = base
-                                    }
-                                    entityType = entityType ?? entityTypeFromOperation(op.type)
-                                    entityId = entityId ?? op.entityId
-                                    operationType = op.type.apiTypeString
-                                } else {
-                                    // Queued op not found: divergent conflict or op cleared. Allow resolution when operationId is divergent or with stored operation_type.
-                                    let et = conflict.entityType
-                                    let eid = conflict.entityId
-                                    guard !et.isEmpty, !eid.isEmpty else {
-                                        throw NSError(domain: "ConflictResolution", code: 1, userInfo: [NSLocalizedDescriptionKey: "Cannot resolve: missing entity info"])
-                                    }
-                                    let isEvidenceOrPhoto = (et == "evidence" || et == "photo")
-                                    if isEvidenceOrPhoto {
-                                        resolvedValue = resolvedValue ?? [:]
-                                        entityType = et
-                                        entityId = eid
-                                        operationType = nil
-                                    } else if conflict.id.hasPrefix("divergent:") {
-                                        // Divergent conflicts: pass reconstructed payload and inferred operationType so backend validation passes.
-                                        var base = syncEngine.getLocalPayloadForConflict(entityType: et, entityId: eid)
-                                        if outcome.strategy == .merge && (et == "hazard" || et == "control"), var localDict = base {
-                                            base = SyncConflictMerge.mergeHazardControlPayload(
-                                                localDict: localDict,
-                                                serverValue: conflict.serverValueForMerge ?? (conflict.serverValue as Any?),
-                                                conflictField: conflict.field
-                                            )
-                                        }
-                                        if let perField = outcome.perFieldResolvedValues, !perField.isEmpty, var merged = base {
-                                            for (k, v) in perField { merged[k] = v }
-                                            base = merged
-                                        }
-                                        resolvedValue = base
-                                        entityType = et
-                                        entityId = eid
-                                        operationType = inferredOperationTypeForEntityType(et)
-                                    } else if !isEvidenceOrPhoto {
-                                        guard let storedOpType = conflict.operationType, !storedOpType.isEmpty else {
-                                            throw NSError(domain: "ConflictResolution", code: 3, userInfo: [NSLocalizedDescriptionKey: "Cannot resolve: original operation type is unknown. The pending operation may have been cleared."])
-                                        }
-                                        var base = syncEngine.getLocalPayloadForConflict(entityType: et, entityId: eid)
-                                        if outcome.strategy == .merge && (et == "hazard" || et == "control"), var localDict = base {
-                                            base = SyncConflictMerge.mergeHazardControlPayload(
-                                                localDict: localDict,
-                                                serverValue: conflict.serverValueForMerge ?? (conflict.serverValue as Any?),
-                                                conflictField: conflict.field
-                                            )
-                                        }
-                                        if let perField = outcome.perFieldResolvedValues, !perField.isEmpty, var merged = base {
-                                            for (k, v) in perField { merged[k] = v }
-                                            base = merged
-                                        }
-                                        resolvedValue = base
-                                        entityType = et
-                                        entityId = eid
-                                        operationType = storedOpType
-                                    }
-                                }
-                                guard let resolved = resolvedValue,
-                                      let et = entityType, !et.isEmpty,
-                                      let eid = entityId else {
-                                    throw NSError(domain: "ConflictResolution", code: 2, userInfo: [NSLocalizedDescriptionKey: "Cannot resolve: payload or required metadata missing"])
-                                }
-                            }
+                            let payload = try syncEngine.buildResolvePayload(conflict: conflict, outcome: outcome, pendingOp: op)
                             do {
                                 try await syncEngine.resolveConflict(
                                     operationId: conflict.id,
                                     strategy: outcome.strategy,
-                                    resolvedValue: resolvedValue,
-                                    entityType: entityType,
-                                    entityId: entityId,
-                                    operationType: operationType
+                                    resolvedValue: payload.resolvedValue,
+                                    entityType: payload.entityType,
+                                    entityId: payload.entityId,
+                                    operationType: payload.operationType
                                 )
                                 conflictToResolve = syncEngine.pendingConflicts.first
                                 _ = try? await syncEngine.syncPendingOperations()
@@ -374,24 +289,6 @@ struct SyncQueueView: View {
         case "control": return "control"
         case "evidence", "photo": return "photo"
         default: return conflict.entityType
-        }
-    }
-
-    private func entityTypeFromOperation(_ type: OperationType) -> String {
-        switch type {
-        case .createJob, .updateJob, .deleteJob: return "job"
-        case .createHazard, .updateHazard, .deleteHazard: return "hazard"
-        case .createControl, .updateControl, .deleteControl: return "control"
-        }
-    }
-
-    /// Infer backend operation_type for divergent conflicts (no queued op) so resolve-conflict validation passes.
-    private func inferredOperationTypeForEntityType(_ entityType: String) -> String? {
-        switch entityType {
-        case "job": return "update_job"
-        case "hazard": return "update_hazard"
-        case "control": return "update_control"
-        default: return nil
         }
     }
 }

@@ -914,10 +914,12 @@ syncRouter.post(
         });
       }
 
-      const validStrategies = ["server_wins", "local_wins", "merge", "ask_user"];
-      if (!validStrategies.includes(strategy)) {
+      // Only concrete resolution strategies are permitted; ask_user would clear conflicts/ops without applying a resolution.
+      const allowedStrategies = ["server_wins", "local_wins", "merge"];
+      if (!allowedStrategies.includes(strategy)) {
         return res.status(400).json({
-          message: `Invalid strategy. Must be one of: ${validStrategies.join(", ")}`,
+          message: `Invalid strategy. Only server_wins, local_wins, and merge are permitted for resolution. Got: ${strategy}`,
+          code: "INVALID_STRATEGY",
         });
       }
 
