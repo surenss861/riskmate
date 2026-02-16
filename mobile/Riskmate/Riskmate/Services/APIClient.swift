@@ -1173,6 +1173,14 @@ class APIClient {
         return response.data
     }
 
+    /// Resolve a sign-off (comment) ID to its job ID for deep link navigation (e.g. riskmate://comments/:signoffId).
+    func getJobIdForSignoff(signoffId: String) async throws -> String {
+        let response: SignoffJobRefResponse = try await request(
+            endpoint: "/api/jobs/by-signoff/\(signoffId)"
+        )
+        return response.data.job_id
+    }
+
     /// Get or create an active (non-superseded, signable) report run for a job.
     /// With forceNew: false, returns existing active run if any; otherwise creates one. With forceNew: true, supersedes prior and creates new.
     func getActiveReportRun(jobId: String, packetType: String = "insurance", forceNew: Bool = false) async throws -> (run: ReportRun, created: Bool) {
@@ -1954,6 +1962,15 @@ struct ChartDataPointAPI: Codable {
 
 struct JobResponse: Codable {
     let data: Job
+}
+
+/// Response from GET /api/jobs/by-signoff/:signoffId (for comment deep link resolution).
+struct SignoffJobRefResponse: Codable {
+    let data: SignoffJobRef
+}
+
+struct SignoffJobRef: Codable {
+    let job_id: String
 }
 
 struct AuditEventsResponse: Codable {

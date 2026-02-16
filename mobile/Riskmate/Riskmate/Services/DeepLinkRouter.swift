@@ -16,6 +16,8 @@ final class DeepLinkRouter: ObservableObject {
     @Published var pendingReportRunId: String?
     /// Request to open notifications (e.g. NotificationCenterView).
     @Published var openNotifications: Bool = false
+    /// Request to navigate to a comment (sign-off) context; app resolves to job and opens Signatures tab.
+    @Published var pendingCommentId: String?
 
     private init() {}
 
@@ -38,6 +40,11 @@ final class DeepLinkRouter: ObservableObject {
             return handleReportRoute(pathComponents: pathComponents)
         case "notifications":
             openNotifications = true
+            return nil
+        case "comments":
+            if pathComponents.count >= 2 {
+                pendingCommentId = pathComponents[1]
+            }
             return nil
         default:
             return nil
@@ -115,5 +122,6 @@ final class DeepLinkRouter: ObservableObject {
         pendingHazardId = nil
         pendingReportRunId = nil
         openNotifications = false
+        pendingCommentId = nil
     }
 }

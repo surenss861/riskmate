@@ -771,6 +771,41 @@ jobsRouter.get("/", authenticate, async (req: express.Request, res: express.Resp
   }
 });
 
+// GET /api/jobs/by-signoff/:signoffId
+// Returns job_id for a sign-off (for deep link resolution: riskmate://comments/:signoffId).
+// Must be before /:id routes so "by-signoff" is not captured as job id.
+jobsRouter.get("/by-signoff/:signoffId", authenticate, async (req: express.Request, res: express.Response) => {
+  const authReq = req as AuthenticatedRequest & RequestWithId;
+  const requestId = authReq.requestId || "unknown";
+  try {
+    const { organization_id } = authReq.user;
+    const { signoffId } = req.params;
+    const { data, error } = await supabase
+      .from("job_signoffs")
+      .select("job_id")
+      .eq("id", signoffId)
+      .eq("organization_id", organization_id)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!data) {
+      return res.status(404).json({ message: "Sign-off not found" });
+    }
+    res.json({ data: { job_id: data.job_id } });
+  } catch (err: any) {
+    console.error("Sign-off lookup failed:", err);
+    const { response: errorResponse, errorId } = createErrorResponse({
+      message: "Failed to lookup sign-off",
+      internalMessage: err?.message || String(err),
+      code: "SIGNOFF_LOOKUP_FAILED",
+      requestId,
+      statusCode: 500,
+    });
+    res.setHeader("X-Error-ID", errorId);
+    res.status(500).json(errorResponse);
+  }
+});
+
 // GET /api/jobs/:id/hazards
 // Returns all hazards (mitigation items) for a job
 // NOTE: Must be before /:id route to match correctly

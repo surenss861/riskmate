@@ -134,10 +134,11 @@ class SessionManager: ObservableObject {
         // Unsubscribe from realtime events
         await RealtimeEventService.shared.unsubscribe()
         
-        // Unregister device token before signing out (ignore benign errors)
+        // Unregister device token before signing out; clear cached token after success to prevent reuse
         if let token = NotificationService.shared.lastDeviceToken {
             do {
                 try await NotificationService.shared.unregisterDeviceToken(token)
+                NotificationService.shared.clearStoredToken()
             } catch {
                 // Benign: e.g. network, token already removed
             }

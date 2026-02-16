@@ -22,6 +22,8 @@ struct ContentView: View {
     @State private var showReportFromDeepLink = false
     @State private var deepLinkReportRunId: String?
     @State private var showNotificationCenterFromDeepLink = false
+    @State private var showCommentFromDeepLink = false
+    @State private var deepLinkCommentId: String?
     @State private var showNotificationPermissionPrompt = false
 
     private var isAuditor: Bool {
@@ -142,6 +144,11 @@ struct ContentView: View {
                 deepLinkRouter.clearPending()
             }
         }
+        .onChange(of: deepLinkRouter.pendingCommentId) { _, new in
+            guard let commentId = new else { return }
+            deepLinkCommentId = commentId
+            showCommentFromDeepLink = true
+        }
         .fullScreenCover(isPresented: $showNotificationCenterFromDeepLink, onDismiss: {
             showNotificationCenterFromDeepLink = false
         }) {
@@ -173,6 +180,20 @@ struct ContentView: View {
             Group {
                 if let jobId = deepLinkJobId {
                     JobDetailView(jobId: jobId, initialTab: deepLinkJobTab, initialHazardId: deepLinkHazardId)
+                        .environmentObject(quickAction)
+                } else {
+                    EmptyView()
+                }
+            }
+        }
+        .fullScreenCover(isPresented: $showCommentFromDeepLink, onDismiss: {
+            deepLinkRouter.clearPending()
+            deepLinkCommentId = nil
+            showCommentFromDeepLink = false
+        }) {
+            Group {
+                if let commentId = deepLinkCommentId {
+                    CommentDeepLinkView(signoffId: commentId)
                         .environmentObject(quickAction)
                 } else {
                     EmptyView()
@@ -501,6 +522,54 @@ struct SidebarView: View {
         .onAppear {
             if selectedItem == nil {
                 selectedItem = .dashboard
+            }
+        }
+    }
+}
+
+// MARK: - Comment (sign-off) deep link
+
+private struct CommentDeepLinkView: View {
+    let signoffId: String
+    @State private var jobId: String?
+    @State private var loadError: String?
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        Group {
+            if let jobId = jobId {
+                JobDetailView(jobId: jobId, initialTab: .signatures)
+                    .environmentObject(QuickActionRouter.shared)
+            } else if let error = loadError {
+                VStack(spacing: RMTheme.Spacing.lg) {
+                    Text("Could not open comment")
+                        .font(RMTheme.Typography.headline)
+                    Text(error)
+                        .font(RMTheme.Typography.body)
+                        .foregroundColor(RMTheme.Colors.textSecondary)
+                        .multilineTextAlignment(.center)
+                    Button("Dismiss") {
+                        dismiss()
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+                .padding(RMTheme.Spacing.pagePadding)
+            } else {
+                VStack(spacing: RMTheme.Spacing.lg) {
+                    RMSkeletonView(width: 80, height: 80, cornerRadius: 12)
+                    Text("Loading…")
+                        .font(RMTheme.Typography.body)
+                        .foregroundColor(RMTheme.Colors.textSecondary)
+                }
+            }
+        }
+        .task {
+            guard jobId == nil, loadError == nil else { return }
+            do {
+                let resolvedJobId = try await APIClient.shared.getJobIdForSignoff(signoffId: signoffId)
+                jobId = resolvedJobId
+            } catch {
+                loadError = error.localizedDescription
             }
         }
     }

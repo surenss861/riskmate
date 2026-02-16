@@ -88,6 +88,11 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
         try await APIClient.shared.unregisterPushToken(token: tokenString)
     }
 
+    /// Clear the stored device token (call after successful unregister on logout to prevent reuse).
+    func clearStoredToken() {
+        lastDeviceToken = nil
+    }
+
     // MARK: - Notification tap (deep link)
 
     /// Handle user tapping a notification. Parse payload and route via DeepLinkRouter.

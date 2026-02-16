@@ -744,7 +744,7 @@ export async function sendMentionNotification(
     data: {
       type: "mention",
       commentId,
-      deepLink: "riskmate://notifications",
+      deepLink: `riskmate://comments/${commentId}`,
     },
     categoryId: "mention",
     priority: "high",
