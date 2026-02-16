@@ -16,19 +16,23 @@ CREATE INDEX IF NOT EXISTS idx_device_tokens_user ON device_tokens (user_id);
 -- Server-side jobs use the service key, which bypasses RLS
 ALTER TABLE device_tokens ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can view their own device tokens" ON device_tokens;
 CREATE POLICY "Users can view their own device tokens"
   ON device_tokens FOR SELECT
   USING (user_id = auth.uid());
 
+DROP POLICY IF EXISTS "Users can create their own device tokens" ON device_tokens;
 CREATE POLICY "Users can create their own device tokens"
   ON device_tokens FOR INSERT
   WITH CHECK (user_id = auth.uid());
 
+DROP POLICY IF EXISTS "Users can update their own device tokens" ON device_tokens;
 CREATE POLICY "Users can update their own device tokens"
   ON device_tokens FOR UPDATE
   USING (user_id = auth.uid())
   WITH CHECK (user_id = auth.uid());
 
+DROP POLICY IF EXISTS "Users can delete their own device tokens" ON device_tokens;
 CREATE POLICY "Users can delete their own device tokens"
   ON device_tokens FOR DELETE
   USING (user_id = auth.uid());

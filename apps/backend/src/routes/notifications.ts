@@ -191,19 +191,85 @@ notificationsRouter.patch(
   }
 );
 
-/** POST /api/notifications/evidence-uploaded — notify a user that evidence was uploaded to a job (e.g. job owner). */
+/** POST /api/notifications/evidence-uploaded — notify the job owner that evidence was uploaded. Enforces org/job scoping; target user is derived from the job, not from the client. */
 notificationsRouter.post(
   "/evidence-uploaded",
   authenticate as unknown as express.RequestHandler,
   async (req: express.Request, res: express.Response) => {
+    const authReq = req as AuthenticatedRequest;
     try {
-      const { userId, jobId, photoId } = req.body || {};
-      if (!userId || !jobId || !photoId) {
+      const { jobId, photoId } = req.body || {};
+      if (!jobId || !photoId) {
         return res
           .status(400)
-          .json({ message: "Missing userId, jobId, or photoId" });
+          .json({ message: "Missing jobId or photoId" });
       }
-      await sendEvidenceUploadedNotification(userId, jobId, photoId);
+
+      const organizationId = authReq.user.organization_id;
+
+      // Look up job constrained to caller's organization; if not found, return 403/404
+      const { data: job, error: jobError } = await supabase
+        .from("jobs")
+        .select("id, organization_id, created_by")
+        .eq("id", jobId)
+        .eq("organization_id", organizationId)
+        .single();
+
+      if (jobError || !job) {
+        return res.status(404).json({ message: "Job not found" });
+      }
+
+      const targetUserId = job.created_by;
+      if (!targetUserId) {
+        return res.status(400).json({
+          message: "Job has no owner to notify",
+          code: "NO_JOB_OWNER",
+        });
+      }
+
+      // Verify target user is in the same organization
+      const { data: targetUser, error: userError } = await supabase
+        .from("users")
+        .select("id, organization_id")
+        .eq("id", targetUserId)
+        .single();
+
+      if (userError || !targetUser || targetUser.organization_id !== organizationId) {
+        return res.status(403).json({
+          message: "Target user is not in this organization",
+          code: "TARGET_USER_ORG_MISMATCH",
+        });
+      }
+
+      // Optionally ensure photoId belongs to this job/org (document or evidence)
+      const { data: doc } = await supabase
+        .from("documents")
+        .select("id")
+        .eq("id", photoId)
+        .eq("job_id", jobId)
+        .eq("organization_id", organizationId)
+        .maybeSingle();
+
+      if (doc) {
+        // photoId is a document in this job — proceed
+      } else {
+        const { data: ev } = await supabase
+          .from("evidence")
+          .select("id")
+          .eq("id", photoId)
+          .eq("work_record_id", jobId)
+          .eq("organization_id", organizationId)
+          .maybeSingle();
+
+        if (!ev) {
+          return res.status(404).json({
+            message: "Photo/evidence not found for this job",
+            code: "PHOTO_NOT_FOUND",
+          });
+        }
+      }
+
+      await sendEvidenceUploadedNotification(targetUserId, jobId, photoId);
       res.status(204).end();
     } catch (err: any) {
       console.error("Evidence uploaded notification failed:", err);
