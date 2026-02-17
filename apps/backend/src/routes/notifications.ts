@@ -2,7 +2,6 @@ import express, { type Router as ExpressRouter } from "express";
 import { authenticate, AuthenticatedRequest } from "../middleware/auth";
 import {
   registerDeviceToken,
-  unregisterDeviceToken,
   sendEvidenceUploadedNotification,
   validatePushToken,
   getNotificationPreferences,
@@ -75,7 +74,23 @@ notificationsRouter.delete(
           .json({ message: "Missing token", code: "INVALID_TOKEN" });
       }
 
-      await unregisterDeviceToken(token);
+      const { data, error } = await supabase
+        .from("device_tokens")
+        .delete()
+        .eq("token", token)
+        .eq("user_id", authReq.user.id)
+        .eq("organization_id", authReq.user.organization_id)
+        .select("id");
+
+      if (error) {
+        console.error("Device token unregister failed:", error);
+        return res.status(500).json({ message: "Failed to unregister device token" });
+      }
+      if (!data || data.length === 0) {
+        return res
+          .status(404)
+          .json({ message: "Device token not found or you do not have access to remove it", code: "TOKEN_NOT_FOUND" });
+      }
       res.json({ status: "ok" });
     } catch (err: any) {
       console.error("Device token unregister failed:", err);
