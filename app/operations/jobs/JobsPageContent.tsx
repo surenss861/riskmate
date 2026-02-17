@@ -370,28 +370,30 @@ export function JobsPageContentView(props: JobsPageContentProps) {
       const { data } = await jobsApi.bulkStatus(ids, status)
       const { succeeded, failed } = data
       props.onJobArchived()
-      bulk.clearSelection()
-      setBulkStatusModalOpen(false)
       if (failed.length === 0) {
+        bulk.clearSelection()
+        setBulkStatusModalOpen(false)
         setToast({ message: `${succeeded.length} job${succeeded.length !== 1 ? 's' : ''} updated to ${status.replace('_', ' ')}`, type: 'success' })
-      } else if (succeeded.length > 0) {
-        if (previousData && props.mutateData?.mutate) {
-          props.mutateData.mutate(previousData, { revalidate: false })
-        }
-        props.onJobArchived()
-        setToast({ message: `${succeeded.length} updated, ${failed.length} failed`, type: 'success' })
       } else {
         if (previousData && props.mutateData?.mutate) {
           props.mutateData.mutate(previousData, { revalidate: false })
         }
         props.onJobArchived()
-        setToast({ message: failed[0]?.message || 'Failed to update jobs', type: 'error' })
+        bulk.setSelection(failed.map((f: { id: string }) => f.id))
+        setBulkStatusModalOpen(true)
+        if (succeeded.length > 0) {
+          setToast({ message: `${succeeded.length} updated, ${failed.length} failed. Retry or adjust selection.`, type: 'error' })
+        } else {
+          setToast({ message: failed[0]?.message || 'Failed to update jobs. Retry or adjust selection.', type: 'error' })
+        }
       }
     } catch (err: any) {
       if (previousData && props.mutateData?.mutate) {
         props.mutateData.mutate(previousData, { revalidate: false })
       }
       props.onJobArchived()
+      bulk.setSelection(ids)
+      setBulkStatusModalOpen(true)
       setToast({ message: err?.message || 'Failed to update some jobs', type: 'error' })
     } finally {
       setBulkActionLoading(false)
@@ -417,28 +419,30 @@ export function JobsPageContentView(props: JobsPageContentProps) {
       const { data } = await jobsApi.bulkAssign(ids, workerId)
       const { succeeded, failed } = data
       props.onJobArchived()
-      bulk.clearSelection()
-      setBulkAssignModalOpen(false)
       if (failed.length === 0) {
+        bulk.clearSelection()
+        setBulkAssignModalOpen(false)
         setToast({ message: `${succeeded.length} job${succeeded.length !== 1 ? 's' : ''} assigned`, type: 'success' })
-      } else if (succeeded.length > 0) {
-        if (previousData && props.mutateData?.mutate) {
-          props.mutateData.mutate(previousData, { revalidate: false })
-        }
-        props.onJobArchived()
-        setToast({ message: `${succeeded.length} assigned, ${failed.length} failed`, type: 'success' })
       } else {
         if (previousData && props.mutateData?.mutate) {
           props.mutateData.mutate(previousData, { revalidate: false })
         }
         props.onJobArchived()
-        setToast({ message: failed[0]?.message || 'Failed to assign jobs', type: 'error' })
+        bulk.setSelection(failed.map((f: { id: string }) => f.id))
+        setBulkAssignModalOpen(true)
+        if (succeeded.length > 0) {
+          setToast({ message: `${succeeded.length} assigned, ${failed.length} failed. Retry or adjust selection.`, type: 'error' })
+        } else {
+          setToast({ message: failed[0]?.message || 'Failed to assign jobs. Retry or adjust selection.', type: 'error' })
+        }
       }
     } catch (err: any) {
       if (previousData && props.mutateData?.mutate) {
         props.mutateData.mutate(previousData, { revalidate: false })
       }
       props.onJobArchived()
+      bulk.setSelection(ids)
+      setBulkAssignModalOpen(true)
       setToast({ message: err?.message || 'Failed to assign jobs', type: 'error' })
     } finally {
       setBulkActionLoading(false)

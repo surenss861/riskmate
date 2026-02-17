@@ -49,6 +49,17 @@ export function useBulkSelection<T extends { id: string }>(items: T[]) {
     setSelectedIds(new Set())
   }, [])
 
+  /** Set selection to exactly these IDs (e.g. keep only failed IDs for retry). IDs not in current items are ignored. */
+  const setSelection = useCallback((ids: string[]) => {
+    setSelectedIds((prev) => {
+      const next = new Set<string>()
+      for (const id of ids) {
+        if (currentIds.has(id)) next.add(id)
+      }
+      return next
+    })
+  }, [currentIds])
+
   const isSelected = useCallback(
     (id: string) => selectedIds.has(id),
     [selectedIds]
@@ -71,6 +82,7 @@ export function useBulkSelection<T extends { id: string }>(items: T[]) {
     toggleItem,
     toggleAll,
     clearSelection,
+    setSelection,
     isSelected,
     isAllSelected,
   }

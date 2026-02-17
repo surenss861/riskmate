@@ -818,7 +818,7 @@ jobsRouter.post("/bulk/status", authenticate, requireWriteAccess, async (req: ex
     if (!Array.isArray(job_ids) || job_ids.length === 0 || typeof status !== "string") {
       return res.status(400).json({ message: "job_ids (array) and status (string) are required" });
     }
-    const allowedStatuses = ["draft", "pending", "in_progress", "completed", "cancelled", "on-hold", "archived"];
+    const allowedStatuses = ["draft", "pending", "in_progress", "completed", "cancelled", "on-hold"];
     if (!allowedStatuses.includes(status)) {
       return res.status(400).json({ message: "Invalid status" });
     }
