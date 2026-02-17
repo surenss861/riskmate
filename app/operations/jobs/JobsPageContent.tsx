@@ -15,6 +15,7 @@ import { BulkDeleteConfirmation } from '@/components/jobs/BulkDeleteConfirmation
 import { useBulkSelection } from '@/hooks/useBulkSelection'
 import { jobsApi } from '@/lib/api'
 import { hasPermission } from '@/lib/utils/permissions'
+import { exportJobs } from '@/lib/utils/exportJobs'
 import { AppBackground, AppShell, PageHeader, PageSection, GlassCard, Button } from '@/components/shared'
 
 interface JobsPageContentProps {
@@ -69,11 +70,13 @@ export function JobsPageContentView(props: JobsPageContentProps) {
   const [bulkAssignModalOpen, setBulkAssignModalOpen] = useState(false)
   const [bulkDeleteModalOpen, setBulkDeleteModalOpen] = useState(false)
   const [bulkActionLoading, setBulkActionLoading] = useState(false)
+  const [exportInFlight, setExportInFlight] = useState(false)
 
   const bulk = useBulkSelection(props.jobs)
   
   const canArchive = hasPermission(props.userRole, 'jobs.close')
   const canDelete = hasPermission(props.userRole, 'jobs.delete')
+  const canAssign = hasPermission(props.userRole, 'jobs.edit')
   
   // Show keyboard hint once per user
   React.useEffect(() => {
@@ -381,6 +384,19 @@ export function JobsPageContentView(props: JobsPageContentProps) {
   }
 
   const handleBulkAssign = async (workerId: string) => {
+    const ids = bulk.selectedItems.map((j) => j.id)
+    const previousData = props.mutateData?.currentData ? JSON.parse(JSON.stringify(props.mutateData.currentData)) : null
+    if (props.mutateData?.mutate) {
+      props.mutateData.mutate((current: any) => {
+        if (!current?.data) return current
+        return {
+          ...current,
+          data: current.data.map((job: any) =>
+            ids.includes(job.id) ? { ...job, assigned_to_id: workerId } : job
+          ),
+        }
+      }, { optimisticData: true, rollbackOnError: true, revalidate: false })
+    }
     setBulkActionLoading(true)
     try {
       const results = await Promise.allSettled(
@@ -394,12 +410,34 @@ export function JobsPageContentView(props: JobsPageContentProps) {
       if (failed === 0) {
         setToast({ message: `${succeeded} job${succeeded !== 1 ? 's' : ''} assigned`, type: 'success' })
       } else {
+        if (previousData && props.mutateData?.mutate) {
+          props.mutateData.mutate(previousData, { revalidate: false })
+        }
+        props.onJobArchived()
         setToast({ message: `${succeeded} assigned, ${failed} failed`, type: failed === results.length ? 'error' : 'success' })
       }
     } catch (err: any) {
+      if (previousData && props.mutateData?.mutate) {
+        props.mutateData.mutate(previousData, { revalidate: false })
+      }
+      props.onJobArchived()
       setToast({ message: err?.message || 'Failed to assign jobs', type: 'error' })
     } finally {
       setBulkActionLoading(false)
+    }
+  }
+
+  const handleBulkExport = async () => {
+    if (bulk.selectedItems.length === 0) return
+    setExportInFlight(true)
+    setToast({ message: 'Preparing export…', type: 'success' })
+    try {
+      await exportJobs(bulk.selectedItems, ['csv', 'pdf'])
+      setToast({ message: `Exported ${bulk.selectedItems.length} job${bulk.selectedItems.length !== 1 ? 's' : ''} (CSV and PDF).`, type: 'success' })
+    } catch (err: any) {
+      setToast({ message: err?.message || 'Export failed', type: 'error' })
+    } finally {
+      setExportInFlight(false)
     }
   }
 
@@ -657,10 +695,13 @@ export function JobsPageContentView(props: JobsPageContentProps) {
                   selectedCount={bulk.selectedItems.length}
                   onStatusChange={() => setBulkStatusModalOpen(true)}
                   onAssign={() => setBulkAssignModalOpen(true)}
-                  onExport={() => setToast({ message: 'Bulk export (CSV/PDF) coming soon.', type: 'success' })}
+                  onExport={handleBulkExport}
                   onDelete={() => setBulkDeleteModalOpen(true)}
                   onClearSelection={bulk.clearSelection}
-                  disableExport={false}
+                  disableExport={exportInFlight}
+                  canChangeStatus={canArchive}
+                  canAssign={canAssign}
+                  canDelete={canDelete}
                 />
               </div>
             )}

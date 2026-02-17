@@ -11,6 +11,10 @@ export interface BulkActionsToolbarProps {
   onClearSelection: () => void
   /** Optional: disable actions when bulk APIs are not ready (e.g. export) */
   disableExport?: boolean
+  /** Permission flags: hide or disable bulk actions when user lacks permission */
+  canChangeStatus?: boolean
+  canAssign?: boolean
+  canDelete?: boolean
 }
 
 export function BulkActionsToolbar({
@@ -21,6 +25,9 @@ export function BulkActionsToolbar({
   onDelete,
   onClearSelection,
   disableExport = false,
+  canChangeStatus = true,
+  canAssign = true,
+  canDelete = true,
 }: BulkActionsToolbarProps) {
   if (selectedCount === 0) return null
 
@@ -34,22 +41,26 @@ export function BulkActionsToolbar({
           {selectedCount} job{selectedCount !== 1 ? 's' : ''} selected
         </span>
         <div className="flex items-center gap-2 flex-wrap">
-          <button
-            type="button"
-            onClick={onStatusChange}
-            className="inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium bg-white/20 hover:bg-white/30 transition-colors"
-          >
-            <span aria-hidden>📋</span>
-            Change Status
-          </button>
-          <button
-            type="button"
-            onClick={onAssign}
-            className="inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium bg-white/20 hover:bg-white/30 transition-colors"
-          >
-            <span aria-hidden>👤</span>
-            Assign
-          </button>
+          {canChangeStatus && (
+            <button
+              type="button"
+              onClick={onStatusChange}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium bg-white/20 hover:bg-white/30 transition-colors"
+            >
+              <span aria-hidden>📋</span>
+              Change Status
+            </button>
+          )}
+          {canAssign && (
+            <button
+              type="button"
+              onClick={onAssign}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium bg-white/20 hover:bg-white/30 transition-colors"
+            >
+              <span aria-hidden>👤</span>
+              Assign
+            </button>
+          )}
           <button
             type="button"
             onClick={onExport}
@@ -59,14 +70,16 @@ export function BulkActionsToolbar({
             <span aria-hidden>📥</span>
             Export
           </button>
-          <button
-            type="button"
-            onClick={onDelete}
-            className="inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium bg-white/20 hover:bg-red-500/30 hover:bg-red-500/40 transition-colors"
-          >
-            <span aria-hidden>🗑️</span>
-            Delete
-          </button>
+          {canDelete && (
+            <button
+              type="button"
+              onClick={onDelete}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium bg-white/20 hover:bg-red-500/30 hover:bg-red-500/40 transition-colors"
+            >
+              <span aria-hidden>🗑️</span>
+              Delete
+            </button>
+          )}
         </div>
       </div>
       <button
