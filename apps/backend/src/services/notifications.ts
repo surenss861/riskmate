@@ -276,7 +276,7 @@ export async function createNotificationRecord(
 export async function listNotifications(
   userId: string,
   organizationId: string,
-  options: { limit?: number; offset?: number } = {}
+  options: { limit?: number; offset?: number; since?: string } = {}
 ): Promise<{
   data: Array<{
     id: string;
@@ -290,11 +290,17 @@ export async function listNotifications(
   const limit = Math.min(Math.max(options.limit ?? 50, 1), 100);
   const offset = Math.max(options.offset ?? 0, 0);
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("notifications")
     .select("id, type, content, is_read, created_at, deep_link")
     .eq("user_id", userId)
-    .eq("organization_id", organizationId)
+    .eq("organization_id", organizationId);
+
+  if (options.since) {
+    query = query.gte("created_at", options.since);
+  }
+
+  const { data, error } = await query
     .order("created_at", { ascending: false })
     .range(offset, offset + limit - 1);
 
@@ -646,7 +652,10 @@ export async function sendJobAssignedNotification(
   jobTitle?: string
 ) {
   const prefs = await getNotificationPreferences(userId);
-  if (!prefs.job_assigned_enabled) return;
+  if (!prefs.job_assigned_enabled) {
+    console.log("[Notifications] Skipped job_assigned for user", userId, "(preference disabled)");
+    return;
+  }
   await sendToUser(userId, organizationId, {
     title: "Job Assigned",
     body: jobTitle
@@ -670,7 +679,10 @@ export async function sendSignatureRequestNotification(
   jobTitle?: string
 ) {
   const prefs = await getNotificationPreferences(userId);
-  if (!prefs.signature_request_enabled) return;
+  if (!prefs.signature_request_enabled) {
+    console.log("[Notifications] Skipped signature_request for user", userId, "(preference disabled)");
+    return;
+  }
   await sendToUser(userId, organizationId, {
     title: "Signature Requested",
     body: jobTitle
@@ -694,7 +706,10 @@ export async function sendEvidenceUploadedNotification(
   photoId: string
 ) {
   const prefs = await getNotificationPreferences(userId);
-  if (!prefs.evidence_uploaded_enabled) return;
+  if (!prefs.evidence_uploaded_enabled) {
+    console.log("[Notifications] Skipped evidence_uploaded for user", userId, "(preference disabled)");
+    return;
+  }
   await sendToUser(userId, organizationId, {
     title: "Evidence Uploaded",
     body: "New evidence was added to a job.",
@@ -717,7 +732,10 @@ export async function sendHazardAddedNotification(
   hazardId: string
 ) {
   const prefs = await getNotificationPreferences(userId);
-  if (!prefs.hazard_added_enabled) return;
+  if (!prefs.hazard_added_enabled) {
+    console.log("[Notifications] Skipped hazard_added for user", userId, "(preference disabled)");
+    return;
+  }
   await sendToUser(userId, organizationId, {
     title: "Hazard Added",
     body: "A new hazard was added to a job.",
@@ -741,7 +759,10 @@ export async function sendDeadlineNotification(
   jobTitle?: string
 ) {
   const prefs = await getNotificationPreferences(userId);
-  if (!prefs.deadline_enabled) return;
+  if (!prefs.deadline_enabled) {
+    console.log("[Notifications] Skipped deadline for user", userId, "(preference disabled)");
+    return;
+  }
   const h = Math.round(hoursRemaining);
   const text =
     h <= 0
@@ -771,7 +792,10 @@ export async function sendMentionNotification(
   contextLabel?: string
 ) {
   const prefs = await getNotificationPreferences(userId);
-  if (!prefs.mentions_enabled) return;
+  if (!prefs.mentions_enabled) {
+    console.log("[Notifications] Skipped mention for user", userId, "(preference disabled)");
+    return;
+  }
   await sendToUser(userId, organizationId, {
     title: "You were mentioned",
     body: contextLabel ?? "Someone mentioned you in a comment.",

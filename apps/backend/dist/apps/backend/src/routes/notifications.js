@@ -31,12 +31,17 @@ exports.notificationsRouter.post("/register", auth_1.authenticate, (0, limits_1.
                 code: "INVALID_TOKEN",
             });
         }
-        await (0, notifications_1.registerDeviceToken)({
+        const ok = await (0, notifications_1.registerDeviceToken)({
             userId: authReq.user.id,
             organizationId: authReq.user.organization_id,
             token,
             platform,
         });
+        if (!ok) {
+            return res
+                .status(500)
+                .json({ message: "Failed to register device token", code: "REGISTRATION_FAILED" });
+        }
         res.json({ status: "ok" });
     }
     catch (err) {
@@ -53,12 +58,58 @@ exports.notificationsRouter.delete("/register", auth_1.authenticate, (0, limits_
                 .status(400)
                 .json({ message: "Missing token", code: "INVALID_TOKEN" });
         }
-        await (0, notifications_1.unregisterDeviceToken)(token);
+        const deleted = await (0, notifications_1.unregisterDeviceToken)(token, authReq.user.id, authReq.user.organization_id);
+        if (!deleted) {
+            return res
+                .status(404)
+                .json({ message: "Device token not found or you do not have access to remove it", code: "TOKEN_NOT_FOUND" });
+        }
         res.json({ status: "ok" });
     }
     catch (err) {
         console.error("Device token unregister failed:", err);
         res.status(500).json({ message: "Failed to unregister device token" });
+    }
+});
+/** GET /api/notifications — list notifications for current user (paginated). Query: limit (default 50), offset (default 0), since (ISO date, e.g. last 30 days). */
+exports.notificationsRouter.get("/", auth_1.authenticate, async (req, res) => {
+    const authReq = req;
+    try {
+        const limit = req.query.limit != null ? parseInt(String(req.query.limit), 10) : 50;
+        const offset = req.query.offset != null ? parseInt(String(req.query.offset), 10) : 0;
+        const since = typeof req.query.since === "string" && req.query.since ? req.query.since : undefined;
+        const result = await (0, notifications_1.listNotifications)(authReq.user.id, authReq.user.organization_id, { limit, offset, since });
+        res.json(result);
+    }
+    catch (err) {
+        console.error("List notifications failed:", err);
+        res.status(500).json({ message: "Failed to list notifications" });
+    }
+});
+/** GET /api/notifications/unread-count — unread count for badge (e.g. after fetching notifications). */
+exports.notificationsRouter.get("/unread-count", auth_1.authenticate, async (req, res) => {
+    const authReq = req;
+    try {
+        const count = await (0, notifications_1.getUnreadNotificationCount)(authReq.user.id, authReq.user.organization_id);
+        res.json({ count });
+    }
+    catch (err) {
+        console.error("Get unread count failed:", err);
+        res.status(500).json({ message: "Failed to get unread count" });
+    }
+});
+/** PATCH /api/notifications/read — mark notifications as read (all for current user, or by id(s)). */
+exports.notificationsRouter.patch("/read", auth_1.authenticate, async (req, res) => {
+    const authReq = req;
+    try {
+        const body = (req.body || {});
+        const ids = Array.isArray(body.ids) ? body.ids : undefined;
+        await (0, notifications_1.markNotificationsAsRead)(authReq.user.id, authReq.user.organization_id, ids);
+        res.json({ status: "ok" });
+    }
+    catch (err) {
+        console.error("Mark notifications as read failed:", err);
+        res.status(500).json({ message: "Failed to mark notifications as read" });
     }
 });
 /** GET /api/notifications/preferences — get current user's notification preferences (defaults if no row). */
@@ -105,16 +156,73 @@ exports.notificationsRouter.patch("/preferences", auth_1.authenticate, async (re
         res.status(500).json({ message: "Failed to update preferences" });
     }
 });
-/** POST /api/notifications/evidence-uploaded — notify a user that evidence was uploaded to a job (e.g. job owner). */
+/** POST /api/notifications/evidence-uploaded — notify recipients (job owner/assignees) that evidence was uploaded. Accepts optional userId; when provided, sends to that user; otherwise sends to job owner. Enforces org/job scoping. */
 exports.notificationsRouter.post("/evidence-uploaded", auth_1.authenticate, async (req, res) => {
+    const authReq = req;
     try {
-        const { userId, jobId, photoId } = req.body || {};
-        if (!userId || !jobId || !photoId) {
+        const { jobId, photoId, userId: bodyUserId } = req.body || {};
+        if (!jobId || !photoId) {
             return res
                 .status(400)
-                .json({ message: "Missing userId, jobId, or photoId" });
+                .json({ message: "Missing jobId or photoId" });
         }
-        await (0, notifications_1.sendEvidenceUploadedNotification)(userId, jobId, photoId);
+        const organizationId = authReq.user.organization_id;
+        // Look up job constrained to caller's organization; if not found, return 403/404
+        const { data: job, error: jobError } = await supabaseClient_1.supabase
+            .from("jobs")
+            .select("id, organization_id, created_by")
+            .eq("id", jobId)
+            .eq("organization_id", organizationId)
+            .single();
+        if (jobError || !job) {
+            return res.status(404).json({ message: "Job not found" });
+        }
+        const targetUserId = bodyUserId ?? job.created_by;
+        if (!targetUserId) {
+            return res.status(400).json({
+                message: "Job has no owner to notify and userId not provided",
+                code: "NO_JOB_OWNER",
+            });
+        }
+        // Verify target user is in the same organization
+        const { data: targetUser, error: userError } = await supabaseClient_1.supabase
+            .from("users")
+            .select("id, organization_id")
+            .eq("id", targetUserId)
+            .single();
+        if (userError || !targetUser || targetUser.organization_id !== organizationId) {
+            return res.status(403).json({
+                message: "Target user is not in this organization",
+                code: "TARGET_USER_ORG_MISMATCH",
+            });
+        }
+        // Optionally ensure photoId belongs to this job/org (document or evidence)
+        const { data: doc } = await supabaseClient_1.supabase
+            .from("documents")
+            .select("id")
+            .eq("id", photoId)
+            .eq("job_id", jobId)
+            .eq("organization_id", organizationId)
+            .maybeSingle();
+        if (doc) {
+            // photoId is a document in this job — proceed
+        }
+        else {
+            const { data: ev } = await supabaseClient_1.supabase
+                .from("evidence")
+                .select("id")
+                .eq("id", photoId)
+                .eq("work_record_id", jobId)
+                .eq("organization_id", organizationId)
+                .maybeSingle();
+            if (!ev) {
+                return res.status(404).json({
+                    message: "Photo/evidence not found for this job",
+                    code: "PHOTO_NOT_FOUND",
+                });
+            }
+        }
+        await (0, notifications_1.sendEvidenceUploadedNotification)(targetUserId, organizationId, jobId, photoId);
         res.status(204).end();
     }
     catch (err) {

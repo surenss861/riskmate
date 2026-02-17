@@ -9,25 +9,49 @@ type DeviceTokenPayload = {
     token: string;
     platform?: string;
 };
-export declare function registerDeviceToken({ userId, organizationId, token, platform, }: DeviceTokenPayload): Promise<void>;
-export declare function unregisterDeviceToken(token: string): Promise<void>;
-/** Default notification preferences (all enabled). */
+/** Returns true if upsert succeeded, false on Supabase failure. Throws on invalid token. */
+export declare function registerDeviceToken({ userId, organizationId, token, platform, }: DeviceTokenPayload): Promise<boolean>;
+export declare function unregisterDeviceToken(token: string, userId: string, organizationId: string): Promise<boolean>;
+/** Default notification preferences. Master toggles on; weekly_summary off per spec; others on. */
 export declare const DEFAULT_NOTIFICATION_PREFERENCES: {
+    readonly push_enabled: true;
+    readonly email_enabled: true;
     readonly mentions_enabled: true;
     readonly job_assigned_enabled: true;
     readonly signature_request_enabled: true;
     readonly evidence_uploaded_enabled: true;
     readonly hazard_added_enabled: true;
     readonly deadline_enabled: true;
-    readonly weekly_summary_enabled: true;
+    readonly weekly_summary_enabled: false;
     readonly high_risk_job_enabled: true;
     readonly report_ready_enabled: true;
 };
 export type NotificationPreferences = typeof DEFAULT_NOTIFICATION_PREFERENCES;
 /** Fetch notification preferences for a user; returns defaults if no row exists. */
 export declare function getNotificationPreferences(userId: string): Promise<NotificationPreferences>;
-/** Fetch push tokens for a single user (for targeted notifications). */
-export declare function fetchUserTokens(userId: string): Promise<string[]>;
+/** Fetch push tokens for a single user in a given organization (for targeted notifications). */
+export declare function fetchUserTokens(userId: string, organizationId: string): Promise<string[]>;
+/** Get unread notification count for a user in an organization (for badge in push payloads). */
+export declare function getUnreadNotificationCount(userId: string, organizationId: string): Promise<number>;
+/** Create a notification record so unread count and badge stay in sync. Returns the new notification id for push payload (data.id). */
+export declare function createNotificationRecord(userId: string, organizationId: string, type: string, content: string, deepLink?: string | null): Promise<string | null>;
+/** List notifications for a user in an organization with pagination (newest first). Includes deepLink for navigation. */
+export declare function listNotifications(userId: string, organizationId: string, options?: {
+    limit?: number;
+    offset?: number;
+    since?: string;
+}): Promise<{
+    data: Array<{
+        id: string;
+        type: string;
+        content: string;
+        is_read: boolean;
+        created_at: string;
+        deepLink?: string | null;
+    }>;
+}>;
+/** Mark notifications as read: all for the user in the org, or by id(s). Updates is_read and updated_at. */
+export declare function markNotificationsAsRead(userId: string, organizationId: string, ids?: string[]): Promise<void>;
 export declare function notifyHighRiskJob(params: {
     organizationId: string;
     jobId: string;
@@ -44,16 +68,16 @@ export declare function notifyWeeklySummary(params: {
     message: string;
 }): Promise<void>;
 /** Notify user when they are assigned to a job. */
-export declare function sendJobAssignedNotification(userId: string, jobId: string, jobTitle?: string): Promise<void>;
+export declare function sendJobAssignedNotification(userId: string, organizationId: string, jobId: string, jobTitle?: string): Promise<void>;
 /** Notify user when their signature is requested on a report run. */
-export declare function sendSignatureRequestNotification(userId: string, reportRunId: string, jobTitle?: string): Promise<void>;
+export declare function sendSignatureRequestNotification(userId: string, organizationId: string, reportRunId: string, jobTitle?: string): Promise<void>;
 /** Notify user when evidence is uploaded to a job they care about. */
-export declare function sendEvidenceUploadedNotification(userId: string, jobId: string, photoId: string): Promise<void>;
+export declare function sendEvidenceUploadedNotification(userId: string, organizationId: string, jobId: string, photoId: string): Promise<void>;
 /** Notify user when a hazard is added to a job. */
-export declare function sendHazardAddedNotification(userId: string, jobId: string, hazardId: string): Promise<void>;
+export declare function sendHazardAddedNotification(userId: string, organizationId: string, jobId: string, hazardId: string): Promise<void>;
 /** Notify user about an approaching job deadline. */
-export declare function sendDeadlineNotification(userId: string, jobId: string, hoursRemaining: number, jobTitle?: string): Promise<void>;
+export declare function sendDeadlineNotification(userId: string, organizationId: string, jobId: string, hoursRemaining: number, jobTitle?: string): Promise<void>;
 /** Notify user when they are mentioned in a comment. */
-export declare function sendMentionNotification(userId: string, commentId: string, contextLabel?: string): Promise<void>;
+export declare function sendMentionNotification(userId: string, organizationId: string, commentId: string, contextLabel?: string): Promise<void>;
 export {};
 //# sourceMappingURL=notifications.d.ts.map

@@ -5,14 +5,28 @@ import SwiftUI
 struct NotificationCenterView: View {
     @Environment(\.dismiss) private var dismiss
 
-    @State private var items: [APIClient.NotificationItem] = []
+    @State private var items: [AppNotification] = []
+    @State private var unreadCount: Int = 0
     @State private var isLoading = true
     @State private var loadError: String?
     @State private var markingAllRead = false
+    @State private var typeFilter: NotificationType? = nil
 
     private let pageSize = 50
     @State private var hasMore = true
     @State private var loadingMore = false
+
+    private var filteredItems: [AppNotification] {
+        guard let typeFilter = typeFilter else { return items }
+        return items.filter { $0.type == typeFilter }
+    }
+
+    private var navigationTitle: String {
+        if unreadCount > 0 {
+            return "Notifications (\(unreadCount))"
+        }
+        return "Notifications"
+    }
 
     var body: some View {
         ZStack {
@@ -33,7 +47,7 @@ struct NotificationCenterView: View {
                     action: RMEmptyStateAction(title: "Retry", action: { Task { await load(offset: 0) } })
                 )
                 .padding(RMTheme.Spacing.pagePadding)
-            } else if items.isEmpty {
+            } else if filteredItems.isEmpty {
                 RMEmptyState(
                     icon: "bell.badge.fill",
                     title: "Notifications",
@@ -43,16 +57,47 @@ struct NotificationCenterView: View {
                 .padding(RMTheme.Spacing.pagePadding)
             } else {
                 VStack(spacing: 0) {
-                    if items.contains(where: { !$0.is_read }) {
+                    if filteredItems.contains(where: { !$0.isRead }) {
                         markAllReadButton
                     }
                     listContent
                 }
             }
         }
-        .rmNavigationBar(title: "Notifications")
+        .rmNavigationBar(title: navigationTitle)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                typeFilterMenu
+            }
+        }
         .task {
             await load(offset: 0)
+            await refreshUnreadCount()
+        }
+        .refreshable {
+            await load(offset: 0)
+            await refreshUnreadCount()
+        }
+    }
+
+    private var typeFilterMenu: some View {
+        Menu {
+            Button {
+                typeFilter = nil
+            } label: {
+                Label("All types", systemImage: typeFilter == nil ? "checkmark.circle.fill" : "circle")
+            }
+            ForEach(NotificationType.allCases) { type in
+                Button {
+                    typeFilter = type
+                } label: {
+                    Label(type.displayName, systemImage: typeFilter == type ? "checkmark.circle.fill" : "circle")
+                }
+            }
+        } label: {
+            Image(systemName: "line.3.horizontal.decrease.circle")
+                .font(.body)
+                .foregroundColor(RMTheme.Colors.accent)
         }
     }
 
@@ -81,13 +126,13 @@ struct NotificationCenterView: View {
     private var listContent: some View {
         ScrollView {
             LazyVStack(spacing: 0) {
-                ForEach(items, id: \.id) { item in
+                ForEach(filteredItems, id: \.id) { item in
                     NotificationRow(
                         item: item,
                         onTap: { Task { await handleRowTap(item) } }
                     )
                 }
-                if hasMore && !items.isEmpty {
+                if hasMore && !items.isEmpty && typeFilter == nil {
                     ProgressView()
                         .padding()
                         .onAppear {
@@ -109,12 +154,14 @@ struct NotificationCenterView: View {
             }
         }
         do {
-            let list = try await APIClient.shared.getNotifications(limit: pageSize, offset: offset)
+            let since = Self.since30DaysISO
+            let list = try await APIClient.shared.getNotifications(limit: pageSize, offset: offset, since: since)
+            let mapped = list.map { AppNotification(from: $0) }
             await MainActor.run {
                 if offset == 0 {
-                    items = list
+                    items = mapped
                 } else {
-                    items.append(contentsOf: list)
+                    items.append(contentsOf: mapped)
                 }
                 hasMore = list.count >= pageSize
             }
@@ -127,6 +174,24 @@ struct NotificationCenterView: View {
         }
     }
 
+    private static var since30DaysISO: String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        guard let date = Calendar.current.date(byAdding: .day, value: -30, to: Date()) else {
+            return formatter.string(from: Date())
+        }
+        return formatter.string(from: date)
+    }
+
+    private func refreshUnreadCount() async {
+        do {
+            let count = try await APIClient.shared.getUnreadNotificationCount()
+            await MainActor.run { unreadCount = count }
+        } catch {
+            // Non-fatal
+        }
+    }
+
     private func loadMore() async {
         guard !loadingMore, hasMore else { return }
         loadingMore = true
@@ -135,7 +200,7 @@ struct NotificationCenterView: View {
     }
 
     /// On row tap: navigate via deep link if present, then mark this notification read and refresh badge.
-    private func handleRowTap(_ item: APIClient.NotificationItem) async {
+    private func handleRowTap(_ item: AppNotification) async {
         if let link = item.deepLink, !link.isEmpty, let url = URL(string: link) {
             await MainActor.run {
                 DeepLinkRouter.shared.handle(url)
@@ -154,13 +219,14 @@ struct NotificationCenterView: View {
             let idSet = Set(ids)
             items = items.map {
                 if idSet.contains($0.id) {
-                    APIClient.NotificationItem(
+                    AppNotification(
                         id: $0.id,
                         type: $0.type,
-                        content: $0.content,
-                        is_read: true,
-                        created_at: $0.created_at,
-                        deepLink: $0.deepLink
+                        title: $0.title,
+                        body: $0.body,
+                        deepLink: $0.deepLink,
+                        isRead: true,
+                        createdAt: $0.createdAt
                     )
                 } else {
                     $0
@@ -171,6 +237,7 @@ struct NotificationCenterView: View {
             let count = try await APIClient.shared.getUnreadNotificationCount()
             await MainActor.run {
                 NotificationService.shared.setBadgeCount(count)
+                unreadCount = count
             }
         } catch {
             // Non-fatal
@@ -187,13 +254,14 @@ struct NotificationCenterView: View {
         }
         await MainActor.run {
             items = items.map {
-                APIClient.NotificationItem(
+                AppNotification(
                     id: $0.id,
                     type: $0.type,
-                    content: $0.content,
-                    is_read: true,
-                    created_at: $0.created_at,
-                    deepLink: $0.deepLink
+                    title: $0.title,
+                    body: $0.body,
+                    deepLink: $0.deepLink,
+                    isRead: true,
+                    createdAt: $0.createdAt
                 )
             }
         }
@@ -201,6 +269,7 @@ struct NotificationCenterView: View {
             let count = try await APIClient.shared.getUnreadNotificationCount()
             await MainActor.run {
                 NotificationService.shared.setBadgeCount(count)
+                unreadCount = count
             }
         } catch {
             // Non-fatal
@@ -211,7 +280,7 @@ struct NotificationCenterView: View {
 // MARK: - Row
 
 private struct NotificationRow: View {
-    let item: APIClient.NotificationItem
+    let item: AppNotification
     let onTap: () async -> Void
 
     var body: some View {
@@ -219,18 +288,23 @@ private struct NotificationRow: View {
             Task { await onTap() }
         } label: {
             HStack(alignment: .top, spacing: RMTheme.Spacing.md) {
-                if !item.is_read {
+                if !item.isRead {
                     Circle()
                         .fill(RMTheme.Colors.accent)
                         .frame(width: 8, height: 8)
                         .padding(.top, 6)
                 }
                 VStack(alignment: .leading, spacing: RMTheme.Spacing.xs) {
-                    Text(item.content)
+                    if !item.title.isEmpty {
+                        Text(item.title)
+                            .font(RMTheme.Typography.bodyBold)
+                            .foregroundColor(RMTheme.Colors.textPrimary)
+                    }
+                    Text(item.body)
                         .font(RMTheme.Typography.body)
                         .foregroundColor(RMTheme.Colors.textPrimary)
                         .multilineTextAlignment(.leading)
-                    Text(formatDate(item.created_at))
+                    Text(formatDate(item.createdAt))
                         .font(RMTheme.Typography.caption)
                         .foregroundColor(RMTheme.Colors.textTertiary)
                 }
@@ -238,18 +312,12 @@ private struct NotificationRow: View {
                 Spacer(minLength: 0)
             }
             .padding(RMTheme.Spacing.md)
-            .background(item.is_read ? Color.clear : RMTheme.Colors.surface.opacity(0.5))
+            .background(item.isRead ? Color.clear : RMTheme.Colors.surface.opacity(0.5))
         }
         .buttonStyle(.plain)
     }
 
-    private func formatDate(_ iso: String) -> String {
-        let withFractional = ISO8601DateFormatter()
-        withFractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let withoutFractional = ISO8601DateFormatter()
-        withoutFractional.formatOptions = [.withInternetDateTime]
-        let date = withFractional.date(from: iso) ?? withoutFractional.date(from: iso)
-        guard let date = date else { return iso }
+    private func formatDate(_ date: Date) -> String {
         let f = RelativeDateTimeFormatter()
         f.unitsStyle = .abbreviated
         return f.localizedString(for: date, relativeTo: Date())

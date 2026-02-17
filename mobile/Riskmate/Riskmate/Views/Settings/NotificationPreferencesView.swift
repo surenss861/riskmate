@@ -51,17 +51,38 @@ struct NotificationPreferencesView: View {
                     }
 
                     Section {
-                        preferenceToggle(\.mentions_enabled, title: "Mentions", icon: "at")
                         preferenceToggle(\.job_assigned_enabled, title: "Job assigned", icon: "person.badge.plus")
-                        preferenceToggle(\.signature_request_enabled, title: "Signature requests", icon: "signature")
                         preferenceToggle(\.evidence_uploaded_enabled, title: "Evidence uploaded", icon: "photo.on.rectangle.angled")
-                        preferenceToggle(\.hazard_added_enabled, title: "Hazard added", icon: "exclamationmark.triangle")
-                        preferenceToggle(\.deadline_enabled, title: "Deadlines", icon: "clock")
-                        preferenceToggle(\.weekly_summary_enabled, title: "Weekly summary", icon: "chart.bar.doc.horizontal")
-                        preferenceToggle(\.high_risk_job_enabled, title: "High-risk jobs", icon: "flame")
+                        preferenceToggle(\.deadline_enabled, title: "Deadline approaching", icon: "clock")
                         preferenceToggle(\.report_ready_enabled, title: "Report ready", icon: "doc.richtext")
                     } header: {
-                        Text("By type")
+                        Text("Job updates")
+                            .font(RMTheme.Typography.caption)
+                            .foregroundColor(RMTheme.Colors.textTertiary)
+                    }
+
+                    Section {
+                        preferenceToggle(\.hazard_added_enabled, title: "Hazard added", icon: "exclamationmark.triangle")
+                        preferenceToggle(\.high_risk_job_enabled, title: "High-risk jobs", icon: "flame")
+                    } header: {
+                        Text("Safety alerts")
+                            .font(RMTheme.Typography.caption)
+                            .foregroundColor(RMTheme.Colors.textTertiary)
+                    }
+
+                    Section {
+                        preferenceToggle(\.mentions_enabled, title: "Mentions", icon: "at")
+                        preferenceToggle(\.signature_request_enabled, title: "Signature requested", icon: "signature")
+                    } header: {
+                        Text("Collaboration")
+                            .font(RMTheme.Typography.caption)
+                            .foregroundColor(RMTheme.Colors.textTertiary)
+                    }
+
+                    Section {
+                        preferenceToggle(\.weekly_summary_enabled, title: "Weekly summary", icon: "chart.bar.doc.horizontal")
+                    } header: {
+                        Text("Summaries")
                             .font(RMTheme.Typography.caption)
                             .foregroundColor(RMTheme.Colors.textTertiary)
                     }

@@ -451,7 +451,7 @@ exports.evidenceRouter.post('/jobs/:id/evidence/upload', auth_1.authenticate, ra
                 .single();
             const jobOwnerId = jobRow?.created_by;
             if (jobOwnerId && jobOwnerId !== userId) {
-                await (0, notifications_1.sendEvidenceUploadedNotification)(jobOwnerId, jobId, insertedEvidence.id);
+                await (0, notifications_1.sendEvidenceUploadedNotification)(jobOwnerId, organization_id, jobId, insertedEvidence.id);
             }
         }
         catch (notifyErr) {

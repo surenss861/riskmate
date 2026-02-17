@@ -98,7 +98,7 @@ notificationsRouter.delete(
   }
 );
 
-/** GET /api/notifications — list notifications for current user (paginated). Query: limit (default 50), offset (default 0). */
+/** GET /api/notifications — list notifications for current user (paginated). Query: limit (default 50), offset (default 0), since (ISO date, e.g. last 30 days). */
 notificationsRouter.get(
   "/",
   authenticate as unknown as express.RequestHandler,
@@ -107,7 +107,8 @@ notificationsRouter.get(
     try {
       const limit = req.query.limit != null ? parseInt(String(req.query.limit), 10) : 50;
       const offset = req.query.offset != null ? parseInt(String(req.query.offset), 10) : 0;
-      const result = await listNotifications(authReq.user.id, authReq.user.organization_id, { limit, offset });
+      const since = typeof req.query.since === "string" && req.query.since ? req.query.since : undefined;
+      const result = await listNotifications(authReq.user.id, authReq.user.organization_id, { limit, offset, since });
       res.json(result);
     } catch (err: any) {
       console.error("List notifications failed:", err);

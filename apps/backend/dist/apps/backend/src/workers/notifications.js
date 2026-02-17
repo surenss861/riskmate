@@ -35,11 +35,15 @@ async function buildSummaryMessage(organizationId) {
         .select("id, client_name, risk_score, created_at")
         .eq("organization_id", organizationId)
         .gte("created_at", oneWeekAgo.toISOString());
+    const jobIds = (jobs || []).map((job) => job.id);
+    if (jobIds.length === 0) {
+        return "Last week: 0 work records logged, 0 flagged high-risk, controls completion 0%.";
+    }
     const { data: controls } = await supabaseClient_1.supabase
         .from("mitigation_items") // Table name unchanged (database schema)
         .select("id, done")
         .gte("created_at", oneWeekAgo.toISOString())
-        .in("job_id", (jobs || []).map((job) => job.id));
+        .in("job_id", jobIds);
     const totalJobs = jobs?.length ?? 0;
     const highRiskJobs = jobs?.filter((job) => (job.risk_score ?? 0) >= 75).length ?? 0;
     const totalControls = controls?.length ?? 0;
@@ -53,7 +57,7 @@ async function runDeadlineCheck() {
     const in24h = new Date(now.getTime() + 24 * 60 * 60 * 1000);
     const { data: jobs, error } = await supabaseClient_1.supabase
         .from("jobs")
-        .select("id, client_name, due_date, created_by")
+        .select("id, client_name, due_date, created_by, organization_id")
         .not("due_date", "is", null)
         .gte("due_date", now.toISOString())
         .lte("due_date", in24h.toISOString());
@@ -66,11 +70,12 @@ async function runDeadlineCheck() {
     for (const job of jobs) {
         const due = job.due_date ? new Date(job.due_date) : null;
         const createdBy = job.created_by;
-        if (!due || !createdBy)
+        const organizationId = job.organization_id;
+        if (!due || !createdBy || !organizationId)
             continue;
         const hoursRemaining = (due.getTime() - now.getTime()) / (60 * 60 * 1000);
         try {
-            await (0, notifications_1.sendDeadlineNotification)(createdBy, job.id, hoursRemaining, job.client_name ?? undefined);
+            await (0, notifications_1.sendDeadlineNotification)(createdBy, organizationId, job.id, hoursRemaining, job.client_name ?? undefined);
         }
         catch (err) {
             console.error(`Deadline notification failed for job ${job.id}:`, err);

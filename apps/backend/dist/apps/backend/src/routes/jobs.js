@@ -699,6 +699,41 @@ exports.jobsRouter.get("/", auth_1.authenticate, async (req, res) => {
         res.status(500).json(errorResponse);
     }
 });
+// GET /api/jobs/by-signoff/:signoffId
+// Returns job_id for a sign-off (for deep link resolution: riskmate://comments/:signoffId).
+// Must be before /:id routes so "by-signoff" is not captured as job id.
+exports.jobsRouter.get("/by-signoff/:signoffId", auth_1.authenticate, async (req, res) => {
+    const authReq = req;
+    const requestId = authReq.requestId || "unknown";
+    try {
+        const { organization_id } = authReq.user;
+        const { signoffId } = req.params;
+        const { data, error } = await supabaseClient_1.supabase
+            .from("job_signoffs")
+            .select("job_id")
+            .eq("id", signoffId)
+            .eq("organization_id", organization_id)
+            .maybeSingle();
+        if (error)
+            throw error;
+        if (!data) {
+            return res.status(404).json({ message: "Sign-off not found" });
+        }
+        res.json({ data: { job_id: data.job_id } });
+    }
+    catch (err) {
+        console.error("Sign-off lookup failed:", err);
+        const { response: errorResponse, errorId } = (0, errorResponse_1.createErrorResponse)({
+            message: "Failed to lookup sign-off",
+            internalMessage: err?.message || String(err),
+            code: "SIGNOFF_LOOKUP_FAILED",
+            requestId,
+            statusCode: 500,
+        });
+        res.setHeader("X-Error-ID", errorId);
+        res.status(500).json(errorResponse);
+    }
+});
 // GET /api/jobs/:id/hazards
 // Returns all hazards (mitigation items) for a job
 // NOTE: Must be before /:id route to match correctly
@@ -812,7 +847,7 @@ exports.jobsRouter.post("/:id/hazards", auth_1.authenticate, requireWriteAccess_
             metadata: { job_id: jobId, sync_direct: true },
             ...clientMetadata,
         });
-        // Notify job owner (if different from creator)
+        // Notify job owner and assignees (excluding creator)
         try {
             const { data: jobRow } = await supabaseClient_1.supabase
                 .from("jobs")
@@ -821,8 +856,16 @@ exports.jobsRouter.post("/:id/hazards", auth_1.authenticate, requireWriteAccess_
                 .eq("organization_id", organization_id)
                 .single();
             const jobOwnerId = jobRow?.created_by;
-            if (jobOwnerId && jobOwnerId !== userId) {
-                await (0, notifications_1.sendHazardAddedNotification)(jobOwnerId, jobId, inserted.id);
+            const { data: assignments } = await supabaseClient_1.supabase
+                .from("job_assignments")
+                .select("user_id")
+                .eq("job_id", jobId);
+            const assigneeIds = (assignments ?? [])
+                .map((a) => a.user_id)
+                .filter((id) => id != null);
+            const recipientIds = Array.from(new Set([jobOwnerId, ...assigneeIds].filter((id) => id != null && id !== userId)));
+            for (const recipientId of recipientIds) {
+                await (0, notifications_1.sendHazardAddedNotification)(recipientId, organization_id, jobId, inserted.id);
             }
         }
         catch (notifyErr) {
@@ -1279,7 +1322,7 @@ exports.jobsRouter.post("/:id/assign", auth_1.authenticate, requireWriteAccess_1
             throw insertError;
         }
         try {
-            await (0, notifications_1.sendJobAssignedNotification)(assigneeId, jobId, job.client_name ?? undefined);
+            await (0, notifications_1.sendJobAssignedNotification)(assigneeId, job.organization_id, jobId, job.client_name ?? undefined);
         }
         catch (notifyErr) {
             console.warn("[Jobs] Job assigned notification failed:", notifyErr);
@@ -1752,6 +1795,22 @@ exports.jobsRouter.post("/:id/documents", auth_1.authenticate, requireWriteAcces
                 await supabaseClient_1.supabase.from("documents").delete().eq("id", inserted.id);
                 return res.status(500).json({ message: "Failed to save photo category" });
             }
+        }
+        // Notify job owner when uploader is not the owner (evidence upload notification)
+        try {
+            const { data: jobRow } = await supabaseClient_1.supabase
+                .from("jobs")
+                .select("created_by")
+                .eq("id", jobId)
+                .eq("organization_id", organization_id)
+                .single();
+            const ownerId = jobRow?.created_by;
+            if (ownerId && ownerId !== userId) {
+                await (0, notifications_1.sendEvidenceUploadedNotification)(ownerId, organization_id, jobId, inserted.id);
+            }
+        }
+        catch (notifyErr) {
+            console.warn("Evidence upload notification failed:", notifyErr?.message ?? notifyErr);
         }
         const storageBucket = inserted.file_path?.startsWith("evidence/") ? "evidence" : "documents";
         const { data: signed } = await supabaseClient_1.supabase.storage
@@ -2594,21 +2653,32 @@ exports.jobsRouter.post("/:id/signoffs", auth_1.authenticate, requireWriteAccess
                 signer_role: signerRole,
             },
         });
-        // Trigger mention notifications when comments contain @mentions
+        // After successful DB commit: trigger mention notifications when comments contain @mentions
+        // (mentioned user id, signoff/comment id, org scoping, deep link riskmate://comments/{commentId})
         if (comments && typeof comments === "string" && comments.trim().length > 0) {
             const mentionMatches = [...comments.matchAll(/@(\S+)/g)];
             const handles = [...new Set(mentionMatches.map((m) => m[1].trim().toLowerCase()))];
             if (handles.length > 0) {
+                // Resolve org users: try organization_members first; fallback to users.organization_id (single-org)
+                let orgUserIds = [];
                 const { data: memberRows } = await supabaseClient_1.supabase
                     .from("organization_members")
                     .select("user_id")
                     .eq("organization_id", organization_id);
-                const userIds = (memberRows || []).map((r) => r.user_id).filter((id) => id !== userId);
-                if (userIds.length > 0) {
+                orgUserIds = (memberRows || []).map((r) => r.user_id).filter((id) => id !== userId);
+                if (orgUserIds.length === 0) {
+                    const { data: usersInOrg } = await supabaseClient_1.supabase
+                        .from("users")
+                        .select("id")
+                        .eq("organization_id", organization_id)
+                        .neq("id", userId);
+                    orgUserIds = (usersInOrg || []).map((r) => r.id);
+                }
+                if (orgUserIds.length > 0) {
                     const { data: usersData } = await supabaseClient_1.supabase
                         .from("users")
                         .select("id, email, full_name")
-                        .in("id", userIds);
+                        .in("id", orgUserIds);
                     const resolved = new Set();
                     for (const u of usersData || []) {
                         const email = (u.email || "").toLowerCase();
@@ -2619,7 +2689,7 @@ exports.jobsRouter.post("/:id/signoffs", auth_1.authenticate, requireWriteAccess
                     }
                     const signoffContext = "Mentioned in a sign-off comment.";
                     for (const mentionedUserId of resolved) {
-                        (0, notifications_1.sendMentionNotification)(mentionedUserId, data.id, signoffContext).catch((err) => console.error("Mention notification failed:", err));
+                        (0, notifications_1.sendMentionNotification)(mentionedUserId, organization_id, data.id, signoffContext).catch((err) => console.error("Mention notification failed:", err));
                     }
                 }
             }

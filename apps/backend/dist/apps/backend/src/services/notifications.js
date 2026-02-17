@@ -9,6 +9,10 @@ exports.registerDeviceToken = registerDeviceToken;
 exports.unregisterDeviceToken = unregisterDeviceToken;
 exports.getNotificationPreferences = getNotificationPreferences;
 exports.fetchUserTokens = fetchUserTokens;
+exports.getUnreadNotificationCount = getUnreadNotificationCount;
+exports.createNotificationRecord = createNotificationRecord;
+exports.listNotifications = listNotifications;
+exports.markNotificationsAsRead = markNotificationsAsRead;
 exports.notifyHighRiskJob = notifyHighRiskJob;
 exports.notifyReportReady = notifyReportReady;
 exports.notifyWeeklySummary = notifyWeeklySummary;
@@ -18,6 +22,7 @@ exports.sendEvidenceUploadedNotification = sendEvidenceUploadedNotification;
 exports.sendHazardAddedNotification = sendHazardAddedNotification;
 exports.sendDeadlineNotification = sendDeadlineNotification;
 exports.sendMentionNotification = sendMentionNotification;
+const fs_1 = __importDefault(require("fs"));
 const apn_1 = __importDefault(require("apn"));
 const supabaseClient_1 = require("../lib/supabaseClient");
 const EXPO_PUSH_ENDPOINT = "https://exp.host/--/api/v2/push/send";
@@ -44,9 +49,10 @@ function validatePushToken(token) {
         return { valid: true, type: "apns" };
     return { valid: false, type: "invalid" };
 }
+/** Returns true if upsert succeeded, false on Supabase failure. Throws on invalid token. */
 async function registerDeviceToken({ userId, organizationId, token, platform, }) {
     if (!token)
-        return;
+        return false;
     const { valid } = validatePushToken(token);
     if (!valid) {
         throw new Error("INVALID_TOKEN");
@@ -59,19 +65,26 @@ async function registerDeviceToken({ userId, organizationId, token, platform, })
         token,
         platform: platform ?? null,
         last_seen: new Date().toISOString(),
-    }, { onConflict: "token" });
+    }, { onConflict: "token,user_id,organization_id" });
     if (error) {
         console.error("Device token upsert failed:", error);
+        return false;
     }
+    return true;
 }
-async function unregisterDeviceToken(token) {
-    const { error } = await supabaseClient_1.supabase
+async function unregisterDeviceToken(token, userId, organizationId) {
+    const { data, error } = await supabaseClient_1.supabase
         .from("device_tokens")
         .delete()
-        .eq("token", token);
+        .eq("token", token)
+        .eq("user_id", userId)
+        .eq("organization_id", organizationId)
+        .select("id");
     if (error) {
         console.error("Device token delete failed:", error);
+        return false;
     }
+    return (data?.length ?? 0) > 0;
 }
 async function fetchOrgTokens(organizationId) {
     const { data, error } = await supabaseClient_1.supabase
@@ -84,8 +97,8 @@ async function fetchOrgTokens(organizationId) {
     }
     return (data || []).map((row) => row.token);
 }
-/** Fetch org device tokens only for users who have the given preference enabled. */
-async function fetchOrgTokensWithPreference(organizationId, prefKey) {
+/** Fetch org user IDs who have the given preference enabled, push_enabled on, and at least one device token. */
+async function fetchOrgUserIdsWithPreference(organizationId, prefKey) {
     const { data: tokensData, error: tokensError } = await supabaseClient_1.supabase
         .from("device_tokens")
         .select("token, user_id")
@@ -95,22 +108,41 @@ async function fetchOrgTokensWithPreference(organizationId, prefKey) {
     const userIds = [...new Set(tokensData.map((r) => r.user_id))];
     const { data: prefsData } = await supabaseClient_1.supabase
         .from("notification_preferences")
-        .select("user_id, " + prefKey)
+        .select("user_id, push_enabled, " + prefKey)
         .in("user_id", userIds);
-    const prefsByUser = new Map((prefsData || []).map((r) => [r.user_id, r[prefKey] !== false]));
-    return tokensData
-        .filter((r) => prefsByUser.get(r.user_id) !== false)
-        .map((r) => r.token);
+    const prefsByUser = new Map((prefsData || []).map((r) => {
+        const push_enabled = r.push_enabled ?? true;
+        const prefValue = prefKey === "weekly_summary_enabled"
+            ? (r[prefKey] ?? false)
+            : (r[prefKey] ?? true);
+        return [r.user_id, { push_enabled, prefValue }];
+    }));
+    return [
+        ...new Set(tokensData
+            .filter((r) => {
+            const effective = prefsByUser.get(r.user_id);
+            const push_enabled = effective
+                ? effective.push_enabled
+                : exports.DEFAULT_NOTIFICATION_PREFERENCES.push_enabled;
+            const prefEnabled = effective
+                ? effective.prefValue
+                : exports.DEFAULT_NOTIFICATION_PREFERENCES[prefKey];
+            return push_enabled && prefEnabled;
+        })
+            .map((r) => r.user_id)),
+    ];
 }
-/** Default notification preferences (all enabled). */
+/** Default notification preferences. Master toggles on; weekly_summary off per spec; others on. */
 exports.DEFAULT_NOTIFICATION_PREFERENCES = {
+    push_enabled: true,
+    email_enabled: true,
     mentions_enabled: true,
     job_assigned_enabled: true,
     signature_request_enabled: true,
     evidence_uploaded_enabled: true,
     hazard_added_enabled: true,
     deadline_enabled: true,
-    weekly_summary_enabled: true,
+    weekly_summary_enabled: false,
     high_risk_job_enabled: true,
     report_ready_enabled: true,
 };
@@ -128,28 +160,111 @@ async function getNotificationPreferences(userId) {
     if (!data)
         return { ...exports.DEFAULT_NOTIFICATION_PREFERENCES };
     return {
+        push_enabled: data.push_enabled ?? true,
+        email_enabled: data.email_enabled ?? true,
         mentions_enabled: data.mentions_enabled ?? true,
         job_assigned_enabled: data.job_assigned_enabled ?? true,
         signature_request_enabled: data.signature_request_enabled ?? true,
         evidence_uploaded_enabled: data.evidence_uploaded_enabled ?? true,
         hazard_added_enabled: data.hazard_added_enabled ?? true,
         deadline_enabled: data.deadline_enabled ?? true,
-        weekly_summary_enabled: data.weekly_summary_enabled ?? true,
+        weekly_summary_enabled: data.weekly_summary_enabled ?? false,
         high_risk_job_enabled: data.high_risk_job_enabled ?? true,
         report_ready_enabled: data.report_ready_enabled ?? true,
     };
 }
-/** Fetch push tokens for a single user (for targeted notifications). */
-async function fetchUserTokens(userId) {
+/** Fetch push tokens for a single user in a given organization (for targeted notifications). */
+async function fetchUserTokens(userId, organizationId) {
     const { data, error } = await supabaseClient_1.supabase
         .from("device_tokens")
         .select("token")
-        .eq("user_id", userId);
+        .eq("user_id", userId)
+        .eq("organization_id", organizationId);
     if (error) {
         console.error("Failed to load user device tokens:", error);
         return [];
     }
     return (data || []).map((row) => row.token);
+}
+/** Get unread notification count for a user in an organization (for badge in push payloads). */
+async function getUnreadNotificationCount(userId, organizationId) {
+    const { count, error } = await supabaseClient_1.supabase
+        .from("notifications")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", userId)
+        .eq("organization_id", organizationId)
+        .eq("is_read", false);
+    if (error) {
+        console.error("Failed to get unread notification count:", error);
+        return 0;
+    }
+    return typeof count === "number" ? count : 0;
+}
+/** Create a notification record so unread count and badge stay in sync. Returns the new notification id for push payload (data.id). */
+async function createNotificationRecord(userId, organizationId, type, content, deepLink) {
+    const { data: inserted, error } = await supabaseClient_1.supabase
+        .from("notifications")
+        .insert({
+        user_id: userId,
+        organization_id: organizationId,
+        type,
+        content,
+        is_read: false,
+        ...(deepLink != null && deepLink !== "" && { deep_link: deepLink }),
+    })
+        .select("id")
+        .single();
+    if (error) {
+        console.error("Failed to create notification record:", error);
+        return null;
+    }
+    return inserted?.id ?? null;
+}
+/** List notifications for a user in an organization with pagination (newest first). Includes deepLink for navigation. */
+async function listNotifications(userId, organizationId, options = {}) {
+    const limit = Math.min(Math.max(options.limit ?? 50, 1), 100);
+    const offset = Math.max(options.offset ?? 0, 0);
+    let query = supabaseClient_1.supabase
+        .from("notifications")
+        .select("id, type, content, is_read, created_at, deep_link")
+        .eq("user_id", userId)
+        .eq("organization_id", organizationId);
+    if (options.since) {
+        query = query.gte("created_at", options.since);
+    }
+    const { data, error } = await query
+        .order("created_at", { ascending: false })
+        .range(offset, offset + limit - 1);
+    if (error) {
+        console.error("Failed to list notifications:", error);
+        return { data: [] };
+    }
+    return {
+        data: (data || []).map((row) => ({
+            id: row.id,
+            type: row.type,
+            content: row.content,
+            is_read: !!row.is_read,
+            created_at: row.created_at,
+            deepLink: row.deep_link ?? null,
+        })),
+    };
+}
+/** Mark notifications as read: all for the user in the org, or by id(s). Updates is_read and updated_at. */
+async function markNotificationsAsRead(userId, organizationId, ids) {
+    const query = supabaseClient_1.supabase
+        .from("notifications")
+        .update({ is_read: true, updated_at: new Date().toISOString() })
+        .eq("user_id", userId)
+        .eq("organization_id", organizationId)
+        .eq("is_read", false);
+    if (ids?.length) {
+        query.in("id", ids);
+    }
+    const { error } = await query;
+    if (error) {
+        console.error("Failed to mark notifications as read:", error);
+    }
 }
 let apnProvider = null;
 function getAPnProvider() {
@@ -162,9 +277,14 @@ function getAPnProvider() {
         return null;
     }
     try {
+        if (!fs_1.default.existsSync(keyPath)) {
+            console.error("[Notifications] APNs key file not found:", keyPath);
+            return null;
+        }
+        const keyContents = fs_1.default.readFileSync(keyPath, "utf8");
         apnProvider = new apn_1.default.Provider({
             token: {
-                key: keyPath,
+                key: keyContents,
                 keyId,
                 teamId,
             },
@@ -194,6 +314,18 @@ async function sendAPNs(tokens, payload) {
             notification.alert = { title: payload.title, body: payload.body };
             notification.sound = "default";
             notification.topic = bundleId;
+            if (typeof payload.badge === "number") {
+                notification.badge = payload.badge;
+            }
+            if (payload.priority === "high") {
+                notification.priority = 10;
+            }
+            else if (payload.priority === "default") {
+                notification.priority = 5;
+            }
+            if (payload.categoryId) {
+                notification.aps = { ...(notification.aps || {}), category: payload.categoryId };
+            }
             if (payload.data) {
                 notification.payload = payload.data;
             }
@@ -220,7 +352,9 @@ async function sendExpoPush(tokens, message) {
                 body: JSON.stringify(chunk.map((token) => ({
                     to: token,
                     sound: "default",
-                    channelId: "riskmate-alerts",
+                    channelId: message.channelId ?? "riskmate-alerts",
+                    ...(typeof message.badge === "number" && { badge: message.badge }),
+                    ...(message.categoryId && { categoryId: message.categoryId }),
                     ...message,
                 }))),
             });
@@ -252,7 +386,9 @@ async function sendPush(tokens, payload) {
             title: payload.title,
             body: payload.body,
             sound: payload.sound ?? "default",
-            channelId: payload.channelId ?? "riskmate-alerts",
+            channelId: payload.channelId ?? payload.categoryId ?? "riskmate-alerts",
+            categoryId: payload.categoryId,
+            ...(typeof payload.badge === "number" && { badge: payload.badge }),
             data: payload.data,
         });
     }
@@ -261,6 +397,9 @@ async function sendPush(tokens, payload) {
             title: payload.title,
             body: payload.body,
             data: payload.data,
+            ...(typeof payload.badge === "number" && { badge: payload.badge }),
+            ...(payload.priority && { priority: payload.priority }),
+            ...(payload.categoryId && { categoryId: payload.categoryId }),
         });
     }
 }
@@ -274,56 +413,92 @@ const chunkArray = (arr, size) => {
 async function notifyHighRiskJob(params) {
     if (params.riskScore < 75)
         return;
-    const tokens = await fetchOrgTokensWithPreference(params.organizationId, "high_risk_job_enabled");
-    await sendPush(tokens, {
+    const userIds = await fetchOrgUserIdsWithPreference(params.organizationId, "high_risk_job_enabled");
+    const payload = {
         title: "⚠️ High-risk job detected",
         body: `${params.clientName} scored ${params.riskScore}. Review mitigation plan now.`,
         data: {
             type: "high_risk_job",
             jobId: params.jobId,
+            deepLink: `riskmate://jobs/${params.jobId}`,
         },
-    });
+        priority: "default",
+    };
+    for (const userId of userIds) {
+        await sendToUser(userId, params.organizationId, payload);
+    }
 }
 async function notifyReportReady(params) {
-    const tokens = await fetchOrgTokensWithPreference(params.organizationId, "report_ready_enabled");
-    await sendPush(tokens, {
+    const userIds = await fetchOrgUserIdsWithPreference(params.organizationId, "report_ready_enabled");
+    const payload = {
         title: "📄 Risk report ready",
         body: "Your Riskmate PDF report is ready to view.",
         data: {
             type: "report_ready",
             jobId: params.jobId,
             pdfUrl: params.pdfUrl,
+            deepLink: `riskmate://jobs/${params.jobId}`,
         },
-    });
+        priority: "default",
+    };
+    for (const userId of userIds) {
+        await sendToUser(userId, params.organizationId, payload);
+    }
 }
 async function notifyWeeklySummary(params) {
-    const tokens = await fetchOrgTokensWithPreference(params.organizationId, "weekly_summary_enabled");
-    await sendPush(tokens, {
+    const userIds = await fetchOrgUserIdsWithPreference(params.organizationId, "weekly_summary_enabled");
+    const payload = {
         title: "📈 Weekly compliance summary",
         body: params.message,
         data: {
             type: "weekly_summary",
         },
-    });
+        priority: "default",
+    };
+    for (const userId of userIds) {
+        await sendToUser(userId, params.organizationId, payload);
+    }
 }
-async function sendToUser(userId, payload) {
-    const tokens = await fetchUserTokens(userId);
-    if (!tokens.length)
+async function sendToUser(userId, organizationId, payload) {
+    const prefs = await getNotificationPreferences(userId);
+    // Create notification record first; only proceed with badge/push when a row was created so payload IDs and badge stay in sync.
+    const notificationType = typeof payload.data?.type === "string" ? payload.data.type : "push";
+    const deepLink = typeof payload.data?.deepLink === "string" ? payload.data.deepLink : undefined;
+    const notificationId = await createNotificationRecord(userId, organizationId, notificationType, payload.body, deepLink);
+    if (notificationId == null)
         return;
-    await sendPush(tokens, {
-        title: payload.title,
-        body: payload.body,
-        data: payload.data,
-        sound: "default",
-        channelId: payload.categoryId ?? "riskmate-alerts",
-    });
+    const badge = await getUnreadNotificationCount(userId, organizationId);
+    // Include notification id in push payload so tap marks only this one as read; include deepLink for routing.
+    const pushData = {
+        ...payload.data,
+        ...(notificationId && { id: notificationId }),
+    };
+    // Gate only push delivery (Expo/APNs) on push_enabled; in-app history is always recorded.
+    // Only send to tokens registered for this org to avoid cross-org notification leaks.
+    if (prefs.push_enabled) {
+        const tokens = await fetchUserTokens(userId, organizationId);
+        if (tokens.length > 0) {
+            await sendPush(tokens, {
+                title: payload.title,
+                body: payload.body,
+                data: pushData,
+                sound: "default",
+                channelId: payload.categoryId ?? "riskmate-alerts",
+                badge,
+                priority: payload.priority ?? "default",
+                categoryId: payload.categoryId,
+            });
+        }
+    }
 }
 /** Notify user when they are assigned to a job. */
-async function sendJobAssignedNotification(userId, jobId, jobTitle) {
+async function sendJobAssignedNotification(userId, organizationId, jobId, jobTitle) {
     const prefs = await getNotificationPreferences(userId);
-    if (!prefs.job_assigned_enabled)
+    if (!prefs.job_assigned_enabled) {
+        console.log("[Notifications] Skipped job_assigned for user", userId, "(preference disabled)");
         return;
-    await sendToUser(userId, {
+    }
+    await sendToUser(userId, organizationId, {
         title: "Job Assigned",
         body: jobTitle
             ? `You've been assigned to '${jobTitle}'`
@@ -334,14 +509,17 @@ async function sendJobAssignedNotification(userId, jobId, jobTitle) {
             deepLink: `riskmate://jobs/${jobId}`,
         },
         categoryId: "job_assigned",
+        priority: "default",
     });
 }
 /** Notify user when their signature is requested on a report run. */
-async function sendSignatureRequestNotification(userId, reportRunId, jobTitle) {
+async function sendSignatureRequestNotification(userId, organizationId, reportRunId, jobTitle) {
     const prefs = await getNotificationPreferences(userId);
-    if (!prefs.signature_request_enabled)
+    if (!prefs.signature_request_enabled) {
+        console.log("[Notifications] Skipped signature_request for user", userId, "(preference disabled)");
         return;
-    await sendToUser(userId, {
+    }
+    await sendToUser(userId, organizationId, {
         title: "Signature Requested",
         body: jobTitle
             ? `Your signature is requested for '${jobTitle}'`
@@ -352,14 +530,17 @@ async function sendSignatureRequestNotification(userId, reportRunId, jobTitle) {
             deepLink: `riskmate://reports/${reportRunId}`,
         },
         categoryId: "signature_request",
+        priority: "high",
     });
 }
 /** Notify user when evidence is uploaded to a job they care about. */
-async function sendEvidenceUploadedNotification(userId, jobId, photoId) {
+async function sendEvidenceUploadedNotification(userId, organizationId, jobId, photoId) {
     const prefs = await getNotificationPreferences(userId);
-    if (!prefs.evidence_uploaded_enabled)
+    if (!prefs.evidence_uploaded_enabled) {
+        console.log("[Notifications] Skipped evidence_uploaded for user", userId, "(preference disabled)");
         return;
-    await sendToUser(userId, {
+    }
+    await sendToUser(userId, organizationId, {
         title: "Evidence Uploaded",
         body: "New evidence was added to a job.",
         data: {
@@ -369,14 +550,17 @@ async function sendEvidenceUploadedNotification(userId, jobId, photoId) {
             deepLink: `riskmate://jobs/${jobId}/evidence`,
         },
         categoryId: "evidence_uploaded",
+        priority: "default",
     });
 }
 /** Notify user when a hazard is added to a job. */
-async function sendHazardAddedNotification(userId, jobId, hazardId) {
+async function sendHazardAddedNotification(userId, organizationId, jobId, hazardId) {
     const prefs = await getNotificationPreferences(userId);
-    if (!prefs.hazard_added_enabled)
+    if (!prefs.hazard_added_enabled) {
+        console.log("[Notifications] Skipped hazard_added for user", userId, "(preference disabled)");
         return;
-    await sendToUser(userId, {
+    }
+    await sendToUser(userId, organizationId, {
         title: "Hazard Added",
         body: "A new hazard was added to a job.",
         data: {
@@ -386,20 +570,23 @@ async function sendHazardAddedNotification(userId, jobId, hazardId) {
             deepLink: `riskmate://jobs/${jobId}/hazards/${hazardId}`,
         },
         categoryId: "hazard_added",
+        priority: "default",
     });
 }
 /** Notify user about an approaching job deadline. */
-async function sendDeadlineNotification(userId, jobId, hoursRemaining, jobTitle) {
+async function sendDeadlineNotification(userId, organizationId, jobId, hoursRemaining, jobTitle) {
     const prefs = await getNotificationPreferences(userId);
-    if (!prefs.deadline_enabled)
+    if (!prefs.deadline_enabled) {
+        console.log("[Notifications] Skipped deadline for user", userId, "(preference disabled)");
         return;
+    }
     const h = Math.round(hoursRemaining);
     const text = h <= 0
         ? "Due now"
         : h < 24
             ? `Due in ${h} hour${h === 1 ? "" : "s"}`
             : `Due in ${Math.round(h / 24)} day${Math.round(h / 24) === 1 ? "" : "s"}`;
-    await sendToUser(userId, {
+    await sendToUser(userId, organizationId, {
         title: "Deadline Approaching",
         body: jobTitle ? `'${jobTitle}' – ${text}` : text,
         data: {
@@ -409,22 +596,26 @@ async function sendDeadlineNotification(userId, jobId, hoursRemaining, jobTitle)
             deepLink: `riskmate://jobs/${jobId}`,
         },
         categoryId: "deadline",
+        priority: "high",
     });
 }
 /** Notify user when they are mentioned in a comment. */
-async function sendMentionNotification(userId, commentId, contextLabel) {
+async function sendMentionNotification(userId, organizationId, commentId, contextLabel) {
     const prefs = await getNotificationPreferences(userId);
-    if (!prefs.mentions_enabled)
+    if (!prefs.mentions_enabled) {
+        console.log("[Notifications] Skipped mention for user", userId, "(preference disabled)");
         return;
-    await sendToUser(userId, {
+    }
+    await sendToUser(userId, organizationId, {
         title: "You were mentioned",
         body: contextLabel ?? "Someone mentioned you in a comment.",
         data: {
             type: "mention",
             commentId,
-            deepLink: "riskmate://notifications",
+            deepLink: `riskmate://comments/${commentId}`,
         },
         categoryId: "mention",
+        priority: "high",
     });
 }
 //# sourceMappingURL=notifications.js.map

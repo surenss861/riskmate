@@ -841,12 +841,15 @@ class APIClient {
         }
     }
 
-    /// List notifications (GET /api/notifications). Supports pagination via limit and offset.
-    func getNotifications(limit: Int = 50, offset: Int = 0) async throws -> [NotificationItem] {
+    /// List notifications (GET /api/notifications). Supports pagination and optional since (ISO8601 date string, e.g. last 30 days).
+    func getNotifications(limit: Int = 50, offset: Int = 0, since: String? = nil) async throws -> [NotificationItem] {
         struct ListResponse: Decodable {
             let data: [NotificationItem]
         }
-        let query = "limit=\(limit)&offset=\(offset)"
+        var query = "limit=\(limit)&offset=\(offset)"
+        if let since = since, !since.isEmpty {
+            query += "&since=\(since.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? since)"
+        }
         let response: ListResponse = try await request(
             endpoint: "/api/notifications?\(query)"
         )
