@@ -65,7 +65,7 @@ export async function registerDeviceToken({
         platform: platform ?? null,
         last_seen: new Date().toISOString(),
       },
-      { onConflict: "token" }
+      { onConflict: "token,user_id,organization_id" }
     );
 
   if (error) {
@@ -73,15 +73,24 @@ export async function registerDeviceToken({
   }
 }
 
-export async function unregisterDeviceToken(token: string) {
-  const { error } = await supabase
+export async function unregisterDeviceToken(
+  token: string,
+  userId: string,
+  organizationId: string
+): Promise<boolean> {
+  const { data, error } = await supabase
     .from("device_tokens")
     .delete()
-    .eq("token", token);
+    .eq("token", token)
+    .eq("user_id", userId)
+    .eq("organization_id", organizationId)
+    .select("id");
 
   if (error) {
     console.error("Device token delete failed:", error);
+    return false;
   }
+  return (data?.length ?? 0) > 0;
 }
 
 async function fetchOrgTokens(organizationId: string) {
@@ -213,12 +222,16 @@ export async function fetchUserTokens(userId: string, organizationId: string): P
   return (data || []).map((row) => row.token);
 }
 
-/** Get unread notification count for a user (for badge in push payloads). */
-export async function getUnreadNotificationCount(userId: string): Promise<number> {
+/** Get unread notification count for a user in an organization (for badge in push payloads). */
+export async function getUnreadNotificationCount(
+  userId: string,
+  organizationId: string
+): Promise<number> {
   const { count, error } = await supabase
     .from("notifications")
     .select("id", { count: "exact", head: true })
     .eq("user_id", userId)
+    .eq("organization_id", organizationId)
     .eq("is_read", false);
 
   if (error) {
@@ -231,6 +244,7 @@ export async function getUnreadNotificationCount(userId: string): Promise<number
 /** Create a notification record so unread count and badge stay in sync. Returns the new notification id for push payload (data.id). */
 export async function createNotificationRecord(
   userId: string,
+  organizationId: string,
   type: string,
   content: string,
   deepLink?: string | null
@@ -239,6 +253,7 @@ export async function createNotificationRecord(
     .from("notifications")
     .insert({
       user_id: userId,
+      organization_id: organizationId,
       type,
       content,
       is_read: false,
@@ -254,9 +269,10 @@ export async function createNotificationRecord(
   return inserted?.id ?? null;
 }
 
-/** List notifications for a user with pagination (newest first). Includes deepLink for navigation. */
+/** List notifications for a user in an organization with pagination (newest first). Includes deepLink for navigation. */
 export async function listNotifications(
   userId: string,
+  organizationId: string,
   options: { limit?: number; offset?: number } = {}
 ): Promise<{
   data: Array<{
@@ -275,6 +291,7 @@ export async function listNotifications(
     .from("notifications")
     .select("id, type, content, is_read, created_at, deep_link")
     .eq("user_id", userId)
+    .eq("organization_id", organizationId)
     .order("created_at", { ascending: false })
     .range(offset, offset + limit - 1);
 
@@ -294,15 +311,17 @@ export async function listNotifications(
   };
 }
 
-/** Mark notifications as read: all for the user, or by id(s). Updates is_read and updated_at. */
+/** Mark notifications as read: all for the user in the org, or by id(s). Updates is_read and updated_at. */
 export async function markNotificationsAsRead(
   userId: string,
+  organizationId: string,
   ids?: string[]
 ): Promise<void> {
   const query = supabase
     .from("notifications")
     .update({ is_read: true, updated_at: new Date().toISOString() })
     .eq("user_id", userId)
+    .eq("organization_id", organizationId)
     .eq("is_read", false);
 
   if (ids?.length) {
@@ -575,21 +594,20 @@ type PushPayload = {
 async function sendToUser(userId: string, organizationId: string, payload: PushPayload) {
   const prefs = await getNotificationPreferences(userId);
 
-  // Always create notification record and update badge so Notification Center and badges stay in sync.
-  // Note: Badge and notification records are currently user-scoped (notifications table has no organization_id).
-  // If the product needs per-org notification history/badges, add organization_id to notifications and scope here.
+  // Always create notification record and update badge so Notification Center and badges stay in sync (scoped by org).
   const notificationType =
     typeof payload.data?.type === "string" ? (payload.data.type as string) : "push";
   const deepLink =
     typeof payload.data?.deepLink === "string" ? (payload.data.deepLink as string) : undefined;
   const notificationId = await createNotificationRecord(
     userId,
+    organizationId,
     notificationType,
     payload.body,
     deepLink
   );
 
-  const badge = await getUnreadNotificationCount(userId);
+  const badge = await getUnreadNotificationCount(userId, organizationId);
 
   // Include notification id in push payload so tap marks only this one as read; include deepLink for routing.
   const pushData = {

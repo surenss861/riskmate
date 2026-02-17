@@ -2,6 +2,7 @@ import express, { type Router as ExpressRouter } from "express";
 import { authenticate, AuthenticatedRequest } from "../middleware/auth";
 import {
   registerDeviceToken,
+  unregisterDeviceToken,
   sendEvidenceUploadedNotification,
   validatePushToken,
   getNotificationPreferences,
@@ -74,19 +75,12 @@ notificationsRouter.delete(
           .json({ message: "Missing token", code: "INVALID_TOKEN" });
       }
 
-      const { data, error } = await supabase
-        .from("device_tokens")
-        .delete()
-        .eq("token", token)
-        .eq("user_id", authReq.user.id)
-        .eq("organization_id", authReq.user.organization_id)
-        .select("id");
-
-      if (error) {
-        console.error("Device token unregister failed:", error);
-        return res.status(500).json({ message: "Failed to unregister device token" });
-      }
-      if (!data || data.length === 0) {
+      const deleted = await unregisterDeviceToken(
+        token,
+        authReq.user.id,
+        authReq.user.organization_id
+      );
+      if (!deleted) {
         return res
           .status(404)
           .json({ message: "Device token not found or you do not have access to remove it", code: "TOKEN_NOT_FOUND" });
@@ -108,7 +102,7 @@ notificationsRouter.get(
     try {
       const limit = req.query.limit != null ? parseInt(String(req.query.limit), 10) : 50;
       const offset = req.query.offset != null ? parseInt(String(req.query.offset), 10) : 0;
-      const result = await listNotifications(authReq.user.id, { limit, offset });
+      const result = await listNotifications(authReq.user.id, authReq.user.organization_id, { limit, offset });
       res.json(result);
     } catch (err: any) {
       console.error("List notifications failed:", err);
@@ -124,7 +118,7 @@ notificationsRouter.get(
   async (req: express.Request, res: express.Response) => {
     const authReq = req as AuthenticatedRequest;
     try {
-      const count = await getUnreadNotificationCount(authReq.user.id);
+      const count = await getUnreadNotificationCount(authReq.user.id, authReq.user.organization_id);
       res.json({ count });
     } catch (err: any) {
       console.error("Get unread count failed:", err);
@@ -142,7 +136,7 @@ notificationsRouter.patch(
     try {
       const body = (req.body || {}) as { ids?: string[] };
       const ids = Array.isArray(body.ids) ? body.ids : undefined;
-      await markNotificationsAsRead(authReq.user.id, ids);
+      await markNotificationsAsRead(authReq.user.id, authReq.user.organization_id, ids);
       res.json({ status: "ok" });
     } catch (err: any) {
       console.error("Mark notifications as read failed:", err);

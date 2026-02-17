@@ -9,7 +9,9 @@ CREATE TABLE IF NOT EXISTS device_tokens (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_device_tokens_token ON device_tokens (token);
+-- Composite unique so the same token can exist per (user, org); avoids cross-org overwrite and unregister failures.
+DROP INDEX IF EXISTS idx_device_tokens_token;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_device_tokens_token_user_org ON device_tokens (token, user_id, organization_id);
 CREATE INDEX IF NOT EXISTS idx_device_tokens_user ON device_tokens (user_id);
 
 -- Row-level security: only allow access to own device tokens (user_id = auth.uid())
