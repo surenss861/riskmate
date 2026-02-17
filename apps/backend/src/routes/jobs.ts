@@ -2988,21 +2988,31 @@ jobsRouter.post("/:id/signoffs", authenticate, requireWriteAccess, async (req: e
     });
 
     // After successful DB commit: trigger mention notifications when comments contain @mentions
-    // (mentioned user id, signoff/comment id, and org scoping via organization_members below)
+    // (mentioned user id, signoff/comment id, org scoping, deep link riskmate://comments/{commentId})
     if (comments && typeof comments === "string" && comments.trim().length > 0) {
       const mentionMatches = [...comments.matchAll(/@(\S+)/g)];
       const handles = [...new Set(mentionMatches.map((m) => m[1].trim().toLowerCase()))];
       if (handles.length > 0) {
+        // Resolve org users: try organization_members first; fallback to users.organization_id (single-org)
+        let orgUserIds: string[] = [];
         const { data: memberRows } = await supabase
           .from("organization_members")
           .select("user_id")
           .eq("organization_id", organization_id);
-        const userIds = (memberRows || []).map((r) => r.user_id).filter((id) => id !== userId);
-        if (userIds.length > 0) {
+        orgUserIds = (memberRows || []).map((r) => r.user_id).filter((id) => id !== userId);
+        if (orgUserIds.length === 0) {
+          const { data: usersInOrg } = await supabase
+            .from("users")
+            .select("id")
+            .eq("organization_id", organization_id)
+            .neq("id", userId);
+          orgUserIds = (usersInOrg || []).map((r) => r.id);
+        }
+        if (orgUserIds.length > 0) {
           const { data: usersData } = await supabase
             .from("users")
             .select("id, email, full_name")
-            .in("id", userIds);
+            .in("id", orgUserIds);
           const resolved = new Set<string>();
           for (const u of usersData || []) {
             const email = (u.email || "").toLowerCase();

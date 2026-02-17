@@ -22,8 +22,8 @@ DELETE FROM notifications WHERE organization_id IS NULL;
 ALTER TABLE notifications ALTER COLUMN organization_id SET NOT NULL;
 
 -- Indexes for org-scoped queries (user_id + organization_id)
-DROP INDEX IF EXISTS idx_notifications_user_id ON notifications;
-DROP INDEX IF EXISTS idx_notifications_user_id_is_read ON notifications;
+DROP INDEX IF EXISTS idx_notifications_user_id;
+DROP INDEX IF EXISTS idx_notifications_user_id_is_read;
 CREATE INDEX IF NOT EXISTS idx_notifications_user_id_org ON notifications (user_id, organization_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_user_id_org_is_read ON notifications (user_id, organization_id, is_read);
 
