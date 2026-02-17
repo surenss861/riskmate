@@ -191,14 +191,14 @@ notificationsRouter.patch(
   }
 );
 
-/** POST /api/notifications/evidence-uploaded — notify the job owner that evidence was uploaded. Enforces org/job scoping; target user is derived from the job, not from the client. */
+/** POST /api/notifications/evidence-uploaded — notify recipients (job owner/assignees) that evidence was uploaded. Accepts optional userId; when provided, sends to that user; otherwise sends to job owner. Enforces org/job scoping. */
 notificationsRouter.post(
   "/evidence-uploaded",
   authenticate as unknown as express.RequestHandler,
   async (req: express.Request, res: express.Response) => {
     const authReq = req as AuthenticatedRequest;
     try {
-      const { jobId, photoId } = req.body || {};
+      const { jobId, photoId, userId: bodyUserId } = req.body || {};
       if (!jobId || !photoId) {
         return res
           .status(400)
@@ -219,10 +219,10 @@ notificationsRouter.post(
         return res.status(404).json({ message: "Job not found" });
       }
 
-      const targetUserId = job.created_by;
+      const targetUserId = bodyUserId ?? job.created_by;
       if (!targetUserId) {
         return res.status(400).json({
-          message: "Job has no owner to notify",
+          message: "Job has no owner to notify and userId not provided",
           code: "NO_JOB_OWNER",
         });
       }

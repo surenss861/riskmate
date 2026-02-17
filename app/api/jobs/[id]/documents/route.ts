@@ -274,7 +274,7 @@ export async function POST(
       }
     }
 
-    // Notify job owner when uploader is not the owner (evidence upload notification)
+    // Notify job owner and assignees when uploader is not the recipient (evidence upload notification)
     try {
       const { data: jobRow } = await supabase
         .from('jobs')
@@ -283,9 +283,17 @@ export async function POST(
         .eq('organization_id', organization_id)
         .single()
       const ownerId = jobRow?.created_by
-      if (ownerId && ownerId !== userId) {
-        const token = await getSessionToken(request)
-        if (token) {
+      const { data: assignments } = await supabase
+        .from('job_assignments')
+        .select('user_id')
+        .eq('job_id', jobId)
+      const assigneeIds = (assignments ?? []).map((a) => a.user_id).filter(Boolean) as string[]
+      const recipientIds = [...new Set([ownerId, ...assigneeIds].filter(Boolean))].filter(
+        (id) => id !== userId
+      )
+      const token = await getSessionToken(request)
+      if (token) {
+        for (const recipientId of recipientIds) {
           await fetch(`${BACKEND_URL}/api/notifications/evidence-uploaded`, {
             method: 'POST',
             headers: {
@@ -293,11 +301,11 @@ export async function POST(
               Authorization: `Bearer ${token}`,
             },
             body: JSON.stringify({
-              userId: ownerId,
+              userId: recipientId,
               jobId,
               photoId: inserted.id,
             }),
-          })
+          }).catch((e) => console.error('Evidence upload notification for recipient failed:', e))
         }
       }
     } catch (notifyErr) {
