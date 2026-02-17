@@ -218,7 +218,7 @@ jobsRouter.get("/", authenticate, async (req: express.Request, res: express.Resp
     // Base columns (always present)
     const baseColumns = "id, client_name, job_type, location, status, risk_score, risk_level, created_at, updated_at, review_flag, flagged_at";
     // Optional columns (may not exist if migration hasn't run)
-    const optionalColumns = "applied_template_id, applied_template_type";
+    const optionalColumns = "applied_template_id, applied_template_type, assigned_to_id, assigned_to_name, assigned_to_email";
     
     let query = supabase
       .from("jobs")
@@ -348,6 +348,9 @@ jobsRouter.get("/", authenticate, async (req: express.Request, res: express.Resp
       error.message?.includes('applied_template_type') ||
       error.message?.includes('review_flag') ||
       error.message?.includes('flagged_at') ||
+      error.message?.includes('assigned_to_id') ||
+      error.message?.includes('assigned_to_name') ||
+      error.message?.includes('assigned_to_email') ||
       (error as any).code === 'PGRST116'
     )) {
       console.warn('[JOBS] Some columns not found - retrying with minimal columns (migration may not be applied yet):', error.message);
@@ -614,6 +617,9 @@ jobsRouter.get("/", authenticate, async (req: express.Request, res: express.Resp
           applied_template_type: job.applied_template_type ?? null,
           review_flag: job.review_flag ?? null,
           flagged_at: job.flagged_at ?? null,
+          assigned_to_id: job.assigned_to_id ?? null,
+          assigned_to_name: job.assigned_to_name ?? null,
+          assigned_to_email: job.assigned_to_email ?? null,
           readiness_score: readiness.readiness_score,
           readiness_basis: readiness.readiness_basis,
           readiness_empty_reason: readiness.readiness_empty_reason,
@@ -886,14 +892,17 @@ jobsRouter.post("/bulk/assign", authenticate, requireWriteAccess, async (req: ex
     }
     const { data: assignee } = await supabase
       .from("users")
-      .select("id, organization_id")
+      .select("id, organization_id, full_name, email")
       .eq("id", workerId)
       .single();
     if (!assignee || assignee.organization_id !== organization_id) {
       return res.status(400).json({ message: "Worker not found or does not belong to your organization" });
     }
+    const assigneeName = (assignee as any).full_name ?? null;
+    const assigneeEmail = (assignee as any).email ?? null;
     const succeeded: string[] = [];
     const failed: { id: string; code: string; message: string }[] = [];
+    const updated_assignments: Record<string, { assigned_to_id: string; assigned_to_name: string | null; assigned_to_email: string | null }> = {};
     for (const jobId of jobIds) {
       if (typeof jobId !== "string") {
         failed.push({ id: String(jobId), code: "INVALID_ID", message: "Invalid job id" });
@@ -922,7 +931,24 @@ jobsRouter.post("/bulk/assign", authenticate, requireWriteAccess, async (req: ex
         }
         continue;
       }
+      const { error: updateJobError } = await supabase
+        .from("jobs")
+        .update({
+          assigned_to_id: workerId,
+          assigned_to_name: assigneeName,
+          assigned_to_email: assigneeEmail,
+        })
+        .eq("id", jobId)
+        .eq("organization_id", organization_id);
+      if (updateJobError) {
+        console.warn("[bulk/assign] Failed to update job assignment fields for", jobId, updateJobError.message);
+      }
       succeeded.push(jobId);
+      updated_assignments[jobId] = {
+        assigned_to_id: workerId,
+        assigned_to_name: assigneeName,
+        assigned_to_email: assigneeEmail,
+      };
       try {
         await sendJobAssignedNotification(workerId, organization_id, jobId, job.client_name ?? undefined);
       } catch (_) {}
@@ -936,7 +962,7 @@ jobsRouter.post("/bulk/assign", authenticate, requireWriteAccess, async (req: ex
         ...extractClientMetadata(req),
       });
     }
-    res.json({ data: { succeeded, failed } });
+    res.json({ data: { succeeded, failed, updated_assignments } });
   } catch (err: any) {
     console.error("Bulk assign failed:", err);
     res.status(500).json({ message: "Failed to assign jobs" });

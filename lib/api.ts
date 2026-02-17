@@ -694,10 +694,14 @@ export const jobsApi = {
     });
   },
 
-  /** Bulk assign a worker to multiple jobs. Returns { data: { succeeded, failed } }. */
+  /** Bulk assign a worker to multiple jobs. Returns { data: { succeeded, failed, updated_assignments } }. */
   bulkAssign: async (jobIds: string[], workerId: string) => {
     return apiRequest<{
-      data: { succeeded: string[]; failed: Array<{ id: string; code: string; message: string }> };
+      data: {
+        succeeded: string[];
+        failed: Array<{ id: string; code: string; message: string }>;
+        updated_assignments?: Record<string, { assigned_to_id: string; assigned_to_name: string | null; assigned_to_email: string | null }>;
+      };
     }>('/api/jobs/bulk/assign', {
       method: 'POST',
       body: JSON.stringify({ job_ids: jobIds, worker_id: workerId }),

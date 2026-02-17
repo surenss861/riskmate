@@ -77,6 +77,7 @@ export function JobsPageContentView(props: JobsPageContentProps) {
   const canArchive = hasPermission(props.userRole, 'jobs.close')
   const canDelete = hasPermission(props.userRole, 'jobs.delete')
   const canAssign = hasPermission(props.userRole, 'jobs.edit')
+  const canChangeStatus = hasPermission(props.userRole, 'jobs.edit')
   
   // Show keyboard hint once per user
   React.useEffect(() => {
@@ -417,7 +418,20 @@ export function JobsPageContentView(props: JobsPageContentProps) {
     setBulkActionLoading(true)
     try {
       const { data } = await jobsApi.bulkAssign(ids, workerId)
-      const { succeeded, failed } = data
+      const { succeeded, failed, updated_assignments } = data
+      if (succeeded.length > 0 && updated_assignments && props.mutateData?.mutate) {
+        props.mutateData.mutate((current: any) => {
+          if (!current?.data) return current
+          return {
+            ...current,
+            data: current.data.map((job: any) => {
+              const u = updated_assignments[job.id]
+              if (!u) return job
+              return { ...job, assigned_to_id: u.assigned_to_id, assigned_to_name: u.assigned_to_name, assigned_to_email: u.assigned_to_email }
+            }),
+          }
+        }, { revalidate: false })
+      }
       props.onJobArchived()
       if (failed.length === 0) {
         bulk.clearSelection()
@@ -732,7 +746,7 @@ export function JobsPageContentView(props: JobsPageContentProps) {
                   onDelete={() => setBulkDeleteModalOpen(true)}
                   onClearSelection={bulk.clearSelection}
                   disableExport={exportInFlight}
-                  canChangeStatus={canArchive}
+                  canChangeStatus={canChangeStatus}
                   canAssign={canAssign}
                   canDelete={canDelete}
                 />
