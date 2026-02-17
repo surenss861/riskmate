@@ -932,7 +932,7 @@ jobsRouter.post("/:id/hazards", authenticate, requireWriteAccess, async (req: ex
       ...clientMetadata,
     });
 
-    // Notify job owner (if different from creator)
+    // Notify job owner and assignees (excluding creator)
     try {
       const { data: jobRow } = await supabase
         .from("jobs")
@@ -941,9 +941,21 @@ jobsRouter.post("/:id/hazards", authenticate, requireWriteAccess, async (req: ex
         .eq("organization_id", organization_id)
         .single();
       const jobOwnerId = jobRow?.created_by;
-      if (jobOwnerId && jobOwnerId !== userId) {
+
+      const { data: assignments } = await supabase
+        .from("job_assignments")
+        .select("user_id")
+        .eq("job_id", jobId);
+      const assigneeIds = (assignments ?? [])
+        .map((a: { user_id: string | null }) => a.user_id)
+        .filter((id): id is string => id != null);
+
+      const recipientIds = Array.from(
+        new Set([jobOwnerId, ...assigneeIds].filter((id): id is string => id != null && id !== userId))
+      );
+      for (const recipientId of recipientIds) {
         await sendHazardAddedNotification(
-          jobOwnerId,
+          recipientId,
           organization_id,
           jobId,
           inserted.id
