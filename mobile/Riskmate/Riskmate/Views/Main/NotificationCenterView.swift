@@ -124,23 +124,57 @@ struct NotificationCenterView: View {
     }
 
     private var listContent: some View {
-        ScrollView {
-            LazyVStack(spacing: 0) {
-                ForEach(filteredItems, id: \.id) { item in
-                    NotificationRow(
-                        item: item,
-                        onTap: { Task { await handleRowTap(item) } }
-                    )
-                }
-                if hasMore && !items.isEmpty {
-                    ProgressView()
-                        .padding()
-                        .onAppear {
-                            Task { await loadMore() }
+        List {
+            ForEach(filteredItems, id: \.id) { item in
+                NotificationRow(
+                    item: item,
+                    onTap: { Task { await handleRowTap(item) } }
+                )
+                .listRowBackground(item.isRead ? Color.clear : RMTheme.Colors.surface.opacity(0.5))
+                .listRowSeparator(.visible)
+                .listRowInsets(EdgeInsets(top: RMTheme.Spacing.md, leading: RMTheme.Spacing.md, bottom: RMTheme.Spacing.md, trailing: RMTheme.Spacing.md))
+                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                    if item.isRead {
+                        Button {
+                            Task { await markAsUnreadAndRefreshBadge(ids: [item.id]) }
+                        } label: {
+                            Label("Mark unread", systemImage: "envelope.badge")
                         }
+                    } else {
+                        Button {
+                            Task { await markAsReadAndRefreshBadge(ids: [item.id]) }
+                        } label: {
+                            Label("Mark read", systemImage: "envelope.open")
+                        }
+                    }
+                }
+                .contextMenu {
+                    if item.isRead {
+                        Button {
+                            Task { await markAsUnreadAndRefreshBadge(ids: [item.id]) }
+                        } label: {
+                            Label("Mark unread", systemImage: "envelope.badge")
+                        }
+                    } else {
+                        Button {
+                            Task { await markAsReadAndRefreshBadge(ids: [item.id]) }
+                        } label: {
+                            Label("Mark read", systemImage: "envelope.open")
+                        }
+                    }
                 }
             }
+            if hasMore && !items.isEmpty {
+                ProgressView()
+                    .frame(maxWidth: .infinity)
+                    .listRowBackground(Color.clear)
+                    .onAppear {
+                        Task { await loadMore() }
+                    }
+            }
         }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
     }
 
     private func load(offset: Int) async {
@@ -233,6 +267,37 @@ struct NotificationCenterView: View {
                 }
             }
         }
+        await refreshUnreadCountAndBadge()
+    }
+
+    private func markAsUnreadAndRefreshBadge(ids: [String]) async {
+        do {
+            try await APIClient.shared.markNotificationsAsUnread(ids: ids)
+        } catch {
+            // Non-fatal
+        }
+        await MainActor.run {
+            let idSet = Set(ids)
+            items = items.map {
+                if idSet.contains($0.id) {
+                    AppNotification(
+                        id: $0.id,
+                        type: $0.type,
+                        title: $0.title,
+                        body: $0.body,
+                        deepLink: $0.deepLink,
+                        isRead: false,
+                        createdAt: $0.createdAt
+                    )
+                } else {
+                    $0
+                }
+            }
+        }
+        await refreshUnreadCountAndBadge()
+    }
+
+    private func refreshUnreadCountAndBadge() async {
         do {
             let count = try await APIClient.shared.getUnreadNotificationCount()
             await MainActor.run {
@@ -265,15 +330,7 @@ struct NotificationCenterView: View {
                 )
             }
         }
-        do {
-            let count = try await APIClient.shared.getUnreadNotificationCount()
-            await MainActor.run {
-                NotificationService.shared.setBadgeCount(count)
-                unreadCount = count
-            }
-        } catch {
-            // Non-fatal
-        }
+        await refreshUnreadCountAndBadge()
     }
 }
 

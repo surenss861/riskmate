@@ -51,10 +51,10 @@ struct NotificationPreferencesView: View {
                     }
 
                     Section {
-                        preferenceToggle(\.job_assigned_enabled, title: "Job assigned", icon: "person.badge.plus")
-                        preferenceToggle(\.evidence_uploaded_enabled, title: "Evidence uploaded", icon: "photo.on.rectangle.angled")
-                        preferenceToggle(\.deadline_enabled, title: "Deadline approaching", icon: "clock")
-                        preferenceToggle(\.report_ready_enabled, title: "Report ready", icon: "doc.richtext")
+                        preferenceToggle(\.job_assigned, title: "Job assigned", icon: "person.badge.plus")
+                        preferenceToggle(\.evidence_uploaded, title: "Evidence uploaded", icon: "photo.on.rectangle.angled")
+                        preferenceToggle(\.deadline_approaching, title: "Deadline approaching", icon: "clock")
+                        preferenceToggle(\.report_ready, title: "Report ready", icon: "doc.richtext")
                     } header: {
                         Text("Job updates")
                             .font(RMTheme.Typography.caption)
@@ -62,8 +62,8 @@ struct NotificationPreferencesView: View {
                     }
 
                     Section {
-                        preferenceToggle(\.hazard_added_enabled, title: "Hazard added", icon: "exclamationmark.triangle")
-                        preferenceToggle(\.high_risk_job_enabled, title: "High-risk jobs", icon: "flame")
+                        preferenceToggle(\.hazard_added, title: "Hazard added", icon: "exclamationmark.triangle")
+                        preferenceToggle(\.high_risk_job, title: "High-risk jobs", icon: "flame")
                     } header: {
                         Text("Safety alerts")
                             .font(RMTheme.Typography.caption)
@@ -71,8 +71,8 @@ struct NotificationPreferencesView: View {
                     }
 
                     Section {
-                        preferenceToggle(\.mentions_enabled, title: "Mentions", icon: "at")
-                        preferenceToggle(\.signature_request_enabled, title: "Signature requested", icon: "signature")
+                        preferenceToggle(\.mention, title: "Mentions", icon: "at")
+                        preferenceToggle(\.signature_requested, title: "Signature requested", icon: "signature")
                     } header: {
                         Text("Collaboration")
                             .font(RMTheme.Typography.caption)
@@ -80,7 +80,7 @@ struct NotificationPreferencesView: View {
                     }
 
                     Section {
-                        preferenceToggle(\.weekly_summary_enabled, title: "Weekly summary", icon: "chart.bar.doc.horizontal")
+                        preferenceToggle(\.weekly_summary, title: "Weekly summary", icon: "chart.bar.doc.horizontal")
                     } header: {
                         Text("Summaries")
                             .font(RMTheme.Typography.caption)

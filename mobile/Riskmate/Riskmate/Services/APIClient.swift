@@ -867,12 +867,13 @@ class APIClient {
         return response.count
     }
 
-    /// Mark notifications as read (PATCH /api/notifications/read). Pass nil or empty to mark all for current user.
-    func markNotificationsAsRead(ids: [String]? = nil) async throws {
+    /// Set notifications read state (PATCH /api/notifications/read). Pass read: true to mark read, read: false to mark unread. Pass nil or empty ids to apply to all.
+    func setNotificationsReadState(ids: [String]? = nil, read: Bool) async throws {
         struct MarkReadBody: Encodable {
             let ids: [String]?
+            let read: Bool
         }
-        let body = try JSONEncoder().encode(MarkReadBody(ids: ids))
+        let body = try JSONEncoder().encode(MarkReadBody(ids: ids, read: read))
         let _: EmptyResponse = try await request(
             endpoint: "/api/notifications/read",
             method: "PATCH",
@@ -880,33 +881,43 @@ class APIClient {
         )
     }
 
-    /// Notification preferences (GET /api/notifications/preferences). Includes master toggles and per-type flags.
-    /// All JSON keys use snake_case (push_enabled, email_enabled, etc.).
+    /// Mark notifications as read (PATCH /api/notifications/read). Pass nil or empty to mark all for current user.
+    func markNotificationsAsRead(ids: [String]? = nil) async throws {
+        try await setNotificationsReadState(ids: ids, read: true)
+    }
+
+    /// Mark notifications as unread (PATCH /api/notifications/read with read: false).
+    func markNotificationsAsUnread(ids: [String]) async throws {
+        try await setNotificationsReadState(ids: ids.isEmpty ? nil : ids, read: false)
+    }
+
+    /// Notification preferences (GET /api/notifications/preferences). Contract keys: job_assigned, signature_requested, deadline_approaching, mention, etc.
+    /// All JSON keys use snake_case (push_enabled, email_enabled, job_assigned, mention, etc.).
     struct NotificationPreferences: Codable, Equatable {
         var push_enabled: Bool
         var email_enabled: Bool
-        var mentions_enabled: Bool
-        var job_assigned_enabled: Bool
-        var signature_request_enabled: Bool
-        var evidence_uploaded_enabled: Bool
-        var hazard_added_enabled: Bool
-        var deadline_enabled: Bool
-        var weekly_summary_enabled: Bool
-        var high_risk_job_enabled: Bool
-        var report_ready_enabled: Bool
+        var mention: Bool
+        var job_assigned: Bool
+        var signature_requested: Bool
+        var evidence_uploaded: Bool
+        var hazard_added: Bool
+        var deadline_approaching: Bool
+        var weekly_summary: Bool
+        var high_risk_job: Bool
+        var report_ready: Bool
 
         enum CodingKeys: String, CodingKey {
             case push_enabled
             case email_enabled
-            case mentions_enabled
-            case job_assigned_enabled
-            case signature_request_enabled
-            case evidence_uploaded_enabled
-            case hazard_added_enabled
-            case deadline_enabled
-            case weekly_summary_enabled
-            case high_risk_job_enabled
-            case report_ready_enabled
+            case mention
+            case job_assigned
+            case signature_requested
+            case evidence_uploaded
+            case hazard_added
+            case deadline_approaching
+            case weekly_summary
+            case high_risk_job
+            case report_ready
         }
     }
 
