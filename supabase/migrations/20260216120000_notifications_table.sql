@@ -47,6 +47,18 @@ SET organization_id = (
 )
 WHERE n.organization_id IS NULL;
 
+-- Handle orphaned rows that cannot be backfilled so ALTER COLUMN ... SET NOT NULL cannot fail
+DO $$
+DECLARE
+  null_count bigint;
+BEGIN
+  SELECT COUNT(*) INTO null_count FROM notifications WHERE organization_id IS NULL;
+  IF null_count > 0 THEN
+    RAISE NOTICE 'Cleaning % notification(s) with NULL organization_id that could not be backfilled', null_count;
+    DELETE FROM notifications WHERE organization_id IS NULL;
+  END IF;
+END $$;
+
 ALTER TABLE notifications ALTER COLUMN organization_id SET NOT NULL;
 
 -- Replace type CHECK constraint

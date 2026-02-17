@@ -15,6 +15,8 @@ struct NotificationCenterView: View {
     private let pageSize = 50
     @State private var hasMore = true
     @State private var loadingMore = false
+    /// Effective `since` for the current list; nil after fallback so pagination stays consistent.
+    @State private var listSince: String? = Self.since30DaysISO
 
     private var filteredItems: [AppNotification] {
         guard let typeFilter = typeFilter else { return items }
@@ -48,13 +50,18 @@ struct NotificationCenterView: View {
                 )
                 .padding(RMTheme.Spacing.pagePadding)
             } else if filteredItems.isEmpty {
-                RMEmptyState(
-                    icon: "bell.badge.fill",
-                    title: "Notifications",
+                VStack(spacing: 0) {
+                    if unreadCount > 0 {
+                        markAllReadButton
+                    }
+                    RMEmptyState(
+                        icon: "bell.badge.fill",
+                        title: "Notifications",
                     message: "You’re all caught up. New alerts will appear here.",
                     action: nil
-                )
-                .padding(RMTheme.Spacing.pagePadding)
+                    )
+                    .padding(RMTheme.Spacing.pagePadding)
+                }
             } else {
                 VStack(spacing: 0) {
                     if filteredItems.contains(where: { !$0.isRead }) {
@@ -73,6 +80,11 @@ struct NotificationCenterView: View {
         .task {
             await load(offset: 0)
             await refreshUnreadCount()
+            // If unread count exceeds loaded items, older unreads exist outside the 30d window; fetch without since so user can clear badge.
+            if unreadCount > items.count {
+                await load(offset: 0, since: nil)
+                await refreshUnreadCount()
+            }
         }
         .refreshable {
             await load(offset: 0)
@@ -177,7 +189,7 @@ struct NotificationCenterView: View {
         .scrollContentBackground(.hidden)
     }
 
-    private func load(offset: Int) async {
+    private func load(offset: Int, since: String? = Self.since30DaysISO) async {
         if offset == 0 {
             isLoading = true
             loadError = nil
@@ -188,12 +200,12 @@ struct NotificationCenterView: View {
             }
         }
         do {
-            let since = Self.since30DaysISO
             let list = try await APIClient.shared.getNotifications(limit: pageSize, offset: offset, since: since)
             let mapped = list.map { AppNotification(from: $0) }
             await MainActor.run {
                 if offset == 0 {
                     items = mapped
+                    listSince = since
                 } else {
                     items.append(contentsOf: mapped)
                 }
@@ -230,7 +242,7 @@ struct NotificationCenterView: View {
         guard !loadingMore, hasMore else { return }
         loadingMore = true
         defer { loadingMore = false }
-        await load(offset: items.count)
+        await load(offset: items.count, since: listSince)
     }
 
     /// On row tap: navigate via deep link if present, then mark this notification read and refresh badge.
