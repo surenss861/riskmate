@@ -132,7 +132,7 @@ struct NotificationCenterView: View {
                         onTap: { Task { await handleRowTap(item) } }
                     )
                 }
-                if hasMore && !items.isEmpty && typeFilter == nil {
+                if hasMore && !items.isEmpty {
                     ProgressView()
                         .padding()
                         .onAppear {

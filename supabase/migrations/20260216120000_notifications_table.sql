@@ -47,18 +47,6 @@ SET organization_id = (
 )
 WHERE n.organization_id IS NULL;
 
--- Handle rows still with NULL organization_id (orphaned): delete them so migration can complete on legacy data.
-DO $$
-DECLARE
-  deleted_count INT;
-BEGIN
-  DELETE FROM notifications WHERE organization_id IS NULL;
-  GET DIAGNOSTICS deleted_count = ROW_COUNT;
-  IF deleted_count > 0 THEN
-    RAISE NOTICE 'notifications migration: removed % orphaned row(s) with NULL organization_id', deleted_count;
-  END IF;
-END $$;
-
 ALTER TABLE notifications ALTER COLUMN organization_id SET NOT NULL;
 
 -- Replace type CHECK constraint
