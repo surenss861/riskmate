@@ -47,15 +47,21 @@ SET organization_id = (
 )
 WHERE n.organization_id IS NULL;
 
--- Handle orphaned rows that cannot be backfilled so ALTER COLUMN ... SET NOT NULL cannot fail
+-- Preserve history: do not delete rows. Assign fallback org for any remaining NULL organization_id.
 DO $$
 DECLARE
   null_count bigint;
+  fallback_org_id uuid;
 BEGIN
   SELECT COUNT(*) INTO null_count FROM notifications WHERE organization_id IS NULL;
   IF null_count > 0 THEN
-    RAISE NOTICE 'Cleaning % notification(s) with NULL organization_id that could not be backfilled', null_count;
-    DELETE FROM notifications WHERE organization_id IS NULL;
+    SELECT id INTO fallback_org_id FROM organizations ORDER BY id LIMIT 1;
+    IF fallback_org_id IS NOT NULL THEN
+      UPDATE notifications SET organization_id = fallback_org_id WHERE organization_id IS NULL;
+      RAISE NOTICE 'Assigned fallback organization_id to % notification(s) that could not be backfilled from user/org membership', null_count;
+    ELSE
+      RAISE EXCEPTION 'Cannot set NOT NULL organization_id: % notification(s) have NULL and no fallback organization exists. Fix data manually and re-run migration.', null_count;
+    END IF;
   END IF;
 END $$;
 

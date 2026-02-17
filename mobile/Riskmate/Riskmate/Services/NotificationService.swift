@@ -137,7 +137,9 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
                     setBadgeCount(count)
                 }
             } catch {
-                clearBadge()
+                // Leave badge unchanged on network/API failure; log and retry later
+                print("[NotificationService] getUnreadNotificationCount failed after tap: \(error.localizedDescription)")
+                Task { await refreshBadgeFromServer() }
             }
         }
         if let deepLink = deepLinkString,
@@ -206,8 +208,8 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
                 setBadgeCount(count)
             }
         } catch {
-            // Non-fatal: fallback to clearing badge
-            clearBadge()
+            // Leave badge unchanged on failure to fetch unread count (e.g. network error)
+            print("[NotificationService] getUnreadNotificationCount failed in markAsReadAndRefreshBadge: \(error.localizedDescription)")
         }
     }
 
