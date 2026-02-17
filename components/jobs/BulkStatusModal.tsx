@@ -4,9 +4,8 @@ import React, { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 
 const STATUS_OPTIONS = [
-  { value: 'draft', label: 'Draft' },
-  { value: 'pending', label: 'Pending' },
-  { value: 'in_progress', label: 'In Progress' },
+  { value: 'active', label: 'Active' },
+  { value: 'on-hold', label: 'On Hold' },
   { value: 'completed', label: 'Completed' },
   { value: 'cancelled', label: 'Cancelled' },
 ] as const
@@ -28,7 +27,7 @@ export function BulkStatusModal({
   onConfirm,
   loading = false,
 }: BulkStatusModalProps) {
-  const [status, setStatus] = useState<BulkStatusValue>('in_progress')
+  const [status, setStatus] = useState<BulkStatusValue>('active')
 
   if (!isOpen) return null
 

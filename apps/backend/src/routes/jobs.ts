@@ -64,7 +64,9 @@ jobsRouter.get("/", authenticate, async (req: express.Request, res: express.Resp
       missing_evidence,
     } = authReq.query;
     const includeArchived = include_archived === 'true' || include_archived === '1';
-    
+    // Map UI filter status to DB values (active -> in_progress, on-hold -> on_hold)
+    const statusForQuery = status === "active" ? "in_progress" : status === "on-hold" ? "on_hold" : status;
+
     // Parse time_range to date cutoff
     let dateCutoff: Date | null = null;
     if (time_range && typeof time_range === 'string' && time_range !== 'all') {
@@ -322,8 +324,8 @@ jobsRouter.get("/", authenticate, async (req: express.Request, res: express.Resp
       query = query.is("archived_at", null);
     }
 
-    if (status) {
-      query = query.eq("status", status);
+    if (statusForQuery) {
+      query = query.eq("status", statusForQuery);
     }
 
     if (risk_level) {
@@ -426,8 +428,8 @@ jobsRouter.get("/", authenticate, async (req: express.Request, res: express.Resp
         }
       }
       
-      if (status) {
-        fallbackQuery = fallbackQuery.eq("status", status);
+      if (statusForQuery) {
+        fallbackQuery = fallbackQuery.eq("status", statusForQuery);
       }
       if (risk_level) {
         fallbackQuery = fallbackQuery.eq("risk_level", risk_level);
@@ -674,8 +676,8 @@ jobsRouter.get("/", authenticate, async (req: express.Request, res: express.Resp
       countQuery = countQuery.is("archived_at", null);
     }
 
-    if (status) {
-      countQuery = countQuery.eq("status", status);
+    if (statusForQuery) {
+      countQuery = countQuery.eq("status", statusForQuery);
     }
 
     if (risk_level) {
@@ -702,8 +704,8 @@ jobsRouter.get("/", authenticate, async (req: express.Request, res: express.Resp
         .select("*", { count: "exact", head: true })
         .eq("organization_id", organization_id);
       
-      if (status) {
-        fallbackCountQuery = fallbackCountQuery.eq("status", status);
+      if (statusForQuery) {
+        fallbackCountQuery = fallbackCountQuery.eq("status", statusForQuery);
       }
       if (risk_level) {
         fallbackCountQuery = fallbackCountQuery.eq("risk_level", risk_level);
@@ -824,10 +826,12 @@ jobsRouter.post("/bulk/status", authenticate, requireWriteAccess, async (req: ex
     if (!Array.isArray(job_ids) || job_ids.length === 0 || typeof status !== "string") {
       return res.status(400).json({ message: "job_ids (array) and status (string) are required" });
     }
-    const allowedStatuses = ["draft", "pending", "in_progress", "completed", "cancelled", "on-hold"];
+    const allowedStatuses = ["active", "on-hold", "completed", "cancelled"];
     if (!allowedStatuses.includes(status)) {
       return res.status(400).json({ message: "Invalid status" });
     }
+    // Map UI status values to DB values where the schema uses different literals
+    const dbStatus = status === "active" ? "in_progress" : status === "on-hold" ? "on_hold" : status;
     const succeeded: string[] = [];
     const failed: { id: string; code: string; message: string }[] = [];
     for (const jobId of job_ids) {
@@ -851,7 +855,7 @@ jobsRouter.post("/bulk/status", authenticate, requireWriteAccess, async (req: ex
       }
       const { error: updateError } = await supabase
         .from("jobs")
-        .update({ status })
+        .update({ status: dbStatus })
         .eq("id", jobId)
         .eq("organization_id", organization_id);
       if (updateError) {

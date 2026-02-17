@@ -492,46 +492,59 @@ export function JobsPageContentView(props: JobsPageContentProps) {
   const handleBulkDelete = async () => {
     const ids = bulk.selectedItems.map((j) => j.id)
     const previousData = props.mutateData?.currentData ? JSON.parse(JSON.stringify(props.mutateData.currentData)) : null
-    if (props.mutateData?.mutate) {
-      props.mutateData.mutate((current: any) => {
-        if (!current?.data) return current
-        return {
-          ...current,
-          data: (current.data || []).filter((job: any) => !ids.includes(job.id)),
-          pagination: {
-            ...current.pagination,
-            total: Math.max(0, (current.pagination?.total || 0) - ids.length),
-          },
-        }
-      }, { optimisticData: true, rollbackOnError: true, revalidate: false })
-    }
     setBulkActionLoading(true)
     try {
       const { data } = await jobsApi.bulkDelete(ids)
       const { succeeded, failed } = data
       props.onJobDeleted()
-      bulk.clearSelection()
-      setBulkDeleteModalOpen(false)
       if (failed.length === 0) {
+        bulk.clearSelection()
+        setBulkDeleteModalOpen(false)
+        if (props.mutateData?.mutate) {
+          props.mutateData.mutate((current: any) => {
+            if (!current?.data) return current
+            return {
+              ...current,
+              data: (current.data || []).filter((job: any) => !ids.includes(job.id)),
+              pagination: {
+                ...current.pagination,
+                total: Math.max(0, (current.pagination?.total || 0) - ids.length),
+              },
+            }
+          }, { revalidate: false })
+        }
         setToast({ message: `${succeeded.length} job${succeeded.length !== 1 ? 's' : ''} deleted`, type: 'success' })
-      } else if (succeeded.length > 0) {
-        if (previousData && props.mutateData?.mutate) {
-          props.mutateData.mutate(previousData, { revalidate: false })
-        }
-        props.onJobDeleted()
-        setToast({ message: `${succeeded.length} deleted, ${failed.length} could not be deleted (e.g. not draft)`, type: 'success' })
       } else {
-        if (previousData && props.mutateData?.mutate) {
-          props.mutateData.mutate(previousData, { revalidate: false })
+        const failedIds = failed.map((f: { id: string }) => f.id)
+        bulk.setSelection(failedIds)
+        setBulkDeleteModalOpen(true)
+        if (props.mutateData?.mutate) {
+          props.mutateData.mutate((current: any) => {
+            if (!current?.data) return current
+            const removed = new Set(succeeded)
+            return {
+              ...current,
+              data: (current.data || []).filter((job: any) => !removed.has(job.id)),
+              pagination: {
+                ...current.pagination,
+                total: Math.max(0, (current.pagination?.total || 0) - succeeded.length),
+              },
+            }
+          }, { revalidate: false })
         }
-        props.onJobDeleted()
-        setToast({ message: failed[0]?.message || 'Could not delete jobs. Only draft jobs without audit data can be deleted.', type: 'error' })
+        if (succeeded.length > 0) {
+          setToast({ message: `${succeeded.length} deleted, ${failed.length} could not be deleted (e.g. not draft). Retry or adjust selection.`, type: 'error' })
+        } else {
+          setToast({ message: failed[0]?.message || 'Could not delete jobs. Only draft jobs without audit data can be deleted.', type: 'error' })
+        }
       }
     } catch (err: any) {
       if (previousData && props.mutateData?.mutate) {
         props.mutateData.mutate(previousData, { revalidate: false })
       }
       props.onJobDeleted()
+      bulk.setSelection(ids)
+      setBulkDeleteModalOpen(true)
       setToast({ message: err?.message || 'Failed to delete jobs', type: 'error' })
     } finally {
       setBulkActionLoading(false)
