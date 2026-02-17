@@ -1,13 +1,29 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 
 /**
  * Generic hook for multi-select state on a list of items with string ids.
  * Used for bulk actions (e.g. jobs table).
+ * Syncs selectedIds when items change: intersect with current item IDs so
+ * selection stays accurate across pagination/filter changes.
  */
 export function useBulkSelection<T extends { id: string }>(items: T[]) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+
+  const currentIds = useMemo(() => new Set(items.map((item) => item.id)), [items])
+
+  // When items change (page/filter), reconcile selection: keep only IDs that still exist in current items
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      if (prev.size === 0) return prev
+      const next = new Set<string>()
+      for (const id of prev) {
+        if (currentIds.has(id)) next.add(id)
+      }
+      return next.size === prev.size ? prev : next
+    })
+  }, [currentIds])
 
   const toggleItem = useCallback((id: string) => {
     setSelectedIds((prev) => {
@@ -23,7 +39,10 @@ export function useBulkSelection<T extends { id: string }>(items: T[]) {
 
   const toggleAll = useCallback(() => {
     const allIds = new Set(items.map((item) => item.id))
-    setSelectedIds((prev) => (prev.size === items.length ? new Set() : allIds))
+    setSelectedIds((prev) => {
+      const everyCurrentSelected = items.length > 0 && items.every((item) => prev.has(item.id))
+      return everyCurrentSelected ? new Set() : allIds
+    })
   }, [items])
 
   const clearSelection = useCallback(() => {
@@ -35,10 +54,16 @@ export function useBulkSelection<T extends { id: string }>(items: T[]) {
     [selectedIds]
   )
 
-  const isAllSelected =
-    items.length > 0 && selectedIds.size === items.length
+  // Header "Select All" is checked only when every current item ID is in selectedIds (not just matching count)
+  const isAllSelected = useMemo(
+    () => items.length > 0 && items.every((item) => selectedIds.has(item.id)),
+    [items, selectedIds]
+  )
 
-  const selectedItems = items.filter((item) => selectedIds.has(item.id))
+  const selectedItems = useMemo(
+    () => items.filter((item) => selectedIds.has(item.id)),
+    [items, selectedIds]
+  )
 
   return {
     selectedIds,

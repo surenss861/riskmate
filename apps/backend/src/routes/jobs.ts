@@ -806,6 +806,266 @@ jobsRouter.get("/by-signoff/:signoffId", authenticate, async (req: express.Reque
   }
 });
 
+// --- Bulk routes (must be before /:id so "bulk" is not captured as id) ---
+
+// POST /api/jobs/bulk/status
+// Update status for multiple jobs; returns succeeded/failed per job.
+jobsRouter.post("/bulk/status", authenticate, requireWriteAccess, async (req: express.Request, res: express.Response) => {
+  const authReq = req as AuthenticatedRequest;
+  try {
+    const { organization_id, id: userId } = authReq.user;
+    const { job_ids, status } = req.body || {};
+    if (!Array.isArray(job_ids) || job_ids.length === 0 || typeof status !== "string") {
+      return res.status(400).json({ message: "job_ids (array) and status (string) are required" });
+    }
+    const allowedStatuses = ["draft", "pending", "in_progress", "completed", "cancelled", "on-hold", "archived"];
+    if (!allowedStatuses.includes(status)) {
+      return res.status(400).json({ message: "Invalid status" });
+    }
+    const succeeded: string[] = [];
+    const failed: { id: string; code: string; message: string }[] = [];
+    for (const jobId of job_ids) {
+      if (typeof jobId !== "string") {
+        failed.push({ id: String(jobId), code: "INVALID_ID", message: "Invalid job id" });
+        continue;
+      }
+      const { data: job, error: jobError } = await supabase
+        .from("jobs")
+        .select("id, status, archived_at, deleted_at")
+        .eq("id", jobId)
+        .eq("organization_id", organization_id)
+        .single();
+      if (jobError || !job) {
+        failed.push({ id: jobId, code: "NOT_FOUND", message: "Job not found" });
+        continue;
+      }
+      if (job.deleted_at) {
+        failed.push({ id: jobId, code: "ALREADY_DELETED", message: "Job has been deleted" });
+        continue;
+      }
+      const { error: updateError } = await supabase
+        .from("jobs")
+        .update({ status })
+        .eq("id", jobId)
+        .eq("organization_id", organization_id);
+      if (updateError) {
+        failed.push({ id: jobId, code: "UPDATE_FAILED", message: updateError.message });
+        continue;
+      }
+      succeeded.push(jobId);
+      const clientMetadata = extractClientMetadata(req);
+      await recordAuditLog({
+        organizationId: organization_id,
+        actorId: userId,
+        eventName: "job.updated",
+        targetType: "job",
+        targetId: jobId,
+        metadata: { status, bulk: true },
+        ...clientMetadata,
+      });
+      await emitJobEvent(organization_id, "job.updated", jobId, userId);
+    }
+    res.json({ data: { succeeded, failed } });
+  } catch (err: any) {
+    console.error("Bulk status update failed:", err);
+    res.status(500).json({ message: "Failed to update jobs" });
+  }
+});
+
+// POST /api/jobs/bulk/assign
+// Assign a worker to multiple jobs; returns succeeded/failed per job.
+jobsRouter.post("/bulk/assign", authenticate, requireWriteAccess, async (req: express.Request, res: express.Response) => {
+  const authReq = req as AuthenticatedRequest;
+  try {
+    const { organization_id, id: actorId } = authReq.user;
+    const body = req.body || {};
+    const workerId = body.worker_id ?? body.user_id;
+    const jobIds = body.job_ids;
+    if (!Array.isArray(jobIds) || jobIds.length === 0 || !workerId || typeof workerId !== "string") {
+      return res.status(400).json({ message: "job_ids (array) and worker_id (string) are required" });
+    }
+    const { data: assignee } = await supabase
+      .from("users")
+      .select("id, organization_id")
+      .eq("id", workerId)
+      .single();
+    if (!assignee || assignee.organization_id !== organization_id) {
+      return res.status(400).json({ message: "Worker not found or does not belong to your organization" });
+    }
+    const succeeded: string[] = [];
+    const failed: { id: string; code: string; message: string }[] = [];
+    for (const jobId of jobIds) {
+      if (typeof jobId !== "string") {
+        failed.push({ id: String(jobId), code: "INVALID_ID", message: "Invalid job id" });
+        continue;
+      }
+      const { data: job, error: jobError } = await supabase
+        .from("jobs")
+        .select("id, client_name")
+        .eq("id", jobId)
+        .eq("organization_id", organization_id)
+        .single();
+      if (jobError || !job) {
+        failed.push({ id: jobId, code: "NOT_FOUND", message: "Job not found" });
+        continue;
+      }
+      const { error: insertError } = await supabase.from("job_assignments").insert({
+        job_id: jobId,
+        user_id: workerId,
+        role: "worker",
+      });
+      if (insertError) {
+        if (insertError.code === "23505") {
+          failed.push({ id: jobId, code: "ALREADY_ASSIGNED", message: "User already assigned to this job" });
+        } else {
+          failed.push({ id: jobId, code: "ASSIGN_FAILED", message: insertError.message });
+        }
+        continue;
+      }
+      succeeded.push(jobId);
+      try {
+        await sendJobAssignedNotification(workerId, organization_id, jobId, job.client_name ?? undefined);
+      } catch (_) {}
+      await recordAuditLog({
+        organizationId: organization_id,
+        actorId,
+        eventName: "worker.assigned",
+        targetType: "job",
+        targetId: jobId,
+        metadata: { worker_id: workerId, bulk: true },
+        ...extractClientMetadata(req),
+      });
+    }
+    res.json({ data: { succeeded, failed } });
+  } catch (err: any) {
+    console.error("Bulk assign failed:", err);
+    res.status(500).json({ message: "Failed to assign jobs" });
+  }
+});
+
+// POST /api/jobs/bulk/delete
+// Delete multiple jobs (same eligibility as single delete); returns succeeded/failed per job.
+jobsRouter.post("/bulk/delete", authenticate, requireWriteAccess, async (req: express.Request, res: express.Response) => {
+  const authReq = req as AuthenticatedRequest;
+  try {
+    const { organization_id, id: userId, role } = authReq.user;
+    const { job_ids } = req.body || {};
+    if (!Array.isArray(job_ids) || job_ids.length === 0) {
+      return res.status(400).json({ message: "job_ids (array) is required" });
+    }
+    if (role !== "owner") {
+      return res.status(403).json({ message: "Only organization owners can delete jobs" });
+    }
+    const succeeded: string[] = [];
+    const failed: { id: string; code: string; message: string }[] = [];
+    for (const jobId of job_ids) {
+      if (typeof jobId !== "string") {
+        failed.push({ id: String(jobId), code: "INVALID_ID", message: "Invalid job id" });
+        continue;
+      }
+      const { data: job, error: jobError } = await supabase
+        .from("jobs")
+        .select("id, status, archived_at, deleted_at")
+        .eq("id", jobId)
+        .eq("organization_id", organization_id)
+        .single();
+      if (jobError || !job) {
+        failed.push({ id: jobId, code: "NOT_FOUND", message: "Job not found" });
+        continue;
+      }
+      if (job.deleted_at) {
+        failed.push({ id: jobId, code: "ALREADY_DELETED", message: "Job has already been deleted" });
+        continue;
+      }
+      if (job.status !== "draft") {
+        failed.push({ id: jobId, code: "NOT_ELIGIBLE_FOR_DELETE", message: "Only draft jobs can be deleted" });
+        continue;
+      }
+      const [auditRes, docRes, riskRes, reportRes] = await Promise.all([
+        supabase.from("audit_logs").select("id").eq("organization_id", organization_id).or(`target_id.eq.${jobId},metadata->>job_id.eq.${jobId}`).limit(1),
+        supabase.from("documents").select("id").eq("job_id", jobId).limit(1),
+        supabase.from("job_risk_scores").select("id").eq("job_id", jobId).limit(1),
+        supabase.from("reports").select("id").eq("job_id", jobId).limit(1),
+      ]);
+      if ((auditRes.data?.length ?? 0) > 0) {
+        failed.push({ id: jobId, code: "HAS_AUDIT_HISTORY", message: "Jobs with audit history cannot be deleted" });
+        continue;
+      }
+      if ((docRes.data?.length ?? 0) > 0) {
+        failed.push({ id: jobId, code: "HAS_EVIDENCE", message: "Jobs with uploaded evidence cannot be deleted" });
+        continue;
+      }
+      if ((riskRes.data?.length ?? 0) > 0) {
+        failed.push({ id: jobId, code: "HAS_RISK_ASSESSMENT", message: "Jobs with finalized risk assessments cannot be deleted" });
+        continue;
+      }
+      if ((reportRes.data?.length ?? 0) > 0) {
+        failed.push({ id: jobId, code: "HAS_REPORTS", message: "Jobs with generated reports cannot be deleted" });
+        continue;
+      }
+      const { error: deleteError } = await supabase
+        .from("jobs")
+        .update({ deleted_at: new Date().toISOString() })
+        .eq("id", jobId)
+        .eq("organization_id", organization_id);
+      if (deleteError) {
+        failed.push({ id: jobId, code: "DELETE_FAILED", message: deleteError.message });
+        continue;
+      }
+      succeeded.push(jobId);
+      await recordAuditLog({
+        organizationId: organization_id,
+        actorId: userId,
+        eventName: "job.deleted",
+        targetType: "job",
+        targetId: jobId,
+        metadata: { previous_status: job.status, bulk: true },
+        ...extractClientMetadata(req),
+      });
+    }
+    res.json({ data: { succeeded, failed } });
+  } catch (err: any) {
+    console.error("Bulk delete failed:", err);
+    res.status(500).json({ message: "Failed to delete jobs" });
+  }
+});
+
+// POST /api/jobs/bulk/export
+// Validate access to job IDs and return succeeded/failed; client uses this before client-side export.
+jobsRouter.post("/bulk/export", authenticate, async (req: express.Request, res: express.Response) => {
+  const authReq = req as AuthenticatedRequest;
+  try {
+    const { organization_id } = authReq.user;
+    const { job_ids } = req.body || {};
+    if (!Array.isArray(job_ids) || job_ids.length === 0) {
+      return res.status(400).json({ message: "job_ids (array) is required" });
+    }
+    const succeeded: string[] = [];
+    const failed: { id: string; code: string; message: string }[] = [];
+    for (const jobId of job_ids) {
+      if (typeof jobId !== "string") {
+        failed.push({ id: String(jobId), code: "INVALID_ID", message: "Invalid job id" });
+        continue;
+      }
+      const { data: job, error: jobError } = await supabase
+        .from("jobs")
+        .select("id")
+        .eq("id", jobId)
+        .eq("organization_id", organization_id)
+        .single();
+      if (jobError || !job) {
+        failed.push({ id: jobId, code: "NOT_FOUND", message: "Job not found" });
+        continue;
+      }
+      succeeded.push(jobId);
+    }
+    res.json({ data: { succeeded, failed } });
+  } catch (err: any) {
+    console.error("Bulk export validation failed:", err);
+    res.status(500).json({ message: "Failed to validate export jobs" });
+  }
+});
+
 // GET /api/jobs/:id/hazards
 // Returns all hazards (mitigation items) for a job
 // NOTE: Must be before /:id route to match correctly

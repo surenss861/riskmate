@@ -367,11 +367,26 @@ export function JobsPageContentView(props: JobsPageContentProps) {
     }
     setBulkActionLoading(true)
     try {
-      await Promise.all(ids.map((id) => jobsApi.update(id, { status })))
+      const { data } = await jobsApi.bulkStatus(ids, status)
+      const { succeeded, failed } = data
       props.onJobArchived()
       bulk.clearSelection()
       setBulkStatusModalOpen(false)
-      setToast({ message: `${ids.length} job${ids.length !== 1 ? 's' : ''} updated to ${status.replace('_', ' ')}`, type: 'success' })
+      if (failed.length === 0) {
+        setToast({ message: `${succeeded.length} job${succeeded.length !== 1 ? 's' : ''} updated to ${status.replace('_', ' ')}`, type: 'success' })
+      } else if (succeeded.length > 0) {
+        if (previousData && props.mutateData?.mutate) {
+          props.mutateData.mutate(previousData, { revalidate: false })
+        }
+        props.onJobArchived()
+        setToast({ message: `${succeeded.length} updated, ${failed.length} failed`, type: 'success' })
+      } else {
+        if (previousData && props.mutateData?.mutate) {
+          props.mutateData.mutate(previousData, { revalidate: false })
+        }
+        props.onJobArchived()
+        setToast({ message: failed[0]?.message || 'Failed to update jobs', type: 'error' })
+      }
     } catch (err: any) {
       if (previousData && props.mutateData?.mutate) {
         props.mutateData.mutate(previousData, { revalidate: false })
@@ -399,22 +414,25 @@ export function JobsPageContentView(props: JobsPageContentProps) {
     }
     setBulkActionLoading(true)
     try {
-      const results = await Promise.allSettled(
-        bulk.selectedItems.map((j) => jobsApi.assignWorker(j.id, workerId))
-      )
-      const failed = results.filter((r) => r.status === 'rejected').length
-      const succeeded = results.length - failed
+      const { data } = await jobsApi.bulkAssign(ids, workerId)
+      const { succeeded, failed } = data
       props.onJobArchived()
       bulk.clearSelection()
       setBulkAssignModalOpen(false)
-      if (failed === 0) {
-        setToast({ message: `${succeeded} job${succeeded !== 1 ? 's' : ''} assigned`, type: 'success' })
+      if (failed.length === 0) {
+        setToast({ message: `${succeeded.length} job${succeeded.length !== 1 ? 's' : ''} assigned`, type: 'success' })
+      } else if (succeeded.length > 0) {
+        if (previousData && props.mutateData?.mutate) {
+          props.mutateData.mutate(previousData, { revalidate: false })
+        }
+        props.onJobArchived()
+        setToast({ message: `${succeeded.length} assigned, ${failed.length} failed`, type: 'success' })
       } else {
         if (previousData && props.mutateData?.mutate) {
           props.mutateData.mutate(previousData, { revalidate: false })
         }
         props.onJobArchived()
-        setToast({ message: `${succeeded} assigned, ${failed} failed`, type: failed === results.length ? 'error' : 'success' })
+        setToast({ message: failed[0]?.message || 'Failed to assign jobs', type: 'error' })
       }
     } catch (err: any) {
       if (previousData && props.mutateData?.mutate) {
@@ -429,11 +447,23 @@ export function JobsPageContentView(props: JobsPageContentProps) {
 
   const handleBulkExport = async () => {
     if (bulk.selectedItems.length === 0) return
+    const ids = bulk.selectedItems.map((j) => j.id)
     setExportInFlight(true)
     setToast({ message: 'Preparing export…', type: 'success' })
     try {
-      await exportJobs(bulk.selectedItems, ['csv', 'pdf'])
-      setToast({ message: `Exported ${bulk.selectedItems.length} job${bulk.selectedItems.length !== 1 ? 's' : ''} (CSV and PDF).`, type: 'success' })
+      const { data } = await jobsApi.bulkExport(ids)
+      const { succeeded, failed } = data
+      const toExport = bulk.selectedItems.filter((j) => succeeded.includes(j.id))
+      if (toExport.length === 0) {
+        setToast({ message: failed[0]?.message || 'No jobs available to export', type: 'error' })
+        return
+      }
+      await exportJobs(toExport, ['csv', 'pdf'])
+      if (failed.length > 0) {
+        setToast({ message: `Exported ${toExport.length} job${toExport.length !== 1 ? 's' : ''}; ${failed.length} could not be exported.`, type: 'success' })
+      } else {
+        setToast({ message: `Exported ${toExport.length} job${toExport.length !== 1 ? 's' : ''} (CSV and PDF).`, type: 'success' })
+      }
     } catch (err: any) {
       setToast({ message: err?.message || 'Export failed', type: 'error' })
     } finally {
@@ -459,26 +489,25 @@ export function JobsPageContentView(props: JobsPageContentProps) {
     }
     setBulkActionLoading(true)
     try {
-      const results = await Promise.allSettled(ids.map((id) => jobsApi.delete(id)))
-      const failed = results.filter((r) => r.status === 'rejected').length
-      const succeeded = results.length - failed
+      const { data } = await jobsApi.bulkDelete(ids)
+      const { succeeded, failed } = data
       props.onJobDeleted()
       bulk.clearSelection()
       setBulkDeleteModalOpen(false)
-      if (failed === 0) {
-        setToast({ message: `${succeeded} job${succeeded !== 1 ? 's' : ''} deleted`, type: 'success' })
-      } else if (succeeded > 0) {
+      if (failed.length === 0) {
+        setToast({ message: `${succeeded.length} job${succeeded.length !== 1 ? 's' : ''} deleted`, type: 'success' })
+      } else if (succeeded.length > 0) {
         if (previousData && props.mutateData?.mutate) {
           props.mutateData.mutate(previousData, { revalidate: false })
         }
         props.onJobDeleted()
-        setToast({ message: `${succeeded} deleted, ${failed} could not be deleted (e.g. not draft)`, type: 'success' })
+        setToast({ message: `${succeeded.length} deleted, ${failed.length} could not be deleted (e.g. not draft)`, type: 'success' })
       } else {
         if (previousData && props.mutateData?.mutate) {
           props.mutateData.mutate(previousData, { revalidate: false })
         }
         props.onJobDeleted()
-        setToast({ message: 'Could not delete jobs. Only draft jobs without audit data can be deleted.', type: 'error' })
+        setToast({ message: failed[0]?.message || 'Could not delete jobs. Only draft jobs without audit data can be deleted.', type: 'error' })
       }
     } catch (err: any) {
       if (previousData && props.mutateData?.mutate) {

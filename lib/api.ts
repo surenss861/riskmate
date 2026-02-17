@@ -683,6 +683,46 @@ export const jobsApi = {
       method: 'DELETE',
     });
   },
+
+  /** Bulk update status for multiple jobs. Returns { data: { succeeded, failed } }. */
+  bulkStatus: async (jobIds: string[], status: string) => {
+    return apiRequest<{
+      data: { succeeded: string[]; failed: Array<{ id: string; code: string; message: string }> };
+    }>('/api/jobs/bulk/status', {
+      method: 'POST',
+      body: JSON.stringify({ job_ids: jobIds, status }),
+    });
+  },
+
+  /** Bulk assign a worker to multiple jobs. Returns { data: { succeeded, failed } }. */
+  bulkAssign: async (jobIds: string[], workerId: string) => {
+    return apiRequest<{
+      data: { succeeded: string[]; failed: Array<{ id: string; code: string; message: string }> };
+    }>('/api/jobs/bulk/assign', {
+      method: 'POST',
+      body: JSON.stringify({ job_ids: jobIds, worker_id: workerId }),
+    });
+  },
+
+  /** Bulk delete multiple jobs (draft-only). Returns { data: { succeeded, failed } }. */
+  bulkDelete: async (jobIds: string[]) => {
+    return apiRequest<{
+      data: { succeeded: string[]; failed: Array<{ id: string; code: string; message: string }> };
+    }>('/api/jobs/bulk/delete', {
+      method: 'POST',
+      body: JSON.stringify({ job_ids: jobIds }),
+    });
+  },
+
+  /** Validate access to job IDs for export; returns { data: { succeeded, failed } }. */
+  bulkExport: async (jobIds: string[]) => {
+    return apiRequest<{
+      data: { succeeded: string[]; failed: Array<{ id: string; code: string; message: string }> };
+    }>('/api/jobs/bulk/export', {
+      method: 'POST',
+      body: JSON.stringify({ job_ids: jobIds }),
+    });
+  },
 };
 
 // Risk API
