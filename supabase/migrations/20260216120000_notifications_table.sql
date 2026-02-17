@@ -28,6 +28,7 @@ DROP POLICY IF EXISTS "Users can view their own notifications" ON notifications;
 DROP POLICY IF EXISTS "Users can update their own notifications" ON notifications;
 DROP POLICY IF EXISTS "Users can read own notifications" ON notifications;
 DROP POLICY IF EXISTS "Users can update own notifications" ON notifications;
+DROP POLICY IF EXISTS "Users can create own notifications in current org" ON notifications;
 
 -- Drop legacy columns only (keep organization_id; ensure it exists if table was created without it)
 ALTER TABLE notifications ADD COLUMN IF NOT EXISTS organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE;
