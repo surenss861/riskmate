@@ -6,7 +6,7 @@ import { spacing, dividerStyles, motion as motionStyles } from '@/lib/styles/des
 
 interface Column<T> {
   id: string
-  header: string
+  header: string | React.ReactNode
   accessor: (row: T) => any
   render?: (value: any, row: T) => React.ReactNode
   sortable?: boolean
@@ -375,7 +375,7 @@ function DataGridRows<T extends { id: string }>({
                   onClick={() => column.sortable && handleSort(column.id)}
                 >
                   <div className="flex items-center gap-2">
-                    {column.header}
+                    {typeof column.header === 'string' ? column.header : column.header}
                     {column.sortable && sortColumn === column.id && (
                       <span className="text-[#F97316]">
                         {sortDirection === 'asc' ? '↑' : '↓'}

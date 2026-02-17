@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useRef, useState } from 'react'
+import React, { useRef, useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { DashboardNavbar } from '@/components/dashboard/DashboardNavbar'
@@ -8,6 +8,11 @@ import { DataGrid } from '@/components/dashboard/DataGrid'
 import { ConfirmationModal } from '@/components/dashboard/ConfirmationModal'
 import { Toast } from '@/components/dashboard/Toast'
 import { JobRosterSelect } from '@/components/dashboard/JobRosterSelect'
+import { BulkActionsToolbar } from '@/components/jobs/BulkActionsToolbar'
+import { BulkStatusModal } from '@/components/jobs/BulkStatusModal'
+import { BulkAssignModal } from '@/components/jobs/BulkAssignModal'
+import { BulkDeleteConfirmation } from '@/components/jobs/BulkDeleteConfirmation'
+import { useBulkSelection } from '@/hooks/useBulkSelection'
 import { jobsApi } from '@/lib/api'
 import { hasPermission } from '@/lib/utils/permissions'
 import { AppBackground, AppShell, PageHeader, PageSection, GlassCard, Button } from '@/components/shared'
@@ -60,6 +65,12 @@ export function JobsPageContentView(props: JobsPageContentProps) {
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
   const [executiveView, setExecutiveView] = useState(false)
   const [showKeyboardHint, setShowKeyboardHint] = useState(false)
+  const [bulkStatusModalOpen, setBulkStatusModalOpen] = useState(false)
+  const [bulkAssignModalOpen, setBulkAssignModalOpen] = useState(false)
+  const [bulkDeleteModalOpen, setBulkDeleteModalOpen] = useState(false)
+  const [bulkActionLoading, setBulkActionLoading] = useState(false)
+
+  const bulk = useBulkSelection(props.jobs)
   
   const canArchive = hasPermission(props.userRole, 'jobs.close')
   const canDelete = hasPermission(props.userRole, 'jobs.delete')
@@ -76,6 +87,21 @@ export function JobsPageContentView(props: JobsPageContentProps) {
       return () => clearTimeout(timer)
     }
   }, [props.jobs.length])
+
+  // Cmd+A / Ctrl+A: select all jobs when not in an input
+  const toggleAll = bulk.toggleAll
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return
+      if ((e.metaKey || e.ctrlKey) && e.key === 'a') {
+        e.preventDefault()
+        if (props.jobs.length > 0) toggleAll()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [props.jobs.length, toggleAll])
   
   // Calculate risk trend (simple heuristic: compare current risk to a baseline)
   // For now, we'll use a simple indicator based on risk level changes
@@ -321,7 +347,112 @@ export function JobsPageContentView(props: JobsPageContentProps) {
       setLoading(false)
     }
   }
-  
+
+  const handleBulkStatusChange = async (status: import('@/components/jobs/BulkStatusModal').BulkStatusValue) => {
+    const ids = bulk.selectedItems.map((j) => j.id)
+    const previousData = props.mutateData?.currentData ? JSON.parse(JSON.stringify(props.mutateData.currentData)) : null
+    if (props.mutateData?.mutate) {
+      props.mutateData.mutate((current: any) => {
+        if (!current?.data) return current
+        return {
+          ...current,
+          data: current.data.map((job: any) =>
+            ids.includes(job.id) ? { ...job, status } : job
+          ),
+        }
+      }, { optimisticData: true, rollbackOnError: true, revalidate: false })
+    }
+    setBulkActionLoading(true)
+    try {
+      await Promise.all(ids.map((id) => jobsApi.update(id, { status })))
+      props.onJobArchived()
+      bulk.clearSelection()
+      setBulkStatusModalOpen(false)
+      setToast({ message: `${ids.length} job${ids.length !== 1 ? 's' : ''} updated to ${status.replace('_', ' ')}`, type: 'success' })
+    } catch (err: any) {
+      if (previousData && props.mutateData?.mutate) {
+        props.mutateData.mutate(previousData, { revalidate: false })
+      }
+      props.onJobArchived()
+      setToast({ message: err?.message || 'Failed to update some jobs', type: 'error' })
+    } finally {
+      setBulkActionLoading(false)
+    }
+  }
+
+  const handleBulkAssign = async (workerId: string) => {
+    setBulkActionLoading(true)
+    try {
+      const results = await Promise.allSettled(
+        bulk.selectedItems.map((j) => jobsApi.assignWorker(j.id, workerId))
+      )
+      const failed = results.filter((r) => r.status === 'rejected').length
+      const succeeded = results.length - failed
+      props.onJobArchived()
+      bulk.clearSelection()
+      setBulkAssignModalOpen(false)
+      if (failed === 0) {
+        setToast({ message: `${succeeded} job${succeeded !== 1 ? 's' : ''} assigned`, type: 'success' })
+      } else {
+        setToast({ message: `${succeeded} assigned, ${failed} failed`, type: failed === results.length ? 'error' : 'success' })
+      }
+    } catch (err: any) {
+      setToast({ message: err?.message || 'Failed to assign jobs', type: 'error' })
+    } finally {
+      setBulkActionLoading(false)
+    }
+  }
+
+  const handleBulkDelete = async () => {
+    const ids = bulk.selectedItems.map((j) => j.id)
+    const previousData = props.mutateData?.currentData ? JSON.parse(JSON.stringify(props.mutateData.currentData)) : null
+    if (props.mutateData?.mutate) {
+      props.mutateData.mutate((current: any) => {
+        if (!current?.data) return current
+        return {
+          ...current,
+          data: (current.data || []).filter((job: any) => !ids.includes(job.id)),
+          pagination: {
+            ...current.pagination,
+            total: Math.max(0, (current.pagination?.total || 0) - ids.length),
+          },
+        }
+      }, { optimisticData: true, rollbackOnError: true, revalidate: false })
+    }
+    setBulkActionLoading(true)
+    try {
+      const results = await Promise.allSettled(ids.map((id) => jobsApi.delete(id)))
+      const failed = results.filter((r) => r.status === 'rejected').length
+      const succeeded = results.length - failed
+      props.onJobDeleted()
+      bulk.clearSelection()
+      setBulkDeleteModalOpen(false)
+      if (failed === 0) {
+        setToast({ message: `${succeeded} job${succeeded !== 1 ? 's' : ''} deleted`, type: 'success' })
+      } else if (succeeded > 0) {
+        if (previousData && props.mutateData?.mutate) {
+          props.mutateData.mutate(previousData, { revalidate: false })
+        }
+        props.onJobDeleted()
+        setToast({ message: `${succeeded} deleted, ${failed} could not be deleted (e.g. not draft)`, type: 'success' })
+      } else {
+        if (previousData && props.mutateData?.mutate) {
+          props.mutateData.mutate(previousData, { revalidate: false })
+        }
+        props.onJobDeleted()
+        setToast({ message: 'Could not delete jobs. Only draft jobs without audit data can be deleted.', type: 'error' })
+      }
+    } catch (err: any) {
+      if (previousData && props.mutateData?.mutate) {
+        props.mutateData.mutate(previousData, { revalidate: false })
+      }
+      props.onJobDeleted()
+      setToast({ message: err?.message || 'Failed to delete jobs', type: 'error' })
+    } finally {
+      setBulkActionLoading(false)
+    }
+  }
+
   return (
     <AppBackground>
       <DashboardNavbar 
@@ -519,12 +650,65 @@ export function JobsPageContentView(props: JobsPageContentProps) {
             )}
           </GlassCard>
         ) : (
+          <>
+            {bulk.selectedItems.length > 0 && (
+              <div className="mb-4">
+                <BulkActionsToolbar
+                  selectedCount={bulk.selectedItems.length}
+                  onStatusChange={() => setBulkStatusModalOpen(true)}
+                  onAssign={() => setBulkAssignModalOpen(true)}
+                  onExport={() => setToast({ message: 'Bulk export (CSV/PDF) coming soon.', type: 'success' })}
+                  onDelete={() => setBulkDeleteModalOpen(true)}
+                  onClearSelection={bulk.clearSelection}
+                  disableExport={false}
+                />
+              </div>
+            )}
           <DataGrid
             data={props.jobs}
             stickyColumns={['client_name', 'risk_score']}
             enableKeyboardShortcuts={true}
             executiveView={executiveView}
+            rowHighlight={(job: any) =>
+              bulk.isSelected(job.id)
+                ? 'rgba(0, 122, 255, 0.12)'
+                : (job.risk_level === 'critical' || (job.risk_score && job.risk_score >= 90)
+                    ? 'rgba(239, 68, 68, 0.1)'
+                    : job.risk_level === 'high' || (job.risk_score && job.risk_score >= 70)
+                      ? 'rgba(251, 146, 60, 0.1)'
+                      : job.risk_level === 'medium' || (job.risk_score && job.risk_score >= 40)
+                        ? 'rgba(251, 191, 36, 0.08)'
+                        : job.risk_level === 'low' || (job.risk_score != null && job.risk_score < 40)
+                          ? 'rgba(34, 197, 94, 0.08)'
+                          : null)
+            }
             columns={[
+              {
+                id: 'select',
+                header: (
+                  <input
+                    type="checkbox"
+                    checked={bulk.isAllSelected}
+                    onChange={() => bulk.toggleAll()}
+                    onClick={(e) => e.stopPropagation()}
+                    className="w-4 h-4 rounded border-white/30 bg-white/10 text-[#007aff] focus:ring-[#007aff]/50 cursor-pointer"
+                    aria-label="Select all jobs"
+                  />
+                ),
+                accessor: () => '',
+                sortable: false,
+                width: '48px',
+                render: (_: any, job: any) => (
+                  <input
+                    type="checkbox"
+                    checked={bulk.isSelected(job.id)}
+                    onChange={() => bulk.toggleItem(job.id)}
+                    onClick={(e) => e.stopPropagation()}
+                    className="w-4 h-4 rounded border-white/30 bg-white/10 text-[#007aff] focus:ring-[#007aff]/50 cursor-pointer"
+                    aria-label={`Select ${job.client_name}`}
+                  />
+                ),
+              },
               {
                 id: 'client_name',
                 header: 'Client',
@@ -802,23 +986,8 @@ export function JobsPageContentView(props: JobsPageContentProps) {
             onRowClick={(job: any) => router.push(`/operations/jobs/${job.id}`)}
             onRowHover={(job: any) => handleJobHover(job.id)}
             onRowHoverEnd={(job: any) => handleJobHoverEnd(job.id)}
-            rowHighlight={(job: any) => {
-              // Risk spine: subtle left border based on risk level
-              if (job.risk_level === 'critical' || (job.risk_score && job.risk_score >= 90)) {
-                return 'rgba(239, 68, 68, 0.1)' // red at 10% opacity
-              }
-              if (job.risk_level === 'high' || (job.risk_score && job.risk_score >= 70)) {
-                return 'rgba(251, 146, 60, 0.1)' // amber at 10% opacity
-              }
-              if (job.risk_level === 'medium' || (job.risk_score && job.risk_score >= 40)) {
-                return 'rgba(251, 191, 36, 0.08)' // yellow at 8% opacity
-              }
-              if (job.risk_level === 'low' || (job.risk_score !== null && job.risk_score < 40)) {
-                return 'rgba(34, 197, 94, 0.08)' // green at 8% opacity
-              }
-              return null
-            }}
           />
+          </>
         )}
         </PageSection>
 
@@ -891,6 +1060,33 @@ export function JobsPageContentView(props: JobsPageContentProps) {
         loading={loading}
         onConfirm={confirmDelete}
         onCancel={() => setDeleteModal({ isOpen: false, jobId: null, jobName: '' })}
+      />
+
+      {/* Bulk Status Modal */}
+      <BulkStatusModal
+        isOpen={bulkStatusModalOpen}
+        onClose={() => setBulkStatusModalOpen(false)}
+        selectedJobs={bulk.selectedItems.map((j) => ({ id: j.id, client_name: j.client_name }))}
+        onConfirm={handleBulkStatusChange}
+        loading={bulkActionLoading}
+      />
+
+      {/* Bulk Assign Modal */}
+      <BulkAssignModal
+        isOpen={bulkAssignModalOpen}
+        onClose={() => setBulkAssignModalOpen(false)}
+        selectedJobs={bulk.selectedItems.map((j) => ({ id: j.id, client_name: j.client_name }))}
+        onConfirm={handleBulkAssign}
+        loading={bulkActionLoading}
+      />
+
+      {/* Bulk Delete Confirmation */}
+      <BulkDeleteConfirmation
+        isOpen={bulkDeleteModalOpen}
+        onClose={() => setBulkDeleteModalOpen(false)}
+        selectedJobs={bulk.selectedItems.map((j) => ({ id: j.id, client_name: j.client_name }))}
+        onConfirm={handleBulkDelete}
+        loading={bulkActionLoading}
       />
       
       {/* Toast Notification */}
