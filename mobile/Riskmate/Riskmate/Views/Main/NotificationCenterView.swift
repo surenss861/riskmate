@@ -79,16 +79,16 @@ struct NotificationCenterView: View {
         }
         .task {
             await load(offset: 0)
-            await refreshUnreadCount()
+            await refreshUnreadCountAndBadge()
             // If unread count exceeds loaded items, older unreads exist outside the 30d window; fetch without since so user can clear badge.
             if unreadCount > items.count {
                 await load(offset: 0, since: nil)
-                await refreshUnreadCount()
+                await refreshUnreadCountAndBadge()
             }
         }
         .refreshable {
             await load(offset: 0)
-            await refreshUnreadCount()
+            await refreshUnreadCountAndBadge()
         }
     }
 
