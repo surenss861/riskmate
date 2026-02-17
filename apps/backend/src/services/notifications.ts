@@ -653,8 +653,8 @@ async function sendToUser(userId: string, organizationId: string, payload: PushP
     }
   }
 
-  // Gate email delivery on email_enabled (same as push_enabled). When email sending is
-  // implemented for notifications, add it here so the preference is respected.
+  // Email delivery is gated on prefs.email_enabled. Any email job/worker that sends
+  // notification emails must respect this flag; send email only inside this block.
   if (prefs.email_enabled) {
     // TODO: send email when email delivery for in-app notifications is implemented
   }

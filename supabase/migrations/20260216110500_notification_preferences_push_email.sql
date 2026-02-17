@@ -15,6 +15,12 @@ BEGIN
   ) THEN
     ALTER TABLE notification_preferences ADD COLUMN email_enabled BOOLEAN NOT NULL DEFAULT true;
   END IF;
+  -- Only set default for weekly_summary_enabled when the column exists (e.g. from 20260216110000).
+  -- On fresh deploys that use 20260215000000, the table has weekly_summary (contract) and no weekly_summary_enabled.
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'notification_preferences' AND column_name = 'weekly_summary_enabled'
+  ) THEN
+    ALTER TABLE notification_preferences ALTER COLUMN weekly_summary_enabled SET DEFAULT false;
+  END IF;
 END $$;
-
-ALTER TABLE notification_preferences ALTER COLUMN weekly_summary_enabled SET DEFAULT false;
