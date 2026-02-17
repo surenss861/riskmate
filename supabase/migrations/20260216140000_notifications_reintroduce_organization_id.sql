@@ -39,6 +39,7 @@ CREATE POLICY "Users can update own notifications"
 
 -- Allow inserts for current user + current org (backend service role bypasses RLS)
 DROP POLICY IF EXISTS "System can create notifications for users" ON notifications;
+DROP POLICY IF EXISTS "Users can create own notifications in current org" ON notifications;
 CREATE POLICY "Users can create own notifications in current org"
   ON notifications FOR INSERT
   WITH CHECK (user_id = auth.uid() AND organization_id = get_user_organization_id());
