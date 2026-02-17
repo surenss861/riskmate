@@ -625,7 +625,7 @@ async function sendToUser(userId: string, organizationId: string, payload: PushP
     ...(notificationId && { id: notificationId }),
   };
 
-  // Gate only push delivery (Expo/APNs) on push_enabled; in-app history is always recorded.
+  // Gate push delivery (Expo/APNs) on push_enabled; in-app history is always recorded.
   // Only send to tokens registered for this org to avoid cross-org notification leaks.
   if (prefs.push_enabled) {
     const tokens = await fetchUserTokens(userId, organizationId);
@@ -641,6 +641,12 @@ async function sendToUser(userId: string, organizationId: string, payload: PushP
         categoryId: payload.categoryId,
       });
     }
+  }
+
+  // Gate email delivery on email_enabled (same as push_enabled). When email sending is
+  // implemented for notifications, add it here so the preference is respected.
+  if (prefs.email_enabled) {
+    // TODO: send email when email delivery for in-app notifications is implemented
   }
 }
 
