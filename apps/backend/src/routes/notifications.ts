@@ -284,7 +284,7 @@ notificationsRouter.post(
         }
       }
 
-      await sendEvidenceUploadedNotification(targetUserId, jobId, photoId);
+      await sendEvidenceUploadedNotification(targetUserId, organizationId, jobId, photoId);
       res.status(204).end();
     } catch (err: any) {
       console.error("Evidence uploaded notification failed:", err);

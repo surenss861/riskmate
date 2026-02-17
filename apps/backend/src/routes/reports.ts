@@ -363,7 +363,7 @@ reportsRouter.post(
 
       for (const uid of intendedSignerUserIds) {
         try {
-          await sendSignatureRequestNotification(uid, reportRunId, jobTitleOrClientName);
+          await sendSignatureRequestNotification(uid, organization_id, reportRunId, jobTitleOrClientName);
         } catch (err) {
           console.error("sendSignatureRequestNotification failed for user", uid, err);
         }
@@ -415,7 +415,7 @@ reportsRouter.post(
 
       for (const uid of intendedSignerUserIds) {
         try {
-          await sendSignatureRequestNotification(uid, reportRunId, jobTitleOrClientName);
+          await sendSignatureRequestNotification(uid, organization_id, reportRunId, jobTitleOrClientName);
         } catch (err) {
           console.error("sendSignatureRequestNotification failed for user", uid, err);
         }

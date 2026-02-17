@@ -505,6 +505,7 @@ evidenceRouter.post(
         if (jobOwnerId && jobOwnerId !== userId) {
           await sendEvidenceUploadedNotification(
             jobOwnerId,
+            organization_id,
             jobId,
             insertedEvidence.id
           )

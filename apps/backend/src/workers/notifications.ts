@@ -68,7 +68,7 @@ export async function runDeadlineCheck() {
 
   const { data: jobs, error } = await supabase
     .from("jobs")
-    .select("id, client_name, due_date, created_by")
+    .select("id, client_name, due_date, created_by, organization_id")
     .not("due_date", "is", null)
     .gte("due_date", now.toISOString())
     .lte("due_date", in24h.toISOString());
@@ -83,11 +83,13 @@ export async function runDeadlineCheck() {
   for (const job of jobs) {
     const due = job.due_date ? new Date(job.due_date) : null;
     const createdBy = job.created_by;
-    if (!due || !createdBy) continue;
+    const organizationId = job.organization_id;
+    if (!due || !createdBy || !organizationId) continue;
     const hoursRemaining = (due.getTime() - now.getTime()) / (60 * 60 * 1000);
     try {
       await sendDeadlineNotification(
         createdBy,
+        organizationId,
         job.id,
         hoursRemaining,
         job.client_name ?? undefined

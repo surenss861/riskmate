@@ -197,12 +197,13 @@ export async function getNotificationPreferences(
   };
 }
 
-/** Fetch push tokens for a single user (for targeted notifications). */
-export async function fetchUserTokens(userId: string): Promise<string[]> {
+/** Fetch push tokens for a single user in a given organization (for targeted notifications). */
+export async function fetchUserTokens(userId: string, organizationId: string): Promise<string[]> {
   const { data, error } = await supabase
     .from("device_tokens")
     .select("token")
-    .eq("user_id", userId);
+    .eq("user_id", userId)
+    .eq("organization_id", organizationId);
 
   if (error) {
     console.error("Failed to load user device tokens:", error);
@@ -510,7 +511,7 @@ export async function notifyHighRiskJob(params: {
     priority: "default",
   };
   for (const userId of userIds) {
-    await sendToUser(userId, payload);
+    await sendToUser(userId, params.organizationId, payload);
   }
 }
 
@@ -535,7 +536,7 @@ export async function notifyReportReady(params: {
     priority: "default",
   };
   for (const userId of userIds) {
-    await sendToUser(userId, payload);
+    await sendToUser(userId, params.organizationId, payload);
   }
 }
 
@@ -556,7 +557,7 @@ export async function notifyWeeklySummary(params: {
     priority: "default",
   };
   for (const userId of userIds) {
-    await sendToUser(userId, payload);
+    await sendToUser(userId, params.organizationId, payload);
   }
 }
 
@@ -571,10 +572,12 @@ type PushPayload = {
   priority?: "high" | "default";
 };
 
-async function sendToUser(userId: string, payload: PushPayload) {
+async function sendToUser(userId: string, organizationId: string, payload: PushPayload) {
   const prefs = await getNotificationPreferences(userId);
 
   // Always create notification record and update badge so Notification Center and badges stay in sync.
+  // Note: Badge and notification records are currently user-scoped (notifications table has no organization_id).
+  // If the product needs per-org notification history/badges, add organization_id to notifications and scope here.
   const notificationType =
     typeof payload.data?.type === "string" ? (payload.data.type as string) : "push";
   const deepLink =
@@ -595,8 +598,9 @@ async function sendToUser(userId: string, payload: PushPayload) {
   };
 
   // Gate only push delivery (Expo/APNs) on push_enabled; in-app history is always recorded.
+  // Only send to tokens registered for this org to avoid cross-org notification leaks.
   if (prefs.push_enabled) {
-    const tokens = await fetchUserTokens(userId);
+    const tokens = await fetchUserTokens(userId, organizationId);
     if (tokens.length > 0) {
       await sendPush(tokens, {
         title: payload.title,
@@ -615,12 +619,13 @@ async function sendToUser(userId: string, payload: PushPayload) {
 /** Notify user when they are assigned to a job. */
 export async function sendJobAssignedNotification(
   userId: string,
+  organizationId: string,
   jobId: string,
   jobTitle?: string
 ) {
   const prefs = await getNotificationPreferences(userId);
   if (!prefs.job_assigned_enabled) return;
-  await sendToUser(userId, {
+  await sendToUser(userId, organizationId, {
     title: "Job Assigned",
     body: jobTitle
       ? `You've been assigned to '${jobTitle}'`
@@ -638,12 +643,13 @@ export async function sendJobAssignedNotification(
 /** Notify user when their signature is requested on a report run. */
 export async function sendSignatureRequestNotification(
   userId: string,
+  organizationId: string,
   reportRunId: string,
   jobTitle?: string
 ) {
   const prefs = await getNotificationPreferences(userId);
   if (!prefs.signature_request_enabled) return;
-  await sendToUser(userId, {
+  await sendToUser(userId, organizationId, {
     title: "Signature Requested",
     body: jobTitle
       ? `Your signature is requested for '${jobTitle}'`
@@ -661,12 +667,13 @@ export async function sendSignatureRequestNotification(
 /** Notify user when evidence is uploaded to a job they care about. */
 export async function sendEvidenceUploadedNotification(
   userId: string,
+  organizationId: string,
   jobId: string,
   photoId: string
 ) {
   const prefs = await getNotificationPreferences(userId);
   if (!prefs.evidence_uploaded_enabled) return;
-  await sendToUser(userId, {
+  await sendToUser(userId, organizationId, {
     title: "Evidence Uploaded",
     body: "New evidence was added to a job.",
     data: {
@@ -683,12 +690,13 @@ export async function sendEvidenceUploadedNotification(
 /** Notify user when a hazard is added to a job. */
 export async function sendHazardAddedNotification(
   userId: string,
+  organizationId: string,
   jobId: string,
   hazardId: string
 ) {
   const prefs = await getNotificationPreferences(userId);
   if (!prefs.hazard_added_enabled) return;
-  await sendToUser(userId, {
+  await sendToUser(userId, organizationId, {
     title: "Hazard Added",
     body: "A new hazard was added to a job.",
     data: {
@@ -705,6 +713,7 @@ export async function sendHazardAddedNotification(
 /** Notify user about an approaching job deadline. */
 export async function sendDeadlineNotification(
   userId: string,
+  organizationId: string,
   jobId: string,
   hoursRemaining: number,
   jobTitle?: string
@@ -718,7 +727,7 @@ export async function sendDeadlineNotification(
       : h < 24
         ? `Due in ${h} hour${h === 1 ? "" : "s"}`
         : `Due in ${Math.round(h / 24)} day${Math.round(h / 24) === 1 ? "" : "s"}`;
-  await sendToUser(userId, {
+  await sendToUser(userId, organizationId, {
     title: "Deadline Approaching",
     body: jobTitle ? `'${jobTitle}' – ${text}` : text,
     data: {
@@ -735,12 +744,13 @@ export async function sendDeadlineNotification(
 /** Notify user when they are mentioned in a comment. */
 export async function sendMentionNotification(
   userId: string,
+  organizationId: string,
   commentId: string,
   contextLabel?: string
 ) {
   const prefs = await getNotificationPreferences(userId);
   if (!prefs.mentions_enabled) return;
-  await sendToUser(userId, {
+  await sendToUser(userId, organizationId, {
     title: "You were mentioned",
     body: contextLabel ?? "Someone mentioned you in a comment.",
     data: {

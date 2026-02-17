@@ -944,6 +944,7 @@ jobsRouter.post("/:id/hazards", authenticate, requireWriteAccess, async (req: ex
       if (jobOwnerId && jobOwnerId !== userId) {
         await sendHazardAddedNotification(
           jobOwnerId,
+          organization_id,
           jobId,
           inserted.id
         );
@@ -1469,7 +1470,7 @@ jobsRouter.post("/:id/assign", authenticate, requireWriteAccess, async (req: exp
     }
 
     try {
-      await sendJobAssignedNotification(assigneeId, jobId, job.client_name ?? undefined);
+      await sendJobAssignedNotification(assigneeId, job.organization_id, jobId, job.client_name ?? undefined);
     } catch (notifyErr) {
       console.warn("[Jobs] Job assigned notification failed:", notifyErr);
     }
@@ -2023,7 +2024,7 @@ jobsRouter.post("/:id/documents", authenticate, requireWriteAccess, async (req: 
         .single();
       const ownerId = jobRow?.created_by;
       if (ownerId && ownerId !== userId) {
-        await sendEvidenceUploadedNotification(ownerId, jobId, inserted.id);
+        await sendEvidenceUploadedNotification(ownerId, organization_id, jobId, inserted.id);
       }
     } catch (notifyErr: any) {
       console.warn("Evidence upload notification failed:", notifyErr?.message ?? notifyErr);
@@ -3001,7 +3002,7 @@ jobsRouter.post("/:id/signoffs", authenticate, requireWriteAccess, async (req: e
           }
           const signoffContext = "Mentioned in a sign-off comment.";
           for (const mentionedUserId of resolved) {
-            sendMentionNotification(mentionedUserId, data.id, signoffContext).catch((err) =>
+            sendMentionNotification(mentionedUserId, organization_id, data.id, signoffContext).catch((err) =>
               console.error("Mention notification failed:", err)
             );
           }
