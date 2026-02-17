@@ -24,7 +24,6 @@ struct ContentView: View {
     @State private var showNotificationCenterFromDeepLink = false
     @State private var showCommentFromDeepLink = false
     @State private var deepLinkCommentId: String?
-    @State private var showNotificationPermissionPrompt = false
 
     private var isAuditor: Bool {
         entitlements.isAuditor()
@@ -78,22 +77,6 @@ struct ContentView: View {
                         } else {
                             iPhoneNavigation
                         }
-                    }
-                    .task {
-                        await requestNotificationPermissionsAndRegisterIfNeeded()
-                    }
-                    .sheet(isPresented: $showNotificationPermissionPrompt) {
-                        NotificationPermissionEducationView(
-                            onEnable: {
-                                showNotificationPermissionPrompt = false
-                                Task {
-                                    await requestNotificationPermissionsAfterEducation()
-                                }
-                            },
-                            onNotNow: {
-                                showNotificationPermissionPrompt = false
-                            }
-                        )
                     }
                 }
             } else {
@@ -200,31 +183,6 @@ struct ContentView: View {
                 }
             }
         }
-    }
-
-    private func requestNotificationPermissionsAndRegisterIfNeeded() async {
-        guard sessionManager.isAuthenticated else { return }
-        let shouldRequest = await NotificationService.shared.shouldRequestPermissions()
-        guard shouldRequest else {
-            await NotificationService.shared.registerStoredTokenIfNeeded()
-            return
-        }
-        // Show pre-permission education first; only request system permission after user taps Enable
-        await MainActor.run {
-            showNotificationPermissionPrompt = true
-        }
-    }
-
-    /// Called after user taps "Enable" in the notification permission education modal. Requests system authorization then registers token.
-    private func requestNotificationPermissionsAfterEducation() async {
-        _ = try? await NotificationService.shared.requestPermissions()
-        let status = await NotificationService.shared.authorizationStatus()
-        if status == .authorized || status == .provisional {
-            await MainActor.run {
-                UIApplication.shared.registerForRemoteNotifications()
-            }
-        }
-        await NotificationService.shared.registerStoredTokenIfNeeded()
     }
 
     private func checkBackendHealth() async {

@@ -6,6 +6,7 @@ struct RiskmateApp: App {
     @StateObject private var sessionManager = SessionManager.shared
     @StateObject private var quickAction = QuickActionRouter.shared
     @StateObject private var serverStatus = ServerStatusManager.shared
+    @State private var showNotificationPermissionPrompt = false
     
     init() {
         // Migrate legacy UserDefaults keys to namespaced format
@@ -70,6 +71,13 @@ struct RiskmateApp: App {
                         // Handle app lifecycle
                         handleScenePhaseChange(from: oldPhase, to: newPhase)
                     }
+                    .onChange(of: sessionManager.isAuthenticated) { _, isAuthenticated in
+                        if isAuthenticated {
+                            Task {
+                                await checkAndPromptNotificationPermissions()
+                            }
+                        }
+                    }
                     .onChange(of: serverStatus.isOnline) { wasOnline, isOnline in
                         // Auto-sync when network restored
                         if !wasOnline && isOnline {
@@ -82,6 +90,19 @@ struct RiskmateApp: App {
                 
                 // Global toast container
                 ToastContainer()
+            }
+            .sheet(isPresented: $showNotificationPermissionPrompt) {
+                NotificationPermissionEducationView(
+                    onEnable: {
+                        showNotificationPermissionPrompt = false
+                        Task {
+                            await requestNotificationPermissionsAndRegister()
+                        }
+                    },
+                    onNotNow: {
+                        showNotificationPermissionPrompt = false
+                    }
+                )
             }
             .sheet(isPresented: .constant(ProcessInfo.processInfo.arguments.contains("RISKMATE_UI_TEST_CONFLICT_SHEET"))) {
                 ConflictResolutionSheet(
@@ -135,6 +156,9 @@ struct RiskmateApp: App {
             Task {
                 await NotificationService.shared.refreshBadgeFromServer()
             }
+            Task {
+                await checkAndPromptNotificationPermissions()
+            }
 
             // Check for auth expiry after long background (30+ min)
             Task {
@@ -154,6 +178,37 @@ struct RiskmateApp: App {
             break
         }
     }
+
+    // MARK: - Notification permissions
+
+    /// On first launch/onboarding and when entering foreground: check authorization, show benefits UI if .notDetermined, register token if granted.
+    private func checkAndPromptNotificationPermissions() async {
+        guard sessionManager.isAuthenticated else { return }
+        let status = await NotificationService.shared.authorizationStatus()
+        switch status {
+        case .notDetermined:
+            await MainActor.run {
+                showNotificationPermissionPrompt = true
+            }
+        case .authorized, .provisional:
+            NotificationService.shared.registerForRemoteNotificationsIfAuthorized()
+            await NotificationService.shared.registerStoredTokenIfNeeded()
+        case .denied:
+            break
+        @unknown default:
+            break
+        }
+    }
+
+    /// Called after user taps "Enable" in the notification permission education modal. Requests system authorization then registers token.
+    private func requestNotificationPermissionsAndRegister() async {
+        _ = try? await NotificationService.shared.requestPermissions()
+        let status = await NotificationService.shared.authorizationStatus()
+        if status == .authorized || status == .provisional {
+            NotificationService.shared.registerForRemoteNotificationsIfAuthorized()
+        }
+        await NotificationService.shared.registerStoredTokenIfNeeded()
+    }
 }
 
 // MARK: - AppDelegate (Background URLSession + Push)
@@ -165,7 +220,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         UNUserNotificationCenter.current().delegate = NotificationService.shared
-        application.registerForRemoteNotifications()
+        // registerForRemoteNotifications is gated behind granted permission; RiskmateApp invokes it after authorization
         return true
     }
 

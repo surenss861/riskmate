@@ -50,6 +50,17 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
         return status == .notDetermined
     }
 
+    /// Call after permission is granted so iOS will issue the device token. Gates registerForRemoteNotifications behind authorization.
+    func registerForRemoteNotificationsIfAuthorized() {
+        Task {
+            let status = await authorizationStatus()
+            guard status == .authorized || status == .provisional else { return }
+            await MainActor.run {
+                UIApplication.shared.registerForRemoteNotifications()
+            }
+        }
+    }
+
     // MARK: - Device token registration
 
     /// Register the APNs device token with the backend. Call from AppDelegate after receiving token.
