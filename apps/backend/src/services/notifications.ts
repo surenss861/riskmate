@@ -42,13 +42,14 @@ type DeviceTokenPayload = {
   platform?: string;
 };
 
+/** Returns true if upsert succeeded, false on Supabase failure. Throws on invalid token. */
 export async function registerDeviceToken({
   userId,
   organizationId,
   token,
   platform,
-}: DeviceTokenPayload) {
-  if (!token) return;
+}: DeviceTokenPayload): Promise<boolean> {
+  if (!token) return false;
 
   const { valid } = validatePushToken(token);
   if (!valid) {
@@ -70,7 +71,9 @@ export async function registerDeviceToken({
 
   if (error) {
     console.error("Device token upsert failed:", error);
+    return false;
   }
+  return true;
 }
 
 export async function unregisterDeviceToken(

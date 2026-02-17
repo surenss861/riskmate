@@ -46,12 +46,17 @@ notificationsRouter.post(
           });
       }
 
-      await registerDeviceToken({
+      const ok = await registerDeviceToken({
         userId: authReq.user.id,
         organizationId: authReq.user.organization_id,
         token,
         platform,
       });
+      if (!ok) {
+        return res
+          .status(500)
+          .json({ message: "Failed to register device token", code: "REGISTRATION_FAILED" });
+      }
 
       res.json({ status: "ok" });
     } catch (err: any) {

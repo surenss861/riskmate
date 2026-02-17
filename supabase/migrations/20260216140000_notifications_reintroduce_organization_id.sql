@@ -1,23 +1,19 @@
--- Reintroduce organization_id on notifications so records and badge counts are scoped by org (no cross-org pollution).
--- Add column nullable, backfill from users.organization_id, then set NOT NULL; update indexes and RLS.
+-- Reintroduce organization_id on notifications (for DBs that ran the old 16120000 which dropped it).
+-- Keep organization_id: add column if missing, backfill NULLs from users then organization_members,
+-- then set NOT NULL; update indexes and RLS in place. No DELETE of NULL rows (no data loss).
 
 ALTER TABLE notifications ADD COLUMN IF NOT EXISTS organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE;
 
--- Backfill: one org per user from users table
+-- Backfill NULLs from users, then from organization_members
 UPDATE notifications n
 SET organization_id = (SELECT u.organization_id FROM users u WHERE u.id = n.user_id LIMIT 1)
 WHERE n.organization_id IS NULL;
 
--- Orphaned rows (no user or user has no org): leave NULL and exclude from NOT NULL by deleting or assigning.
--- Assign any remaining to first org the user belongs to via organization_members if available
 UPDATE notifications n
 SET organization_id = (
   SELECT om.organization_id FROM organization_members om WHERE om.user_id = n.user_id LIMIT 1
 )
 WHERE n.organization_id IS NULL;
-
--- Remove notifications that cannot be assigned an org (orphans)
-DELETE FROM notifications WHERE organization_id IS NULL;
 
 ALTER TABLE notifications ALTER COLUMN organization_id SET NOT NULL;
 
