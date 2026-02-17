@@ -175,9 +175,24 @@ export const DEFAULT_NOTIFICATION_PREFERENCES = {
   report_ready: true,
 } as const;
 
+/** Safe opt-out when preferences cannot be loaded (e.g. Supabase error). All delivery disabled to avoid re-enabling push/email for opted-out users. */
+export const OPT_OUT_SAFE_PREFERENCES: NotificationPreferences = {
+  push_enabled: false,
+  email_enabled: false,
+  mention: false,
+  job_assigned: false,
+  signature_requested: false,
+  evidence_uploaded: false,
+  hazard_added: false,
+  deadline_approaching: false,
+  weekly_summary: false,
+  high_risk_job: false,
+  report_ready: false,
+};
+
 export type NotificationPreferences = typeof DEFAULT_NOTIFICATION_PREFERENCES;
 
-/** Fetch notification preferences for a user; returns defaults if no row exists. */
+/** Fetch notification preferences for a user; returns defaults if no row exists. On Supabase error returns OPT_OUT_SAFE_PREFERENCES so delivery is skipped (fail closed). */
 export async function getNotificationPreferences(
   userId: string
 ): Promise<NotificationPreferences> {
@@ -189,7 +204,7 @@ export async function getNotificationPreferences(
 
   if (error) {
     console.error("Failed to load notification preferences:", error);
-    return { ...DEFAULT_NOTIFICATION_PREFERENCES };
+    return { ...OPT_OUT_SAFE_PREFERENCES };
   }
 
   if (!data) return { ...DEFAULT_NOTIFICATION_PREFERENCES };

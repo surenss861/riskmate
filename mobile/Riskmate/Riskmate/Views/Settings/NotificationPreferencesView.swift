@@ -19,7 +19,7 @@ struct NotificationPreferencesView: View {
                         .font(RMTheme.Typography.body)
                         .foregroundColor(RMTheme.Colors.textSecondary)
                 }
-            } else if let error = errorMessage {
+            } else if prefs == nil, let error = errorMessage {
                 RMEmptyState(
                     icon: "exclamationmark.triangle.fill",
                     title: "Error",
@@ -27,7 +27,11 @@ struct NotificationPreferencesView: View {
                 )
                 .padding(RMTheme.Spacing.pagePadding)
             } else if let prefs = prefs {
-                List {
+                VStack(spacing: 0) {
+                    if let error = errorMessage {
+                        inlineErrorBanner(message: error)
+                    }
+                    List {
                     Section {
                         Toggle(isOn: binding(\.push_enabled)) {
                             Label("Push notifications", systemImage: "bell.badge.fill")
@@ -91,6 +95,7 @@ struct NotificationPreferencesView: View {
                 .refreshable {
                     await load()
                 }
+                }
             }
         }
         .navigationTitle("Notification preferences")
@@ -147,10 +152,29 @@ struct NotificationPreferencesView: View {
             prefs = updated
         } catch {
             errorMessage = error.localizedDescription
-            // Revert local state on failure
-            prefs = try? await APIClient.shared.getNotificationPreferences()
+            // Revert local state on failure; clear error banner if refetch succeeds
+            if let refetched = try? await APIClient.shared.getNotificationPreferences() {
+                prefs = refetched
+                errorMessage = nil
+            }
+            // If refetch failed, leave prefs unchanged so user can still interact with the list
         }
         isSaving = false
+    }
+
+    private func inlineErrorBanner(message: String) -> some View {
+        HStack {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundColor(RMTheme.Colors.warning)
+            Text(message)
+                .font(RMTheme.Typography.caption)
+                .foregroundColor(RMTheme.Colors.textPrimary)
+            Spacer(minLength: 0)
+        }
+        .padding(RMTheme.Spacing.md)
+        .background(RMTheme.Colors.surface.opacity(0.9))
+        .padding(.horizontal, RMTheme.Spacing.pagePadding)
+        .padding(.top, RMTheme.Spacing.sm)
     }
 }
 
