@@ -597,7 +597,7 @@ type PushPayload = {
 async function sendToUser(userId: string, organizationId: string, payload: PushPayload) {
   const prefs = await getNotificationPreferences(userId);
 
-  // Always create notification record and update badge so Notification Center and badges stay in sync (scoped by org).
+  // Create notification record first; only proceed with badge/push when a row was created so payload IDs and badge stay in sync.
   const notificationType =
     typeof payload.data?.type === "string" ? (payload.data.type as string) : "push";
   const deepLink =
@@ -609,6 +609,7 @@ async function sendToUser(userId: string, organizationId: string, payload: PushP
     payload.body,
     deepLink
   );
+  if (notificationId == null) return;
 
   const badge = await getUnreadNotificationCount(userId, organizationId);
 

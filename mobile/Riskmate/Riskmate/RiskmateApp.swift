@@ -153,8 +153,10 @@ struct RiskmateApp: App {
         case .active:
             // Resume timers and check auth when app foregrounds
             ServerStatusManager.shared.resumeChecks()
-            Task {
-                await NotificationService.shared.refreshBadgeFromServer()
+            if SessionManager.shared.isAuthenticated {
+                Task {
+                    await NotificationService.shared.refreshBadgeFromServer()
+                }
             }
             Task {
                 await checkAndPromptNotificationPermissions()

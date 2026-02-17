@@ -47,6 +47,19 @@ SET organization_id = (
 )
 WHERE n.organization_id IS NULL;
 
+-- Handle rows still with NULL organization_id (orphaned): raise error listing affected IDs so migration does not fail silently.
+DO $$
+DECLARE
+  orphan_ids UUID[];
+BEGIN
+  SELECT ARRAY_AGG(id) INTO orphan_ids
+  FROM notifications
+  WHERE organization_id IS NULL;
+  IF orphan_ids IS NOT NULL AND array_length(orphan_ids, 1) > 0 THEN
+    RAISE EXCEPTION 'notifications migration: % row(s) have NULL organization_id after backfill (orphaned). Affected ids: %', array_length(orphan_ids, 1), orphan_ids;
+  END IF;
+END $$;
+
 ALTER TABLE notifications ALTER COLUMN organization_id SET NOT NULL;
 
 -- Replace type CHECK constraint
