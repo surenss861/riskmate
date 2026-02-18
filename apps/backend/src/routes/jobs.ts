@@ -893,21 +893,30 @@ jobsRouter.post("/bulk/status", authenticate, requireWriteAccess, async (req: ex
       return res.json({ data: { succeeded: [], failed } });
     }
 
-    const { error: updateError } = await supabase
-      .from("jobs")
-      .update({ status: dbStatus })
-      .eq("organization_id", organization_id)
-      .in("id", eligibleIds);
+    const { data: rpcResult, error: rpcError } = await supabase.rpc("bulk_update_job_status", {
+      p_organization_id: organization_id,
+      p_job_ids: eligibleIds,
+      p_status: dbStatus,
+    });
 
-    if (updateError) {
+    if (rpcError) {
       for (const id of eligibleIds) {
-        failed.push({ id, code: "UPDATE_FAILED", message: updateError.message });
+        failed.push({ id, code: "UPDATE_FAILED", message: rpcError.message });
       }
       return res.json({ data: { succeeded: [], failed } });
     }
 
+    const succeeded: string[] = Array.isArray(rpcResult)
+      ? rpcResult.map((r) => (typeof r === "string" ? r : (r as { id?: string })?.id ?? "")).filter(Boolean)
+      : [];
+    for (const id of eligibleIds) {
+      if (!succeeded.includes(id)) {
+        failed.push({ id, code: "UPDATE_FAILED", message: "Job was not updated (ineligible)" });
+      }
+    }
+
     const clientMetadata = extractClientMetadata(req);
-    for (const jobId of eligibleIds) {
+    for (const jobId of succeeded) {
       await recordAuditLog({
         organizationId: organization_id,
         actorId: userId,
@@ -919,7 +928,7 @@ jobsRouter.post("/bulk/status", authenticate, requireWriteAccess, async (req: ex
       });
       await emitJobEvent(organization_id, "job.updated", jobId, userId);
     }
-    res.json({ data: { succeeded: eligibleIds, failed } });
+    res.json({ data: { succeeded, failed } });
   } catch (err: any) {
     console.error("Bulk status update failed:", err);
     res.status(500).json({ message: "Failed to update jobs" });
@@ -994,54 +1003,27 @@ jobsRouter.post("/bulk/assign", authenticate, requireWriteAccess, async (req: ex
       return res.json({ data: { succeeded: [], failed, updated_assignments: {} } });
     }
 
-    const rows = eligibleIds.map((job_id: string) => ({
-      job_id,
-      user_id: workerId,
-      role: "worker",
-      organization_id,
-    }));
-    const { error: insertError } = await supabase.from("job_assignments").insert(rows);
+    const { data: rpcResult, error: rpcError } = await supabase.rpc("bulk_assign_jobs", {
+      p_organization_id: organization_id,
+      p_job_ids: eligibleIds,
+      p_worker_id: workerId,
+      p_worker_name: assigneeName,
+      p_worker_email: assigneeEmail,
+    });
 
-    let succeeded: string[] = [];
-    if (insertError) {
-      if (insertError.code === "23505") {
-        for (const jobId of eligibleIds) {
-          const { error: oneError } = await supabase.from("job_assignments").insert({
-            job_id: jobId,
-            user_id: workerId,
-            role: "worker",
-            organization_id,
-          });
-          if (oneError && oneError.code === "23505") {
-            failed.push({ id: jobId, code: "ALREADY_ASSIGNED", message: "User already assigned to this job" });
-          } else if (oneError) {
-            failed.push({ id: jobId, code: "ASSIGN_FAILED", message: oneError.message });
-          } else {
-            succeeded.push(jobId);
-          }
-        }
-      } else {
-        for (const id of eligibleIds) {
-          failed.push({ id, code: "ASSIGN_FAILED", message: insertError.message });
-        }
-        return res.json({ data: { succeeded: [], failed, updated_assignments: {} } });
+    if (rpcError) {
+      for (const id of eligibleIds) {
+        failed.push({ id, code: "ASSIGN_FAILED", message: rpcError.message });
       }
-    } else {
-      succeeded = [...eligibleIds];
+      return res.json({ data: { succeeded: [], failed, updated_assignments: {} } });
     }
 
-    if (succeeded.length > 0) {
-      const { error: updateJobError } = await supabase
-        .from("jobs")
-        .update({
-          assigned_to_id: workerId,
-          assigned_to_name: assigneeName,
-          assigned_to_email: assigneeEmail,
-        })
-        .eq("organization_id", organization_id)
-        .in("id", succeeded);
-      if (updateJobError) {
-        console.warn("[bulk/assign] Failed to update job assignment fields:", updateJobError.message);
+    const succeeded: string[] = Array.isArray(rpcResult)
+      ? rpcResult.map((r) => (typeof r === "string" ? r : (r as { id?: string })?.id ?? "")).filter(Boolean)
+      : [];
+    for (const id of eligibleIds) {
+      if (!succeeded.includes(id)) {
+        failed.push({ id, code: "ASSIGN_FAILED", message: "Job was not assigned (ineligible)" });
       }
     }
 
