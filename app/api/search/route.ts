@@ -118,7 +118,7 @@ export async function GET(request: NextRequest) {
           results.push({
             type: 'job',
             id: row.id,
-            title: row.client_name || 'Untitled Job',
+            title: (row.title || row.client_name || 'Untitled Job').trim() || 'Untitled Job',
             subtitle: [row.job_type, row.location].filter(Boolean).join(' • '),
             highlight: row.highlight || '',
             score: Number(row.score) || 0,

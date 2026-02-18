@@ -1,10 +1,14 @@
--- Recreate search_vector so it includes job title/name (client_name) and all searchable fields
+-- Ensure job title/name column exists for search coverage (optional; may already exist).
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS title TEXT;
+
+-- Recreate search_vector so it includes job title/name and all searchable fields
 ALTER TABLE jobs DROP COLUMN IF EXISTS search_vector;
 
 ALTER TABLE jobs
   ADD COLUMN search_vector tsvector
     GENERATED ALWAYS AS (
       to_tsvector('english',
+        coalesce(title, '') || ' ' ||
         coalesce(client_name, '') || ' ' ||
         coalesce(job_type, '') || ' ' ||
         coalesce(description, '') || ' ' ||
@@ -79,6 +83,7 @@ CREATE OR REPLACE FUNCTION search_jobs(
 )
 RETURNS TABLE (
   id UUID,
+  title TEXT,
   client_name TEXT,
   job_type TEXT,
   location TEXT,
@@ -95,6 +100,7 @@ AS $$
   )
   SELECT
     j.id,
+    j.title,
     j.client_name,
     j.job_type,
     j.location,
@@ -103,6 +109,7 @@ AS $$
     ts_rank(j.search_vector, q.tsq)::REAL AS score,
     ts_headline(
       'english',
+      coalesce(j.title, '') || ' ' ||
       coalesce(j.client_name, '') || ' ' ||
       coalesce(j.job_type, '') || ' ' ||
       coalesce(j.description, '') || ' ' ||

@@ -207,6 +207,7 @@ jobsRouter.get("/", authenticate, async (req: express.Request, res: express.Resp
     // Type for job rows - optional fields may not exist if migration hasn't run
     type JobRow = {
       id: string;
+      title?: string | null;
       client_name: string | null;
       job_type: string | null;
       location: string | null;
@@ -222,8 +223,8 @@ jobsRouter.get("/", authenticate, async (req: express.Request, res: express.Resp
       applied_template_type?: string | null;
     };
     
-    // Base columns (always present)
-    const baseColumns = "id, client_name, job_type, location, status, risk_score, risk_level, created_at, updated_at, review_flag, flagged_at";
+    // Base columns (always present; title may be null if not set)
+    const baseColumns = "id, title, client_name, job_type, location, status, risk_score, risk_level, created_at, updated_at, review_flag, flagged_at";
     // Optional columns (may not exist if migration hasn't run)
     const optionalColumns = "applied_template_id, applied_template_type, assigned_to_id, assigned_to_name, assigned_to_email";
     
@@ -247,8 +248,8 @@ jobsRouter.get("/", authenticate, async (req: express.Request, res: express.Resp
       }
       // Escape special characters for LIKE query
       const escapedTerm = searchTerm.replace(/[%_]/g, '\\$&');
-      // Search in client_name, location, or id (case-insensitive partial match)
-      query = query.or(`client_name.ilike.%${escapedTerm}%,location.ilike.%${escapedTerm}%,id.eq.${escapedTerm}`);
+      // Search in title, client_name, location, or id (case-insensitive partial match)
+      query = query.or(`title.ilike.%${escapedTerm}%,client_name.ilike.%${escapedTerm}%,location.ilike.%${escapedTerm}%,id.eq.${escapedTerm}`);
     }
     
     // Cursor-based pagination (per-sort cursor keys for consistency)
@@ -349,8 +350,9 @@ jobsRouter.get("/", authenticate, async (req: express.Request, res: express.Resp
     
     // If error is due to missing columns (migration not applied), retry with minimal columns
     if (error && (
-      error.message?.includes('archived_at') || 
-      error.message?.includes('deleted_at') || 
+      error.message?.includes('archived_at') ||
+      error.message?.includes('deleted_at') ||
+      error.message?.includes('title') ||
       error.message?.includes('applied_template_id') ||
       error.message?.includes('applied_template_type') ||
       error.message?.includes('review_flag') ||
@@ -365,7 +367,16 @@ jobsRouter.get("/", authenticate, async (req: express.Request, res: express.Resp
       let fallbackQuery = supabase
         .from("jobs")
         .select("id, client_name, job_type, location, status, risk_score, risk_level, created_at, updated_at")
-        .eq("organization_id", organization_id);
+        .eq("organization_id", organization_id)
+        .is("deleted_at", null);
+
+      if (q && typeof q === 'string' && q.trim()) {
+        const searchTerm = q.trim();
+        if (/^[a-zA-Z0-9\s\-_]+$/.test(searchTerm)) {
+          const escapedTerm = searchTerm.replace(/[%_]/g, '\\$&');
+          fallbackQuery = fallbackQuery.or(`client_name.ilike.%${escapedTerm}%,location.ilike.%${escapedTerm}%,id.eq.${escapedTerm}`);
+        }
+      }
       
       // Apply cursor or offset pagination (fallback mode - simplified)
       if (useCursor) {
