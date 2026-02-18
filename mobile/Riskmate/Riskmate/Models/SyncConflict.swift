@@ -1,7 +1,8 @@
 import Foundation
 
 /// Represents a conflict between local and server data during sync
-struct SyncConflict: Identifiable {
+struct SyncConflict: Identifiable, Equatable {
+    static func == (lhs: SyncConflict, rhs: SyncConflict) -> Bool { lhs.id == rhs.id }
     let id: String
     let entityType: String
     let entityId: String

@@ -1640,7 +1640,7 @@ struct JobActivityData: Codable {
 }
 
 /// Job activity event from GET /api/jobs/:id/activity (audit log row + enriched actor).
-struct ActivityEvent: Identifiable, Codable {
+struct ActivityEvent: Identifiable, Codable, Equatable {
     let id: String
     let actorId: String?
     let eventName: String?
@@ -1729,6 +1729,10 @@ struct ActivityEvent: Identifiable, Codable {
         outcome = other.outcome
         summary = other.summary
         metadata = other.metadata
+    }
+
+    static func == (lhs: ActivityEvent, rhs: ActivityEvent) -> Bool {
+        lhs.id == rhs.id
     }
 }
 
@@ -1886,11 +1890,11 @@ struct SyncMitigationData: Codable {
     enum CodingKeys: String, CodingKey {
         case id, title, name, description, status, done, code, severity
         case isCompleted = "isCompleted"
-        case is_completed
+        case is_completed = "is_completed"
         case hazardId = "hazardId"
-        case hazard_id
+        case hazard_id = "hazard_id"
         case jobId = "jobId"
-        case job_id
+        case job_id = "job_id"
         case createdAt = "createdAt"
         case updatedAt = "updatedAt"
         case created_at
@@ -1905,19 +1909,40 @@ struct SyncMitigationData: Codable {
         description = try c.decodeIfPresent(String.self, forKey: .description)
         status = try c.decodeIfPresent(String.self, forKey: .status)
         done = try c.decodeIfPresent(Bool.self, forKey: .done)
-        isCompleted = try c.decodeIfPresent(Bool.self, forKey: .isCompleted)
-            ?? try? c.decode(Bool.self, forKey: .is_completed)
-        let hazardIdVal = try c.decodeIfPresent(String.self, forKey: .hazardId)
-            ?? try? c.decode(String.self, forKey: .hazard_id)
-        hazardId = hazardIdVal
-        jobId = try c.decodeIfPresent(String.self, forKey: .jobId)
-            ?? try? c.decode(String.self, forKey: .job_id)
+        let isCompletedCamel = try c.decodeIfPresent(Bool.self, forKey: .isCompleted)
+        let isCompletedSnake = try? c.decode(Bool.self, forKey: .is_completed)
+        isCompleted = isCompletedCamel ?? isCompletedSnake
+        let hazardIdCamel = try c.decodeIfPresent(String.self, forKey: .hazardId)
+        let hazardIdSnake = try? c.decode(String.self, forKey: .hazard_id)
+        hazardId = hazardIdCamel ?? hazardIdSnake
+        let jobIdCamel = try c.decodeIfPresent(String.self, forKey: .jobId)
+        let jobIdSnake = try? c.decode(String.self, forKey: .job_id)
+        jobId = jobIdCamel ?? jobIdSnake
         code = try c.decodeIfPresent(String.self, forKey: .code)
         severity = try c.decodeIfPresent(String.self, forKey: .severity)
         createdAt = try c.decodeIfPresent(String.self, forKey: .createdAt)
         updatedAt = try c.decodeIfPresent(String.self, forKey: .updatedAt)
         created_at = try c.decodeIfPresent(String.self, forKey: .created_at)
         updated_at = try c.decodeIfPresent(String.self, forKey: .updated_at)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encodeIfPresent(title, forKey: .title)
+        try c.encodeIfPresent(name, forKey: .name)
+        try c.encodeIfPresent(description, forKey: .description)
+        try c.encodeIfPresent(status, forKey: .status)
+        try c.encodeIfPresent(done, forKey: .done)
+        try c.encodeIfPresent(isCompleted, forKey: .isCompleted)
+        try c.encodeIfPresent(hazardId, forKey: .hazardId)
+        try c.encodeIfPresent(jobId, forKey: .jobId)
+        try c.encodeIfPresent(code, forKey: .code)
+        try c.encodeIfPresent(severity, forKey: .severity)
+        try c.encodeIfPresent(createdAt, forKey: .createdAt)
+        try c.encodeIfPresent(updatedAt, forKey: .updatedAt)
+        try c.encodeIfPresent(created_at, forKey: .created_at)
+        try c.encodeIfPresent(updated_at, forKey: .updated_at)
     }
 
     var jobIdFromData: String? { jobId }

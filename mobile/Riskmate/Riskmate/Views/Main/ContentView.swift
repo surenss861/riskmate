@@ -493,43 +493,46 @@ private struct CommentDeepLinkView: View {
     @State private var loadError: String?
     @Environment(\.dismiss) private var dismiss
 
+    @ViewBuilder
+    private var content: some View {
+        if let jobId = jobId {
+            JobDetailView(jobId: jobId, initialTab: .signatures)
+                .environmentObject(QuickActionRouter.shared)
+        } else if let error = loadError {
+            VStack(spacing: RMTheme.Spacing.lg) {
+                Text("Could not open comment")
+                    .font(RMTheme.Typography.headingSmall)
+                Text(error)
+                    .font(RMTheme.Typography.body)
+                    .foregroundColor(RMTheme.Colors.textSecondary)
+                    .multilineTextAlignment(.center)
+                Button("Dismiss") {
+                    dismiss()
+                }
+                .buttonStyle(.borderedProminent)
+            }
+            .padding(RMTheme.Spacing.pagePadding)
+        } else {
+            VStack(spacing: RMTheme.Spacing.lg) {
+                RMSkeletonView(width: 80, height: 80, cornerRadius: 12)
+                Text("Loading…")
+                    .font(RMTheme.Typography.body)
+                    .foregroundColor(RMTheme.Colors.textSecondary)
+            }
+        }
+    }
+
     var body: some View {
-        Group {
-            if let jobId = jobId {
-                JobDetailView(jobId: jobId, initialTab: .signatures)
-                    .environmentObject(QuickActionRouter.shared)
-            } else if let error = loadError {
-                VStack(spacing: RMTheme.Spacing.lg) {
-                    Text("Could not open comment")
-                        .font(RMTheme.Typography.headline)
-                    Text(error)
-                        .font(RMTheme.Typography.body)
-                        .foregroundColor(RMTheme.Colors.textSecondary)
-                        .multilineTextAlignment(.center)
-                    Button("Dismiss") {
-                        dismiss()
-                    }
-                    .buttonStyle(.borderedProminent)
-                }
-                .padding(RMTheme.Spacing.pagePadding)
-            } else {
-                VStack(spacing: RMTheme.Spacing.lg) {
-                    RMSkeletonView(width: 80, height: 80, cornerRadius: 12)
-                    Text("Loading…")
-                        .font(RMTheme.Typography.body)
-                        .foregroundColor(RMTheme.Colors.textSecondary)
+        content
+            .task {
+                guard jobId == nil, loadError == nil else { return }
+                do {
+                    let resolvedJobId = try await APIClient.shared.getJobIdForSignoff(signoffId: signoffId)
+                    jobId = resolvedJobId
+                } catch {
+                    loadError = error.localizedDescription
                 }
             }
-        }
-        .task {
-            guard jobId == nil, loadError == nil else { return }
-            do {
-                let resolvedJobId = try await APIClient.shared.getJobIdForSignoff(signoffId: signoffId)
-                jobId = resolvedJobId
-            } catch {
-                loadError = error.localizedDescription
-            }
-        }
     }
 }
 
@@ -541,43 +544,46 @@ private struct ReportRunDeepLinkView: View {
     @State private var loadError: String?
     @Environment(\.dismiss) private var dismiss
 
+    @ViewBuilder
+    private var content: some View {
+        if let jobId = jobId {
+            JobDetailView(jobId: jobId, initialTab: .signatures)
+                .environmentObject(QuickActionRouter.shared)
+        } else if let error = loadError {
+            VStack(spacing: RMTheme.Spacing.lg) {
+                Text("Could not load report")
+                    .font(RMTheme.Typography.headingSmall)
+                Text(error)
+                    .font(RMTheme.Typography.body)
+                    .foregroundColor(RMTheme.Colors.textSecondary)
+                    .multilineTextAlignment(.center)
+                Button("Dismiss") {
+                    dismiss()
+                }
+                .buttonStyle(.borderedProminent)
+            }
+            .padding(RMTheme.Spacing.pagePadding)
+        } else {
+            VStack(spacing: RMTheme.Spacing.lg) {
+                RMSkeletonView(width: 80, height: 80, cornerRadius: 12)
+                Text("Loading report…")
+                    .font(RMTheme.Typography.body)
+                    .foregroundColor(RMTheme.Colors.textSecondary)
+            }
+        }
+    }
+
     var body: some View {
-        Group {
-            if let jobId = jobId {
-                JobDetailView(jobId: jobId, initialTab: .signatures)
-                    .environmentObject(QuickActionRouter.shared)
-            } else if let error = loadError {
-                VStack(spacing: RMTheme.Spacing.lg) {
-                    Text("Could not load report")
-                        .font(RMTheme.Typography.headline)
-                    Text(error)
-                        .font(RMTheme.Typography.body)
-                        .foregroundColor(RMTheme.Colors.textSecondary)
-                        .multilineTextAlignment(.center)
-                    Button("Dismiss") {
-                        dismiss()
-                    }
-                    .buttonStyle(.borderedProminent)
-                }
-                .padding(RMTheme.Spacing.pagePadding)
-            } else {
-                VStack(spacing: RMTheme.Spacing.lg) {
-                    RMSkeletonView(width: 80, height: 80, cornerRadius: 12)
-                    Text("Loading report…")
-                        .font(RMTheme.Typography.body)
-                        .foregroundColor(RMTheme.Colors.textSecondary)
+        content
+            .task {
+                guard jobId == nil, loadError == nil else { return }
+                do {
+                    let run = try await APIClient.shared.getReportRun(reportRunId: reportRunId)
+                    jobId = run.jobId
+                } catch {
+                    loadError = error.localizedDescription
                 }
             }
-        }
-        .task {
-            guard jobId == nil, loadError == nil else { return }
-            do {
-                let run = try await APIClient.shared.getReportRun(reportRunId: reportRunId)
-                jobId = run.jobId
-            } catch {
-                loadError = error.localizedDescription
-            }
-        }
     }
 }
 

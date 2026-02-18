@@ -484,7 +484,7 @@ private struct PressureSignaturePadView: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: PressureSignatureCanvasView, context: Context) {
-        context.coordinator.canvasSize.wrappedValue = uiView.bounds.size
+        context.coordinator.canvasSize = uiView.bounds.size
         if paths.isEmpty && currentPath.isEmpty {
             uiView.clearAll()
         } else {

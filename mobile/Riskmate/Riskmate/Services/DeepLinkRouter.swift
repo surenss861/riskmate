@@ -1,3 +1,4 @@
+import Combine
 import SwiftUI
 
 /// Routes riskmate:// URLs to the appropriate view (JobDetail, Report, Notifications, etc.).

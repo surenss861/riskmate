@@ -53,28 +53,30 @@ struct SyncQueueView: View {
         return "~\(mins) min"
     }
 
-    var body: some View {
-        NavigationStack {
-            RMBackground()
-                .overlay {
-                    Group {
-                        if !hasPendingItems {
-                            VStack(spacing: RMTheme.Spacing.lg) {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .font(.system(size: 48))
-                                    .foregroundColor(RMTheme.Colors.success)
-                                Text("All synced")
-                                    .font(RMTheme.Typography.title2)
-                                    .foregroundColor(RMTheme.Colors.textPrimary)
-                                Text("No pending operations. Your data is up to date.")
-                                    .font(RMTheme.Typography.bodySmall)
-                                    .foregroundColor(RMTheme.Colors.textSecondary)
-                                    .multilineTextAlignment(.center)
-                                    .padding(.horizontal)
-                            }
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        } else {
-                            List {
+    @ViewBuilder
+    private var syncQueueContent: some View {
+        if !hasPendingItems {
+            VStack(spacing: RMTheme.Spacing.lg) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 48))
+                    .foregroundColor(RMTheme.Colors.success)
+                Text("All synced")
+                    .font(RMTheme.Typography.title2)
+                    .foregroundColor(RMTheme.Colors.textPrimary)
+                Text("No pending operations. Your data is up to date.")
+                    .font(RMTheme.Typography.bodySmall)
+                    .foregroundColor(RMTheme.Colors.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            syncQueueList
+        }
+    }
+
+    private var syncQueueList: some View {
+        List {
                                 Section {
                                     if !estimatedSyncTime.isEmpty {
                                         HStack {
@@ -138,92 +140,94 @@ struct SyncQueueView: View {
                                         Text("Evidence uploads (\(queuedUploads.count))")
                                     }
                                 }
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+    }
+
+    @ViewBuilder
+    private var syncPrimaryActionButton: some View {
+        if hasPendingItems, statusManager.isOnline, canSyncNow {
+            Button {
+                Haptics.tap()
+                Task {
+                    do {
+                        _ = try await syncEngine.syncPendingOperations()
+                        JobsStore.shared.refreshPendingJobs()
+                    } catch {
+                        ToastCenter.shared.show(
+                            error.localizedDescription,
+                            systemImage: "exclamationmark.triangle",
+                            style: .error
+                        )
+                    }
+                    let toProcess = actionableUploads
+                    if !toProcess.isEmpty {
+                        isRetryingUploads = true
+                        defer { isRetryingUploads = false }
+                        for upload in toProcess {
+                            do {
+                                try await uploadManager.retryUpload(upload)
+                            } catch {
+                                ToastCenter.shared.show(
+                                    error.localizedDescription,
+                                    systemImage: "exclamationmark.triangle",
+                                    style: .error
+                                )
                             }
-                            .listStyle(.plain)
-                            .scrollContentBackground(.hidden)
                         }
                     }
                 }
-                .navigationTitle("Sync Queue")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("Done") {
-                            dismiss()
-                        }
+            } label: {
+                if syncEngine.isSyncing || isRetryingUploads {
+                    ProgressView().scaleEffect(0.9)
+                } else {
+                    Text("Sync Now").fontWeight(.semibold)
+                }
+            }
+            .disabled(syncEngine.isSyncing || isRetryingUploads)
+            .foregroundColor(RMTheme.Colors.accent)
+        } else if hasPendingItems, !statusManager.isOnline {
+            Button {
+                Haptics.tap()
+                Task { await statusManager.checkHealth() }
+            } label: {
+                Label("Check connection", systemImage: "wifi.slash")
+                    .font(RMTheme.Typography.bodySmallBold)
+            }
+            .foregroundColor(RMTheme.Colors.accent)
+        }
+    }
+
+    private var navigationContent: some View {
+        RMBackground()
+            .overlay { syncQueueContent }
+            .navigationTitle("Sync Queue")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Done") { dismiss() }
                         .foregroundColor(RMTheme.Colors.accent)
-                    }
-                    ToolbarItem(placement: .topBarLeading) {
-                        Button {
-                            Haptics.tap()
-                            showConflictHistory = true
-                        } label: {
-                            Label("Conflicts", systemImage: "arrow.triangle.2.circlepath")
-                                .font(RMTheme.Typography.caption)
-                        }
-                        .foregroundColor(RMTheme.Colors.textSecondary)
-                    }
-                    ToolbarItem(placement: .primaryAction) {
-                        if hasPendingItems {
-                            if statusManager.isOnline {
-                                if canSyncNow {
-                                    Button {
-                                        Haptics.tap()
-                                        Task {
-                                            // 1. Sync pending operations (jobs, hazards, controls)
-                                            do {
-                                                _ = try await syncEngine.syncPendingOperations()
-                                                JobsStore.shared.refreshPendingJobs()
-                                            } catch {
-                                                ToastCenter.shared.show(
-                                                    error.localizedDescription,
-                                                    systemImage: "exclamationmark.triangle",
-                                                    style: .error
-                                                )
-                                            }
-                                            // 2. Retry failed uploads and start queued ones
-                                            let toProcess = actionableUploads
-                                            if !toProcess.isEmpty {
-                                                isRetryingUploads = true
-                                                defer { isRetryingUploads = false }
-                                                for upload in toProcess {
-                                                    do {
-                                                        try await uploadManager.retryUpload(upload)
-                                                    } catch {
-                                                        ToastCenter.shared.show(
-                                                            error.localizedDescription,
-                                                            systemImage: "exclamationmark.triangle",
-                                                            style: .error
-                                                        )
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    } label: {
-                                        if syncEngine.isSyncing || isRetryingUploads {
-                                            ProgressView()
-                                                .scaleEffect(0.9)
-                                        } else {
-                                            Text("Sync Now")
-                                                .fontWeight(.semibold)
-                                        }
-                                    }
-                                    .disabled(syncEngine.isSyncing || isRetryingUploads)
-                                    .foregroundColor(RMTheme.Colors.accent)
-                                }
-                            } else {
-                                Button {
-                                    Haptics.tap()
-                                    Task { await statusManager.checkHealth() }
-                                } label: {
-                                    Label("Check connection", systemImage: "wifi.slash")
-                                        .font(RMTheme.Typography.bodySmallBold)
-                                }
-                                .foregroundColor(RMTheme.Colors.accent)
-                            }
-                        }
-                    }
                 }
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        Haptics.tap()
+                        showConflictHistory = true
+                    } label: {
+                        Label("Conflicts", systemImage: "arrow.triangle.2.circlepath")
+                            .font(RMTheme.Typography.caption)
+                    }
+                    .foregroundColor(RMTheme.Colors.textSecondary)
+                }
+                ToolbarItem(placement: .primaryAction) {
+                    syncPrimaryActionButton
+                }
+            }
+    }
+
+    var body: some View {
+        NavigationStack {
+            navigationContent
                 .onChange(of: syncEngine.isSyncing) { _, isSyncing in
                     if !isSyncing {
                         syncEngine.refreshPendingOperations()
@@ -243,43 +247,47 @@ struct SyncQueueView: View {
                     }
                 }
                 .sheet(item: $conflictToResolve) { conflict in
-                    ConflictResolutionSheet(
-                        conflict: conflict,
-                        entityLabel: entityLabel(for: conflict),
-                        onResolve: { outcome in
-                            var op = syncEngine.pendingOperations.first { $0.id == conflict.id }
-                            if op == nil {
-                                op = OfflineDatabase.shared.getSyncQueue().first { $0.id == conflict.id }
-                            }
-                            let payload = try syncEngine.buildResolvePayload(conflict: conflict, outcome: outcome, pendingOp: op)
-                            do {
-                                try await syncEngine.resolveConflict(
-                                    operationId: conflict.id,
-                                    strategy: outcome.strategy,
-                                    resolvedValue: payload.resolvedValue,
-                                    entityType: payload.entityType,
-                                    entityId: payload.entityId,
-                                    operationType: payload.operationType
-                                )
-                                conflictToResolve = syncEngine.pendingConflicts.first
-                                _ = try? await syncEngine.syncPendingOperations()
-                                JobsStore.shared.refreshPendingJobs()
-                                NotificationCenter.default.post(name: .syncConflictHistoryDidChange, object: nil)
-                                ToastCenter.shared.show("Conflict resolved", systemImage: "checkmark.circle", style: .success)
-                            } catch {
-                                ToastCenter.shared.show(error.localizedDescription, systemImage: "exclamationmark.triangle", style: .error)
-                                throw error
-                            }
-                        },
-                        onCancel: {
-                            conflictToResolve = nil
-                        }
-                    )
+                    conflictResolutionSheetContent(conflict: conflict)
                 }
                 .sheet(isPresented: $showConflictHistory) {
                     ConflictHistoryView()
                 }
         }
+    }
+
+    private func conflictResolutionSheetContent(conflict: SyncConflict) -> some View {
+        ConflictResolutionSheet(
+            conflict: conflict,
+            entityLabel: entityLabel(for: conflict),
+            onResolve: { outcome in
+                var op = syncEngine.pendingOperations.first { $0.id == conflict.id }
+                if op == nil {
+                    op = OfflineDatabase.shared.getSyncQueue().first { $0.id == conflict.id }
+                }
+                let payload = try syncEngine.buildResolvePayload(conflict: conflict, outcome: outcome, pendingOp: op)
+                do {
+                    try await syncEngine.resolveConflict(
+                        operationId: conflict.id,
+                        strategy: outcome.strategy,
+                        resolvedValue: payload.resolvedValue,
+                        entityType: payload.entityType,
+                        entityId: payload.entityId,
+                        operationType: payload.operationType
+                    )
+                    conflictToResolve = syncEngine.pendingConflicts.first
+                    _ = try? await syncEngine.syncPendingOperations()
+                    JobsStore.shared.refreshPendingJobs()
+                    NotificationCenter.default.post(name: .syncConflictHistoryDidChange, object: nil)
+                    ToastCenter.shared.show("Conflict resolved", systemImage: "checkmark.circle", style: .success)
+                } catch {
+                    ToastCenter.shared.show(error.localizedDescription, systemImage: "exclamationmark.triangle", style: .error)
+                    throw error
+                }
+            },
+            onCancel: {
+                conflictToResolve = nil
+            }
+        )
     }
 
     private func entityLabel(for conflict: SyncConflict) -> String {

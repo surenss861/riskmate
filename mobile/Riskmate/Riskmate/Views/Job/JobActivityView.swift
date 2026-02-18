@@ -1,3 +1,4 @@
+import Combine
 import SwiftUI
 import Supabase
 
@@ -366,6 +367,7 @@ struct JobActivityView: View {
             case .decodingError: return "Invalid response"
             case .invalidURL: return "Invalid request"
             case .invalidResponse: return "Invalid response"
+            case .unauthorized: return "Please log in"
             }
         }
         return error.localizedDescription
@@ -418,6 +420,13 @@ private struct ActivityFilters {
     var eventTypes: [String]
     var startDate: Date?
     var endDate: Date?
+
+    init(actorId: String? = nil, eventTypes: [String] = [], startDate: Date? = nil, endDate: Date? = nil) {
+        self.actorId = actorId
+        self.eventTypes = eventTypes
+        self.startDate = startDate
+        self.endDate = endDate
+    }
 }
 
 private struct ActivityActor: Identifiable {
@@ -604,8 +613,7 @@ final class JobActivityRealtimeService: ObservableObject {
 
         // Authenticate with current user JWT so audit_logs RLS allows the postgres_changes feed.
         do {
-            let t = try await AuthService.shared.getAccessToken()
-            guard !t.isEmpty else {
+            guard let t = try await AuthService.shared.getAccessToken(), !t.isEmpty else {
                 subscriptionUnavailableReason = "Live updates unavailable — please pull to refresh."
                 return
             }
@@ -616,12 +624,8 @@ final class JobActivityRealtimeService: ObservableObject {
 
         guard let url = URL(string: AppConfig.shared.supabaseURL) else { return }
 
-        var options = SupabaseClientOptions()
-        options.realtime.accessToken = {
-            // Re-fetch token so refresh is respected during long-lived subscription.
-            try await AuthService.shared.getAccessToken()
-        }
-        let client = SupabaseClient(supabaseURL: url, supabaseKey: AppConfig.shared.supabaseAnonKey, options: options)
+        // Supabase client shares auth session when using same URL/key; realtime uses it for RLS.
+        let client = SupabaseClient(supabaseURL: url, supabaseKey: AppConfig.shared.supabaseAnonKey)
         supabaseClient = client
         let ch = client.channel(channelId)
 
@@ -648,8 +652,6 @@ final class JobActivityRealtimeService: ObservableObject {
             return
         }
         channel = ch
-
-        await withCheckedContinuation { _ in }
     }
 
     private func handleInsertAction(_ action: InsertAction, jobId: String) async {
@@ -699,7 +701,7 @@ struct ActivityFilterSheet: View {
     @Binding var eventTypes: Set<String>
     @Binding var startDate: Date?
     @Binding var endDate: Date?
-    let actors: [ActivityActor]
+    fileprivate let actors: [ActivityActor]
     let eventTypeOptions: [String]
     let onApply: () -> Void
     let onClear: () -> Void

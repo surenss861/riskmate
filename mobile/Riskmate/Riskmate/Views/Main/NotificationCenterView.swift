@@ -1,5 +1,15 @@
 import SwiftUI
 
+/// File-private helper so load(offset:since:) default param can be evaluated from any isolation context.
+private nonisolated func _notificationDefaultSinceISO() -> String {
+    let formatter = ISO8601DateFormatter()
+    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    guard let date = Calendar.current.date(byAdding: .day, value: -30, to: Date()) else {
+        return formatter.string(from: Date())
+    }
+    return formatter.string(from: date)
+}
+
 /// Notification center screen shown when the user opens riskmate://notifications or taps a notification.
 /// Lists the user's notifications with unread indicators; tap marks item read and refreshes badge.
 struct NotificationCenterView: View {
@@ -189,7 +199,7 @@ struct NotificationCenterView: View {
         .scrollContentBackground(.hidden)
     }
 
-    private func load(offset: Int, since: String? = Self.since30DaysISO) async {
+    private func load(offset: Int, since: String? = _notificationDefaultSinceISO()) async {
         if offset == 0 {
             isLoading = true
             loadError = nil
@@ -221,12 +231,7 @@ struct NotificationCenterView: View {
     }
 
     private static var since30DaysISO: String {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        guard let date = Calendar.current.date(byAdding: .day, value: -30, to: Date()) else {
-            return formatter.string(from: Date())
-        }
-        return formatter.string(from: date)
+        _notificationDefaultSinceISO()
     }
 
     private func refreshUnreadCount() async {

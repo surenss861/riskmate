@@ -17,6 +17,8 @@ struct AppNotification: Identifiable {
 
 /// Notification type for display and filtering. Aligns with backend notification types.
 enum NotificationType: String, CaseIterable, Identifiable {
+    var id: String { rawValue }
+
     case jobAssigned = "job_assigned"
     case signatureRequest = "signature_request"
     case evidenceUploaded = "evidence_uploaded"
