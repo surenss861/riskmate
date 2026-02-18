@@ -7,27 +7,22 @@ import { PDFDocument, StandardFonts } from 'pdf-lib'
 
 export interface JobRowForExport {
   id: string
+  job_name: string
   client_name: string
-  job_type?: string | null
-  location?: string | null
   status?: string | null
-  risk_score?: number | null
-  risk_level?: string | null
-  owner_name?: string | null
+  assigned_to_name?: string | null
+  assigned_to_email?: string | null
+  due_date?: string | null
   created_at?: string | null
-  updated_at?: string | null
 }
 
 const CSV_HEADERS = [
+  'Job Name',
   'Client',
-  'Job Type',
-  'Location',
   'Status',
-  'Risk Score',
-  'Risk Level',
-  'Owner',
-  'Created (UTC)',
-  'Updated (UTC)',
+  'Assigned To',
+  'Due Date',
+  'Created At',
 ]
 
 function escapeCsvCell(value: string | number | null | undefined): string {
@@ -39,19 +34,22 @@ function escapeCsvCell(value: string | number | null | undefined): string {
   return s
 }
 
+function formatAssignedTo(job: JobRowForExport): string {
+  if (job.assigned_to_name) return job.assigned_to_name
+  if (job.assigned_to_email) return job.assigned_to_email
+  return ''
+}
+
 export function buildCsvString(jobs: JobRowForExport[]): string {
   const headerRow = CSV_HEADERS.join(',')
   const rows = jobs.map((job) =>
     [
+      escapeCsvCell(job.job_name),
       escapeCsvCell(job.client_name),
-      escapeCsvCell(job.job_type),
-      escapeCsvCell(job.location),
       escapeCsvCell(job.status),
-      escapeCsvCell(job.risk_score),
-      escapeCsvCell(job.risk_level),
-      escapeCsvCell(job.owner_name),
-      escapeCsvCell(job.created_at),
-      escapeCsvCell(job.updated_at),
+      escapeCsvCell(formatAssignedTo(job)),
+      escapeCsvCell(job.due_date ? new Date(job.due_date).toISOString().slice(0, 10) : null),
+      escapeCsvCell(job.created_at ? new Date(job.created_at).toISOString() : null),
     ].join(',')
   )
   return [headerRow, ...rows].join('\r\n')
@@ -66,7 +64,7 @@ export async function buildPdfBuffer(jobs: JobRowForExport[]): Promise<Uint8Arra
   const margin = 50
   const pageWidth = 595
   const pageHeight = 842
-  const colWidths = [100, 60, 70, 55, 45, 50, 70, 65, 65]
+  const colWidths = [100, 80, 60, 80, 70, 90]
 
   let page = doc.addPage([pageWidth, pageHeight])
   let y = pageHeight - margin
@@ -89,7 +87,7 @@ export async function buildPdfBuffer(jobs: JobRowForExport[]): Promise<Uint8Arra
     let x = margin
     row.forEach((cell, i) => {
       const w = colWidths[i] ?? 60
-      const text = String(cell ?? '').slice(0, 20)
+      const text = String(cell ?? '').slice(0, 25)
       page.drawText(text, { x, y, size: fontSize, font })
       x += w
     })
@@ -98,16 +96,15 @@ export async function buildPdfBuffer(jobs: JobRowForExport[]): Promise<Uint8Arra
 
   addHeader()
   for (const job of jobs) {
+    const dueStr = job.due_date ? new Date(job.due_date).toISOString().slice(0, 10) : ''
+    const createdStr = job.created_at ? new Date(job.created_at).toISOString() : ''
     addRow([
+      String(job.job_name ?? ''),
       String(job.client_name ?? ''),
-      String(job.job_type ?? ''),
-      String(job.location ?? ''),
       String(job.status ?? ''),
-      String(job.risk_score ?? ''),
-      String(job.risk_level ?? ''),
-      String(job.owner_name ?? ''),
-      String(job.created_at ?? ''),
-      String(job.updated_at ?? ''),
+      String(formatAssignedTo(job)),
+      dueStr,
+      createdStr,
     ])
   }
 

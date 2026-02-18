@@ -1,5 +1,6 @@
 import express, { type Router as ExpressRouter } from 'express'
 import { supabase } from '../lib/supabaseClient'
+import { triggerExportProcessing } from '../services/exportWorker'
 import { authenticate, AuthenticatedRequest } from '../middleware/auth'
 import { RequestWithId } from '../middleware/requestId'
 import { createErrorResponse, logErrorForSupport } from '../utils/errorResponse'
@@ -9,6 +10,17 @@ import { logWithRequest } from '../utils/structuredLog'
 import crypto from 'crypto'
 
 export const exportsRouter: ExpressRouter = express.Router()
+
+// POST /api/exports/trigger
+// Wakes the export worker to process queued exports immediately (e.g. after bulk export enqueue).
+exportsRouter.post(
+  '/exports/trigger',
+  authenticate as unknown as express.RequestHandler,
+  async (_req: express.Request, res: express.Response) => {
+    triggerExportProcessing()
+    res.status(202).json({ ok: true, message: 'Export processing triggered' })
+  }
+)
 
 // POST /api/jobs/:id/export/pdf
 // Creates an async export job for a single PDF

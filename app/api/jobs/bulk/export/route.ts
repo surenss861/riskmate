@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { getBulkAuth, BULK_CAP, buildBulkResults, type BulkFailedItem } from '../shared'
 import { hasPermission } from '@/lib/utils/permissions'
 import { recordAuditLog } from '@/lib/audit/auditLogger'
+import { BACKEND_URL } from '@/lib/config'
 
 export const runtime = 'nodejs'
 
@@ -158,6 +159,29 @@ export async function POST(request: NextRequest) {
     targetId: exportRow.id,
     metadata: { job_count: succeeded.length, formats, failed_count: failed.length },
   })
+
+  // Enqueue export work: trigger backend export worker to process immediately
+  const authHeader = request.headers.get('authorization')
+  let token = authHeader?.replace(/^Bearer\s+/i, '')
+  if (!token) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      token = session?.access_token ?? undefined
+    } catch {
+      // Ignore when auth unavailable (e.g. in tests) - worker will poll
+    }
+  }
+  if (token && BACKEND_URL) {
+    fetch(`${BACKEND_URL}/api/exports/trigger`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+    }).catch((err) => {
+      console.warn('[bulk/export] Failed to trigger export worker:', err?.message ?? err)
+    })
+  }
 
   const total = succeeded.length + failed.length
   const pollUrl = `/api/exports/${exportRow.id}`

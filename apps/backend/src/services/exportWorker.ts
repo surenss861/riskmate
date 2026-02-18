@@ -43,6 +43,16 @@ export function startExportWorker() {
 }
 
 /**
+ * Trigger one cycle of export processing (for immediate wake after enqueue).
+ * Called by API when a new export is inserted so processing starts without waiting for the poll interval.
+ */
+export function triggerExportProcessing(): void {
+  processExportQueue().catch((err) => {
+    console.error('[ExportWorker] Trigger processing error:', err)
+  })
+}
+
+/**
  * Stop the export worker
  */
 export function stopExportWorker() {
@@ -356,7 +366,7 @@ async function generateBulkJobsExport(
 
   const { data: jobs, error: jobsError } = await supabase
     .from('jobs')
-    .select('id, client_name, job_type, location, status, risk_score, risk_level, owner_name, created_at, updated_at')
+    .select('id, client_name, status, assigned_to_name, assigned_to_email, end_date, created_at')
     .eq('organization_id', organizationId)
     .is('deleted_at', null)
     .is('archived_at', null)
@@ -365,15 +375,13 @@ async function generateBulkJobsExport(
   if (jobsError) throw jobsError
   const jobRows: JobRowForExport[] = (jobs ?? []).map((j: any) => ({
     id: j.id,
+    job_name: j.client_name ?? '',
     client_name: j.client_name ?? '',
-    job_type: j.job_type ?? null,
-    location: j.location ?? null,
     status: j.status ?? null,
-    risk_score: j.risk_score ?? null,
-    risk_level: j.risk_level ?? null,
-    owner_name: j.owner_name ?? null,
+    assigned_to_name: j.assigned_to_name ?? null,
+    assigned_to_email: j.assigned_to_email ?? null,
+    due_date: j.end_date ?? null,
     created_at: j.created_at ?? null,
-    updated_at: j.updated_at ?? null,
   }))
 
   if (jobRows.length === 0) {
