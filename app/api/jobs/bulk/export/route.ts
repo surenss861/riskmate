@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
-import { getBulkAuth, BULK_CAP, type BulkFailedItem } from '../shared'
+import { getBulkAuth, BULK_CAP, buildBulkResults, type BulkFailedItem } from '../shared'
 import { hasPermission } from '@/lib/utils/permissions'
 import { recordAuditLog } from '@/lib/audit/auditLogger'
 
@@ -75,6 +75,7 @@ export async function POST(request: NextRequest) {
         message: 'No valid job IDs (each must be a string)',
         summary: { total, succeeded: 0, failed: total },
         data: { succeeded: [], failed: failedInvalid },
+        results: buildBulkResults([], failedInvalid),
       },
       { status: 400 }
     )
@@ -121,6 +122,7 @@ export async function POST(request: NextRequest) {
         message: 'No jobs found to export',
         summary: { total, succeeded: 0, failed: total },
         data: { succeeded: [], failed },
+        results: buildBulkResults([], failed),
       },
       { status: 400 }
     )
@@ -166,6 +168,7 @@ export async function POST(request: NextRequest) {
       message: 'Export started. Poll GET /api/exports/:id for status and download URL.',
       summary: { total, succeeded: succeeded.length, failed: failed.length },
       data: { succeeded, failed },
+      results: buildBulkResults(succeeded, failed),
     },
     { status: 202 }
   )

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
-import { parseBulkJobIds, getBulkAuth, getBulkClientMetadata, type BulkFailedItem } from '../shared'
+import { parseBulkJobIds, getBulkAuth, getBulkClientMetadata, buildBulkResults, type BulkFailedItem } from '../shared'
 import { hasJobsDeletePermission } from '@/lib/utils/permissions'
 import { recordAuditLog } from '@/lib/audit/auditLogger'
 
@@ -48,6 +48,7 @@ export async function POST(request: NextRequest) {
       success: true,
       summary: { total, succeeded: 0, failed: total },
       data: { succeeded: [], failed },
+      results: buildBulkResults([], failed),
     })
   }
 
@@ -96,6 +97,7 @@ export async function POST(request: NextRequest) {
       success: true,
       summary: { total, succeeded: 0, failed: total },
       data: { succeeded: [], failed },
+      results: buildBulkResults([], failed),
     })
   }
 
@@ -166,6 +168,7 @@ export async function POST(request: NextRequest) {
       success: true,
       summary: { total, succeeded: 0, failed: total },
       data: { succeeded: [], failed },
+      results: buildBulkResults([], failed),
     })
   }
 
@@ -185,6 +188,7 @@ export async function POST(request: NextRequest) {
       success: true,
       summary: { total, succeeded: 0, failed: total },
       data: { succeeded: [], failed },
+      results: buildBulkResults([], failed),
     })
   }
 
@@ -207,5 +211,6 @@ export async function POST(request: NextRequest) {
     success: true,
     summary: { total, succeeded: eligibleIds.length, failed: failed.length },
     data: { succeeded: eligibleIds, failed },
+    results: buildBulkResults(eligibleIds, failed),
   })
 }

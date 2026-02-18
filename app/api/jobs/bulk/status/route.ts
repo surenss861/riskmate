@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
-import { parseBulkJobIds, getBulkAuth, getBulkClientMetadata, type BulkFailedItem } from '../shared'
+import { parseBulkJobIds, getBulkAuth, getBulkClientMetadata, buildBulkResults, type BulkFailedItem } from '../shared'
 import { hasPermission } from '@/lib/utils/permissions'
 import { recordAuditLog } from '@/lib/audit/auditLogger'
 import { emitJobEvent } from '@/lib/realtime/emitJobEvent'
@@ -44,6 +44,7 @@ export async function POST(request: NextRequest) {
       success: true,
       summary: { total, succeeded: 0, failed: total },
       data: { succeeded: [], failed },
+      results: buildBulkResults([], failed),
     })
   }
 
@@ -89,6 +90,7 @@ export async function POST(request: NextRequest) {
       success: true,
       summary: { total, succeeded: 0, failed: total },
       data: { succeeded: [], failed },
+      results: buildBulkResults([], failed),
     })
   }
 
@@ -107,6 +109,7 @@ export async function POST(request: NextRequest) {
       success: true,
       summary: { total, succeeded: 0, failed: total },
       data: { succeeded: [], failed },
+      results: buildBulkResults([], failed),
     })
   }
 
@@ -141,5 +144,6 @@ export async function POST(request: NextRequest) {
     success: true,
     summary: { total, succeeded: succeeded.length, failed: failed.length },
     data: { succeeded, failed },
+    results: buildBulkResults(succeeded, failed),
   })
 }

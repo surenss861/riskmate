@@ -16,6 +16,29 @@ const ROUTE_BULK = '/api/jobs/bulk'
 
 export type BulkFailedItem = { id: string; code: string; message: string }
 
+/** Per-job result for the agreed response contract (results array). */
+export type BulkResultItem =
+  | { id: string; success: true }
+  | { id: string; success: false; code: string; message: string }
+
+/**
+ * Build the results array for bulk API responses (per ticket schema).
+ * Order: succeeded items first (success: true), then failed (success: false with code/message).
+ */
+export function buildBulkResults(
+  succeeded: string[],
+  failed: BulkFailedItem[]
+): BulkResultItem[] {
+  const succeededResults: BulkResultItem[] = succeeded.map((id) => ({ id, success: true as const }))
+  const failedResults: BulkResultItem[] = failed.map(({ id, code, message }) => ({
+    id,
+    success: false as const,
+    code,
+    message,
+  }))
+  return [...succeededResults, ...failedResults]
+}
+
 /**
  * Parse and validate bulk request body: job_ids array and optional status/worker_id.
  * Enforces 100-item cap server-side.
