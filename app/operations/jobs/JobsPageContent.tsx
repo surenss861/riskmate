@@ -9,7 +9,7 @@ import { ConfirmationModal } from '@/components/dashboard/ConfirmationModal'
 import { Toast } from '@/components/dashboard/Toast'
 import { JobRosterSelect } from '@/components/dashboard/JobRosterSelect'
 import { BulkActionsToolbar } from '@/components/jobs/BulkActionsToolbar'
-import { BulkStatusModal } from '@/components/jobs/BulkStatusModal'
+import { BulkStatusModal, dbStatusToLabel } from '@/components/jobs/BulkStatusModal'
 import { BulkAssignModal } from '@/components/jobs/BulkAssignModal'
 import { BulkDeleteConfirmation } from '@/components/jobs/BulkDeleteConfirmation'
 import { useBulkSelection } from '@/hooks/useBulkSelection'
@@ -80,6 +80,7 @@ export function JobsPageContentView(props: JobsPageContentProps) {
   const canDelete = hasPermission(props.userRole, 'jobs.delete')
   const canAssign = hasPermission(props.userRole, 'jobs.edit')
   const canChangeStatus = hasPermission(props.userRole, 'jobs.edit')
+  const canExport = hasPermission(props.userRole, 'jobs.edit')
   
   // Show toast once when selection first exceeds bulk cap
   const prevSelectionCount = useRef(0)
@@ -389,7 +390,7 @@ export function JobsPageContentView(props: JobsPageContentProps) {
       if (failed.length === 0) {
         bulk.clearSelection()
         setBulkStatusModalOpen(false)
-        setToast({ message: `${succeeded.length} job${succeeded.length !== 1 ? 's' : ''} updated to ${status.replace(/_/g, ' ')}`, type: 'success' })
+        setToast({ message: `${succeeded.length} job${succeeded.length !== 1 ? 's' : ''} updated to ${dbStatusToLabel(status)}`, type: 'success' })
       } else {
         if (previousData && props.mutateData?.mutate) {
           props.mutateData.mutate(previousData, { revalidate: false })
@@ -779,6 +780,7 @@ export function JobsPageContentView(props: JobsPageContentProps) {
                   disableExport={exportInFlight}
                   canChangeStatus={canChangeStatus}
                   canAssign={canAssign}
+                  canExport={canExport}
                   canDelete={canDelete}
                   selectionOverCap={selectionOverCap}
                   bulkCap={BULK_CAP}
@@ -879,7 +881,7 @@ export function JobsPageContentView(props: JobsPageContentProps) {
                 sortable: true,
                 render: (value: string) => (
                   <span className={`px-2 py-0.5 rounded text-xs font-normal ${props.getStatusColor(value)} opacity-80`}>
-                    {value}
+                    {dbStatusToLabel(value)}
                   </span>
                 ),
               }]),

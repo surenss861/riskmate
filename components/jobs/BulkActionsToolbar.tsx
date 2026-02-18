@@ -16,6 +16,7 @@ export interface BulkActionsToolbarProps {
   /** Permission flags: hide or disable bulk actions when user lacks permission */
   canChangeStatus?: boolean
   canAssign?: boolean
+  canExport?: boolean
   canDelete?: boolean
   /** When true, selection exceeds batch cap; disable bulk actions and show message */
   selectionOverCap?: boolean
@@ -33,6 +34,7 @@ export function BulkActionsToolbar({
   disableExport = false,
   canChangeStatus = true,
   canAssign = true,
+  canExport = true,
   canDelete = true,
   selectionOverCap = false,
   bulkCap = 100,
@@ -98,6 +100,7 @@ export function BulkActionsToolbar({
               Assign
             </button>
           )}
+          {canExport && (
           <div className="relative" ref={exportDropdownRef}>
             <button
               type="button"
@@ -135,6 +138,7 @@ export function BulkActionsToolbar({
               </div>
             )}
           </div>
+          )}
           {canDelete && (
             <button
               type="button"

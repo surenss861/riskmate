@@ -21,6 +21,19 @@ export function canonicalStatusToDb(canonical: BulkStatusValue): string {
   return canonical
 }
 
+/** Map DB status to user-friendly display label. */
+const DB_STATUS_TO_LABEL: Record<string, string> = {
+  draft: 'Draft',
+  in_progress: 'Active',
+  on_hold: 'On Hold',
+  completed: 'Completed',
+  cancelled: 'Cancelled',
+  archived: 'Archived',
+}
+export function dbStatusToLabel(dbStatus: string): string {
+  return DB_STATUS_TO_LABEL[dbStatus] ?? dbStatus
+}
+
 export interface BulkStatusModalProps {
   isOpen: boolean
   onClose: () => void
