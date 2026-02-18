@@ -15,6 +15,8 @@ import app from "../../index";
 describe("Bulk Delete Permissions", () => {
   let testData: TestData;
   let draftJobId: string;
+  let draftJobWithDocId: string;
+  let documentId: string | null = null;
 
   beforeAll(async () => {
     testData = await setupTestData();
@@ -33,9 +35,43 @@ describe("Bulk Delete Permissions", () => {
       .single();
     if (error) throw new Error(`Failed to create draft job: ${error.message}`);
     draftJobId = draftJob.id;
+
+    // Create a draft job with a document (should be rejected with HAS_EVIDENCE)
+    const { data: jobWithDoc, error: jobError } = await supabase
+      .from("jobs")
+      .insert({
+        organization_id: testData.testOrgId,
+        client_name: "Draft Job With Document",
+        job_type: "inspection",
+        location: "Test",
+        status: "draft",
+        created_by: testData.ownerUserId,
+      })
+      .select("id")
+      .single();
+    if (jobError) throw new Error(`Failed to create draft job with doc: ${jobError.message}`);
+    draftJobWithDocId = jobWithDoc.id;
+    const { data: doc, error: docError } = await supabase
+      .from("documents")
+      .insert({
+        job_id: draftJobWithDocId,
+        organization_id: testData.testOrgId,
+        name: "test-evidence.pdf",
+        type: "other",
+        file_path: "test/test-evidence.pdf",
+        file_size: 0,
+        mime_type: "application/pdf",
+        uploaded_by: testData.ownerUserId,
+      })
+      .select("id")
+      .single();
+    if (docError) throw new Error(`Failed to create document: ${docError.message}`);
+    documentId = doc?.id ?? null;
   });
 
   afterAll(async () => {
+    if (documentId) await supabase.from("documents").delete().eq("id", documentId);
+    await supabase.from("jobs").delete().eq("id", draftJobWithDocId);
     await supabase.from("jobs").delete().eq("id", draftJobId);
     await cleanupTestData(testData.testOrgId);
   });
@@ -64,6 +100,23 @@ describe("Bulk Delete Permissions", () => {
       expect(response.status).toBe(200);
       expect(response.body.data).toBeDefined();
       expect(response.body.data.succeeded).toContain(draftJobId);
+    });
+
+    it("should return HAS_EVIDENCE for jobs with documents (matching Next endpoint behavior)", async () => {
+      const response = await request(app)
+        .post("/api/jobs/bulk/delete")
+        .set("Authorization", `Bearer ${testData.ownerToken}`)
+        .send({ job_ids: [draftJobWithDocId] });
+
+      expect(response.status).toBe(200);
+      expect(response.body.data).toBeDefined();
+      expect(response.body.data.succeeded).toEqual([]);
+      const failed = response.body.data.failed ?? [];
+      const hasEvidenceFailure = failed.find(
+        (f: { id: string; code: string }) => f.id === draftJobWithDocId && f.code === "HAS_EVIDENCE"
+      );
+      expect(hasEvidenceFailure).toBeDefined();
+      expect(hasEvidenceFailure.message).toMatch(/evidence|cannot be deleted/i);
     });
   });
 });
