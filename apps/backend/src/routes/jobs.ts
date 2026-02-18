@@ -860,7 +860,7 @@ jobsRouter.post("/bulk/status", authenticate, requireWriteAccess, async (req: ex
 
     const { data: jobs, error: fetchError } = await supabase
       .from("jobs")
-      .select("id, status, deleted_at")
+      .select("id, status, deleted_at, archived_at")
       .eq("organization_id", organization_id)
       .in("id", validIds);
 
@@ -868,19 +868,25 @@ jobsRouter.post("/bulk/status", authenticate, requireWriteAccess, async (req: ex
       return res.status(500).json({ message: fetchError.message, code: "QUERY_ERROR" });
     }
 
-    const found = new Map((jobs ?? []).map((j: { id: string; deleted_at: string | null }) => [j.id, j]));
+    type JobRow = { id: string; deleted_at: string | null; archived_at?: string | null; status?: string };
+    const found = new Map((jobs ?? []).map((j: JobRow) => [j.id, j]));
     for (const id of validIds) {
       if (!found.has(id)) {
         failed.push({ id, code: "NOT_FOUND", message: "Job not found" });
         continue;
       }
-      if (found.get(id)!.deleted_at) {
+      const j = found.get(id)!;
+      if (j.deleted_at) {
         failed.push({ id, code: "ALREADY_DELETED", message: "Job has been deleted" });
+        continue;
+      }
+      if (j.archived_at || j.status === "archived") {
+        failed.push({ id, code: "ARCHIVED", message: "Job is archived and cannot be updated" });
       }
     }
     const eligibleIds = validIds.filter((id) => {
       const j = found.get(id);
-      return j && !j.deleted_at;
+      return j && !j.deleted_at && !j.archived_at && j.status !== "archived";
     });
 
     if (eligibleIds.length === 0) {
@@ -956,7 +962,7 @@ jobsRouter.post("/bulk/assign", authenticate, requireWriteAccess, async (req: ex
 
     const { data: jobs, error: fetchError } = await supabase
       .from("jobs")
-      .select("id, client_name")
+      .select("id, client_name, deleted_at, archived_at, status")
       .eq("organization_id", organization_id)
       .in("id", validIds);
 
@@ -964,13 +970,26 @@ jobsRouter.post("/bulk/assign", authenticate, requireWriteAccess, async (req: ex
       return res.status(500).json({ message: fetchError.message, code: "QUERY_ERROR" });
     }
 
-    const found = new Map((jobs ?? []).map((j: { id: string; client_name?: string | null }) => [j.id, j]));
+    type AssignJobRow = { id: string; client_name?: string | null; deleted_at?: string | null; archived_at?: string | null; status?: string };
+    const found = new Map((jobs ?? []).map((j: AssignJobRow) => [j.id, j]));
     for (const id of validIds) {
       if (!found.has(id)) {
         failed.push({ id, code: "NOT_FOUND", message: "Job not found" });
+        continue;
+      }
+      const j = found.get(id)!;
+      if (j.deleted_at) {
+        failed.push({ id, code: "ALREADY_DELETED", message: "Job has been deleted" });
+        continue;
+      }
+      if (j.archived_at || j.status === "archived") {
+        failed.push({ id, code: "ARCHIVED", message: "Job is archived and cannot be assigned" });
       }
     }
-    const eligibleIds = validIds.filter((id) => found.has(id));
+    const eligibleIds = validIds.filter((id) => {
+      const j = found.get(id);
+      return j && !j.deleted_at && !j.archived_at && j.status !== "archived";
+    });
     if (eligibleIds.length === 0) {
       return res.json({ data: { succeeded: [], failed, updated_assignments: {} } });
     }

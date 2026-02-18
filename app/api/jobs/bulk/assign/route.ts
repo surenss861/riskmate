@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
 
   const { data: jobs, error: fetchError } = await supabase
     .from('jobs')
-    .select('id, client_name')
+    .select('id, client_name, deleted_at, archived_at, status')
     .eq('organization_id', organization_id)
     .in('id', validIds)
 
@@ -75,14 +75,27 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const found = new Map((jobs ?? []).map((j: { id: string; client_name?: string }) => [j.id, j]))
+  type JobRow = { id: string; client_name?: string; deleted_at?: string | null; archived_at?: string | null; status?: string }
+  const found = new Map((jobs ?? []).map((j: JobRow) => [j.id, j]))
   for (const id of validIds) {
     if (!found.has(id)) {
       failed.push({ id, code: 'NOT_FOUND', message: 'Job not found' })
+      continue
+    }
+    const job = found.get(id)!
+    if (job.deleted_at) {
+      failed.push({ id, code: 'ALREADY_DELETED', message: 'Job has been deleted' })
+      continue
+    }
+    if (job.archived_at || job.status === 'archived') {
+      failed.push({ id, code: 'ARCHIVED', message: 'Job is archived and cannot be assigned' })
     }
   }
 
-  const eligibleIds = validIds.filter((id) => found.has(id))
+  const eligibleIds = validIds.filter((id) => {
+    const j = found.get(id)
+    return j && !j.deleted_at && !j.archived_at && j.status !== 'archived'
+  })
   if (eligibleIds.length === 0) {
     return NextResponse.json({
       data: { succeeded: [], failed, updated_assignments: {} },

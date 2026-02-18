@@ -64,12 +64,18 @@ export async function POST(request: NextRequest) {
     const job = found.get(id)!
     if (job.deleted_at) {
       failed.push({ id, code: 'ALREADY_DELETED', message: 'Job has been deleted' })
+      continue
+    }
+    if (job.archived_at || (job as { status?: string }).status === 'archived') {
+      failed.push({ id, code: 'ARCHIVED', message: 'Job is archived and cannot be updated' })
     }
   }
 
   const eligibleIds = validIds.filter((id) => {
     const j = found.get(id)
-    return j && !j.deleted_at
+    if (!j || j.deleted_at) return false
+    if (j.archived_at || (j as { status?: string }).status === 'archived') return false
+    return true
   })
 
   if (eligibleIds.length === 0) {
