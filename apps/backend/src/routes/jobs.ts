@@ -2271,6 +2271,7 @@ jobsRouter.get("/:id/documents", authenticate, async (req: express.Request, res:
       .select("id, name, type, file_size, file_path, mime_type, description, created_at, uploaded_by")
       .eq("job_id", jobId)
       .eq("organization_id", organization_id)
+      .is("deleted_at", null)
       .order("created_at", { ascending: true });
 
     if (error) throw error;
@@ -2294,7 +2295,8 @@ jobsRouter.get("/:id/documents", authenticate, async (req: express.Request, res:
       .select("id, storage_path, file_name, mime_type, phase, created_at, uploaded_by")
       .eq("work_record_id", jobId)
       .eq("organization_id", organization_id)
-      .eq("state", "sealed");
+      .eq("state", "sealed")
+      .is("deleted_at", null);
 
     const evidenceAsDocuments = await Promise.all(
       (imageEvidence || [])
