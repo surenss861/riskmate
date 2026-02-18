@@ -106,6 +106,7 @@ export async function POST(request: NextRequest) {
     job_id,
     user_id: workerId,
     role: 'worker',
+    organization_id,
   }))
   const { error: insertError } = await supabase.from('job_assignments').insert(rows)
 
@@ -117,6 +118,7 @@ export async function POST(request: NextRequest) {
           job_id: jobId,
           user_id: workerId,
           role: 'worker',
+          organization_id,
         })
         if (oneError && oneError.code === '23505') {
           failed.push({ id: jobId, code: 'ALREADY_ASSIGNED', message: 'User already assigned to this job' })
@@ -168,8 +170,9 @@ export async function POST(request: NextRequest) {
 
   const clientMeta = getBulkClientMetadata(request)
   const token = await getSessionToken(request)
-  for (const jobId of succeeded) {
-    await recordAuditLog(supabase, {
+  const auditAndNotifyPromises = succeeded.map((jobId) => {
+    const job = found.get(jobId)
+    const auditPromise = recordAuditLog(supabase, {
       organizationId: organization_id,
       actorId: user_id,
       eventName: 'worker.assigned',
@@ -177,10 +180,8 @@ export async function POST(request: NextRequest) {
       targetId: jobId,
       metadata: { worker_id: workerId, bulk: true, ...clientMeta },
     })
-    const job = found.get(jobId)
-    try {
-      if (token) {
-        await fetch(`${BACKEND_URL}/api/notifications/job-assigned`, {
+    const notifyPromise = token
+      ? fetch(`${BACKEND_URL}/api/notifications/job-assigned`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify({
@@ -189,9 +190,10 @@ export async function POST(request: NextRequest) {
             jobTitle: job?.client_name ?? undefined,
           }),
         })
-      }
-    } catch (_) {}
-  }
+      : Promise.resolve()
+    return Promise.allSettled([auditPromise, notifyPromise])
+  })
+  await Promise.allSettled(auditAndNotifyPromises)
 
   return NextResponse.json({
     data: { succeeded, failed, updated_assignments },

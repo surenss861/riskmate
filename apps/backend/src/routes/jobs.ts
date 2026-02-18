@@ -998,6 +998,7 @@ jobsRouter.post("/bulk/assign", authenticate, requireWriteAccess, async (req: ex
       job_id,
       user_id: workerId,
       role: "worker",
+      organization_id,
     }));
     const { error: insertError } = await supabase.from("job_assignments").insert(rows);
 
@@ -1009,6 +1010,7 @@ jobsRouter.post("/bulk/assign", authenticate, requireWriteAccess, async (req: ex
             job_id: jobId,
             user_id: workerId,
             role: "worker",
+            organization_id,
           });
           if (oneError && oneError.code === "23505") {
             failed.push({ id: jobId, code: "ALREADY_ASSIGNED", message: "User already assigned to this job" });
@@ -1937,6 +1939,7 @@ jobsRouter.post("/:id/assign", authenticate, requireWriteAccess, async (req: exp
       job_id: jobId,
       user_id: assigneeId,
       role: String(role),
+      organization_id: job.organization_id,
     });
 
     if (insertError) {
