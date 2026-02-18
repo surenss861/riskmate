@@ -1122,6 +1122,7 @@ jobsRouter.post("/bulk/delete", authenticate, requireWriteAccess, async (req: ex
       auditByTarget,
       auditByJobId,
       docsRes,
+      evidenceRes,
       riskRes,
       reportRes,
     ] = await Promise.all([
@@ -1136,7 +1137,18 @@ jobsRouter.post("/bulk/delete", authenticate, requireWriteAccess, async (req: ex
         .eq("organization_id", organization_id)
         .in("job_id", draftNotDeleted)
         .not("job_id", "is", null),
-      supabase.from("documents").select("job_id").in("job_id", draftNotDeleted),
+      supabase
+        .from("documents")
+        .select("job_id")
+        .eq("organization_id", organization_id)
+        .is("deleted_at", null)
+        .in("job_id", draftNotDeleted),
+      supabase
+        .from("evidence")
+        .select("work_record_id")
+        .eq("organization_id", organization_id)
+        .is("deleted_at", null)
+        .in("work_record_id", draftNotDeleted),
       supabase.from("job_risk_scores").select("job_id").in("job_id", draftNotDeleted),
       supabase.from("reports").select("job_id").in("job_id", draftNotDeleted),
     ]);
@@ -1146,6 +1158,9 @@ jobsRouter.post("/bulk/delete", authenticate, requireWriteAccess, async (req: ex
       (auditByJobId.data ?? []).map((r: { job_id: string }) => r.job_id).filter(Boolean)
     );
     const hasDocs = new Set((docsRes.data ?? []).map((r: { job_id: string }) => r.job_id));
+    const hasEvidence = new Set(
+      (evidenceRes.data ?? []).map((r: { work_record_id: string }) => r.work_record_id)
+    );
     const hasRisk = new Set((riskRes.data ?? []).map((r: { job_id: string }) => r.job_id));
     const hasReports = new Set((reportRes.data ?? []).map((r: { job_id: string }) => r.job_id));
     const ineligibleAudit = new Set([...hasAuditByTarget, ...hasAuditByJobId]);
@@ -1156,7 +1171,7 @@ jobsRouter.post("/bulk/delete", authenticate, requireWriteAccess, async (req: ex
         failed.push({ id, code: "HAS_AUDIT_HISTORY", message: "Jobs with audit history cannot be deleted" });
         continue;
       }
-      if (hasDocs.has(id)) {
+      if (hasDocs.has(id) || hasEvidence.has(id)) {
         failed.push({ id, code: "HAS_EVIDENCE", message: "Jobs with uploaded evidence cannot be deleted" });
         continue;
       }
