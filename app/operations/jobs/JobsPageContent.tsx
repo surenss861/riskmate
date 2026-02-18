@@ -73,12 +73,27 @@ export function JobsPageContentView(props: JobsPageContentProps) {
   const [exportInFlight, setExportInFlight] = useState(false)
 
   const bulk = useBulkSelection(props.jobs)
-  
+  const BULK_CAP = 100
+  const selectionOverCap = bulk.selectedItems.length > BULK_CAP
+
   const canArchive = hasPermission(props.userRole, 'jobs.close')
   const canDelete = hasPermission(props.userRole, 'jobs.delete')
   const canAssign = hasPermission(props.userRole, 'jobs.edit')
   const canChangeStatus = hasPermission(props.userRole, 'jobs.edit')
   
+  // Show toast once when selection first exceeds bulk cap
+  const prevSelectionCount = useRef(0)
+  React.useEffect(() => {
+    const n = bulk.selectedItems.length
+    if (n > BULK_CAP && prevSelectionCount.current <= BULK_CAP) {
+      setToast({
+        message: `Maximum ${BULK_CAP} jobs per bulk action. Clear some selections or run actions in smaller batches.`,
+        type: 'error',
+      })
+    }
+    prevSelectionCount.current = n
+  }, [bulk.selectedItems.length, BULK_CAP])
+
   // Show keyboard hint once per user
   React.useEffect(() => {
     const hasSeenHint = localStorage.getItem('riskMate_keyboardHint_seen')
@@ -762,6 +777,8 @@ export function JobsPageContentView(props: JobsPageContentProps) {
                   canChangeStatus={canChangeStatus}
                   canAssign={canAssign}
                   canDelete={canDelete}
+                  selectionOverCap={selectionOverCap}
+                  bulkCap={BULK_CAP}
                 />
               </div>
             )}

@@ -15,6 +15,10 @@ export interface BulkActionsToolbarProps {
   canChangeStatus?: boolean
   canAssign?: boolean
   canDelete?: boolean
+  /** When true, selection exceeds batch cap; disable bulk actions and show message */
+  selectionOverCap?: boolean
+  /** Maximum allowed selection for bulk operations (e.g. 100) */
+  bulkCap?: number
 }
 
 export function BulkActionsToolbar({
@@ -28,8 +32,12 @@ export function BulkActionsToolbar({
   canChangeStatus = true,
   canAssign = true,
   canDelete = true,
+  selectionOverCap = false,
+  bulkCap = 100,
 }: BulkActionsToolbarProps) {
   if (selectedCount === 0) return null
+
+  const disabled = selectionOverCap
 
   return (
     <div
@@ -40,12 +48,18 @@ export function BulkActionsToolbar({
         <span className="font-semibold text-base whitespace-nowrap">
           {selectedCount} job{selectedCount !== 1 ? 's' : ''} selected
         </span>
+        {selectionOverCap && (
+          <span className="text-sm text-white/90">
+            Maximum {bulkCap} jobs per bulk action. Clear some selections or run actions in smaller batches.
+          </span>
+        )}
         <div className="flex items-center gap-2 flex-wrap">
           {canChangeStatus && (
             <button
               type="button"
               onClick={onStatusChange}
-              className="inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium bg-white/20 hover:bg-white/30 transition-colors"
+              disabled={disabled}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium bg-white/20 hover:bg-white/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <span aria-hidden>📋</span>
               Change Status
@@ -55,7 +69,8 @@ export function BulkActionsToolbar({
             <button
               type="button"
               onClick={onAssign}
-              className="inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium bg-white/20 hover:bg-white/30 transition-colors"
+              disabled={disabled}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium bg-white/20 hover:bg-white/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <span aria-hidden>👤</span>
               Assign
@@ -64,7 +79,7 @@ export function BulkActionsToolbar({
           <button
             type="button"
             onClick={onExport}
-            disabled={disableExport}
+            disabled={disableExport || disabled}
             className="inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium bg-white/20 hover:bg-white/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <span aria-hidden>📥</span>
@@ -74,7 +89,8 @@ export function BulkActionsToolbar({
             <button
               type="button"
               onClick={onDelete}
-              className="inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium bg-white/20 hover:bg-red-500/30 hover:bg-red-500/40 transition-colors"
+              disabled={disabled}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium bg-white/20 hover:bg-red-500/30 hover:bg-red-500/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <span aria-hidden>🗑️</span>
               Delete

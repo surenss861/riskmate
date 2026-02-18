@@ -10,8 +10,12 @@ import { RequestWithId } from "../middleware/requestId";
 import { createErrorResponse, logErrorForSupport } from "../utils/errorResponse";
 import { requireWriteAccess } from "../middleware/requireWriteAccess";
 import { emitJobEvent, emitEvidenceEvent } from "../utils/realtimeEvents";
+import { hasJobsDeletePermission } from "../utils/permissions";
 
 export const jobsRouter: ExpressRouter = express.Router();
+
+/** Maximum number of job IDs per bulk request; prevents oversized batches. */
+const BULK_BATCH_CAP = 100;
 
 // Log that jobs routes are being loaded (verification for deployment)
 console.log("[ROUTES] ✅ Jobs routes loaded (including /:id/hazards, /:id/controls, /:id/permit-packs)");
@@ -826,6 +830,9 @@ jobsRouter.post("/bulk/status", authenticate, requireWriteAccess, async (req: ex
     if (!Array.isArray(job_ids) || job_ids.length === 0 || typeof status !== "string") {
       return res.status(400).json({ message: "job_ids (array) and status (string) are required" });
     }
+    if (job_ids.length > BULK_BATCH_CAP) {
+      return res.status(400).json({ message: `Maximum ${BULK_BATCH_CAP} jobs per bulk operation. Please select fewer jobs.` });
+    }
     const allowedStatuses = ["draft", "in_progress", "completed", "cancelled"];
     if (!allowedStatuses.includes(status)) {
       return res.status(400).json({ message: "Invalid status" });
@@ -892,6 +899,9 @@ jobsRouter.post("/bulk/assign", authenticate, requireWriteAccess, async (req: ex
     const jobIds = body.job_ids;
     if (!Array.isArray(jobIds) || jobIds.length === 0 || !workerId || typeof workerId !== "string") {
       return res.status(400).json({ message: "job_ids (array) and worker_id (string) are required" });
+    }
+    if (jobIds.length > BULK_BATCH_CAP) {
+      return res.status(400).json({ message: `Maximum ${BULK_BATCH_CAP} jobs per bulk operation. Please select fewer jobs.` });
     }
     const { data: assignee } = await supabase
       .from("users")
@@ -982,8 +992,11 @@ jobsRouter.post("/bulk/delete", authenticate, requireWriteAccess, async (req: ex
     if (!Array.isArray(job_ids) || job_ids.length === 0) {
       return res.status(400).json({ message: "job_ids (array) is required" });
     }
-    if (role !== "owner") {
-      return res.status(403).json({ message: "Only organization owners can delete jobs" });
+    if (job_ids.length > BULK_BATCH_CAP) {
+      return res.status(400).json({ message: `Maximum ${BULK_BATCH_CAP} jobs per bulk operation. Please select fewer jobs.` });
+    }
+    if (!hasJobsDeletePermission(role)) {
+      return res.status(403).json({ message: "You do not have permission to delete jobs" });
     }
     const succeeded: string[] = [];
     const failed: { id: string; code: string; message: string }[] = [];
@@ -1068,6 +1081,9 @@ jobsRouter.post("/bulk/export", authenticate, async (req: express.Request, res: 
     const { job_ids } = req.body || {};
     if (!Array.isArray(job_ids) || job_ids.length === 0) {
       return res.status(400).json({ message: "job_ids (array) is required" });
+    }
+    if (job_ids.length > BULK_BATCH_CAP) {
+      return res.status(400).json({ message: `Maximum ${BULK_BATCH_CAP} jobs per bulk operation. Please select fewer jobs.` });
     }
     const succeeded: string[] = [];
     const failed: { id: string; code: string; message: string }[] = [];
