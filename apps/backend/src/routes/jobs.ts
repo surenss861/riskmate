@@ -822,20 +822,20 @@ jobsRouter.get("/by-signoff/:signoffId", authenticate, async (req: express.Reque
 
 type BulkFailedItem = { id: string; code: string; message: string };
 type BulkResultItem =
-  | { id: string; success: true }
-  | { id: string; success: false; code: string; message: string };
+  | { job_id: string; status: "success" }
+  | { job_id: string; status: "error"; error: string; code?: string };
 
-/** Build the results array for bulk API responses (per ticket schema). */
+/** Build the results array for bulk API responses (per ticket schema). Uses job_id and status. */
 function buildBulkResults(
   succeeded: string[],
   failed: BulkFailedItem[]
 ): BulkResultItem[] {
-  const succeededResults: BulkResultItem[] = succeeded.map((id) => ({ id, success: true as const }));
+  const succeededResults: BulkResultItem[] = succeeded.map((job_id) => ({ job_id, status: "success" as const }));
   const failedResults: BulkResultItem[] = failed.map(({ id, code, message }) => ({
-    id,
-    success: false as const,
+    job_id: id,
+    status: "error" as const,
+    error: message,
     code,
-    message,
   }));
   return [...succeededResults, ...failedResults];
 }

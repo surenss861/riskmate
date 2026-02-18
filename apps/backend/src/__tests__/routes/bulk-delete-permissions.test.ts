@@ -151,6 +151,8 @@ describe("Bulk Delete Permissions", () => {
       expect(response.status).toBe(200);
       expect(response.body.data).toBeDefined();
       expect(response.body.data.succeeded).toContain(draftJobId);
+      expect(response.body.results).toEqual(expect.arrayContaining([expect.objectContaining({ job_id: draftJobId, status: "success" })]));
+      expect(response.body.results.every((r: { job_id: string; status: string }) => r.job_id && (r.status === "success" || r.status === "error"))).toBe(true);
     });
 
     it("should allow bulk delete of jobs with documents (cascade soft-delete)", async () => {
@@ -184,6 +186,10 @@ describe("Bulk Delete Permissions", () => {
           }),
         ])
       );
+      expect(response.body.results).toEqual(expect.arrayContaining([
+        expect.objectContaining({ job_id: draftJobForPartialId, status: "success" }),
+        expect.objectContaining({ job_id: draftJobWithReportRunId, status: "error", error: expect.any(String), code: "HAS_REPORTS" }),
+      ]));
       expect(response.body.summary.succeeded).toBe(1);
       expect(response.body.summary.failed).toBe(1);
     });

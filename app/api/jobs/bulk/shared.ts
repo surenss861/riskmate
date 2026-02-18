@@ -16,25 +16,25 @@ const ROUTE_BULK = '/api/jobs/bulk'
 
 export type BulkFailedItem = { id: string; code: string; message: string }
 
-/** Per-job result for the agreed response contract (results array). */
+/** Per-job result for the agreed response contract (results array). Uses job_id and status. */
 export type BulkResultItem =
-  | { id: string; success: true }
-  | { id: string; success: false; code: string; message: string }
+  | { job_id: string; status: 'success' }
+  | { job_id: string; status: 'error'; error: string; code?: string }
 
 /**
  * Build the results array for bulk API responses (per ticket schema).
- * Order: succeeded items first (success: true), then failed (success: false with code/message).
+ * Order: succeeded items first (status: 'success'), then failed (status: 'error' with error/code).
  */
 export function buildBulkResults(
   succeeded: string[],
   failed: BulkFailedItem[]
 ): BulkResultItem[] {
-  const succeededResults: BulkResultItem[] = succeeded.map((id) => ({ id, success: true as const }))
+  const succeededResults: BulkResultItem[] = succeeded.map((job_id) => ({ job_id, status: 'success' as const }))
   const failedResults: BulkResultItem[] = failed.map(({ id, code, message }) => ({
-    id,
-    success: false as const,
+    job_id: id,
+    status: 'error' as const,
+    error: message,
     code,
-    message,
   }))
   return [...succeededResults, ...failedResults]
 }

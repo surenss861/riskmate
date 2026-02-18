@@ -78,6 +78,8 @@ describe('Next POST /api/jobs/bulk/delete – cascade soft-delete (documents/evi
     expect(body.data).toBeDefined()
     expect(body.data.succeeded).toContain(JOB_ID_WITH_DOC)
     expect(body.data.failed ?? []).toEqual([])
+    expect(body.results).toEqual(expect.arrayContaining([expect.objectContaining({ job_id: JOB_ID_WITH_DOC, status: 'success' })]))
+    expect(body.results.every((r: { job_id: string; status: string }) => r.job_id && (r.status === 'success' || r.status === 'error'))).toBe(true)
     expect(bulkDeleteSupabaseMock.rpc).toHaveBeenCalledWith('bulk_soft_delete_jobs', expect.any(Object))
   })
 
@@ -100,6 +102,7 @@ describe('Next POST /api/jobs/bulk/delete – cascade soft-delete (documents/evi
     expect(response.status).toBe(200)
     expect(body.data.succeeded).toContain(jobIdWithEvidence)
     expect(body.data.failed ?? []).toEqual([])
+    expect(body.results).toEqual(expect.arrayContaining([expect.objectContaining({ job_id: jobIdWithEvidence, status: 'success' })]))
     expect(bulkDeleteSupabaseMock.rpc).toHaveBeenCalledWith('bulk_soft_delete_jobs', expect.any(Object))
   })
 })

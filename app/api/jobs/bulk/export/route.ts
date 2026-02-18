@@ -160,12 +160,14 @@ export async function POST(request: NextRequest) {
   })
 
   const total = succeeded.length + failed.length
+  const pollUrl = `/api/exports/${exportRow.id}`
   return NextResponse.json(
     {
       success: true,
       export_id: exportRow.id,
       status: 'queued',
-      message: 'Export started. Poll GET /api/exports/:id for status and download URL.',
+      poll_url: pollUrl,
+      message: 'Export started. Poll the poll_url for status; when state is "ready", the response includes download_url.',
       summary: { total, succeeded: succeeded.length, failed: failed.length },
       data: { succeeded, failed },
       results: buildBulkResults(succeeded, failed),
