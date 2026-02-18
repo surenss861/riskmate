@@ -61,7 +61,8 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const found = new Map((jobs ?? []).map((j: { id: string }) => [j.id, j]))
+  type JobRow = { id: string; status?: string; archived_at?: string | null; deleted_at?: string | null }
+  const found = new Map((jobs ?? []).map((j: JobRow) => [j.id, j]))
   for (const id of validIds) {
     if (!found.has(id)) {
       failed.push({ id, code: 'NOT_FOUND', message: 'Job not found' })
@@ -72,7 +73,7 @@ export async function POST(request: NextRequest) {
       failed.push({ id, code: 'ALREADY_DELETED', message: 'Job has been deleted' })
       continue
     }
-    if (job.archived_at || (job as { status?: string }).status === 'archived') {
+    if (job.archived_at || job.status === 'archived') {
       failed.push({ id, code: 'ARCHIVED', message: 'Job is archived and cannot be updated' })
     }
   }
@@ -80,7 +81,7 @@ export async function POST(request: NextRequest) {
   const eligibleIds = validIds.filter((id) => {
     const j = found.get(id)
     if (!j || j.deleted_at) return false
-    if (j.archived_at || (j as { status?: string }).status === 'archived') return false
+    if (j.archived_at || j.status === 'archived') return false
     return true
   })
 
