@@ -84,16 +84,34 @@ export async function GET(request: NextRequest) {
       score: number
     }> = []
 
+    let total = 0
+    let jobCount = 0
+    let hazardCount = 0
+
     if (q) {
       if (type === 'jobs' || type === 'all') {
-        const { data: jobRows, error: jobSearchError } = await supabase.rpc('search_jobs', {
-          p_org_id: organizationId,
-          p_query: q,
-          p_limit: limit,
-        })
+        const [{ data: jobRows, error: jobSearchError }, { data: jobCountData, error: jobCountError }] = await Promise.all([
+          supabase.rpc('search_jobs', {
+            p_org_id: organizationId,
+            p_query: q,
+            p_limit: limit,
+          }),
+          supabase.rpc('search_jobs_count', {
+            p_org_id: organizationId,
+            p_query: q,
+          }),
+        ])
 
         if (jobSearchError) {
           throw jobSearchError
+        }
+        if (jobCountError) {
+          throw jobCountError
+        }
+
+        jobCount = Number(jobCountData ?? 0) || 0
+        if (type === 'jobs') {
+          total = jobCount
         }
 
         for (const row of jobRows || []) {
@@ -109,25 +127,30 @@ export async function GET(request: NextRequest) {
       }
 
       if (type === 'hazards' || type === 'all') {
-        const { data: hazardRows, error: hazardSearchError } = await supabase.rpc('search_hazards', {
-          p_org_id: organizationId,
-          p_query: q,
-          p_limit: limit,
-        })
+        const [{ data: hazardRows, error: hazardSearchError }, { data: hazardCountData, error: hazardCountError }] = await Promise.all([
+          supabase.rpc('search_hazards', {
+            p_org_id: organizationId,
+            p_query: q,
+            p_limit: limit,
+          }),
+          supabase.rpc('search_hazards_count', {
+            p_org_id: organizationId,
+            p_query: q,
+          }),
+        ])
 
         if (hazardSearchError) {
           throw hazardSearchError
         }
+        if (hazardCountError) {
+          throw hazardCountError
+        }
 
-        for (const row of hazardRows || []) {
-          results.push({
-            type: 'hazard',
-            id: row.id,
-            title: row.hazard_type || 'Untitled Hazard',
-            subtitle: row.severity ? `Severity: ${row.severity}` : '',
-            highlight: row.description || '',
-            score: Number(row.score) || 0,
-          })
+        hazardCount = Number(hazardCountData ?? 0) || 0
+        if (type === 'hazards') {
+          total = hazardCount
+        } else if (type === 'all') {
+          total = jobCount + hazardCount
         }
       }
 
@@ -188,7 +211,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       results,
-      total: results.length,
+      total,
       suggestions,
     })
   } catch (error: any) {

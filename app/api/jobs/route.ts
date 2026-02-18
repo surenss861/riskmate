@@ -84,6 +84,68 @@ function collectAndConditions(group: FilterGroup): FilterCondition[] {
   return collected
 }
 
+function isFilterGroup(c: FilterCondition | FilterGroup): c is FilterGroup {
+  return c != null && typeof c === 'object' && 'conditions' in c && Array.isArray((c as FilterGroup).conditions)
+}
+
+async function getMatchingJobIdsFromFilterGroup(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  organization_id: string,
+  group: FilterGroup,
+  includeArchived: boolean
+): Promise<string[]> {
+  const operator = (group.operator || 'AND').toUpperCase()
+  const conditions = Array.isArray(group.conditions) ? group.conditions : []
+  if (conditions.length === 0) return []
+
+  const baseQuery = () => {
+    let q = supabase
+      .from('jobs')
+      .select('id')
+      .eq('organization_id', organization_id)
+      .is('deleted_at', null)
+    if (!includeArchived) {
+      q = q.is('archived_at', null)
+    }
+    return q
+  }
+
+  const getIdsForCondition = async (condition: FilterCondition | FilterGroup): Promise<string[]> => {
+    if (isFilterGroup(condition)) {
+      return getMatchingJobIdsFromFilterGroup(supabase, organization_id, condition, includeArchived)
+    }
+    let q = baseQuery()
+    q = applySingleFilter(q, condition as FilterCondition)
+    const { data, error } = await q
+    if (error) throw error
+    return (data || []).map((row: { id: string }) => row.id).filter(Boolean)
+  }
+
+  if (operator === 'OR') {
+    const idSets = await Promise.all(conditions.map(getIdsForCondition))
+    const union = new Set<string>()
+    for (const ids of idSets) {
+      for (const id of ids) union.add(id)
+    }
+    return Array.from(union)
+  }
+
+  // AND: apply all conditions (and nested groups via ID filter)
+  let q = baseQuery()
+  for (const condition of conditions) {
+    if (isFilterGroup(condition)) {
+      const nestedIds = await getMatchingJobIdsFromFilterGroup(supabase, organization_id, condition, includeArchived)
+      if (nestedIds.length === 0) return []
+      q = q.in('id', nestedIds)
+    } else {
+      q = applySingleFilter(q, condition as FilterCondition)
+    }
+  }
+  const { data, error } = await q
+  if (error) throw error
+  return (data || []).map((row: { id: string }) => row.id).filter(Boolean)
+}
+
 function applySingleFilter(query: any, condition: FilterCondition): any {
   const field = typeof condition.field === 'string' ? condition.field : ''
   const operator = typeof condition.operator === 'string' ? condition.operator.toLowerCase() : ''
@@ -169,6 +231,10 @@ export async function GET(request: NextRequest) {
     const riskScoreMax = parseNumberParam(searchParams.get('risk_score_max'))
     const hasPhotos = parseBooleanParam(searchParams.get('has_photos'))
     const hasSignatures = parseBooleanParam(searchParams.get('has_signatures'))
+    const overdue = parseBooleanParam(searchParams.get('overdue'))
+    const needsSignatures = parseBooleanParam(searchParams.get('needs_signatures'))
+    const unassigned = parseBooleanParam(searchParams.get('unassigned'))
+    const recent = parseBooleanParam(searchParams.get('recent'))
     const jobType = searchParams.get('job_type')
     const client = searchParams.get('client')
     const sort = searchParams.get('sort')
@@ -183,21 +249,6 @@ export async function GET(request: NextRequest) {
         { requestId, statusCode: 400 }
       )
       logApiError(400, 'INVALID_FORMAT', errorId, requestId, organization_id, response.message, {
-        category: 'validation', severity: 'warn', route: ROUTE_JOBS,
-      })
-      return NextResponse.json(response, {
-        status: 400,
-        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
-      })
-    }
-
-    if (filterConfig && (filterConfig.operator || 'AND').toUpperCase() !== 'AND') {
-      const { response, errorId } = createErrorResponse(
-        'Only AND filter groups are supported in filter_config.',
-        'VALIDATION_ERROR',
-        { requestId, statusCode: 400 }
-      )
-      logApiError(400, 'VALIDATION_ERROR', errorId, requestId, organization_id, response.message, {
         category: 'validation', severity: 'warn', route: ROUTE_JOBS,
       })
       return NextResponse.json(response, {
@@ -256,6 +307,20 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    if (needsSignatures === true) {
+      const { data: signatureRows, error: signaturesError } = await supabase
+        .from('signatures')
+        .select('job_id')
+        .eq('organization_id', organization_id)
+
+      if (signaturesError) throw signaturesError
+
+      const signatureJobIds = new Set(
+        (signatureRows || []).map((row: any) => row.job_id).filter(Boolean)
+      )
+      for (const jobId of signatureJobIds) excludedJobIds.add(jobId)
+    }
+
     if (requiredJobIds !== null && requiredJobIds.length === 0) {
       return NextResponse.json({
         data: [],
@@ -266,6 +331,27 @@ export async function GET(request: NextRequest) {
           totalPages: 0,
         },
       })
+    }
+
+    if (filterConfig) {
+      const filterConfigJobIds = await getMatchingJobIdsFromFilterGroup(
+        supabase,
+        organization_id,
+        filterConfig,
+        include_archived
+      )
+      requiredJobIds = intersectIds(requiredJobIds, filterConfigJobIds)
+      if (requiredJobIds !== null && requiredJobIds.length === 0) {
+        return NextResponse.json({
+          data: [],
+          pagination: {
+            page,
+            limit,
+            total: 0,
+            totalPages: 0,
+          },
+        })
+      }
     }
 
     let query = supabase
@@ -311,6 +397,19 @@ export async function GET(request: NextRequest) {
       query = query.ilike('client_name', `%${client}%`)
     }
 
+    if (overdue === true) {
+      query = query.lt('end_date', new Date().toISOString().split('T')[0])
+    }
+
+    if (unassigned === true) {
+      query = query.is('assigned_to_id', null)
+    }
+
+    if (recent === true) {
+      const recentSince = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+      query = query.gte('updated_at', recentSince)
+    }
+
     if (requiredJobIds !== null) {
       query = query.in('id', requiredJobIds)
     }
@@ -319,19 +418,46 @@ export async function GET(request: NextRequest) {
       query = query.not('id', 'in', inList(Array.from(excludedJobIds)))
     }
 
-    if (filterConfig) {
-      for (const condition of collectAndConditions(filterConfig)) {
-        query = applySingleFilter(query, condition)
-      }
-    }
-
     const sortColumn =
       sort && SORT_ALLOWLIST.has(sort)
         ? (sort === 'due_date' ? 'end_date' : sort)
         : 'created_at'
-    query = query.order(sortColumn, { ascending: order === 'asc' })
 
-    const { data: jobs, error } = await query
+    let jobs: any[] | null = null
+    let error: any = null
+
+    if (q) {
+      const rpcParams: Record<string, unknown> = {
+        p_org_id: organization_id,
+        p_query: q,
+        p_limit: limit,
+        p_offset: offset,
+        p_include_archived: include_archived,
+        p_required_ids: requiredJobIds?.length ? requiredJobIds : null,
+        p_excluded_ids: excludedJobIds.size ? Array.from(excludedJobIds) : null,
+        p_overdue: overdue === true ? true : null,
+        p_unassigned: unassigned === true ? true : null,
+        p_recent_days: recent === true ? 7 : null,
+      }
+      if (status) rpcParams.p_status = status
+      if (risk_level) rpcParams.p_risk_level = risk_level
+      if (assigned_to) rpcParams.p_assigned_to_id = assigned_to
+      if (riskScoreMin !== null) rpcParams.p_risk_score_min = riskScoreMin
+      if (riskScoreMax !== null) rpcParams.p_risk_score_max = riskScoreMax
+      if (jobType) rpcParams.p_job_type = jobType
+      if (client) rpcParams.p_client_ilike = `%${client}%`
+      const rankedRes = await supabase.rpc('get_jobs_ranked', rpcParams)
+      if (rankedRes.error) {
+        error = rankedRes.error
+      } else {
+        jobs = rankedRes.data || []
+      }
+    } else {
+      query = query.order(sortColumn, { ascending: order === 'asc' })
+      const result = await query
+      jobs = result.data
+      error = result.error
+    }
 
     if (error) throw error
 
@@ -378,18 +504,25 @@ export async function GET(request: NextRequest) {
       countQuery = countQuery.ilike('client_name', `%${client}%`)
     }
 
+    if (overdue === true) {
+      countQuery = countQuery.lt('end_date', new Date().toISOString().split('T')[0])
+    }
+
+    if (unassigned === true) {
+      countQuery = countQuery.is('assigned_to_id', null)
+    }
+
+    if (recent === true) {
+      const recentSince = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+      countQuery = countQuery.gte('updated_at', recentSince)
+    }
+
     if (requiredJobIds !== null) {
       countQuery = countQuery.in('id', requiredJobIds)
     }
 
     if (excludedJobIds.size > 0) {
       countQuery = countQuery.not('id', 'in', inList(Array.from(excludedJobIds)))
-    }
-
-    if (filterConfig) {
-      for (const condition of collectAndConditions(filterConfig)) {
-        countQuery = applySingleFilter(countQuery, condition)
-      }
     }
 
     const { count, error: countError } = await countQuery
