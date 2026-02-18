@@ -61,6 +61,7 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '20', 10)
     const status = searchParams.get('status')
     const risk_level = searchParams.get('risk_level')
+    const include_archived = searchParams.get('include_archived') === 'true'
 
     const offset = (page - 1) * limit
 
@@ -68,8 +69,13 @@ export async function GET(request: NextRequest) {
       .from('jobs')
       .select('id, client_name, job_type, location, status, risk_score, risk_level, created_at, updated_at')
       .eq('organization_id', organization_id)
+      .is('deleted_at', null)
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1)
+
+    if (!include_archived) {
+      query = query.is('archived_at', null)
+    }
 
     if (status) {
       query = query.eq('status', status)
@@ -88,6 +94,11 @@ export async function GET(request: NextRequest) {
       .from('jobs')
       .select('*', { count: 'exact', head: true })
       .eq('organization_id', organization_id)
+      .is('deleted_at', null)
+
+    if (!include_archived) {
+      countQuery = countQuery.is('archived_at', null)
+    }
 
     if (status) {
       countQuery = countQuery.eq('status', status)

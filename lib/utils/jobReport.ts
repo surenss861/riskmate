@@ -63,6 +63,7 @@ export async function buildJobReport(
     .select('id, name, type, file_path, mime_type, description, created_at, uploaded_by')
     .eq('job_id', jobId)
     .eq('organization_id', organizationId)
+    .is('deleted_at', null)
     .order('created_at', { ascending: true })
 
   // Fetch job_photos for category (before/during/after) to attach to photo documents
@@ -84,6 +85,7 @@ export async function buildJobReport(
     .eq('work_record_id', jobId)
     .eq('organization_id', organizationId)
     .eq('state', 'sealed')
+    .is('deleted_at', null)
 
   const PHOTO_CATEGORIES = ['before', 'during', 'after'] as const
   const evidencePhotoItems = (imageEvidence || [])
