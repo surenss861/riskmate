@@ -3,21 +3,29 @@
 import React, { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 
+/** Canonical strings matching job filter options (active/on-hold map to DB in_progress/on_hold). */
 const STATUS_OPTIONS = [
   { value: 'draft', label: 'Draft' },
-  { value: 'in_progress', label: 'Active' },
-  { value: 'on_hold', label: 'On Hold' },
+  { value: 'active', label: 'Active' },
+  { value: 'on-hold', label: 'On Hold' },
   { value: 'completed', label: 'Completed' },
   { value: 'cancelled', label: 'Cancelled' },
 ] as const
 
 export type BulkStatusValue = (typeof STATUS_OPTIONS)[number]['value']
 
+/** Map canonical UI status to DB status for API and local state. */
+export function canonicalStatusToDb(canonical: BulkStatusValue): string {
+  if (canonical === 'active') return 'in_progress'
+  if (canonical === 'on-hold') return 'on_hold'
+  return canonical
+}
+
 export interface BulkStatusModalProps {
   isOpen: boolean
   onClose: () => void
   selectedJobs: Array<{ id: string; client_name: string }>
-  onConfirm: (status: BulkStatusValue) => Promise<void>
+  onConfirm: (status: string) => Promise<void>
   loading?: boolean
 }
 
@@ -28,14 +36,15 @@ export function BulkStatusModal({
   onConfirm,
   loading = false,
 }: BulkStatusModalProps) {
-  const [status, setStatus] = useState<BulkStatusValue>('in_progress')
+  const [status, setStatus] = useState<BulkStatusValue>('active')
 
   if (!isOpen) return null
 
   const handleConfirm = async () => {
     const allowedValues = STATUS_OPTIONS.map((o) => o.value)
     if (!allowedValues.includes(status)) return
-    await onConfirm(status)
+    const dbStatus = canonicalStatusToDb(status)
+    await onConfirm(dbStatus)
     // Parent closes modal only on full success; do not call onClose() here so failure paths leave modal open
   }
 

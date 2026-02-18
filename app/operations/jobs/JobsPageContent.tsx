@@ -367,7 +367,7 @@ export function JobsPageContentView(props: JobsPageContentProps) {
     }
   }
 
-  const handleBulkStatusChange = async (status: import('@/components/jobs/BulkStatusModal').BulkStatusValue) => {
+  const handleBulkStatusChange = async (status: string) => {
     const ids = bulk.selectedItems.map((j) => j.id)
     const previousData = props.mutateData?.currentData ? JSON.parse(JSON.stringify(props.mutateData.currentData)) : null
     if (props.mutateData?.mutate) {
@@ -389,7 +389,7 @@ export function JobsPageContentView(props: JobsPageContentProps) {
       if (failed.length === 0) {
         bulk.clearSelection()
         setBulkStatusModalOpen(false)
-        setToast({ message: `${succeeded.length} job${succeeded.length !== 1 ? 's' : ''} updated to ${status.replace('_', ' ')}`, type: 'success' })
+        setToast({ message: `${succeeded.length} job${succeeded.length !== 1 ? 's' : ''} updated to ${status.replace(/_/g, ' ')}`, type: 'success' })
       } else {
         if (previousData && props.mutateData?.mutate) {
           props.mutateData.mutate(previousData, { revalidate: false })
@@ -478,11 +478,12 @@ export function JobsPageContentView(props: JobsPageContentProps) {
     }
   }
 
-  const handleBulkExport = async () => {
-    if (bulk.selectedItems.length === 0) return
+  const handleBulkExport = async (formats: import('@/components/jobs/BulkActionsToolbar').ExportFormat[]) => {
+    if (bulk.selectedItems.length === 0 || formats.length === 0) return
     const ids = bulk.selectedItems.map((j) => j.id)
     setExportInFlight(true)
-    setToast({ message: 'Preparing export…', type: 'success' })
+    const formatLabels = formats.length === 2 ? 'CSV and PDF' : formats[0]!.toUpperCase()
+    setToast({ message: `Preparing ${formatLabels} export…`, type: 'success' })
     try {
       const { data } = await jobsApi.bulkExport(ids)
       const { succeeded, failed } = data
@@ -491,11 +492,11 @@ export function JobsPageContentView(props: JobsPageContentProps) {
         setToast({ message: failed[0]?.message || 'No jobs available to export', type: 'error' })
         return
       }
-      await exportJobs(toExport, ['csv', 'pdf'])
+      await exportJobs(toExport, formats)
       if (failed.length > 0) {
         setToast({ message: `Exported ${toExport.length} job${toExport.length !== 1 ? 's' : ''}; ${failed.length} could not be exported.`, type: 'success' })
       } else {
-        setToast({ message: `Exported ${toExport.length} job${toExport.length !== 1 ? 's' : ''} (CSV and PDF).`, type: 'success' })
+        setToast({ message: `Exported ${toExport.length} job${toExport.length !== 1 ? 's' : ''} (${formatLabels}).`, type: 'success' })
       }
       bulk.clearSelection()
     } catch (err: any) {
@@ -597,6 +598,7 @@ export function JobsPageContentView(props: JobsPageContentProps) {
               placeholder="All Statuses"
               options={[
                 { label: 'All Statuses', value: '' },
+                { label: 'Draft', value: 'draft' },
                 { label: 'Active', value: 'active' },
                 { label: 'Completed', value: 'completed' },
                 { label: 'On Hold', value: 'on-hold' },

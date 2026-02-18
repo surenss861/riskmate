@@ -1,12 +1,14 @@
 'use client'
 
-import React from 'react'
+import React, { useState, useRef, useEffect } from 'react'
+
+export type ExportFormat = 'csv' | 'pdf'
 
 export interface BulkActionsToolbarProps {
   selectedCount: number
   onStatusChange: () => void
   onAssign: () => void
-  onExport: () => void
+  onExport: (formats: ExportFormat[]) => void
   onDelete: () => void
   onClearSelection: () => void
   /** Optional: disable actions when bulk APIs are not ready (e.g. export) */
@@ -35,9 +37,29 @@ export function BulkActionsToolbar({
   selectionOverCap = false,
   bulkCap = 100,
 }: BulkActionsToolbarProps) {
+  const [exportDropdownOpen, setExportDropdownOpen] = useState(false)
+  const exportDropdownRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (exportDropdownRef.current && !exportDropdownRef.current.contains(e.target as Node)) {
+        setExportDropdownOpen(false)
+      }
+    }
+    if (exportDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+      return () => document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [exportDropdownOpen])
+
   if (selectedCount === 0) return null
 
   const disabled = selectionOverCap
+
+  const handleExportChoice = (formats: ExportFormat[]) => {
+    setExportDropdownOpen(false)
+    onExport(formats)
+  }
 
   return (
     <div
@@ -76,15 +98,43 @@ export function BulkActionsToolbar({
               Assign
             </button>
           )}
-          <button
-            type="button"
-            onClick={onExport}
-            disabled={disableExport || disabled}
-            className="inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium bg-white/20 hover:bg-white/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <span aria-hidden>📥</span>
-            Export
-          </button>
+          <div className="relative" ref={exportDropdownRef}>
+            <button
+              type="button"
+              onClick={() => setExportDropdownOpen((o) => !o)}
+              disabled={disableExport || disabled}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium bg-white/20 hover:bg-white/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <span aria-hidden>📥</span>
+              Export
+              <span className="text-xs opacity-80">▼</span>
+            </button>
+            {exportDropdownOpen && (
+              <div className="absolute left-0 top-full mt-1 z-40 min-w-[160px] py-1 rounded-lg shadow-lg bg-[#1A1A1A] border border-white/10">
+                <button
+                  type="button"
+                  onClick={() => handleExportChoice(['csv'])}
+                  className="w-full px-3 py-2 text-left text-sm text-white/90 hover:bg-white/10 transition-colors"
+                >
+                  Export as CSV
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleExportChoice(['pdf'])}
+                  className="w-full px-3 py-2 text-left text-sm text-white/90 hover:bg-white/10 transition-colors"
+                >
+                  Export as PDF
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleExportChoice(['csv', 'pdf'])}
+                  className="w-full px-3 py-2 text-left text-sm text-white/90 hover:bg-white/10 transition-colors border-t border-white/5"
+                >
+                  Export as CSV & PDF
+                </button>
+              </div>
+            )}
+          </div>
           {canDelete && (
             <button
               type="button"

@@ -91,8 +91,19 @@ export async function parseBulkJobIds(
         }),
       }
     }
-    const allowedStatuses = ['draft', 'in_progress', 'on_hold', 'completed', 'cancelled']
-    if (!allowedStatuses.includes(status)) {
+    /** Accept canonical (active, on-hold) and DB values; normalize before use. */
+    const canonicalToDb: Record<string, string> = {
+      active: 'in_progress',
+      'on-hold': 'on_hold',
+      draft: 'draft',
+      in_progress: 'in_progress',
+      on_hold: 'on_hold',
+      completed: 'completed',
+      cancelled: 'cancelled',
+    }
+    const dbStatus = canonicalToDb[status] ?? status
+    const allowedDbStatuses = ['draft', 'in_progress', 'on_hold', 'completed', 'cancelled']
+    if (!allowedDbStatuses.includes(dbStatus)) {
       const { response, errorId } = createErrorResponse(
         'Invalid status',
         'VALIDATION_ERROR',
@@ -105,7 +116,7 @@ export async function parseBulkJobIds(
         }),
       }
     }
-    return { jobIds: job_ids as string[], status: status.trim() }
+    return { jobIds: job_ids as string[], status: dbStatus }
   }
 
   if (requireWorkerId) {

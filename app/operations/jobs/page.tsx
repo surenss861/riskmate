@@ -257,6 +257,7 @@ const JobsPageContent = () => {
     switch (status.toLowerCase()) {
       case 'draft':
         return 'bg-white/10 text-white/60 border-white/10'
+      case 'active':
       case 'in_progress':
         return 'bg-green-500/20 text-green-400 border-green-500/30'
       case 'completed':
@@ -266,6 +267,8 @@ const JobsPageContent = () => {
         return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
       case 'cancelled':
         return 'bg-red-500/20 text-red-400 border-red-500/30'
+      case 'archived':
+        return 'bg-white/10 text-white/50 border-white/5'
       default:
         return 'bg-white/10 text-white/60 border-white/10'
     }
