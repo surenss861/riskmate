@@ -39,6 +39,12 @@ const FILTER_FIELD_ALLOWLIST = new Set([
   'client_name',
   'location',
   'assigned_to_id',
+  'end_date',
+  'due_date',
+  'created_at',
+  'has_photos',
+  'has_signatures',
+  'needs_signatures',
 ])
 
 function parseBooleanParam(value: string | null): boolean | null {
@@ -88,6 +94,60 @@ function isFilterGroup(c: FilterCondition | FilterGroup): c is FilterGroup {
   return c != null && typeof c === 'object' && 'conditions' in c && Array.isArray((c as FilterGroup).conditions)
 }
 
+async function resolveJobIdsForBooleanFilter(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  organization_id: string,
+  includeArchived: boolean,
+  field: 'has_photos' | 'has_signatures' | 'needs_signatures',
+  value: boolean
+): Promise<string[]> {
+  const baseQuery = () => {
+    let q = supabase.from('jobs').select('id').eq('organization_id', organization_id).is('deleted_at', null)
+    if (!includeArchived) q = q.is('archived_at', null)
+    return q
+  }
+
+  if (field === 'has_photos') {
+    const { data: photoRows, error } = await supabase
+      .from('job_photos')
+      .select('job_id')
+      .eq('organization_id', organization_id)
+    if (error) throw error
+    const photoJobIds = Array.from(new Set((photoRows || []).map((row: { job_id: string }) => row.job_id).filter(Boolean)))
+    if (value) return photoJobIds
+    const { data: allRows } = await baseQuery()
+    const allIds = (allRows || []).map((row: { id: string }) => row.id).filter(Boolean)
+    return allIds.filter((id) => !photoJobIds.includes(id))
+  }
+
+  if (field === 'has_signatures') {
+    const { data: sigRows, error } = await supabase
+      .from('signatures')
+      .select('job_id')
+      .eq('organization_id', organization_id)
+    if (error) throw error
+    const sigJobIds = Array.from(new Set((sigRows || []).map((row: { job_id: string }) => row.job_id).filter(Boolean)))
+    if (value) return sigJobIds
+    const { data: allRows } = await baseQuery()
+    const allIds = (allRows || []).map((row: { id: string }) => row.id).filter(Boolean)
+    return allIds.filter((id) => !sigJobIds.includes(id))
+  }
+
+  if (field === 'needs_signatures') {
+    const { data: sigRows, error } = await supabase
+      .from('signatures')
+      .select('job_id')
+      .eq('organization_id', organization_id)
+    if (error) throw error
+    const sigJobIds = new Set((sigRows || []).map((row: { job_id: string }) => row.job_id).filter(Boolean))
+    const { data: allRows } = await baseQuery()
+    const allIds = (allRows || []).map((row: { id: string }) => row.id).filter(Boolean)
+    return allIds.filter((id) => !sigJobIds.has(id))
+  }
+
+  return []
+}
+
 async function getMatchingJobIdsFromFilterGroup(
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
   organization_id: string,
@@ -114,8 +174,25 @@ async function getMatchingJobIdsFromFilterGroup(
     if (isFilterGroup(condition)) {
       return getMatchingJobIdsFromFilterGroup(supabase, organization_id, condition, includeArchived)
     }
+    const c = condition as FilterCondition
+    const field = typeof c.field === 'string' ? c.field : ''
+    const op = typeof c.operator === 'string' ? c.operator.toLowerCase() : ''
+    const value = c.value
+    if (
+      (field === 'has_photos' || field === 'has_signatures' || field === 'needs_signatures') &&
+      op === 'eq' &&
+      (value === true || value === false)
+    ) {
+      return resolveJobIdsForBooleanFilter(
+        supabase,
+        organization_id,
+        includeArchived,
+        field as 'has_photos' | 'has_signatures' | 'needs_signatures',
+        value
+      )
+    }
     let q = baseQuery()
-    q = applySingleFilter(q, condition as FilterCondition)
+    q = applySingleFilter(q, c)
     const { data, error } = await q
     if (error) throw error
     return (data || []).map((row: { id: string }) => row.id).filter(Boolean)
@@ -138,7 +215,27 @@ async function getMatchingJobIdsFromFilterGroup(
       if (nestedIds.length === 0) return []
       q = q.in('id', nestedIds)
     } else {
-      q = applySingleFilter(q, condition as FilterCondition)
+      const c = condition as FilterCondition
+      const field = typeof c.field === 'string' ? c.field : ''
+      const op = typeof c.operator === 'string' ? c.operator.toLowerCase() : ''
+      const value = c.value
+      if (
+        (field === 'has_photos' || field === 'has_signatures' || field === 'needs_signatures') &&
+        op === 'eq' &&
+        (value === true || value === false)
+      ) {
+        const ids = await resolveJobIdsForBooleanFilter(
+          supabase,
+          organization_id,
+          includeArchived,
+          field as 'has_photos' | 'has_signatures' | 'needs_signatures',
+          value
+        )
+        if (ids.length === 0) return []
+        q = q.in('id', ids)
+      } else {
+        q = applySingleFilter(q, c)
+      }
     }
   }
   const { data, error } = await q
@@ -147,17 +244,28 @@ async function getMatchingJobIdsFromFilterGroup(
 }
 
 function applySingleFilter(query: any, condition: FilterCondition): any {
-  const field = typeof condition.field === 'string' ? condition.field : ''
+  const rawField = typeof condition.field === 'string' ? condition.field : ''
+  const field = rawField === 'due_date' ? 'end_date' : rawField
   const operator = typeof condition.operator === 'string' ? condition.operator.toLowerCase() : ''
   const value = condition.value
 
-  if (!FILTER_FIELD_ALLOWLIST.has(field) || value === undefined || value === null) {
+  if (!FILTER_FIELD_ALLOWLIST.has(rawField) || value === undefined || value === null) {
+    return query
+  }
+
+  // Derived boolean fields are handled in getMatchingJobIdsFromFilterGroup via subqueries
+  if (field === 'has_photos' || field === 'has_signatures' || field === 'needs_signatures') {
     return query
   }
 
   if (operator === 'eq') return query.eq(field, value)
   if (operator === 'gte') return query.gte(field, value)
   if (operator === 'lte') return query.lte(field, value)
+  if (operator === 'gt') return query.gt(field, value)
+  if (operator === 'lt') return query.lt(field, value)
+  if (operator === 'between' && Array.isArray(value) && value.length >= 2) {
+    return query.gte(field, value[0]).lte(field, value[1])
+  }
   if (operator === 'ilike' && typeof value === 'string') return query.ilike(field, `%${value}%`)
   if (operator === 'in' && Array.isArray(value)) return query.in(field, value)
 
