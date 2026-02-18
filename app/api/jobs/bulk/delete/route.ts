@@ -200,8 +200,11 @@ export async function POST(request: NextRequest) {
       data: { succeeded: [], failed },
       results: buildBulkResults([], failed),
     }
+    const pgCode = (rpcError as { code?: string }).code
     const isEligibilityError =
-      (rpcError as { code?: string }).code === 'P0001' ||
+      pgCode === 'P0001' ||
+      pgCode === '23514' ||
+      pgCode === 'check_violation' ||
       /ineligible|cannot be deleted/i.test(rpcError.message ?? '')
     if (isEligibilityError) {
       return NextResponse.json(
