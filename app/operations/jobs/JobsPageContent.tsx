@@ -14,7 +14,7 @@ import { BulkAssignModal } from '@/components/jobs/BulkAssignModal'
 import { BulkDeleteConfirmation } from '@/components/jobs/BulkDeleteConfirmation'
 import { useBulkSelection } from '@/hooks/useBulkSelection'
 import { jobsApi } from '@/lib/api'
-import { hasPermission } from '@/lib/utils/permissions'
+import { hasPermission, hasJobsDeletePermission } from '@/lib/utils/permissions'
 import { AppBackground, AppShell, PageHeader, PageSection, GlassCard, Button } from '@/components/shared'
 
 interface JobsPageContentProps {
@@ -76,7 +76,7 @@ export function JobsPageContentView(props: JobsPageContentProps) {
   const selectionOverCap = bulk.selectedIds.size > BULK_CAP
 
   const canArchive = hasPermission(props.userRole, 'jobs.close')
-  const canDelete = hasPermission(props.userRole, 'jobs.delete')
+  const canDelete = hasJobsDeletePermission(props.userRole)
   const canAssign = hasPermission(props.userRole, 'jobs.edit')
   const canChangeStatus = hasPermission(props.userRole, 'jobs.edit')
   const canExport = hasPermission(props.userRole, 'jobs.edit')

@@ -1251,6 +1251,8 @@ jobsRouter.post("/bulk/export", authenticate, async (req: express.Request, res: 
       .from("jobs")
       .select("id")
       .eq("organization_id", organization_id)
+      .is("deleted_at", null)
+      .is("archived_at", null)
       .in("id", validIds);
 
     if (fetchError) {
@@ -1261,7 +1263,11 @@ jobsRouter.post("/bulk/export", authenticate, async (req: express.Request, res: 
     const succeeded = validIds.filter((id) => foundIds.has(id));
     for (const id of validIds) {
       if (!foundIds.has(id)) {
-        failed.push({ id, code: "NOT_FOUND", message: "Job not found" });
+        failed.push({
+          id,
+          code: "NOT_FOUND",
+          message: "Job not found or excluded (deleted/archived)",
+        });
       }
     }
     res.json({ data: { succeeded, failed } });
