@@ -1745,6 +1745,8 @@ export default function AuditViewPage() {
                 onSelect={(eventId) => {
                   selectionHook.toggleSelection(eventId)
                 }}
+                onSelectAll={(ids) => selectionHook.selectAll(ids)}
+                onClearAll={() => selectionHook.clearSelection()}
                 onRowClick={(event) => {
                   // Set selected target for modals
                   setSelectedTarget({

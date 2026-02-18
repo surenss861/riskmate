@@ -28,6 +28,10 @@ interface EventSelectionTableProps {
   selectedIds?: string[] // Optional: use external selection state if provided
   highlightedFailedIds?: string[] // IDs to highlight (for showing failed items)
   onSelect?: (eventId: string) => void
+  /** When provided with external selection, header "select all" sets selection to this full list in one step. */
+  onSelectAll?: (ids: string[]) => void
+  /** When provided with external selection, header "clear" and Clear button clear selection in one step. */
+  onClearAll?: () => void
   onRowClick?: (event: AuditEvent) => void
   showActions?: boolean
   userRole?: string
@@ -38,7 +42,9 @@ export function EventSelectionTable({
   view,
   selectedIds: externalSelectedIds,
   highlightedFailedIds = [],
-  onSelect, 
+  onSelect,
+  onSelectAll,
+  onClearAll,
   onRowClick,
   showActions = false,
   userRole
@@ -64,11 +70,38 @@ export function EventSelectionTable({
 
   const handleClearSelection = () => {
     if (externalSelectedIds !== undefined) {
-      // External selection - clear all by toggling each selected one
-      selectedIds.forEach(id => onSelect?.(id))
+      if (onClearAll) {
+        onClearAll()
+      } else {
+        selectedIds.forEach(id => onSelect?.(id))
+      }
     } else {
-      // Internal selection
       internalSelection.clearSelection()
+    }
+  }
+
+  const handleHeaderCheckboxChange = (checked: boolean) => {
+    if (checked) {
+      const allIds = events.map((e) => e.id)
+      if (externalSelectedIds !== undefined) {
+        if (onSelectAll) {
+          onSelectAll(allIds)
+        } else {
+          events.forEach((event) => handleToggleSelection(event.id))
+        }
+      } else {
+        internalSelection.selectAll(allIds)
+      }
+    } else {
+      if (externalSelectedIds !== undefined) {
+        if (onClearAll) {
+          onClearAll()
+        } else {
+          handleClearSelection()
+        }
+      } else {
+        internalSelection.clearSelection()
+      }
     }
   }
 
@@ -135,13 +168,7 @@ export function EventSelectionTable({
                 <input
                   type="checkbox"
                   checked={selectedIds.length === events.length && events.length > 0}
-                  onChange={(e) => {
-                    if (e.target.checked) {
-                      events.forEach(event => handleToggleSelection(event.id))
-                    } else {
-                      handleClearSelection()
-                    }
-                  }}
+                  onChange={(e) => handleHeaderCheckboxChange(e.target.checked)}
                   className="w-4 h-4 rounded border-white/20 bg-white/5 text-[#F97316] focus:ring-[#F97316]"
                   disabled={isReadOnly}
                 />
