@@ -255,7 +255,8 @@ const JobsPageContent = () => {
 
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
-      case 'active':
+      case 'draft':
+        return 'bg-white/10 text-white/60 border-white/10'
       case 'in_progress':
         return 'bg-green-500/20 text-green-400 border-green-500/30'
       case 'completed':

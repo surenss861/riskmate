@@ -826,12 +826,11 @@ jobsRouter.post("/bulk/status", authenticate, requireWriteAccess, async (req: ex
     if (!Array.isArray(job_ids) || job_ids.length === 0 || typeof status !== "string") {
       return res.status(400).json({ message: "job_ids (array) and status (string) are required" });
     }
-    const allowedStatuses = ["active", "on-hold", "completed", "cancelled"];
+    const allowedStatuses = ["draft", "in_progress", "completed", "cancelled"];
     if (!allowedStatuses.includes(status)) {
       return res.status(400).json({ message: "Invalid status" });
     }
-    // Map UI status values to DB values where the schema uses different literals
-    const dbStatus = status === "active" ? "in_progress" : status === "on-hold" ? "on_hold" : status;
+    const dbStatus = status;
     const succeeded: string[] = [];
     const failed: { id: string; code: string; message: string }[] = [];
     for (const jobId of job_ids) {
