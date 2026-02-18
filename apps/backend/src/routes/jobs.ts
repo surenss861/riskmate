@@ -926,7 +926,14 @@ jobsRouter.post("/bulk/status", authenticate, requireWriteAccess, async (req: ex
         failed.push({ id, code: "UPDATE_FAILED", message: rpcError.message });
       }
       const total = failed.length;
-      return res.json({ success: true, summary: { total, succeeded: 0, failed: total }, data: { succeeded: [], failed }, results: buildBulkResults([], failed) });
+      return res.status(500).json({
+        success: false,
+        message: rpcError.message,
+        code: "RPC_ERROR",
+        summary: { total, succeeded: 0, failed: total },
+        data: { succeeded: [], failed },
+        results: buildBulkResults([], failed),
+      });
     }
 
     const succeeded: string[] = Array.isArray(rpcResult)
@@ -1042,7 +1049,14 @@ jobsRouter.post("/bulk/assign", authenticate, requireWriteAccess, async (req: ex
         failed.push({ id, code: "ASSIGN_FAILED", message: rpcError.message });
       }
       const total = failed.length;
-      return res.json({ success: true, summary: { total, succeeded: 0, failed: total }, data: { succeeded: [], failed, updated_assignments: {} }, results: buildBulkResults([], failed) });
+      return res.status(500).json({
+        success: false,
+        message: rpcError.message,
+        code: "RPC_ERROR",
+        summary: { total, succeeded: 0, failed: total },
+        data: { succeeded: [], failed, updated_assignments: {} },
+        results: buildBulkResults([], failed),
+      });
     }
 
     const succeeded: string[] = Array.isArray(rpcResult)
@@ -1153,6 +1167,7 @@ jobsRouter.post("/bulk/delete", authenticate, requireWriteAccess, async (req: ex
       auditByJobId,
       riskRes,
       reportRes,
+      reportRunsRes,
     ] = await Promise.all([
       supabase
         .from("audit_logs")
@@ -1167,6 +1182,11 @@ jobsRouter.post("/bulk/delete", authenticate, requireWriteAccess, async (req: ex
         .not("job_id", "is", null),
       supabase.from("job_risk_scores").select("job_id").in("job_id", draftNotDeleted),
       supabase.from("reports").select("job_id").in("job_id", draftNotDeleted),
+      supabase
+        .from("report_runs")
+        .select("job_id")
+        .eq("organization_id", organization_id)
+        .in("job_id", draftNotDeleted),
     ]);
 
     const hasAuditByTarget = new Set((auditByTarget.data ?? []).map((r: { target_id: string }) => r.target_id));
@@ -1174,7 +1194,10 @@ jobsRouter.post("/bulk/delete", authenticate, requireWriteAccess, async (req: ex
       (auditByJobId.data ?? []).map((r: { job_id: string }) => r.job_id).filter(Boolean)
     );
     const hasRisk = new Set((riskRes.data ?? []).map((r: { job_id: string }) => r.job_id));
-    const hasReports = new Set((reportRes.data ?? []).map((r: { job_id: string }) => r.job_id));
+    const hasReports = new Set([
+      ...(reportRes.data ?? []).map((r: { job_id: string }) => r.job_id),
+      ...(reportRunsRes.data ?? []).map((r: { job_id: string }) => r.job_id),
+    ]);
     const ineligibleAudit = new Set([...hasAuditByTarget, ...hasAuditByJobId]);
 
     const eligibleIds: string[] = [];
@@ -1211,7 +1234,14 @@ jobsRouter.post("/bulk/delete", authenticate, requireWriteAccess, async (req: ex
         failed.push({ id, code: "DELETE_FAILED", message: rpcError.message });
       }
       const total = failed.length;
-      return res.json({ success: true, summary: { total, succeeded: 0, failed: total }, data: { succeeded: [], failed }, results: buildBulkResults([], failed) });
+      return res.status(500).json({
+        success: false,
+        message: rpcError.message,
+        code: "RPC_ERROR",
+        summary: { total, succeeded: 0, failed: total },
+        data: { succeeded: [], failed },
+        results: buildBulkResults([], failed),
+      });
     }
 
     const clientMetadata = extractClientMetadata(req);

@@ -124,12 +124,17 @@ export async function POST(request: NextRequest) {
       failed.push({ id, code: 'ASSIGN_FAILED', message: rpcError.message })
     }
     const total = failed.length
-    return NextResponse.json({
-      success: true,
-      summary: { total, succeeded: 0, failed: total },
-      data: { succeeded: [], failed, updated_assignments: {} },
-      results: buildBulkResults([], failed),
-    })
+    return NextResponse.json(
+      {
+        success: false,
+        message: rpcError.message,
+        code: 'RPC_ERROR',
+        summary: { total, succeeded: 0, failed: total },
+        data: { succeeded: [], failed, updated_assignments: {} },
+        results: buildBulkResults([], failed),
+      },
+      { status: 500 }
+    )
   }
 
   const succeeded = Array.isArray(assignedIds)
