@@ -152,6 +152,20 @@ export async function GET(request: NextRequest) {
         } else if (type === 'all') {
           total = jobCount + hazardCount
         }
+
+        for (const row of hazardRows || []) {
+          const desc = row.description ?? ''
+          const title = (row.hazard_type || desc.slice(0, 50) + (desc.length > 50 ? '...' : '')).trim() || 'Hazard'
+          const subtitle = [row.severity].filter(Boolean).join(' • ')
+          results.push({
+            type: 'hazard',
+            id: row.id,
+            title,
+            subtitle,
+            highlight: row.highlight || '',
+            score: Number(row.score) || 0,
+          })
+        }
       }
 
       results.sort((a, b) => b.score - a.score)

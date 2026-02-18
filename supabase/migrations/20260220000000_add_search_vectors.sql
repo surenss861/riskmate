@@ -1,5 +1,8 @@
+-- Recreate search_vector so it includes job title/name (client_name) and all searchable fields
+ALTER TABLE jobs DROP COLUMN IF EXISTS search_vector;
+
 ALTER TABLE jobs
-  ADD COLUMN IF NOT EXISTS search_vector tsvector
+  ADD COLUMN search_vector tsvector
     GENERATED ALWAYS AS (
       to_tsvector('english',
         coalesce(client_name, '') || ' ' ||
@@ -100,7 +103,10 @@ AS $$
     ts_rank(j.search_vector, q.tsq)::REAL AS score,
     ts_headline(
       'english',
-      coalesce(j.description, '') || ' ' || coalesce(j.location, ''),
+      coalesce(j.client_name, '') || ' ' ||
+      coalesce(j.job_type, '') || ' ' ||
+      coalesce(j.description, '') || ' ' ||
+      coalesce(j.location, ''),
       q.tsq
     ) AS highlight
   FROM jobs j
