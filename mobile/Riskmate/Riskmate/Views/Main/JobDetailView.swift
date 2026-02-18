@@ -35,7 +35,7 @@ struct JobDetailView: View {
         [.overview]
         + (hazardsCount > 0 ? [.hazards] : [])
         + (controlsCount > 0 ? [.controls] : [])
-        + [.activity, .signatures, .evidence]
+        + [.activity, .signatures, .evidence, .tasks]
     }
     
     /// Single source of truth: validate selection when counts or loading state change. Only reset when loading finished and count is 0 (no jank during load).
@@ -284,6 +284,8 @@ struct JobDetailView: View {
                 JobSignaturesView(jobId: jobId, jobCreatorId: job.createdBy, onExportTapped: { showExportProofSheet = true })
             case .evidence:
                 EvidenceTab(jobId: jobId)
+            case .tasks:
+                JobTasksView(jobId: jobId)
             }
         }
     }
@@ -414,6 +416,7 @@ enum JobDetailTab: String, CaseIterable {
     case activity
     case signatures
     case evidence
+    case tasks
     
     var title: String {
         switch self {
@@ -423,6 +426,7 @@ enum JobDetailTab: String, CaseIterable {
         case .activity: return "Activity"
         case .signatures: return "Signatures"
         case .evidence: return "Evidence"
+        case .tasks: return "Tasks"
         }
     }
 }

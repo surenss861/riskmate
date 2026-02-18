@@ -19,6 +19,9 @@ import { ApplyTemplateInline } from '@/components/dashboard/ApplyTemplateInline'
 import { JobPacketView } from '@/components/job/JobPacketView'
 import { JobActivityFeed, type AuditEvent } from '@/components/job/JobActivityFeed'
 import { TeamSignatures } from '@/components/report/TeamSignatures'
+import { AddTaskModal } from '@/components/tasks/AddTaskModal'
+import { TaskList } from '@/components/tasks/TaskList'
+import { TaskTemplateSelector } from '@/components/tasks/TaskTemplateSelector'
 import { ToastContainer } from '@/components/ToastContainer'
 import { typography, emptyStateStyles, spacing, dividerStyles, tabStyles } from '@/lib/styles/design-system'
 import { ErrorModal } from '@/components/dashboard/ErrorModal'
@@ -27,6 +30,8 @@ import { getGPSLocation } from '@/lib/utils/gpsMetadata'
 import { hasPermission } from '@/lib/utils/permissions'
 import { AppBackground, AppShell, PageSection, GlassCard, Button, Badge, TrustReceiptStrip, IntegrityBadge, EventChip, EnforcementBanner, EvidenceStamp } from '@/components/shared'
 import { extractProxyError, formatProxyErrorTitle, logProxyError } from '@/lib/utils/extractProxyError'
+import { useTasks } from '@/hooks/useTasks'
+import { CreateTaskPayload } from '@/types/tasks'
 
 // Helper function to convert base64 to Blob
 const base64ToBlob = (base64: string, contentType = 'application/pdf') => {
@@ -97,6 +102,8 @@ export default function JobDetailPage() {
   const [showProgressModal, setShowProgressModal] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showApplyTemplate, setShowApplyTemplate] = useState(false)
+  const [showAddTask, setShowAddTask] = useState(false)
+  const [showTemplateSelector, setShowTemplateSelector] = useState(false)
   const [showCreateTemplate, setShowCreateTemplate] = useState(false)
   const [organizationId, setOrganizationId] = useState<string | null>(null)
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
@@ -160,9 +167,37 @@ export default function JobDetailPage() {
     actionType?: 'job_created' | 'hazard_added' | 'hazard_removed' | 'mitigation_completed' | 'photo_uploaded' | 'evidence_approved' | 'evidence_rejected' | 'template_applied' | 'worker_assigned' | 'worker_unassigned' | 'status_changed' | 'pdf_generated'
     metadata?: any
   }>>([])
-  const [activeTab, setActiveTab] = useState<'overview' | 'activity' | 'signatures'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'activity' | 'signatures' | 'tasks'>('overview')
   const [activityInitialEvents, setActivityInitialEvents] = useState<AuditEvent[] | null>(null)
   const [signatureCount, setSignatureCount] = useState<{ signed: number; total: number } | null>(null)
+  const [taskIncompleteCount, setTaskIncompleteCount] = useState<number | null>(null)
+  const [taskRefreshKey, setTaskRefreshKey] = useState(0)
+
+  const { addTask, refetch: refetchTasks, incompleteCount } = useTasks(jobId)
+
+  useEffect(() => {
+    setTaskIncompleteCount(incompleteCount)
+  }, [incompleteCount])
+
+  const handleAddTask = useCallback(
+    async (payload: CreateTaskPayload) => {
+      await addTask(payload)
+      await refetchTasks()
+      setTaskRefreshKey((value) => value + 1)
+    },
+    [addTask, refetchTasks]
+  )
+
+  const handleApplyTaskTemplate = useCallback(
+    async (tasks: CreateTaskPayload[]) => {
+      for (const task of tasks) {
+        await addTask(task)
+      }
+      await refetchTasks()
+      setTaskRefreshKey((value) => value + 1)
+    },
+    [addTask, refetchTasks]
+  )
 
   const loadVersionHistory = async () => {
     if (loadingVersionHistory || !jobId) return
@@ -886,6 +921,18 @@ export default function JobDetailPage() {
                 </span>
               )}
             </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('tasks')}
+              className={`${tabStyles.item} ${activeTab === 'tasks' ? tabStyles.active : tabStyles.inactive}`}
+            >
+              Tasks
+              {taskIncompleteCount !== null && taskIncompleteCount > 0 && (
+                <span className="ml-1.5 inline-flex items-center justify-center min-w-[2rem] px-1.5 py-0.5 text-xs font-medium rounded-md bg-white/10 text-white/80 border border-white/10">
+                  {taskIncompleteCount}
+                </span>
+              )}
+            </button>
           </div>
 
           {activeTab === 'activity' ? (
@@ -916,6 +963,26 @@ export default function JobDetailPage() {
                   onSignaturesChange={(signed, total) => {
                     setSignatureCount({ signed, total })
                   }}
+                />
+              </GlassCard>
+            </PageSection>
+          ) : activeTab === 'tasks' ? (
+            <PageSection>
+              <GlassCard className="p-6 md:p-8">
+                <div className="flex items-center justify-between mb-6">
+                  <div>
+                    <h2 className={`${typography.h2} mb-1`}>Tasks</h2>
+                    <p className="text-sm text-white/60">Track and complete job work items.</p>
+                  </div>
+                  <button type="button" className={tabStyles.item + ' ' + tabStyles.active} onClick={() => setShowAddTask(true)}>
+                    + Add Task
+                  </button>
+                </div>
+                <TaskList
+                  jobId={jobId}
+                  onAddTask={() => setShowAddTask(true)}
+                  onTaskCountChange={(count) => setTaskIncompleteCount(count)}
+                  refreshKey={taskRefreshKey}
                 />
               </GlassCard>
             </PageSection>
@@ -1576,7 +1643,24 @@ export default function JobDetailPage() {
           router.push('/operations/jobs')
         }}
       />
+
+      <AddTaskModal
+        isOpen={showAddTask}
+        onClose={() => setShowAddTask(false)}
+        jobId={jobId}
+        onTaskAdded={handleAddTask}
+        onUseTemplate={() => {
+          setShowAddTask(false)
+          setShowTemplateSelector(true)
+        }}
+      />
+
+      <TaskTemplateSelector
+        isOpen={showTemplateSelector}
+        onClose={() => setShowTemplateSelector(false)}
+        jobId={jobId}
+        onApply={handleApplyTaskTemplate}
+      />
     </ProtectedRoute>
   )
 }
-

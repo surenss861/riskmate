@@ -958,6 +958,41 @@ class APIClient {
         )
         return response.data
     }
+
+    /// Get tasks for a job
+    func getTasks(jobId: String) async throws -> [APIClientTask] {
+        let response: TasksResponse = try await request(
+            endpoint: "/api/jobs/\(jobId)/tasks"
+        )
+        return response.data
+    }
+
+    /// Create task for a job
+    func createTask(jobId: String, payload: CreateTaskRequest) async throws -> APIClientTask {
+        let body = try JSONEncoder().encode(payload)
+        let response: TaskResponse = try await request(
+            endpoint: "/api/jobs/\(jobId)/tasks",
+            method: "POST",
+            body: body
+        )
+        return response.data
+    }
+
+    /// Complete a task
+    func completeTask(id: String) async throws {
+        let _: EmptyResponse = try await request(
+            endpoint: "/api/tasks/\(id)/complete",
+            method: "POST"
+        )
+    }
+
+    /// Delete a task
+    func deleteTask(id: String) async throws {
+        let _: EmptyResponse = try await request(
+            endpoint: "/api/tasks/\(id)",
+            method: "DELETE"
+        )
+    }
     
     /// Get controls for a job
     func getControls(jobId: String) async throws -> [Control] {
@@ -1522,6 +1557,14 @@ struct HazardsResponse: Codable {
     let data: [Hazard]
 }
 
+struct TasksResponse: Codable {
+    let data: [APIClientTask]
+}
+
+struct TaskResponse: Codable {
+    let data: APIClientTask
+}
+
 struct HazardResponse: Codable {
     let data: Hazard
 }
@@ -1532,6 +1575,50 @@ struct ControlsResponse: Codable {
 
 struct ControlResponse: Codable {
     let data: Control
+}
+
+struct CreateTaskRequest: Codable {
+    let title: String
+    let description: String?
+    let assigned_to: String?
+    let priority: String
+    let due_date: String?
+    let status: String?
+    let sort_order: Int?
+}
+
+struct APIClientTask: Codable, Identifiable {
+    let id: String
+    let title: String
+    let status: String
+    let priority: String
+    let dueDate: String?
+    let completedAt: String?
+    let sortOrder: Int
+    let assignedUser: APIClientTaskUser?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case title
+        case status
+        case priority
+        case dueDate = "due_date"
+        case completedAt = "completed_at"
+        case sortOrder = "sort_order"
+        case assignedUser = "assigned_user"
+    }
+}
+
+struct APIClientTaskUser: Codable {
+    let id: String?
+    let fullName: String?
+    let email: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case fullName = "full_name"
+        case email
+    }
 }
 
 // MARK: - Job Activity API

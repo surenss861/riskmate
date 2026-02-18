@@ -36,6 +36,10 @@ import { dashboardRouter } from "./routes/dashboard";
 import { startExportWorker } from "./services/exportWorker";
 import { startRetentionWorker } from "./services/retentionWorker";
 import { startLedgerRootWorker } from "./services/ledgerRootWorker";
+import { startEmailQueueWorker } from "./workers/emailQueue";
+import { startWeeklyDigestWorker } from "./workers/weeklyDigest";
+import { startDeadlineReminderWorker } from "./workers/deadlineReminders";
+import { startTaskReminderWorker } from "./workers/taskReminders";
 import { requestIdMiddleware, RequestWithId } from "./middleware/requestId";
 import { createErrorResponse, logErrorForSupport } from "./utils/errorResponse";
 import { authenticate } from "./middleware/auth";
@@ -451,6 +455,9 @@ if (process.env.NODE_ENV !== "test") {
     startExportWorker();
     startRetentionWorker();
     startLedgerRootWorker();
+    startEmailQueueWorker();
+    startWeeklyDigestWorker();
+    startDeadlineReminderWorker();
+    startTaskReminderWorker();
   });
 }
-

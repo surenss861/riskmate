@@ -161,7 +161,23 @@ async function fetchOrgUserIdsWithPreference(
 }
 
 /** Default notification preferences (contract keys). Master toggles on; weekly_summary off per spec; others on. */
-export const DEFAULT_NOTIFICATION_PREFERENCES = {
+export type NotificationPreferences = {
+  push_enabled: boolean;
+  email_enabled: boolean;
+  mention: boolean;
+  job_assigned: boolean;
+  signature_requested: boolean;
+  evidence_uploaded: boolean;
+  hazard_added: boolean;
+  deadline_approaching: boolean;
+  email_deadline_reminder: boolean;
+  weekly_summary: boolean;
+  email_weekly_digest: boolean;
+  high_risk_job: boolean;
+  report_ready: boolean;
+};
+
+export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
   push_enabled: true,
   email_enabled: true,
   mention: true,
@@ -170,10 +186,12 @@ export const DEFAULT_NOTIFICATION_PREFERENCES = {
   evidence_uploaded: true,
   hazard_added: true,
   deadline_approaching: true,
+  email_deadline_reminder: true,
   weekly_summary: false,
+  email_weekly_digest: true,
   high_risk_job: true,
   report_ready: true,
-} as const;
+};
 
 /** Safe opt-out when preferences cannot be loaded (e.g. Supabase error). All delivery disabled to avoid re-enabling push/email for opted-out users. */
 export const OPT_OUT_SAFE_PREFERENCES: NotificationPreferences = {
@@ -185,12 +203,12 @@ export const OPT_OUT_SAFE_PREFERENCES: NotificationPreferences = {
   evidence_uploaded: false,
   hazard_added: false,
   deadline_approaching: false,
+  email_deadline_reminder: false,
   weekly_summary: false,
+  email_weekly_digest: false,
   high_risk_job: false,
   report_ready: false,
 };
-
-export type NotificationPreferences = typeof DEFAULT_NOTIFICATION_PREFERENCES;
 
 /** Fetch notification preferences for a user; returns defaults if no row exists. On Supabase error returns OPT_OUT_SAFE_PREFERENCES so delivery is skipped (fail closed). */
 export async function getNotificationPreferences(
@@ -218,7 +236,9 @@ export async function getNotificationPreferences(
     evidence_uploaded: data.evidence_uploaded ?? true,
     hazard_added: data.hazard_added ?? true,
     deadline_approaching: data.deadline_approaching ?? true,
+    email_deadline_reminder: data.email_deadline_reminder ?? true,
     weekly_summary: data.weekly_summary ?? false,
+    email_weekly_digest: data.email_weekly_digest ?? true,
     high_risk_job: data.high_risk_job ?? true,
     report_ready: data.report_ready ?? true,
   };
@@ -671,7 +691,8 @@ async function sendToUser(userId: string, organizationId: string, payload: PushP
   // Email delivery is gated on prefs.email_enabled. Any email job/worker that sends
   // notification emails must respect this flag; send email only inside this block.
   if (prefs.email_enabled) {
-    // TODO: send email when email delivery for in-app notifications is implemented
+    // Route-level handlers queue email jobs directly via emailQueue.ts.
+    // This block remains a no-op for in-app push delivery.
   }
 }
 
@@ -699,6 +720,87 @@ export async function sendJobAssignedNotification(
     },
     categoryId: "job_assigned",
     priority: "default",
+  });
+}
+
+export async function sendTaskAssignedNotification(
+  userId: string,
+  organizationId: string,
+  taskId: string,
+  jobTitle: string,
+  taskTitle: string
+) {
+  const prefs = await getNotificationPreferences(userId);
+  if (!prefs.job_assigned) {
+    console.log("[Notifications] Skipped task_assigned for user", userId, "(preference disabled)");
+    return;
+  }
+
+  let jobId: string | null = null;
+  const { data: task } = await supabase
+    .from("tasks")
+    .select("job_id")
+    .eq("id", taskId)
+    .maybeSingle();
+
+  if (task?.job_id) {
+    jobId = task.job_id;
+  }
+
+  await sendToUser(userId, organizationId, {
+    title: "Task Assigned",
+    body: `You've been assigned '${taskTitle}' on '${jobTitle}'`,
+    data: {
+      type: "task_assigned",
+      taskId,
+      deepLink: `riskmate://jobs/${jobId ?? ""}/tasks/${taskId}`,
+    },
+    categoryId: "task_assigned",
+    priority: "default",
+  });
+}
+
+export async function sendTaskCompletedNotification(
+  userId: string,
+  organizationId: string,
+  taskId: string,
+  taskTitle: string,
+  jobTitle: string
+) {
+  void jobTitle;
+  await sendToUser(userId, organizationId, {
+    title: "Task Completed",
+    body: `'${taskTitle}' has been completed`,
+    data: {
+      type: "task_completed",
+      taskId,
+    },
+    priority: "default",
+  });
+}
+
+export async function sendTaskOverdueNotification(
+  userId: string,
+  organizationId: string,
+  taskId: string,
+  taskTitle: string,
+  jobTitle: string
+) {
+  const prefs = await getNotificationPreferences(userId);
+  if (!prefs.deadline_approaching) {
+    console.log("[Notifications] Skipped task_overdue for user", userId, "(preference disabled)");
+    return;
+  }
+
+  await sendToUser(userId, organizationId, {
+    title: "Task Overdue",
+    body: `'${taskTitle}' on '${jobTitle}' is overdue`,
+    data: {
+      type: "task_overdue",
+      taskId,
+    },
+    priority: "high",
+    categoryId: "deadline",
   });
 }
 
@@ -839,4 +941,3 @@ export async function sendMentionNotification(
     priority: "high",
   });
 }
-

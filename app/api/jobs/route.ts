@@ -11,6 +11,107 @@ export const runtime = 'nodejs'
 
 const ROUTE_JOBS = '/api/jobs'
 
+type FilterCondition = {
+  field?: string
+  operator?: string
+  value?: unknown
+}
+
+type FilterGroup = {
+  operator?: string
+  conditions?: Array<FilterCondition | FilterGroup>
+}
+
+const SORT_ALLOWLIST = new Set([
+  'created_at',
+  'updated_at',
+  'risk_score',
+  'end_date',
+  'due_date', // URL state alias, mapped to end_date
+  'client_name',
+])
+
+const FILTER_FIELD_ALLOWLIST = new Set([
+  'status',
+  'risk_level',
+  'risk_score',
+  'job_type',
+  'client_name',
+  'location',
+  'assigned_to_id',
+])
+
+function parseBooleanParam(value: string | null): boolean | null {
+  if (value === null) return null
+  if (value === 'true') return true
+  if (value === 'false') return false
+  return null
+}
+
+function parseNumberParam(value: string | null): number | null {
+  if (value === null) return null
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+function normalizeFilterConfig(raw: string | null): FilterGroup | null {
+  if (!raw) return null
+  try {
+    const parsed = JSON.parse(raw)
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null
+    return parsed as FilterGroup
+  } catch {
+    return null
+  }
+}
+
+function collectAndConditions(group: FilterGroup): FilterCondition[] {
+  const operator = (group.operator || 'AND').toUpperCase()
+  if (operator !== 'AND' || !Array.isArray(group.conditions)) return []
+
+  const collected: FilterCondition[] = []
+  for (const condition of group.conditions) {
+    if (!condition || typeof condition !== 'object') continue
+    if ('conditions' in condition) {
+      const nested = collectAndConditions(condition as FilterGroup)
+      for (const item of nested) {
+        collected.push(item)
+      }
+      continue
+    }
+    collected.push(condition as FilterCondition)
+  }
+  return collected
+}
+
+function applySingleFilter(query: any, condition: FilterCondition): any {
+  const field = typeof condition.field === 'string' ? condition.field : ''
+  const operator = typeof condition.operator === 'string' ? condition.operator.toLowerCase() : ''
+  const value = condition.value
+
+  if (!FILTER_FIELD_ALLOWLIST.has(field) || value === undefined || value === null) {
+    return query
+  }
+
+  if (operator === 'eq') return query.eq(field, value)
+  if (operator === 'gte') return query.gte(field, value)
+  if (operator === 'lte') return query.lte(field, value)
+  if (operator === 'ilike' && typeof value === 'string') return query.ilike(field, `%${value}%`)
+  if (operator === 'in' && Array.isArray(value)) return query.in(field, value)
+
+  return query
+}
+
+function intersectIds(currentIds: string[] | null, nextIds: string[]): string[] {
+  if (currentIds === null) return nextIds
+  const nextSet = new Set(nextIds)
+  return currentIds.filter((id) => nextSet.has(id))
+}
+
+function inList(ids: string[]): string {
+  return `(${ids.join(',')})`
+}
+
 export async function GET(request: NextRequest) {
   const requestId = request.headers.get('x-request-id') || getRequestId()
 
@@ -62,15 +163,116 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status')
     const risk_level = searchParams.get('risk_level')
     const include_archived = searchParams.get('include_archived') === 'true'
+    const q = (searchParams.get('q') || '').trim()
+    const assignedToParam = searchParams.get('assigned_to') || searchParams.get('assigned')
+    const riskScoreMin = parseNumberParam(searchParams.get('risk_score_min'))
+    const riskScoreMax = parseNumberParam(searchParams.get('risk_score_max'))
+    const hasPhotos = parseBooleanParam(searchParams.get('has_photos'))
+    const hasSignatures = parseBooleanParam(searchParams.get('has_signatures'))
+    const jobType = searchParams.get('job_type')
+    const client = searchParams.get('client')
+    const sort = searchParams.get('sort')
+    const order = (searchParams.get('order') || 'desc').toLowerCase() === 'asc' ? 'asc' : 'desc'
+    const filterConfigRaw = searchParams.get('filter_config')
+    const filterConfig = normalizeFilterConfig(filterConfigRaw)
+
+    if (filterConfigRaw && !filterConfig) {
+      const { response, errorId } = createErrorResponse(
+        'Invalid filter_config. Expected a valid JSON object.',
+        'INVALID_FORMAT',
+        { requestId, statusCode: 400 }
+      )
+      logApiError(400, 'INVALID_FORMAT', errorId, requestId, organization_id, response.message, {
+        category: 'validation', severity: 'warn', route: ROUTE_JOBS,
+      })
+      return NextResponse.json(response, {
+        status: 400,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
+
+    if (filterConfig && (filterConfig.operator || 'AND').toUpperCase() !== 'AND') {
+      const { response, errorId } = createErrorResponse(
+        'Only AND filter groups are supported in filter_config.',
+        'VALIDATION_ERROR',
+        { requestId, statusCode: 400 }
+      )
+      logApiError(400, 'VALIDATION_ERROR', errorId, requestId, organization_id, response.message, {
+        category: 'validation', severity: 'warn', route: ROUTE_JOBS,
+      })
+      return NextResponse.json(response, {
+        status: 400,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
+
+    const assigned_to =
+      assignedToParam === 'me'
+        ? user.id
+        : assignedToParam && assignedToParam.trim()
+        ? assignedToParam.trim()
+        : null
 
     const offset = (page - 1) * limit
+
+    let requiredJobIds: string[] | null = null
+    const excludedJobIds = new Set<string>()
+
+    if (hasPhotos !== null) {
+      const { data: photoRows, error: photosError } = await supabase
+        .from('job_photos')
+        .select('job_id')
+        .eq('organization_id', organization_id)
+
+      if (photosError) throw photosError
+
+      const photoJobIds = Array.from(
+        new Set((photoRows || []).map((row: any) => row.job_id).filter(Boolean))
+      )
+
+      if (hasPhotos) {
+        requiredJobIds = intersectIds(requiredJobIds, photoJobIds)
+      } else {
+        for (const jobId of photoJobIds) excludedJobIds.add(jobId)
+      }
+    }
+
+    if (hasSignatures !== null) {
+      const { data: signatureRows, error: signaturesError } = await supabase
+        .from('signatures')
+        .select('job_id')
+        .eq('organization_id', organization_id)
+
+      if (signaturesError) throw signaturesError
+
+      const signatureJobIds = Array.from(
+        new Set((signatureRows || []).map((row: any) => row.job_id).filter(Boolean))
+      )
+
+      if (hasSignatures) {
+        requiredJobIds = intersectIds(requiredJobIds, signatureJobIds)
+      } else {
+        for (const jobId of signatureJobIds) excludedJobIds.add(jobId)
+      }
+    }
+
+    if (requiredJobIds !== null && requiredJobIds.length === 0) {
+      return NextResponse.json({
+        data: [],
+        pagination: {
+          page,
+          limit,
+          total: 0,
+          totalPages: 0,
+        },
+      })
+    }
 
     let query = supabase
       .from('jobs')
       .select('id, client_name, job_type, location, status, risk_score, risk_level, created_at, updated_at')
       .eq('organization_id', organization_id)
       .is('deleted_at', null)
-      .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1)
 
     if (!include_archived) {
@@ -84,6 +286,50 @@ export async function GET(request: NextRequest) {
     if (risk_level) {
       query = query.eq('risk_level', risk_level)
     }
+
+    if (q) {
+      query = query.textSearch('search_vector', q, { type: 'websearch', config: 'english' })
+    }
+
+    if (assigned_to) {
+      query = query.eq('assigned_to_id', assigned_to)
+    }
+
+    if (riskScoreMin !== null) {
+      query = query.gte('risk_score', riskScoreMin)
+    }
+
+    if (riskScoreMax !== null) {
+      query = query.lte('risk_score', riskScoreMax)
+    }
+
+    if (jobType) {
+      query = query.eq('job_type', jobType)
+    }
+
+    if (client) {
+      query = query.ilike('client_name', `%${client}%`)
+    }
+
+    if (requiredJobIds !== null) {
+      query = query.in('id', requiredJobIds)
+    }
+
+    if (excludedJobIds.size > 0) {
+      query = query.not('id', 'in', inList(Array.from(excludedJobIds)))
+    }
+
+    if (filterConfig) {
+      for (const condition of collectAndConditions(filterConfig)) {
+        query = applySingleFilter(query, condition)
+      }
+    }
+
+    const sortColumn =
+      sort && SORT_ALLOWLIST.has(sort)
+        ? (sort === 'due_date' ? 'end_date' : sort)
+        : 'created_at'
+    query = query.order(sortColumn, { ascending: order === 'asc' })
 
     const { data: jobs, error } = await query
 
@@ -106,6 +352,44 @@ export async function GET(request: NextRequest) {
 
     if (risk_level) {
       countQuery = countQuery.eq('risk_level', risk_level)
+    }
+
+    if (q) {
+      countQuery = countQuery.textSearch('search_vector', q, { type: 'websearch', config: 'english' })
+    }
+
+    if (assigned_to) {
+      countQuery = countQuery.eq('assigned_to_id', assigned_to)
+    }
+
+    if (riskScoreMin !== null) {
+      countQuery = countQuery.gte('risk_score', riskScoreMin)
+    }
+
+    if (riskScoreMax !== null) {
+      countQuery = countQuery.lte('risk_score', riskScoreMax)
+    }
+
+    if (jobType) {
+      countQuery = countQuery.eq('job_type', jobType)
+    }
+
+    if (client) {
+      countQuery = countQuery.ilike('client_name', `%${client}%`)
+    }
+
+    if (requiredJobIds !== null) {
+      countQuery = countQuery.in('id', requiredJobIds)
+    }
+
+    if (excludedJobIds.size > 0) {
+      countQuery = countQuery.not('id', 'in', inList(Array.from(excludedJobIds)))
+    }
+
+    if (filterConfig) {
+      for (const condition of collectAndConditions(filterConfig)) {
+        countQuery = applySingleFilter(countQuery, condition)
+      }
     }
 
     const { count, error: countError } = await countQuery
@@ -718,4 +1002,3 @@ export async function POST(request: NextRequest) {
     })
   }
 }
-

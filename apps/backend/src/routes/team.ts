@@ -5,6 +5,7 @@ import { authenticate, AuthenticatedRequest } from "../middleware/auth";
 import { canInviteRole, onlyOwnerCanSetOwner, requireRole } from "../middleware/rbac";
 import { limitsFor } from "../auth/planRules";
 import { recordAuditLog, extractClientMetadata } from "../middleware/audit";
+import { EmailJobType, queueEmail } from "../workers/emailQueue";
 
 export const teamRouter: ExpressRouter = express.Router();
 
@@ -300,6 +301,27 @@ teamRouter.post("/invite", requireRole("safety_lead"), async (req: express.Reque
         invite_id: inviteRow?.id || null,
       },
     });
+
+    try {
+      const [{ data: inviter }, { data: organization }] = await Promise.all([
+        supabase.from("users").select("full_name").eq("id", authReq.user.id).maybeSingle(),
+        supabase.from("organizations").select("name").eq("id", organizationId).maybeSingle(),
+      ]);
+
+      queueEmail(
+        EmailJobType.team_invite,
+        normalizedEmail,
+        {
+          orgName: organization?.name ?? "your organization",
+          inviterName: inviter?.full_name ?? "A teammate",
+          tempPassword,
+          loginUrl: process.env.FRONTEND_URL || "https://www.riskmate.dev",
+        },
+        newUserId
+      );
+    } catch (emailQueueErr) {
+      console.warn("[Team] Team invite email queueing failed:", emailQueueErr);
+    }
 
     res.json({
       data: inviteRow,
@@ -677,4 +699,3 @@ teamRouter.post("/acknowledge-reset", async (req: express.Request, res: express.
     res.status(500).json({ message: "Failed to acknowledge password reset" });
   }
 });
-

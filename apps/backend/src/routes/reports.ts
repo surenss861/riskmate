@@ -9,6 +9,7 @@ import crypto from "crypto";
 import { notifyReportReady, sendSignatureRequestNotification } from "../services/notifications";
 import { buildJobReport } from "../utils/jobReport";
 import { requireFeature } from "../middleware/limits";
+import { EmailJobType, queueEmail } from "../workers/emailQueue";
 
 export const reportsRouter: ExpressRouter = express.Router();
 
@@ -271,6 +272,48 @@ reportsRouter.post("/generate/:jobId", authenticate as unknown as RequestHandler
       pdfUrl,
     });
 
+    try {
+      const { data: members } = await supabase
+        .from("organization_members")
+        .select("user_id")
+        .eq("organization_id", organization_id);
+
+      const memberIds = (members || []).map((m: { user_id: string }) => m.user_id).filter(Boolean);
+      if (memberIds.length > 0) {
+        const { data: prefsRows } = await supabase
+          .from("notification_preferences")
+          .select("user_id")
+          .in("user_id", memberIds)
+          .eq("email_enabled", true)
+          .eq("report_ready", true);
+
+        const enabledIds = new Set((prefsRows || []).map((row: { user_id: string }) => row.user_id));
+        if (enabledIds.size > 0) {
+          const { data: users } = await supabase
+            .from("users")
+            .select("id, email")
+            .in("id", Array.from(enabledIds))
+            .not("email", "is", null);
+
+          for (const user of users || []) {
+            if (!user.email) continue;
+            queueEmail(
+              EmailJobType.report_ready,
+              user.email,
+              {
+                jobTitle: reportData.job?.client_name ?? "Risk report",
+                downloadUrl: pdfUrl ?? "",
+                viewUrl: `${BASE_SHARE_URL}/reports/${jobId}`,
+              },
+              user.id
+            );
+          }
+        }
+      }
+    } catch (emailQueueErr) {
+      console.warn("[Reports] Failed to queue report ready emails:", emailQueueErr);
+    }
+
     // Always return pdf_base64 so frontend can download even if storage upload fails
     res.json({
       data: {
@@ -367,6 +410,30 @@ reportsRouter.post(
         } catch (err) {
           console.error("sendSignatureRequestNotification failed for user", uid, err);
         }
+      }
+
+      try {
+        const { data: signerRows } = await supabase
+          .from("users")
+          .select("id, email")
+          .in("id", intendedSignerUserIds)
+          .not("email", "is", null);
+
+        for (const signer of signerRows || []) {
+          if (!signer.email) continue;
+          queueEmail(
+            EmailJobType.signature_request,
+            signer.email,
+            {
+              reportRunId,
+              jobTitle: jobTitleOrClientName ?? "Risk report",
+              reportName: `Report ${reportRunId.slice(0, 8)}`,
+            },
+            signer.id
+          );
+        }
+      } catch (emailQueueErr) {
+        console.warn("[Reports] Failed to queue signature request emails:", emailQueueErr);
       }
 
       res.json({ data: updated });
@@ -728,4 +795,3 @@ reportsRouter.post("/permit-pack/:jobId", authenticate as unknown as RequestHand
     res.status(500).json({ message: "Failed to generate Permit Pack" });
   }
 }) as RequestHandler);
-

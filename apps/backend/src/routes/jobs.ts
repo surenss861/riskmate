@@ -11,6 +11,7 @@ import { createErrorResponse, logErrorForSupport } from "../utils/errorResponse"
 import { requireWriteAccess } from "../middleware/requireWriteAccess";
 import { emitJobEvent, emitEvidenceEvent } from "../utils/realtimeEvents";
 import { hasJobsDeletePermission, canDeleteSingleJob } from "../utils/permissions";
+import { EmailJobType, queueEmail } from "../workers/emailQueue";
 
 export const jobsRouter: ExpressRouter = express.Router();
 
@@ -1973,7 +1974,7 @@ jobsRouter.post("/:id/assign", authenticate, requireWriteAccess, async (req: exp
 
     const { data: assignee } = await supabase
       .from("users")
-      .select("id, organization_id")
+      .select("id, organization_id, email, full_name")
       .eq("id", assigneeId)
       .single();
 
@@ -2009,6 +2010,30 @@ jobsRouter.post("/:id/assign", authenticate, requireWriteAccess, async (req: exp
       await sendJobAssignedNotification(assigneeId, job.organization_id, jobId, job.client_name ?? undefined);
     } catch (notifyErr) {
       console.warn("[Jobs] Job assigned notification failed:", notifyErr);
+    }
+
+    try {
+      const { data: actor } = await supabase
+        .from("users")
+        .select("full_name")
+        .eq("id", actorId)
+        .maybeSingle();
+
+      const assigneeEmail = (assignee as { email?: string | null } | null)?.email ?? null;
+      if (assigneeEmail) {
+        queueEmail(
+          EmailJobType.job_assigned,
+          assigneeEmail,
+          {
+            job,
+            assignedByName: actor?.full_name ?? "A teammate",
+            userName: (assignee as { full_name?: string | null } | null)?.full_name ?? null,
+          },
+          assigneeId
+        );
+      }
+    } catch (emailQueueErr) {
+      console.warn("[Jobs] Job assigned email queueing failed:", emailQueueErr);
     }
 
     res.status(201).json({ status: "ok", message: "User assigned to job" });
@@ -3572,4 +3597,3 @@ jobsRouter.post("/:id/signoffs", authenticate, requireWriteAccess, async (req: e
     res.status(500).json(errorResponse);
   }
 });
-
