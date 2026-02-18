@@ -54,6 +54,7 @@ export async function POST(request: NextRequest) {
     )
   }
 
+  const workerIdStr = assignee.id
   const assigneeName = assignee.full_name ?? null
   const assigneeEmail = assignee.email ?? null
 
@@ -114,7 +115,7 @@ export async function POST(request: NextRequest) {
   const { data: assignedIds, error: rpcError } = await supabase.rpc('bulk_assign_jobs', {
     p_organization_id: organization_id,
     p_job_ids: eligibleIds,
-    p_worker_id: workerId,
+    p_worker_id: workerIdStr,
     p_worker_name: assigneeName,
     p_worker_email: assigneeEmail,
   })
@@ -154,7 +155,7 @@ export async function POST(request: NextRequest) {
   > = {}
   for (const id of succeeded) {
     updated_assignments[id] = {
-      assigned_to_id: workerId,
+      assigned_to_id: workerIdStr,
       assigned_to_name: assigneeName,
       assigned_to_email: assigneeEmail,
     }
@@ -170,14 +171,14 @@ export async function POST(request: NextRequest) {
       eventName: 'worker.assigned',
       targetType: 'job',
       targetId: jobId,
-      metadata: { worker_id: workerId, bulk: true, ...clientMeta },
+      metadata: { worker_id: workerIdStr, bulk: true, ...clientMeta },
     })
     const notifyPromise = token
       ? fetch(`${BACKEND_URL}/api/notifications/job-assigned`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify({
-            userId: workerId,
+            userId: workerIdStr,
             jobId,
             jobTitle: job?.client_name ?? undefined,
           }),
