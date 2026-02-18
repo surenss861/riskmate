@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { PassThrough } from 'stream'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { getBulkAuth, BULK_CAP, type BulkFailedItem } from '../shared'
 import { hasPermission } from '@/lib/utils/permissions'
@@ -90,9 +91,9 @@ export async function POST(request: NextRequest) {
     .filter((id) => !foundIds.has(id))
     .map((id) => ({ id, code: 'NOT_FOUND', message: 'Job not found' }))
 
-  if (succeeded.length === 0) {
+  if (failed.length > 0) {
     return NextResponse.json(
-      { data: { succeeded: [], failed } },
+      { message: 'Some requested jobs were not found', data: { failed, succeeded } },
       { status: 400 }
     )
   }
@@ -138,8 +139,14 @@ export async function POST(request: NextRequest) {
   }
 
   const archive = archiver('zip', { zlib: { level: 9 } })
+  const stream = new PassThrough()
   const chunks: Buffer[] = []
-  archive.on('data', (chunk: Buffer) => chunks.push(chunk))
+  stream.on('data', (chunk: Buffer) => chunks.push(chunk))
+  const streamEnd = new Promise<Buffer>((resolve, reject) => {
+    stream.on('end', () => resolve(Buffer.concat(chunks)))
+    stream.on('error', reject)
+  })
+  archive.pipe(stream)
 
   const csv = buildCsvString(jobRows)
   archive.append(csv, { name: csvName })
@@ -147,7 +154,7 @@ export async function POST(request: NextRequest) {
   archive.append(Buffer.from(pdfBuffer), { name: pdfName })
   await archive.finalize()
 
-  const zipBuffer = Buffer.concat(chunks)
+  const zipBuffer = await streamEnd
   const zipName = `work-records-export-${dateStr}.zip`
   return new NextResponse(zipBuffer, {
     status: 200,

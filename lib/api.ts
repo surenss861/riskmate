@@ -738,7 +738,7 @@ export const jobsApi = {
       const isJson = contentType.includes('application/json');
       const data = isJson ? await res.json() : await res.text();
       const message = isJson ? (data?.message ?? data?.detail) : data || res.statusText;
-      const err: Error & ApiError & { data?: { failed?: Array<{ id: string; message: string }> } } = new Error(message) as any;
+      const err: Error & ApiError & { data?: { failed?: Array<{ id: string; code?: string; message: string }>; succeeded?: string[] } } = new Error(message) as any;
       if (isJson && data?.code) err.code = data.code;
       if (isJson && data?.data) err.data = data.data;
       throw err;

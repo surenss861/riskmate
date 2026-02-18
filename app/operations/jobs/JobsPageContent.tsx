@@ -495,8 +495,8 @@ export function JobsPageContentView(props: JobsPageContentProps) {
       setToast({ message: `Export ready: ${ids.length} job${ids.length !== 1 ? 's' : ''} (${formatLabels}).`, type: 'success' })
       bulk.clearSelection()
     } catch (err: any) {
-      const data = err?.data as { data?: { failed?: Array<{ id: string; message: string }> } } | undefined
-      const failed = data?.data?.failed ?? []
+      const payload = err?.data as { failed?: Array<{ id: string; message: string }>; succeeded?: string[] } | undefined
+      const failed = payload?.failed ?? []
       if (failed.length > 0) {
         bulk.setSelection(failed.map((f: { id: string }) => f.id))
         setToast({ message: failed[0]?.message || err?.message || 'Export failed. Failed items remain selected for retry.', type: 'error' })
