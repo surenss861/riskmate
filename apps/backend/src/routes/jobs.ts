@@ -1192,15 +1192,15 @@ jobsRouter.post("/bulk/delete", authenticate, requireWriteAccess, async (req: ex
     }
 
     const deletedAt = new Date().toISOString();
-    const { error: updateError } = await supabase
-      .from("jobs")
-      .update({ deleted_at: deletedAt })
-      .eq("organization_id", organization_id)
-      .in("id", eligibleIds);
+    const { error: rpcError } = await supabase.rpc("bulk_soft_delete_jobs", {
+      p_organization_id: organization_id,
+      p_job_ids: eligibleIds,
+      p_deleted_at: deletedAt,
+    });
 
-    if (updateError) {
+    if (rpcError) {
       for (const id of eligibleIds) {
-        failed.push({ id, code: "DELETE_FAILED", message: updateError.message });
+        failed.push({ id, code: "DELETE_FAILED", message: rpcError.message });
       }
       return res.json({ data: { succeeded: [], failed } });
     }

@@ -4,7 +4,7 @@ interface AuditLogEntry {
   organizationId: string
   actorId: string
   eventName: string
-  targetType: 'job' | 'event' | 'user' | 'control' | 'signoff' | 'system' | 'document'
+  targetType: 'job' | 'event' | 'user' | 'control' | 'signoff' | 'system' | 'document' | 'export'
   targetId?: string | null
   metadata?: Record<string, any>
 }

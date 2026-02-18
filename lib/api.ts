@@ -718,11 +718,16 @@ export const jobsApi = {
     });
   },
 
-  /** Request server-generated CSV/PDF export for all requested job IDs (across pages). Returns { blob, filename } for download. On error returns JSON with failed list; throw has .data for client to set selection. */
+  /** Enqueue bulk export, poll until ready, then return blob and filename. Partial success: export is for found jobs only; failed list in response. */
   bulkExportDownload: async (
     jobIds: string[],
     formats: ('csv' | 'pdf')[]
-  ): Promise<{ blob: Blob; filename: string }> => {
+  ): Promise<{
+    blob: Blob;
+    filename: string;
+    succeeded?: string[];
+    failed?: Array<{ id: string; code?: string; message: string }>;
+  }> => {
     const token = await getAuthToken();
     const res = await fetch('/api/jobs/bulk/export', {
       method: 'POST',
@@ -733,18 +738,53 @@ export const jobsApi = {
       body: JSON.stringify({ job_ids: jobIds, formats }),
     });
     const contentType = res.headers.get('content-type') ?? '';
-    const filename = res.headers.get('x-export-filename') ?? `work-records-export-${new Date().toISOString().slice(0, 10)}.zip`;
+    const isJson = contentType.includes('application/json');
+    const data = isJson ? await res.json() : await res.text();
     if (!res.ok) {
-      const isJson = contentType.includes('application/json');
-      const data = isJson ? await res.json() : await res.text();
       const message = isJson ? (data?.message ?? data?.detail) : data || res.statusText;
       const err: Error & ApiError & { data?: { failed?: Array<{ id: string; code?: string; message: string }>; succeeded?: string[] } } = new Error(message) as any;
       if (isJson && data?.code) err.code = data.code;
       if (isJson && data?.data) err.data = data.data;
       throw err;
     }
-    const blob = await res.blob();
-    return { blob, filename };
+    if (res.status !== 202 || !data?.export_id) {
+      throw new Error('Expected export job id from server');
+    }
+    const { export_id, data: responseData } = data as { export_id: string; data: { succeeded: string[]; failed: Array<{ id: string; code?: string; message: string }> } };
+    const succeeded = responseData?.succeeded ?? [];
+    const failed = responseData?.failed ?? [];
+
+    const pollInterval = 2000;
+    const maxAttempts = 120;
+    for (let i = 0; i < maxAttempts; i++) {
+      const pollRes = await fetch(`/api/exports/${export_id}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!pollRes.ok) throw new Error('Failed to poll export status');
+      const pollData = await pollRes.json();
+      const state = pollData?.data?.state;
+      if (state === 'ready') {
+        const downloadUrl = pollData?.data?.download_url;
+        if (!downloadUrl) throw new Error('Export ready but no download URL');
+        const blobRes = await fetch(downloadUrl);
+        if (!blobRes.ok) throw new Error('Failed to download export file');
+        const blob = await blobRes.blob();
+        const filename =
+          pollData?.data?.filename ??
+          (() => {
+            const d = blobRes.headers.get('content-disposition');
+            const m = d?.match(/filename="?([^";]+)"?/);
+            return m?.[1] ?? `work-records-export-${new Date().toISOString().slice(0, 10)}.zip`;
+          })();
+        return { blob, filename, succeeded, failed };
+      }
+      if (state === 'failed') {
+        const msg = pollData?.data?.failure_reason ?? pollData?.data?.error_message ?? 'Export failed';
+        throw new Error(msg);
+      }
+      await new Promise((r) => setTimeout(r, pollInterval));
+    }
+    throw new Error('Export timed out');
   },
 };
 

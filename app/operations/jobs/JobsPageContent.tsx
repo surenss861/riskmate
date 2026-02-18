@@ -485,15 +485,26 @@ export function JobsPageContentView(props: JobsPageContentProps) {
     const formatLabels = formats.length === 2 ? 'CSV and PDF' : formats[0]!.toUpperCase()
     setToast({ message: `Preparing ${formatLabels} export…`, type: 'success' })
     try {
-      const { blob, filename } = await jobsApi.bulkExportDownload(ids, formats)
+      const { blob, filename, succeeded, failed } = await jobsApi.bulkExportDownload(ids, formats)
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
       a.download = filename
       a.click()
       URL.revokeObjectURL(url)
-      setToast({ message: `Export ready: ${ids.length} job${ids.length !== 1 ? 's' : ''} (${formatLabels}).`, type: 'success' })
-      bulk.clearSelection()
+      const exportedCount = succeeded?.length ?? ids.length
+      const failedCount = failed?.length ?? 0
+      if (failedCount > 0) {
+        const failedIds = failed!.map((f) => f.id)
+        bulk.setSelection(failedIds)
+        setToast({
+          message: `Exported ${exportedCount} job${exportedCount !== 1 ? 's' : ''} (${formatLabels}). ${failedCount} not found; failed items remain selected.`,
+          type: 'success',
+        })
+      } else {
+        setToast({ message: `Export ready: ${exportedCount} job${exportedCount !== 1 ? 's' : ''} (${formatLabels}).`, type: 'success' })
+        bulk.clearSelection()
+      }
     } catch (err: any) {
       const payload = err?.data as { failed?: Array<{ id: string; message: string }>; succeeded?: string[] } | undefined
       const failed = payload?.failed ?? []

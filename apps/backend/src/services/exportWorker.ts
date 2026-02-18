@@ -17,6 +17,7 @@ import archiver from 'archiver'
 import crypto from 'crypto'
 import { generateLedgerExportPDF } from '../utils/pdf/ledgerExport'
 import { generateControlsPDF, generateAttestationsPDF, generateEvidenceIndexPDF } from '../utils/pdf/proofPack'
+import { buildCsvString, buildPdfBuffer, type JobRowForExport } from '../utils/bulkJobsExport'
 
 const WORKER_INTERVAL_MS = 5000 // Check every 5 seconds
 const MAX_CONCURRENT_EXPORTS = 3
@@ -220,6 +221,12 @@ async function processExport(exportJob: any) {
       manifestPath = result.manifestPath
       manifestHash = result.manifestHash
       manifest = result.manifest
+    } else if (export_type === 'bulk_jobs') {
+      const result = await generateBulkJobsExport(organization_id, id, filters || {})
+      storagePath = result.storagePath
+      manifestPath = result.manifestPath
+      manifestHash = result.manifestHash
+      manifest = result.manifest
     } else {
       throw new Error(`Unsupported export type: ${export_type}`)
     }
@@ -327,6 +334,106 @@ async function processExport(exportJob: any) {
       },
     })
   }
+}
+
+/**
+ * Generate bulk jobs export (CSV/PDF/ZIP) and upload to storage.
+ */
+async function generateBulkJobsExport(
+  organizationId: string,
+  exportId: string,
+  filters: { job_ids?: string[]; formats?: string[] }
+): Promise<{
+  storagePath: string
+  manifestPath: string
+  manifestHash: string
+  manifest: any
+}> {
+  const jobIds = filters.job_ids ?? []
+  const formats = (filters.formats ?? ['csv']).filter((f: string) => f === 'csv' || f === 'pdf')
+  if (jobIds.length === 0) throw new Error('bulk_jobs export has no job_ids')
+  if (formats.length === 0) formats.push('csv')
+
+  const { data: jobs, error: jobsError } = await supabase
+    .from('jobs')
+    .select('id, client_name, job_type, location, status, risk_score, risk_level, owner_name, created_at, updated_at')
+    .eq('organization_id', organizationId)
+    .in('id', jobIds)
+
+  if (jobsError) throw jobsError
+  const jobRows: JobRowForExport[] = (jobs ?? []).map((j: any) => ({
+    id: j.id,
+    client_name: j.client_name ?? '',
+    job_type: j.job_type ?? null,
+    location: j.location ?? null,
+    status: j.status ?? null,
+    risk_score: j.risk_score ?? null,
+    risk_level: j.risk_level ?? null,
+    owner_name: j.owner_name ?? null,
+    created_at: j.created_at ?? null,
+    updated_at: j.updated_at ?? null,
+  }))
+
+  const dateStr = new Date().toISOString().slice(0, 10)
+  const csvName = `work-records-export-${dateStr}.csv`
+  const pdfName = `work-records-export-${dateStr}.pdf`
+  const zipName = `work-records-export-${dateStr}.zip`
+  const prefix = `${organizationId}/bulk-jobs/${exportId}-${Date.now()}`
+
+  await ensureBucketExists('exports')
+
+  let storagePath: string
+  const manifest: { version: string; generated_at: string; organization_id: string; job_count: number; files: { name: string; type: string; hash?: string }[] } = {
+    version: '1.0',
+    generated_at: new Date().toISOString(),
+    organization_id: organizationId,
+    job_count: jobRows.length,
+    files: [],
+  }
+
+  if (formats.length === 1) {
+    if (formats[0] === 'csv') {
+      const csv = buildCsvString(jobRows)
+      const csvBuffer = Buffer.from(csv, 'utf-8')
+      storagePath = `${prefix}-${csvName}`
+      const { error: upErr } = await supabase.storage.from('exports').upload(storagePath, csvBuffer, { contentType: 'text/csv; charset=utf-8', upsert: false })
+      if (upErr) throw upErr
+      manifest.files.push({ name: csvName, type: 'csv', hash: crypto.createHash('sha256').update(csvBuffer).digest('hex') })
+    } else {
+      const pdfBuffer = await buildPdfBuffer(jobRows)
+      storagePath = `${prefix}-${pdfName}`
+      const { error: upErr } = await supabase.storage.from('exports').upload(storagePath, Buffer.from(pdfBuffer), { contentType: 'application/pdf', upsert: false })
+      if (upErr) throw upErr
+      manifest.files.push({ name: pdfName, type: 'pdf', hash: crypto.createHash('sha256').update(pdfBuffer).digest('hex') })
+    }
+  } else {
+    const archive = archiver('zip', { zlib: { level: 9 } })
+    const chunks: Buffer[] = []
+    archive.on('data', (chunk: Buffer) => chunks.push(chunk))
+    const zipEnd = new Promise<Buffer>((resolve, reject) => {
+      archive.on('end', () => resolve(Buffer.concat(chunks)))
+      archive.on('error', reject)
+    })
+    const csv = buildCsvString(jobRows)
+    archive.append(csv, { name: csvName })
+    const pdfBuffer = await buildPdfBuffer(jobRows)
+    archive.append(Buffer.from(pdfBuffer), { name: pdfName })
+    await archive.finalize()
+    const zipBuffer = await zipEnd
+    storagePath = `${prefix}-${zipName}`
+    const { error: upErr } = await supabase.storage.from('exports').upload(storagePath, zipBuffer, { contentType: 'application/zip', upsert: false })
+    if (upErr) throw upErr
+    manifest.files.push({ name: csvName, type: 'csv' }, { name: pdfName, type: 'pdf' })
+  }
+
+  const manifestJson = JSON.stringify(manifest, null, 2)
+  const manifestBuffer = Buffer.from(manifestJson, 'utf-8')
+  const manifestHash = crypto.createHash('sha256').update(manifestBuffer).digest('hex')
+  const manifestPath = `${prefix}-manifest.json`
+  const { error: manifestUpErr } = await supabase.storage.from('exports').upload(manifestPath, manifestBuffer, { contentType: 'application/json', upsert: false })
+  if (manifestUpErr) throw manifestUpErr
+
+  return { storagePath, manifestPath, manifestHash, manifest }
 }
 
 /**

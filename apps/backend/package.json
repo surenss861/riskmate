@@ -25,6 +25,7 @@
     "dotenv": "^17.2.3",
     "express": "^4.22.1",
     "nodemailer": "^7.0.12",
+    "pdf-lib": "^1.17.1",
     "pdfkit": "^0.17.2",
     "resend": "^6.7.0",
     "stripe": "^14.7.0",

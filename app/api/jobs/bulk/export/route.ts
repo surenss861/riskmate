@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { PassThrough } from 'stream'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { getBulkAuth, BULK_CAP, type BulkFailedItem } from '../shared'
 import { hasPermission } from '@/lib/utils/permissions'
-import { buildCsvString, buildPdfBuffer, type JobRowForExport } from '@/lib/utils/exportJobsServer'
-import archiver from 'archiver'
+import { recordAuditLog } from '@/lib/audit/auditLogger'
 
 export const runtime = 'nodejs'
 
@@ -14,8 +12,8 @@ type ExportFormat = (typeof VALID_FORMATS)[number]
 /**
  * POST /api/jobs/bulk/export
  * Body: { job_ids: string[], formats: ('csv'|'pdf')[] }
- * Validates access, fetches all requested jobs in one query, generates CSV/PDF
- * server-side, and returns a ZIP (or single file) for download.
+ * Enqueues export work to the background worker, returns export ID and download polling info.
+ * Audit log: export.bulk_jobs.requested. Partial success: export is enqueued for found jobs only; failed list in response.
  */
 export async function POST(request: NextRequest) {
   const auth = await getBulkAuth(request)
@@ -91,77 +89,51 @@ export async function POST(request: NextRequest) {
     .filter((id) => !foundIds.has(id))
     .map((id) => ({ id, code: 'NOT_FOUND', message: 'Job not found' }))
 
-  if (failed.length > 0) {
+  if (succeeded.length === 0) {
     return NextResponse.json(
-      { message: 'Some requested jobs were not found', data: { failed, succeeded } },
-      { status: 400 }
+      { message: 'No jobs found to export', data: { succeeded: [], failed } },
+      { status: 200 }
     )
   }
 
-  const jobRows: JobRowForExport[] = (jobs ?? []).map((j: any) => ({
-    id: j.id,
-    client_name: j.client_name ?? '',
-    job_type: j.job_type ?? null,
-    location: j.location ?? null,
-    status: j.status ?? null,
-    risk_score: j.risk_score ?? null,
-    risk_level: j.risk_level ?? null,
-    owner_name: j.owner_name ?? null,
-    created_at: j.created_at ?? null,
-    updated_at: j.updated_at ?? null,
-  }))
-
-  const dateStr = new Date().toISOString().slice(0, 10)
-  const csvName = `work-records-export-${dateStr}.csv`
-  const pdfName = `work-records-export-${dateStr}.pdf`
-
-  if (formats.length === 1) {
-    if (formats[0] === 'csv') {
-      const csv = buildCsvString(jobRows)
-      return new NextResponse(csv, {
-        status: 200,
-        headers: {
-          'Content-Type': 'text/csv; charset=utf-8',
-          'Content-Disposition': `attachment; filename="${csvName}"`,
-          'X-Export-Filename': csvName,
-        },
-      })
-    }
-    const pdfBuffer = await buildPdfBuffer(jobRows)
-    return new NextResponse(pdfBuffer, {
-      status: 200,
-      headers: {
-        'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="${pdfName}"`,
-        'X-Export-Filename': pdfName,
-      },
+  const { data: exportRow, error: insertError } = await supabase
+    .from('exports')
+    .insert({
+      organization_id,
+      work_record_id: null,
+      export_type: 'bulk_jobs',
+      state: 'queued',
+      progress: 0,
+      filters: { job_ids: succeeded, formats },
+      created_by: user_id,
+      requested_at: new Date().toISOString(),
     })
+    .select('id')
+    .single()
+
+  if (insertError) {
+    return NextResponse.json(
+      { message: 'Failed to enqueue export', code: 'INSERT_ERROR' },
+      { status: 500 }
+    )
   }
 
-  const archive = archiver('zip', { zlib: { level: 9 } })
-  const stream = new PassThrough()
-  const chunks: Buffer[] = []
-  stream.on('data', (chunk: Buffer) => chunks.push(chunk))
-  const streamEnd = new Promise<Buffer>((resolve, reject) => {
-    stream.on('end', () => resolve(Buffer.concat(chunks)))
-    stream.on('error', reject)
+  await recordAuditLog(supabase, {
+    organizationId: organization_id,
+    actorId: user_id,
+    eventName: 'export.bulk_jobs.requested',
+    targetType: 'export',
+    targetId: exportRow.id,
+    metadata: { job_count: succeeded.length, formats, failed_count: failed.length },
   })
-  archive.pipe(stream)
 
-  const csv = buildCsvString(jobRows)
-  archive.append(csv, { name: csvName })
-  const pdfBuffer = await buildPdfBuffer(jobRows)
-  archive.append(Buffer.from(pdfBuffer), { name: pdfName })
-  await archive.finalize()
-
-  const zipBuffer = await streamEnd
-  const zipName = `work-records-export-${dateStr}.zip`
-  return new NextResponse(zipBuffer, {
-    status: 200,
-    headers: {
-      'Content-Type': 'application/zip',
-      'Content-Disposition': `attachment; filename="${zipName}"`,
-      'X-Export-Filename': zipName,
+  return NextResponse.json(
+    {
+      export_id: exportRow.id,
+      status: 'queued',
+      message: 'Export started. Poll GET /api/exports/:id for status and download URL.',
+      data: { succeeded, failed },
     },
-  })
+    { status: 202 }
+  )
 }
