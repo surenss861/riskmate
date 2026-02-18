@@ -11,8 +11,32 @@ BEGIN
   END IF;
 END $$;
 
--- RPC: bulk soft-delete jobs and their mitigation_items in one transaction.
--- Caller must have already validated eligibility (draft, no audit/docs/risk/reports).
+-- Add deleted_at to documents if not present (cascade soft-delete with jobs).
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'documents') THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_name = 'documents' AND column_name = 'deleted_at') THEN
+      ALTER TABLE documents ADD COLUMN deleted_at TIMESTAMPTZ;
+      COMMENT ON COLUMN documents.deleted_at IS 'Soft-delete timestamp; set when job is soft-deleted so documents are hidden with the job.';
+    END IF;
+  END IF;
+END $$;
+
+-- Add deleted_at to evidence if not present (cascade soft-delete with jobs).
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'evidence') THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_name = 'evidence' AND column_name = 'deleted_at') THEN
+      ALTER TABLE evidence ADD COLUMN deleted_at TIMESTAMPTZ;
+      COMMENT ON COLUMN evidence.deleted_at IS 'Soft-delete timestamp; set when job is soft-deleted so evidence is hidden with the job.';
+    END IF;
+  END IF;
+END $$;
+
+-- RPC: bulk soft-delete jobs and their related records (documents, evidence, mitigation_items) in one transaction.
+-- Caller must have already validated eligibility (draft, no audit/risk/reports).
 CREATE OR REPLACE FUNCTION public.bulk_soft_delete_jobs(
   p_organization_id UUID,
   p_job_ids UUID[],
@@ -28,6 +52,30 @@ DECLARE
 BEGIN
   IF array_length(p_job_ids, 1) IS NULL OR array_length(p_job_ids, 1) = 0 THEN
     RETURN 0;
+  END IF;
+
+  -- Soft-delete documents (job documents/photos) for these jobs
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'documents') THEN
+    IF EXISTS (SELECT 1 FROM information_schema.columns
+               WHERE table_name = 'documents' AND column_name = 'deleted_at') THEN
+      UPDATE documents
+      SET deleted_at = p_deleted_at
+      WHERE job_id = ANY(p_job_ids)
+        AND organization_id = p_organization_id
+        AND deleted_at IS NULL;
+    END IF;
+  END IF;
+
+  -- Soft-delete evidence (work_record_id = job id) for these jobs
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'evidence') THEN
+    IF EXISTS (SELECT 1 FROM information_schema.columns
+               WHERE table_name = 'evidence' AND column_name = 'deleted_at') THEN
+      UPDATE evidence
+      SET deleted_at = p_deleted_at
+      WHERE work_record_id = ANY(p_job_ids)
+        AND organization_id = p_organization_id
+        AND deleted_at IS NULL;
+    END IF;
   END IF;
 
   -- Soft-delete mitigation_items for these jobs (if column exists)
@@ -53,7 +101,7 @@ END;
 $$;
 
 COMMENT ON FUNCTION public.bulk_soft_delete_jobs(UUID, UUID[], TIMESTAMPTZ) IS
-  'Soft-deletes jobs and their mitigation_items in one transaction. Caller must validate eligibility (draft, no audit/docs/risk/reports).';
+  'Soft-deletes jobs and their documents, evidence, and mitigation_items in one transaction. Caller must validate eligibility (draft, no audit/risk/reports).';
 
 GRANT EXECUTE ON FUNCTION public.bulk_soft_delete_jobs(UUID, UUID[], TIMESTAMPTZ) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.bulk_soft_delete_jobs(UUID, UUID[], TIMESTAMPTZ) TO service_role;

@@ -82,21 +82,27 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ data: { succeeded: [], failed } })
   }
 
-  const { error: updateError } = await supabase
-    .from('jobs')
-    .update({ status })
-    .eq('organization_id', organization_id)
-    .in('id', eligibleIds)
+  const { data: updatedIds, error: rpcError } = await supabase.rpc('bulk_update_job_status', {
+    p_organization_id: organization_id,
+    p_job_ids: eligibleIds,
+    p_status: status,
+  })
 
-  if (updateError) {
+  if (rpcError) {
     for (const id of eligibleIds) {
-      failed.push({ id, code: 'UPDATE_FAILED', message: updateError.message })
+      failed.push({ id, code: 'UPDATE_FAILED', message: rpcError.message })
     }
     return NextResponse.json({ data: { succeeded: [], failed } })
   }
 
+  const succeeded = Array.isArray(updatedIds)
+    ? (updatedIds as string[])
+    : updatedIds
+      ? ([updatedIds] as string[])
+      : []
+
   const clientMeta = getBulkClientMetadata(request)
-  for (const jobId of eligibleIds) {
+  for (const jobId of succeeded) {
     await recordAuditLog(supabase, {
       organizationId: organization_id,
       actorId: user_id,
@@ -108,7 +114,13 @@ export async function POST(request: NextRequest) {
     await emitJobEvent(organization_id, 'job.updated', jobId, user_id)
   }
 
+  for (const id of eligibleIds) {
+    if (!succeeded.includes(id)) {
+      failed.push({ id, code: 'UPDATE_FAILED', message: 'Job was not updated' })
+    }
+  }
+
   return NextResponse.json({
-    data: { succeeded: eligibleIds, failed },
+    data: { succeeded, failed },
   })
 }

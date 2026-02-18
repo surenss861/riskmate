@@ -9,8 +9,9 @@ export const runtime = 'nodejs'
 
 /**
  * POST /api/jobs/bulk/assign
- * Assign a worker to multiple jobs. Uses batched SQL: single select to validate membership,
- * single insert for job_assignments, single update for jobs. Returns { data: { succeeded, failed, updated_assignments } }.
+ * Assign a worker to multiple jobs. Uses atomic RPC (bulk_assign_jobs) to insert job_assignments
+ * and update jobs.assigned_to_* and updated_at in one transaction. Audit/notifications run only
+ * after commit for returned job ids. Returns { data: { succeeded, failed, updated_assignments } }.
  */
 export async function POST(request: NextRequest) {
   const auth = await getBulkAuth(request)
@@ -102,57 +103,31 @@ export async function POST(request: NextRequest) {
     })
   }
 
-  const rows = eligibleIds.map((job_id) => ({
-    job_id,
-    user_id: workerId,
-    role: 'worker',
-    organization_id,
-  }))
-  const { error: insertError } = await supabase.from('job_assignments').insert(rows)
+  const { data: assignedIds, error: rpcError } = await supabase.rpc('bulk_assign_jobs', {
+    p_organization_id: organization_id,
+    p_job_ids: eligibleIds,
+    p_worker_id: workerId,
+    p_worker_name: assigneeName,
+    p_worker_email: assigneeEmail,
+  })
 
-  let succeeded: string[] = []
-  if (insertError) {
-    if (insertError.code === '23505') {
-      for (const jobId of eligibleIds) {
-        const { error: oneError } = await supabase.from('job_assignments').insert({
-          job_id: jobId,
-          user_id: workerId,
-          role: 'worker',
-          organization_id,
-        })
-        if (oneError && oneError.code === '23505') {
-          failed.push({ id: jobId, code: 'ALREADY_ASSIGNED', message: 'User already assigned to this job' })
-        } else if (oneError) {
-          failed.push({ id: jobId, code: 'ASSIGN_FAILED', message: oneError.message })
-        } else {
-          succeeded.push(jobId)
-        }
-      }
-    } else {
-      for (const id of eligibleIds) {
-        failed.push({ id, code: 'ASSIGN_FAILED', message: insertError.message })
-      }
-      return NextResponse.json({
-        data: { succeeded: [], failed, updated_assignments: {} },
-      })
+  if (rpcError) {
+    for (const id of eligibleIds) {
+      failed.push({ id, code: 'ASSIGN_FAILED', message: rpcError.message })
     }
-  } else {
-    succeeded = [...eligibleIds]
+    return NextResponse.json({
+      data: { succeeded: [], failed, updated_assignments: {} },
+    })
   }
 
-  if (succeeded.length > 0) {
-    const { error: updateJobError } = await supabase
-      .from('jobs')
-      .update({
-        assigned_to_id: workerId,
-        assigned_to_name: assigneeName,
-        assigned_to_email: assigneeEmail,
-      })
-      .eq('organization_id', organization_id)
-      .in('id', succeeded)
-
-    if (updateJobError) {
-      // Non-fatal: assignment rows created but denormalized fields may not exist on schema
+  const succeeded = Array.isArray(assignedIds)
+    ? (assignedIds as string[])
+    : assignedIds
+      ? ([assignedIds] as string[])
+      : []
+  for (const id of eligibleIds) {
+    if (!succeeded.includes(id)) {
+      failed.push({ id, code: 'ASSIGN_FAILED', message: 'Job was not assigned' })
     }
   }
 

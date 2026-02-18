@@ -8,9 +8,9 @@ export const runtime = 'nodejs'
 
 /**
  * POST /api/jobs/bulk/delete
- * Soft-delete multiple jobs (draft-only, no audit/evidence/risk/reports).
- * Uses batched SQL: single select to validate and get eligibility, batch checks for
- * audit/docs/risk/reports, single update for eligible IDs. Returns { data: { succeeded, failed } }.
+ * Soft-delete multiple jobs (draft-only, no audit/risk/reports). Related documents and evidence
+ * are cascade soft-deleted in the same transaction. Uses RPC bulk_soft_delete_jobs for atomic
+ * updates. Returns { data: { succeeded, failed } }.
  */
 export async function POST(request: NextRequest) {
   const auth = await getBulkAuth(request)
@@ -92,7 +92,6 @@ export async function POST(request: NextRequest) {
   const [
     auditByTarget,
     auditByJobId,
-    docsRes,
     riskRes,
     reportRes,
   ] = await Promise.all([
@@ -107,7 +106,6 @@ export async function POST(request: NextRequest) {
       .eq('organization_id', organization_id)
       .in('job_id', draftNotDeleted)
       .not('job_id', 'is', null),
-    supabase.from('documents').select('job_id').in('job_id', draftNotDeleted),
     supabase.from('job_risk_scores').select('job_id').in('job_id', draftNotDeleted),
     supabase.from('reports').select('job_id').in('job_id', draftNotDeleted),
   ])
@@ -118,7 +116,6 @@ export async function POST(request: NextRequest) {
   const hasAuditByJobId = new Set(
     (auditByJobId.data ?? []).map((r: { job_id: string }) => r.job_id).filter(Boolean)
   )
-  const hasDocs = new Set((docsRes.data ?? []).map((r: { job_id: string }) => r.job_id))
   const hasRisk = new Set((riskRes.data ?? []).map((r: { job_id: string }) => r.job_id))
   const hasReports = new Set((reportRes.data ?? []).map((r: { job_id: string }) => r.job_id))
 
@@ -131,14 +128,6 @@ export async function POST(request: NextRequest) {
         id,
         code: 'HAS_AUDIT_HISTORY',
         message: 'Jobs with audit history cannot be deleted',
-      })
-      continue
-    }
-    if (hasDocs.has(id)) {
-      failed.push({
-        id,
-        code: 'HAS_EVIDENCE',
-        message: 'Jobs with uploaded evidence cannot be deleted',
       })
       continue
     }
