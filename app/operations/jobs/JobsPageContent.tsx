@@ -497,6 +497,7 @@ export function JobsPageContentView(props: JobsPageContentProps) {
       } else {
         setToast({ message: `Exported ${toExport.length} job${toExport.length !== 1 ? 's' : ''} (CSV and PDF).`, type: 'success' })
       }
+      bulk.clearSelection()
     } catch (err: any) {
       setToast({ message: err?.message || 'Export failed', type: 'error' })
     } finally {

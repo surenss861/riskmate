@@ -91,7 +91,7 @@ export async function parseBulkJobIds(
         }),
       }
     }
-    const allowedStatuses = ['draft', 'in_progress', 'completed', 'cancelled']
+    const allowedStatuses = ['draft', 'in_progress', 'on_hold', 'completed', 'cancelled']
     if (!allowedStatuses.includes(status)) {
       const { response, errorId } = createErrorResponse(
         'Invalid status',

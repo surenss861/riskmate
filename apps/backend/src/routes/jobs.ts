@@ -833,7 +833,7 @@ jobsRouter.post("/bulk/status", authenticate, requireWriteAccess, async (req: ex
     if (job_ids.length > BULK_BATCH_CAP) {
       return res.status(400).json({ message: `Maximum ${BULK_BATCH_CAP} jobs per bulk operation. Please select fewer jobs.` });
     }
-    const allowedStatuses = ["draft", "in_progress", "completed", "cancelled"];
+    const allowedStatuses = ["draft", "in_progress", "on_hold", "completed", "cancelled"];
     if (!allowedStatuses.includes(status)) {
       return res.status(400).json({ message: "Invalid status" });
     }

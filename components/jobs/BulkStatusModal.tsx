@@ -5,7 +5,8 @@ import { motion, AnimatePresence } from 'framer-motion'
 
 const STATUS_OPTIONS = [
   { value: 'draft', label: 'Draft' },
-  { value: 'in_progress', label: 'In Progress' },
+  { value: 'in_progress', label: 'Active' },
+  { value: 'on_hold', label: 'On Hold' },
   { value: 'completed', label: 'Completed' },
   { value: 'cancelled', label: 'Cancelled' },
 ] as const
@@ -32,6 +33,8 @@ export function BulkStatusModal({
   if (!isOpen) return null
 
   const handleConfirm = async () => {
+    const allowedValues = STATUS_OPTIONS.map((o) => o.value)
+    if (!allowedValues.includes(status)) return
     await onConfirm(status)
     // Parent closes modal only on full success; do not call onClose() here so failure paths leave modal open
   }
