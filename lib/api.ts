@@ -718,14 +718,33 @@ export const jobsApi = {
     });
   },
 
-  /** Validate access to job IDs for export; returns { data: { succeeded, failed } }. Uses Next.js API so bulk works when requests hit the app. */
-  bulkExport: async (jobIds: string[]) => {
-    return nextApiRequest<{
-      data: { succeeded: string[]; failed: Array<{ id: string; code: string; message: string }> };
-    }>('/api/jobs/bulk/export', {
+  /** Request server-generated CSV/PDF export for all requested job IDs (across pages). Returns { blob, filename } for download. On error returns JSON with failed list; throw has .data for client to set selection. */
+  bulkExportDownload: async (
+    jobIds: string[],
+    formats: ('csv' | 'pdf')[]
+  ): Promise<{ blob: Blob; filename: string }> => {
+    const token = await getAuthToken();
+    const res = await fetch('/api/jobs/bulk/export', {
       method: 'POST',
-      body: JSON.stringify({ job_ids: jobIds }),
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token && { Authorization: `Bearer ${token}` }),
+      },
+      body: JSON.stringify({ job_ids: jobIds, formats }),
     });
+    const contentType = res.headers.get('content-type') ?? '';
+    const filename = res.headers.get('x-export-filename') ?? `work-records-export-${new Date().toISOString().slice(0, 10)}.zip`;
+    if (!res.ok) {
+      const isJson = contentType.includes('application/json');
+      const data = isJson ? await res.json() : await res.text();
+      const message = isJson ? (data?.message ?? data?.detail) : data || res.statusText;
+      const err: Error & ApiError & { data?: { failed?: Array<{ id: string; message: string }> } } = new Error(message) as any;
+      if (isJson && data?.code) err.code = data.code;
+      if (isJson && data?.data) err.data = data.data;
+      throw err;
+    }
+    const blob = await res.blob();
+    return { blob, filename };
   },
 };
 

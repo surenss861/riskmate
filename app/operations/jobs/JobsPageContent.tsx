@@ -15,7 +15,6 @@ import { BulkDeleteConfirmation } from '@/components/jobs/BulkDeleteConfirmation
 import { useBulkSelection } from '@/hooks/useBulkSelection'
 import { jobsApi } from '@/lib/api'
 import { hasPermission } from '@/lib/utils/permissions'
-import { exportJobs } from '@/lib/utils/exportJobs'
 import { AppBackground, AppShell, PageHeader, PageSection, GlassCard, Button } from '@/components/shared'
 
 interface JobsPageContentProps {
@@ -72,9 +71,9 @@ export function JobsPageContentView(props: JobsPageContentProps) {
   const [bulkActionLoading, setBulkActionLoading] = useState(false)
   const [exportInFlight, setExportInFlight] = useState(false)
 
-  const bulk = useBulkSelection(props.jobs)
   const BULK_CAP = 100
-  const selectionOverCap = bulk.selectedItems.length > BULK_CAP
+  const bulk = useBulkSelection(props.jobs, { maxSelectionSize: BULK_CAP })
+  const selectionOverCap = bulk.selectedIds.size > BULK_CAP
 
   const canArchive = hasPermission(props.userRole, 'jobs.close')
   const canDelete = hasPermission(props.userRole, 'jobs.delete')
@@ -85,7 +84,7 @@ export function JobsPageContentView(props: JobsPageContentProps) {
   // Show toast once when selection first exceeds bulk cap
   const prevSelectionCount = useRef(0)
   React.useEffect(() => {
-    const n = bulk.selectedItems.length
+    const n = bulk.selectedIds.size
     if (n > BULK_CAP && prevSelectionCount.current <= BULK_CAP) {
       setToast({
         message: `Maximum ${BULK_CAP} jobs per bulk action. Clear some selections or run actions in smaller batches.`,
@@ -93,7 +92,7 @@ export function JobsPageContentView(props: JobsPageContentProps) {
       })
     }
     prevSelectionCount.current = n
-  }, [bulk.selectedItems.length, BULK_CAP])
+  }, [bulk.selectedIds.size, BULK_CAP])
 
   // Show keyboard hint once per user
   React.useEffect(() => {
@@ -369,7 +368,7 @@ export function JobsPageContentView(props: JobsPageContentProps) {
   }
 
   const handleBulkStatusChange = async (status: string) => {
-    const ids = bulk.selectedItems.map((j) => j.id)
+    const ids = Array.from(bulk.selectedIds)
     const previousData = props.mutateData?.currentData ? JSON.parse(JSON.stringify(props.mutateData.currentData)) : null
     if (props.mutateData?.mutate) {
       props.mutateData.mutate((current: any) => {
@@ -418,7 +417,7 @@ export function JobsPageContentView(props: JobsPageContentProps) {
   }
 
   const handleBulkAssign = async (workerId: string) => {
-    const ids = bulk.selectedItems.map((j) => j.id)
+    const ids = Array.from(bulk.selectedIds)
     const previousData = props.mutateData?.currentData ? JSON.parse(JSON.stringify(props.mutateData.currentData)) : null
     if (props.mutateData?.mutate) {
       props.mutateData.mutate((current: any) => {
@@ -480,37 +479,37 @@ export function JobsPageContentView(props: JobsPageContentProps) {
   }
 
   const handleBulkExport = async (formats: import('@/components/jobs/BulkActionsToolbar').ExportFormat[]) => {
-    if (bulk.selectedItems.length === 0 || formats.length === 0) return
-    const ids = bulk.selectedItems.map((j) => j.id)
+    const ids = Array.from(bulk.selectedIds)
+    if (ids.length === 0 || formats.length === 0) return
     setExportInFlight(true)
     const formatLabels = formats.length === 2 ? 'CSV and PDF' : formats[0]!.toUpperCase()
     setToast({ message: `Preparing ${formatLabels} export…`, type: 'success' })
     try {
-      const { data } = await jobsApi.bulkExport(ids)
-      const { succeeded, failed } = data
-      const toExport = bulk.selectedItems.filter((j) => succeeded.includes(j.id))
-      if (toExport.length === 0) {
-        setToast({ message: failed[0]?.message || 'No jobs available to export', type: 'error' })
-        return
-      }
-      await exportJobs(toExport, formats)
-      if (failed.length > 0) {
-        const failedIds = failed.map((f: { id: string }) => f.id)
-        bulk.setSelection(failedIds)
-        setToast({ message: `Exported ${toExport.length} job${toExport.length !== 1 ? 's' : ''}; ${failed.length} could not be exported. Failed items remain selected for retry.`, type: 'success' })
-      } else {
-        setToast({ message: `Exported ${toExport.length} job${toExport.length !== 1 ? 's' : ''} (${formatLabels}).`, type: 'success' })
-        bulk.clearSelection()
-      }
+      const { blob, filename } = await jobsApi.bulkExportDownload(ids, formats)
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      a.click()
+      URL.revokeObjectURL(url)
+      setToast({ message: `Export ready: ${ids.length} job${ids.length !== 1 ? 's' : ''} (${formatLabels}).`, type: 'success' })
+      bulk.clearSelection()
     } catch (err: any) {
-      setToast({ message: err?.message || 'Export failed', type: 'error' })
+      const data = err?.data as { data?: { failed?: Array<{ id: string; message: string }> } } | undefined
+      const failed = data?.data?.failed ?? []
+      if (failed.length > 0) {
+        bulk.setSelection(failed.map((f: { id: string }) => f.id))
+        setToast({ message: failed[0]?.message || err?.message || 'Export failed. Failed items remain selected for retry.', type: 'error' })
+      } else {
+        setToast({ message: err?.message || 'Export failed', type: 'error' })
+      }
     } finally {
       setExportInFlight(false)
     }
   }
 
   const handleBulkDelete = async () => {
-    const ids = bulk.selectedItems.map((j) => j.id)
+    const ids = Array.from(bulk.selectedIds)
     const previousData = props.mutateData?.currentData ? JSON.parse(JSON.stringify(props.mutateData.currentData)) : null
     setBulkActionLoading(true)
     try {
@@ -770,10 +769,10 @@ export function JobsPageContentView(props: JobsPageContentProps) {
           </GlassCard>
         ) : (
           <>
-            {bulk.selectedItems.length > 0 && (
+            {bulk.selectedIds.size > 0 && (
               <div className="mb-4">
                 <BulkActionsToolbar
-                  selectedCount={bulk.selectedItems.length}
+                  selectedCount={bulk.selectedIds.size}
                   onStatusChange={() => setBulkStatusModalOpen(true)}
                   onAssign={() => setBulkAssignModalOpen(true)}
                   onExport={handleBulkExport}

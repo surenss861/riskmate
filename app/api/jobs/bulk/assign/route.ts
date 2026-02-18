@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { parseBulkJobIds, getBulkAuth, getBulkClientMetadata, type BulkFailedItem } from '../shared'
-import { getRequestId } from '@/lib/utils/requestId'
 import { hasPermission } from '@/lib/utils/permissions'
 import { recordAuditLog } from '@/lib/audit/auditLogger'
 import { getSessionToken, BACKEND_URL } from '@/lib/api/proxy-helpers'
@@ -10,11 +9,10 @@ export const runtime = 'nodejs'
 
 /**
  * POST /api/jobs/bulk/assign
- * Assign a worker to multiple jobs. Returns { data: { succeeded, failed, updated_assignments } }.
+ * Assign a worker to multiple jobs. Uses batched SQL: single select to validate membership,
+ * single insert for job_assignments, single update for jobs. Returns { data: { succeeded, failed, updated_assignments } }.
  */
 export async function POST(request: NextRequest) {
-  const requestId = getRequestId(request)
-
   const auth = await getBulkAuth(request)
   if ('errorResponse' in auth) return auth.errorResponse
   const { organization_id, user_id } = auth
@@ -37,12 +35,10 @@ export async function POST(request: NextRequest) {
   if ('errorResponse' in parsed) return parsed.errorResponse
   const { jobIds, workerId } = parsed
 
-  const succeeded: string[] = []
-  const failed: BulkFailedItem[] = []
-  const updated_assignments: Record<
-    string,
-    { assigned_to_id: string; assigned_to_name: string | null; assigned_to_email: string | null }
-  > = {}
+  const validIds = jobIds.filter((id): id is string => typeof id === 'string')
+  const failed: BulkFailedItem[] = jobIds
+    .filter((id) => typeof id !== 'string')
+    .map((id) => ({ id: String(id), code: 'INVALID_ID', message: 'Invalid job id' }))
 
   const { data: assignee, error: assigneeError } = await supabase
     .from('users')
@@ -60,39 +56,76 @@ export async function POST(request: NextRequest) {
   const assigneeName = assignee.full_name ?? null
   const assigneeEmail = assignee.email ?? null
 
-  for (const jobId of jobIds) {
-    if (typeof jobId !== 'string') {
-      failed.push({ id: String(jobId), code: 'INVALID_ID', message: 'Invalid job id' })
-      continue
-    }
-
-    const { data: job, error: jobError } = await supabase
-      .from('jobs')
-      .select('id, client_name')
-      .eq('id', jobId)
-      .eq('organization_id', organization_id)
-      .single()
-
-    if (jobError || !job) {
-      failed.push({ id: jobId, code: 'NOT_FOUND', message: 'Job not found' })
-      continue
-    }
-
-    const { error: insertError } = await supabase.from('job_assignments').insert({
-      job_id: jobId,
-      user_id: workerId,
-      role: 'worker',
+  if (validIds.length === 0) {
+    return NextResponse.json({
+      data: { succeeded: [], failed, updated_assignments: {} },
     })
+  }
 
-    if (insertError) {
-      if (insertError.code === '23505') {
-        failed.push({ id: jobId, code: 'ALREADY_ASSIGNED', message: 'User already assigned to this job' })
-      } else {
-        failed.push({ id: jobId, code: 'ASSIGN_FAILED', message: insertError.message })
-      }
-      continue
+  const { data: jobs, error: fetchError } = await supabase
+    .from('jobs')
+    .select('id, client_name')
+    .eq('organization_id', organization_id)
+    .in('id', validIds)
+
+  if (fetchError) {
+    return NextResponse.json(
+      { message: fetchError.message, code: 'QUERY_ERROR' },
+      { status: 500 }
+    )
+  }
+
+  const found = new Map((jobs ?? []).map((j: { id: string; client_name?: string }) => [j.id, j]))
+  for (const id of validIds) {
+    if (!found.has(id)) {
+      failed.push({ id, code: 'NOT_FOUND', message: 'Job not found' })
     }
+  }
 
+  const eligibleIds = validIds.filter((id) => found.has(id))
+  if (eligibleIds.length === 0) {
+    return NextResponse.json({
+      data: { succeeded: [], failed, updated_assignments: {} },
+    })
+  }
+
+  const rows = eligibleIds.map((job_id) => ({
+    job_id,
+    user_id: workerId,
+    role: 'worker',
+  }))
+  const { error: insertError } = await supabase.from('job_assignments').insert(rows)
+
+  let succeeded: string[] = []
+  if (insertError) {
+    if (insertError.code === '23505') {
+      for (const jobId of eligibleIds) {
+        const { error: oneError } = await supabase.from('job_assignments').insert({
+          job_id: jobId,
+          user_id: workerId,
+          role: 'worker',
+        })
+        if (oneError && oneError.code === '23505') {
+          failed.push({ id: jobId, code: 'ALREADY_ASSIGNED', message: 'User already assigned to this job' })
+        } else if (oneError) {
+          failed.push({ id: jobId, code: 'ASSIGN_FAILED', message: oneError.message })
+        } else {
+          succeeded.push(jobId)
+        }
+      }
+    } else {
+      for (const id of eligibleIds) {
+        failed.push({ id, code: 'ASSIGN_FAILED', message: insertError.message })
+      }
+      return NextResponse.json({
+        data: { succeeded: [], failed, updated_assignments: {} },
+      })
+    }
+  } else {
+    succeeded = [...eligibleIds]
+  }
+
+  if (succeeded.length > 0) {
     const { error: updateJobError } = await supabase
       .from('jobs')
       .update({
@@ -100,20 +133,29 @@ export async function POST(request: NextRequest) {
         assigned_to_name: assigneeName,
         assigned_to_email: assigneeEmail,
       })
-      .eq('id', jobId)
       .eq('organization_id', organization_id)
+      .in('id', succeeded)
 
     if (updateJobError) {
-      // Non-fatal: assignment row created but denormalized fields may not exist on schema
+      // Non-fatal: assignment rows created but denormalized fields may not exist on schema
     }
+  }
 
-    succeeded.push(jobId)
-    updated_assignments[jobId] = {
+  const updated_assignments: Record<
+    string,
+    { assigned_to_id: string; assigned_to_name: string | null; assigned_to_email: string | null }
+  > = {}
+  for (const id of succeeded) {
+    updated_assignments[id] = {
       assigned_to_id: workerId,
       assigned_to_name: assigneeName,
       assigned_to_email: assigneeEmail,
     }
-    const clientMeta = getBulkClientMetadata(request)
+  }
+
+  const clientMeta = getBulkClientMetadata(request)
+  const token = await getSessionToken(request)
+  for (const jobId of succeeded) {
     await recordAuditLog(supabase, {
       organizationId: organization_id,
       actorId: user_id,
@@ -122,8 +164,8 @@ export async function POST(request: NextRequest) {
       targetId: jobId,
       metadata: { worker_id: workerId, bulk: true, ...clientMeta },
     })
+    const job = found.get(jobId)
     try {
-      const token = await getSessionToken(request)
       if (token) {
         await fetch(`${BACKEND_URL}/api/notifications/job-assigned`, {
           method: 'POST',

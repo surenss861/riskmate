@@ -1,73 +1,82 @@
 'use client'
 
-import { useState, useCallback, useEffect, useMemo } from 'react'
+import { useState, useCallback, useMemo } from 'react'
+
+export interface UseBulkSelectionOptions {
+  /** Maximum number of IDs that can be selected. When adding (toggleItem/toggleAll), selection is capped at this size. */
+  maxSelectionSize?: number
+}
 
 /**
  * Generic hook for multi-select state on a list of items with string ids.
  * Used for bulk actions (e.g. jobs table).
- * Syncs selectedIds when items change: intersect with current item IDs so
- * selection stays accurate across pagination/filter changes.
+ * Selection is tracked by job ID independent of the current page items so it
+ * persists across pagination/filter changes. Selection is only cleared or
+ * shrunk when the user explicitly clears it or after a bulk action completes.
  */
-export function useBulkSelection<T extends { id: string }>(items: T[]) {
+export function useBulkSelection<T extends { id: string }>(
+  items: T[],
+  options: UseBulkSelectionOptions = {}
+) {
+  const { maxSelectionSize } = options
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
-  const currentIds = useMemo(() => new Set(items.map((item) => item.id)), [items])
+  const toggleItem = useCallback(
+    (id: string) => {
+      setSelectedIds((prev) => {
+        const next = new Set(prev)
+        if (next.has(id)) {
+          next.delete(id)
+        } else {
+          if (maxSelectionSize != null && prev.size >= maxSelectionSize) return prev
+          next.add(id)
+        }
+        return next
+      })
+    },
+    [maxSelectionSize]
+  )
 
-  // When items change (page/filter), reconcile selection: keep only IDs that still exist in current items
-  useEffect(() => {
+  const toggleAll = useCallback(() => {
+    const currentIds = items.map((item) => item.id)
     setSelectedIds((prev) => {
-      if (prev.size === 0) return prev
-      const next = new Set<string>()
-      for (const id of prev) {
-        if (currentIds.has(id)) next.add(id)
+      const everyCurrentSelected =
+        currentIds.length > 0 && currentIds.every((id) => prev.has(id))
+      if (everyCurrentSelected) {
+        const next = new Set(prev)
+        currentIds.forEach((id) => next.delete(id))
+        return next
       }
-      return next.size === prev.size ? prev : next
-    })
-  }, [currentIds])
-
-  const toggleItem = useCallback((id: string) => {
-    setSelectedIds((prev) => {
       const next = new Set(prev)
-      if (next.has(id)) {
-        next.delete(id)
-      } else {
-        next.add(id)
+      const cap = maxSelectionSize != null ? maxSelectionSize - next.size : currentIds.length
+      let added = 0
+      for (const id of currentIds) {
+        if (!next.has(id) && added < cap) {
+          next.add(id)
+          added++
+        }
       }
       return next
     })
-  }, [])
-
-  const toggleAll = useCallback(() => {
-    const allIds = new Set(items.map((item) => item.id))
-    setSelectedIds((prev) => {
-      const everyCurrentSelected = items.length > 0 && items.every((item) => prev.has(item.id))
-      return everyCurrentSelected ? new Set() : allIds
-    })
-  }, [items])
+  }, [items, maxSelectionSize])
 
   const clearSelection = useCallback(() => {
     setSelectedIds(new Set())
   }, [])
 
-  /** Set selection to exactly these IDs (e.g. keep only failed IDs for retry). IDs not in current items are ignored. */
+  /** Set selection to exactly these IDs (e.g. keep only failed IDs for retry). */
   const setSelection = useCallback((ids: string[]) => {
-    setSelectedIds((prev) => {
-      const next = new Set<string>()
-      for (const id of ids) {
-        if (currentIds.has(id)) next.add(id)
-      }
-      return next
-    })
-  }, [currentIds])
+    setSelectedIds(new Set(ids))
+  }, [])
 
   const isSelected = useCallback(
     (id: string) => selectedIds.has(id),
     [selectedIds]
   )
 
-  // Header "Select All" is checked only when every current item ID is in selectedIds (not just matching count)
   const isAllSelected = useMemo(
-    () => items.length > 0 && items.every((item) => selectedIds.has(item.id)),
+    () =>
+      items.length > 0 && items.every((item) => selectedIds.has(item.id)),
     [items, selectedIds]
   )
 

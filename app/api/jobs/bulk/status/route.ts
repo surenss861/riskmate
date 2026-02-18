@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { parseBulkJobIds, getBulkAuth, getBulkClientMetadata, type BulkFailedItem } from '../shared'
-import { getRequestId } from '@/lib/utils/requestId'
 import { hasPermission } from '@/lib/utils/permissions'
 import { recordAuditLog } from '@/lib/audit/auditLogger'
 import { emitJobEvent } from '@/lib/realtime/emitJobEvent'
@@ -9,8 +8,6 @@ import { emitJobEvent } from '@/lib/realtime/emitJobEvent'
 export const runtime = 'nodejs'
 
 export async function POST(request: NextRequest) {
-  const requestId = getRequestId(request)
-
   const auth = await getBulkAuth(request)
   if ('errorResponse' in auth) return auth.errorResponse
   const { organization_id, user_id } = auth
@@ -33,43 +30,67 @@ export async function POST(request: NextRequest) {
   if ('errorResponse' in parsed) return parsed.errorResponse
   const { jobIds, status } = parsed
 
-  const succeeded: string[] = []
-  const failed: BulkFailedItem[] = []
+  const validIds = jobIds.filter((id): id is string => typeof id === 'string')
+  const invalid = jobIds.filter((id) => typeof id !== 'string')
+  const failed: BulkFailedItem[] = invalid.map((id) => ({
+    id: String(id),
+    code: 'INVALID_ID',
+    message: 'Invalid job id',
+  }))
 
-  for (const jobId of jobIds) {
-    if (typeof jobId !== 'string') {
-      failed.push({ id: String(jobId), code: 'INVALID_ID', message: 'Invalid job id' })
+  if (validIds.length === 0) {
+    return NextResponse.json({ data: { succeeded: [], failed } })
+  }
+
+  const { data: jobs, error: fetchError } = await supabase
+    .from('jobs')
+    .select('id, status, archived_at, deleted_at')
+    .eq('organization_id', organization_id)
+    .in('id', validIds)
+
+  if (fetchError) {
+    return NextResponse.json(
+      { message: fetchError.message, code: 'QUERY_ERROR' },
+      { status: 500 }
+    )
+  }
+
+  const found = new Map((jobs ?? []).map((j: { id: string }) => [j.id, j]))
+  for (const id of validIds) {
+    if (!found.has(id)) {
+      failed.push({ id, code: 'NOT_FOUND', message: 'Job not found' })
       continue
     }
-
-    const { data: job, error: jobError } = await supabase
-      .from('jobs')
-      .select('id, status, archived_at, deleted_at')
-      .eq('id', jobId)
-      .eq('organization_id', organization_id)
-      .single()
-
-    if (jobError || !job) {
-      failed.push({ id: jobId, code: 'NOT_FOUND', message: 'Job not found' })
-      continue
-    }
+    const job = found.get(id)!
     if (job.deleted_at) {
-      failed.push({ id: jobId, code: 'ALREADY_DELETED', message: 'Job has been deleted' })
-      continue
+      failed.push({ id, code: 'ALREADY_DELETED', message: 'Job has been deleted' })
     }
+  }
 
-    const { error: updateError } = await supabase
-      .from('jobs')
-      .update({ status })
-      .eq('id', jobId)
-      .eq('organization_id', organization_id)
+  const eligibleIds = validIds.filter((id) => {
+    const j = found.get(id)
+    return j && !j.deleted_at
+  })
 
-    if (updateError) {
-      failed.push({ id: jobId, code: 'UPDATE_FAILED', message: updateError.message })
-      continue
+  if (eligibleIds.length === 0) {
+    return NextResponse.json({ data: { succeeded: [], failed } })
+  }
+
+  const { error: updateError } = await supabase
+    .from('jobs')
+    .update({ status })
+    .eq('organization_id', organization_id)
+    .in('id', eligibleIds)
+
+  if (updateError) {
+    for (const id of eligibleIds) {
+      failed.push({ id, code: 'UPDATE_FAILED', message: updateError.message })
     }
-    succeeded.push(jobId)
-    const clientMeta = getBulkClientMetadata(request)
+    return NextResponse.json({ data: { succeeded: [], failed } })
+  }
+
+  const clientMeta = getBulkClientMetadata(request)
+  for (const jobId of eligibleIds) {
     await recordAuditLog(supabase, {
       organizationId: organization_id,
       actorId: user_id,
@@ -82,6 +103,6 @@ export async function POST(request: NextRequest) {
   }
 
   return NextResponse.json({
-    data: { succeeded, failed },
+    data: { succeeded: eligibleIds, failed },
   })
 }

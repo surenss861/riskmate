@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { parseBulkJobIds, getBulkAuth, getBulkClientMetadata, type BulkFailedItem } from '../shared'
-import { getRequestId } from '@/lib/utils/requestId'
 import { hasPermission } from '@/lib/utils/permissions'
 import { recordAuditLog } from '@/lib/audit/auditLogger'
 
@@ -9,11 +8,11 @@ export const runtime = 'nodejs'
 
 /**
  * POST /api/jobs/bulk/delete
- * Soft-delete multiple jobs (draft-only, no audit/evidence/risk/reports). Returns { data: { succeeded, failed } }.
+ * Soft-delete multiple jobs (draft-only, no audit/evidence/risk/reports).
+ * Uses batched SQL: single select to validate and get eligibility, batch checks for
+ * audit/docs/risk/reports, single update for eligible IDs. Returns { data: { succeeded, failed } }.
  */
 export async function POST(request: NextRequest) {
-  const requestId = getRequestId(request)
-
   const auth = await getBulkAuth(request)
   if ('errorResponse' in auth) return auth.errorResponse
   const { organization_id, user_id } = auth
@@ -38,96 +37,151 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const succeeded: string[] = []
-  const failed: BulkFailedItem[] = []
+  const validIds = jobIds.filter((id): id is string => typeof id === 'string')
+  const failed: BulkFailedItem[] = jobIds
+    .filter((id) => typeof id !== 'string')
+    .map((id) => ({ id: String(id), code: 'INVALID_ID', message: 'Invalid job id' }))
 
-  for (const jobId of jobIds) {
-    if (typeof jobId !== 'string') {
-      failed.push({ id: String(jobId), code: 'INVALID_ID', message: 'Invalid job id' })
+  if (validIds.length === 0) {
+    return NextResponse.json({ data: { succeeded: [], failed } })
+  }
+
+  const { data: jobs, error: jobsError } = await supabase
+    .from('jobs')
+    .select('id, status, archived_at, deleted_at')
+    .eq('organization_id', organization_id)
+    .in('id', validIds)
+
+  if (jobsError) {
+    return NextResponse.json(
+      { message: jobsError.message, code: 'QUERY_ERROR' },
+      { status: 500 }
+    )
+  }
+
+  const jobMap = new Map((jobs ?? []).map((j: { id: string; status: string; deleted_at: string | null }) => [j.id, j]))
+
+  for (const id of validIds) {
+    if (!jobMap.has(id)) {
+      failed.push({ id, code: 'NOT_FOUND', message: 'Job not found' })
       continue
     }
-
-    const { data: job, error: jobError } = await supabase
-      .from('jobs')
-      .select('id, status, archived_at, deleted_at')
-      .eq('id', jobId)
-      .eq('organization_id', organization_id)
-      .single()
-
-    if (jobError || !job) {
-      failed.push({ id: jobId, code: 'NOT_FOUND', message: 'Job not found' })
-      continue
-    }
+    const job = jobMap.get(id)!
     if (job.deleted_at) {
-      failed.push({ id: jobId, code: 'ALREADY_DELETED', message: 'Job has already been deleted' })
+      failed.push({ id, code: 'ALREADY_DELETED', message: 'Job has already been deleted' })
       continue
     }
     if (job.status !== 'draft') {
       failed.push({
-        id: jobId,
+        id,
         code: 'NOT_ELIGIBLE_FOR_DELETE',
         message: 'Only draft jobs can be deleted',
       })
-      continue
     }
+  }
 
-    const [auditRes, docRes, riskRes, reportRes] = await Promise.all([
-      supabase
-        .from('audit_logs')
-        .select('id')
-        .eq('organization_id', organization_id)
-        .or(`target_id.eq.${jobId},metadata->>job_id.eq.${jobId}`)
-        .limit(1),
-      supabase.from('documents').select('id').eq('job_id', jobId).limit(1),
-      supabase.from('job_risk_scores').select('id').eq('job_id', jobId).limit(1),
-      supabase.from('reports').select('id').eq('job_id', jobId).limit(1),
-    ])
+  const draftNotDeleted = validIds.filter((id) => {
+    const j = jobMap.get(id)
+    return j && !j.deleted_at && j.status === 'draft'
+  })
 
-    if ((auditRes.data?.length ?? 0) > 0) {
+  if (draftNotDeleted.length === 0) {
+    return NextResponse.json({ data: { succeeded: [], failed } })
+  }
+
+  const [
+    auditByTarget,
+    auditByJobId,
+    docsRes,
+    riskRes,
+    reportRes,
+  ] = await Promise.all([
+    supabase
+      .from('audit_logs')
+      .select('target_id')
+      .eq('organization_id', organization_id)
+      .in('target_id', draftNotDeleted),
+    supabase
+      .from('audit_logs')
+      .select('job_id')
+      .eq('organization_id', organization_id)
+      .in('job_id', draftNotDeleted)
+      .not('job_id', 'is', null),
+    supabase.from('documents').select('job_id').in('job_id', draftNotDeleted),
+    supabase.from('job_risk_scores').select('job_id').in('job_id', draftNotDeleted),
+    supabase.from('reports').select('job_id').in('job_id', draftNotDeleted),
+  ])
+
+  const hasAuditByTarget = new Set(
+    (auditByTarget.data ?? []).map((r: { target_id: string }) => r.target_id)
+  )
+  const hasAuditByJobId = new Set(
+    (auditByJobId.data ?? []).map((r: { job_id: string }) => r.job_id).filter(Boolean)
+  )
+  const hasDocs = new Set((docsRes.data ?? []).map((r: { job_id: string }) => r.job_id))
+  const hasRisk = new Set((riskRes.data ?? []).map((r: { job_id: string }) => r.job_id))
+  const hasReports = new Set((reportRes.data ?? []).map((r: { job_id: string }) => r.job_id))
+
+  const ineligibleAudit = new Set([...hasAuditByTarget, ...hasAuditByJobId])
+
+  const eligibleIds: string[] = []
+  for (const id of draftNotDeleted) {
+    if (ineligibleAudit.has(id)) {
       failed.push({
-        id: jobId,
+        id,
         code: 'HAS_AUDIT_HISTORY',
         message: 'Jobs with audit history cannot be deleted',
       })
       continue
     }
-    if ((docRes.data?.length ?? 0) > 0) {
+    if (hasDocs.has(id)) {
       failed.push({
-        id: jobId,
+        id,
         code: 'HAS_EVIDENCE',
         message: 'Jobs with uploaded evidence cannot be deleted',
       })
       continue
     }
-    if ((riskRes.data?.length ?? 0) > 0) {
+    if (hasRisk.has(id)) {
       failed.push({
-        id: jobId,
+        id,
         code: 'HAS_RISK_ASSESSMENT',
         message: 'Jobs with finalized risk assessments cannot be deleted',
       })
       continue
     }
-    if ((reportRes.data?.length ?? 0) > 0) {
+    if (hasReports.has(id)) {
       failed.push({
-        id: jobId,
+        id,
         code: 'HAS_REPORTS',
         message: 'Jobs with generated reports cannot be deleted',
       })
       continue
     }
+    eligibleIds.push(id)
+  }
 
-    const { error: deleteError } = await supabase
-      .from('jobs')
-      .update({ deleted_at: new Date().toISOString() })
-      .eq('id', jobId)
-      .eq('organization_id', organization_id)
+  if (eligibleIds.length === 0) {
+    return NextResponse.json({ data: { succeeded: [], failed } })
+  }
 
-    if (deleteError) {
-      failed.push({ id: jobId, code: 'DELETE_FAILED', message: deleteError.message })
-      continue
+  const deletedAt = new Date().toISOString()
+  const { error: updateError } = await supabase
+    .from('jobs')
+    .update({ deleted_at: deletedAt })
+    .eq('organization_id', organization_id)
+    .in('id', eligibleIds)
+
+  if (updateError) {
+    for (const id of eligibleIds) {
+      failed.push({ id, code: 'DELETE_FAILED', message: updateError.message })
     }
-    succeeded.push(jobId)
-    const clientMeta = getBulkClientMetadata(request)
+    return NextResponse.json({ data: { succeeded: [], failed } })
+  }
+
+  const clientMeta = getBulkClientMetadata(request)
+  for (const jobId of eligibleIds) {
+    const job = jobMap.get(jobId)!
     await recordAuditLog(supabase, {
       organizationId: organization_id,
       actorId: user_id,
@@ -139,6 +193,6 @@ export async function POST(request: NextRequest) {
   }
 
   return NextResponse.json({
-    data: { succeeded, failed },
+    data: { succeeded: eligibleIds, failed },
   })
 }
