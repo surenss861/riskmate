@@ -112,12 +112,14 @@ export async function POST(request: NextRequest) {
       .from('documents')
       .select('job_id')
       .eq('organization_id', organization_id)
-      .in('job_id', draftNotDeleted),
+      .in('job_id', draftNotDeleted)
+      .is('deleted_at', null),
     supabase
       .from('evidence')
       .select('work_record_id')
       .eq('organization_id', organization_id)
-      .in('work_record_id', draftNotDeleted),
+      .in('work_record_id', draftNotDeleted)
+      .is('deleted_at', null),
     supabase.from('job_risk_scores').select('job_id').in('job_id', draftNotDeleted),
     supabase.from('reports').select('job_id').in('job_id', draftNotDeleted),
   ])
