@@ -1234,14 +1234,20 @@ jobsRouter.post("/bulk/delete", authenticate, requireWriteAccess, async (req: ex
         failed.push({ id, code: "DELETE_FAILED", message: rpcError.message });
       }
       const total = failed.length;
-      return res.status(500).json({
+      const payload = {
         success: false,
         message: rpcError.message,
-        code: "RPC_ERROR",
         summary: { total, succeeded: 0, failed: total },
         data: { succeeded: [], failed },
         results: buildBulkResults([], failed),
-      });
+      };
+      const isEligibilityError =
+        (rpcError as { code?: string }).code === "P0001" ||
+        /ineligible|cannot be deleted/i.test(rpcError.message ?? "");
+      if (isEligibilityError) {
+        return res.status(400).json({ ...payload, code: "VALIDATION_ERROR" });
+      }
+      return res.status(500).json({ ...payload, code: "RPC_ERROR" });
     }
 
     const clientMetadata = extractClientMetadata(req);

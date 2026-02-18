@@ -193,15 +193,24 @@ export async function POST(request: NextRequest) {
       failed.push({ id, code: 'DELETE_FAILED', message: rpcError.message })
     }
     const total = failed.length
+    const payload = {
+      success: false,
+      message: rpcError.message,
+      summary: { total, succeeded: 0, failed: total },
+      data: { succeeded: [], failed },
+      results: buildBulkResults([], failed),
+    }
+    const isEligibilityError =
+      (rpcError as { code?: string }).code === 'P0001' ||
+      /ineligible|cannot be deleted/i.test(rpcError.message ?? '')
+    if (isEligibilityError) {
+      return NextResponse.json(
+        { ...payload, code: 'VALIDATION_ERROR' },
+        { status: 400 }
+      )
+    }
     return NextResponse.json(
-      {
-        success: false,
-        message: rpcError.message,
-        code: 'RPC_ERROR',
-        summary: { total, succeeded: 0, failed: total },
-        data: { succeeded: [], failed },
-        results: buildBulkResults([], failed),
-      },
+      { ...payload, code: 'RPC_ERROR' },
       { status: 500 }
     )
   }
