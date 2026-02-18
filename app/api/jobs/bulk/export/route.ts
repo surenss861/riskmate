@@ -74,6 +74,8 @@ export async function POST(request: NextRequest) {
     .from('jobs')
     .select('id, client_name, job_type, location, status, risk_score, risk_level, owner_name, created_at, updated_at')
     .eq('organization_id', organization_id)
+    .is('deleted_at', null)
+    .is('archived_at', null)
     .in('id', jobIds)
 
   if (jobsError) {
@@ -87,7 +89,7 @@ export async function POST(request: NextRequest) {
   const succeeded = jobIds.filter((id) => foundIds.has(id))
   const failed: BulkFailedItem[] = jobIds
     .filter((id) => !foundIds.has(id))
-    .map((id) => ({ id, code: 'NOT_FOUND', message: 'Job not found' }))
+    .map((id) => ({ id, code: 'NOT_FOUND', message: 'Job not found or excluded (deleted/archived)' }))
 
   if (succeeded.length === 0) {
     return NextResponse.json(

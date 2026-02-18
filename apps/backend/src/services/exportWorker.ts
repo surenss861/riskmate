@@ -358,6 +358,8 @@ async function generateBulkJobsExport(
     .from('jobs')
     .select('id, client_name, job_type, location, status, risk_score, risk_level, owner_name, created_at, updated_at')
     .eq('organization_id', organizationId)
+    .is('deleted_at', null)
+    .is('archived_at', null)
     .in('id', jobIds)
 
   if (jobsError) throw jobsError
@@ -373,6 +375,10 @@ async function generateBulkJobsExport(
     created_at: j.created_at ?? null,
     updated_at: j.updated_at ?? null,
   }))
+
+  if (jobRows.length === 0) {
+    throw new Error('No eligible jobs to export: all requested jobs are deleted or archived')
+  }
 
   const dateStr = new Date().toISOString().slice(0, 10)
   const csvName = `work-records-export-${dateStr}.csv`
