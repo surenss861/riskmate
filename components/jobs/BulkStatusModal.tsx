@@ -33,7 +33,7 @@ export function BulkStatusModal({
 
   const handleConfirm = async () => {
     await onConfirm(status)
-    onClose()
+    // Parent closes modal only on full success; do not call onClose() here so failure paths leave modal open
   }
 
   return (

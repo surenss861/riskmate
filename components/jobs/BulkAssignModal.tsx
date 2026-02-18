@@ -44,7 +44,7 @@ export function BulkAssignModal({
   const handleConfirm = async () => {
     if (!workerId) return
     await onConfirm(workerId)
-    onClose()
+    // Parent closes modal only on full success; do not call onClose() here so failure paths leave modal open
   }
 
   return (

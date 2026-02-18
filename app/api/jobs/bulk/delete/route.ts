@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
-import { parseBulkJobIds, getBulkAuth, type BulkFailedItem } from '../shared'
+import { parseBulkJobIds, getBulkAuth, getBulkClientMetadata, type BulkFailedItem } from '../shared'
 import { getRequestId } from '@/lib/utils/requestId'
 import { hasPermission } from '@/lib/utils/permissions'
+import { recordAuditLog } from '@/lib/audit/auditLogger'
 
 export const runtime = 'nodejs'
 
@@ -126,6 +127,15 @@ export async function POST(request: NextRequest) {
       continue
     }
     succeeded.push(jobId)
+    const clientMeta = getBulkClientMetadata(request)
+    await recordAuditLog(supabase, {
+      organizationId: organization_id,
+      actorId: user_id,
+      eventName: 'job.deleted',
+      targetType: 'job',
+      targetId: jobId,
+      metadata: { previous_status: job.status, bulk: true, ...clientMeta },
+    })
   }
 
   return NextResponse.json({

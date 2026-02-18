@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
-import { parseBulkJobIds, getBulkAuth, type BulkFailedItem } from '../shared'
+import { parseBulkJobIds, getBulkAuth, getBulkClientMetadata, type BulkFailedItem } from '../shared'
 import { getRequestId } from '@/lib/utils/requestId'
+import { hasPermission } from '@/lib/utils/permissions'
+import { recordAuditLog } from '@/lib/audit/auditLogger'
+import { emitJobEvent } from '@/lib/realtime/emitJobEvent'
 
 export const runtime = 'nodejs'
 
@@ -12,14 +15,26 @@ export async function POST(request: NextRequest) {
   if ('errorResponse' in auth) return auth.errorResponse
   const { organization_id, user_id } = auth
 
+  const supabase = await createSupabaseServerClient()
+  const { data: userData } = await supabase
+    .from('users')
+    .select('role')
+    .eq('id', user_id)
+    .single()
+  const role = (userData?.role as 'owner' | 'admin' | 'member') ?? 'member'
+  if (!hasPermission(role, 'jobs.edit')) {
+    return NextResponse.json(
+      { message: 'You do not have permission to update job status' },
+      { status: 403 }
+    )
+  }
+
   const parsed = await parseBulkJobIds(request, true)
   if ('errorResponse' in parsed) return parsed.errorResponse
   const { jobIds, status } = parsed
 
   const succeeded: string[] = []
   const failed: BulkFailedItem[] = []
-
-  const supabase = await createSupabaseServerClient()
 
   for (const jobId of jobIds) {
     if (typeof jobId !== 'string') {
@@ -54,6 +69,16 @@ export async function POST(request: NextRequest) {
       continue
     }
     succeeded.push(jobId)
+    const clientMeta = getBulkClientMetadata(request)
+    await recordAuditLog(supabase, {
+      organizationId: organization_id,
+      actorId: user_id,
+      eventName: 'job.updated',
+      targetType: 'job',
+      targetId: jobId,
+      metadata: { status, bulk: true, ...clientMeta },
+    })
+    await emitJobEvent(organization_id, 'job.updated', jobId, user_id)
   }
 
   return NextResponse.json({

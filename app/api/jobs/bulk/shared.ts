@@ -3,6 +3,14 @@ import { getOrganizationContext } from '@/lib/utils/organizationGuard'
 import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { getRequestId } from '@/lib/utils/requestId'
 
+/** Extract client metadata from request for audit logging (same shape as backend extractClientMetadata). */
+export function getBulkClientMetadata(request: NextRequest): { client: string; appVersion: string; deviceId: string } {
+  const client = request.headers.get('x-client') || request.headers.get('client') || 'web'
+  const appVersion = request.headers.get('x-app-version') || request.headers.get('app-version') || 'unknown'
+  const deviceId = request.headers.get('x-device-id') || request.headers.get('device-id') || 'unknown'
+  return { client: client || 'web', appVersion: appVersion || 'unknown', deviceId: deviceId || 'unknown' }
+}
+
 export const BULK_CAP = 100
 const ROUTE_BULK = '/api/jobs/bulk'
 

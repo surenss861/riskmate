@@ -4,6 +4,7 @@ import {
   registerDeviceToken,
   unregisterDeviceToken,
   sendEvidenceUploadedNotification,
+  sendJobAssignedNotification,
   validatePushToken,
   getNotificationPreferences,
   getUnreadNotificationCount,
@@ -208,6 +209,46 @@ notificationsRouter.patch(
     } catch (err: any) {
       console.error("Update notification preferences failed:", err);
       res.status(500).json({ message: "Failed to update preferences" });
+    }
+  }
+);
+
+/** POST /api/notifications/job-assigned — notify a user that they were assigned to a job. Body: { userId, jobId, jobTitle? }. Caller must be authenticated; org is taken from auth. */
+notificationsRouter.post(
+  "/job-assigned",
+  authenticate as unknown as express.RequestHandler,
+  async (req: express.Request, res: express.Response) => {
+    const authReq = req as AuthenticatedRequest;
+    try {
+      const { userId, jobId, jobTitle } = req.body || {};
+      if (!userId || !jobId) {
+        return res
+          .status(400)
+          .json({ message: "Missing userId or jobId" });
+      }
+      const organizationId = authReq.user.organization_id;
+      const { data: job } = await supabase
+        .from("jobs")
+        .select("id, organization_id")
+        .eq("id", jobId)
+        .eq("organization_id", organizationId)
+        .single();
+      if (!job) {
+        return res.status(404).json({ message: "Job not found" });
+      }
+      const { data: user } = await supabase
+        .from("users")
+        .select("id, organization_id")
+        .eq("id", userId)
+        .single();
+      if (!user || user.organization_id !== organizationId) {
+        return res.status(403).json({ message: "User not in this organization" });
+      }
+      await sendJobAssignedNotification(userId, organizationId, jobId, jobTitle);
+      res.status(204).end();
+    } catch (err: any) {
+      console.error("Job assigned notification failed:", err);
+      res.status(500).json({ message: "Failed to send notification" });
     }
   }
 );

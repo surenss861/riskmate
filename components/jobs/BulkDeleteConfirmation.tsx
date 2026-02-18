@@ -70,7 +70,7 @@ export function BulkDeleteConfirmation({
               type="button"
               onClick={async () => {
                 await onConfirm()
-                onClose()
+                // Parent closes modal only on full success; do not call onClose() here so failure paths leave modal open
               }}
               disabled={loading}
               className="flex-1 py-2.5 px-4 rounded-lg font-medium text-white bg-red-600 hover:bg-red-700 transition-colors disabled:opacity-50"

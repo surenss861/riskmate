@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
-import { parseBulkJobIds, getBulkAuth, type BulkFailedItem } from '../shared'
+import { parseBulkJobIds, getBulkAuth, getBulkClientMetadata, type BulkFailedItem } from '../shared'
 import { getRequestId } from '@/lib/utils/requestId'
+import { hasPermission } from '@/lib/utils/permissions'
+import { recordAuditLog } from '@/lib/audit/auditLogger'
+import { getSessionToken, BACKEND_URL } from '@/lib/api/proxy-helpers'
 
 export const runtime = 'nodejs'
 
@@ -16,6 +19,20 @@ export async function POST(request: NextRequest) {
   if ('errorResponse' in auth) return auth.errorResponse
   const { organization_id, user_id } = auth
 
+  const supabase = await createSupabaseServerClient()
+  const { data: userData } = await supabase
+    .from('users')
+    .select('role')
+    .eq('id', user_id)
+    .single()
+  const role = (userData?.role as 'owner' | 'admin' | 'member') ?? 'member'
+  if (!hasPermission(role, 'jobs.edit')) {
+    return NextResponse.json(
+      { message: 'You do not have permission to assign jobs' },
+      { status: 403 }
+    )
+  }
+
   const parsed = await parseBulkJobIds(request, false, true)
   if ('errorResponse' in parsed) return parsed.errorResponse
   const { jobIds, workerId } = parsed
@@ -26,8 +43,6 @@ export async function POST(request: NextRequest) {
     string,
     { assigned_to_id: string; assigned_to_name: string | null; assigned_to_email: string | null }
   > = {}
-
-  const supabase = await createSupabaseServerClient()
 
   const { data: assignee, error: assigneeError } = await supabase
     .from('users')
@@ -98,6 +113,29 @@ export async function POST(request: NextRequest) {
       assigned_to_name: assigneeName,
       assigned_to_email: assigneeEmail,
     }
+    const clientMeta = getBulkClientMetadata(request)
+    await recordAuditLog(supabase, {
+      organizationId: organization_id,
+      actorId: user_id,
+      eventName: 'worker.assigned',
+      targetType: 'job',
+      targetId: jobId,
+      metadata: { worker_id: workerId, bulk: true, ...clientMeta },
+    })
+    try {
+      const token = await getSessionToken(request)
+      if (token) {
+        await fetch(`${BACKEND_URL}/api/notifications/job-assigned`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            userId: workerId,
+            jobId,
+            jobTitle: job?.client_name ?? undefined,
+          }),
+        })
+      }
+    } catch (_) {}
   }
 
   return NextResponse.json({
