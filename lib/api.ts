@@ -684,9 +684,9 @@ export const jobsApi = {
     });
   },
 
-  /** Bulk update status for multiple jobs. Returns { data: { succeeded, failed } }. */
+  /** Bulk update status for multiple jobs. Returns { data: { succeeded, failed } }. Uses Next.js API so bulk works when requests hit the app. */
   bulkStatus: async (jobIds: string[], status: string) => {
-    return apiRequest<{
+    return nextApiRequest<{
       data: { succeeded: string[]; failed: Array<{ id: string; code: string; message: string }> };
     }>('/api/jobs/bulk/status', {
       method: 'POST',
@@ -694,9 +694,9 @@ export const jobsApi = {
     });
   },
 
-  /** Bulk assign a worker to multiple jobs. Returns { data: { succeeded, failed, updated_assignments } }. */
+  /** Bulk assign a worker to multiple jobs. Returns { data: { succeeded, failed, updated_assignments } }. Uses Next.js API so bulk works when requests hit the app. */
   bulkAssign: async (jobIds: string[], workerId: string) => {
-    return apiRequest<{
+    return nextApiRequest<{
       data: {
         succeeded: string[];
         failed: Array<{ id: string; code: string; message: string }>;
@@ -708,9 +708,9 @@ export const jobsApi = {
     });
   },
 
-  /** Bulk delete multiple jobs (draft-only). Returns { data: { succeeded, failed } }. */
+  /** Bulk delete multiple jobs (draft-only). Returns { data: { succeeded, failed } }. Uses Next.js API so bulk works when requests hit the app. */
   bulkDelete: async (jobIds: string[]) => {
-    return apiRequest<{
+    return nextApiRequest<{
       data: { succeeded: string[]; failed: Array<{ id: string; code: string; message: string }> };
     }>('/api/jobs/bulk/delete', {
       method: 'POST',
@@ -718,9 +718,9 @@ export const jobsApi = {
     });
   },
 
-  /** Validate access to job IDs for export; returns { data: { succeeded, failed } }. */
+  /** Validate access to job IDs for export; returns { data: { succeeded, failed } }. Uses Next.js API so bulk works when requests hit the app. */
   bulkExport: async (jobIds: string[]) => {
-    return apiRequest<{
+    return nextApiRequest<{
       data: { succeeded: string[]; failed: Array<{ id: string; code: string; message: string }> };
     }>('/api/jobs/bulk/export', {
       method: 'POST',
