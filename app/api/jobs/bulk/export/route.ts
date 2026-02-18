@@ -57,7 +57,22 @@ export async function POST(request: NextRequest) {
       { status: 400 }
     )
   }
-  const jobIds = job_ids as string[]
+
+  const validIds = job_ids.filter((id): id is string => typeof id === 'string')
+  const failedInvalid: BulkFailedItem[] = job_ids
+    .filter((id) => typeof id !== 'string')
+    .map((id) => ({
+      id: String(id),
+      code: 'INVALID_ID',
+      message: 'Job ID must be a string',
+    }))
+
+  if (validIds.length === 0) {
+    return NextResponse.json(
+      { message: 'No valid job IDs (each must be a string)', data: { succeeded: [], failed: failedInvalid } },
+      { status: 400 }
+    )
+  }
 
   const rawFormats = Array.isArray(body?.formats) ? body.formats : ['csv']
   const formats = rawFormats.filter((f): f is ExportFormat =>
@@ -76,7 +91,7 @@ export async function POST(request: NextRequest) {
     .eq('organization_id', organization_id)
     .is('deleted_at', null)
     .is('archived_at', null)
-    .in('id', jobIds)
+    .in('id', validIds)
 
   if (jobsError) {
     return NextResponse.json(
@@ -86,10 +101,11 @@ export async function POST(request: NextRequest) {
   }
 
   const foundIds = new Set((jobs ?? []).map((j: { id: string }) => j.id))
-  const succeeded = jobIds.filter((id) => foundIds.has(id))
-  const failed: BulkFailedItem[] = jobIds
+  const succeeded = validIds.filter((id) => foundIds.has(id))
+  const failedNotFound: BulkFailedItem[] = validIds
     .filter((id) => !foundIds.has(id))
     .map((id) => ({ id, code: 'NOT_FOUND', message: 'Job not found or excluded (deleted/archived)' }))
+  const failed: BulkFailedItem[] = [...failedInvalid, ...failedNotFound]
 
   if (succeeded.length === 0) {
     return NextResponse.json(
