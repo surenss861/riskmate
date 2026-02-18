@@ -25,14 +25,19 @@ export function BulkAssignModal({
 
   useEffect(() => {
     if (isOpen) {
+      setWorkerId('')
       setLoadingMembers(true)
       teamApi
         .get()
         .then((res) => {
-          setMembers(res.members ?? [])
-          if (res.members?.length && !workerId) {
-            setWorkerId(res.members[0].id)
-          }
+          const list = res.members ?? []
+          setMembers(list)
+          setWorkerId((current) => {
+            if (!current || !list.some((m) => m.id === current)) {
+              return list.length ? list[0].id : ''
+            }
+            return current
+          })
         })
         .catch(() => setMembers([]))
         .finally(() => setLoadingMembers(false))
@@ -42,7 +47,7 @@ export function BulkAssignModal({
   if (!isOpen) return null
 
   const handleConfirm = async () => {
-    if (!workerId) return
+    if (!workerId || !members.some((m) => m.id === workerId)) return
     await onConfirm(workerId)
     // Parent closes modal only on full success; do not call onClose() here so failure paths leave modal open
   }
@@ -110,7 +115,7 @@ export function BulkAssignModal({
             <button
               type="button"
               onClick={handleConfirm}
-              disabled={loading || loadingMembers || !workerId}
+              disabled={loading || loadingMembers || !workerId || !members.some((m) => m.id === workerId)}
               className="flex-1 py-2.5 px-4 rounded-lg font-medium text-white transition-colors disabled:opacity-50"
               style={{ background: '#007aff' }}
             >

@@ -495,11 +495,13 @@ export function JobsPageContentView(props: JobsPageContentProps) {
       }
       await exportJobs(toExport, formats)
       if (failed.length > 0) {
-        setToast({ message: `Exported ${toExport.length} job${toExport.length !== 1 ? 's' : ''}; ${failed.length} could not be exported.`, type: 'success' })
+        const failedIds = failed.map((f: { id: string }) => f.id)
+        bulk.setSelection(failedIds)
+        setToast({ message: `Exported ${toExport.length} job${toExport.length !== 1 ? 's' : ''}; ${failed.length} could not be exported. Failed items remain selected for retry.`, type: 'success' })
       } else {
         setToast({ message: `Exported ${toExport.length} job${toExport.length !== 1 ? 's' : ''} (${formatLabels}).`, type: 'success' })
+        bulk.clearSelection()
       }
-      bulk.clearSelection()
     } catch (err: any) {
       setToast({ message: err?.message || 'Export failed', type: 'error' })
     } finally {
