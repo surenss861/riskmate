@@ -10,7 +10,7 @@ import { RequestWithId } from "../middleware/requestId";
 import { createErrorResponse, logErrorForSupport } from "../utils/errorResponse";
 import { requireWriteAccess } from "../middleware/requireWriteAccess";
 import { emitJobEvent, emitEvidenceEvent } from "../utils/realtimeEvents";
-import { hasJobsDeletePermission } from "../utils/permissions";
+import { hasJobsDeletePermission, canDeleteSingleJob } from "../utils/permissions";
 
 export const jobsRouter: ExpressRouter = express.Router();
 
@@ -1131,8 +1131,6 @@ jobsRouter.post("/bulk/delete", authenticate, requireWriteAccess, async (req: ex
     const [
       auditByTarget,
       auditByJobId,
-      docsRes,
-      evidenceRes,
       riskRes,
       reportRes,
     ] = await Promise.all([
@@ -1147,18 +1145,6 @@ jobsRouter.post("/bulk/delete", authenticate, requireWriteAccess, async (req: ex
         .eq("organization_id", organization_id)
         .in("job_id", draftNotDeleted)
         .not("job_id", "is", null),
-      supabase
-        .from("documents")
-        .select("job_id")
-        .eq("organization_id", organization_id)
-        .is("deleted_at", null)
-        .in("job_id", draftNotDeleted),
-      supabase
-        .from("evidence")
-        .select("work_record_id")
-        .eq("organization_id", organization_id)
-        .is("deleted_at", null)
-        .in("work_record_id", draftNotDeleted),
       supabase.from("job_risk_scores").select("job_id").in("job_id", draftNotDeleted),
       supabase.from("reports").select("job_id").in("job_id", draftNotDeleted),
     ]);
@@ -1166,10 +1152,6 @@ jobsRouter.post("/bulk/delete", authenticate, requireWriteAccess, async (req: ex
     const hasAuditByTarget = new Set((auditByTarget.data ?? []).map((r: { target_id: string }) => r.target_id));
     const hasAuditByJobId = new Set(
       (auditByJobId.data ?? []).map((r: { job_id: string }) => r.job_id).filter(Boolean)
-    );
-    const hasDocs = new Set((docsRes.data ?? []).map((r: { job_id: string }) => r.job_id));
-    const hasEvidence = new Set(
-      (evidenceRes.data ?? []).map((r: { work_record_id: string }) => r.work_record_id)
     );
     const hasRisk = new Set((riskRes.data ?? []).map((r: { job_id: string }) => r.job_id));
     const hasReports = new Set((reportRes.data ?? []).map((r: { job_id: string }) => r.job_id));
@@ -1179,10 +1161,6 @@ jobsRouter.post("/bulk/delete", authenticate, requireWriteAccess, async (req: ex
     for (const id of draftNotDeleted) {
       if (ineligibleAudit.has(id)) {
         failed.push({ id, code: "HAS_AUDIT_HISTORY", message: "Jobs with audit history cannot be deleted" });
-        continue;
-      }
-      if (hasDocs.has(id) || hasEvidence.has(id)) {
-        failed.push({ id, code: "HAS_EVIDENCE", message: "Jobs with uploaded evidence cannot be deleted" });
         continue;
       }
       if (hasRisk.has(id)) {
@@ -3072,16 +3050,16 @@ jobsRouter.delete("/:id", authenticate, requireWriteAccess, async (req: express.
     const { id: userId, organization_id, role } = authReq.user;
     const jobId = authReq.params.id;
 
-    // Only owners can delete jobs (requireWriteAccess already blocks auditors/executives)
-    if (role !== "owner") {
+    // Single-job delete: owner and admin allowed (bulk delete remains owner-only)
+    if (!canDeleteSingleJob(role)) {
       const requestId = (authReq as RequestWithId).requestId || 'unknown';
       const { response: errorResponse, errorId } = createErrorResponse({
-        message: "Only organization owners can delete jobs",
-        internalMessage: `Delete attempt by user with role=${role}, required=owner`,
+        message: "You do not have permission to delete jobs",
+        internalMessage: `Single delete attempt by user with role=${role}, required=owner or admin`,
         code: "AUTH_ROLE_FORBIDDEN",
         requestId,
         statusCode: 403,
-        required_role: "owner",
+        required_role: "owner or admin",
         current_role: role || "unknown",
       });
       

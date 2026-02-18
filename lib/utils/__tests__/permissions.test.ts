@@ -31,7 +31,7 @@ describe('hasPermission', () => {
     expect(hasPermission('owner', 'jobs.delete')).toBe(true)
   })
 
-  it('admin should not have jobs.delete', () => {
-    expect(hasPermission('admin', 'jobs.delete')).toBe(false)
+  it('admin should have jobs.delete (single-job delete; bulk delete remains owner-only)', () => {
+    expect(hasPermission('admin', 'jobs.delete')).toBe(true)
   })
 })

@@ -1,6 +1,6 @@
 /**
  * Unit tests for Next bulk delete endpoint: jobs with documents/evidence
- * are rejected with HAS_EVIDENCE, matching backend behavior.
+ * are allowed and cascade soft-deleted (not rejected with HAS_EVIDENCE).
  */
 
 import { NextRequest } from 'next/server'
@@ -37,12 +37,6 @@ function buildSupabaseMock(
       ])
     }
     if (table === 'audit_logs') return buildChainableMock([])
-    if (table === 'documents') {
-      return buildChainableMock(hasDocuments ? [{ job_id: jobId }] : [])
-    }
-    if (table === 'evidence') {
-      return buildChainableMock(hasEvidence ? [{ work_record_id: jobId }] : [])
-    }
     if (table === 'job_risk_scores' || table === 'reports') return buildChainableMock([])
     return buildChainableMock([])
   })
@@ -63,8 +57,12 @@ jest.mock('@/lib/utils/organizationGuard', () => ({
   }),
 }))
 
-describe('Next POST /api/jobs/bulk/delete – HAS_EVIDENCE', () => {
-  it('rejects jobs with documents with code HAS_EVIDENCE (matching backend)', async () => {
+jest.mock('@/lib/audit/auditLogger', () => ({
+  recordAuditLog: jest.fn().mockResolvedValue(undefined),
+}))
+
+describe('Next POST /api/jobs/bulk/delete – cascade soft-delete (documents/evidence allowed)', () => {
+  it('succeeds for jobs with documents (cascade soft-delete)', async () => {
     bulkDeleteSupabaseMock = buildSupabaseMock(JOB_ID_WITH_DOC, { hasDocuments: true, hasEvidence: false })
     const { POST } = await import('@/app/api/jobs/bulk/delete/route')
     const request = new NextRequest('http://localhost/api/jobs/bulk/delete', {
@@ -78,16 +76,12 @@ describe('Next POST /api/jobs/bulk/delete – HAS_EVIDENCE', () => {
 
     expect(response.status).toBe(200)
     expect(body.data).toBeDefined()
-    expect(body.data.succeeded).toEqual([])
-    const failed = body.data.failed ?? []
-    const hasEvidenceFailure = failed.find(
-      (f: { id: string; code: string }) => f.id === JOB_ID_WITH_DOC && f.code === 'HAS_EVIDENCE'
-    )
-    expect(hasEvidenceFailure).toBeDefined()
-    expect(hasEvidenceFailure?.message).toMatch(/evidence|cannot be deleted/i)
+    expect(body.data.succeeded).toContain(JOB_ID_WITH_DOC)
+    expect(body.data.failed ?? []).toEqual([])
+    expect(bulkDeleteSupabaseMock.rpc).toHaveBeenCalledWith('bulk_soft_delete_jobs', expect.any(Object))
   })
 
-  it('rejects jobs with evidence (evidence table) with code HAS_EVIDENCE', async () => {
+  it('succeeds for jobs with evidence (evidence table, cascade soft-delete)', async () => {
     const jobIdWithEvidence = '22222222-3333-4444-8555-666677778888'
     bulkDeleteSupabaseMock = buildSupabaseMock(jobIdWithEvidence, {
       hasDocuments: false,
@@ -104,12 +98,8 @@ describe('Next POST /api/jobs/bulk/delete – HAS_EVIDENCE', () => {
     const body = await response.json()
 
     expect(response.status).toBe(200)
-    expect(body.data.succeeded).toEqual([])
-    const failed = body.data.failed ?? []
-    const hasEvidenceFailure = failed.find(
-      (f: { id: string; code: string }) =>
-        f.id === jobIdWithEvidence && f.code === 'HAS_EVIDENCE'
-    )
-    expect(hasEvidenceFailure).toBeDefined()
+    expect(body.data.succeeded).toContain(jobIdWithEvidence)
+    expect(body.data.failed ?? []).toEqual([])
+    expect(bulkDeleteSupabaseMock.rpc).toHaveBeenCalledWith('bulk_soft_delete_jobs', expect.any(Object))
   })
 })

@@ -76,7 +76,8 @@ export function JobsPageContentView(props: JobsPageContentProps) {
   const selectionOverCap = bulk.selectedIds.size > BULK_CAP
 
   const canArchive = hasPermission(props.userRole, 'jobs.close')
-  const canDelete = hasJobsDeletePermission(props.userRole)
+  const canDelete = hasPermission(props.userRole, 'jobs.delete')
+  const canBulkDelete = hasJobsDeletePermission(props.userRole)
   const canAssign = hasPermission(props.userRole, 'jobs.edit')
   const canChangeStatus = hasPermission(props.userRole, 'jobs.edit')
   const canExport = hasPermission(props.userRole, 'jobs.edit')
@@ -793,7 +794,7 @@ export function JobsPageContentView(props: JobsPageContentProps) {
                   canChangeStatus={canChangeStatus}
                   canAssign={canAssign}
                   canExport={canExport}
-                  canDelete={canDelete}
+                  canDelete={canBulkDelete}
                   selectionOverCap={selectionOverCap}
                   bulkCap={BULK_CAP}
                 />

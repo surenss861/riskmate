@@ -36,7 +36,7 @@ describe("Bulk Delete Permissions", () => {
     if (error) throw new Error(`Failed to create draft job: ${error.message}`);
     draftJobId = draftJob.id;
 
-    // Create a draft job with a document (should be rejected with HAS_EVIDENCE)
+    // Create a draft job with a document (cascade soft-delete allowed)
     const { data: jobWithDoc, error: jobError } = await supabase
       .from("jobs")
       .insert({
@@ -102,7 +102,7 @@ describe("Bulk Delete Permissions", () => {
       expect(response.body.data.succeeded).toContain(draftJobId);
     });
 
-    it("should return HAS_EVIDENCE for jobs with documents (matching Next endpoint behavior)", async () => {
+    it("should allow bulk delete of jobs with documents (cascade soft-delete)", async () => {
       const response = await request(app)
         .post("/api/jobs/bulk/delete")
         .set("Authorization", `Bearer ${testData.ownerToken}`)
@@ -110,13 +110,8 @@ describe("Bulk Delete Permissions", () => {
 
       expect(response.status).toBe(200);
       expect(response.body.data).toBeDefined();
-      expect(response.body.data.succeeded).toEqual([]);
-      const failed = response.body.data.failed ?? [];
-      const hasEvidenceFailure = failed.find(
-        (f: { id: string; code: string }) => f.id === draftJobWithDocId && f.code === "HAS_EVIDENCE"
-      );
-      expect(hasEvidenceFailure).toBeDefined();
-      expect(hasEvidenceFailure.message).toMatch(/evidence|cannot be deleted/i);
+      expect(response.body.data.succeeded).toContain(draftJobWithDocId);
+      expect(response.body.data.failed ?? []).toEqual([]);
     });
   });
 });

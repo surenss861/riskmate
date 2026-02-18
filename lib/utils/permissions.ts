@@ -58,6 +58,7 @@ const ROLE_PERMISSIONS: PermissionMap = {
   admin: [
     'jobs.create',
     'jobs.edit',
+    'jobs.delete',
     'jobs.close',
     'hazards.edit',
     'mitigations.edit',
