@@ -68,8 +68,14 @@ export async function POST(request: NextRequest) {
     }))
 
   if (validIds.length === 0) {
+    const total = failedInvalid.length
     return NextResponse.json(
-      { message: 'No valid job IDs (each must be a string)', data: { succeeded: [], failed: failedInvalid } },
+      {
+        success: false,
+        message: 'No valid job IDs (each must be a string)',
+        summary: { total, succeeded: 0, failed: total },
+        data: { succeeded: [], failed: failedInvalid },
+      },
       { status: 400 }
     )
   }
@@ -108,8 +114,14 @@ export async function POST(request: NextRequest) {
   const failed: BulkFailedItem[] = [...failedInvalid, ...failedNotFound]
 
   if (succeeded.length === 0) {
+    const total = failed.length
     return NextResponse.json(
-      { message: 'No jobs found to export', data: { succeeded: [], failed } },
+      {
+        success: false,
+        message: 'No jobs found to export',
+        summary: { total, succeeded: 0, failed: total },
+        data: { succeeded: [], failed },
+      },
       { status: 400 }
     )
   }
@@ -122,7 +134,7 @@ export async function POST(request: NextRequest) {
       export_type: 'bulk_jobs',
       state: 'queued',
       progress: 0,
-      filters: { job_ids: succeeded, formats },
+      filters: { job_ids: succeeded, formats, failed_job_ids: failed.map((f) => ({ id: f.id, code: f.code, message: f.message })) },
       created_by: user_id,
       requested_at: new Date().toISOString(),
     })
@@ -145,11 +157,14 @@ export async function POST(request: NextRequest) {
     metadata: { job_count: succeeded.length, formats, failed_count: failed.length },
   })
 
+  const total = succeeded.length + failed.length
   return NextResponse.json(
     {
+      success: true,
       export_id: exportRow.id,
       status: 'queued',
       message: 'Export started. Poll GET /api/exports/:id for status and download URL.',
+      summary: { total, succeeded: succeeded.length, failed: failed.length },
       data: { succeeded, failed },
     },
     { status: 202 }

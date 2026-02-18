@@ -855,7 +855,8 @@ jobsRouter.post("/bulk/status", authenticate, requireWriteAccess, async (req: ex
       .map((id) => ({ id: String(id), code: "INVALID_ID", message: "Invalid job id" }));
 
     if (validIds.length === 0) {
-      return res.json({ data: { succeeded: [], failed } });
+      const total = failed.length;
+      return res.json({ success: true, summary: { total, succeeded: 0, failed: total }, data: { succeeded: [], failed } });
     }
 
     const { data: jobs, error: fetchError } = await supabase
@@ -890,7 +891,8 @@ jobsRouter.post("/bulk/status", authenticate, requireWriteAccess, async (req: ex
     });
 
     if (eligibleIds.length === 0) {
-      return res.json({ data: { succeeded: [], failed } });
+      const total = failed.length;
+      return res.json({ success: true, summary: { total, succeeded: 0, failed: total }, data: { succeeded: [], failed } });
     }
 
     const { data: rpcResult, error: rpcError } = await supabase.rpc("bulk_update_job_status", {
@@ -903,7 +905,8 @@ jobsRouter.post("/bulk/status", authenticate, requireWriteAccess, async (req: ex
       for (const id of eligibleIds) {
         failed.push({ id, code: "UPDATE_FAILED", message: rpcError.message });
       }
-      return res.json({ data: { succeeded: [], failed } });
+      const total = failed.length;
+      return res.json({ success: true, summary: { total, succeeded: 0, failed: total }, data: { succeeded: [], failed } });
     }
 
     const succeeded: string[] = Array.isArray(rpcResult)
@@ -928,7 +931,8 @@ jobsRouter.post("/bulk/status", authenticate, requireWriteAccess, async (req: ex
       });
       await emitJobEvent(organization_id, "job.updated", jobId, userId);
     }
-    res.json({ data: { succeeded, failed } });
+    const total = succeeded.length + failed.length;
+    res.json({ success: true, summary: { total, succeeded: succeeded.length, failed: failed.length }, data: { succeeded, failed } });
   } catch (err: any) {
     console.error("Bulk status update failed:", err);
     res.status(500).json({ message: "Failed to update jobs" });
@@ -966,7 +970,8 @@ jobsRouter.post("/bulk/assign", authenticate, requireWriteAccess, async (req: ex
       .map((id) => ({ id: String(id), code: "INVALID_ID", message: "Invalid job id" }));
 
     if (validIds.length === 0) {
-      return res.json({ data: { succeeded: [], failed, updated_assignments: {} } });
+      const total = failed.length;
+      return res.json({ success: true, summary: { total, succeeded: 0, failed: total }, data: { succeeded: [], failed, updated_assignments: {} } });
     }
 
     const { data: jobs, error: fetchError } = await supabase
@@ -1000,7 +1005,8 @@ jobsRouter.post("/bulk/assign", authenticate, requireWriteAccess, async (req: ex
       return j && !j.deleted_at && !j.archived_at && j.status !== "archived";
     });
     if (eligibleIds.length === 0) {
-      return res.json({ data: { succeeded: [], failed, updated_assignments: {} } });
+      const total = failed.length;
+      return res.json({ success: true, summary: { total, succeeded: 0, failed: total }, data: { succeeded: [], failed, updated_assignments: {} } });
     }
 
     const { data: rpcResult, error: rpcError } = await supabase.rpc("bulk_assign_jobs", {
@@ -1015,7 +1021,8 @@ jobsRouter.post("/bulk/assign", authenticate, requireWriteAccess, async (req: ex
       for (const id of eligibleIds) {
         failed.push({ id, code: "ASSIGN_FAILED", message: rpcError.message });
       }
-      return res.json({ data: { succeeded: [], failed, updated_assignments: {} } });
+      const total = failed.length;
+      return res.json({ success: true, summary: { total, succeeded: 0, failed: total }, data: { succeeded: [], failed, updated_assignments: {} } });
     }
 
     const succeeded: string[] = Array.isArray(rpcResult)
@@ -1052,7 +1059,8 @@ jobsRouter.post("/bulk/assign", authenticate, requireWriteAccess, async (req: ex
         ...clientMetadata,
       });
     }
-    res.json({ data: { succeeded, failed, updated_assignments } });
+    const total = succeeded.length + failed.length;
+    res.json({ success: true, summary: { total, succeeded: succeeded.length, failed: failed.length }, data: { succeeded, failed, updated_assignments } });
   } catch (err: any) {
     console.error("Bulk assign failed:", err);
     res.status(500).json({ message: "Failed to assign jobs" });
@@ -1081,7 +1089,8 @@ jobsRouter.post("/bulk/delete", authenticate, requireWriteAccess, async (req: ex
       .map((id) => ({ id: String(id), code: "INVALID_ID", message: "Invalid job id" }));
 
     if (validIds.length === 0) {
-      return res.json({ data: { succeeded: [], failed } });
+      const total = failed.length;
+      return res.json({ success: true, summary: { total, succeeded: 0, failed: total }, data: { succeeded: [], failed } });
     }
 
     const { data: jobs, error: jobsError } = await supabase
@@ -1115,7 +1124,8 @@ jobsRouter.post("/bulk/delete", authenticate, requireWriteAccess, async (req: ex
     });
 
     if (draftNotDeleted.length === 0) {
-      return res.json({ data: { succeeded: [], failed } });
+      const total = failed.length;
+      return res.json({ success: true, summary: { total, succeeded: 0, failed: total }, data: { succeeded: [], failed } });
     }
 
     const [
@@ -1187,7 +1197,8 @@ jobsRouter.post("/bulk/delete", authenticate, requireWriteAccess, async (req: ex
     }
 
     if (eligibleIds.length === 0) {
-      return res.json({ data: { succeeded: [], failed } });
+      const total = failed.length;
+      return res.json({ success: true, summary: { total, succeeded: 0, failed: total }, data: { succeeded: [], failed } });
     }
 
     const deletedAt = new Date().toISOString();
@@ -1201,7 +1212,8 @@ jobsRouter.post("/bulk/delete", authenticate, requireWriteAccess, async (req: ex
       for (const id of eligibleIds) {
         failed.push({ id, code: "DELETE_FAILED", message: rpcError.message });
       }
-      return res.json({ data: { succeeded: [], failed } });
+      const total = failed.length;
+      return res.json({ success: true, summary: { total, succeeded: 0, failed: total }, data: { succeeded: [], failed } });
     }
 
     const clientMetadata = extractClientMetadata(req);
@@ -1218,7 +1230,8 @@ jobsRouter.post("/bulk/delete", authenticate, requireWriteAccess, async (req: ex
       });
     });
     await Promise.allSettled(auditPromises);
-    res.json({ data: { succeeded: eligibleIds, failed } });
+    const total = eligibleIds.length + failed.length;
+    res.json({ success: true, summary: { total, succeeded: eligibleIds.length, failed: failed.length }, data: { succeeded: eligibleIds, failed } });
   } catch (err: any) {
     console.error("Bulk delete failed:", err);
     res.status(500).json({ message: "Failed to delete jobs" });
@@ -1244,7 +1257,8 @@ jobsRouter.post("/bulk/export", authenticate, async (req: express.Request, res: 
       .map((id) => ({ id: String(id), code: "INVALID_ID", message: "Invalid job id" }));
 
     if (validIds.length === 0) {
-      return res.json({ data: { succeeded: [], failed } });
+      const total = failed.length;
+      return res.json({ success: true, summary: { total, succeeded: 0, failed: total }, data: { succeeded: [], failed } });
     }
 
     const { data: jobs, error: fetchError } = await supabase
@@ -1270,7 +1284,8 @@ jobsRouter.post("/bulk/export", authenticate, async (req: express.Request, res: 
         });
       }
     }
-    res.json({ data: { succeeded, failed } });
+    const total = succeeded.length + failed.length;
+    res.json({ success: true, summary: { total, succeeded: succeeded.length, failed: failed.length }, data: { succeeded, failed } });
   } catch (err: any) {
     console.error("Bulk export validation failed:", err);
     res.status(500).json({ message: "Failed to validate export jobs" });

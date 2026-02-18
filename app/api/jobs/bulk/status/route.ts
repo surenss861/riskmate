@@ -39,7 +39,12 @@ export async function POST(request: NextRequest) {
   }))
 
   if (validIds.length === 0) {
-    return NextResponse.json({ data: { succeeded: [], failed } })
+    const total = failed.length
+    return NextResponse.json({
+      success: true,
+      summary: { total, succeeded: 0, failed: total },
+      data: { succeeded: [], failed },
+    })
   }
 
   const { data: jobs, error: fetchError } = await supabase
@@ -79,7 +84,12 @@ export async function POST(request: NextRequest) {
   })
 
   if (eligibleIds.length === 0) {
-    return NextResponse.json({ data: { succeeded: [], failed } })
+    const total = failed.length
+    return NextResponse.json({
+      success: true,
+      summary: { total, succeeded: 0, failed: total },
+      data: { succeeded: [], failed },
+    })
   }
 
   const { data: updatedIds, error: rpcError } = await supabase.rpc('bulk_update_job_status', {
@@ -92,7 +102,12 @@ export async function POST(request: NextRequest) {
     for (const id of eligibleIds) {
       failed.push({ id, code: 'UPDATE_FAILED', message: rpcError.message })
     }
-    return NextResponse.json({ data: { succeeded: [], failed } })
+    const total = failed.length
+    return NextResponse.json({
+      success: true,
+      summary: { total, succeeded: 0, failed: total },
+      data: { succeeded: [], failed },
+    })
   }
 
   const succeeded = Array.isArray(updatedIds)
@@ -121,7 +136,10 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  const total = succeeded.length + failed.length
   return NextResponse.json({
+    success: true,
+    summary: { total, succeeded: succeeded.length, failed: failed.length },
     data: { succeeded, failed },
   })
 }

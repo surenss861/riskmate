@@ -58,7 +58,10 @@ export async function POST(request: NextRequest) {
   const assigneeEmail = assignee.email ?? null
 
   if (validIds.length === 0) {
+    const total = failed.length
     return NextResponse.json({
+      success: true,
+      summary: { total, succeeded: 0, failed: total },
       data: { succeeded: [], failed, updated_assignments: {} },
     })
   }
@@ -98,7 +101,10 @@ export async function POST(request: NextRequest) {
     return j && !j.deleted_at && !j.archived_at && j.status !== 'archived'
   })
   if (eligibleIds.length === 0) {
+    const total = failed.length
     return NextResponse.json({
+      success: true,
+      summary: { total, succeeded: 0, failed: total },
       data: { succeeded: [], failed, updated_assignments: {} },
     })
   }
@@ -115,7 +121,10 @@ export async function POST(request: NextRequest) {
     for (const id of eligibleIds) {
       failed.push({ id, code: 'ASSIGN_FAILED', message: rpcError.message })
     }
+    const total = failed.length
     return NextResponse.json({
+      success: true,
+      summary: { total, succeeded: 0, failed: total },
       data: { succeeded: [], failed, updated_assignments: {} },
     })
   }
@@ -170,7 +179,10 @@ export async function POST(request: NextRequest) {
   })
   await Promise.allSettled(auditAndNotifyPromises)
 
+  const total = succeeded.length + failed.length
   return NextResponse.json({
+    success: true,
+    summary: { total, succeeded: succeeded.length, failed: failed.length },
     data: { succeeded, failed, updated_assignments },
   })
 }

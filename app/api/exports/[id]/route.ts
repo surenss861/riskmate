@@ -45,7 +45,15 @@ export async function GET(
     download_url = signed?.signedUrl ?? null
   }
 
-  const filters = (exportRow.filters as { job_ids?: string[]; formats?: string[] }) ?? {}
+  const filters = (exportRow.filters as {
+    job_ids?: string[]
+    formats?: string[]
+    failed_job_ids?: Array<{ id: string; code?: string; message?: string }>
+  }) ?? {}
+  const failedStored = filters.failed_job_ids ?? []
+  const failed = Array.isArray(failedStored)
+    ? failedStored.map((f) => (typeof f === 'string' ? { id: f, code: undefined, message: undefined } : { id: f.id, code: f.code, message: f.message }))
+    : []
   const filename = exportRow.storage_path
     ? exportRow.storage_path.split('/').pop() ?? null
     : null
@@ -62,7 +70,7 @@ export async function GET(
       created_at: exportRow.created_at,
       completed_at: exportRow.completed_at ?? null,
       succeeded: filters.job_ids ?? [],
-      failed: [],
+      failed,
     },
   })
 }

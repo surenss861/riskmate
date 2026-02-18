@@ -43,7 +43,12 @@ export async function POST(request: NextRequest) {
     .map((id) => ({ id: String(id), code: 'INVALID_ID', message: 'Invalid job id' }))
 
   if (validIds.length === 0) {
-    return NextResponse.json({ data: { succeeded: [], failed } })
+    const total = failed.length
+    return NextResponse.json({
+      success: true,
+      summary: { total, succeeded: 0, failed: total },
+      data: { succeeded: [], failed },
+    })
   }
 
   const { data: jobs, error: jobsError } = await supabase
@@ -86,7 +91,12 @@ export async function POST(request: NextRequest) {
   })
 
   if (draftNotDeleted.length === 0) {
-    return NextResponse.json({ data: { succeeded: [], failed } })
+    const total = failed.length
+    return NextResponse.json({
+      success: true,
+      summary: { total, succeeded: 0, failed: total },
+      data: { succeeded: [], failed },
+    })
   }
 
   const [
@@ -177,7 +187,12 @@ export async function POST(request: NextRequest) {
   }
 
   if (eligibleIds.length === 0) {
-    return NextResponse.json({ data: { succeeded: [], failed } })
+    const total = failed.length
+    return NextResponse.json({
+      success: true,
+      summary: { total, succeeded: 0, failed: total },
+      data: { succeeded: [], failed },
+    })
   }
 
   const deletedAt = new Date().toISOString()
@@ -191,7 +206,12 @@ export async function POST(request: NextRequest) {
     for (const id of eligibleIds) {
       failed.push({ id, code: 'DELETE_FAILED', message: rpcError.message })
     }
-    return NextResponse.json({ data: { succeeded: [], failed } })
+    const total = failed.length
+    return NextResponse.json({
+      success: true,
+      summary: { total, succeeded: 0, failed: total },
+      data: { succeeded: [], failed },
+    })
   }
 
   const clientMeta = getBulkClientMetadata(request)
@@ -208,7 +228,10 @@ export async function POST(request: NextRequest) {
   })
   await Promise.allSettled(auditPromises)
 
+  const total = eligibleIds.length + failed.length
   return NextResponse.json({
+    success: true,
+    summary: { total, succeeded: eligibleIds.length, failed: failed.length },
     data: { succeeded: eligibleIds, failed },
   })
 }
