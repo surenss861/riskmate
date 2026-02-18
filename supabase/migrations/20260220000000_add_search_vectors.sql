@@ -78,11 +78,13 @@ CREATE POLICY "Users can delete own saved filters"
 
 -- Drop so return type can change (added title to RETURNS TABLE)
 DROP FUNCTION IF EXISTS search_jobs(uuid, text, integer);
+DROP FUNCTION IF EXISTS search_jobs(uuid, text, integer, boolean);
 
 CREATE OR REPLACE FUNCTION search_jobs(
   p_org_id UUID,
   p_query TEXT,
-  p_limit INT DEFAULT 20
+  p_limit INT DEFAULT 20,
+  p_include_archived BOOLEAN DEFAULT false
 )
 RETURNS TABLE (
   id UUID,
@@ -123,6 +125,7 @@ AS $$
   CROSS JOIN q
   WHERE j.organization_id = p_org_id
     AND j.deleted_at IS NULL
+    AND (p_include_archived OR j.archived_at IS NULL)
     AND j.search_vector @@ q.tsq
   ORDER BY score DESC
   LIMIT GREATEST(COALESCE(p_limit, 20), 1);
@@ -174,7 +177,12 @@ AS $$
   LIMIT GREATEST(COALESCE(p_limit, 20), 1);
 $$;
 
-CREATE OR REPLACE FUNCTION search_jobs_count(p_org_id UUID, p_query TEXT)
+DROP FUNCTION IF EXISTS search_jobs_count(uuid, text);
+CREATE OR REPLACE FUNCTION search_jobs_count(
+  p_org_id UUID,
+  p_query TEXT,
+  p_include_archived BOOLEAN DEFAULT false
+)
 RETURNS BIGINT
 LANGUAGE sql
 STABLE
@@ -183,6 +191,7 @@ AS $$
   FROM jobs j
   WHERE j.organization_id = p_org_id
     AND j.deleted_at IS NULL
+    AND (p_include_archived OR j.archived_at IS NULL)
     AND j.search_vector @@ websearch_to_tsquery('english', p_query);
 $$;
 
@@ -197,13 +206,15 @@ AS $$
     AND to_tsvector('english', coalesce(h.hazard_type, '') || ' ' || coalesce(h.description, '')) @@ websearch_to_tsquery('english', p_query);
 $$;
 
--- RPC to return jobs filtered like the API and ordered by ts_rank when q is present
+-- RPC to return jobs filtered like the API; ordered by caller sort/order when provided, else by ts_rank
 CREATE OR REPLACE FUNCTION get_jobs_ranked(
   p_org_id UUID,
   p_query TEXT,
   p_limit INT DEFAULT 20,
   p_offset INT DEFAULT 0,
   p_include_archived BOOLEAN DEFAULT false,
+  p_sort_column TEXT DEFAULT NULL,
+  p_sort_order TEXT DEFAULT 'desc',
   p_status TEXT DEFAULT NULL,
   p_risk_level TEXT DEFAULT NULL,
   p_assigned_to_id UUID DEFAULT NULL,
@@ -262,7 +273,18 @@ AS $$
     AND (p_overdue IS NOT TRUE OR (j.end_date IS NOT NULL AND j.end_date::date < CURRENT_DATE))
     AND (p_unassigned IS NOT TRUE OR j.assigned_to_id IS NULL)
     AND (p_recent_days IS NULL OR j.updated_at >= (CURRENT_TIMESTAMP - (p_recent_days || ' days')::interval))
-  ORDER BY ts_rank(j.search_vector, q.tsq) DESC
+  ORDER BY
+    (CASE WHEN p_sort_column = 'created_at' AND (p_sort_order IS NULL OR LOWER(p_sort_order) = 'asc')  THEN j.created_at END) ASC NULLS LAST,
+    (CASE WHEN p_sort_column = 'created_at' AND LOWER(p_sort_order) = 'desc' THEN j.created_at END) DESC NULLS LAST,
+    (CASE WHEN p_sort_column = 'updated_at' AND (p_sort_order IS NULL OR LOWER(p_sort_order) = 'asc')  THEN j.updated_at END) ASC NULLS LAST,
+    (CASE WHEN p_sort_column = 'updated_at' AND LOWER(p_sort_order) = 'desc' THEN j.updated_at END) DESC NULLS LAST,
+    (CASE WHEN p_sort_column = 'risk_score' AND (p_sort_order IS NULL OR LOWER(p_sort_order) = 'asc')  THEN j.risk_score END) ASC NULLS LAST,
+    (CASE WHEN p_sort_column = 'risk_score' AND LOWER(p_sort_order) = 'desc' THEN j.risk_score END) DESC NULLS LAST,
+    (CASE WHEN p_sort_column = 'end_date' AND (p_sort_order IS NULL OR LOWER(p_sort_order) = 'asc')  THEN j.end_date END) ASC NULLS LAST,
+    (CASE WHEN p_sort_column = 'end_date' AND LOWER(p_sort_order) = 'desc' THEN j.end_date END) DESC NULLS LAST,
+    (CASE WHEN p_sort_column = 'client_name' AND (p_sort_order IS NULL OR LOWER(p_sort_order) = 'asc')  THEN j.client_name END) ASC NULLS LAST,
+    (CASE WHEN p_sort_column = 'client_name' AND LOWER(p_sort_order) = 'desc' THEN j.client_name END) DESC NULLS LAST,
+    ts_rank(j.search_vector, q.tsq) DESC
   LIMIT GREATEST(COALESCE(p_limit, 20), 1)
   OFFSET GREATEST(COALESCE(p_offset, 0), 0);
 $$;

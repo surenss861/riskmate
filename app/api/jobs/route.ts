@@ -433,6 +433,8 @@ export async function GET(request: NextRequest) {
         p_limit: limit,
         p_offset: offset,
         p_include_archived: include_archived,
+        p_sort_column: sortColumn,
+        p_sort_order: order,
         p_required_ids: requiredJobIds?.length ? requiredJobIds : null,
         p_excluded_ids: excludedJobIds.size ? Array.from(excludedJobIds) : null,
         p_overdue: overdue === true ? true : null,
