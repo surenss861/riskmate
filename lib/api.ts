@@ -748,7 +748,10 @@ export const jobsApi = {
       throw err;
     }
     if (res.status !== 202 || !data?.export_id) {
-      throw new Error('Expected export job id from server');
+      const msg = (typeof data === 'object' && data?.message) || 'Expected export job id from server';
+      const err: Error & ApiError & { data?: { failed?: Array<{ id: string; code?: string; message: string }>; succeeded?: string[] } } = new Error(msg) as any;
+      if (typeof data === 'object' && data?.data) err.data = data.data;
+      throw err;
     }
     const { export_id, data: responseData } = data as { export_id: string; data: { succeeded: string[]; failed: Array<{ id: string; code?: string; message: string }> } };
     const succeeded = responseData?.succeeded ?? [];

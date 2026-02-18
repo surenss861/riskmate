@@ -19,6 +19,8 @@ export interface TestData {
   ownerUserId: string;
   auditorUserId: string;
   executiveUserId: string;
+  adminUserId?: string;
+  adminToken?: string;
   ownerToken: string;
   auditorToken: string;
   executiveToken: string;
@@ -69,6 +71,7 @@ export async function setupTestData(): Promise<TestData> {
   const ownerEmail = process.env.TEST_OWNER_EMAIL || `test-owner-${Date.now()}@test.riskmate.dev`;
   const auditorEmail = process.env.TEST_AUDITOR_EMAIL || `test-auditor-${Date.now()}@test.riskmate.dev`;
   const executiveEmail = process.env.TEST_EXEC_EMAIL || `test-exec-${Date.now()}@test.riskmate.dev`;
+  const adminEmail = process.env.TEST_ADMIN_EMAIL || `test-admin-${Date.now()}@test.riskmate.dev`;
   const testPassword = process.env.TEST_USER_PASSWORD || "TestPassword123!";
 
   // Helper to get or create user
@@ -116,6 +119,7 @@ export async function setupTestData(): Promise<TestData> {
   const ownerAuthId = await getOrCreateUser(ownerEmail, testPassword);
   const executiveAuthId = await getOrCreateUser(executiveEmail, testPassword);
   const auditorAuthId = await getOrCreateUser(auditorEmail, testPassword);
+  const adminAuthId = await getOrCreateUser(adminEmail, testPassword);
 
   if (!executiveAuthId || !auditorAuthId) {
     throw new Error("Failed to create test users");
@@ -170,6 +174,22 @@ export async function setupTestData(): Promise<TestData> {
     throw new Error(`Failed to create auditor user record: ${auditorUserError.message}`);
   }
 
+  const { error: adminUserError } = await supabase
+    .from("users")
+    .upsert({
+      id: adminAuthId,
+      email: adminEmail,
+      organization_id: testOrgId,
+      role: "admin",
+      full_name: "Test Admin",
+    }, {
+      onConflict: "id",
+    });
+
+  if (adminUserError) {
+    throw new Error(`Failed to create admin user record: ${adminUserError.message}`);
+  }
+
   // Ensure organization_members entries exist
   await supabase
     .from("organization_members")
@@ -188,6 +208,11 @@ export async function setupTestData(): Promise<TestData> {
         user_id: auditorAuthId,
         organization_id: testOrgId,
         role: "viewer",
+      },
+      {
+        user_id: adminAuthId,
+        organization_id: testOrgId,
+        role: "admin",
       },
     ], {
       onConflict: "user_id,organization_id",
@@ -210,6 +235,11 @@ export async function setupTestData(): Promise<TestData> {
 
   const { data: auditorSession } = await anonClient.auth.signInWithPassword({
     email: auditorEmail,
+    password: testPassword,
+  });
+
+  const { data: adminSession } = await anonClient.auth.signInWithPassword({
+    email: adminEmail,
     password: testPassword,
   });
 
@@ -242,6 +272,8 @@ export async function setupTestData(): Promise<TestData> {
     ownerUserId: ownerAuthId,
     auditorUserId: auditorAuthId,
     executiveUserId: executiveAuthId,
+    adminUserId: adminAuthId,
+    adminToken: adminSession?.session?.access_token,
     ownerToken: ownerSession.session.access_token,
     auditorToken: auditorSession.session.access_token,
     executiveToken: executiveSession.session.access_token,

@@ -94,7 +94,7 @@ export async function POST(request: NextRequest) {
   if (succeeded.length === 0) {
     return NextResponse.json(
       { message: 'No jobs found to export', data: { succeeded: [], failed } },
-      { status: 200 }
+      { status: 400 }
     )
   }
 

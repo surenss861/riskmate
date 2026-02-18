@@ -102,17 +102,18 @@ export async function POST(request: NextRequest) {
       : []
 
   const clientMeta = getBulkClientMetadata(request)
-  for (const jobId of succeeded) {
-    await recordAuditLog(supabase, {
+  const sideEffectPromises = succeeded.flatMap((jobId) => [
+    recordAuditLog(supabase, {
       organizationId: organization_id,
       actorId: user_id,
       eventName: 'job.updated',
       targetType: 'job',
       targetId: jobId,
       metadata: { status, bulk: true, ...clientMeta },
-    })
-    await emitJobEvent(organization_id, 'job.updated', jobId, user_id)
-  }
+    }),
+    emitJobEvent(organization_id, 'job.updated', jobId, user_id),
+  ])
+  await Promise.allSettled(sideEffectPromises)
 
   for (const id of eligibleIds) {
     if (!succeeded.includes(id)) {

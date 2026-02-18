@@ -1190,9 +1190,9 @@ jobsRouter.post("/bulk/delete", authenticate, requireWriteAccess, async (req: ex
     }
 
     const clientMetadata = extractClientMetadata(req);
-    for (const jobId of eligibleIds) {
+    const auditPromises = eligibleIds.map((jobId) => {
       const job = jobMap.get(jobId)!;
-      await recordAuditLog({
+      return recordAuditLog({
         organizationId: organization_id,
         actorId: userId,
         eventName: "job.deleted",
@@ -1201,7 +1201,8 @@ jobsRouter.post("/bulk/delete", authenticate, requireWriteAccess, async (req: ex
         metadata: { previous_status: job.status, bulk: true },
         ...clientMetadata,
       });
-    }
+    });
+    await Promise.allSettled(auditPromises);
     res.json({ data: { succeeded: eligibleIds, failed } });
   } catch (err: any) {
     console.error("Bulk delete failed:", err);

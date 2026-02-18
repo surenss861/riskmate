@@ -80,6 +80,14 @@ const ROLE_PERMISSIONS: PermissionMap = {
   ],
 }
 
+/** Roles allowed to delete jobs (owner-only; aligned with backend apps/backend/src/utils/permissions.ts) */
+const JOBS_DELETE_ROLES = ['owner'] as const
+
+/** Owner-only check for job deletion; use for bulk delete to match backend enforcement. */
+export function hasJobsDeletePermission(role: string | undefined): boolean {
+  return !!role && JOBS_DELETE_ROLES.includes(role as (typeof JOBS_DELETE_ROLES)[number])
+}
+
 /**
  * Check if a role has a specific permission
  */

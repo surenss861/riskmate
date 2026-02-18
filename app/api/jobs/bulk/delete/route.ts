@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { parseBulkJobIds, getBulkAuth, getBulkClientMetadata, type BulkFailedItem } from '../shared'
-import { hasPermission } from '@/lib/utils/permissions'
+import { hasJobsDeletePermission } from '@/lib/utils/permissions'
 import { recordAuditLog } from '@/lib/audit/auditLogger'
 
 export const runtime = 'nodejs'
@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
     .single()
 
   const role = (userData?.role as string) ?? 'member'
-  if (!hasPermission(role, 'jobs.delete')) {
+  if (!hasJobsDeletePermission(role)) {
     return NextResponse.json(
       { message: 'You do not have permission to delete jobs' },
       { status: 403 }
@@ -169,9 +169,9 @@ export async function POST(request: NextRequest) {
   }
 
   const clientMeta = getBulkClientMetadata(request)
-  for (const jobId of eligibleIds) {
+  const auditPromises = eligibleIds.map((jobId) => {
     const job = jobMap.get(jobId)!
-    await recordAuditLog(supabase, {
+    return recordAuditLog(supabase, {
       organizationId: organization_id,
       actorId: user_id,
       eventName: 'job.deleted',
@@ -179,7 +179,8 @@ export async function POST(request: NextRequest) {
       targetId: jobId,
       metadata: { previous_status: job.status, bulk: true, ...clientMeta },
     })
-  }
+  })
+  await Promise.allSettled(auditPromises)
 
   return NextResponse.json({
     data: { succeeded: eligibleIds, failed },
