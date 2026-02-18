@@ -26,6 +26,7 @@ export async function GET(request: NextRequest) {
     const type = (searchParams.get('type') || 'all') as SearchType
     const parsedLimit = parseInt(searchParams.get('limit') || '20', 10)
     const limit = Number.isFinite(parsedLimit) ? Math.min(Math.max(parsedLimit, 1), 100) : 20
+    const savedFilterIdParam = searchParams.get('saved_filter_id')?.trim() ?? ''
 
     if (!orgIdParam) {
       const { response, errorId } = createErrorResponse(
@@ -142,6 +143,16 @@ export async function GET(request: NextRequest) {
       })
     }
 
+    // Use admin client when searching another org so RLS (get_user_organization_id) doesn't block results
+    type SupabaseClient = Awaited<ReturnType<typeof createSupabaseServerClient>>
+    let searchClient: SupabaseClient
+    if (isOwnOrg) {
+      searchClient = supabase
+    } else {
+      const { createSupabaseAdminClient } = await import('@/lib/supabase/admin')
+      searchClient = createSupabaseAdminClient() as unknown as SupabaseClient
+    }
+
     const organizationId = requestedOrgId
     const results: Array<{
       type: 'job' | 'hazard' | 'client'
@@ -160,12 +171,12 @@ export async function GET(request: NextRequest) {
     if (q) {
       if (type === 'jobs' || type === 'all') {
         const [{ data: jobRows, error: jobSearchError }, { data: jobCountData, error: jobCountError }] = await Promise.all([
-          supabase.rpc('search_jobs', {
+          searchClient.rpc('search_jobs', {
             p_org_id: organizationId,
             p_query: q,
             p_limit: limit,
           }),
-          supabase.rpc('search_jobs_count', {
+          searchClient.rpc('search_jobs_count', {
             p_org_id: organizationId,
             p_query: q,
           }),
@@ -197,12 +208,12 @@ export async function GET(request: NextRequest) {
 
       if (type === 'hazards' || type === 'all') {
         const [{ data: hazardRows, error: hazardSearchError }, { data: hazardCountData, error: hazardCountError }] = await Promise.all([
-          supabase.rpc('search_hazards', {
+          searchClient.rpc('search_hazards', {
             p_org_id: organizationId,
             p_query: q,
             p_limit: limit,
           }),
-          supabase.rpc('search_hazards_count', {
+          searchClient.rpc('search_hazards_count', {
             p_org_id: organizationId,
             p_query: q,
           }),
@@ -239,12 +250,12 @@ export async function GET(request: NextRequest) {
 
       if (type === 'clients' || type === 'all') {
         const [{ data: clientRows, error: clientSearchError }, { data: clientCountData, error: clientCountError }] = await Promise.all([
-          supabase.rpc('search_clients', {
+          searchClient.rpc('search_clients', {
             p_org_id: organizationId,
             p_query: q,
             p_limit: limit,
           }),
-          supabase.rpc('search_clients_count', {
+          searchClient.rpc('search_clients_count', {
             p_org_id: organizationId,
             p_query: q,
           }),
@@ -287,10 +298,12 @@ export async function GET(request: NextRequest) {
     const suggestions: string[] = []
 
     if (q) {
-      const { data: suggestionRows } = await supabase
+      const { data: suggestionRows } = await searchClient
         .from('jobs')
         .select('client_name')
         .eq('organization_id', organizationId)
+        .is('deleted_at', null)
+        .is('archived_at', null)
         .ilike('client_name', `%${q}%`)
         .limit(10)
 
@@ -302,7 +315,7 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      const { data: clientNameRows } = await supabase
+      const { data: clientNameRows } = await searchClient
         .from('clients')
         .select('name')
         .eq('organization_id', organizationId)
@@ -319,10 +332,12 @@ export async function GET(request: NextRequest) {
         }
       }
     } else {
-      const { data: clientRows } = await supabase
+      const { data: clientRows } = await searchClient
         .from('jobs')
         .select('client_name')
         .eq('organization_id', organizationId)
+        .is('deleted_at', null)
+        .is('archived_at', null)
         .not('client_name', 'is', null)
         .limit(50)
 
@@ -334,7 +349,7 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      const { data: clientsTableRows } = await supabase
+      const { data: clientsTableRows } = await searchClient
         .from('clients')
         .select('name')
         .eq('organization_id', organizationId)
@@ -350,10 +365,12 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      const { data: jobTypeRows } = await supabase
+      const { data: jobTypeRows } = await searchClient
         .from('jobs')
         .select('job_type')
         .eq('organization_id', organizationId)
+        .is('deleted_at', null)
+        .is('archived_at', null)
         .not('job_type', 'is', null)
         .limit(50)
 
@@ -368,10 +385,30 @@ export async function GET(request: NextRequest) {
       suggestions.splice(15)
     }
 
+    // Optional: return applied saved filter when requested (for integration with jobs list / filter UI)
+    let applied_filter: { id: string; name: string; filter_config: Record<string, unknown> } | null = null
+    if (savedFilterIdParam && isValidUUID(savedFilterIdParam)) {
+      const { data: savedFilter } = await searchClient
+        .from('saved_filters')
+        .select('id, name, filter_config')
+        .eq('organization_id', organizationId)
+        .eq('id', savedFilterIdParam)
+        .or(`user_id.eq.${user.id},is_shared.eq.true`)
+        .maybeSingle()
+      if (savedFilter?.id && savedFilter?.name != null && savedFilter?.filter_config != null) {
+        applied_filter = {
+          id: savedFilter.id,
+          name: savedFilter.name,
+          filter_config: (savedFilter.filter_config as Record<string, unknown>) ?? {},
+        }
+      }
+    }
+
     return NextResponse.json({
       results,
       total,
       suggestions,
+      ...(applied_filter && { applied_filter }),
     })
   } catch (error: any) {
     console.error('Search failed:', error)
