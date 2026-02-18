@@ -18,6 +18,79 @@ ALTER TABLE jobs
 
 CREATE INDEX IF NOT EXISTS idx_jobs_search ON jobs USING GIN(search_vector);
 
+-- Clients table for search (display names per organization; exclude deleted/archived in search)
+CREATE TABLE IF NOT EXISTS clients (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  deleted_at TIMESTAMPTZ,
+  archived_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_clients_org ON clients(organization_id);
+
+ALTER TABLE clients DROP COLUMN IF EXISTS search_vector;
+ALTER TABLE clients
+  ADD COLUMN search_vector tsvector
+    GENERATED ALWAYS AS (to_tsvector('english', coalesce(name, ''))) STORED;
+
+CREATE INDEX IF NOT EXISTS idx_clients_search ON clients USING GIN(search_vector);
+
+DROP TRIGGER IF EXISTS update_clients_updated_at ON clients;
+CREATE TRIGGER update_clients_updated_at
+  BEFORE UPDATE ON clients
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
+
+DROP FUNCTION IF EXISTS search_clients(uuid, text, integer);
+CREATE OR REPLACE FUNCTION search_clients(
+  p_org_id UUID,
+  p_query TEXT,
+  p_limit INT DEFAULT 20
+)
+RETURNS TABLE (
+  id UUID,
+  display_name TEXT,
+  highlight TEXT,
+  rank REAL
+)
+LANGUAGE sql
+STABLE
+AS $$
+  WITH q AS (
+    SELECT websearch_to_tsquery('english', p_query) AS tsq
+  )
+  SELECT
+    c.id,
+    c.name AS display_name,
+    ts_headline('english', coalesce(c.name, ''), q.tsq) AS highlight,
+    ts_rank(c.search_vector, q.tsq)::REAL AS rank
+  FROM clients c
+  CROSS JOIN q
+  WHERE c.organization_id = p_org_id
+    AND c.deleted_at IS NULL
+    AND c.archived_at IS NULL
+    AND c.search_vector @@ q.tsq
+  ORDER BY rank DESC
+  LIMIT GREATEST(COALESCE(p_limit, 20), 1);
+$$;
+
+DROP FUNCTION IF EXISTS search_clients_count(uuid, text);
+CREATE OR REPLACE FUNCTION search_clients_count(p_org_id UUID, p_query TEXT)
+RETURNS BIGINT
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT COUNT(*)::BIGINT
+  FROM clients c
+  WHERE c.organization_id = p_org_id
+    AND c.deleted_at IS NULL
+    AND c.archived_at IS NULL
+    AND c.search_vector @@ websearch_to_tsquery('english', p_query);
+$$;
+
 CREATE TABLE IF NOT EXISTS saved_filters (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,

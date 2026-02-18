@@ -8,21 +8,58 @@ export const runtime = 'nodejs'
 
 const ROUTE = '/api/search'
 
-type SearchType = 'jobs' | 'hazards' | 'all'
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+type SearchType = 'jobs' | 'hazards' | 'clients' | 'all'
+
+function isValidUUID(s: string): boolean {
+  return UUID_REGEX.test(s)
+}
 
 export async function GET(request: NextRequest) {
   const requestId = request.headers.get('x-request-id') || getRequestId()
 
   try {
     const { searchParams } = new URL(request.url)
+    const orgIdParam = searchParams.get('org_id')?.trim() ?? ''
     const q = (searchParams.get('q') || '').trim()
     const type = (searchParams.get('type') || 'all') as SearchType
     const parsedLimit = parseInt(searchParams.get('limit') || '20', 10)
     const limit = Number.isFinite(parsedLimit) ? Math.min(Math.max(parsedLimit, 1), 100) : 20
 
-    if (!['jobs', 'hazards', 'all'].includes(type)) {
+    if (!orgIdParam) {
       const { response, errorId } = createErrorResponse(
-        'Invalid search type. Must be one of: jobs, hazards, all',
+        'Missing required query parameter: org_id',
+        'INVALID_FORMAT',
+        { requestId, statusCode: 400 }
+      )
+      logApiError(400, 'INVALID_FORMAT', errorId, requestId, undefined, response.message, {
+        category: 'validation', severity: 'warn', route: ROUTE,
+      })
+      return NextResponse.json(response, {
+        status: 400,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
+
+    if (!isValidUUID(orgIdParam)) {
+      const { response, errorId } = createErrorResponse(
+        'Invalid org_id: must be a valid UUID',
+        'INVALID_FORMAT',
+        { requestId, statusCode: 400 }
+      )
+      logApiError(400, 'INVALID_FORMAT', errorId, requestId, undefined, response.message, {
+        category: 'validation', severity: 'warn', route: ROUTE,
+      })
+      return NextResponse.json(response, {
+        status: 400,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
+
+    if (!['jobs', 'hazards', 'clients', 'all'].includes(type)) {
+      const { response, errorId } = createErrorResponse(
+        'Invalid search type. Must be one of: jobs, hazards, clients, all',
         'INVALID_FORMAT',
         { requestId, statusCode: 400 }
       )
@@ -74,9 +111,40 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    const organizationId = userData.organization_id
+    const requestedOrgId = orgIdParam
+    const userOrgId = userData.organization_id
+    const isOwnOrg = userOrgId === requestedOrgId
+    let isMemberOfRequestedOrg = false
+    if (!isOwnOrg) {
+      const { createSupabaseAdminClient } = await import('@/lib/supabase/admin')
+      const adminSupabase = createSupabaseAdminClient()
+      const { data: member } = await adminSupabase
+        .from('organization_members')
+        .select('organization_id')
+        .eq('user_id', user.id)
+        .eq('organization_id', requestedOrgId)
+        .maybeSingle()
+      isMemberOfRequestedOrg = Boolean(member?.organization_id)
+    }
+
+    if (!isOwnOrg && !isMemberOfRequestedOrg) {
+      const { response, errorId } = createErrorResponse(
+        'Forbidden: You are not permitted to search this organization',
+        'FORBIDDEN',
+        { requestId, statusCode: 403 }
+      )
+      logApiError(403, 'FORBIDDEN', errorId, requestId, undefined, response.message, {
+        category: 'auth', severity: 'warn', route: ROUTE,
+      })
+      return NextResponse.json(response, {
+        status: 403,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
+
+    const organizationId = requestedOrgId
     const results: Array<{
-      type: 'job' | 'hazard'
+      type: 'job' | 'hazard' | 'client'
       id: string
       title: string
       subtitle: string
@@ -87,6 +155,7 @@ export async function GET(request: NextRequest) {
     let total = 0
     let jobCount = 0
     let hazardCount = 0
+    let clientCount = 0
 
     if (q) {
       if (type === 'jobs' || type === 'all') {
@@ -168,6 +237,45 @@ export async function GET(request: NextRequest) {
         }
       }
 
+      if (type === 'clients' || type === 'all') {
+        const [{ data: clientRows, error: clientSearchError }, { data: clientCountData, error: clientCountError }] = await Promise.all([
+          supabase.rpc('search_clients', {
+            p_org_id: organizationId,
+            p_query: q,
+            p_limit: limit,
+          }),
+          supabase.rpc('search_clients_count', {
+            p_org_id: organizationId,
+            p_query: q,
+          }),
+        ])
+
+        if (clientSearchError) {
+          throw clientSearchError
+        }
+        if (clientCountError) {
+          throw clientCountError
+        }
+
+        clientCount = Number(clientCountData ?? 0) || 0
+        if (type === 'clients') {
+          total = clientCount
+        } else if (type === 'all') {
+          total = jobCount + hazardCount + clientCount
+        }
+
+        for (const row of clientRows || []) {
+          results.push({
+            type: 'client',
+            id: row.id,
+            title: (row.display_name || '').trim() || 'Client',
+            subtitle: '',
+            highlight: row.highlight || '',
+            score: Number(row.rank) || 0,
+          })
+        }
+      }
+
       results.sort((a, b) => b.score - a.score)
     }
 
@@ -189,6 +297,23 @@ export async function GET(request: NextRequest) {
           suggestions.push(value)
         }
       }
+
+      const { data: clientNameRows } = await supabase
+        .from('clients')
+        .select('name')
+        .eq('organization_id', organizationId)
+        .is('deleted_at', null)
+        .is('archived_at', null)
+        .ilike('name', `%${q}%`)
+        .limit(10)
+
+      for (const row of clientNameRows || []) {
+        const value = row.name?.trim()
+        if (value && !seenSuggestions.has(value.toLowerCase())) {
+          seenSuggestions.add(value.toLowerCase())
+          suggestions.push(value)
+        }
+      }
     } else {
       const { data: clientRows } = await supabase
         .from('jobs')
@@ -199,6 +324,22 @@ export async function GET(request: NextRequest) {
 
       for (const row of clientRows || []) {
         const value = row.client_name?.trim()
+        if (value && !seenSuggestions.has(value.toLowerCase())) {
+          seenSuggestions.add(value.toLowerCase())
+          suggestions.push(value)
+        }
+      }
+
+      const { data: clientsTableRows } = await supabase
+        .from('clients')
+        .select('name')
+        .eq('organization_id', organizationId)
+        .is('deleted_at', null)
+        .is('archived_at', null)
+        .limit(50)
+
+      for (const row of clientsTableRows || []) {
+        const value = row.name?.trim()
         if (value && !seenSuggestions.has(value.toLowerCase())) {
           seenSuggestions.add(value.toLowerCase())
           suggestions.push(value)
