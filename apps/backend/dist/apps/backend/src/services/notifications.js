@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.DEFAULT_NOTIFICATION_PREFERENCES = void 0;
+exports.OPT_OUT_SAFE_PREFERENCES = exports.DEFAULT_NOTIFICATION_PREFERENCES = void 0;
 exports.validatePushToken = validatePushToken;
 exports.registerDeviceToken = registerDeviceToken;
 exports.unregisterDeviceToken = unregisterDeviceToken;
@@ -12,6 +12,7 @@ exports.fetchUserTokens = fetchUserTokens;
 exports.getUnreadNotificationCount = getUnreadNotificationCount;
 exports.createNotificationRecord = createNotificationRecord;
 exports.listNotifications = listNotifications;
+exports.setNotificationsReadState = setNotificationsReadState;
 exports.markNotificationsAsRead = markNotificationsAsRead;
 exports.notifyHighRiskJob = notifyHighRiskJob;
 exports.notifyReportReady = notifyReportReady;
@@ -112,7 +113,7 @@ async function fetchOrgUserIdsWithPreference(organizationId, prefKey) {
         .in("user_id", userIds);
     const prefsByUser = new Map((prefsData || []).map((r) => {
         const push_enabled = r.push_enabled ?? true;
-        const prefValue = prefKey === "weekly_summary_enabled"
+        const prefValue = prefKey === "weekly_summary"
             ? (r[prefKey] ?? false)
             : (r[prefKey] ?? true);
         return [r.user_id, { push_enabled, prefValue }];
@@ -132,21 +133,35 @@ async function fetchOrgUserIdsWithPreference(organizationId, prefKey) {
             .map((r) => r.user_id)),
     ];
 }
-/** Default notification preferences. Master toggles on; weekly_summary off per spec; others on. */
+/** Default notification preferences (contract keys). Master toggles on; weekly_summary off per spec; others on. */
 exports.DEFAULT_NOTIFICATION_PREFERENCES = {
     push_enabled: true,
     email_enabled: true,
-    mentions_enabled: true,
-    job_assigned_enabled: true,
-    signature_request_enabled: true,
-    evidence_uploaded_enabled: true,
-    hazard_added_enabled: true,
-    deadline_enabled: true,
-    weekly_summary_enabled: false,
-    high_risk_job_enabled: true,
-    report_ready_enabled: true,
+    mention: true,
+    job_assigned: true,
+    signature_requested: true,
+    evidence_uploaded: true,
+    hazard_added: true,
+    deadline_approaching: true,
+    weekly_summary: false,
+    high_risk_job: true,
+    report_ready: true,
 };
-/** Fetch notification preferences for a user; returns defaults if no row exists. */
+/** Safe opt-out when preferences cannot be loaded (e.g. Supabase error). All delivery disabled to avoid re-enabling push/email for opted-out users. */
+exports.OPT_OUT_SAFE_PREFERENCES = {
+    push_enabled: false,
+    email_enabled: false,
+    mention: false,
+    job_assigned: false,
+    signature_requested: false,
+    evidence_uploaded: false,
+    hazard_added: false,
+    deadline_approaching: false,
+    weekly_summary: false,
+    high_risk_job: false,
+    report_ready: false,
+};
+/** Fetch notification preferences for a user; returns defaults if no row exists. On Supabase error returns OPT_OUT_SAFE_PREFERENCES so delivery is skipped (fail closed). */
 async function getNotificationPreferences(userId) {
     const { data, error } = await supabaseClient_1.supabase
         .from("notification_preferences")
@@ -155,22 +170,22 @@ async function getNotificationPreferences(userId) {
         .maybeSingle();
     if (error) {
         console.error("Failed to load notification preferences:", error);
-        return { ...exports.DEFAULT_NOTIFICATION_PREFERENCES };
+        return { ...exports.OPT_OUT_SAFE_PREFERENCES };
     }
     if (!data)
         return { ...exports.DEFAULT_NOTIFICATION_PREFERENCES };
     return {
         push_enabled: data.push_enabled ?? true,
         email_enabled: data.email_enabled ?? true,
-        mentions_enabled: data.mentions_enabled ?? true,
-        job_assigned_enabled: data.job_assigned_enabled ?? true,
-        signature_request_enabled: data.signature_request_enabled ?? true,
-        evidence_uploaded_enabled: data.evidence_uploaded_enabled ?? true,
-        hazard_added_enabled: data.hazard_added_enabled ?? true,
-        deadline_enabled: data.deadline_enabled ?? true,
-        weekly_summary_enabled: data.weekly_summary_enabled ?? false,
-        high_risk_job_enabled: data.high_risk_job_enabled ?? true,
-        report_ready_enabled: data.report_ready_enabled ?? true,
+        mention: data.mention ?? true,
+        job_assigned: data.job_assigned ?? true,
+        signature_requested: data.signature_requested ?? true,
+        evidence_uploaded: data.evidence_uploaded ?? true,
+        hazard_added: data.hazard_added ?? true,
+        deadline_approaching: data.deadline_approaching ?? true,
+        weekly_summary: data.weekly_summary ?? false,
+        high_risk_job: data.high_risk_job ?? true,
+        report_ready: data.report_ready ?? true,
     };
 }
 /** Fetch push tokens for a single user in a given organization (for targeted notifications). */
@@ -250,21 +265,25 @@ async function listNotifications(userId, organizationId, options = {}) {
         })),
     };
 }
-/** Mark notifications as read: all for the user in the org, or by id(s). Updates is_read and updated_at. */
-async function markNotificationsAsRead(userId, organizationId, ids) {
+/** Set notifications read state: all for the user in the org, or by id(s). Updates is_read and updated_at. */
+async function setNotificationsReadState(userId, organizationId, read, ids) {
     const query = supabaseClient_1.supabase
         .from("notifications")
-        .update({ is_read: true, updated_at: new Date().toISOString() })
+        .update({ is_read: read, updated_at: new Date().toISOString() })
         .eq("user_id", userId)
         .eq("organization_id", organizationId)
-        .eq("is_read", false);
+        .eq("is_read", !read);
     if (ids?.length) {
         query.in("id", ids);
     }
     const { error } = await query;
     if (error) {
-        console.error("Failed to mark notifications as read:", error);
+        console.error("Failed to set notifications read state:", error);
     }
+}
+/** Mark notifications as read: all for the user in the org, or by id(s). Convenience wrapper. */
+async function markNotificationsAsRead(userId, organizationId, ids) {
+    await setNotificationsReadState(userId, organizationId, true, ids);
 }
 let apnProvider = null;
 function getAPnProvider() {
@@ -413,7 +432,7 @@ const chunkArray = (arr, size) => {
 async function notifyHighRiskJob(params) {
     if (params.riskScore < 75)
         return;
-    const userIds = await fetchOrgUserIdsWithPreference(params.organizationId, "high_risk_job_enabled");
+    const userIds = await fetchOrgUserIdsWithPreference(params.organizationId, "high_risk_job");
     const payload = {
         title: "⚠️ High-risk job detected",
         body: `${params.clientName} scored ${params.riskScore}. Review mitigation plan now.`,
@@ -429,7 +448,7 @@ async function notifyHighRiskJob(params) {
     }
 }
 async function notifyReportReady(params) {
-    const userIds = await fetchOrgUserIdsWithPreference(params.organizationId, "report_ready_enabled");
+    const userIds = await fetchOrgUserIdsWithPreference(params.organizationId, "report_ready");
     const payload = {
         title: "📄 Risk report ready",
         body: "Your Riskmate PDF report is ready to view.",
@@ -446,7 +465,7 @@ async function notifyReportReady(params) {
     }
 }
 async function notifyWeeklySummary(params) {
-    const userIds = await fetchOrgUserIdsWithPreference(params.organizationId, "weekly_summary_enabled");
+    const userIds = await fetchOrgUserIdsWithPreference(params.organizationId, "weekly_summary");
     const payload = {
         title: "📈 Weekly compliance summary",
         body: params.message,
@@ -473,7 +492,7 @@ async function sendToUser(userId, organizationId, payload) {
         ...payload.data,
         ...(notificationId && { id: notificationId }),
     };
-    // Gate only push delivery (Expo/APNs) on push_enabled; in-app history is always recorded.
+    // Gate push delivery (Expo/APNs) on push_enabled; in-app history is always recorded.
     // Only send to tokens registered for this org to avoid cross-org notification leaks.
     if (prefs.push_enabled) {
         const tokens = await fetchUserTokens(userId, organizationId);
@@ -490,11 +509,16 @@ async function sendToUser(userId, organizationId, payload) {
             });
         }
     }
+    // Email delivery is gated on prefs.email_enabled. Any email job/worker that sends
+    // notification emails must respect this flag; send email only inside this block.
+    if (prefs.email_enabled) {
+        // TODO: send email when email delivery for in-app notifications is implemented
+    }
 }
 /** Notify user when they are assigned to a job. */
 async function sendJobAssignedNotification(userId, organizationId, jobId, jobTitle) {
     const prefs = await getNotificationPreferences(userId);
-    if (!prefs.job_assigned_enabled) {
+    if (!prefs.job_assigned) {
         console.log("[Notifications] Skipped job_assigned for user", userId, "(preference disabled)");
         return;
     }
@@ -515,7 +539,7 @@ async function sendJobAssignedNotification(userId, organizationId, jobId, jobTit
 /** Notify user when their signature is requested on a report run. */
 async function sendSignatureRequestNotification(userId, organizationId, reportRunId, jobTitle) {
     const prefs = await getNotificationPreferences(userId);
-    if (!prefs.signature_request_enabled) {
+    if (!prefs.signature_requested) {
         console.log("[Notifications] Skipped signature_request for user", userId, "(preference disabled)");
         return;
     }
@@ -536,7 +560,7 @@ async function sendSignatureRequestNotification(userId, organizationId, reportRu
 /** Notify user when evidence is uploaded to a job they care about. */
 async function sendEvidenceUploadedNotification(userId, organizationId, jobId, photoId) {
     const prefs = await getNotificationPreferences(userId);
-    if (!prefs.evidence_uploaded_enabled) {
+    if (!prefs.evidence_uploaded) {
         console.log("[Notifications] Skipped evidence_uploaded for user", userId, "(preference disabled)");
         return;
     }
@@ -556,7 +580,7 @@ async function sendEvidenceUploadedNotification(userId, organizationId, jobId, p
 /** Notify user when a hazard is added to a job. */
 async function sendHazardAddedNotification(userId, organizationId, jobId, hazardId) {
     const prefs = await getNotificationPreferences(userId);
-    if (!prefs.hazard_added_enabled) {
+    if (!prefs.hazard_added) {
         console.log("[Notifications] Skipped hazard_added for user", userId, "(preference disabled)");
         return;
     }
@@ -576,7 +600,7 @@ async function sendHazardAddedNotification(userId, organizationId, jobId, hazard
 /** Notify user about an approaching job deadline. */
 async function sendDeadlineNotification(userId, organizationId, jobId, hoursRemaining, jobTitle) {
     const prefs = await getNotificationPreferences(userId);
-    if (!prefs.deadline_enabled) {
+    if (!prefs.deadline_approaching) {
         console.log("[Notifications] Skipped deadline for user", userId, "(preference disabled)");
         return;
     }
@@ -602,7 +626,7 @@ async function sendDeadlineNotification(userId, organizationId, jobId, hoursRema
 /** Notify user when they are mentioned in a comment. */
 async function sendMentionNotification(userId, organizationId, commentId, contextLabel) {
     const prefs = await getNotificationPreferences(userId);
-    if (!prefs.mentions_enabled) {
+    if (!prefs.mention) {
         console.log("[Notifications] Skipped mention for user", userId, "(preference disabled)");
         return;
     }

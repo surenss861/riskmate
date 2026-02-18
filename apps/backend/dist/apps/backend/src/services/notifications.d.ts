@@ -12,22 +12,24 @@ type DeviceTokenPayload = {
 /** Returns true if upsert succeeded, false on Supabase failure. Throws on invalid token. */
 export declare function registerDeviceToken({ userId, organizationId, token, platform, }: DeviceTokenPayload): Promise<boolean>;
 export declare function unregisterDeviceToken(token: string, userId: string, organizationId: string): Promise<boolean>;
-/** Default notification preferences. Master toggles on; weekly_summary off per spec; others on. */
+/** Default notification preferences (contract keys). Master toggles on; weekly_summary off per spec; others on. */
 export declare const DEFAULT_NOTIFICATION_PREFERENCES: {
     readonly push_enabled: true;
     readonly email_enabled: true;
-    readonly mentions_enabled: true;
-    readonly job_assigned_enabled: true;
-    readonly signature_request_enabled: true;
-    readonly evidence_uploaded_enabled: true;
-    readonly hazard_added_enabled: true;
-    readonly deadline_enabled: true;
-    readonly weekly_summary_enabled: false;
-    readonly high_risk_job_enabled: true;
-    readonly report_ready_enabled: true;
+    readonly mention: true;
+    readonly job_assigned: true;
+    readonly signature_requested: true;
+    readonly evidence_uploaded: true;
+    readonly hazard_added: true;
+    readonly deadline_approaching: true;
+    readonly weekly_summary: false;
+    readonly high_risk_job: true;
+    readonly report_ready: true;
 };
+/** Safe opt-out when preferences cannot be loaded (e.g. Supabase error). All delivery disabled to avoid re-enabling push/email for opted-out users. */
+export declare const OPT_OUT_SAFE_PREFERENCES: NotificationPreferences;
 export type NotificationPreferences = typeof DEFAULT_NOTIFICATION_PREFERENCES;
-/** Fetch notification preferences for a user; returns defaults if no row exists. */
+/** Fetch notification preferences for a user; returns defaults if no row exists. On Supabase error returns OPT_OUT_SAFE_PREFERENCES so delivery is skipped (fail closed). */
 export declare function getNotificationPreferences(userId: string): Promise<NotificationPreferences>;
 /** Fetch push tokens for a single user in a given organization (for targeted notifications). */
 export declare function fetchUserTokens(userId: string, organizationId: string): Promise<string[]>;
@@ -50,7 +52,9 @@ export declare function listNotifications(userId: string, organizationId: string
         deepLink?: string | null;
     }>;
 }>;
-/** Mark notifications as read: all for the user in the org, or by id(s). Updates is_read and updated_at. */
+/** Set notifications read state: all for the user in the org, or by id(s). Updates is_read and updated_at. */
+export declare function setNotificationsReadState(userId: string, organizationId: string, read: boolean, ids?: string[]): Promise<void>;
+/** Mark notifications as read: all for the user in the org, or by id(s). Convenience wrapper. */
 export declare function markNotificationsAsRead(userId: string, organizationId: string, ids?: string[]): Promise<void>;
 export declare function notifyHighRiskJob(params: {
     organizationId: string;

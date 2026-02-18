@@ -98,18 +98,19 @@ exports.notificationsRouter.get("/unread-count", auth_1.authenticate, async (req
         res.status(500).json({ message: "Failed to get unread count" });
     }
 });
-/** PATCH /api/notifications/read — mark notifications as read (all for current user, or by id(s)). */
+/** PATCH /api/notifications/read — set read state (default true). Body: { ids?: string[], read?: boolean }. */
 exports.notificationsRouter.patch("/read", auth_1.authenticate, async (req, res) => {
     const authReq = req;
     try {
         const body = (req.body || {});
         const ids = Array.isArray(body.ids) ? body.ids : undefined;
-        await (0, notifications_1.markNotificationsAsRead)(authReq.user.id, authReq.user.organization_id, ids);
+        const read = typeof body.read === "boolean" ? body.read : true;
+        await (0, notifications_1.setNotificationsReadState)(authReq.user.id, authReq.user.organization_id, read, ids);
         res.json({ status: "ok" });
     }
     catch (err) {
-        console.error("Mark notifications as read failed:", err);
-        res.status(500).json({ message: "Failed to mark notifications as read" });
+        console.error("Set notifications read state failed:", err);
+        res.status(500).json({ message: "Failed to update read state" });
     }
 });
 /** GET /api/notifications/preferences — get current user's notification preferences (defaults if no row). */
@@ -154,6 +155,42 @@ exports.notificationsRouter.patch("/preferences", auth_1.authenticate, async (re
     catch (err) {
         console.error("Update notification preferences failed:", err);
         res.status(500).json({ message: "Failed to update preferences" });
+    }
+});
+/** POST /api/notifications/job-assigned — notify a user that they were assigned to a job. Body: { userId, jobId, jobTitle? }. Caller must be authenticated; org is taken from auth. */
+exports.notificationsRouter.post("/job-assigned", auth_1.authenticate, async (req, res) => {
+    const authReq = req;
+    try {
+        const { userId, jobId, jobTitle } = req.body || {};
+        if (!userId || !jobId) {
+            return res
+                .status(400)
+                .json({ message: "Missing userId or jobId" });
+        }
+        const organizationId = authReq.user.organization_id;
+        const { data: job } = await supabaseClient_1.supabase
+            .from("jobs")
+            .select("id, organization_id")
+            .eq("id", jobId)
+            .eq("organization_id", organizationId)
+            .single();
+        if (!job) {
+            return res.status(404).json({ message: "Job not found" });
+        }
+        const { data: user } = await supabaseClient_1.supabase
+            .from("users")
+            .select("id, organization_id")
+            .eq("id", userId)
+            .single();
+        if (!user || user.organization_id !== organizationId) {
+            return res.status(403).json({ message: "User not in this organization" });
+        }
+        await (0, notifications_1.sendJobAssignedNotification)(userId, organizationId, jobId, jobTitle);
+        res.status(204).end();
+    }
+    catch (err) {
+        console.error("Job assigned notification failed:", err);
+        res.status(500).json({ message: "Failed to send notification" });
     }
 });
 /** POST /api/notifications/evidence-uploaded — notify recipients (job owner/assignees) that evidence was uploaded. Accepts optional userId; when provided, sends to that user; otherwise sends to job owner. Enforces org/job scoping. */
