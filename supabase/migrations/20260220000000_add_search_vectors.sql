@@ -44,6 +44,29 @@ CREATE TRIGGER update_clients_updated_at
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at_column();
 
+ALTER TABLE clients ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users can view clients in org" ON clients;
+CREATE POLICY "Users can view clients in org"
+  ON clients FOR SELECT
+  USING (organization_id = get_user_organization_id());
+
+DROP POLICY IF EXISTS "Users can insert clients in org" ON clients;
+CREATE POLICY "Users can insert clients in org"
+  ON clients FOR INSERT
+  WITH CHECK (organization_id = get_user_organization_id());
+
+DROP POLICY IF EXISTS "Users can update clients in org" ON clients;
+CREATE POLICY "Users can update clients in org"
+  ON clients FOR UPDATE
+  USING (organization_id = get_user_organization_id())
+  WITH CHECK (organization_id = get_user_organization_id());
+
+DROP POLICY IF EXISTS "Users can delete clients in org" ON clients;
+CREATE POLICY "Users can delete clients in org"
+  ON clients FOR DELETE
+  USING (organization_id = get_user_organization_id());
+
 DROP FUNCTION IF EXISTS search_clients(uuid, text, integer);
 CREATE OR REPLACE FUNCTION search_clients(
   p_org_id UUID,
@@ -280,6 +303,8 @@ AS $$
 $$;
 
 -- RPC to return jobs filtered like the API; ordered by caller sort/order when provided, else by ts_rank
+-- Drop so return type can change (added title to RETURNS TABLE)
+DROP FUNCTION IF EXISTS get_jobs_ranked(uuid, text, integer, integer, boolean, text, text, text, text, uuid, real, real, text, text, uuid[], uuid[], boolean, boolean, integer);
 CREATE OR REPLACE FUNCTION get_jobs_ranked(
   p_org_id UUID,
   p_query TEXT,
@@ -303,6 +328,7 @@ CREATE OR REPLACE FUNCTION get_jobs_ranked(
 )
 RETURNS TABLE (
   id UUID,
+  title TEXT,
   client_name TEXT,
   job_type TEXT,
   location TEXT,
@@ -320,6 +346,7 @@ AS $$
   )
   SELECT
     j.id,
+    j.title,
     j.client_name,
     j.job_type,
     j.location,

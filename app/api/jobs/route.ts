@@ -356,7 +356,7 @@ export async function GET(request: NextRequest) {
 
     let query = supabase
       .from('jobs')
-      .select('id, client_name, job_type, location, status, risk_score, risk_level, created_at, updated_at')
+      .select('id, title, client_name, job_type, location, status, risk_score, risk_level, created_at, updated_at')
       .eq('organization_id', organization_id)
       .is('deleted_at', null)
       .range(offset, offset + limit - 1)

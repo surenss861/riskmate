@@ -277,6 +277,10 @@ export async function GET(request: NextRequest) {
       }
 
       results.sort((a, b) => b.score - a.score)
+
+      if (type === 'all') {
+        results.splice(limit)
+      }
     }
 
     const seenSuggestions = new Set<string>()
