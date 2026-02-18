@@ -76,6 +76,9 @@ CREATE POLICY "Users can delete own saved filters"
     AND organization_id = get_user_organization_id()
   );
 
+-- Drop so return type can change (added title to RETURNS TABLE)
+DROP FUNCTION IF EXISTS search_jobs(uuid, text, integer);
+
 CREATE OR REPLACE FUNCTION search_jobs(
   p_org_id UUID,
   p_query TEXT,
