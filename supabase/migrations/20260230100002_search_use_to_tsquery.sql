@@ -1,71 +1,5 @@
--- Ensure job title/name column exists for search coverage (optional; may already exist).
-ALTER TABLE jobs ADD COLUMN IF NOT EXISTS title TEXT;
-
--- Recreate search_vector so it includes job title/name and all searchable fields
-ALTER TABLE jobs DROP COLUMN IF EXISTS search_vector;
-
-ALTER TABLE jobs
-  ADD COLUMN search_vector tsvector
-    GENERATED ALWAYS AS (
-      to_tsvector('english',
-        coalesce(title, '') || ' ' ||
-        coalesce(client_name, '') || ' ' ||
-        coalesce(job_type, '') || ' ' ||
-        coalesce(description, '') || ' ' ||
-        coalesce(location, '')
-      )
-    ) STORED;
-
-CREATE INDEX IF NOT EXISTS idx_jobs_search ON jobs USING GIN(search_vector);
-
--- Clients table for search (display names per organization; exclude deleted/archived in search)
-CREATE TABLE IF NOT EXISTS clients (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-  name TEXT NOT NULL,
-  deleted_at TIMESTAMPTZ,
-  archived_at TIMESTAMPTZ,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE INDEX IF NOT EXISTS idx_clients_org ON clients(organization_id);
-
-ALTER TABLE clients DROP COLUMN IF EXISTS search_vector;
-ALTER TABLE clients
-  ADD COLUMN search_vector tsvector
-    GENERATED ALWAYS AS (to_tsvector('english', coalesce(name, ''))) STORED;
-
-CREATE INDEX IF NOT EXISTS idx_clients_search ON clients USING GIN(search_vector);
-
-DROP TRIGGER IF EXISTS update_clients_updated_at ON clients;
-CREATE TRIGGER update_clients_updated_at
-  BEFORE UPDATE ON clients
-  FOR EACH ROW
-  EXECUTE FUNCTION update_updated_at_column();
-
-ALTER TABLE clients ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS "Users can view clients in org" ON clients;
-CREATE POLICY "Users can view clients in org"
-  ON clients FOR SELECT
-  USING (organization_id = get_user_organization_id());
-
-DROP POLICY IF EXISTS "Users can insert clients in org" ON clients;
-CREATE POLICY "Users can insert clients in org"
-  ON clients FOR INSERT
-  WITH CHECK (organization_id = get_user_organization_id());
-
-DROP POLICY IF EXISTS "Users can update clients in org" ON clients;
-CREATE POLICY "Users can update clients in org"
-  ON clients FOR UPDATE
-  USING (organization_id = get_user_organization_id())
-  WITH CHECK (organization_id = get_user_organization_id());
-
-DROP POLICY IF EXISTS "Users can delete clients in org" ON clients;
-CREATE POLICY "Users can delete clients in org"
-  ON clients FOR DELETE
-  USING (organization_id = get_user_organization_id());
+-- Follow-up: ensure full-text search uses to_tsquery (spec) instead of websearch_to_tsquery.
+-- Recreates search_* and get_jobs_ranked so already-applied 20260220000000 gets the fix.
 
 DROP FUNCTION IF EXISTS search_clients(uuid, text, integer);
 CREATE OR REPLACE FUNCTION search_clients(
@@ -114,68 +48,8 @@ AS $$
     AND c.search_vector @@ to_tsquery('english', p_query);
 $$;
 
-CREATE TABLE IF NOT EXISTS saved_filters (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  name TEXT NOT NULL,
-  filter_config JSONB NOT NULL DEFAULT '{}',
-  is_shared BOOLEAN NOT NULL DEFAULT false,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE INDEX IF NOT EXISTS idx_saved_filters_org ON saved_filters(organization_id);
-CREATE INDEX IF NOT EXISTS idx_saved_filters_user ON saved_filters(user_id);
-
-DROP TRIGGER IF EXISTS update_saved_filters_updated_at ON saved_filters;
-CREATE TRIGGER update_saved_filters_updated_at
-  BEFORE UPDATE ON saved_filters
-  FOR EACH ROW
-  EXECUTE FUNCTION update_updated_at_column();
-
-ALTER TABLE saved_filters ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS "Users can view saved filters in org or owned" ON saved_filters;
-CREATE POLICY "Users can view saved filters in org or owned"
-  ON saved_filters FOR SELECT
-  USING (
-    organization_id = get_user_organization_id()
-    AND (user_id = auth.uid() OR is_shared = true)
-  );
-
-DROP POLICY IF EXISTS "Users can insert own saved filters" ON saved_filters;
-CREATE POLICY "Users can insert own saved filters"
-  ON saved_filters FOR INSERT
-  WITH CHECK (
-    user_id = auth.uid()
-    AND organization_id = get_user_organization_id()
-  );
-
-DROP POLICY IF EXISTS "Users can update own saved filters" ON saved_filters;
-CREATE POLICY "Users can update own saved filters"
-  ON saved_filters FOR UPDATE
-  USING (
-    user_id = auth.uid()
-    AND organization_id = get_user_organization_id()
-  )
-  WITH CHECK (
-    user_id = auth.uid()
-    AND organization_id = get_user_organization_id()
-  );
-
-DROP POLICY IF EXISTS "Users can delete own saved filters" ON saved_filters;
-CREATE POLICY "Users can delete own saved filters"
-  ON saved_filters FOR DELETE
-  USING (
-    user_id = auth.uid()
-    AND organization_id = get_user_organization_id()
-  );
-
--- Drop so return type can change (added title to RETURNS TABLE)
 DROP FUNCTION IF EXISTS search_jobs(uuid, text, integer);
 DROP FUNCTION IF EXISTS search_jobs(uuid, text, integer, boolean);
-
 CREATE OR REPLACE FUNCTION search_jobs(
   p_org_id UUID,
   p_query TEXT,
@@ -302,8 +176,6 @@ AS $$
     AND to_tsvector('english', coalesce(h.hazard_type, '') || ' ' || coalesce(h.description, '')) @@ to_tsquery('english', p_query);
 $$;
 
--- RPC to return jobs filtered like the API; ordered by caller sort/order when provided, else by ts_rank
--- Drop so return type can change (added title to RETURNS TABLE)
 DROP FUNCTION IF EXISTS get_jobs_ranked(uuid, text, integer, integer, boolean, text, text, text, text, uuid, real, real, text, text, uuid[], uuid[], boolean, boolean, integer);
 CREATE OR REPLACE FUNCTION get_jobs_ranked(
   p_org_id UUID,
