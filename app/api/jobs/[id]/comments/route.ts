@@ -137,11 +137,23 @@ export async function POST(
     }
 
     const fromText = extractMentionUserIds(trimmed)
-    const mentionUserIds = Array.isArray(explicitMentions)
+    const rawMentionIds = Array.isArray(explicitMentions)
       ? [...new Set([...explicitMentions, ...fromText])].filter((id) => id && id !== user_id)
       : fromText.filter((id) => id !== user_id)
 
     const supabase = await createSupabaseServerClient()
+    let mentionUserIds: string[]
+    if (rawMentionIds.length === 0) {
+      mentionUserIds = []
+    } else {
+      const { data: orgUsers } = await supabase
+        .from('users')
+        .select('id')
+        .eq('organization_id', organization_id)
+      const orgIds = new Set((orgUsers ?? []).map((r: { id: string }) => r.id))
+      mentionUserIds = rawMentionIds.filter((id) => orgIds.has(id))
+    }
+
     const { data: comment, error } = await supabase
       .from('comments')
       .insert({

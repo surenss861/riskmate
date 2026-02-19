@@ -17,13 +17,13 @@ export async function POST(
   const requestId = getRequestId(request)
 
   try {
-    const { organization_id, user_id } = await getOrganizationContext(request)
+    const { organization_id, user_id, user_role } = await getOrganizationContext(request)
     const { id: commentId } = await params
 
     const supabase = await createSupabaseServerClient()
     const { data: existing } = await supabase
       .from('comments')
-      .select('id, deleted_at')
+      .select('id, author_id, deleted_at')
       .eq('id', commentId)
       .eq('organization_id', organization_id)
       .single()
@@ -36,6 +36,20 @@ export async function POST(
       )
       return NextResponse.json(response, {
         status: 404,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
+
+    const isAuthor = (existing as any).author_id === user_id
+    const isAdmin = user_role === 'owner' || user_role === 'admin'
+    if (!isAuthor && !isAdmin) {
+      const { response, errorId } = createErrorResponse(
+        'Only the author or an admin can resolve this comment',
+        'FORBIDDEN',
+        { requestId, statusCode: 403 }
+      )
+      return NextResponse.json(response, {
+        status: 403,
         headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
       })
     }
@@ -82,13 +96,13 @@ export async function DELETE(
   const requestId = getRequestId(request)
 
   try {
-    const { organization_id } = await getOrganizationContext(request)
+    const { organization_id, user_id, user_role } = await getOrganizationContext(request)
     const { id: commentId } = await params
 
     const supabase = await createSupabaseServerClient()
     const { data: existing } = await supabase
       .from('comments')
-      .select('id, deleted_at')
+      .select('id, author_id, deleted_at')
       .eq('id', commentId)
       .eq('organization_id', organization_id)
       .single()
@@ -101,6 +115,20 @@ export async function DELETE(
       )
       return NextResponse.json(response, {
         status: 404,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
+
+    const isAuthor = (existing as any).author_id === user_id
+    const isAdmin = user_role === 'owner' || user_role === 'admin'
+    if (!isAuthor && !isAdmin) {
+      const { response, errorId } = createErrorResponse(
+        'Only the author or an admin can unresolve this comment',
+        'FORBIDDEN',
+        { requestId, statusCode: 403 }
+      )
+      return NextResponse.json(response, {
+        status: 403,
         headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
       })
     }

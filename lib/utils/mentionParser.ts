@@ -16,10 +16,26 @@ export interface MentionSpan {
 }
 
 /**
+ * Parse content for @[Display Name](userId) markers and return mentioned user IDs.
+ * Contract: parseMentions(content: string): string[]
+ */
+export function parseMentions(content: string): string[] {
+  if (!content || typeof content !== 'string') return []
+  const ids: string[] = []
+  let m: RegExpExecArray | null
+  const re = new RegExp(MENTION_REGEX.source, 'g')
+  while ((m = re.exec(content)) !== null) {
+    if (m[2] && !ids.includes(m[2])) ids.push(m[2])
+  }
+  return ids
+}
+
+/**
  * Parse body text that may contain mention markers @[Display Name](userId).
  * Returns segments for display: text and mention spans with userId and displayName.
+ * Segment-based helper; use renderMentions(content) for raw content → React.
  */
-export function parseMentions(body: string): MentionSpan[] {
+export function parseMentionsToSegments(body: string): MentionSpan[] {
   if (!body || typeof body !== 'string') return [{ type: 'text', text: '' }]
   const segments: MentionSpan[] = []
   let lastIndex = 0
@@ -45,17 +61,10 @@ export function parseMentions(body: string): MentionSpan[] {
 
 /**
  * Extract user IDs from body that contains @[Name](userId) markers.
- * Used for persisting mentions and sending notifications.
+ * Used for persisting mentions and sending notifications. Delegates to parseMentions.
  */
 export function extractMentionUserIds(body: string): string[] {
-  if (!body || typeof body !== 'string') return []
-  const ids: string[] = []
-  let m: RegExpExecArray | null
-  const re = new RegExp(MENTION_REGEX.source, 'g')
-  while ((m = re.exec(body)) !== null) {
-    if (m[2] && !ids.includes(m[2])) ids.push(m[2])
-  }
-  return ids
+  return parseMentions(body)
 }
 
 /**
@@ -120,11 +129,21 @@ export function formatMentions(content: string, users: MentionUser[]): string {
 }
 
 /**
+ * Render raw content as React nodes with styled spans for mentions.
+ * Accepts raw content and internally parses/segments; contract: renderMentions(content: string): React.ReactNode.
+ */
+export function renderMentions(content: string): React.ReactNode {
+  const segments = parseMentionsToSegments(content ?? '')
+  return renderMentionsFromSegments(segments)
+}
+
+/**
  * Render parsed segments as React nodes with styled spans for mentions.
+ * Segment-based helper; use renderMentions(content) for raw content.
  * Mention segments are wrapped in a span with data-mention and data-user-id for styling.
  */
-export function renderMentions(segments: MentionSpan[]): React.ReactNode[] {
-  if (!segments?.length) return []
+export function renderMentionsFromSegments(segments: MentionSpan[]): React.ReactNode {
+  if (!segments?.length) return null
   return segments.map((s, i) => {
     if (s.type === 'mention') {
       const display = s.displayName ?? s.userId ?? ''
