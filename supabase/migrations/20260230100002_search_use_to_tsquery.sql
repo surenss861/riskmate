@@ -240,7 +240,9 @@ RETURNS TABLE (
   risk_level TEXT,
   created_at TIMESTAMPTZ,
   updated_at TIMESTAMPTZ,
-  total_count BIGINT
+  total_count BIGINT,
+  score REAL,
+  highlight TEXT
 )
 LANGUAGE sql
 STABLE
@@ -259,7 +261,17 @@ AS $$
     j.risk_level,
     j.created_at,
     j.updated_at,
-    count(*) OVER () AS total_count
+    count(*) OVER () AS total_count,
+    ts_rank(j.search_vector, q.tsq)::REAL AS score,
+    ts_headline(
+      'english',
+      coalesce(j.title, '') || ' ' ||
+      coalesce(j.client_name, '') || ' ' ||
+      coalesce(j.job_type, '') || ' ' ||
+      coalesce(j.description, '') || ' ' ||
+      coalesce(j.location, ''),
+      q.tsq
+    ) AS highlight
   FROM jobs j
   CROSS JOIN q
   WHERE j.organization_id = p_org_id

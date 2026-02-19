@@ -31,8 +31,24 @@ export const FILTER_FIELD_ALLOWLIST = new Set([
   'needs_signatures',
 ])
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type SupabaseClientLike = { from: (t: string) => any; rpc: (name: string, params: Record<string, unknown>) => Promise<{ data: string[] | null; error: unknown }> }
+/** Chain type for Supabase query builder used in filter helpers. */
+interface QueryBuilderLike {
+  eq(col: string, val: unknown): QueryBuilderLike
+  is(col: string, val: unknown): QueryBuilderLike
+  in(col: string, val: string[]): QueryBuilderLike
+  gte(col: string, val: unknown): QueryBuilderLike
+  lte(col: string, val: unknown): QueryBuilderLike
+  gt(col: string, val: unknown): QueryBuilderLike
+  lt(col: string, val: unknown): QueryBuilderLike
+  ilike(col: string, val: string): QueryBuilderLike
+  then<T>(onfulfilled?: (value: { data: { id: string }[] | null; error: unknown }) => T): Promise<T>
+}
+
+/** Minimal Supabase-like client for filter helpers. Cast real Supabase client to this when calling. */
+export type SupabaseClientLike = {
+  from(t: string): { select(cols: string): QueryBuilderLike }
+  rpc(name: string, params: Record<string, unknown>): Promise<{ data: string[] | null; error: unknown }>
+}
 
 export function normalizeFilterConfig(raw: string | null | Record<string, unknown>): FilterGroup | null {
   if (raw == null) return null
@@ -51,7 +67,7 @@ function isFilterGroup(c: FilterCondition | FilterGroup): c is FilterGroup {
   return c != null && typeof c === 'object' && 'conditions' in c && Array.isArray((c as FilterGroup).conditions)
 }
 
-function applySingleFilter(query: any, condition: FilterCondition): any {
+function applySingleFilter(query: QueryBuilderLike, condition: FilterCondition): QueryBuilderLike {
   const rawField = typeof condition.field === 'string' ? condition.field : ''
   const field =
     rawField === 'due_date'

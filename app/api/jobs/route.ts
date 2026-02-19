@@ -10,6 +10,7 @@ import { normalizeSearchQueryForTsquery } from '@/lib/utils/normalizeSearchQuery
 import {
   type FilterCondition,
   type FilterGroup,
+  type SupabaseClientLike,
   FILTER_FIELD_ALLOWLIST,
   normalizeFilterConfig as normalizeFilterConfigLib,
   getMatchingJobIdsFromFilterGroup,
@@ -181,7 +182,7 @@ export async function GET(request: NextRequest) {
 
     if (filterConfig) {
       const filterConfigJobIds = await getMatchingJobIdsFromFilterGroup(
-        supabase,
+        supabase as unknown as SupabaseClientLike,
         organization_id,
         filterConfig,
         include_archived

@@ -4,7 +4,7 @@ import { getRequestId } from '@/lib/featureEvents'
 import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { logApiError } from '@/lib/utils/errorLogging'
 import { normalizeSearchQueryForTsquery } from '@/lib/utils/normalizeSearchQuery'
-import { normalizeFilterConfig, getMatchingJobIdsFromFilterGroup } from '@/lib/jobs/filterConfig'
+import { normalizeFilterConfig, getMatchingJobIdsFromFilterGroup, type SupabaseClientLike } from '@/lib/jobs/filterConfig'
 
 export const runtime = 'nodejs'
 
@@ -194,7 +194,7 @@ export async function GET(request: NextRequest) {
         const filterGroup = normalizeFilterConfig(savedFilter.filter_config as Record<string, unknown>)
         if (filterGroup) {
           const ids = await getMatchingJobIdsFromFilterGroup(
-            searchClient as Parameters<typeof getMatchingJobIdsFromFilterGroup>[0],
+            searchClient as unknown as SupabaseClientLike,
             organizationId,
             filterGroup,
             includeArchived
@@ -261,6 +261,8 @@ export async function GET(request: NextRequest) {
             job_type: string | null
             location: string | null
             total_count?: number
+            score?: number
+            highlight?: string | null
           }>
           jobCount = Number(jobRows[0]?.total_count ?? 0) || 0
           if (type === 'jobs') total = jobCount
@@ -271,8 +273,8 @@ export async function GET(request: NextRequest) {
               id: row.id,
               title: (row.title || row.client_name || 'Untitled Job').trim() || 'Untitled Job',
               subtitle: [row.job_type, row.location].filter(Boolean).join(' • '),
-              highlight: '',
-              score: 0,
+              highlight: row.highlight ?? '',
+              score: Number(row.score) || 0,
             })
           }
         } else {
