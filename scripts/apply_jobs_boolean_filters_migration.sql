@@ -1,10 +1,11 @@
--- Boolean filters (has_photos, has_signatures, needs_signatures) via EXISTS/NOT EXISTS
--- in a single query instead of multiple full-table scans.
--- 1. get_job_ids_for_boolean_filter: returns job IDs matching one boolean condition (for filter_config)
--- 2. get_jobs_list: non-search jobs listing with boolean filters via EXISTS
--- 3. get_jobs_list_count: count for get_jobs_list
--- 4. Extend get_jobs_ranked with p_has_photos, p_has_signatures, p_needs_signatures
+-- Run this in Supabase Dashboard → SQL Editor when db push fails with duplicate schema_migrations.
+-- Applies only 20260230100000_jobs_boolean_filters_exists and records it so future db push skips it.
+--
+-- IMPORTANT: Do NOT use "supabase db push --include-all". It re-applies every local migration and
+-- always hits duplicate key on 20260215000000 (already in schema_migrations). For future migrations
+-- use plain:  supabase db push
 
+-- 1) Apply the migration (same as supabase/migrations/20260230100000_jobs_boolean_filters_exists.sql)
 CREATE OR REPLACE FUNCTION get_job_ids_for_boolean_filter(
   p_org_id UUID,
   p_field TEXT,
@@ -45,7 +46,6 @@ AS $$
     );
 $$;
 
--- Non-search jobs list with all filters including boolean via EXISTS
 CREATE OR REPLACE FUNCTION get_jobs_list(
   p_org_id UUID,
   p_limit INT DEFAULT 20,
@@ -86,16 +86,8 @@ LANGUAGE sql
 STABLE
 AS $$
   SELECT
-    j.id,
-    j.title,
-    j.client_name,
-    j.job_type,
-    j.location,
-    j.status,
-    j.risk_score,
-    j.risk_level,
-    j.created_at,
-    j.updated_at,
+    j.id, j.title, j.client_name, j.job_type, j.location, j.status,
+    j.risk_score, j.risk_level, j.created_at, j.updated_at,
     count(*) OVER () AS total_count
   FROM jobs j
   WHERE j.organization_id = p_org_id
@@ -113,15 +105,9 @@ AS $$
     AND (p_overdue IS NOT TRUE OR (j.end_date IS NOT NULL AND j.end_date::date < CURRENT_DATE))
     AND (p_unassigned IS NOT TRUE OR j.assigned_to_id IS NULL)
     AND (p_recent_days IS NULL OR j.updated_at >= (CURRENT_TIMESTAMP - (p_recent_days || ' days')::interval))
-    AND (p_has_photos IS NULL OR (
-      p_has_photos = EXISTS (SELECT 1 FROM job_photos jp WHERE jp.job_id = j.id AND jp.organization_id = p_org_id)
-    ))
-    AND (p_has_signatures IS NULL OR (
-      p_has_signatures = EXISTS (SELECT 1 FROM signatures s WHERE s.job_id = j.id AND s.organization_id = p_org_id)
-    ))
-    AND (p_needs_signatures IS NULL OR (
-      p_needs_signatures = NOT EXISTS (SELECT 1 FROM signatures s WHERE s.job_id = j.id AND s.organization_id = p_org_id)
-    ))
+    AND (p_has_photos IS NULL OR (p_has_photos = EXISTS (SELECT 1 FROM job_photos jp WHERE jp.job_id = j.id AND jp.organization_id = p_org_id)))
+    AND (p_has_signatures IS NULL OR (p_has_signatures = EXISTS (SELECT 1 FROM signatures s WHERE s.job_id = j.id AND s.organization_id = p_org_id)))
+    AND (p_needs_signatures IS NULL OR (p_needs_signatures = NOT EXISTS (SELECT 1 FROM signatures s WHERE s.job_id = j.id AND s.organization_id = p_org_id)))
   ORDER BY
     (CASE WHEN p_sort_column = 'created_at' AND (p_sort_order IS NULL OR LOWER(p_sort_order) = 'asc')  THEN j.created_at END) ASC NULLS LAST,
     (CASE WHEN p_sort_column = 'created_at' AND LOWER(p_sort_order) = 'desc' THEN j.created_at END) DESC NULLS LAST,
@@ -138,7 +124,6 @@ AS $$
   OFFSET GREATEST(COALESCE(p_offset, 0), 0);
 $$;
 
--- Extend get_jobs_ranked with boolean filter params
 DROP FUNCTION IF EXISTS get_jobs_ranked(uuid, text, integer, integer, boolean, text, text, text, text, uuid, real, real, text, text, uuid[], uuid[], boolean, boolean, integer);
 
 CREATE OR REPLACE FUNCTION get_jobs_ranked(
@@ -181,20 +166,10 @@ RETURNS TABLE (
 LANGUAGE sql
 STABLE
 AS $$
-  WITH q AS (
-    SELECT websearch_to_tsquery('english', p_query) AS tsq
-  )
+  WITH q AS (SELECT websearch_to_tsquery('english', p_query) AS tsq)
   SELECT
-    j.id,
-    j.title,
-    j.client_name,
-    j.job_type,
-    j.location,
-    j.status,
-    j.risk_score,
-    j.risk_level,
-    j.created_at,
-    j.updated_at,
+    j.id, j.title, j.client_name, j.job_type, j.location, j.status,
+    j.risk_score, j.risk_level, j.created_at, j.updated_at,
     count(*) OVER () AS total_count
   FROM jobs j
   CROSS JOIN q
@@ -214,15 +189,9 @@ AS $$
     AND (p_overdue IS NOT TRUE OR (j.end_date IS NOT NULL AND j.end_date::date < CURRENT_DATE))
     AND (p_unassigned IS NOT TRUE OR j.assigned_to_id IS NULL)
     AND (p_recent_days IS NULL OR j.updated_at >= (CURRENT_TIMESTAMP - (p_recent_days || ' days')::interval))
-    AND (p_has_photos IS NULL OR (
-      p_has_photos = EXISTS (SELECT 1 FROM job_photos jp WHERE jp.job_id = j.id AND jp.organization_id = p_org_id)
-    ))
-    AND (p_has_signatures IS NULL OR (
-      p_has_signatures = EXISTS (SELECT 1 FROM signatures s WHERE s.job_id = j.id AND s.organization_id = p_org_id)
-    ))
-    AND (p_needs_signatures IS NULL OR (
-      p_needs_signatures = NOT EXISTS (SELECT 1 FROM signatures s WHERE s.job_id = j.id AND s.organization_id = p_org_id)
-    ))
+    AND (p_has_photos IS NULL OR (p_has_photos = EXISTS (SELECT 1 FROM job_photos jp WHERE jp.job_id = j.id AND jp.organization_id = p_org_id)))
+    AND (p_has_signatures IS NULL OR (p_has_signatures = EXISTS (SELECT 1 FROM signatures s WHERE s.job_id = j.id AND s.organization_id = p_org_id)))
+    AND (p_needs_signatures IS NULL OR (p_needs_signatures = NOT EXISTS (SELECT 1 FROM signatures s WHERE s.job_id = j.id AND s.organization_id = p_org_id)))
   ORDER BY
     (CASE WHEN p_sort_column = 'created_at' AND (p_sort_order IS NULL OR LOWER(p_sort_order) = 'asc')  THEN j.created_at END) ASC NULLS LAST,
     (CASE WHEN p_sort_column = 'created_at' AND LOWER(p_sort_order) = 'desc' THEN j.created_at END) DESC NULLS LAST,
@@ -238,3 +207,8 @@ AS $$
   LIMIT GREATEST(COALESCE(p_limit, 20), 1)
   OFFSET GREATEST(COALESCE(p_offset, 0), 0);
 $$;
+
+-- 2) Record this migration so Supabase CLI considers it applied (avoids duplicate key on next db push)
+INSERT INTO supabase_migrations.schema_migrations(version, name, statements)
+VALUES (20260230100000, '20260230100000_jobs_boolean_filters_exists.sql', ARRAY[]::text[])
+ON CONFLICT (version) DO NOTHING;

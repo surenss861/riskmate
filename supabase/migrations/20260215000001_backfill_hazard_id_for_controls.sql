@@ -3,12 +3,23 @@
 -- subsequent rows = controls linked to that hazard. Only applies to rows where hazard_id IS NULL.
 -- After this migration, legacy data from generateMitigationItems (multiple steps per risk factor)
 -- will correctly appear as hazards with controls in /api/jobs/:id/hazards and /api/jobs/:id/controls.
+-- Ensures hazard_id column exists before backfill (column may be added in 20260215000004; order varies).
 
 DO $$
 DECLARE
   has_risk_factor_id boolean;
+  has_hazard_id boolean;
   updated_count integer := 0;
 BEGIN
+  -- Ensure hazard_id column exists (add if not, so this migration can run before 20260215000004)
+  SELECT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'mitigation_items' AND column_name = 'hazard_id'
+  ) INTO has_hazard_id;
+  IF NOT has_hazard_id THEN
+    ALTER TABLE mitigation_items ADD COLUMN hazard_id UUID REFERENCES mitigation_items(id) ON DELETE CASCADE;
+  END IF;
+
   -- Check if risk_factor_id column exists (it may have been made nullable or removed in some migrations)
   SELECT EXISTS (
     SELECT 1 FROM information_schema.columns
