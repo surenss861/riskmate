@@ -95,58 +95,21 @@ function isFilterGroup(c: FilterCondition | FilterGroup): c is FilterGroup {
   return c != null && typeof c === 'object' && 'conditions' in c && Array.isArray((c as FilterGroup).conditions)
 }
 
-async function resolveJobIdsForBooleanFilter(
+async function getJobIdsForBooleanFilter(
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
   organization_id: string,
   includeArchived: boolean,
   field: 'has_photos' | 'has_signatures' | 'needs_signatures',
   value: boolean
 ): Promise<string[]> {
-  const baseQuery = () => {
-    let q = supabase.from('jobs').select('id').eq('organization_id', organization_id).is('deleted_at', null)
-    if (!includeArchived) q = q.is('archived_at', null)
-    return q
-  }
-
-  if (field === 'has_photos') {
-    const { data: photoRows, error } = await supabase
-      .from('job_photos')
-      .select('job_id')
-      .eq('organization_id', organization_id)
-    if (error) throw error
-    const photoJobIds = Array.from(new Set((photoRows || []).map((row: { job_id: string }) => row.job_id).filter(Boolean)))
-    if (value) return photoJobIds
-    const { data: allRows } = await baseQuery()
-    const allIds = (allRows || []).map((row: { id: string }) => row.id).filter(Boolean)
-    return allIds.filter((id) => !photoJobIds.includes(id))
-  }
-
-  if (field === 'has_signatures') {
-    const { data: sigRows, error } = await supabase
-      .from('signatures')
-      .select('job_id')
-      .eq('organization_id', organization_id)
-    if (error) throw error
-    const sigJobIds = Array.from(new Set((sigRows || []).map((row: { job_id: string }) => row.job_id).filter(Boolean)))
-    if (value) return sigJobIds
-    const { data: allRows } = await baseQuery()
-    const allIds = (allRows || []).map((row: { id: string }) => row.id).filter(Boolean)
-    return allIds.filter((id) => !sigJobIds.includes(id))
-  }
-
-  if (field === 'needs_signatures') {
-    const { data: sigRows, error } = await supabase
-      .from('signatures')
-      .select('job_id')
-      .eq('organization_id', organization_id)
-    if (error) throw error
-    const sigJobIds = new Set((sigRows || []).map((row: { job_id: string }) => row.job_id).filter(Boolean))
-    const { data: allRows } = await baseQuery()
-    const allIds = (allRows || []).map((row: { id: string }) => row.id).filter(Boolean)
-    return allIds.filter((id) => !sigJobIds.has(id))
-  }
-
-  return []
+  const { data, error } = await supabase.rpc('get_job_ids_for_boolean_filter', {
+    p_org_id: organization_id,
+    p_include_archived: includeArchived,
+    p_field: field,
+    p_value: value,
+  })
+  if (error) throw error
+  return (data || []).filter(Boolean).map((id) => String(id))
 }
 
 async function getMatchingJobIdsFromFilterGroup(
@@ -184,7 +147,7 @@ async function getMatchingJobIdsFromFilterGroup(
       op === 'eq' &&
       (value === true || value === false)
     ) {
-      return resolveJobIdsForBooleanFilter(
+      return getJobIdsForBooleanFilter(
         supabase,
         organization_id,
         includeArchived,
@@ -225,7 +188,7 @@ async function getMatchingJobIdsFromFilterGroup(
         op === 'eq' &&
         (value === true || value === false)
       ) {
-        const ids = await resolveJobIdsForBooleanFilter(
+        const ids = await getJobIdsForBooleanFilter(
           supabase,
           organization_id,
           includeArchived,
@@ -283,10 +246,6 @@ function intersectIds(currentIds: string[] | null, nextIds: string[]): string[] 
   if (currentIds === null) return nextIds
   const nextSet = new Set(nextIds)
   return currentIds.filter((id) => nextSet.has(id))
-}
-
-function inList(ids: string[]): string {
-  return `(${ids.join(',')})`
 }
 
 export async function GET(request: NextRequest) {
@@ -414,69 +373,8 @@ export async function GET(request: NextRequest) {
     let requiredJobIds: string[] | null = null
     const excludedJobIds = new Set<string>()
 
-    if (hasPhotos !== null) {
-      const { data: photoRows, error: photosError } = await supabase
-        .from('job_photos')
-        .select('job_id')
-        .eq('organization_id', organization_id)
-
-      if (photosError) throw photosError
-
-      const photoJobIds = Array.from(
-        new Set((photoRows || []).map((row: any) => row.job_id).filter(Boolean))
-      )
-
-      if (hasPhotos) {
-        requiredJobIds = intersectIds(requiredJobIds, photoJobIds)
-      } else {
-        for (const jobId of photoJobIds) excludedJobIds.add(jobId)
-      }
-    }
-
-    if (hasSignatures !== null) {
-      const { data: signatureRows, error: signaturesError } = await supabase
-        .from('signatures')
-        .select('job_id')
-        .eq('organization_id', organization_id)
-
-      if (signaturesError) throw signaturesError
-
-      const signatureJobIds = Array.from(
-        new Set((signatureRows || []).map((row: any) => row.job_id).filter(Boolean))
-      )
-
-      if (hasSignatures) {
-        requiredJobIds = intersectIds(requiredJobIds, signatureJobIds)
-      } else {
-        for (const jobId of signatureJobIds) excludedJobIds.add(jobId)
-      }
-    }
-
-    if (needsSignatures === true) {
-      const { data: signatureRows, error: signaturesError } = await supabase
-        .from('signatures')
-        .select('job_id')
-        .eq('organization_id', organization_id)
-
-      if (signaturesError) throw signaturesError
-
-      const signatureJobIds = new Set(
-        (signatureRows || []).map((row: any) => row.job_id).filter(Boolean)
-      )
-      for (const jobId of signatureJobIds) excludedJobIds.add(jobId)
-    }
-
-    if (requiredJobIds !== null && requiredJobIds.length === 0) {
-      return NextResponse.json({
-        data: [],
-        pagination: {
-          page,
-          limit,
-          total: 0,
-          totalPages: 0,
-        },
-      })
-    }
+    // Boolean filters (has_photos, has_signatures, needs_signatures) are pushed into the main
+    // query via EXISTS/NOT EXISTS in get_jobs_list and get_jobs_ranked RPCs - no separate scans.
 
     if (filterConfig) {
       const filterConfigJobIds = await getMatchingJobIdsFromFilterGroup(
@@ -499,190 +397,62 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    let query = supabase
-      .from('jobs')
-      .select('id, title, client_name, job_type, location, status, risk_score, risk_level, created_at, updated_at')
-      .eq('organization_id', organization_id)
-      .is('deleted_at', null)
-      .range(offset, offset + limit - 1)
-
-    if (!include_archived) {
-      query = query.is('archived_at', null)
-    }
-
-    if (status) {
-      query = query.eq('status', status)
-    }
-
-    if (risk_level) {
-      query = query.eq('risk_level', risk_level)
-    }
-
-    if (q) {
-      query = query.textSearch('search_vector', q, { type: 'websearch', config: 'english' })
-    }
-
-    if (assigned_to) {
-      query = query.eq('assigned_to_id', assigned_to)
-    }
-
-    if (riskScoreMin !== null) {
-      query = query.gte('risk_score', riskScoreMin)
-    }
-
-    if (riskScoreMax !== null) {
-      query = query.lte('risk_score', riskScoreMax)
-    }
-
-    if (jobType) {
-      query = query.eq('job_type', jobType)
-    }
-
-    if (client) {
-      query = query.ilike('client_name', `%${client}%`)
-    }
-
-    if (overdue === true) {
-      query = query.lt('end_date', new Date().toISOString().split('T')[0])
-    }
-
-    if (unassigned === true) {
-      query = query.is('assigned_to_id', null)
-    }
-
-    if (recent === true) {
-      const recentSince = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
-      query = query.gte('updated_at', recentSince)
-    }
-
-    if (requiredJobIds !== null) {
-      query = query.in('id', requiredJobIds)
-    }
-
-    if (excludedJobIds.size > 0) {
-      query = query.not('id', 'in', inList(Array.from(excludedJobIds)))
-    }
-
     const sortColumn =
       sort && SORT_ALLOWLIST.has(sort)
         ? (sort === 'due_date' ? 'end_date' : sort)
         : 'created_at'
 
-    let jobs: any[] | null = null
-    let error: any = null
+    const rpcBaseParams: Record<string, unknown> = {
+      p_org_id: organization_id,
+      p_limit: limit,
+      p_offset: offset,
+      p_include_archived: include_archived,
+      p_sort_column: sortColumn,
+      p_sort_order: order,
+      p_status: status || null,
+      p_risk_level: risk_level || null,
+      p_assigned_to_id: assigned_to || null,
+      p_risk_score_min: riskScoreMin,
+      p_risk_score_max: riskScoreMax,
+      p_job_type: jobType || null,
+      p_client_ilike: client ? `%${client}%` : null,
+      p_required_ids: requiredJobIds?.length ? requiredJobIds : null,
+      p_excluded_ids: excludedJobIds.size ? Array.from(excludedJobIds) : null,
+      p_overdue: overdue === true ? true : null,
+      p_unassigned: unassigned === true ? true : null,
+      p_recent_days: recent === true ? 7 : null,
+      p_has_photos: hasPhotos ?? null,
+      p_has_signatures: hasSignatures ?? null,
+      p_needs_signatures: needsSignatures ?? null,
+    }
+
+    let jobs: Array<Record<string, unknown>> = []
+    let totalCount = 0
 
     if (q) {
-      const rpcParams: Record<string, unknown> = {
-        p_org_id: organization_id,
+      const rankedRes = await supabase.rpc('get_jobs_ranked', {
+        ...rpcBaseParams,
         p_query: q,
-        p_limit: limit,
-        p_offset: offset,
-        p_include_archived: include_archived,
-        p_sort_column: sortColumn,
-        p_sort_order: order,
-        p_required_ids: requiredJobIds?.length ? requiredJobIds : null,
-        p_excluded_ids: excludedJobIds.size ? Array.from(excludedJobIds) : null,
-        p_overdue: overdue === true ? true : null,
-        p_unassigned: unassigned === true ? true : null,
-        p_recent_days: recent === true ? 7 : null,
-      }
-      if (status) rpcParams.p_status = status
-      if (risk_level) rpcParams.p_risk_level = risk_level
-      if (assigned_to) rpcParams.p_assigned_to_id = assigned_to
-      if (riskScoreMin !== null) rpcParams.p_risk_score_min = riskScoreMin
-      if (riskScoreMax !== null) rpcParams.p_risk_score_max = riskScoreMax
-      if (jobType) rpcParams.p_job_type = jobType
-      if (client) rpcParams.p_client_ilike = `%${client}%`
-      const rankedRes = await supabase.rpc('get_jobs_ranked', rpcParams)
-      if (rankedRes.error) {
-        error = rankedRes.error
-      } else {
-        jobs = rankedRes.data || []
-      }
+      })
+      if (rankedRes.error) throw rankedRes.error
+      const rows = (rankedRes.data || []) as Array<Record<string, unknown>>
+      totalCount = (rows[0]?.total_count as number) ?? 0
+      jobs = rows.map(({ total_count: _tc, ...rest }) => rest)
     } else {
-      query = query.order(sortColumn, { ascending: order === 'asc' })
-      const result = await query
-      jobs = result.data
-      error = result.error
+      const listRes = await supabase.rpc('get_jobs_list', rpcBaseParams)
+      if (listRes.error) throw listRes.error
+      const rows = (listRes.data || []) as Array<Record<string, unknown>>
+      totalCount = (rows[0]?.total_count as number) ?? 0
+      jobs = rows.map(({ total_count: _tc, ...rest }) => rest)
     }
-
-    if (error) throw error
-
-    // Get total count for pagination
-    let countQuery = supabase
-      .from('jobs')
-      .select('*', { count: 'exact', head: true })
-      .eq('organization_id', organization_id)
-      .is('deleted_at', null)
-
-    if (!include_archived) {
-      countQuery = countQuery.is('archived_at', null)
-    }
-
-    if (status) {
-      countQuery = countQuery.eq('status', status)
-    }
-
-    if (risk_level) {
-      countQuery = countQuery.eq('risk_level', risk_level)
-    }
-
-    if (q) {
-      countQuery = countQuery.textSearch('search_vector', q, { type: 'websearch', config: 'english' })
-    }
-
-    if (assigned_to) {
-      countQuery = countQuery.eq('assigned_to_id', assigned_to)
-    }
-
-    if (riskScoreMin !== null) {
-      countQuery = countQuery.gte('risk_score', riskScoreMin)
-    }
-
-    if (riskScoreMax !== null) {
-      countQuery = countQuery.lte('risk_score', riskScoreMax)
-    }
-
-    if (jobType) {
-      countQuery = countQuery.eq('job_type', jobType)
-    }
-
-    if (client) {
-      countQuery = countQuery.ilike('client_name', `%${client}%`)
-    }
-
-    if (overdue === true) {
-      countQuery = countQuery.lt('end_date', new Date().toISOString().split('T')[0])
-    }
-
-    if (unassigned === true) {
-      countQuery = countQuery.is('assigned_to_id', null)
-    }
-
-    if (recent === true) {
-      const recentSince = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
-      countQuery = countQuery.gte('updated_at', recentSince)
-    }
-
-    if (requiredJobIds !== null) {
-      countQuery = countQuery.in('id', requiredJobIds)
-    }
-
-    if (excludedJobIds.size > 0) {
-      countQuery = countQuery.not('id', 'in', inList(Array.from(excludedJobIds)))
-    }
-
-    const { count, error: countError } = await countQuery
-
-    if (countError) throw countError
 
     return NextResponse.json({
-      data: jobs || [],
+      data: jobs,
       pagination: {
         page,
         limit,
-        total: count || 0,
-        totalPages: Math.ceil((count || 0) / limit),
+        total: totalCount,
+        totalPages: Math.ceil(totalCount / limit),
       },
     })
   } catch (error: any) {
