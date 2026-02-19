@@ -7,21 +7,17 @@ import { getRequestId } from '@/lib/featureEvents'
 import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { logApiError } from '@/lib/utils/errorLogging'
 import { normalizeSearchQueryForTsquery } from '@/lib/utils/normalizeSearchQuery'
+import {
+  type FilterCondition,
+  type FilterGroup,
+  FILTER_FIELD_ALLOWLIST,
+  normalizeFilterConfig as normalizeFilterConfigLib,
+  getMatchingJobIdsFromFilterGroup,
+} from '@/lib/jobs/filterConfig'
 
 export const runtime = 'nodejs'
 
 const ROUTE_JOBS = '/api/jobs'
-
-type FilterCondition = {
-  field?: string
-  operator?: string
-  value?: unknown
-}
-
-type FilterGroup = {
-  operator?: string
-  conditions?: Array<FilterCondition | FilterGroup>
-}
 
 const SORT_ALLOWLIST = new Set([
   'created_at',
@@ -30,23 +26,6 @@ const SORT_ALLOWLIST = new Set([
   'end_date',
   'due_date', // URL state alias, mapped to end_date
   'client_name',
-])
-
-const FILTER_FIELD_ALLOWLIST = new Set([
-  'status',
-  'risk_level',
-  'risk_score',
-  'job_type',
-  'client_name',
-  'location',
-  'assigned_to',
-  'assigned_to_id',
-  'end_date',
-  'due_date',
-  'created_at',
-  'has_photos',
-  'has_signatures',
-  'needs_signatures',
 ])
 
 function parseBooleanParam(value: string | null): boolean | null {
@@ -63,185 +42,7 @@ function parseNumberParam(value: string | null): number | null {
 }
 
 function normalizeFilterConfig(raw: string | null): FilterGroup | null {
-  if (!raw) return null
-  try {
-    const parsed = JSON.parse(raw)
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null
-    return parsed as FilterGroup
-  } catch {
-    return null
-  }
-}
-
-function collectAndConditions(group: FilterGroup): FilterCondition[] {
-  const operator = (group.operator || 'AND').toUpperCase()
-  if (operator !== 'AND' || !Array.isArray(group.conditions)) return []
-
-  const collected: FilterCondition[] = []
-  for (const condition of group.conditions) {
-    if (!condition || typeof condition !== 'object') continue
-    if ('conditions' in condition) {
-      const nested = collectAndConditions(condition as FilterGroup)
-      for (const item of nested) {
-        collected.push(item)
-      }
-      continue
-    }
-    collected.push(condition as FilterCondition)
-  }
-  return collected
-}
-
-function isFilterGroup(c: FilterCondition | FilterGroup): c is FilterGroup {
-  return c != null && typeof c === 'object' && 'conditions' in c && Array.isArray((c as FilterGroup).conditions)
-}
-
-async function getJobIdsForBooleanFilter(
-  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
-  organization_id: string,
-  includeArchived: boolean,
-  field: 'has_photos' | 'has_signatures' | 'needs_signatures',
-  value: boolean
-): Promise<string[]> {
-  const { data, error } = await supabase.rpc('get_job_ids_for_boolean_filter', {
-    p_org_id: organization_id,
-    p_include_archived: includeArchived,
-    p_field: field,
-    p_value: value,
-  })
-  if (error) throw error
-  const ids = (data as string[] | null) ?? []
-  return ids.filter(Boolean).map((id) => String(id))
-}
-
-async function getMatchingJobIdsFromFilterGroup(
-  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
-  organization_id: string,
-  group: FilterGroup,
-  includeArchived: boolean
-): Promise<string[]> {
-  const operator = (group.operator || 'AND').toUpperCase()
-  const conditions = Array.isArray(group.conditions) ? group.conditions : []
-  if (conditions.length === 0) return []
-
-  const baseQuery = () => {
-    let q = supabase
-      .from('jobs')
-      .select('id')
-      .eq('organization_id', organization_id)
-      .is('deleted_at', null)
-    if (!includeArchived) {
-      q = q.is('archived_at', null)
-    }
-    return q
-  }
-
-  const getIdsForCondition = async (condition: FilterCondition | FilterGroup): Promise<string[]> => {
-    if (isFilterGroup(condition)) {
-      return getMatchingJobIdsFromFilterGroup(supabase, organization_id, condition, includeArchived)
-    }
-    const c = condition as FilterCondition
-    const field = typeof c.field === 'string' ? c.field : ''
-    const op = typeof c.operator === 'string' ? c.operator.toLowerCase() : ''
-    const value = c.value
-    if (
-      (field === 'has_photos' || field === 'has_signatures' || field === 'needs_signatures') &&
-      op === 'eq' &&
-      (value === true || value === false)
-    ) {
-      return getJobIdsForBooleanFilter(
-        supabase,
-        organization_id,
-        includeArchived,
-        field as 'has_photos' | 'has_signatures' | 'needs_signatures',
-        value
-      )
-    }
-    let q = baseQuery()
-    q = applySingleFilter(q, c)
-    const { data, error } = await q
-    if (error) throw error
-    return (data || []).map((row: { id: string }) => row.id).filter(Boolean)
-  }
-
-  if (operator === 'OR') {
-    const idSets = await Promise.all(conditions.map(getIdsForCondition))
-    const union = new Set<string>()
-    for (const ids of idSets) {
-      for (const id of ids) union.add(id)
-    }
-    return Array.from(union)
-  }
-
-  // AND: apply all conditions (and nested groups via ID filter)
-  let q = baseQuery()
-  for (const condition of conditions) {
-    if (isFilterGroup(condition)) {
-      const nestedIds = await getMatchingJobIdsFromFilterGroup(supabase, organization_id, condition, includeArchived)
-      if (nestedIds.length === 0) return []
-      q = q.in('id', nestedIds)
-    } else {
-      const c = condition as FilterCondition
-      const field = typeof c.field === 'string' ? c.field : ''
-      const op = typeof c.operator === 'string' ? c.operator.toLowerCase() : ''
-      const value = c.value
-      if (
-        (field === 'has_photos' || field === 'has_signatures' || field === 'needs_signatures') &&
-        op === 'eq' &&
-        (value === true || value === false)
-      ) {
-        const ids = await getJobIdsForBooleanFilter(
-          supabase,
-          organization_id,
-          includeArchived,
-          field as 'has_photos' | 'has_signatures' | 'needs_signatures',
-          value
-        )
-        if (ids.length === 0) return []
-        q = q.in('id', ids)
-      } else {
-        q = applySingleFilter(q, c)
-      }
-    }
-  }
-  const { data, error } = await q
-  if (error) throw error
-  return (data || []).map((row: { id: string }) => row.id).filter(Boolean)
-}
-
-function applySingleFilter(query: any, condition: FilterCondition): any {
-  const rawField = typeof condition.field === 'string' ? condition.field : ''
-  // Normalize: due_date -> end_date; assigned_to -> assigned_to_id
-  const field =
-    rawField === 'due_date'
-      ? 'end_date'
-      : rawField === 'assigned_to'
-      ? 'assigned_to_id'
-      : rawField
-  const operator = typeof condition.operator === 'string' ? condition.operator.toLowerCase() : ''
-  const value = condition.value
-
-  if (!FILTER_FIELD_ALLOWLIST.has(rawField) || value === undefined || value === null) {
-    return query
-  }
-
-  // Derived boolean fields are handled in getMatchingJobIdsFromFilterGroup via subqueries
-  if (field === 'has_photos' || field === 'has_signatures' || field === 'needs_signatures') {
-    return query
-  }
-
-  if (operator === 'eq') return query.eq(field, value)
-  if (operator === 'gte') return query.gte(field, value)
-  if (operator === 'lte') return query.lte(field, value)
-  if (operator === 'gt') return query.gt(field, value)
-  if (operator === 'lt') return query.lt(field, value)
-  if (operator === 'between' && Array.isArray(value) && value.length >= 2) {
-    return query.gte(field, value[0]).lte(field, value[1])
-  }
-  if (operator === 'ilike' && typeof value === 'string') return query.ilike(field, `%${value}%`)
-  if (operator === 'in' && Array.isArray(value)) return query.in(field, value)
-
-  return query
+  return normalizeFilterConfigLib(raw)
 }
 
 function intersectIds(currentIds: string[] | null, nextIds: string[]): string[] {
