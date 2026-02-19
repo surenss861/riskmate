@@ -14,6 +14,137 @@ function isValidUUID(s: string): boolean {
   return UUID_REGEX.test(s)
 }
 
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const requestId = request.headers.get('x-request-id') || getRequestId()
+
+  try {
+    const supabase = await createSupabaseServerClient()
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+
+    if (authError || !user) {
+      const { response, errorId } = createErrorResponse(
+        'Unauthorized: Please log in to view filters',
+        'UNAUTHORIZED',
+        { requestId, statusCode: 401 }
+      )
+      logApiError(401, 'UNAUTHORIZED', errorId, requestId, undefined, response.message, {
+        category: 'auth', severity: 'warn', route: ROUTE,
+      })
+      return NextResponse.json(response, {
+        status: 401,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
+
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('organization_id')
+      .eq('id', user.id)
+      .single()
+
+    if (userError || !userData?.organization_id) {
+      const { response, errorId } = createErrorResponse(
+        'Failed to get organization ID',
+        'QUERY_ERROR',
+        { requestId, statusCode: 500 }
+      )
+      logApiError(500, 'QUERY_ERROR', errorId, requestId, userData?.organization_id, response.message, {
+        category: 'internal', severity: 'error', route: ROUTE,
+      })
+      return NextResponse.json(response, {
+        status: 500,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
+
+    const organizationId = userData.organization_id
+    const { id } = await params
+
+    if (!isValidUUID(id)) {
+      const { response, errorId } = createErrorResponse(
+        'Invalid filter id: must be a valid UUID',
+        'INVALID_FORMAT',
+        { requestId, statusCode: 400 }
+      )
+      logApiError(400, 'INVALID_FORMAT', errorId, requestId, organizationId, response.message, {
+        category: 'validation', severity: 'warn', route: ROUTE,
+      })
+      return NextResponse.json(response, {
+        status: 400,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
+
+    // RLS-compatible: organization_id and visibility (owner or is_shared)
+    const { data: filter, error: fetchError } = await supabase
+      .from('saved_filters')
+      .select('id, organization_id, user_id, name, filter_config, is_shared, created_at, updated_at')
+      .eq('id', id)
+      .eq('organization_id', organizationId)
+      .or(`user_id.eq.${user.id},is_shared.eq.true`)
+      .maybeSingle()
+
+    if (fetchError) {
+      const { response, errorId } = createErrorResponse(
+        'Failed to fetch filter',
+        'QUERY_ERROR',
+        {
+          requestId,
+          statusCode: 500,
+          details: process.env.NODE_ENV === 'development' ? { detail: fetchError?.message } : undefined,
+        }
+      )
+      logApiError(500, 'QUERY_ERROR', errorId, requestId, organizationId, response.message, {
+        category: 'internal', severity: 'error', route: ROUTE,
+        details: process.env.NODE_ENV === 'development' ? { detail: fetchError?.message } : undefined,
+      })
+      return NextResponse.json(response, {
+        status: 500,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
+
+    if (!filter) {
+      const { response, errorId } = createErrorResponse(
+        'Filter not found',
+        'NOT_FOUND',
+        { requestId, statusCode: 404 }
+      )
+      logApiError(404, 'NOT_FOUND', errorId, requestId, organizationId, response.message, {
+        category: 'validation', severity: 'warn', route: ROUTE,
+      })
+      return NextResponse.json(response, {
+        status: 404,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
+
+    return NextResponse.json({ data: filter })
+  } catch (error: any) {
+    console.error('Filter fetch failed:', error)
+    const { response, errorId } = createErrorResponse(
+      'Failed to fetch filter',
+      'QUERY_ERROR',
+      {
+        requestId,
+        statusCode: 500,
+        details: process.env.NODE_ENV === 'development' ? { detail: error?.message } : undefined,
+      }
+    )
+    logApiError(500, 'QUERY_ERROR', errorId, requestId, undefined, response.message, {
+      category: 'internal', severity: 'error', route: ROUTE,
+      details: process.env.NODE_ENV === 'development' ? { detail: error?.message } : undefined,
+    })
+    return NextResponse.json(response, {
+      status: 500,
+      headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+    })
+  }
+}
+
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
