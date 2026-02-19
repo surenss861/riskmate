@@ -14,6 +14,7 @@ import {
   type CommentEntityType,
 } from "../services/comments";
 import { sendCommentReplyNotification } from "../services/notifications";
+import { extractMentionUserIds } from "../utils/mentionParser";
 
 export const commentsRouter: ExpressRouter = express.Router();
 
@@ -50,7 +51,8 @@ commentsRouter.get(
         entityId,
         { limit, offset, includeReplies }
       );
-      res.json(result);
+      const data = (result.data || []).map((c: any) => ({ ...c, content: c.body }));
+      res.json({ data });
     } catch (err: any) {
       console.error("List comments failed:", err);
       res.status(500).json({ message: "Failed to list comments" });
@@ -72,7 +74,8 @@ commentsRouter.get(
         authReq.user.id,
         { limit, offset }
       );
-      res.json(result);
+      const data = (result.data || []).map((c: any) => ({ ...c, content: c.body }));
+      res.json({ data });
     } catch (err: any) {
       console.error("List mentions failed:", err);
       res.status(500).json({ message: "Failed to list comments where mentioned" });
@@ -80,7 +83,7 @@ commentsRouter.get(
   }
 );
 
-/** POST /api/comments — create a comment. Body: entity_type, entity_id, body, parent_id?, mention_user_ids? */
+/** POST /api/comments — create a comment. Body: entity_type, entity_id, content (or body), parent_id?, mention_user_ids? */
 commentsRouter.post(
   "/",
   authenticate as unknown as express.RequestHandler,
@@ -89,6 +92,7 @@ commentsRouter.post(
     const body = (req.body || {}) as {
       entity_type?: string;
       entity_id?: string;
+      content?: string;
       body?: string;
       parent_id?: string | null;
       mention_user_ids?: string[];
@@ -96,7 +100,7 @@ commentsRouter.post(
 
     const entityType = body.entity_type;
     const entityId = body.entity_id;
-    const commentBody = body.body;
+    const commentBody = body.content ?? body.body ?? "";
     if (!entityType || !entityId) {
       return res.status(400).json({
         message: "body must include entity_type and entity_id",
@@ -110,6 +114,12 @@ commentsRouter.post(
       });
     }
 
+    const fromText = extractMentionUserIds(commentBody);
+    const explicitMentions = Array.isArray(body.mention_user_ids) ? body.mention_user_ids : [];
+    const mentionUserIds = [...new Set([...explicitMentions, ...fromText])].filter(
+      (id) => id && id !== authReq.user.id
+    );
+
     try {
       const result = await createComment(
         authReq.user.organization_id,
@@ -117,15 +127,16 @@ commentsRouter.post(
         {
           entity_type: entityType as CommentEntityType,
           entity_id: entityId,
-          body: commentBody ?? "",
+          body: commentBody,
           parent_id: body.parent_id,
-          mention_user_ids: Array.isArray(body.mention_user_ids) ? body.mention_user_ids : undefined,
+          mention_user_ids: mentionUserIds.length > 0 ? mentionUserIds : undefined,
         }
       );
       if (result.error) {
         return res.status(400).json({ message: result.error, code: "CREATE_FAILED" });
       }
-      res.status(201).json({ data: result.data });
+      const data = result.data as any;
+      res.status(201).json({ data: data ? { ...data, content: data.body } : data });
     } catch (err: any) {
       console.error("Create comment failed:", err);
       res.status(500).json({ message: "Failed to create comment" });
@@ -133,24 +144,24 @@ commentsRouter.post(
   }
 );
 
-/** PATCH /api/comments/:id — update comment body (author only). */
+/** PATCH /api/comments/:id — update comment content (author only). */
 commentsRouter.patch(
   "/:id",
   authenticate as unknown as express.RequestHandler,
   async (req: express.Request, res: express.Response) => {
     const authReq = req as AuthenticatedRequest;
     const commentId = req.params.id;
-    const body = (req.body || {}) as { body?: string };
-    const commentBody = body.body;
+    const body = (req.body || {}) as { content?: string; body?: string };
+    const commentBody = body.content ?? body.body;
 
     if (commentBody !== undefined && (typeof commentBody !== "string" || !commentBody.trim())) {
       return res.status(400).json({
-        message: "body.body must be a non-empty string",
+        message: "content must be a non-empty string",
         code: "INVALID_BODY",
       });
     }
     if (commentBody === undefined) {
-      return res.status(400).json({ message: "body.body is required", code: "MISSING_BODY" });
+      return res.status(400).json({ message: "content is required", code: "MISSING_BODY" });
     }
 
     try {
@@ -169,7 +180,8 @@ commentsRouter.patch(
         }
         return res.status(400).json({ message: result.error, code: "UPDATE_FAILED" });
       }
-      res.json({ data: result.data });
+      const data = result.data as any;
+      res.json({ data: data ? { ...data, content: data.body } : data });
     } catch (err: any) {
       console.error("Update comment failed:", err);
       res.status(500).json({ message: "Failed to update comment" });
@@ -241,7 +253,8 @@ commentsRouter.post(
       if (result.error) {
         return res.status(404).json({ message: result.error, code: "NOT_FOUND" });
       }
-      res.json({ data: result.data });
+      const data = result.data as any;
+      res.json({ data: data ? { ...data, content: data.body } : data });
     } catch (err: any) {
       console.error("Resolve comment failed:", err);
       res.status(500).json({ message: "Failed to resolve comment" });
@@ -278,7 +291,8 @@ commentsRouter.delete(
       if (result.error) {
         return res.status(404).json({ message: result.error, code: "NOT_FOUND" });
       }
-      res.json({ data: result.data });
+      const data = result.data as any;
+      res.json({ data: data ? { ...data, content: data.body } : data });
     } catch (err: any) {
       console.error("Unresolve comment failed:", err);
       res.status(500).json({ message: "Failed to unresolve comment" });
@@ -301,7 +315,8 @@ commentsRouter.get(
         parentId,
         { limit, offset }
       );
-      res.json(result);
+      const data = (result.data || []).map((c: any) => ({ ...c, content: c.body }));
+      res.json({ data });
     } catch (err: any) {
       console.error("List replies failed:", err);
       res.status(500).json({ message: "Failed to list replies" });
@@ -316,11 +331,11 @@ commentsRouter.post(
   async (req: express.Request, res: express.Response) => {
     const authReq = req as AuthenticatedRequest;
     const parentId = req.params.id;
-    const body = (req.body || {}) as { body?: string; mention_user_ids?: string[] };
-    const commentBody = body.body;
+    const body = (req.body || {}) as { content?: string; body?: string; mention_user_ids?: string[] };
+    const commentBody = body.content ?? body.body ?? "";
     if (!commentBody || typeof commentBody !== "string" || !commentBody.trim()) {
       return res.status(400).json({
-        message: "body.body is required and must be a non-empty string",
+        message: "content is required and must be a non-empty string",
         code: "INVALID_BODY",
       });
     }
@@ -328,6 +343,11 @@ commentsRouter.post(
     if (!parent || (parent as any).deleted_at) {
       return res.status(404).json({ message: "Comment not found", code: "NOT_FOUND" });
     }
+    const fromText = extractMentionUserIds(commentBody);
+    const explicitMentions = Array.isArray(body.mention_user_ids) ? body.mention_user_ids : [];
+    const mentionUserIds = [...new Set([...explicitMentions, ...fromText])].filter(
+      (id) => id && id !== authReq.user.id
+    );
     try {
       const result = await createComment(
         authReq.user.organization_id,
@@ -337,7 +357,7 @@ commentsRouter.post(
           entity_id: parent.entity_id,
           body: commentBody.trim(),
           parent_id: parentId,
-          mention_user_ids: Array.isArray(body.mention_user_ids) ? body.mention_user_ids : undefined,
+          mention_user_ids: mentionUserIds.length > 0 ? mentionUserIds : undefined,
         }
       );
       if (result.error) {
@@ -354,7 +374,8 @@ commentsRouter.post(
           console.error("[Comments] Reply notification failed:", err)
         );
       }
-      res.status(201).json({ data: result.data });
+      const replyData = result.data as any;
+      res.status(201).json({ data: replyData ? { ...replyData, content: replyData.body } : replyData });
     } catch (err: any) {
       console.error("Create reply failed:", err);
       res.status(500).json({ message: "Failed to create reply" });

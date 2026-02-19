@@ -69,7 +69,8 @@ export async function POST(
       .single()
 
     if (error) throw error
-    return NextResponse.json({ data: comment })
+    const { body: _b, ...rest } = comment as any
+    return NextResponse.json({ data: { ...rest, content: _b } })
   } catch (error: any) {
     const { response, errorId } = createErrorResponse(
       error?.message || 'Failed to resolve comment',
@@ -148,7 +149,8 @@ export async function DELETE(
       .single()
 
     if (error) throw error
-    return NextResponse.json({ data: comment })
+    const { body: _b, ...rest } = comment as any
+    return NextResponse.json({ data: { ...rest, content: _b } })
   } catch (error: any) {
     const { response, errorId } = createErrorResponse(
       error?.message || 'Failed to unresolve comment',

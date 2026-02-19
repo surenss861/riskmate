@@ -52,17 +52,21 @@ export async function GET(
       .in('id', authorIds)
 
     const userMap = new Map((users || []).map((u: any) => [u.id, u]))
-    const data = comments.map((c) => ({
-      ...c,
-      author: userMap.get(c.author_id)
-        ? {
-            id: c.author_id,
-            full_name: userMap.get(c.author_id)?.full_name ?? null,
-            email: userMap.get(c.author_id)?.email ?? null,
-          }
-        : undefined,
-      mentions: (c.mentions ?? []).map((user_id: string) => ({ user_id })),
-    }))
+    const data = comments.map((c) => {
+      const { body: bodyText, ...rest } = c
+      return {
+        ...rest,
+        content: bodyText,
+        author: userMap.get(c.author_id)
+          ? {
+              id: c.author_id,
+              full_name: userMap.get(c.author_id)?.full_name ?? null,
+              email: userMap.get(c.author_id)?.email ?? null,
+            }
+          : undefined,
+        mentions: (c.mentions ?? []).map((user_id: string) => ({ user_id })),
+      }
+    })
 
     return NextResponse.json({ data })
   } catch (error: any) {
@@ -115,12 +119,12 @@ export async function POST(
     }
 
     const body = await request.json().catch(() => ({}))
-    const { body: commentBody, mention_user_ids: explicitMentions } = body
-    const rawBody = typeof commentBody === 'string' ? commentBody : ''
-    const trimmed = rawBody.trim()
+    const rawContent = body?.content ?? body?.body
+    const { mention_user_ids: explicitMentions } = body
+    const trimmed = typeof rawContent === 'string' ? rawContent.trim() : ''
     if (!trimmed) {
       const { response, errorId } = createErrorResponse(
-        'body.body is required and must be non-empty',
+        'content is required and must be non-empty',
         'VALIDATION_ERROR',
         { requestId, statusCode: 400 }
       )
@@ -163,6 +167,9 @@ export async function POST(
 
     if (error || !comment) throw error || new Error('Failed to create reply')
 
+    const { body: _b, ...commentRest } = comment as any
+    const responseData = { ...commentRest, content: _b }
+
     const token = await getSessionToken(request)
     if (token && BACKEND_URL) {
       const parentAuthorId = (parent as any).author_id
@@ -196,7 +203,7 @@ export async function POST(
       }
     }
 
-    return NextResponse.json({ data: comment }, { status: 201 })
+    return NextResponse.json({ data: responseData }, { status: 201 })
   } catch (error: any) {
     const { response, errorId } = createErrorResponse(
       error?.message || 'Failed to create reply',

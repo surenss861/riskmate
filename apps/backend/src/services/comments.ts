@@ -1,5 +1,6 @@
 import { supabase } from "../lib/supabaseClient";
 import { sendMentionNotification } from "./notifications";
+import { extractMentionUserIds } from "../utils/mentionParser";
 
 export const COMMENT_ENTITY_TYPES = [
   "job",
@@ -119,7 +120,7 @@ export async function listComments(
   return { data };
 }
 
-/** Create a comment with optional mentions (stored in comments.mentions; sends notifications). */
+/** Create a comment with optional mentions (stored in comments.mentions; sends notifications). Parses body for @[Name](id) as fallback. */
 export async function createComment(
   organizationId: string,
   authorId: string,
@@ -140,7 +141,9 @@ export async function createComment(
     return { data: null, error: "Invalid entity_type" };
   }
 
-  const rawMentionIds = (mention_user_ids ?? []).filter(
+  const fromText = extractMentionUserIds(body);
+  const explicitIds = Array.isArray(mention_user_ids) ? mention_user_ids : [];
+  const rawMentionIds = [...new Set([...explicitIds, ...fromText])].filter(
     (id) => id && id !== authorId
   );
 

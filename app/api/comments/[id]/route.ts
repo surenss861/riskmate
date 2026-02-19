@@ -21,10 +21,11 @@ export async function PATCH(
     const { id: commentId } = await params
 
     const body = await request.json().catch(() => ({}))
-    const commentBody = body?.body
-    if (typeof commentBody !== 'string' || !commentBody.trim()) {
+    const rawContent = body?.content ?? body?.body
+    const commentBody = typeof rawContent === 'string' ? rawContent.trim() : ''
+    if (!commentBody) {
       const { response, errorId } = createErrorResponse(
-        'body.body must be a non-empty string',
+        'content must be a non-empty string',
         'VALIDATION_ERROR',
         { requestId, statusCode: 400 }
       )
@@ -90,7 +91,8 @@ export async function PATCH(
       .single()
 
     if (error) throw error
-    return NextResponse.json({ data: comment })
+    const { body: _b, ...rest } = comment as any
+    return NextResponse.json({ data: { ...rest, content: _b } })
   } catch (error: any) {
     const { response, errorId } = createErrorResponse(
       error?.message || 'Failed to update comment',
@@ -158,11 +160,28 @@ export async function DELETE(
     }
 
     const now = new Date().toISOString()
-    await supabase
+    const { error: updateError } = await supabase
       .from('comments')
       .update({ deleted_at: now, updated_at: now })
       .eq('id', commentId)
       .eq('organization_id', organization_id)
+
+    if (updateError) {
+      const { response, errorId } = createErrorResponse(
+        updateError.message || 'Failed to delete comment',
+        'QUERY_ERROR',
+        { requestId, statusCode: 500 }
+      )
+      logApiError(500, 'QUERY_ERROR', errorId, requestId, undefined, response.message, {
+        category: 'internal',
+        severity: 'error',
+        route: ROUTE,
+      })
+      return NextResponse.json(response, {
+        status: 500,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
 
     return new NextResponse(null, { status: 204 })
   } catch (error: any) {
