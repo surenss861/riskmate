@@ -165,6 +165,7 @@ export type NotificationPreferences = {
   push_enabled: boolean;
   email_enabled: boolean;
   mention: boolean;
+  reply: boolean;
   job_assigned: boolean;
   signature_requested: boolean;
   evidence_uploaded: boolean;
@@ -181,6 +182,7 @@ export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
   push_enabled: true,
   email_enabled: true,
   mention: true,
+  reply: true,
   job_assigned: true,
   signature_requested: true,
   evidence_uploaded: true,
@@ -198,6 +200,7 @@ export const OPT_OUT_SAFE_PREFERENCES: NotificationPreferences = {
   push_enabled: false,
   email_enabled: false,
   mention: false,
+  reply: false,
   job_assigned: false,
   signature_requested: false,
   evidence_uploaded: false,
@@ -231,6 +234,7 @@ export async function getNotificationPreferences(
     push_enabled: data.push_enabled ?? true,
     email_enabled: data.email_enabled ?? true,
     mention: data.mention ?? true,
+    reply: data.reply ?? true,
     job_assigned: data.job_assigned ?? true,
     signature_requested: data.signature_requested ?? true,
     evidence_uploaded: data.evidence_uploaded ?? true,
@@ -938,6 +942,31 @@ export async function sendMentionNotification(
       deepLink: `riskmate://comments/${commentId}`,
     },
     categoryId: "mention",
+    priority: "high",
+  });
+}
+
+/** Notify user when someone replies to their comment. */
+export async function sendCommentReplyNotification(
+  userId: string,
+  organizationId: string,
+  commentId: string,
+  contextLabel?: string
+) {
+  const prefs = await getNotificationPreferences(userId);
+  if (!prefs.reply) {
+    console.log("[Notifications] Skipped reply for user", userId, "(preference disabled)");
+    return;
+  }
+  await sendToUser(userId, organizationId, {
+    title: "Reply to your comment",
+    body: contextLabel ?? "Someone replied to your comment.",
+    data: {
+      type: "reply",
+      commentId,
+      deepLink: `riskmate://comments/${commentId}`,
+    },
+    categoryId: "reply",
     priority: "high",
   });
 }

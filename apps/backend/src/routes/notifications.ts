@@ -5,6 +5,8 @@ import {
   unregisterDeviceToken,
   sendEvidenceUploadedNotification,
   sendJobAssignedNotification,
+  sendMentionNotification,
+  sendCommentReplyNotification,
   validatePushToken,
   getNotificationPreferences,
   getUnreadNotificationCount,
@@ -335,6 +337,64 @@ notificationsRouter.post(
       res.status(204).end();
     } catch (err: any) {
       console.error("Evidence uploaded notification failed:", err);
+      res.status(500).json({ message: "Failed to send notification" });
+    }
+  }
+);
+
+/** POST /api/notifications/mention — send mention notification (gated on user preferences, push/email). Used by Next.js comment APIs. */
+notificationsRouter.post(
+  "/mention",
+  authenticate as unknown as express.RequestHandler,
+  async (req: express.Request, res: express.Response) => {
+    const authReq = req as AuthenticatedRequest;
+    try {
+      const { userId, commentId, contextLabel } = req.body || {};
+      if (!userId || !commentId) {
+        return res.status(400).json({ message: "Missing userId or commentId" });
+      }
+      const organizationId = authReq.user.organization_id;
+      const { data: user } = await supabase
+        .from("users")
+        .select("id, organization_id")
+        .eq("id", userId)
+        .single();
+      if (!user || user.organization_id !== organizationId) {
+        return res.status(403).json({ message: "User not in this organization" });
+      }
+      await sendMentionNotification(userId, organizationId, commentId, contextLabel);
+      res.status(204).end();
+    } catch (err: any) {
+      console.error("Mention notification failed:", err);
+      res.status(500).json({ message: "Failed to send notification" });
+    }
+  }
+);
+
+/** POST /api/notifications/comment-reply — send reply notification to parent comment author (gated on preferences, push/email). */
+notificationsRouter.post(
+  "/comment-reply",
+  authenticate as unknown as express.RequestHandler,
+  async (req: express.Request, res: express.Response) => {
+    const authReq = req as AuthenticatedRequest;
+    try {
+      const { userId, commentId, contextLabel } = req.body || {};
+      if (!userId || !commentId) {
+        return res.status(400).json({ message: "Missing userId or commentId" });
+      }
+      const organizationId = authReq.user.organization_id;
+      const { data: user } = await supabase
+        .from("users")
+        .select("id, organization_id")
+        .eq("id", userId)
+        .single();
+      if (!user || user.organization_id !== organizationId) {
+        return res.status(403).json({ message: "User not in this organization" });
+      }
+      await sendCommentReplyNotification(userId, organizationId, commentId, contextLabel);
+      res.status(204).end();
+    } catch (err: any) {
+      console.error("Comment reply notification failed:", err);
       res.status(500).json({ message: "Failed to send notification" });
     }
   }

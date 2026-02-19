@@ -3,6 +3,8 @@
  * Supports @mention syntax and optional user ID extraction for notifications.
  */
 
+import React from 'react'
+
 const MENTION_REGEX = /@\[([^\]]+)\]\(([a-f0-9-]+)\)/g
 const AT_NAME_REGEX = /@(\w+(?:\s+\w+)*)/g
 
@@ -57,12 +59,88 @@ export function extractMentionUserIds(body: string): string[] {
 }
 
 /**
+ * Detect active @mention at cursor: returns the query string after @ for autocomplete.
+ * If cursor is not immediately after an @ or inside an @-mention context, returns null.
+ * @param text - Full text content
+ * @param cursorPos - Cursor position (0-based index)
+ * @returns The query string after @ (e.g. "jo" for "@jo"), or null if no active mention
+ */
+export function extractMentionQuery(text: string, cursorPos: number): string | null {
+  if (!text || typeof text !== 'string' || cursorPos < 0 || cursorPos > text.length) return null
+  const beforeCursor = text.slice(0, cursorPos)
+  const lastAt = beforeCursor.lastIndexOf('@')
+  if (lastAt === -1) return null
+  const afterAt = beforeCursor.slice(lastAt + 1)
+  if (/[\s\n\r]/.test(afterAt)) return null
+  return afterAt
+}
+
+/**
  * Format a mention for storage: @[Display Name](userId).
  * Use when inserting a mention into plain text (e.g. from a mention picker).
  */
 export function formatMention(displayName: string, userId: string): string {
   const safe = (displayName || '').replace(/\]/g, '\\]').trim() || 'User'
   return `@[${safe}](${userId})`
+}
+
+/**
+ * User shape for formatMentions (id and display name).
+ */
+export interface MentionUser {
+  id: string
+  full_name?: string | null
+}
+
+/**
+ * Convert plain @username segments in content to @[Name](userId) using the provided users.
+ * Matches by display name (full_name); case-insensitive match.
+ * @param content - Text that may contain plain @Username tokens
+ * @param users - List of users with id and full_name for resolution
+ * @returns Content with @username replaced by @[Name](userId)
+ */
+export function formatMentions(content: string, users: MentionUser[]): string {
+  if (!content || typeof content !== 'string') return content
+  if (!Array.isArray(users) || users.length === 0) return content
+  const nameToUser = new Map<string, MentionUser>()
+  for (const u of users) {
+    const name = (u.full_name ?? '').trim() || u.id
+    nameToUser.set(name.toLowerCase(), u)
+    if (u.full_name?.trim()) nameToUser.set(u.full_name.trim(), u)
+  }
+  return content.replace(AT_NAME_REGEX, (match, namePart) => {
+    const key = namePart.trim()
+    if (!key) return match
+    const byExact = nameToUser.get(key)
+    if (byExact) return formatMention(byExact.full_name ?? byExact.id, byExact.id)
+    const byLower = nameToUser.get(key.toLowerCase())
+    if (byLower) return formatMention(byLower.full_name ?? byLower.id, byLower.id)
+    return match
+  })
+}
+
+/**
+ * Render parsed segments as React nodes with styled spans for mentions.
+ * Mention segments are wrapped in a span with data-mention and data-user-id for styling.
+ */
+export function renderMentions(segments: MentionSpan[]): React.ReactNode[] {
+  if (!segments?.length) return []
+  return segments.map((s, i) => {
+    if (s.type === 'mention') {
+      const display = s.displayName ?? s.userId ?? ''
+      return React.createElement(
+        'span',
+        {
+          key: `m-${i}-${s.userId ?? ''}`,
+          'data-mention': true,
+          'data-user-id': s.userId ?? '',
+          className: 'mention',
+        },
+        `@${display}`
+      )
+    }
+    return React.createElement(React.Fragment, { key: `t-${i}` }, s.text ?? '')
+  })
 }
 
 /**

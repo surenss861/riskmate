@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
-import { createSupabaseAdminClient } from '@/lib/supabase/admin'
 import { getOrganizationContext, verifyJobOwnership } from '@/lib/utils/organizationGuard'
 import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { logApiError } from '@/lib/utils/errorLogging'
 import { getRequestId } from '@/lib/utils/requestId'
 import { extractMentionUserIds } from '@/lib/utils/mentionParser'
+import { getSessionToken, BACKEND_URL } from '@/lib/api/proxy-helpers'
 
 export const runtime = 'nodejs'
 
@@ -160,17 +160,23 @@ export async function POST(
       throw error || new Error('Failed to create comment')
     }
 
-    const admin = createSupabaseAdminClient()
+    const token = await getSessionToken(request)
     const contextLabel = 'You were mentioned in a comment.'
-    for (const mentionedUserId of mentionUserIds) {
-      await admin.from('notifications').insert({
-        user_id: mentionedUserId,
-        organization_id,
-        type: 'mention',
-        content: contextLabel,
-        is_read: false,
-        deep_link: `riskmate://comments/${comment.id}`,
-      })
+    if (token && BACKEND_URL && mentionUserIds.length > 0) {
+      for (const mentionedUserId of mentionUserIds) {
+        fetch(`${BACKEND_URL}/api/notifications/mention`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            userId: mentionedUserId,
+            commentId: comment.id,
+            contextLabel,
+          }),
+        }).catch((err) => console.error('[Comments] Mention notification request failed:', err))
+      }
     }
 
     return NextResponse.json({ data: comment }, { status: 201 })

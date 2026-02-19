@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
-import { createSupabaseAdminClient } from '@/lib/supabase/admin'
 import { getOrganizationContext } from '@/lib/utils/organizationGuard'
 import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { logApiError } from '@/lib/utils/errorLogging'
 import { getRequestId } from '@/lib/utils/requestId'
 import { extractMentionUserIds } from '@/lib/utils/mentionParser'
+import { getSessionToken, BACKEND_URL } from '@/lib/api/proxy-helpers'
 
 export const runtime = 'nodejs'
 
@@ -151,27 +151,37 @@ export async function POST(
 
     if (error || !comment) throw error || new Error('Failed to create reply')
 
-    const admin = createSupabaseAdminClient()
-    const parentAuthorId = (parent as any).author_id
-    if (parentAuthorId && parentAuthorId !== user_id) {
-      await admin.from('notifications').insert({
-        user_id: parentAuthorId,
-        organization_id,
-        type: 'reply',
-        content: 'Someone replied to your comment.',
-        is_read: false,
-        deep_link: `riskmate://comments/${comment.id}`,
-      })
-    }
-    for (const mentionedUserId of mentionUserIds) {
-      await admin.from('notifications').insert({
-        user_id: mentionedUserId,
-        organization_id,
-        type: 'mention',
-        content: 'You were mentioned in a comment.',
-        is_read: false,
-        deep_link: `riskmate://comments/${comment.id}`,
-      })
+    const token = await getSessionToken(request)
+    if (token && BACKEND_URL) {
+      const parentAuthorId = (parent as any).author_id
+      if (parentAuthorId && parentAuthorId !== user_id) {
+        fetch(`${BACKEND_URL}/api/notifications/comment-reply`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            userId: parentAuthorId,
+            commentId: (comment as any).id,
+            contextLabel: 'Someone replied to your comment.',
+          }),
+        }).catch((err) => console.error('[Replies] Comment reply notification request failed:', err))
+      }
+      for (const mentionedUserId of mentionUserIds) {
+        fetch(`${BACKEND_URL}/api/notifications/mention`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            userId: mentionedUserId,
+            commentId: (comment as any).id,
+            contextLabel: 'You were mentioned in a comment.',
+          }),
+        }).catch((err) => console.error('[Replies] Mention notification request failed:', err))
+      }
     }
 
     return NextResponse.json({ data: comment }, { status: 201 })

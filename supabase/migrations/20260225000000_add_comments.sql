@@ -49,15 +49,36 @@ CREATE POLICY "Users can create comments in their organization"
   ON comments FOR INSERT
   WITH CHECK (organization_id = get_user_organization_id());
 
+-- UPDATE/soft-delete: author only, or org owner/admin (USING and WITH CHECK enforce author-only or admin).
 DROP POLICY IF EXISTS "Users can update comments in their organization" ON comments;
-CREATE POLICY "Users can update comments in their organization"
+CREATE POLICY "Author or admin can update comments"
   ON comments FOR UPDATE
-  USING (organization_id = get_user_organization_id())
-  WITH CHECK (organization_id = get_user_organization_id());
+  USING (
+    organization_id = get_user_organization_id()
+    AND (
+      author_id = auth.uid()
+      OR public.org_role(organization_id) IN ('owner', 'admin')
+    )
+  )
+  WITH CHECK (
+    organization_id = get_user_organization_id()
+    AND (
+      author_id = auth.uid()
+      OR public.org_role(organization_id) IN ('owner', 'admin')
+    )
+  );
 
 -- No DELETE policy: soft delete only. Authors/admins set deleted_at via UPDATE to preserve rows and avoid cascading replies.
 
 COMMENT ON TABLE comments IS 'First-class comments on entities (job, hazard, control, task, document, signoff, photo); supports threads via parent_id; mentions as UUID[]; soft delete via deleted_at.';
 
 -- Realtime: enable for comments so clients can subscribe to new/updated comments.
-ALTER PUBLICATION supabase_realtime ADD TABLE comments;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND tablename = 'comments'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE comments;
+  END IF;
+END $$;

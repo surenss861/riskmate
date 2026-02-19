@@ -13,6 +13,7 @@ import {
   COMMENT_ENTITY_TYPES,
   type CommentEntityType,
 } from "../services/comments";
+import { sendCommentReplyNotification } from "../services/notifications";
 
 export const commentsRouter: ExpressRouter = express.Router();
 
@@ -210,13 +211,27 @@ commentsRouter.delete(
   }
 );
 
-/** POST /api/comments/:id/resolve — mark comment resolved. */
+/** POST /api/comments/:id/resolve — mark comment resolved (author or owner/admin only). */
 commentsRouter.post(
   "/:id/resolve",
   authenticate as unknown as express.RequestHandler,
   async (req: express.Request, res: express.Response) => {
     const authReq = req as AuthenticatedRequest;
     const commentId = req.params.id;
+
+    const comment = await getComment(authReq.user.organization_id, commentId);
+    if (!comment) {
+      return res.status(404).json({ message: "Comment not found", code: "NOT_FOUND" });
+    }
+    const isAuthor = comment.author_id === authReq.user.id;
+    const isAdmin = authReq.user.role === "owner" || authReq.user.role === "admin";
+    if (!isAuthor && !isAdmin) {
+      return res.status(403).json({
+        message: "Only the author or an admin can resolve this comment",
+        code: "FORBIDDEN",
+      });
+    }
+
     try {
       const result = await resolveComment(
         authReq.user.organization_id,
@@ -234,13 +249,27 @@ commentsRouter.post(
   }
 );
 
-/** DELETE /api/comments/:id/resolve — unresolve comment. */
+/** DELETE /api/comments/:id/resolve — unresolve comment (author or owner/admin only). */
 commentsRouter.delete(
   "/:id/resolve",
   authenticate as unknown as express.RequestHandler,
   async (req: express.Request, res: express.Response) => {
     const authReq = req as AuthenticatedRequest;
     const commentId = req.params.id;
+
+    const comment = await getComment(authReq.user.organization_id, commentId);
+    if (!comment) {
+      return res.status(404).json({ message: "Comment not found", code: "NOT_FOUND" });
+    }
+    const isAuthor = comment.author_id === authReq.user.id;
+    const isAdmin = authReq.user.role === "owner" || authReq.user.role === "admin";
+    if (!isAuthor && !isAdmin) {
+      return res.status(403).json({
+        message: "Only the author or an admin can unresolve this comment",
+        code: "FORBIDDEN",
+      });
+    }
+
     try {
       const result = await unresolveComment(
         authReq.user.organization_id,
@@ -313,6 +342,17 @@ commentsRouter.post(
       );
       if (result.error) {
         return res.status(400).json({ message: result.error, code: "CREATE_FAILED" });
+      }
+      const parentAuthorId = parent.author_id;
+      if (parentAuthorId && parentAuthorId !== authReq.user.id && result.data) {
+        sendCommentReplyNotification(
+          parentAuthorId,
+          authReq.user.organization_id,
+          result.data.id,
+          "Someone replied to your comment."
+        ).catch((err) =>
+          console.error("[Comments] Reply notification failed:", err)
+        );
       }
       res.status(201).json({ data: result.data });
     } catch (err: any) {

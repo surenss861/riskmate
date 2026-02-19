@@ -140,9 +140,20 @@ export async function createComment(
     return { data: null, error: "Invalid entity_type" };
   }
 
-  const toMention = (mention_user_ids ?? []).filter(
+  const rawMentionIds = (mention_user_ids ?? []).filter(
     (id) => id && id !== authorId
   );
+
+  // Only send mention notifications to users in the same organization
+  let toMention: string[] = [];
+  if (rawMentionIds.length > 0) {
+    const { data: orgUsers } = await supabase
+      .from("users")
+      .select("id")
+      .eq("organization_id", organizationId)
+      .in("id", rawMentionIds);
+    toMention = (orgUsers ?? []).map((u: { id: string }) => u.id);
+  }
 
   const { data: comment, error: insertError } = await supabase
     .from("comments")
