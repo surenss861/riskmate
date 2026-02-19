@@ -110,7 +110,8 @@ async function getJobIdsForBooleanFilter(
     p_value: value,
   })
   if (error) throw error
-  return (data || []).filter(Boolean).map((id: string) => String(id))
+  const ids = (data as string[] | null) ?? []
+  return ids.filter(Boolean).map((id) => String(id))
 }
 
 async function getMatchingJobIdsFromFilterGroup(
