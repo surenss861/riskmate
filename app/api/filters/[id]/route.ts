@@ -8,6 +8,12 @@ export const runtime = 'nodejs'
 
 const ROUTE = '/api/filters/[id]'
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+function isValidUUID(s: string): boolean {
+  return UUID_REGEX.test(s)
+}
+
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -56,6 +62,22 @@ export async function PATCH(
 
     const organizationId = userData.organization_id
     const { id } = await params
+
+    if (!isValidUUID(id)) {
+      const { response, errorId } = createErrorResponse(
+        'Invalid filter id: must be a valid UUID',
+        'INVALID_FORMAT',
+        { requestId, statusCode: 400 }
+      )
+      logApiError(400, 'INVALID_FORMAT', errorId, requestId, organizationId, response.message, {
+        category: 'validation', severity: 'warn', route: ROUTE,
+      })
+      return NextResponse.json(response, {
+        status: 400,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
+
     const body = await request.json()
 
     const updateData: Record<string, any> = {}
@@ -114,6 +136,7 @@ export async function PATCH(
       })
     }
 
+    // RLS-compatible: organization_id and ownership (only owner can update)
     const { data: updatedFilter, error: updateError } = await supabase
       .from('saved_filters')
       .update(updateData)
@@ -124,7 +147,37 @@ export async function PATCH(
       .maybeSingle()
 
     if (updateError) {
-      throw updateError
+      const statusCode =
+        updateError.code === '23502' || updateError.code === '23503' || updateError.code === '23505'
+          ? 400
+          : 500
+      const errorCode =
+        updateError.code === '23502'
+          ? 'MISSING_REQUIRED_FIELD'
+          : updateError.code === '23503'
+          ? 'INVALID_FORMAT'
+          : updateError.code === '23505'
+          ? 'VALIDATION_ERROR'
+          : 'QUERY_ERROR'
+      const { response, errorId } = createErrorResponse(
+        updateError.message || 'Failed to update filter',
+        errorCode,
+        {
+          requestId,
+          statusCode,
+          details: process.env.NODE_ENV === 'development' ? { detail: updateError?.message } : undefined,
+        }
+      )
+      logApiError(statusCode, errorCode, errorId, requestId, organizationId, response.message, {
+        category: statusCode >= 500 ? 'internal' : 'validation',
+        severity: statusCode >= 500 ? 'error' : 'warn',
+        route: ROUTE,
+        details: process.env.NODE_ENV === 'development' ? { detail: updateError?.message } : undefined,
+      })
+      return NextResponse.json(response, {
+        status: statusCode,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
     }
 
     if (!updatedFilter) {
@@ -214,6 +267,22 @@ export async function DELETE(
     const organizationId = userData.organization_id
     const { id } = await params
 
+    if (!isValidUUID(id)) {
+      const { response, errorId } = createErrorResponse(
+        'Invalid filter id: must be a valid UUID',
+        'INVALID_FORMAT',
+        { requestId, statusCode: 400 }
+      )
+      logApiError(400, 'INVALID_FORMAT', errorId, requestId, organizationId, response.message, {
+        category: 'validation', severity: 'warn', route: ROUTE,
+      })
+      return NextResponse.json(response, {
+        status: 400,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
+
+    // RLS-compatible: organization_id and ownership (only owner can delete)
     const { data: deletedFilter, error: deleteError } = await supabase
       .from('saved_filters')
       .delete()
@@ -224,7 +293,23 @@ export async function DELETE(
       .maybeSingle()
 
     if (deleteError) {
-      throw deleteError
+      const { response, errorId } = createErrorResponse(
+        deleteError.message || 'Failed to delete filter',
+        'QUERY_ERROR',
+        {
+          requestId,
+          statusCode: 500,
+          details: process.env.NODE_ENV === 'development' ? { detail: deleteError?.message } : undefined,
+        }
+      )
+      logApiError(500, 'QUERY_ERROR', errorId, requestId, organizationId, response.message, {
+        category: 'internal', severity: 'error', route: ROUTE,
+        details: process.env.NODE_ENV === 'development' ? { detail: deleteError?.message } : undefined,
+      })
+      return NextResponse.json(response, {
+        status: 500,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
     }
 
     if (!deletedFilter) {

@@ -38,6 +38,7 @@ const FILTER_FIELD_ALLOWLIST = new Set([
   'job_type',
   'client_name',
   'location',
+  'assigned_to',
   'assigned_to_id',
   'end_date',
   'due_date',
@@ -245,7 +246,13 @@ async function getMatchingJobIdsFromFilterGroup(
 
 function applySingleFilter(query: any, condition: FilterCondition): any {
   const rawField = typeof condition.field === 'string' ? condition.field : ''
-  const field = rawField === 'due_date' ? 'end_date' : rawField
+  // Normalize: due_date -> end_date; assigned_to -> assigned_to_id
+  const field =
+    rawField === 'due_date'
+      ? 'end_date'
+      : rawField === 'assigned_to'
+      ? 'assigned_to_id'
+      : rawField
   const operator = typeof condition.operator === 'string' ? condition.operator.toLowerCase() : ''
   const value = condition.value
 

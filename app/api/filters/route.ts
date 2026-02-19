@@ -53,6 +53,7 @@ export async function GET(request: NextRequest) {
 
     const organizationId = userData.organization_id
 
+    // RLS-compatible: organization_id matches get_user_organization_id(); ownership or is_shared
     const { data: filters, error: filtersError } = await supabase
       .from('saved_filters')
       .select('id, organization_id, user_id, name, filter_config, is_shared, created_at, updated_at')
@@ -61,7 +62,23 @@ export async function GET(request: NextRequest) {
       .order('created_at', { ascending: false })
 
     if (filtersError) {
-      throw filtersError
+      const { response, errorId } = createErrorResponse(
+        'Failed to fetch filters',
+        'QUERY_ERROR',
+        {
+          requestId,
+          statusCode: 500,
+          details: process.env.NODE_ENV === 'development' ? { detail: filtersError?.message } : undefined,
+        }
+      )
+      logApiError(500, 'QUERY_ERROR', errorId, requestId, organizationId, response.message, {
+        category: 'internal', severity: 'error', route: ROUTE,
+        details: process.env.NODE_ENV === 'development' ? { detail: filtersError?.message } : undefined,
+      })
+      return NextResponse.json(response, {
+        status: 500,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
     }
 
     return NextResponse.json({ data: filters || [] })
@@ -177,7 +194,37 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (insertError) {
-      throw insertError
+      const statusCode =
+        insertError.code === '23502' || insertError.code === '23503' || insertError.code === '23505'
+          ? 400
+          : 500
+      const errorCode =
+        insertError.code === '23502'
+          ? 'MISSING_REQUIRED_FIELD'
+          : insertError.code === '23503'
+          ? 'INVALID_FORMAT'
+          : insertError.code === '23505'
+          ? 'VALIDATION_ERROR'
+          : 'QUERY_ERROR'
+      const { response, errorId } = createErrorResponse(
+        insertError.message || 'Failed to create filter',
+        errorCode,
+        {
+          requestId,
+          statusCode,
+          details: process.env.NODE_ENV === 'development' ? { detail: insertError?.message } : undefined,
+        }
+      )
+      logApiError(statusCode, errorCode, errorId, requestId, organizationId, response.message, {
+        category: statusCode >= 500 ? 'internal' : 'validation',
+        severity: statusCode >= 500 ? 'error' : 'warn',
+        route: ROUTE,
+        details: process.env.NODE_ENV === 'development' ? { detail: insertError?.message } : undefined,
+      })
+      return NextResponse.json(response, {
+        status: statusCode,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
     }
 
     return NextResponse.json({ data: newFilter }, { status: 201 })
