@@ -221,6 +221,31 @@ export async function POST(
       }
     }
 
+    // Notify job owner when someone comments (skip when author is the owner), respecting notification_preferences
+    if (token && BACKEND_URL) {
+      const { data: job } = await supabase
+        .from('jobs')
+        .select('assigned_to_id')
+        .eq('id', jobId)
+        .eq('organization_id', organization_id)
+        .maybeSingle()
+      const ownerId = (job as { assigned_to_id?: string } | null)?.assigned_to_id
+      if (ownerId && ownerId !== user_id) {
+        fetch(`${BACKEND_URL}/api/notifications/job-comment`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            jobId,
+            commentId: (comment as any).id,
+            authorId: user_id,
+          }),
+        }).catch((err) => console.error('[Comments] Job comment notification request failed:', err))
+      }
+    }
+
     const { body: _b, ...commentRest } = comment as any
     return NextResponse.json({ data: { ...commentRest, content: _b } }, { status: 201 })
   } catch (error: any) {

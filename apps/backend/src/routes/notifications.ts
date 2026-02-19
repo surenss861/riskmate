@@ -7,6 +7,8 @@ import {
   sendJobAssignedNotification,
   sendMentionNotification,
   sendCommentReplyNotification,
+  sendJobCommentNotification,
+  sendCommentResolvedNotification,
   validatePushToken,
   getNotificationPreferences,
   getUnreadNotificationCount,
@@ -395,6 +397,93 @@ notificationsRouter.post(
       res.status(204).end();
     } catch (err: any) {
       console.error("Comment reply notification failed:", err);
+      res.status(500).json({ message: "Failed to send notification" });
+    }
+  }
+);
+
+/** POST /api/notifications/job-comment — notify job owner about a new comment on their job (gated on preferences). Used by Next.js job comments API. */
+notificationsRouter.post(
+  "/job-comment",
+  authenticate as unknown as express.RequestHandler,
+  async (req: express.Request, res: express.Response) => {
+    const authReq = req as AuthenticatedRequest;
+    try {
+      const { jobId, commentId, authorId } = req.body || {};
+      if (!jobId || !commentId) {
+        return res.status(400).json({ message: "Missing jobId or commentId" });
+      }
+      const organizationId = authReq.user.organization_id;
+      const { data: job } = await supabase
+        .from("jobs")
+        .select("id, organization_id, assigned_to_id")
+        .eq("id", jobId)
+        .eq("organization_id", organizationId)
+        .single();
+      if (!job) {
+        return res.status(404).json({ message: "Job not found" });
+      }
+      const ownerId = (job as { assigned_to_id?: string }).assigned_to_id;
+      if (!ownerId || ownerId === authorId) {
+        return res.status(204).end();
+      }
+      const { data: user } = await supabase
+        .from("users")
+        .select("id, organization_id")
+        .eq("id", ownerId)
+        .single();
+      if (!user || user.organization_id !== organizationId) {
+        return res.status(204).end();
+      }
+      await sendJobCommentNotification(
+        ownerId,
+        organizationId,
+        commentId,
+        jobId,
+        "Someone commented on a job you own."
+      );
+      res.status(204).end();
+    } catch (err: any) {
+      console.error("Job comment notification failed:", err);
+      res.status(500).json({ message: "Failed to send notification" });
+    }
+  }
+);
+
+/** POST /api/notifications/comment-resolved — notify comment author that their comment was resolved (gated on preferences). Used by Next.js resolve API. */
+notificationsRouter.post(
+  "/comment-resolved",
+  authenticate as unknown as express.RequestHandler,
+  async (req: express.Request, res: express.Response) => {
+    const authReq = req as AuthenticatedRequest;
+    try {
+      const { commentId, resolverId } = req.body || {};
+      if (!commentId) {
+        return res.status(400).json({ message: "Missing commentId" });
+      }
+      const organizationId = authReq.user.organization_id;
+      const { data: comment } = await supabase
+        .from("comments")
+        .select("id, author_id, organization_id")
+        .eq("id", commentId)
+        .eq("organization_id", organizationId)
+        .single();
+      if (!comment) {
+        return res.status(404).json({ message: "Comment not found" });
+      }
+      const authorId = (comment as { author_id: string }).author_id;
+      if (!authorId || authorId === resolverId) {
+        return res.status(204).end();
+      }
+      await sendCommentResolvedNotification(
+        authorId,
+        organizationId,
+        commentId,
+        "Your comment was marked resolved."
+      );
+      res.status(204).end();
+    } catch (err: any) {
+      console.error("Comment resolved notification failed:", err);
       res.status(500).json({ message: "Failed to send notification" });
     }
   }

@@ -4,6 +4,7 @@ import { getOrganizationContext } from '@/lib/utils/organizationGuard'
 import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { logApiError } from '@/lib/utils/errorLogging'
 import { getRequestId } from '@/lib/utils/requestId'
+import { getSessionToken, BACKEND_URL } from '@/lib/api/proxy-helpers'
 
 export const runtime = 'nodejs'
 
@@ -69,6 +70,25 @@ export async function POST(
       .single()
 
     if (error) throw error
+
+    // Notify original author when someone else resolves their comment (gated by notification_preferences)
+    const authorId = (existing as any).author_id
+    if (authorId && authorId !== user_id) {
+      const token = await getSessionToken(request)
+      if (token && BACKEND_URL) {
+        fetch(`${BACKEND_URL}/api/notifications/comment-resolved`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ commentId, resolverId: user_id }),
+        }).catch((err) =>
+          console.error('[Comments] Comment resolved notification request failed:', err)
+        )
+      }
+    }
+
     const { body: _b, ...rest } = comment as any
     return NextResponse.json({ data: { ...rest, content: _b } })
   } catch (error: any) {
@@ -89,7 +109,7 @@ export async function POST(
   }
 }
 
-/** DELETE /api/comments/[id]/resolve — unresolve comment. */
+/** DELETE /api/comments/[id]/resolve — unresolve comment. Kept for backward compatibility; prefer POST /api/comments/[id]/unresolve. */
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

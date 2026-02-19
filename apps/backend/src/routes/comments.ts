@@ -6,6 +6,7 @@ import {
   updateComment,
   deleteComment,
   getComment,
+  getParentComment,
   listCommentsWhereMentioned,
   resolveComment,
   unresolveComment,
@@ -13,7 +14,12 @@ import {
   COMMENT_ENTITY_TYPES,
   type CommentEntityType,
 } from "../services/comments";
-import { sendCommentReplyNotification } from "../services/notifications";
+import {
+  sendCommentReplyNotification,
+  sendJobCommentNotification,
+  sendCommentResolvedNotification,
+} from "../services/notifications";
+import { supabase } from "../lib/supabaseClient";
 import { extractMentionUserIds } from "../utils/mentionParser";
 
 export const commentsRouter: ExpressRouter = express.Router();
@@ -114,6 +120,22 @@ commentsRouter.post(
       });
     }
 
+    // When parent_id is provided, ensure parent comment exists in this org and entity, and is not deleted
+    if (body.parent_id != null && body.parent_id !== "") {
+      const parent = await getParentComment(
+        authReq.user.organization_id,
+        body.parent_id,
+        entityType as CommentEntityType,
+        entityId
+      );
+      if (!parent) {
+        return res.status(404).json({
+          message: "Parent comment not found or not valid for this entity",
+          code: "NOT_FOUND",
+        });
+      }
+    }
+
     const fromText = extractMentionUserIds(commentBody);
     const explicitMentions = Array.isArray(body.mention_user_ids) ? body.mention_user_ids : [];
     const mentionUserIds = [...new Set([...explicitMentions, ...fromText])].filter(
@@ -133,9 +155,33 @@ commentsRouter.post(
         }
       );
       if (result.error) {
+        if (result.error.includes("Parent comment not found")) {
+          return res.status(404).json({ message: result.error, code: "NOT_FOUND" });
+        }
         return res.status(400).json({ message: result.error, code: "CREATE_FAILED" });
       }
       const data = result.data as any;
+      // Notify job owner when someone comments on their job (skip when author is the owner)
+      if (entityType === "job" && entityId && data?.id && authReq.user.id) {
+        const { data: job } = await supabase
+          .from("jobs")
+          .select("assigned_to_id")
+          .eq("id", entityId)
+          .eq("organization_id", authReq.user.organization_id)
+          .maybeSingle();
+        const ownerId = (job as { assigned_to_id?: string } | null)?.assigned_to_id;
+        if (ownerId && ownerId !== authReq.user.id) {
+          sendJobCommentNotification(
+            ownerId,
+            authReq.user.organization_id,
+            data.id,
+            entityId,
+            "Someone commented on a job you own."
+          ).catch((err) =>
+            console.error("[Comments] Job comment notification failed:", err)
+          );
+        }
+      }
       res.status(201).json({ data: data ? { ...data, content: data.body } : data });
     } catch (err: any) {
       console.error("Create comment failed:", err);
@@ -254,6 +300,18 @@ commentsRouter.post(
         return res.status(404).json({ message: result.error, code: "NOT_FOUND" });
       }
       const data = result.data as any;
+      // Notify original author when someone else resolves their comment (gated by preferences)
+      const authorId = comment.author_id;
+      if (authorId && authorId !== authReq.user.id) {
+        sendCommentResolvedNotification(
+          authorId,
+          authReq.user.organization_id,
+          commentId,
+          "Your comment was marked resolved."
+        ).catch((err) =>
+          console.error("[Comments] Comment resolved notification failed:", err)
+        );
+      }
       res.json({ data: data ? { ...data, content: data.body } : data });
     } catch (err: any) {
       console.error("Resolve comment failed:", err);
@@ -262,9 +320,47 @@ commentsRouter.post(
   }
 );
 
-/** DELETE /api/comments/:id/resolve — unresolve comment (author or owner/admin only). */
+/** DELETE /api/comments/:id/resolve — unresolve comment (author or owner/admin only). Kept for backward compatibility; prefer POST /:id/unresolve. */
 commentsRouter.delete(
   "/:id/resolve",
+  authenticate as unknown as express.RequestHandler,
+  async (req: express.Request, res: express.Response) => {
+    const authReq = req as AuthenticatedRequest;
+    const commentId = req.params.id;
+
+    const comment = await getComment(authReq.user.organization_id, commentId);
+    if (!comment) {
+      return res.status(404).json({ message: "Comment not found", code: "NOT_FOUND" });
+    }
+    const isAuthor = comment.author_id === authReq.user.id;
+    const isAdmin = authReq.user.role === "owner" || authReq.user.role === "admin";
+    if (!isAuthor && !isAdmin) {
+      return res.status(403).json({
+        message: "Only the author or an admin can unresolve this comment",
+        code: "FORBIDDEN",
+      });
+    }
+
+    try {
+      const result = await unresolveComment(
+        authReq.user.organization_id,
+        commentId
+      );
+      if (result.error) {
+        return res.status(404).json({ message: result.error, code: "NOT_FOUND" });
+      }
+      const data = result.data as any;
+      res.json({ data: data ? { ...data, content: data.body } : data });
+    } catch (err: any) {
+      console.error("Unresolve comment failed:", err);
+      res.status(500).json({ message: "Failed to unresolve comment" });
+    }
+  }
+);
+
+/** POST /api/comments/:id/unresolve — clear is_resolved, resolved_by, resolved_at (spec-aligned). Prefer over DELETE /:id/resolve. */
+commentsRouter.post(
+  "/:id/unresolve",
   authenticate as unknown as express.RequestHandler,
   async (req: express.Request, res: express.Response) => {
     const authReq = req as AuthenticatedRequest;

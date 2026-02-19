@@ -120,6 +120,32 @@ export async function listComments(
   return { data };
 }
 
+/** Get a parent comment by id scoped to org and optional entity_type/entity_id; excludes deleted. Returns null if not found. */
+export async function getParentComment(
+  organizationId: string,
+  parentId: string,
+  entityType?: CommentEntityType,
+  entityId?: string
+): Promise<CommentRow | null> {
+  let query = supabase
+    .from("comments")
+    .select()
+    .eq("id", parentId)
+    .eq("organization_id", organizationId)
+    .is("deleted_at", null);
+
+  if (entityType != null && entityType !== "") {
+    query = query.eq("entity_type", entityType);
+  }
+  if (entityId != null && entityId !== "") {
+    query = query.eq("entity_id", entityId);
+  }
+
+  const { data, error } = await query.maybeSingle();
+  if (error || !data) return null;
+  return data as CommentRow;
+}
+
 /** Create a comment with optional mentions (stored in comments.mentions; sends notifications). Parses body for @[Name](id) as fallback. */
 export async function createComment(
   organizationId: string,
@@ -139,6 +165,17 @@ export async function createComment(
   }
   if (!COMMENT_ENTITY_TYPES.includes(entity_type)) {
     return { data: null, error: "Invalid entity_type" };
+  }
+
+  // When parent_id is provided, validate parent exists, is not deleted, and belongs to same org + entity
+  if (parent_id != null && parent_id !== "") {
+    const parent = await getParentComment(organizationId, parent_id, entity_type, entity_id);
+    if (!parent) {
+      return {
+        data: null,
+        error: "Parent comment not found or not valid for this entity",
+      };
+    }
   }
 
   const fromText = extractMentionUserIds(body);

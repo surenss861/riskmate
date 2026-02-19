@@ -176,6 +176,8 @@ export type NotificationPreferences = {
   email_weekly_digest: boolean;
   high_risk_job: boolean;
   report_ready: boolean;
+  job_comment: boolean;
+  comment_resolved: boolean;
 };
 
 export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
@@ -193,6 +195,8 @@ export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
   email_weekly_digest: true,
   high_risk_job: true,
   report_ready: true,
+  job_comment: true,
+  comment_resolved: true,
 };
 
 /** Safe opt-out when preferences cannot be loaded (e.g. Supabase error). All delivery disabled to avoid re-enabling push/email for opted-out users. */
@@ -211,6 +215,8 @@ export const OPT_OUT_SAFE_PREFERENCES: NotificationPreferences = {
   email_weekly_digest: false,
   high_risk_job: false,
   report_ready: false,
+  job_comment: false,
+  comment_resolved: false,
 };
 
 /** Fetch notification preferences for a user; returns defaults if no row exists. On Supabase error returns OPT_OUT_SAFE_PREFERENCES so delivery is skipped (fail closed). */
@@ -245,6 +251,8 @@ export async function getNotificationPreferences(
     email_weekly_digest: data.email_weekly_digest ?? true,
     high_risk_job: data.high_risk_job ?? true,
     report_ready: data.report_ready ?? true,
+    job_comment: data.job_comment ?? true,
+    comment_resolved: data.comment_resolved ?? true,
   };
 }
 
@@ -968,5 +976,57 @@ export async function sendCommentReplyNotification(
     },
     categoryId: "reply",
     priority: "high",
+  });
+}
+
+/** Notify job owner when someone comments on a job they own (skips when author is the owner). */
+export async function sendJobCommentNotification(
+  userId: string,
+  organizationId: string,
+  commentId: string,
+  jobId: string,
+  contextLabel?: string
+) {
+  const prefs = await getNotificationPreferences(userId);
+  if (!prefs.job_comment) {
+    console.log("[Notifications] Skipped job_comment for user", userId, "(preference disabled)");
+    return;
+  }
+  await sendToUser(userId, organizationId, {
+    title: "New comment on your job",
+    body: contextLabel ?? "Someone commented on a job you own.",
+    data: {
+      type: "job_comment",
+      commentId,
+      jobId,
+      deepLink: `riskmate://comments/${commentId}`,
+    },
+    categoryId: "job_comment",
+    priority: "high",
+  });
+}
+
+/** Notify comment author when someone else resolves their comment. */
+export async function sendCommentResolvedNotification(
+  authorUserId: string,
+  organizationId: string,
+  commentId: string,
+  contextLabel?: string
+) {
+  const prefs = await getNotificationPreferences(authorUserId);
+  if (!prefs.comment_resolved) {
+    console.log("[Notifications] Skipped comment_resolved for user", authorUserId, "(preference disabled)");
+    return;
+  }
+  await sendToUser(authorUserId, organizationId, {
+    title: "Comment resolved",
+    body: contextLabel ?? "Your comment was marked resolved.",
+    data: {
+      type: "comment_resolved",
+      commentId,
+      deepLink: `riskmate://comments/${commentId}`,
+    },
+    categoryId: "comment_resolved",
+    priority: "default",
   });
 }
