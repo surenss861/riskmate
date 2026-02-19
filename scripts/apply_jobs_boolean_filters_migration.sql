@@ -124,7 +124,7 @@ AS $$
   OFFSET GREATEST(COALESCE(p_offset, 0), 0);
 $$;
 
--- Match latest migration (to_tsquery): drop the 22-param overload that includes boolean filters.
+-- Match 20260230100002_search_use_to_tsquery.sql: get_jobs_ranked includes score and highlight.
 DROP FUNCTION IF EXISTS get_jobs_ranked(uuid, text, integer, integer, boolean, text, text, text, text, uuid, real, real, text, text, uuid[], uuid[], boolean, boolean, integer, boolean, boolean, boolean);
 
 CREATE OR REPLACE FUNCTION get_jobs_ranked(
@@ -162,7 +162,9 @@ RETURNS TABLE (
   risk_level TEXT,
   created_at TIMESTAMPTZ,
   updated_at TIMESTAMPTZ,
-  total_count BIGINT
+  total_count BIGINT,
+  score REAL,
+  highlight TEXT
 )
 LANGUAGE sql
 STABLE
@@ -181,7 +183,17 @@ AS $$
     j.risk_level,
     j.created_at,
     j.updated_at,
-    count(*) OVER () AS total_count
+    count(*) OVER () AS total_count,
+    ts_rank(j.search_vector, q.tsq)::REAL AS score,
+    ts_headline(
+      'english',
+      coalesce(j.title, '') || ' ' ||
+      coalesce(j.client_name, '') || ' ' ||
+      coalesce(j.job_type, '') || ' ' ||
+      coalesce(j.description, '') || ' ' ||
+      coalesce(j.location, ''),
+      q.tsq
+    ) AS highlight
   FROM jobs j
   CROSS JOIN q
   WHERE j.organization_id = p_org_id

@@ -20,6 +20,20 @@ export const runtime = 'nodejs'
 
 const ROUTE_JOBS = '/api/jobs'
 
+/** Job object shape returned by GET /api/jobs (same for search and non-search). No score/highlight. */
+export type JobsListJob = {
+  id: string
+  title: string | null
+  client_name: string | null
+  job_type: string | null
+  location: string | null
+  status: string | null
+  risk_score: number | null
+  risk_level: string | null
+  created_at: string | null
+  updated_at: string | null
+}
+
 const SORT_ALLOWLIST = new Set([
   'created_at',
   'updated_at',
@@ -230,7 +244,7 @@ export async function GET(request: NextRequest) {
       p_needs_signatures: needsSignatures ?? null,
     }
 
-    let jobs: Array<Record<string, unknown>> = []
+    let jobs: JobsListJob[] = []
     let totalCount = 0
 
     const normalizedQuery = q ? normalizeSearchQueryForTsquery(q) : ''
@@ -242,13 +256,14 @@ export async function GET(request: NextRequest) {
       if (rankedRes.error) throw rankedRes.error
       const rows = (rankedRes.data || []) as Array<Record<string, unknown>>
       totalCount = (rows[0]?.total_count as number) ?? 0
-      jobs = rows.map(({ total_count: _tc, ...rest }) => rest)
+      // Omit search-only fields so response matches /api/jobs contract (same shape as get_jobs_list).
+      jobs = rows.map(({ total_count: _tc, score: _s, highlight: _h, ...rest }) => rest as JobsListJob)
     } else {
       const listRes = await supabase.rpc('get_jobs_list', rpcBaseParams)
       if (listRes.error) throw listRes.error
       const rows = (listRes.data || []) as Array<Record<string, unknown>>
       totalCount = (rows[0]?.total_count as number) ?? 0
-      jobs = rows.map(({ total_count: _tc, ...rest }) => rest)
+      jobs = rows.map(({ total_count: _tc, ...rest }) => rest as JobsListJob)
     }
 
     return NextResponse.json({
