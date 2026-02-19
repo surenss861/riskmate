@@ -23,6 +23,8 @@ const ROUTE = '/api/search'
  * - has_signatures: optional boolean; when set, filter jobs by presence of signatures
  * - needs_signatures: optional boolean; when set, filter jobs that have no signatures yet
  * - include_archived: optional boolean; when true, include archived jobs and clients in results
+ * - template_source: optional 'template' | 'manual'; filter jobs by template source
+ * - template_id: optional UUID; filter jobs by applied template ID
  */
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -56,6 +58,11 @@ export async function GET(request: NextRequest) {
     const hasSignatures = parseBooleanParam(searchParams.get('has_signatures'))
     const needsSignatures = parseBooleanParam(searchParams.get('needs_signatures'))
     const includeArchived = searchParams.get('include_archived') === 'true'
+    const templateSourceParam = searchParams.get('template_source')?.trim() ?? ''
+    const templateIdParam = searchParams.get('template_id')?.trim() ?? ''
+    const templateSource =
+      templateSourceParam === 'template' || templateSourceParam === 'manual' ? templateSourceParam : null
+    const templateId = templateIdParam && isValidUUID(templateIdParam) ? templateIdParam : null
 
     if (!['jobs', 'hazards', 'clients', 'all'].includes(type)) {
       const { response, errorId } = createErrorResponse(
@@ -226,7 +233,9 @@ export async function GET(request: NextRequest) {
       hasPhotos !== null ||
       hasSignatures !== null ||
       needsSignatures !== null ||
-      includeArchived
+      includeArchived ||
+      templateSource !== null ||
+      templateId !== null
 
     if (q || useJobFilters) {
       if (type === 'jobs' || type === 'all') {
@@ -256,6 +265,8 @@ export async function GET(request: NextRequest) {
               p_has_photos: hasPhotos ?? null,
               p_has_signatures: hasSignatures ?? null,
               p_needs_signatures: needsSignatures ?? null,
+              p_template_source: templateSource,
+              p_template_id: templateId,
             })
             if (rankedRes.error) throw rankedRes.error
             const jobRows = (rankedRes.data || []) as Array<{
@@ -309,6 +320,8 @@ export async function GET(request: NextRequest) {
               p_has_photos: hasPhotos ?? null,
               p_has_signatures: hasSignatures ?? null,
               p_needs_signatures: needsSignatures ?? null,
+              p_template_source: templateSource,
+              p_template_id: templateId,
             })
             if (listRes.error) throw listRes.error
             const jobRows = (listRes.data || []) as Array<{

@@ -218,6 +218,25 @@ describe('GET /api/jobs – advanced filters and response shape', () => {
       expect.objectContaining({ p_include_archived: true })
     )
   })
+
+  it('forwards template_source and template_id to RPC', async () => {
+    const templateId = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
+    const { GET } = await import('@/app/api/jobs/route')
+    const url = `http://localhost/api/jobs?limit=10&template_source=template&template_id=${templateId}`
+    const request = new NextRequest(url)
+    const response = await GET(request)
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.data).toBeDefined()
+    expect(supabaseMock.rpc).toHaveBeenCalledWith(
+      'get_jobs_list',
+      expect.objectContaining({
+        p_template_source: 'template',
+        p_template_id: templateId,
+      })
+    )
+  })
 })
 
 describe('GET /api/search – advanced filters and result shape', () => {
@@ -428,5 +447,75 @@ describe('GET /api/search – advanced filters and result shape', () => {
         p_include_archived: false,
       })
     )
+  })
+
+  it('accepts template_source and template_id and forwards to get_jobs_ranked', async () => {
+    const templateId = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
+    const { GET } = await import('@/app/api/search/route')
+    const request = new NextRequest(
+      `http://localhost/api/search?q=one&type=jobs&limit=20&template_source=template&template_id=${templateId}&include_archived=true`
+    )
+    const response = await GET(request)
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.results).toBeDefined()
+    expect(body.total).toBeDefined()
+    expect(supabaseMock.rpc).toHaveBeenCalledWith(
+      'get_jobs_ranked',
+      expect.objectContaining({
+        p_template_source: 'template',
+        p_template_id: templateId,
+      })
+    )
+    const jobResults = body.results.filter((r: { type: string }) => r.type === 'job')
+    expect(jobResults.length).toBeGreaterThanOrEqual(0)
+    expect(typeof body.total).toBe('number')
+  })
+
+  it('accepts template_source and template_id and forwards to get_jobs_list when no query', async () => {
+    const templateId = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
+    const { GET } = await import('@/app/api/search/route')
+    const request = new NextRequest(
+      `http://localhost/api/search?type=jobs&limit=20&template_source=manual&template_id=${templateId}&include_archived=true`
+    )
+    const response = await GET(request)
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.results).toBeDefined()
+    expect(body.total).toBeDefined()
+    expect(supabaseMock.rpc).toHaveBeenCalledWith(
+      'get_jobs_list',
+      expect.objectContaining({
+        p_template_source: 'manual',
+        p_template_id: templateId,
+      })
+    )
+    expect(typeof body.total).toBe('number')
+  })
+
+  it('filters jobs by template when template_source/template_id set and returns correct count', async () => {
+    supabaseMock.rpc.mockImplementation((name: string, args: Record<string, unknown>) => {
+      if (name === 'get_jobs_list') {
+        const count = args?.p_template_id ? 2 : 0
+        return Promise.resolve({
+          data: count ? [{ id: JOB_ID_1, title: 'Job One', client_name: 'A', job_type: 'inspection', location: 'NY', total_count: 2 }] : [{ total_count: 0 }],
+          error: null,
+        })
+      }
+      return Promise.resolve({ data: null, error: null })
+    })
+    const templateId = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
+    const { GET } = await import('@/app/api/search/route')
+    const withTemplate = new NextRequest(
+      `http://localhost/api/search?type=jobs&limit=20&template_source=template&template_id=${templateId}`
+    )
+    const response = await GET(withTemplate)
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.total).toBe(2)
+    expect(body.results.filter((r: { type: string }) => r.type === 'job')).toHaveLength(1)
   })
 })

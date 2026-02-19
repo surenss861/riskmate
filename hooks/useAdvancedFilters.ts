@@ -105,8 +105,8 @@ function parseStateFromSearchParams(searchParams: URLSearchParams | null): Advan
     needsSignaturesQuick: searchParams.get('needs_signatures') === 'true',
     unassigned: searchParams.get('unassigned') === 'true',
     recent: searchParams.get('recent') === 'true',
-    filterTemplateSource: searchParams.get('source') ?? '',
-    filterTemplateId: searchParams.get('templateId') ?? '',
+    filterTemplateSource: searchParams.get('template_source') ?? '',
+    filterTemplateId: searchParams.get('template_id') ?? '',
   }
 }
 
@@ -133,8 +133,8 @@ function buildParams(state: AdvancedFiltersState): URLSearchParams {
   if (state.overdue) params.set('overdue', 'true')
   if (state.unassigned) params.set('unassigned', 'true')
   if (state.recent) params.set('recent', 'true')
-  if (state.filterTemplateSource) params.set('source', state.filterTemplateSource)
-  if (state.filterTemplateId) params.set('templateId', state.filterTemplateId)
+  if (state.filterTemplateSource) params.set('template_source', state.filterTemplateSource)
+  if (state.filterTemplateId) params.set('template_id', state.filterTemplateId)
   return params
 }
 
