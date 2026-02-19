@@ -101,10 +101,12 @@ AS $$
   LIMIT GREATEST(COALESCE(p_limit, 20), 1);
 $$;
 
+DROP FUNCTION IF EXISTS search_hazards(uuid, text, integer);
 CREATE OR REPLACE FUNCTION search_hazards(
   p_org_id UUID,
   p_query TEXT,
-  p_limit INT DEFAULT 20
+  p_limit INT DEFAULT 20,
+  p_include_archived BOOLEAN DEFAULT false
 )
 RETURNS TABLE (
   id UUID,
@@ -120,29 +122,21 @@ STABLE
 AS $$
   WITH q AS (
     SELECT to_tsquery('english', p_query) AS tsq
-  ),
-  hv AS (
-    SELECT
-      h.id,
-      h.job_id,
-      h.hazard_type,
-      h.description,
-      h.severity,
-      to_tsvector('english', coalesce(h.hazard_type, '') || ' ' || coalesce(h.description, '')) AS vec
-    FROM hazards h
-    WHERE h.organization_id = p_org_id
   )
   SELECT
-    hv.id,
-    hv.job_id,
-    hv.hazard_type,
-    hv.description,
-    hv.severity,
-    ts_rank(hv.vec, q.tsq)::REAL AS score,
-    ts_headline('english', coalesce(hv.description, ''), q.tsq) AS highlight
-  FROM hv
+    h.id,
+    h.job_id,
+    h.hazard_type,
+    h.description,
+    h.severity,
+    ts_rank(h.search_vector, q.tsq)::REAL AS score,
+    ts_headline('english', coalesce(h.description, ''), q.tsq) AS highlight
+  FROM hazards h
   CROSS JOIN q
-  WHERE hv.vec @@ q.tsq
+  WHERE h.organization_id = p_org_id
+    AND h.deleted_at IS NULL
+    AND (p_include_archived OR h.archived_at IS NULL)
+    AND h.search_vector @@ q.tsq
   ORDER BY score DESC
   LIMIT GREATEST(COALESCE(p_limit, 20), 1);
 $$;
@@ -165,7 +159,12 @@ AS $$
     AND j.search_vector @@ to_tsquery('english', p_query);
 $$;
 
-CREATE OR REPLACE FUNCTION search_hazards_count(p_org_id UUID, p_query TEXT)
+DROP FUNCTION IF EXISTS search_hazards_count(uuid, text);
+CREATE OR REPLACE FUNCTION search_hazards_count(
+  p_org_id UUID,
+  p_query TEXT,
+  p_include_archived BOOLEAN DEFAULT false
+)
 RETURNS BIGINT
 LANGUAGE sql
 STABLE
@@ -173,7 +172,9 @@ AS $$
   SELECT COUNT(*)::BIGINT
   FROM hazards h
   WHERE h.organization_id = p_org_id
-    AND to_tsvector('english', coalesce(h.hazard_type, '') || ' ' || coalesce(h.description, '')) @@ to_tsquery('english', p_query);
+    AND h.deleted_at IS NULL
+    AND (p_include_archived OR h.archived_at IS NULL)
+    AND h.search_vector @@ to_tsquery('english', p_query);
 $$;
 
 DROP FUNCTION IF EXISTS get_jobs_ranked(uuid, text, integer, integer, boolean, text, text, text, text, uuid, real, real, text, text, uuid[], uuid[], boolean, boolean, integer, boolean, boolean, boolean);
