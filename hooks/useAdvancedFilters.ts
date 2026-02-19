@@ -70,7 +70,8 @@ function parseStateFromSearchParams(searchParams: URLSearchParams | null): Advan
   let filterConfig: FilterGroup | null = null
   if (filterConfigRaw) {
     try {
-      const parsed = typeof filterConfigRaw === 'string' ? JSON.parse(decodeURIComponent(filterConfigRaw)) : filterConfigRaw
+      // URLSearchParams already returns decoded values; parse raw JSON only
+      const parsed = typeof filterConfigRaw === 'string' ? JSON.parse(filterConfigRaw) : filterConfigRaw
       filterConfig = normalizeFilterConfig(parsed)
     } catch {
       // ignore invalid JSON
@@ -117,7 +118,7 @@ function buildParams(state: AdvancedFiltersState): URLSearchParams {
   if (state.page > 1) params.set('page', String(state.page))
   if (state.savedFilterId) params.set('saved_filter_id', state.savedFilterId)
   if (state.filterConfig && Object.keys(state.filterConfig).length > 0) {
-    params.set('filter_config', encodeURIComponent(JSON.stringify(state.filterConfig)))
+    params.set('filter_config', JSON.stringify(state.filterConfig))
   }
   if (state.myJobs) params.set('my_jobs', 'true')
   if (state.highRisk) params.set('high_risk', 'true')

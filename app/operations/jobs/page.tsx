@@ -136,6 +136,7 @@ const JobsPageContent = () => {
     ]
   )
 
+  // Use debouncedSearchQuery (not state.searchQuery) so key and fetcher use the same value and results don't lag a keystroke
   const swrKey = `jobs-list-${state.page}-${state.filterStatus}-${state.filterRiskLevel}-${state.filterTemplateSource}-${state.filterTemplateId}-${debouncedSearchQuery}-${state.filterTimeRange}-${state.includeArchived}-${state.hasPhotos}-${state.hasSignatures}-${state.needsSignatures}-${state.filterConfig ? JSON.stringify(state.filterConfig) : ''}-${state.savedFilterId}-${state.myJobs}-${state.highRisk}-${state.overdue}-${state.unassigned}-${state.recent}`
 
   const { data: response, error, isLoading, mutate } = useSWR(swrKey, fetcher, {
