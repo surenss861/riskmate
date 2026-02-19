@@ -204,21 +204,25 @@ export function AdvancedFilterBuilder({ value, onChange, className = '' }: Advan
 
     if (fieldType === 'number') {
       if (op === 'between') {
-        const arr = Array.isArray(val) ? (val as (number | string)[]) : [val, val]
+        const arr = Array.isArray(val) ? (val as unknown[]) : [val, val]
+        const toNumStr = (v: unknown): string =>
+          typeof v === 'number' && Number.isFinite(v) ? String(v) : typeof v === 'string' ? v : ''
+        const minStr = toNumStr(arr[0])
+        const maxStr = toNumStr(arr[1])
         return (
           <div className="flex items-center gap-2">
             <input
               type="number"
-              value={arr[0] ?? ''}
-              onChange={(e) => updateCondition(index, { value: [e.target.value === '' ? '' : Number(e.target.value), arr[1] ?? ''] })}
+              value={minStr}
+              onChange={(e) => updateCondition(index, { value: [e.target.value === '' ? '' : Number(e.target.value), arr[1]] })}
               className="h-9 w-24 px-2 rounded-lg bg-white/5 border border-white/10 text-sm text-white focus:ring-1 focus:ring-[#F97316]/50 outline-none"
               placeholder="Min"
             />
             <span className="text-white/50">–</span>
             <input
               type="number"
-              value={arr[1] ?? ''}
-              onChange={(e) => updateCondition(index, { value: [arr[0] ?? '', e.target.value === '' ? '' : Number(e.target.value)] })}
+              value={maxStr}
+              onChange={(e) => updateCondition(index, { value: [arr[0], e.target.value === '' ? '' : Number(e.target.value)] })}
               className="h-9 w-24 px-2 rounded-lg bg-white/5 border border-white/10 text-sm text-white focus:ring-1 focus:ring-[#F97316]/50 outline-none"
               placeholder="Max"
             />

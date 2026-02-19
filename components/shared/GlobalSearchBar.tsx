@@ -107,16 +107,18 @@ export function GlobalSearchBar() {
   }, [debouncedQuery])
 
   const flatItems: { type: 'job' | 'hazard' | 'client'; id: string; title: string; subtitle: string; highlight: string; score: number }[] = results
-  const jobs = flatItems.filter((r) => r.type === 'job')
-  const hazards = flatItems.filter((r) => r.type === 'hazard')
-  const clients = flatItems.filter((r) => r.type === 'client')
+  const sectioned = React.useMemo(() => {
+    const jobs = flatItems.filter((r) => r.type === 'job')
+    const hazards = flatItems.filter((r) => r.type === 'hazard')
+    const clients = flatItems.filter((r) => r.type === 'client')
+    const out: { section: string; items: typeof flatItems }[] = []
+    if (jobs.length) out.push({ section: 'Jobs', items: jobs })
+    if (hazards.length) out.push({ section: 'Hazards', items: hazards })
+    if (clients.length) out.push({ section: 'Clients', items: clients })
+    return out
+  }, [results])
 
-  const sectioned: { section: string; items: typeof flatItems }[] = []
-  if (jobs.length) sectioned.push({ section: 'Jobs', items: jobs })
-  if (hazards.length) sectioned.push({ section: 'Hazards', items: hazards })
-  if (clients.length) sectioned.push({ section: 'Clients', items: clients })
-
-  const allItems = sectioned.flatMap((s) => s.items)
+  const allItems = React.useMemo(() => sectioned.flatMap((s) => s.items), [sectioned])
   const canNavigate = allItems.length > 0
 
   useEffect(() => {
