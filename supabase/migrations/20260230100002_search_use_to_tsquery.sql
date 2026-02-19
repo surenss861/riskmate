@@ -101,6 +101,33 @@ AS $$
   LIMIT GREATEST(COALESCE(p_limit, 20), 1);
 $$;
 
+-- Ensure hazards has search_vector (and deleted_at/archived_at) so search_hazards can use GIN index.
+-- Idempotent: safe if 20260229100000 already ran.
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                 WHERE table_schema = 'public' AND table_name = 'hazards' AND column_name = 'deleted_at') THEN
+    ALTER TABLE hazards ADD COLUMN deleted_at TIMESTAMPTZ;
+    COMMENT ON COLUMN hazards.deleted_at IS 'Soft-delete timestamp; excluded from search by default.';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                 WHERE table_schema = 'public' AND table_name = 'hazards' AND column_name = 'archived_at') THEN
+    ALTER TABLE hazards ADD COLUMN archived_at TIMESTAMPTZ;
+    COMMENT ON COLUMN hazards.archived_at IS 'Archived timestamp; excluded from search unless p_include_archived.';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                 WHERE table_schema = 'public' AND table_name = 'hazards' AND column_name = 'search_vector') THEN
+    ALTER TABLE hazards
+      ADD COLUMN search_vector tsvector
+      GENERATED ALWAYS AS (
+        to_tsvector('english',
+          coalesce(hazard_type, '') || ' ' || coalesce(description, '')
+        )
+      ) STORED;
+    CREATE INDEX IF NOT EXISTS idx_hazards_search ON hazards USING GIN(search_vector);
+  END IF;
+END $$;
+
 DROP FUNCTION IF EXISTS search_hazards(uuid, text, integer);
 CREATE OR REPLACE FUNCTION search_hazards(
   p_org_id UUID,
