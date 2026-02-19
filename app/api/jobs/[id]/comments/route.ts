@@ -140,12 +140,38 @@ export async function POST(
       })
     }
 
+    const supabase = await createSupabaseServerClient()
+
+    if (parent_id != null && parent_id !== '') {
+      const { data: parentRow, error: parentError } = await supabase
+        .from('comments')
+        .select('id, organization_id, entity_type, entity_id, deleted_at')
+        .eq('id', parent_id)
+        .eq('organization_id', organization_id)
+        .eq('entity_type', ENTITY_TYPE)
+        .eq('entity_id', jobId)
+        .is('deleted_at', null)
+        .maybeSingle()
+
+      if (parentError) throw parentError
+      if (!parentRow) {
+        const { response: errResp, errorId: errId } = createErrorResponse(
+          'Parent comment not found or not valid for this job',
+          'NOT_FOUND',
+          { requestId, statusCode: 404 }
+        )
+        return NextResponse.json(errResp, {
+          status: 404,
+          headers: { 'X-Request-ID': requestId, 'X-Error-ID': errId },
+        })
+      }
+    }
+
     const fromText = extractMentionUserIds(trimmed)
     const rawMentionIds = Array.isArray(explicitMentions)
       ? [...new Set([...explicitMentions, ...fromText])].filter((id) => id && id !== user_id)
       : fromText.filter((id) => id !== user_id)
 
-    const supabase = await createSupabaseServerClient()
     let mentionUserIds: string[]
     if (rawMentionIds.length === 0) {
       mentionUserIds = []
