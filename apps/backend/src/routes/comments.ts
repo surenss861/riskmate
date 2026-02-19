@@ -7,6 +7,9 @@ import {
   deleteComment,
   getComment,
   listCommentsWhereMentioned,
+  resolveComment,
+  unresolveComment,
+  listReplies,
   COMMENT_ENTITY_TYPES,
   type CommentEntityType,
 } from "../services/comments";
@@ -203,6 +206,118 @@ commentsRouter.delete(
     } catch (err: any) {
       console.error("Delete comment failed:", err);
       res.status(500).json({ message: "Failed to delete comment" });
+    }
+  }
+);
+
+/** POST /api/comments/:id/resolve — mark comment resolved. */
+commentsRouter.post(
+  "/:id/resolve",
+  authenticate as unknown as express.RequestHandler,
+  async (req: express.Request, res: express.Response) => {
+    const authReq = req as AuthenticatedRequest;
+    const commentId = req.params.id;
+    try {
+      const result = await resolveComment(
+        authReq.user.organization_id,
+        commentId,
+        authReq.user.id
+      );
+      if (result.error) {
+        return res.status(404).json({ message: result.error, code: "NOT_FOUND" });
+      }
+      res.json({ data: result.data });
+    } catch (err: any) {
+      console.error("Resolve comment failed:", err);
+      res.status(500).json({ message: "Failed to resolve comment" });
+    }
+  }
+);
+
+/** DELETE /api/comments/:id/resolve — unresolve comment. */
+commentsRouter.delete(
+  "/:id/resolve",
+  authenticate as unknown as express.RequestHandler,
+  async (req: express.Request, res: express.Response) => {
+    const authReq = req as AuthenticatedRequest;
+    const commentId = req.params.id;
+    try {
+      const result = await unresolveComment(
+        authReq.user.organization_id,
+        commentId
+      );
+      if (result.error) {
+        return res.status(404).json({ message: result.error, code: "NOT_FOUND" });
+      }
+      res.json({ data: result.data });
+    } catch (err: any) {
+      console.error("Unresolve comment failed:", err);
+      res.status(500).json({ message: "Failed to unresolve comment" });
+    }
+  }
+);
+
+/** GET /api/comments/:id/replies — list replies for a comment. */
+commentsRouter.get(
+  "/:id/replies",
+  authenticate as unknown as express.RequestHandler,
+  async (req: express.Request, res: express.Response) => {
+    const authReq = req as AuthenticatedRequest;
+    const parentId = req.params.id;
+    try {
+      const limit = req.query.limit != null ? parseInt(String(req.query.limit), 10) : 50;
+      const offset = req.query.offset != null ? parseInt(String(req.query.offset), 10) : 0;
+      const result = await listReplies(
+        authReq.user.organization_id,
+        parentId,
+        { limit, offset }
+      );
+      res.json(result);
+    } catch (err: any) {
+      console.error("List replies failed:", err);
+      res.status(500).json({ message: "Failed to list replies" });
+    }
+  }
+);
+
+/** POST /api/comments/:id/replies — create a reply (entity_type/entity_id from parent comment). */
+commentsRouter.post(
+  "/:id/replies",
+  authenticate as unknown as express.RequestHandler,
+  async (req: express.Request, res: express.Response) => {
+    const authReq = req as AuthenticatedRequest;
+    const parentId = req.params.id;
+    const body = (req.body || {}) as { body?: string; mention_user_ids?: string[] };
+    const commentBody = body.body;
+    if (!commentBody || typeof commentBody !== "string" || !commentBody.trim()) {
+      return res.status(400).json({
+        message: "body.body is required and must be a non-empty string",
+        code: "INVALID_BODY",
+      });
+    }
+    const parent = await getComment(authReq.user.organization_id, parentId);
+    if (!parent || (parent as any).deleted_at) {
+      return res.status(404).json({ message: "Comment not found", code: "NOT_FOUND" });
+    }
+    try {
+      const result = await createComment(
+        authReq.user.organization_id,
+        authReq.user.id,
+        {
+          entity_type: parent.entity_type as CommentEntityType,
+          entity_id: parent.entity_id,
+          body: commentBody.trim(),
+          parent_id: parentId,
+          mention_user_ids: Array.isArray(body.mention_user_ids) ? body.mention_user_ids : undefined,
+        }
+      );
+      if (result.error) {
+        return res.status(400).json({ message: result.error, code: "CREATE_FAILED" });
+      }
+      res.status(201).json({ data: result.data });
+    } catch (err: any) {
+      console.error("Create reply failed:", err);
+      res.status(500).json({ message: "Failed to create reply" });
     }
   }
 );

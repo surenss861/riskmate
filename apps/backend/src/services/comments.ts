@@ -8,6 +8,7 @@ export const COMMENT_ENTITY_TYPES = [
   "task",
   "document",
   "signoff",
+  "photo",
 ] as const;
 export type CommentEntityType = (typeof COMMENT_ENTITY_TYPES)[number];
 
@@ -19,6 +20,12 @@ export interface CommentRow {
   parent_id: string | null;
   author_id: string;
   body: string;
+  mentions?: string[];
+  is_resolved?: boolean;
+  resolved_by?: string | null;
+  resolved_at?: string | null;
+  edited_at?: string | null;
+  deleted_at?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -26,15 +33,17 @@ export interface CommentRow {
 export interface CommentWithAuthor extends CommentRow {
   author?: { id: string; full_name: string | null; email: string | null };
   mentions?: { user_id: string }[];
+  reply_count?: number;
 }
 
 export interface ListCommentsOptions {
   limit?: number;
   offset?: number;
   includeReplies?: boolean;
+  includeDeleted?: boolean;
 }
 
-/** List comments for an entity. Returns flat list (replies have parent_id set). */
+/** List comments for an entity. Excludes soft-deleted by default. Returns author info and reply counts. */
 export async function listComments(
   organizationId: string,
   entityType: CommentEntityType,
@@ -47,7 +56,7 @@ export async function listComments(
   let query = supabase
     .from("comments")
     .select(
-      "id, organization_id, entity_type, entity_id, parent_id, author_id, body, created_at, updated_at"
+      "id, organization_id, entity_type, entity_id, parent_id, author_id, body, mentions, is_resolved, resolved_by, resolved_at, edited_at, deleted_at, created_at, updated_at"
     )
     .eq("organization_id", organizationId)
     .eq("entity_type", entityType)
@@ -56,6 +65,9 @@ export async function listComments(
 
   if (options.includeReplies === false) {
     query = query.is("parent_id", null);
+  }
+  if (options.includeDeleted !== true) {
+    query = query.is("deleted_at", null);
   }
 
   const { data: rows, error } = await query.range(offset, offset + limit - 1);
@@ -77,19 +89,19 @@ export async function listComments(
     .in("id", authorIds);
 
   const commentIds = comments.map((c) => c.id);
-  const { data: mentionRows } = await supabase
-    .from("comment_mentions")
-    .select("comment_id, user_id")
-    .in("comment_id", commentIds);
+  const { data: replyRows } = await supabase
+    .from("comments")
+    .select("parent_id")
+    .in("parent_id", commentIds)
+    .is("deleted_at", null);
 
-  const userMap = new Map((users || []).map((u: any) => [u.id, u]));
-  const mentionsByComment = new Map<string, { user_id: string }[]>();
-  for (const m of mentionRows || []) {
-    const list = mentionsByComment.get((m as any).comment_id) ?? [];
-    list.push({ user_id: (m as any).user_id });
-    mentionsByComment.set((m as any).comment_id, list);
+  const replyCountByParent = new Map<string, number>();
+  for (const r of replyRows || []) {
+    const pid = (r as { parent_id: string }).parent_id;
+    if (pid) replyCountByParent.set(pid, (replyCountByParent.get(pid) ?? 0) + 1);
   }
 
+  const userMap = new Map((users || []).map((u: any) => [u.id, u]));
   const data: CommentWithAuthor[] = comments.map((c) => ({
     ...c,
     author: userMap.get(c.author_id)
@@ -99,13 +111,14 @@ export async function listComments(
           email: (userMap.get(c.author_id) as any)?.email ?? null,
         }
       : undefined,
-    mentions: mentionsByComment.get(c.id) ?? [],
+    mentions: (c.mentions ?? []).map((user_id) => ({ user_id })),
+    reply_count: replyCountByParent.get(c.id) ?? 0,
   }));
 
   return { data };
 }
 
-/** Create a comment and optionally mention users (sends notifications). */
+/** Create a comment with optional mentions (stored in comments.mentions; sends notifications). */
 export async function createComment(
   organizationId: string,
   authorId: string,
@@ -126,6 +139,10 @@ export async function createComment(
     return { data: null, error: "Invalid entity_type" };
   }
 
+  const toMention = (mention_user_ids ?? []).filter(
+    (id) => id && id !== authorId
+  );
+
   const { data: comment, error: insertError } = await supabase
     .from("comments")
     .insert({
@@ -135,6 +152,7 @@ export async function createComment(
       parent_id: parent_id ?? null,
       author_id: authorId,
       body: body.trim(),
+      mentions: toMention.length > 0 ? toMention : [],
     })
     .select()
     .single();
@@ -147,17 +165,7 @@ export async function createComment(
     return { data: null, error: "Failed to create comment" };
   }
 
-  const toMention = (mention_user_ids ?? []).filter(
-    (id) => id && id !== authorId
-  );
   if (toMention.length > 0) {
-    await supabase.from("comment_mentions").insert(
-      toMention.map((user_id) => ({
-        comment_id: comment.id,
-        user_id,
-      }))
-    );
-
     const contextLabel = "You were mentioned in a comment.";
     for (const userId of toMention) {
       sendMentionNotification(
@@ -174,7 +182,7 @@ export async function createComment(
   return { data: comment as CommentRow, error: null };
 }
 
-/** Update comment body (caller must ensure author or admin). */
+/** Update comment body (sets edited_at). Caller must ensure author or admin. */
 export async function updateComment(
   organizationId: string,
   commentId: string,
@@ -187,7 +195,7 @@ export async function updateComment(
 
   const { data: existing } = await supabase
     .from("comments")
-    .select("id, author_id, organization_id")
+    .select("id, author_id, organization_id, deleted_at")
     .eq("id", commentId)
     .eq("organization_id", organizationId)
     .single();
@@ -195,13 +203,21 @@ export async function updateComment(
   if (!existing) {
     return { data: null, error: "Comment not found" };
   }
+  if ((existing as any).deleted_at) {
+    return { data: null, error: "Comment is deleted" };
+  }
   if ((existing as any).author_id !== userId) {
     return { data: null, error: "Only the author can update this comment" };
   }
 
+  const now = new Date().toISOString();
   const { data: comment, error } = await supabase
     .from("comments")
-    .update({ body: body.trim(), updated_at: new Date().toISOString() })
+    .update({
+      body: body.trim(),
+      edited_at: now,
+      updated_at: now,
+    })
     .eq("id", commentId)
     .eq("organization_id", organizationId)
     .select()
@@ -214,14 +230,15 @@ export async function updateComment(
   return { data: comment as CommentRow, error: null };
 }
 
-/** Delete a comment (caller must ensure author or org admin). */
+/** Soft-delete a comment (sets deleted_at and updated_at). No cascade on replies. Caller must ensure author or org admin. */
 export async function deleteComment(
   organizationId: string,
   commentId: string
 ): Promise<{ ok: boolean; error: string | null }> {
+  const now = new Date().toISOString();
   const { error } = await supabase
     .from("comments")
-    .delete()
+    .update({ deleted_at: now, updated_at: now })
     .eq("id", commentId)
     .eq("organization_id", organizationId);
 
@@ -232,7 +249,7 @@ export async function deleteComment(
   return { ok: true, error: null };
 }
 
-/** Get a single comment by id (for permission checks). */
+/** Get a single comment by id (for permission checks). Includes deleted. */
 export async function getComment(
   organizationId: string,
   commentId: string
@@ -248,7 +265,7 @@ export async function getComment(
   return data as CommentRow;
 }
 
-/** List comments where the given user is mentioned (for notification center). */
+/** List comments where the given user is in mentions array. Excludes soft-deleted. */
 export async function listCommentsWhereMentioned(
   organizationId: string,
   userId: string,
@@ -257,21 +274,14 @@ export async function listCommentsWhereMentioned(
   const limit = Math.min(Math.max(options.limit ?? 20, 1), 50);
   const offset = Math.max(options.offset ?? 0, 0);
 
-  const { data: mentionRows, error: mentionError } = await supabase
-    .from("comment_mentions")
-    .select("comment_id")
-    .eq("user_id", userId);
-
-  if (mentionError || !mentionRows?.length) {
-    return { data: [] };
-  }
-
-  const commentIds = [...new Set((mentionRows as any[]).map((r) => r.comment_id))];
   const { data: comments, error } = await supabase
     .from("comments")
-    .select("id, organization_id, entity_type, entity_id, parent_id, author_id, body, created_at, updated_at")
+    .select(
+      "id, organization_id, entity_type, entity_id, parent_id, author_id, body, mentions, is_resolved, resolved_by, resolved_at, edited_at, deleted_at, created_at, updated_at"
+    )
     .eq("organization_id", organizationId)
-    .in("id", commentIds)
+    .is("deleted_at", null)
+    .contains("mentions", [userId])
     .order("created_at", { ascending: false })
     .range(offset, offset + limit - 1);
 
@@ -285,19 +295,7 @@ export async function listCommentsWhereMentioned(
     .select("id, full_name, email")
     .in("id", authorIds);
 
-  const { data: mentionRows2 } = await supabase
-    .from("comment_mentions")
-    .select("comment_id, user_id")
-    .in("comment_id", (comments as CommentRow[]).map((c) => c.id));
-
   const userMap = new Map((users || []).map((u: any) => [u.id, u]));
-  const mentionsByComment = new Map<string, { user_id: string }[]>();
-  for (const m of mentionRows2 || []) {
-    const list = mentionsByComment.get((m as any).comment_id) ?? [];
-    list.push({ user_id: (m as any).user_id });
-    mentionsByComment.set((m as any).comment_id, list);
-  }
-
   const data: CommentWithAuthor[] = (comments as CommentRow[]).map((c) => ({
     ...c,
     author: userMap.get(c.author_id)
@@ -307,7 +305,138 @@ export async function listCommentsWhereMentioned(
           email: (userMap.get(c.author_id) as any)?.email ?? null,
         }
       : undefined,
-    mentions: mentionsByComment.get(c.id) ?? [],
+    mentions: (c.mentions ?? []).map((user_id) => ({ user_id })),
+  }));
+
+  return { data };
+}
+
+/** Resolve a comment (sets is_resolved, resolved_by, resolved_at). */
+export async function resolveComment(
+  organizationId: string,
+  commentId: string,
+  userId: string
+): Promise<{ data: CommentRow | null; error: string | null }> {
+  const { data: existing } = await supabase
+    .from("comments")
+    .select("id, deleted_at")
+    .eq("id", commentId)
+    .eq("organization_id", organizationId)
+    .single();
+
+  if (!existing || (existing as any).deleted_at) {
+    return { data: null, error: "Comment not found" };
+  }
+
+  const now = new Date().toISOString();
+  const { data: comment, error } = await supabase
+    .from("comments")
+    .update({
+      is_resolved: true,
+      resolved_by: userId,
+      resolved_at: now,
+      updated_at: now,
+    })
+    .eq("id", commentId)
+    .eq("organization_id", organizationId)
+    .select()
+    .single();
+
+  if (error) {
+    console.error("[Comments] resolveComment error:", error);
+    return { data: null, error: error.message };
+  }
+  return { data: comment as CommentRow, error: null };
+}
+
+/** Unresolve a comment (clears is_resolved, resolved_by, resolved_at). */
+export async function unresolveComment(
+  organizationId: string,
+  commentId: string
+): Promise<{ data: CommentRow | null; error: string | null }> {
+  const { data: existing } = await supabase
+    .from("comments")
+    .select("id, deleted_at")
+    .eq("id", commentId)
+    .eq("organization_id", organizationId)
+    .single();
+
+  if (!existing || (existing as any).deleted_at) {
+    return { data: null, error: "Comment not found" };
+  }
+
+  const now = new Date().toISOString();
+  const { data: comment, error } = await supabase
+    .from("comments")
+    .update({
+      is_resolved: false,
+      resolved_by: null,
+      resolved_at: null,
+      updated_at: now,
+    })
+    .eq("id", commentId)
+    .eq("organization_id", organizationId)
+    .select()
+    .single();
+
+  if (error) {
+    console.error("[Comments] unresolveComment error:", error);
+    return { data: null, error: error.message };
+  }
+  return { data: comment as CommentRow, error: null };
+}
+
+/** List replies for a comment. Excludes soft-deleted by default. */
+export async function listReplies(
+  organizationId: string,
+  parentId: string,
+  options: { limit?: number; offset?: number; includeDeleted?: boolean } = {}
+): Promise<{ data: CommentWithAuthor[] }> {
+  const limit = Math.min(Math.max(options.limit ?? 50, 1), 100);
+  const offset = Math.max(options.offset ?? 0, 0);
+
+  let query = supabase
+    .from("comments")
+    .select(
+      "id, organization_id, entity_type, entity_id, parent_id, author_id, body, mentions, is_resolved, resolved_by, resolved_at, edited_at, deleted_at, created_at, updated_at"
+    )
+    .eq("organization_id", organizationId)
+    .eq("parent_id", parentId)
+    .order("created_at", { ascending: true });
+
+  if (options.includeDeleted !== true) {
+    query = query.is("deleted_at", null);
+  }
+
+  const { data: rows, error } = await query.range(offset, offset + limit - 1);
+
+  if (error) {
+    console.error("[Comments] listReplies error:", error);
+    return { data: [] };
+  }
+
+  const comments = (rows || []) as CommentRow[];
+  if (comments.length === 0) {
+    return { data: [] };
+  }
+
+  const authorIds = [...new Set(comments.map((c) => c.author_id))];
+  const { data: users } = await supabase
+    .from("users")
+    .select("id, full_name, email")
+    .in("id", authorIds);
+
+  const userMap = new Map((users || []).map((u: any) => [u.id, u]));
+  const data: CommentWithAuthor[] = comments.map((c) => ({
+    ...c,
+    author: userMap.get(c.author_id)
+      ? {
+          id: c.author_id,
+          full_name: (userMap.get(c.author_id) as any)?.full_name ?? null,
+          email: (userMap.get(c.author_id) as any)?.email ?? null,
+        }
+      : undefined,
+    mentions: (c.mentions ?? []).map((user_id) => ({ user_id })),
   }));
 
   return { data };
