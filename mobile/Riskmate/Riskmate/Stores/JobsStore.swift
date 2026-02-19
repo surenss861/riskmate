@@ -31,9 +31,8 @@ final class JobsStore: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            Task { @MainActor in
-                self?.refreshPendingJobIds()
-            }
+            guard let self else { return }
+            Task { @MainActor in self.refreshPendingJobIds() }
         }
     }
 

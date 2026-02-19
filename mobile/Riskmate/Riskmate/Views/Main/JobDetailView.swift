@@ -1031,7 +1031,7 @@ struct HazardsTab: View {
         defer { isLoading = false }
         
         do {
-            var apiHazards = try await APIClient.shared.getHazards(jobId: jobId)
+            let apiHazards = try await APIClient.shared.getHazards(jobId: jobId)
             let pendingData = OfflineDatabase.shared.getPendingHazards(jobId: jobId)
             let pendingHazards: [Hazard] = pendingData.compactMap { data in
                 guard let hazard = try? JSONDecoder().decode(Hazard.self, from: data) else { return nil }
@@ -1499,7 +1499,7 @@ struct ControlsTab: View {
         defer { isLoading = false }
         
         do {
-            var apiControls = try await APIClient.shared.getControls(jobId: jobId)
+            let apiControls = try await APIClient.shared.getControls(jobId: jobId)
             let pendingData = OfflineDatabase.shared.getPendingControls(jobId: jobId)
             let pendingControls: [Control] = pendingData.compactMap { data in
                 guard let control = try? JSONDecoder().decode(Control.self, from: data) else { return nil }

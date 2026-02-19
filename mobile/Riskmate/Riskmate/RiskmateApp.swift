@@ -188,6 +188,10 @@ struct RiskmateApp: App {
         guard sessionManager.isAuthenticated else { return }
         let status = await NotificationService.shared.authorizationStatus()
         switch status {
+        case .ephemeral:
+            // Treat like authorized for token registration
+            NotificationService.shared.registerForRemoteNotificationsIfAuthorized()
+            await NotificationService.shared.registerStoredTokenIfNeeded()
         case .notDetermined:
             await MainActor.run {
                 showNotificationPermissionPrompt = true

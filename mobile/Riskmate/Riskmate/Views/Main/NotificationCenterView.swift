@@ -253,7 +253,7 @@ struct NotificationCenterView: View {
     /// On row tap: navigate via deep link if present, then mark this notification read and refresh badge.
     private func handleRowTap(_ item: AppNotification) async {
         if let link = item.deepLink, !link.isEmpty, let url = URL(string: link) {
-            await MainActor.run {
+            _ = await MainActor.run {
                 DeepLinkRouter.shared.handle(url)
             }
         }

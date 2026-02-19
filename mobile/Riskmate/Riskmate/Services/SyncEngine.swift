@@ -43,14 +43,14 @@ final class SyncEngine: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.refreshPendingOperations()
+            Task { @MainActor in self?.refreshPendingOperations() }
         }
         conflictHistoryObserver = NotificationCenter.default.addObserver(
             forName: .syncConflictHistoryDidChange,
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.refreshPendingConflictsFromDB()
+            Task { @MainActor in self?.refreshPendingConflictsFromDB() }
         }
         // Auto-sync when backend becomes reachable after being offline
         reachabilityCancellable = ServerStatusManager.shared.$isOnline
@@ -298,7 +298,7 @@ final class SyncEngine: ObservableObject {
             for c in downloadConflicts {
                 if !conflicts.contains(where: { $0.id == c.id }) {
                     conflicts.append(c)
-                    let (serverPayload, localPayload) = rawPayloadsForConflictLog(entityType: c.entityType, serverValue: c.serverValue as? Any, localValue: c.localValue as? Any)
+                    let (serverPayload, localPayload) = rawPayloadsForConflictLog(entityType: c.entityType, serverValue: c.serverValue.map { $0 as Any }, localValue: c.localValue.map { $0 as Any })
                     db.insertConflict(
                         id: c.id,
                         entityType: c.entityType,
@@ -347,8 +347,8 @@ final class SyncEngine: ObservableObject {
                 entityType: row.entityType,
                 entityId: row.entityId,
                 field: row.field ?? "data",
-                serverValue: row.serverVersion as? AnyHashable,
-                localValue: row.localVersion as? AnyHashable,
+                serverValue: row.serverVersion.map { AnyHashable($0) },
+                localValue: row.localVersion.map { AnyHashable($0) },
                 serverTimestamp: row.serverTimestamp ?? Date(),
                 localTimestamp: row.localTimestamp ?? Date(),
                 operationType: row.operationType,
@@ -531,7 +531,7 @@ final class SyncEngine: ObservableObject {
             case .localWins, .merge:
                 // Reconstruct local payload from pending storage, re-enqueue sync op, run sync, then mark resolved
                 let payload = resolvedValue ?? getLocalPayloadForConflict(entityType: et ?? "job", entityId: eid ?? "")
-                guard let resolved = payload, let entityId = eid, let entityType = et else {
+                guard let resolved = payload, eid != nil, let entityType = et else {
                     throw NSError(domain: "SyncEngine", code: -1, userInfo: [NSLocalizedDescriptionKey: "Cannot resolve divergent conflict: missing local payload or entity id"])
                 }
                 let jobId = resolved["job_id"] as? String ?? resolved["jobId"] as? String
@@ -637,7 +637,7 @@ final class SyncEngine: ObservableObject {
         case .localWins, .merge:
             if let job = response.updatedJob {
                 OfflineCache.shared.mergeCachedJobs(synced: [job], deletedIds: [])
-            } else if let resolved = resolvedValue, effectiveEntityType == "job", let effectiveEntityId = effectiveEntityId {
+            } else if let resolved = resolvedValue, effectiveEntityType == "job", effectiveEntityId != nil {
                 if let job = try? decodeJob(from: resolved) {
                     OfflineCache.shared.mergeCachedJobs(synced: [job], deletedIds: [])
                 }
@@ -914,7 +914,7 @@ final class SyncEngine: ObservableObject {
                 operationType = nil
             } else if conflict.id.hasPrefix("divergent:") {
                 var base = getLocalPayloadForConflict(entityType: et, entityId: eid)
-                if outcome.strategy == .merge && (et == "hazard" || et == "control"), var localDict = base {
+                if outcome.strategy == .merge && (et == "hazard" || et == "control"), let localDict = base {
                     base = SyncConflictMerge.mergeHazardControlPayload(
                         localDict: localDict,
                         serverValue: conflict.serverValueForMerge ?? (conflict.serverValue as Any?),
@@ -934,7 +934,7 @@ final class SyncEngine: ObservableObject {
                     throw NSError(domain: "ConflictResolution", code: 3, userInfo: [NSLocalizedDescriptionKey: "Cannot resolve: original operation type is unknown. The pending operation may have been cleared."])
                 }
                 var base = getLocalPayloadForConflict(entityType: et, entityId: eid)
-                if outcome.strategy == .merge && (et == "hazard" || et == "control"), var localDict = base {
+                if outcome.strategy == .merge && (et == "hazard" || et == "control"), let localDict = base {
                     base = SyncConflictMerge.mergeHazardControlPayload(
                         localDict: localDict,
                         serverValue: conflict.serverValueForMerge ?? (conflict.serverValue as Any?),

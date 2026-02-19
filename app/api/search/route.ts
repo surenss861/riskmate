@@ -28,36 +28,6 @@ export async function GET(request: NextRequest) {
     const limit = Number.isFinite(parsedLimit) ? Math.min(Math.max(parsedLimit, 1), 100) : 20
     const savedFilterIdParam = searchParams.get('saved_filter_id')?.trim() ?? ''
 
-    if (!orgIdParam) {
-      const { response, errorId } = createErrorResponse(
-        'Missing required query parameter: org_id',
-        'INVALID_FORMAT',
-        { requestId, statusCode: 400 }
-      )
-      logApiError(400, 'INVALID_FORMAT', errorId, requestId, undefined, response.message, {
-        category: 'validation', severity: 'warn', route: ROUTE,
-      })
-      return NextResponse.json(response, {
-        status: 400,
-        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
-      })
-    }
-
-    if (!isValidUUID(orgIdParam)) {
-      const { response, errorId } = createErrorResponse(
-        'Invalid org_id: must be a valid UUID',
-        'INVALID_FORMAT',
-        { requestId, statusCode: 400 }
-      )
-      logApiError(400, 'INVALID_FORMAT', errorId, requestId, undefined, response.message, {
-        category: 'validation', severity: 'warn', route: ROUTE,
-      })
-      return NextResponse.json(response, {
-        status: 400,
-        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
-      })
-    }
-
     if (!['jobs', 'hazards', 'clients', 'all'].includes(type)) {
       const { response, errorId } = createErrorResponse(
         'Invalid search type. Must be one of: jobs, hazards, clients, all',
@@ -112,8 +82,28 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    const requestedOrgId = orgIdParam
     const userOrgId = userData.organization_id
+    let requestedOrgId: string
+    if (orgIdParam) {
+      if (!isValidUUID(orgIdParam)) {
+        const { response, errorId } = createErrorResponse(
+          'Invalid org_id: must be a valid UUID',
+          'INVALID_FORMAT',
+          { requestId, statusCode: 400 }
+        )
+        logApiError(400, 'INVALID_FORMAT', errorId, requestId, undefined, response.message, {
+          category: 'validation', severity: 'warn', route: ROUTE,
+        })
+        return NextResponse.json(response, {
+          status: 400,
+          headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+        })
+      }
+      requestedOrgId = orgIdParam
+    } else {
+      requestedOrgId = userOrgId
+    }
+
     const isOwnOrg = userOrgId === requestedOrgId
     let isMemberOfRequestedOrg = false
     if (!isOwnOrg) {
@@ -331,6 +321,24 @@ export async function GET(request: NextRequest) {
           suggestions.push(value)
         }
       }
+
+      const { data: locationRows } = await searchClient
+        .from('jobs')
+        .select('location')
+        .eq('organization_id', organizationId)
+        .is('deleted_at', null)
+        .is('archived_at', null)
+        .not('location', 'is', null)
+        .ilike('location', `%${q}%`)
+        .limit(10)
+
+      for (const row of locationRows || []) {
+        const value = row.location?.trim()
+        if (value && !seenSuggestions.has(value.toLowerCase())) {
+          seenSuggestions.add(value.toLowerCase())
+          suggestions.push(value)
+        }
+      }
     } else {
       const { data: clientRows } = await searchClient
         .from('jobs')
@@ -376,6 +384,23 @@ export async function GET(request: NextRequest) {
 
       for (const row of jobTypeRows || []) {
         const value = row.job_type?.trim()
+        if (value && !seenSuggestions.has(value.toLowerCase())) {
+          seenSuggestions.add(value.toLowerCase())
+          suggestions.push(value)
+        }
+      }
+
+      const { data: locationRows } = await searchClient
+        .from('jobs')
+        .select('location')
+        .eq('organization_id', organizationId)
+        .is('deleted_at', null)
+        .is('archived_at', null)
+        .not('location', 'is', null)
+        .limit(50)
+
+      for (const row of locationRows || []) {
+        const value = row.location?.trim()
         if (value && !seenSuggestions.has(value.toLowerCase())) {
           seenSuggestions.add(value.toLowerCase())
           suggestions.push(value)

@@ -26,6 +26,8 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
         let settings = await center.notificationSettings()
 
         switch settings.authorizationStatus {
+        case .ephemeral:
+            return true
         case .authorized, .provisional:
             return true
         case .denied:
@@ -144,7 +146,7 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
         }
         if let deepLink = deepLinkString,
            let url = URL(string: deepLink) {
-            await MainActor.run {
+            _ = await MainActor.run {
                 DeepLinkRouter.shared.handle(url)
             }
         }

@@ -343,7 +343,7 @@ class OfflineCache: ObservableObject {
                 throw NSError(domain: "OfflineCache", code: -1, userInfo: [NSLocalizedDescriptionKey: "Control delete: use sync queue"])
             }
         case .hazard:
-            let hazard = try decoder.decode(Hazard.self, from: item.data)
+            _ = try decoder.decode(Hazard.self, from: item.data)
             switch item.action {
             case .create, .update, .delete:
                 // Hazard ops go via sync batch (SyncEngine)

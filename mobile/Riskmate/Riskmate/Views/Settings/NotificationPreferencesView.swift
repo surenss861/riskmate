@@ -26,7 +26,7 @@ struct NotificationPreferencesView: View {
                     message: error
                 )
                 .padding(RMTheme.Spacing.pagePadding)
-            } else if let prefs = prefs {
+            } else if prefs != nil {
                 VStack(spacing: 0) {
                     if let error = errorMessage {
                         inlineErrorBanner(message: error)
