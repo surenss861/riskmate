@@ -22,7 +22,7 @@ const ROUTE = '/api/search'
  * - has_photos: optional boolean; when set, filter jobs by presence of photos
  * - has_signatures: optional boolean; when set, filter jobs by presence of signatures
  * - needs_signatures: optional boolean; when set, filter jobs that have no signatures yet
- * - include_archived: optional boolean; when true, include archived jobs in results
+ * - include_archived: optional boolean; when true, include archived jobs and clients in results
  */
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -436,10 +436,12 @@ export async function GET(request: NextRequest) {
             p_org_id: organizationId,
             p_query: q,
             p_limit: limit,
+            p_include_archived: includeArchived,
           }),
           searchClient.rpc('search_clients_count', {
             p_org_id: organizationId,
             p_query: q,
+            p_include_archived: includeArchived,
           }),
         ])
 

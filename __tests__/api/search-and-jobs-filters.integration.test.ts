@@ -284,6 +284,17 @@ describe('GET /api/search – advanced filters and result shape', () => {
             error: null,
           })
         }
+        if (name === 'search_clients') {
+          return Promise.resolve({
+            data: [
+              { id: 'c1111111-2222-4333-8444-555566667777', display_name: 'Client A', highlight: 'Client <b>A</b>', rank: 0.5 },
+            ],
+            error: null,
+          })
+        }
+        if (name === 'search_clients_count') {
+          return Promise.resolve({ data: 1, error: null })
+        }
         return Promise.resolve({ data: null, error: null })
       }),
     }
@@ -359,5 +370,63 @@ describe('GET /api/search – advanced filters and result shape', () => {
     expect(body.results).toBeDefined()
     expect(body.total).toBeDefined()
     expect(typeof body.total).toBe('number')
+  })
+
+  it('forwards include_archived=true to search_clients and search_clients_count', async () => {
+    const { GET } = await import('@/app/api/search/route')
+    const request = new NextRequest(
+      'http://localhost/api/search?q=client&type=clients&limit=20&include_archived=true'
+    )
+    const response = await GET(request)
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.results).toBeDefined()
+    expect(supabaseMock.rpc).toHaveBeenCalledWith(
+      'search_clients',
+      expect.objectContaining({
+        p_org_id: ORG_ID,
+        p_query: expect.any(String),
+        p_limit: 20,
+        p_include_archived: true,
+      })
+    )
+    expect(supabaseMock.rpc).toHaveBeenCalledWith(
+      'search_clients_count',
+      expect.objectContaining({
+        p_org_id: ORG_ID,
+        p_query: expect.any(String),
+        p_include_archived: true,
+      })
+    )
+  })
+
+  it('forwards include_archived=false to search_clients and search_clients_count when omitted', async () => {
+    const { GET } = await import('@/app/api/search/route')
+    const request = new NextRequest(
+      'http://localhost/api/search?q=client&type=clients&limit=20'
+    )
+    const response = await GET(request)
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.results).toBeDefined()
+    expect(supabaseMock.rpc).toHaveBeenCalledWith(
+      'search_clients',
+      expect.objectContaining({
+        p_org_id: ORG_ID,
+        p_query: expect.any(String),
+        p_limit: 20,
+        p_include_archived: false,
+      })
+    )
+    expect(supabaseMock.rpc).toHaveBeenCalledWith(
+      'search_clients_count',
+      expect.objectContaining({
+        p_org_id: ORG_ID,
+        p_query: expect.any(String),
+        p_include_archived: false,
+      })
+    )
   })
 })
