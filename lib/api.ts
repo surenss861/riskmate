@@ -296,6 +296,26 @@ async function apiRequest<T>(
   return data as T;
 }
 
+// Global search response shape (used by GlobalSearchBar and jobsApi.search)
+export type SearchResultItem = {
+  type: 'job' | 'hazard' | 'client'
+  id: string
+  title: string
+  subtitle: string
+  highlight: string
+  score: number
+  status?: string
+  risk_level?: string
+  severity?: string
+}
+
+export type SearchResponse = {
+  results: SearchResultItem[]
+  total: number
+  suggestions?: string[]
+  applied_filter?: { id: string; name: string }
+}
+
 // Jobs API
 export const jobsApi = {
   list: async (params?: {
@@ -413,34 +433,27 @@ export const jobsApi = {
 
   /**
    * Global search (jobs, hazards, clients). Sectioned results with highlights.
+   * Calls GET /api/search with q, type, limit, include_archived.
+   * Returns { results, total, suggestions } for GlobalSearchBar.
    */
   search: async (params: {
     q: string;
     type?: 'jobs' | 'hazards' | 'clients' | 'all';
     limit?: number;
     include_archived?: boolean;
-  }) => {
+  }): Promise<SearchResponse> => {
     const searchParams = new URLSearchParams();
-    searchParams.set('q', params.q.trim());
+    searchParams.set('q', (params.q ?? '').trim());
     if (params.type && params.type !== 'all') searchParams.set('type', params.type);
     if (params.limit != null) searchParams.set('limit', String(Math.min(100, Math.max(1, params.limit))));
     if (params.include_archived) searchParams.set('include_archived', 'true');
-    return apiRequest<{
-      results: Array<{
-        type: 'job' | 'hazard' | 'client';
-        id: string;
-        title: string;
-        subtitle: string;
-        highlight: string;
-        score: number;
-        status?: string;
-        risk_level?: string;
-        severity?: string;
-      }>;
-      total: number;
-      suggestions?: string[];
-      applied_filter?: { id: string; name: string };
-    }>(`/api/search?${searchParams.toString()}`);
+    const res = await apiRequest<SearchResponse>(`/api/search?${searchParams.toString()}`);
+    return {
+      results: res?.results ?? [],
+      total: res?.total ?? 0,
+      suggestions: res?.suggestions ?? [],
+      ...(res?.applied_filter && { applied_filter: res.applied_filter }),
+    };
   },
 
   create: async (jobData: {
