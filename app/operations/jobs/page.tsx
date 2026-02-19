@@ -80,6 +80,10 @@ const JobsPageContent = () => {
     else params.delete('status')
     if (filterRiskLevel) params.set('risk_level', filterRiskLevel)
     else params.delete('risk_level')
+    if (filterTemplateSource) params.set('source', filterTemplateSource)
+    else params.delete('source')
+    if (filterTemplateId) params.set('templateId', filterTemplateId)
+    else params.delete('templateId')
     if (filterTimeRange && filterTimeRange !== 'all') params.set('time_range', filterTimeRange)
     else params.delete('time_range')
     if (includeArchived) params.set('include_archived', 'true')
@@ -100,7 +104,7 @@ const JobsPageContent = () => {
     if (next !== current) {
       router.replace(next ? `/operations/jobs?${next}` : '/operations/jobs', { scroll: false })
     }
-  }, [debouncedSearchQuery, filterStatus, filterRiskLevel, filterTimeRange, includeArchived, hasPhotos, hasSignatures, needsSignatures, page, router, searchParams])
+  }, [debouncedSearchQuery, filterStatus, filterRiskLevel, filterTemplateSource, filterTemplateId, filterTimeRange, includeArchived, hasPhotos, hasSignatures, needsSignatures, page, router, searchParams])
 
   // Load templates for filter dropdown
   useEffect(() => {
@@ -365,8 +369,8 @@ const JobsPageContent = () => {
       totalPages={totalPages}
       onFilterStatusChange={(v) => { setFilterStatus(v); setPage(1) }}
       onFilterRiskLevelChange={(v) => { setFilterRiskLevel(v); setPage(1) }}
-      onFilterTemplateSourceChange={setFilterTemplateSource}
-      onFilterTemplateIdChange={setFilterTemplateId}
+      onFilterTemplateSourceChange={(v) => { setFilterTemplateSource(v); setPage(1) }}
+      onFilterTemplateIdChange={(v) => { setFilterTemplateId(v); setPage(1) }}
       onPageChange={setPage}
       getRiskColor={getRiskColor}
       getStatusColor={getStatusColor}
@@ -378,17 +382,17 @@ const JobsPageContent = () => {
       sourceIndicator={sourceIndicator}
       mutateData={getMutateData()}
       searchQuery={searchQuery}
-      onSearchQueryChange={setSearchQuery}
+      onSearchQueryChange={(v) => { setSearchQuery(v); setPage(1) }}
       filterTimeRange={filterTimeRange}
       onFilterTimeRangeChange={(v) => { setFilterTimeRange(v as JobsTimeRange); setPage(1) }}
       includeArchived={includeArchived}
-      onIncludeArchivedChange={setIncludeArchived}
+      onIncludeArchivedChange={(v) => { setIncludeArchived(v); setPage(1) }}
       hasPhotos={hasPhotos}
-      onHasPhotosChange={setHasPhotos}
+      onHasPhotosChange={(v) => { setHasPhotos(v); setPage(1) }}
       hasSignatures={hasSignatures}
-      onHasSignaturesChange={setHasSignatures}
+      onHasSignaturesChange={(v) => { setHasSignatures(v); setPage(1) }}
       needsSignatures={needsSignatures}
-      onNeedsSignaturesChange={setNeedsSignatures}
+      onNeedsSignaturesChange={(v) => { setNeedsSignatures(v); setPage(1) }}
       onClearAllFilters={clearAllFilters}
     />
   )
