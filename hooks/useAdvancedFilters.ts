@@ -7,6 +7,9 @@ import { normalizeFilterConfig } from '@/lib/jobs/filterConfig'
 
 export type JobsTimeRange = 'all' | '7d' | '30d' | '90d'
 
+const ALLOWED_TIME_RANGES: JobsTimeRange[] = ['all', '7d', '30d', '90d']
+const ALLOWED_TIME_RANGE_SET = new Set<string>(ALLOWED_TIME_RANGES)
+
 export interface AdvancedFiltersState {
   searchQuery: string
   filterStatus: string
@@ -83,7 +86,12 @@ function parseStateFromSearchParams(searchParams: URLSearchParams | null): Advan
     searchQuery: searchParams.get('q') ?? '',
     filterStatus: searchParams.get('status') ?? '',
     filterRiskLevel: searchParams.get('risk_level') ?? '',
-    filterTimeRange: (searchParams.get('time_range') as JobsTimeRange) || 'all',
+    filterTimeRange: (() => {
+      const timeRangeParam = searchParams.get('time_range')
+      return timeRangeParam && ALLOWED_TIME_RANGE_SET.has(timeRangeParam)
+        ? (timeRangeParam as JobsTimeRange)
+        : 'all'
+    })(),
     includeArchived: searchParams.get('include_archived') === 'true',
     hasPhotos: parseBoolParam(searchParams.get('has_photos')),
     hasSignatures: parseBoolParam(searchParams.get('has_signatures')),

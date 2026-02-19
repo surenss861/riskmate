@@ -52,12 +52,14 @@ export type SupabaseClientLike = {
 
 export function normalizeFilterConfig(raw: string | null | Record<string, unknown>): FilterGroup | null {
   if (raw == null) return null
-  if (typeof raw === 'object' && !Array.isArray(raw)) return raw as FilterGroup
+  if (typeof raw === 'object' && !Array.isArray(raw)) {
+    return dropIncompleteBetweenConditions(raw as FilterGroup)
+  }
   if (typeof raw !== 'string') return null
   try {
     const parsed = JSON.parse(raw)
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null
-    return parsed as FilterGroup
+    return dropIncompleteBetweenConditions(parsed as FilterGroup)
   } catch {
     return null
   }
@@ -65,6 +67,36 @@ export function normalizeFilterConfig(raw: string | null | Record<string, unknow
 
 function isFilterGroup(c: FilterCondition | FilterGroup): c is FilterGroup {
   return c != null && typeof c === 'object' && 'conditions' in c && Array.isArray((c as FilterGroup).conditions)
+}
+
+function isBetweenValueValid(value: unknown): boolean {
+  if (value === undefined || value === null) return false
+  if (typeof value === 'string') return value.trim() !== ''
+  return true
+}
+
+/** Drops conditions with operator 'between' and invalid/missing bounds so they are not applied. */
+function dropIncompleteBetweenConditions(group: FilterGroup): FilterGroup {
+  const conditions = Array.isArray(group.conditions) ? group.conditions : []
+  const cleaned: Array<FilterCondition | FilterGroup> = []
+  for (const c of conditions) {
+    if (isFilterGroup(c)) {
+      cleaned.push(dropIncompleteBetweenConditions(c))
+    } else {
+      const cond = c as FilterCondition
+      if (
+        typeof cond.operator === 'string' &&
+        cond.operator.toLowerCase() === 'between' &&
+        Array.isArray(cond.value) &&
+        cond.value.length >= 2
+      ) {
+        const [lo, hi] = cond.value
+        if (!isBetweenValueValid(lo) || !isBetweenValueValid(hi)) continue
+      }
+      cleaned.push(cond)
+    }
+  }
+  return { ...group, conditions: cleaned }
 }
 
 function applySingleFilter(query: QueryBuilderLike, condition: FilterCondition): QueryBuilderLike {
@@ -91,7 +123,19 @@ function applySingleFilter(query: QueryBuilderLike, condition: FilterCondition):
   if (operator === 'gt') return query.gt(field, value)
   if (operator === 'lt') return query.lt(field, value)
   if (operator === 'between' && Array.isArray(value) && value.length >= 2) {
-    return query.gte(field, value[0]).lte(field, value[1])
+    const lo = value[0]
+    const hi = value[1]
+    const loValid =
+      lo !== undefined &&
+      lo !== null &&
+      (typeof lo !== 'string' || (lo as string).trim() !== '')
+    const hiValid =
+      hi !== undefined &&
+      hi !== null &&
+      (typeof hi !== 'string' || (hi as string).trim() !== '')
+    if (loValid && hiValid) {
+      return query.gte(field, lo).lte(field, hi)
+    }
   }
   if (operator === 'ilike' && typeof value === 'string') return query.ilike(field, `%${value}%`)
   if (operator === 'in' && Array.isArray(value)) return query.in(field, value)
