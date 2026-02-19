@@ -83,6 +83,10 @@ interface JobsPageContentProps {
   onFilterConfigChange?: (value: FilterGroup | null) => void
   onSavedFilterApply?: (savedFilterId: string | null, filterConfig: FilterGroup | null) => void
   getShareUrl?: () => string
+  /** Called when user saves current filter from AdvancedFilterBuilder; parent should create filter and refresh */
+  onSaveFilter?: (payload: { name: string; is_shared?: boolean }) => Promise<void>
+  /** Called after a saved filter is created or updated (e.g. share toggle) so parent can refresh jobs list */
+  onFilterSaved?: () => void
 }
 
 export function JobsPageContentView(props: JobsPageContentProps) {
@@ -775,6 +779,7 @@ export function JobsPageContentView(props: JobsPageContentProps) {
                   savedFilterId={props.savedFilterId ?? null}
                   onApply={props.onSavedFilterApply}
                   getShareUrl={props.getShareUrl}
+                  onFilterSaved={props.onFilterSaved}
                 />
               )}
               <Button
@@ -818,6 +823,11 @@ export function JobsPageContentView(props: JobsPageContentProps) {
               <AdvancedFilterBuilder
                 value={props.filterConfig ?? null}
                 onChange={props.onFilterConfigChange}
+                onSaveAsFilter={
+                  props.onSaveFilter
+                    ? (name, is_shared) => props.onSaveFilter!({ name, is_shared })
+                    : undefined
+                }
               />
             </div>
           )}

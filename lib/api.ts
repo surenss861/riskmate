@@ -426,7 +426,17 @@ export const jobsApi = {
     if (params.limit != null) searchParams.set('limit', String(Math.min(100, Math.max(1, params.limit))));
     if (params.include_archived) searchParams.set('include_archived', 'true');
     return apiRequest<{
-      results: Array<{ type: 'job' | 'hazard' | 'client'; id: string; title: string; subtitle: string; highlight: string; score: number }>;
+      results: Array<{
+        type: 'job' | 'hazard' | 'client';
+        id: string;
+        title: string;
+        subtitle: string;
+        highlight: string;
+        score: number;
+        status?: string;
+        risk_level?: string;
+        severity?: string;
+      }>;
       total: number;
       suggestions?: string[];
       applied_filter?: { id: string; name: string };

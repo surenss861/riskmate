@@ -211,6 +211,9 @@ export async function GET(request: NextRequest) {
       subtitle: string
       highlight: string
       score: number
+      status?: string
+      risk_level?: string
+      severity?: string
     }> = []
 
     let total = 0
@@ -261,6 +264,8 @@ export async function GET(request: NextRequest) {
               client_name: string | null
               job_type: string | null
               location: string | null
+              status?: string | null
+              risk_level?: string | null
               total_count?: number
               score?: number
               highlight?: string | null
@@ -276,6 +281,8 @@ export async function GET(request: NextRequest) {
                 subtitle: [row.job_type, row.location].filter(Boolean).join(' • '),
                 highlight: row.highlight ?? '',
                 score: Number(row.score) || 0,
+                status: row.status ?? undefined,
+                risk_level: row.risk_level ?? undefined,
               })
             }
           } else {
@@ -310,6 +317,8 @@ export async function GET(request: NextRequest) {
               client_name: string | null
               job_type: string | null
               location: string | null
+              status?: string | null
+              risk_level?: string | null
               total_count?: number
             }>
             jobCount = Number(jobRows[0]?.total_count ?? 0) || 0
@@ -324,6 +333,8 @@ export async function GET(request: NextRequest) {
                 subtitle: [row.job_type, row.location].filter(Boolean).join(' • '),
                 highlight: '',
                 score: 0,
+                status: row.status ?? undefined,
+                risk_level: row.risk_level ?? undefined,
               })
             }
           }
@@ -348,7 +359,18 @@ export async function GET(request: NextRequest) {
           jobCount = Number(jobCountData ?? 0) || 0
           if (type === 'jobs') total = jobCount
 
-          for (const row of jobRows || []) {
+          const jobRowsTyped = (jobRows || []) as Array<{
+            id: string
+            title?: string | null
+            client_name?: string | null
+            job_type?: string | null
+            location?: string | null
+            status?: string | null
+            risk_level?: string | null
+            highlight?: string | null
+            score?: number
+          }>
+          for (const row of jobRowsTyped) {
             results.push({
               type: 'job',
               id: row.id,
@@ -356,6 +378,8 @@ export async function GET(request: NextRequest) {
               subtitle: [row.job_type, row.location].filter(Boolean).join(' • '),
               highlight: row.highlight || '',
               score: Number(row.score) || 0,
+              status: row.status ?? undefined,
+              risk_level: row.risk_level ?? undefined,
             })
           }
         }
@@ -401,6 +425,7 @@ export async function GET(request: NextRequest) {
             subtitle,
             highlight: row.highlight || '',
             score: Number(row.score) || 0,
+            severity: row.severity ?? undefined,
           })
         }
       }

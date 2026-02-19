@@ -4,10 +4,11 @@ import React, { useEffect, useState, useCallback, Suspense } from 'react'
 import useSWR from 'swr'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import ProtectedRoute from '@/components/ProtectedRoute'
-import { jobsApi } from '@/lib/api'
+import { jobsApi, filtersApi } from '@/lib/api'
 import { useDebounce } from '@/hooks/useDebounce'
 import { useAdvancedFilters } from '@/hooks/useAdvancedFilters'
 import { JobsPageContentView, type JobsTimeRange } from './JobsPageContent'
+import type { FilterGroup } from '@/lib/jobs/filterConfig'
 
 interface Job {
   id: string
@@ -292,6 +293,16 @@ const JobsPageContent = () => {
       onFilterConfigChange={adv.setFilterConfig}
       onSavedFilterApply={adv.setSavedFilterId}
       getShareUrl={adv.getShareUrl}
+      onSaveFilter={async (payload) => {
+        const { data } = await filtersApi.create({
+          name: payload.name,
+          filter_config: (state.filterConfig ?? { operator: 'AND', conditions: [] }) as Record<string, unknown>,
+          is_shared: payload.is_shared,
+        })
+        mutate()
+        adv.setSavedFilterId(data.id, data.filter_config as FilterGroup)
+      }}
+      onFilterSaved={() => mutate()}
     />
   )
 }

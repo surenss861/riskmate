@@ -10,6 +10,52 @@ const MAX_RECENT = 8
 
 const MARK_CLASS = 'bg-[#F97316]/30 text-white rounded px-0.5'
 
+function statusToLabel(s: string): string {
+  const map: Record<string, string> = {
+    draft: 'Draft',
+    active: 'Active',
+    in_progress: 'In progress',
+    completed: 'Completed',
+    'on-hold': 'On hold',
+    cancelled: 'Cancelled',
+    archived: 'Archived',
+  }
+  return map[s] ?? s
+}
+
+function riskLevelColor(level: string): string {
+  switch ((level || '').toLowerCase()) {
+    case 'critical':
+      return 'bg-red-500/20 text-red-400 border-red-500/30'
+    case 'high':
+      return 'bg-orange-500/20 text-orange-400 border-orange-500/30'
+    case 'medium':
+      return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
+    case 'low':
+      return 'bg-green-500/20 text-green-400 border-green-500/30'
+    default:
+      return 'bg-white/10 text-white/60 border-white/10'
+  }
+}
+
+function statusColor(s: string): string {
+  switch ((s || '').toLowerCase()) {
+    case 'completed':
+      return 'bg-blue-500/20 text-blue-400 border-blue-500/30'
+    case 'active':
+    case 'in_progress':
+      return 'bg-green-500/20 text-green-400 border-green-500/30'
+    case 'on-hold':
+      return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
+    case 'cancelled':
+      return 'bg-red-500/20 text-red-400 border-red-500/30'
+    case 'archived':
+      return 'bg-white/10 text-white/50 border-white/5'
+    default:
+      return 'bg-white/10 text-white/60 border-white/10'
+  }
+}
+
 /** Escape HTML so it is safe to render as text; then allow only our highlight markup. */
 function sanitizeHighlight(highlight: string): string {
   if (!highlight || typeof highlight !== 'string') return ''
@@ -30,6 +76,9 @@ export type SearchResultItem = {
   subtitle: string
   highlight: string
   score: number
+  status?: string
+  risk_level?: string
+  severity?: string
 }
 
 export function GlobalSearchBar() {
@@ -37,6 +86,7 @@ export function GlobalSearchBar() {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<SearchResultItem[]>([])
+  const [suggestions, setSuggestions] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [recentSearches, setRecentSearches] = useState<string[]>([])
@@ -97,6 +147,7 @@ export function GlobalSearchBar() {
   useEffect(() => {
     if (!debouncedQuery) {
       setResults([])
+      setSuggestions([])
       setLoading(false)
       return
     }
@@ -107,11 +158,15 @@ export function GlobalSearchBar() {
       .then((res) => {
         if (!cancelled) {
           setResults(res.results || [])
+          setSuggestions(res.suggestions ?? [])
           setSelectedIndex(0)
         }
       })
       .catch(() => {
-        if (!cancelled) setResults([])
+        if (!cancelled) {
+          setResults([])
+          setSuggestions([])
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -121,7 +176,7 @@ export function GlobalSearchBar() {
     }
   }, [debouncedQuery])
 
-  const flatItems: { type: 'job' | 'hazard' | 'client'; id: string; title: string; subtitle: string; highlight: string; score: number }[] = results
+  const flatItems: SearchResultItem[] = results
   const sectioned = React.useMemo(() => {
     const jobs = flatItems.filter((r) => r.type === 'job')
     const hazards = flatItems.filter((r) => r.type === 'hazard')
@@ -256,6 +311,28 @@ export function GlobalSearchBar() {
                 </div>
               )}
 
+              {query.trim() && suggestions.length > 0 && (
+                <div className="px-4 py-2 border-b border-white/10">
+                  <div className="text-xs font-medium text-white/50 uppercase tracking-wider mb-2">Suggestions</div>
+                  <ul className="space-y-0.5">
+                    {suggestions.slice(0, 8).map((s, i) => (
+                      <li key={i}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setQuery(s)
+                            inputRef.current?.focus()
+                          }}
+                          className="w-full text-left px-3 py-2 rounded-lg text-sm text-white/80 hover:bg-white/5"
+                        >
+                          {s}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
               {sectioned.length > 0 && (
                 <>
                   {sectioned.map(({ section, items }) => (
@@ -275,7 +352,28 @@ export function GlobalSearchBar() {
                             onMouseEnter={() => setSelectedIndex(flatIndex)}
                             className={`w-full text-left px-4 py-2.5 flex flex-col gap-0.5 ${isSelected ? 'bg-[#F97316]/20' : 'hover:bg-white/5'}`}
                           >
-                            <span className="text-sm font-medium text-white truncate">{item.title}</span>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-sm font-medium text-white truncate">{item.title}</span>
+                              {item.type === 'job' && (item.status != null || item.risk_level != null) && (
+                                <span className="flex items-center gap-1 shrink-0">
+                                  {item.status != null && (
+                                    <span className={`px-1.5 py-0.5 rounded text-xs border ${statusColor(item.status)}`}>
+                                      {statusToLabel(item.status)}
+                                    </span>
+                                  )}
+                                  {item.risk_level != null && (
+                                    <span className={`px-1.5 py-0.5 rounded text-xs border capitalize ${riskLevelColor(item.risk_level)}`}>
+                                      {item.risk_level}
+                                    </span>
+                                  )}
+                                </span>
+                              )}
+                              {item.type === 'hazard' && item.severity != null && (
+                                <span className={`px-1.5 py-0.5 rounded text-xs border shrink-0 capitalize ${riskLevelColor(item.severity)}`}>
+                                  {item.severity}
+                                </span>
+                              )}
+                            </div>
                             {item.subtitle && (
                               <span className="text-xs text-white/50 truncate">{item.subtitle}</span>
                             )}

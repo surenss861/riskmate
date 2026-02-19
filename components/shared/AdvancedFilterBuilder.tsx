@@ -1,6 +1,6 @@
 'use client'
 
-import React from 'react'
+import React, { useState } from 'react'
 import type { FilterCondition, FilterGroup } from '@/lib/jobs/filterConfig'
 import { FILTER_FIELD_ALLOWLIST } from '@/lib/jobs/filterConfig'
 
@@ -65,10 +65,17 @@ function getFieldType(field: string): keyof typeof OPERATORS_BY_TYPE {
 export interface AdvancedFilterBuilderProps {
   value: FilterGroup | null
   onChange: (value: FilterGroup | null) => void
+  /** When provided, shows "Save as Filter" control; called with name and optional is_shared after user confirms in modal */
+  onSaveAsFilter?: (name: string, is_shared?: boolean) => void | Promise<void>
   className?: string
 }
 
-export function AdvancedFilterBuilder({ value, onChange, className = '' }: AdvancedFilterBuilderProps) {
+export function AdvancedFilterBuilder({ value, onChange, onSaveAsFilter, className = '' }: AdvancedFilterBuilderProps) {
+  const [saveModalOpen, setSaveModalOpen] = useState(false)
+  const [saveName, setSaveName] = useState('')
+  const [saveShared, setSaveShared] = useState(false)
+  const [saveSubmitting, setSaveSubmitting] = useState(false)
+
   const group: FilterGroup = value ?? { operator: 'AND', conditions: [] }
   const conditions = Array.isArray(group.conditions) ? (group.conditions as FilterCondition[]) : []
   const operator = (group.operator || 'AND').toUpperCase()
@@ -333,13 +340,83 @@ export function AdvancedFilterBuilder({ value, onChange, className = '' }: Advan
           </div>
         ))}
       </div>
-      <button
-        type="button"
-        onClick={addRow}
-        className="mt-2 text-sm text-[#F97316] hover:text-[#F97316]/80 hover:underline"
-      >
-        + Add row
-      </button>
+      <div className="mt-2 flex items-center gap-3">
+        <button
+          type="button"
+          onClick={addRow}
+          className="text-sm text-[#F97316] hover:text-[#F97316]/80 hover:underline"
+        >
+          + Add row
+        </button>
+        {onSaveAsFilter && (
+          <button
+            type="button"
+            onClick={() => {
+              setSaveName('')
+              setSaveShared(false)
+              setSaveModalOpen(true)
+            }}
+            className="text-sm text-[#F97316] hover:text-[#F97316]/80 hover:underline"
+          >
+            Save as Filter
+          </button>
+        )}
+      </div>
+
+      {saveModalOpen && onSaveAsFilter && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => !saveSubmitting && setSaveModalOpen(false)}>
+          <div
+            className="w-full max-w-sm rounded-xl border border-white/10 bg-[#1A1A1A] p-4 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-3 text-sm font-medium text-white">Save as Filter</div>
+            <input
+              type="text"
+              value={saveName}
+              onChange={(e) => setSaveName(e.target.value)}
+              placeholder="Filter name"
+              className="mb-3 h-10 w-full rounded-lg border border-white/10 bg-white/5 px-3 text-sm text-white placeholder:text-white/40 focus:ring-1 focus:ring-[#F97316]/50 outline-none"
+              autoFocus
+            />
+            <label className="mb-4 flex cursor-pointer items-center gap-2 text-sm text-white/70">
+              <input
+                type="checkbox"
+                checked={saveShared}
+                onChange={(e) => setSaveShared(e.target.checked)}
+                className="h-4 w-4 rounded border-white/20 bg-white/5 text-[#F97316] focus:ring-[#F97316]/50"
+              />
+              Share with team
+            </label>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setSaveModalOpen(false)}
+                disabled={saveSubmitting}
+                className="rounded-lg border border-white/10 px-3 py-1.5 text-sm text-white/70 hover:bg-white/5 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!saveName.trim() || saveSubmitting}
+                onClick={async () => {
+                  if (!saveName.trim()) return
+                  setSaveSubmitting(true)
+                  try {
+                    await onSaveAsFilter(saveName.trim(), saveShared)
+                    setSaveModalOpen(false)
+                  } finally {
+                    setSaveSubmitting(false)
+                  }
+                }}
+                className="rounded-lg bg-[#F97316] px-3 py-1.5 text-sm font-medium text-white hover:bg-[#F97316]/90 disabled:opacity-50"
+              >
+                {saveSubmitting ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
