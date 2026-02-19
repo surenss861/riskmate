@@ -110,6 +110,44 @@ export async function verifyOrganizationOwnership(
   return true
 }
 
+/** Allowed comment entity types; table names for ownership checks. */
+export const COMMENT_ENTITY_TYPES = [
+  'job',
+  'hazard',
+  'control',
+  'task',
+  'document',
+  'signoff',
+  'photo',
+] as const
+export type CommentEntityType = (typeof COMMENT_ENTITY_TYPES)[number]
+
+const ENTITY_TYPE_TO_TABLE: Record<CommentEntityType, string> = {
+  job: 'jobs',
+  hazard: 'hazards',
+  control: 'controls',
+  task: 'tasks',
+  document: 'job_documents',
+  signoff: 'job_signoffs',
+  photo: 'job_photos',
+}
+
+/**
+ * Verify that an entity (job, hazard, control, etc.) belongs to the user's organization.
+ * Use for comment list/create per entity_type + entity_id.
+ */
+export async function verifyEntityOwnership(
+  entityType: CommentEntityType,
+  entityId: string,
+  organizationId: string
+): Promise<boolean> {
+  const table = ENTITY_TYPE_TO_TABLE[entityType]
+  if (!table) {
+    throw new Error(`Invalid entity_type: ${entityType}`)
+  }
+  return verifyOrganizationOwnership(table, entityId, organizationId)
+}
+
 /**
  * Verify that a job belongs to the user's organization
  * This is a convenience wrapper for verifyOrganizationOwnership

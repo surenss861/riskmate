@@ -4,12 +4,14 @@ import { getOrganizationContext } from '@/lib/utils/organizationGuard'
 import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { logApiError } from '@/lib/utils/errorLogging'
 import { getRequestId } from '@/lib/utils/requestId'
+import { extractMentionUserIds } from '@/lib/utils/mentionParser'
+import { getSessionToken, BACKEND_URL } from '@/lib/api/proxy-helpers'
 
 export const runtime = 'nodejs'
 
 const ROUTE = '/api/comments/[id]'
 
-/** PATCH /api/comments/[id] — update comment body (sets edited_at). Author only. */
+/** PATCH /api/comments/[id] — update comment body (sets edited_at). Re-parses mentions, updates mentions column, sends notifications for newly added. Author only. */
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -38,7 +40,7 @@ export async function PATCH(
     const supabase = await createSupabaseServerClient()
     const { data: existing } = await supabase
       .from('comments')
-      .select('id, author_id, deleted_at')
+      .select('id, author_id, deleted_at, mentions')
       .eq('id', commentId)
       .eq('organization_id', organization_id)
       .single()
@@ -77,11 +79,31 @@ export async function PATCH(
       })
     }
 
+    const fromText = extractMentionUserIds(commentBody)
+    const rawMentionIds = fromText.filter((id) => id && id !== user_id)
+
+    let mentionUserIds: string[]
+    if (rawMentionIds.length === 0) {
+      mentionUserIds = []
+    } else {
+      const { data: orgUsers } = await supabase
+        .from('users')
+        .select('id')
+        .eq('organization_id', organization_id)
+      const orgIds = new Set((orgUsers ?? []).map((r: { id: string }) => r.id))
+      mentionUserIds = rawMentionIds.filter((id) => orgIds.has(id))
+    }
+
+    const existingMentions: string[] = (existing as any).mentions ?? []
+    const existingSet = new Set(existingMentions)
+    const addedMentionIds = mentionUserIds.filter((id) => !existingSet.has(id))
+
     const now = new Date().toISOString()
     const { data: comment, error } = await supabase
       .from('comments')
       .update({
-        body: commentBody.trim(),
+        body: commentBody,
+        mentions: mentionUserIds,
         edited_at: now,
         updated_at: now,
       })
@@ -91,6 +113,26 @@ export async function PATCH(
       .single()
 
     if (error) throw error
+
+    const token = await getSessionToken(request)
+    if (token && BACKEND_URL && addedMentionIds.length > 0) {
+      const contextLabel = 'You were mentioned in a comment.'
+      for (const mentionedUserId of addedMentionIds) {
+        fetch(`${BACKEND_URL}/api/notifications/mention`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            userId: mentionedUserId,
+            commentId,
+            contextLabel,
+          }),
+        }).catch((err) => console.error('[Comments] Mention notification (edit) failed:', err))
+      }
+    }
+
     const { body: _b, ...rest } = comment as any
     return NextResponse.json({ data: { ...rest, content: _b } })
   } catch (error: any) {

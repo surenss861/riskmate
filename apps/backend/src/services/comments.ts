@@ -197,7 +197,7 @@ export async function createComment(
   return { data: comment as CommentRow, error: null };
 }
 
-/** Update comment body (sets edited_at). Caller must ensure author or admin. */
+/** Update comment body (sets edited_at). Re-parses mentions, updates mentions column, sends notifications for newly added mentions. Caller must ensure author or admin. */
 export async function updateComment(
   organizationId: string,
   commentId: string,
@@ -210,7 +210,7 @@ export async function updateComment(
 
   const { data: existing } = await supabase
     .from("comments")
-    .select("id, author_id, organization_id, deleted_at")
+    .select("id, author_id, organization_id, deleted_at, mentions")
     .eq("id", commentId)
     .eq("organization_id", organizationId)
     .single();
@@ -225,11 +225,29 @@ export async function updateComment(
     return { data: null, error: "Only the author can update this comment" };
   }
 
+  const fromText = extractMentionUserIds(body.trim());
+  const rawMentionIds = fromText.filter((id) => id && id !== userId);
+
+  let mentionUserIds: string[] = [];
+  if (rawMentionIds.length > 0) {
+    const { data: orgUsers } = await supabase
+      .from("users")
+      .select("id")
+      .eq("organization_id", organizationId)
+      .in("id", rawMentionIds);
+    mentionUserIds = (orgUsers ?? []).map((u: { id: string }) => u.id);
+  }
+
+  const existingMentions: string[] = (existing as any).mentions ?? [];
+  const existingSet = new Set(existingMentions);
+  const addedMentionIds = mentionUserIds.filter((id) => !existingSet.has(id));
+
   const now = new Date().toISOString();
   const { data: comment, error } = await supabase
     .from("comments")
     .update({
       body: body.trim(),
+      mentions: mentionUserIds,
       edited_at: now,
       updated_at: now,
     })
@@ -242,6 +260,19 @@ export async function updateComment(
     console.error("[Comments] updateComment error:", error);
     return { data: null, error: error.message };
   }
+
+  const contextLabel = "You were mentioned in a comment.";
+  for (const mentionedUserId of addedMentionIds) {
+    sendMentionNotification(
+      mentionedUserId,
+      organizationId,
+      commentId,
+      contextLabel
+    ).catch((err) =>
+      console.error("[Comments] Mention notification (edit) failed:", err)
+    );
+  }
+
   return { data: comment as CommentRow, error: null };
 }
 
