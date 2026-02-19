@@ -336,7 +336,22 @@ export async function GET(request: NextRequest) {
     const organization_id = userData.organization_id
     const { searchParams } = new URL(request.url)
     const page = parseInt(searchParams.get('page') || '1', 10)
-    const limit = parseInt(searchParams.get('limit') || '20', 10)
+    const parsedLimit = parseInt(searchParams.get('limit') || '20', 10)
+    if (!Number.isFinite(parsedLimit) || parsedLimit < 1 || parsedLimit > 100) {
+      const { response, errorId } = createErrorResponse(
+        'Invalid limit: must be a number between 1 and 100',
+        'INVALID_FORMAT',
+        { requestId, statusCode: 400 }
+      )
+      logApiError(400, 'INVALID_FORMAT', errorId, requestId, organization_id, response.message, {
+        category: 'validation', severity: 'warn', route: ROUTE_JOBS,
+      })
+      return NextResponse.json(response, {
+        status: 400,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
+    const limit = parsedLimit
     const status = searchParams.get('status')
     const risk_level = searchParams.get('risk_level')
     const include_archived = searchParams.get('include_archived') === 'true'
@@ -380,6 +395,21 @@ export async function GET(request: NextRequest) {
         : null
 
     const offset = (page - 1) * limit
+    const MAX_OFFSET = 10000
+    if (offset > MAX_OFFSET || offset < 0 || !Number.isFinite(page) || page < 1) {
+      const { response, errorId } = createErrorResponse(
+        'Invalid page or offset: page must be >= 1 and resulting offset must not exceed 10000',
+        'INVALID_FORMAT',
+        { requestId, statusCode: 400 }
+      )
+      logApiError(400, 'INVALID_FORMAT', errorId, requestId, organization_id, response.message, {
+        category: 'validation', severity: 'warn', route: ROUTE_JOBS,
+      })
+      return NextResponse.json(response, {
+        status: 400,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
 
     let requiredJobIds: string[] | null = null
     const excludedJobIds = new Set<string>()
@@ -1141,6 +1171,14 @@ export async function POST(request: NextRequest) {
 
     // At this point, TypeScript knows job.id exists
     const jobId = job.id
+
+    // Upsert client into clients table for search
+    if (client_name?.trim()) {
+      await supabase.rpc('upsert_client', {
+        p_org_id: organization_id,
+        p_name: client_name.trim(),
+      })
+    }
 
     // Log successful job creation with standardized schema
     await logFeatureUsage({

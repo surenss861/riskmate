@@ -150,18 +150,20 @@ jobsRouter.get("/", authenticate, async (req: express.Request, res: express.Resp
     const limitParam = limitParamFromCursor ? parseInt(String(limitParamFromCursor), 10) : (limitParamFromQuery ? parseInt(String(limitParamFromQuery), 10) : null);
     
     try {
-      limitNum = pageSizeParam && !isNaN(pageSizeParam) && pageSizeParam > 0 
-        ? pageSizeParam 
-        : (limitParam && !isNaN(limitParam) && limitParam > 0 
-          ? limitParam 
+      limitNum = pageSizeParam && !isNaN(pageSizeParam) && pageSizeParam > 0
+        ? pageSizeParam
+        : (limitParam && !isNaN(limitParam) && limitParam > 0
+          ? limitParam
           : 20);
-      
-      // Enforce maximum limit to prevent abuse
-      if (limitNum > 1000) {
-        limitNum = 1000;
-      }
     } catch {
       limitNum = 20;
+    }
+    // Clamp limit to [1, 100] and return 400 for invalid values
+    if (!Number.isFinite(limitNum) || limitNum < 1 || limitNum > 100) {
+      return res.status(400).json({
+        message: "Invalid limit: must be a number between 1 and 100",
+        code: "INVALID_FORMAT",
+      });
     }
     
     // Cursor pagination is only safe for sorts that match SQL ordering
@@ -319,6 +321,13 @@ jobsRouter.get("/", authenticate, async (req: express.Request, res: express.Resp
     if (!useCursor) {
       // Offset pagination (used for status_asc or when cursor is not provided)
       const offset = (pageNum - 1) * limitNum;
+      const MAX_OFFSET = 10000;
+      if (offset > MAX_OFFSET || offset < 0 || !Number.isFinite(pageNum) || pageNum < 1) {
+        return res.status(400).json({
+          message: "Invalid page or offset: page must be >= 1 and resulting offset must not exceed 10000",
+          code: "INVALID_FORMAT",
+        });
+      }
       query = query.range(offset, offset + limitNum - 1);
     } else {
       // Cursor pagination (for created_desc, created_asc, risk_desc, risk_asc)
@@ -1874,6 +1883,14 @@ jobsRouter.post("/", authenticate, requireWriteAccess, enforceJobLimit, async (r
       return res.status(500).json({ message: "Failed to create job" });
     }
 
+    // Upsert client into clients table for search
+    if (client_name?.trim()) {
+      await supabase.rpc("upsert_client", {
+        p_org_id: organization_id,
+        p_name: client_name.trim(),
+      });
+    }
+
     // Extract client metadata from request
     const clientMetadata = extractClientMetadata(req);
     
@@ -2086,6 +2103,14 @@ jobsRouter.patch("/:id", authenticate, requireWriteAccess, async (req: express.R
         .eq("id", jobId);
 
       if (updateError) throw updateError;
+
+      // Upsert client when client_name changes
+      if (jobUpdates.client_name != null && String(jobUpdates.client_name || "").trim()) {
+        await supabase.rpc("upsert_client", {
+          p_org_id: organization_id,
+          p_name: String(jobUpdates.client_name).trim(),
+        });
+      }
     }
 
     // Recalculate risk if risk factors changed
