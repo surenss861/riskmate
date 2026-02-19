@@ -70,9 +70,14 @@ const verification_1 = require("./routes/verification");
 const publicVerification_1 = require("./routes/publicVerification");
 const metrics_1 = require("./routes/metrics");
 const dashboard_1 = require("./routes/dashboard");
+const comments_1 = require("./routes/comments");
 const exportWorker_1 = require("./services/exportWorker");
 const retentionWorker_1 = require("./services/retentionWorker");
 const ledgerRootWorker_1 = require("./services/ledgerRootWorker");
+const emailQueue_1 = require("./workers/emailQueue");
+const weeklyDigest_1 = require("./workers/weeklyDigest");
+const deadlineReminders_1 = require("./workers/deadlineReminders");
+const taskReminders_1 = require("./workers/taskReminders");
 const requestId_1 = require("./middleware/requestId");
 const errorResponse_1 = require("./utils/errorResponse");
 const auth_1 = require("./middleware/auth");
@@ -362,6 +367,7 @@ app.use("/api", verification_1.verificationRouter);
 app.use("/api/public", publicVerification_1.publicVerificationRouter);
 app.use("/api/metrics", metrics_1.metricsRouter);
 app.use("/api/dashboard", dashboard_1.dashboardRouter);
+app.use("/api/comments", comments_1.commentsRouter);
 // Mount all /api routes under /v1 as well (versioned API)
 v1Router.use("/risk", risk_1.riskRouter);
 v1Router.use("/subscriptions", subscriptions_1.subscriptionsRouter);
@@ -382,6 +388,7 @@ v1Router.use("/", verification_1.verificationRouter);
 v1Router.use("/public", publicVerification_1.publicVerificationRouter);
 v1Router.use("/metrics", metrics_1.metricsRouter);
 v1Router.use("/dashboard", dashboard_1.dashboardRouter);
+v1Router.use("/comments", comments_1.commentsRouter);
 // Dev endpoints (only available when DEV_AUTH_SECRET is set)
 // MUST be mounted BEFORE app.use("/v1", v1Router) to ensure Express registers it
 if (process.env.DEV_AUTH_SECRET) {
@@ -434,6 +441,10 @@ if (process.env.NODE_ENV !== "test") {
         (0, exportWorker_1.startExportWorker)();
         (0, retentionWorker_1.startRetentionWorker)();
         (0, ledgerRootWorker_1.startLedgerRootWorker)();
+        (0, emailQueue_1.startEmailQueueWorker)();
+        (0, weeklyDigest_1.startWeeklyDigestWorker)();
+        (0, deadlineReminders_1.startDeadlineReminderWorker)();
+        (0, taskReminders_1.startTaskReminderWorker)();
     });
 }
 //# sourceMappingURL=index.js.map

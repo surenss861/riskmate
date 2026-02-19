@@ -27,6 +27,7 @@ async function buildJobReport(organizationId, jobId) {
         .select("id, name, type, file_path, mime_type, description, created_at, uploaded_by")
         .eq("job_id", jobId)
         .eq("organization_id", organizationId)
+        .is("deleted_at", null)
         .order("created_at", { ascending: true });
     // Fetch job_photos for category (before/during/after) to attach to photo documents
     const { data: jobPhotos } = await supabaseClient_1.supabase
@@ -42,7 +43,8 @@ async function buildJobReport(organizationId, jobId) {
         .select("id, storage_path, file_name, mime_type, phase, evidence_type, created_at, uploaded_by")
         .eq("work_record_id", jobId)
         .eq("organization_id", organizationId)
-        .eq("state", "sealed");
+        .eq("state", "sealed")
+        .is("deleted_at", null);
     const PHOTO_CATEGORIES = ["before", "during", "after"];
     const evidencePhotoItems = (imageEvidence || [])
         .filter((ev) => ev.mime_type?.toLowerCase().startsWith(IMAGE_MIME_PREFIX))

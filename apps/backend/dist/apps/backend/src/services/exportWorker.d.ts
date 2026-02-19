@@ -14,6 +14,11 @@
  */
 export declare function startExportWorker(): void;
 /**
+ * Trigger one cycle of export processing (for immediate wake after enqueue).
+ * Called by API when a new export is inserted so processing starts without waiting for the poll interval.
+ */
+export declare function triggerExportProcessing(): void;
+/**
  * Stop the export worker
  */
 export declare function stopExportWorker(): void;

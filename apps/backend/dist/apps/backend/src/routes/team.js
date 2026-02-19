@@ -11,6 +11,7 @@ const auth_1 = require("../middleware/auth");
 const rbac_1 = require("../middleware/rbac");
 const planRules_1 = require("../auth/planRules");
 const audit_1 = require("../middleware/audit");
+const emailQueue_1 = require("../workers/emailQueue");
 exports.teamRouter = express_1.default.Router();
 const ALLOWED_ROLES = new Set(["owner", "admin", "safety_lead", "executive", "member"]);
 // Helper to log team events
@@ -250,6 +251,21 @@ exports.teamRouter.post("/invite", (0, rbac_1.requireRole)("safety_lead"), async
                 invite_id: inviteRow?.id || null,
             },
         });
+        try {
+            const [{ data: inviter }, { data: organization }] = await Promise.all([
+                supabaseClient_1.supabase.from("users").select("full_name").eq("id", authReq.user.id).maybeSingle(),
+                supabaseClient_1.supabase.from("organizations").select("name").eq("id", organizationId).maybeSingle(),
+            ]);
+            (0, emailQueue_1.queueEmail)(emailQueue_1.EmailJobType.team_invite, normalizedEmail, {
+                orgName: organization?.name ?? "your organization",
+                inviterName: inviter?.full_name ?? "A teammate",
+                tempPassword,
+                loginUrl: process.env.FRONTEND_URL || "https://www.riskmate.dev",
+            }, newUserId);
+        }
+        catch (emailQueueErr) {
+            console.warn("[Team] Team invite email queueing failed:", emailQueueErr);
+        }
         res.json({
             data: inviteRow,
             temporary_password: tempPassword,

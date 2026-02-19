@@ -14,6 +14,7 @@ const crypto_1 = __importDefault(require("crypto"));
 const notifications_1 = require("../services/notifications");
 const jobReport_1 = require("../utils/jobReport");
 const limits_1 = require("../middleware/limits");
+const emailQueue_1 = require("../workers/emailQueue");
 exports.reportsRouter = express_1.default.Router();
 const ensuredBuckets = new Set();
 const BASE_SHARE_URL = process.env.REPORT_SHARE_BASE_URL ||
@@ -218,6 +219,41 @@ exports.reportsRouter.post("/generate/:jobId", auth_1.authenticate, (async (req,
             jobId,
             pdfUrl,
         });
+        try {
+            const { data: members } = await supabaseClient_1.supabase
+                .from("organization_members")
+                .select("user_id")
+                .eq("organization_id", organization_id);
+            const memberIds = (members || []).map((m) => m.user_id).filter(Boolean);
+            if (memberIds.length > 0) {
+                const { data: prefsRows } = await supabaseClient_1.supabase
+                    .from("notification_preferences")
+                    .select("user_id")
+                    .in("user_id", memberIds)
+                    .eq("email_enabled", true)
+                    .eq("report_ready", true);
+                const enabledIds = new Set((prefsRows || []).map((row) => row.user_id));
+                if (enabledIds.size > 0) {
+                    const { data: users } = await supabaseClient_1.supabase
+                        .from("users")
+                        .select("id, email")
+                        .in("id", Array.from(enabledIds))
+                        .not("email", "is", null);
+                    for (const user of users || []) {
+                        if (!user.email)
+                            continue;
+                        (0, emailQueue_1.queueEmail)(emailQueue_1.EmailJobType.report_ready, user.email, {
+                            jobTitle: reportData.job?.client_name ?? "Risk report",
+                            downloadUrl: pdfUrl ?? "",
+                            viewUrl: `${BASE_SHARE_URL}/reports/${jobId}`,
+                        }, user.id);
+                    }
+                }
+            }
+        }
+        catch (emailQueueErr) {
+            console.warn("[Reports] Failed to queue report ready emails:", emailQueueErr);
+        }
         // Always return pdf_base64 so frontend can download even if storage upload fails
         res.json({
             data: {
@@ -305,6 +341,25 @@ exports.reportsRouter.post("/runs/:reportRunId/ready-for-signatures", auth_1.aut
             catch (err) {
                 console.error("sendSignatureRequestNotification failed for user", uid, err);
             }
+        }
+        try {
+            const { data: signerRows } = await supabaseClient_1.supabase
+                .from("users")
+                .select("id, email")
+                .in("id", intendedSignerUserIds)
+                .not("email", "is", null);
+            for (const signer of signerRows || []) {
+                if (!signer.email)
+                    continue;
+                (0, emailQueue_1.queueEmail)(emailQueue_1.EmailJobType.signature_request, signer.email, {
+                    reportRunId,
+                    jobTitle: jobTitleOrClientName ?? "Risk report",
+                    reportName: `Report ${reportRunId.slice(0, 8)}`,
+                }, signer.id);
+            }
+        }
+        catch (emailQueueErr) {
+            console.warn("[Reports] Failed to queue signature request emails:", emailQueueErr);
         }
         res.json({ data: updated });
     }

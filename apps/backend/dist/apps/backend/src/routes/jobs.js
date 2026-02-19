@@ -49,6 +49,7 @@ const errorResponse_1 = require("../utils/errorResponse");
 const requireWriteAccess_1 = require("../middleware/requireWriteAccess");
 const realtimeEvents_1 = require("../utils/realtimeEvents");
 const permissions_1 = require("../utils/permissions");
+const emailQueue_1 = require("../workers/emailQueue");
 exports.jobsRouter = express_1.default.Router();
 /** Maximum number of job IDs per bulk request; prevents oversized batches. */
 const BULK_BATCH_CAP = 100;
@@ -171,13 +172,16 @@ exports.jobsRouter.get("/", auth_1.authenticate, async (req, res) => {
                 : (limitParam && !isNaN(limitParam) && limitParam > 0
                     ? limitParam
                     : 20);
-            // Enforce maximum limit to prevent abuse
-            if (limitNum > 1000) {
-                limitNum = 1000;
-            }
         }
         catch {
             limitNum = 20;
+        }
+        // Clamp limit to [1, 100] and return 400 for invalid values
+        if (!Number.isFinite(limitNum) || limitNum < 1 || limitNum > 100) {
+            return res.status(400).json({
+                message: "Invalid limit: must be a number between 1 and 100",
+                code: "INVALID_FORMAT",
+            });
         }
         // Cursor pagination is only safe for sorts that match SQL ordering
         // status_asc uses in-memory sorting, so cursor pagination would be inconsistent
@@ -211,8 +215,8 @@ exports.jobsRouter.get("/", auth_1.authenticate, async (req, res) => {
             const index = statusOrder.indexOf(status);
             return index >= 0 ? index : statusOrder.length; // Unknown statuses go last
         };
-        // Base columns (always present)
-        const baseColumns = "id, client_name, job_type, location, status, risk_score, risk_level, created_at, updated_at, review_flag, flagged_at";
+        // Base columns (always present; title may be null if not set)
+        const baseColumns = "id, title, client_name, job_type, location, status, risk_score, risk_level, created_at, updated_at, review_flag, flagged_at";
         // Optional columns (may not exist if migration hasn't run)
         const optionalColumns = "applied_template_id, applied_template_type, assigned_to_id, assigned_to_name, assigned_to_email";
         let query = supabaseClient_1.supabase
@@ -233,8 +237,8 @@ exports.jobsRouter.get("/", auth_1.authenticate, async (req, res) => {
             }
             // Escape special characters for LIKE query
             const escapedTerm = searchTerm.replace(/[%_]/g, '\\$&');
-            // Search in client_name, location, or id (case-insensitive partial match)
-            query = query.or(`client_name.ilike.%${escapedTerm}%,location.ilike.%${escapedTerm}%,id.eq.${escapedTerm}`);
+            // Search in title, client_name, location, or id (case-insensitive partial match)
+            query = query.or(`title.ilike.%${escapedTerm}%,client_name.ilike.%${escapedTerm}%,location.ilike.%${escapedTerm}%,id.eq.${escapedTerm}`);
         }
         // Cursor-based pagination (per-sort cursor keys for consistency)
         if (useCursor) {
@@ -302,6 +306,13 @@ exports.jobsRouter.get("/", auth_1.authenticate, async (req, res) => {
         if (!useCursor) {
             // Offset pagination (used for status_asc or when cursor is not provided)
             const offset = (pageNum - 1) * limitNum;
+            const MAX_OFFSET = 10000;
+            if (offset > MAX_OFFSET || offset < 0 || !Number.isFinite(pageNum) || pageNum < 1) {
+                return res.status(400).json({
+                    message: "Invalid page or offset: page must be >= 1 and resulting offset must not exceed 10000",
+                    code: "INVALID_FORMAT",
+                });
+            }
             query = query.range(offset, offset + limitNum - 1);
         }
         else {
@@ -329,6 +340,7 @@ exports.jobsRouter.get("/", auth_1.authenticate, async (req, res) => {
         // If error is due to missing columns (migration not applied), retry with minimal columns
         if (error && (error.message?.includes('archived_at') ||
             error.message?.includes('deleted_at') ||
+            error.message?.includes('title') ||
             error.message?.includes('applied_template_id') ||
             error.message?.includes('applied_template_type') ||
             error.message?.includes('review_flag') ||
@@ -342,7 +354,15 @@ exports.jobsRouter.get("/", auth_1.authenticate, async (req, res) => {
             let fallbackQuery = supabaseClient_1.supabase
                 .from("jobs")
                 .select("id, client_name, job_type, location, status, risk_score, risk_level, created_at, updated_at")
-                .eq("organization_id", organization_id);
+                .eq("organization_id", organization_id)
+                .is("deleted_at", null);
+            if (q && typeof q === 'string' && q.trim()) {
+                const searchTerm = q.trim();
+                if (/^[a-zA-Z0-9\s\-_]+$/.test(searchTerm)) {
+                    const escapedTerm = searchTerm.replace(/[%_]/g, '\\$&');
+                    fallbackQuery = fallbackQuery.or(`client_name.ilike.%${escapedTerm}%,location.ilike.%${escapedTerm}%,id.eq.${escapedTerm}`);
+                }
+            }
             // Apply cursor or offset pagination (fallback mode - simplified)
             if (useCursor) {
                 try {
@@ -745,7 +765,17 @@ exports.jobsRouter.get("/by-signoff/:signoffId", auth_1.authenticate, async (req
         res.status(500).json(errorResponse);
     }
 });
-// --- Bulk routes (must be before /:id so "bulk" is not captured as id) ---
+/** Build the results array for bulk API responses (per ticket schema). Uses job_id and status. */
+function buildBulkResults(succeeded, failed) {
+    const succeededResults = succeeded.map((job_id) => ({ job_id, status: "success" }));
+    const failedResults = failed.map(({ id, code, message }) => ({
+        job_id: id,
+        status: "error",
+        error: message,
+        code,
+    }));
+    return [...succeededResults, ...failedResults];
+}
 // Map canonical UI status to DB status (align with Next.js bulk shared).
 const canonicalStatusToDb = {
     active: "in_progress",
@@ -779,11 +809,12 @@ exports.jobsRouter.post("/bulk/status", auth_1.authenticate, requireWriteAccess_
             .filter((id) => typeof id !== "string")
             .map((id) => ({ id: String(id), code: "INVALID_ID", message: "Invalid job id" }));
         if (validIds.length === 0) {
-            return res.json({ data: { succeeded: [], failed } });
+            const total = failed.length;
+            return res.json({ success: true, summary: { total, succeeded: 0, failed: total }, data: { succeeded: [], failed }, results: buildBulkResults([], failed) });
         }
         const { data: jobs, error: fetchError } = await supabaseClient_1.supabase
             .from("jobs")
-            .select("id, status, deleted_at")
+            .select("id, status, deleted_at, archived_at")
             .eq("organization_id", organization_id)
             .in("id", validIds);
         if (fetchError) {
@@ -795,30 +826,52 @@ exports.jobsRouter.post("/bulk/status", auth_1.authenticate, requireWriteAccess_
                 failed.push({ id, code: "NOT_FOUND", message: "Job not found" });
                 continue;
             }
-            if (found.get(id).deleted_at) {
+            const j = found.get(id);
+            if (j.deleted_at) {
                 failed.push({ id, code: "ALREADY_DELETED", message: "Job has been deleted" });
+                continue;
+            }
+            if (j.archived_at || j.status === "archived") {
+                failed.push({ id, code: "ARCHIVED", message: "Job is archived and cannot be updated" });
             }
         }
         const eligibleIds = validIds.filter((id) => {
             const j = found.get(id);
-            return j && !j.deleted_at;
+            return j && !j.deleted_at && !j.archived_at && j.status !== "archived";
         });
         if (eligibleIds.length === 0) {
-            return res.json({ data: { succeeded: [], failed } });
+            const total = failed.length;
+            return res.json({ success: true, summary: { total, succeeded: 0, failed: total }, data: { succeeded: [], failed }, results: buildBulkResults([], failed) });
         }
-        const { error: updateError } = await supabaseClient_1.supabase
-            .from("jobs")
-            .update({ status: dbStatus })
-            .eq("organization_id", organization_id)
-            .in("id", eligibleIds);
-        if (updateError) {
+        const { data: rpcResult, error: rpcError } = await supabaseClient_1.supabase.rpc("bulk_update_job_status", {
+            p_organization_id: organization_id,
+            p_job_ids: eligibleIds,
+            p_status: dbStatus,
+        });
+        if (rpcError) {
             for (const id of eligibleIds) {
-                failed.push({ id, code: "UPDATE_FAILED", message: updateError.message });
+                failed.push({ id, code: "UPDATE_FAILED", message: rpcError.message });
             }
-            return res.json({ data: { succeeded: [], failed } });
+            const total = failed.length;
+            return res.status(500).json({
+                success: false,
+                message: rpcError.message,
+                code: "RPC_ERROR",
+                summary: { total, succeeded: 0, failed: total },
+                data: { succeeded: [], failed },
+                results: buildBulkResults([], failed),
+            });
+        }
+        const succeeded = Array.isArray(rpcResult)
+            ? rpcResult.map((r) => (typeof r === "string" ? r : r?.id ?? "")).filter(Boolean)
+            : [];
+        for (const id of eligibleIds) {
+            if (!succeeded.includes(id)) {
+                failed.push({ id, code: "UPDATE_FAILED", message: "Job was not updated (ineligible)" });
+            }
         }
         const clientMetadata = (0, audit_1.extractClientMetadata)(req);
-        for (const jobId of eligibleIds) {
+        for (const jobId of succeeded) {
             await (0, audit_1.recordAuditLog)({
                 organizationId: organization_id,
                 actorId: userId,
@@ -830,7 +883,8 @@ exports.jobsRouter.post("/bulk/status", auth_1.authenticate, requireWriteAccess_
             });
             await (0, realtimeEvents_1.emitJobEvent)(organization_id, "job.updated", jobId, userId);
         }
-        res.json({ data: { succeeded: eligibleIds, failed } });
+        const total = succeeded.length + failed.length;
+        res.json({ success: true, summary: { total, succeeded: succeeded.length, failed: failed.length }, data: { succeeded, failed }, results: buildBulkResults(succeeded, failed) });
     }
     catch (err) {
         console.error("Bulk status update failed:", err);
@@ -867,11 +921,12 @@ exports.jobsRouter.post("/bulk/assign", auth_1.authenticate, requireWriteAccess_
             .filter((id) => typeof id !== "string")
             .map((id) => ({ id: String(id), code: "INVALID_ID", message: "Invalid job id" }));
         if (validIds.length === 0) {
-            return res.json({ data: { succeeded: [], failed, updated_assignments: {} } });
+            const total = failed.length;
+            return res.json({ success: true, summary: { total, succeeded: 0, failed: total }, data: { succeeded: [], failed, updated_assignments: {} }, results: buildBulkResults([], failed) });
         }
         const { data: jobs, error: fetchError } = await supabaseClient_1.supabase
             .from("jobs")
-            .select("id, client_name")
+            .select("id, client_name, deleted_at, archived_at, status")
             .eq("organization_id", organization_id)
             .in("id", validIds);
         if (fetchError) {
@@ -881,60 +936,52 @@ exports.jobsRouter.post("/bulk/assign", auth_1.authenticate, requireWriteAccess_
         for (const id of validIds) {
             if (!found.has(id)) {
                 failed.push({ id, code: "NOT_FOUND", message: "Job not found" });
+                continue;
+            }
+            const j = found.get(id);
+            if (j.deleted_at) {
+                failed.push({ id, code: "ALREADY_DELETED", message: "Job has been deleted" });
+                continue;
+            }
+            if (j.archived_at || j.status === "archived") {
+                failed.push({ id, code: "ARCHIVED", message: "Job is archived and cannot be assigned" });
             }
         }
-        const eligibleIds = validIds.filter((id) => found.has(id));
+        const eligibleIds = validIds.filter((id) => {
+            const j = found.get(id);
+            return j && !j.deleted_at && !j.archived_at && j.status !== "archived";
+        });
         if (eligibleIds.length === 0) {
-            return res.json({ data: { succeeded: [], failed, updated_assignments: {} } });
+            const total = failed.length;
+            return res.json({ success: true, summary: { total, succeeded: 0, failed: total }, data: { succeeded: [], failed, updated_assignments: {} }, results: buildBulkResults([], failed) });
         }
-        const rows = eligibleIds.map((job_id) => ({
-            job_id,
-            user_id: workerId,
-            role: "worker",
-        }));
-        const { error: insertError } = await supabaseClient_1.supabase.from("job_assignments").insert(rows);
-        let succeeded = [];
-        if (insertError) {
-            if (insertError.code === "23505") {
-                for (const jobId of eligibleIds) {
-                    const { error: oneError } = await supabaseClient_1.supabase.from("job_assignments").insert({
-                        job_id: jobId,
-                        user_id: workerId,
-                        role: "worker",
-                    });
-                    if (oneError && oneError.code === "23505") {
-                        failed.push({ id: jobId, code: "ALREADY_ASSIGNED", message: "User already assigned to this job" });
-                    }
-                    else if (oneError) {
-                        failed.push({ id: jobId, code: "ASSIGN_FAILED", message: oneError.message });
-                    }
-                    else {
-                        succeeded.push(jobId);
-                    }
-                }
+        const { data: rpcResult, error: rpcError } = await supabaseClient_1.supabase.rpc("bulk_assign_jobs", {
+            p_organization_id: organization_id,
+            p_job_ids: eligibleIds,
+            p_worker_id: workerId,
+            p_worker_name: assigneeName,
+            p_worker_email: assigneeEmail,
+        });
+        if (rpcError) {
+            for (const id of eligibleIds) {
+                failed.push({ id, code: "ASSIGN_FAILED", message: rpcError.message });
             }
-            else {
-                for (const id of eligibleIds) {
-                    failed.push({ id, code: "ASSIGN_FAILED", message: insertError.message });
-                }
-                return res.json({ data: { succeeded: [], failed, updated_assignments: {} } });
-            }
+            const total = failed.length;
+            return res.status(500).json({
+                success: false,
+                message: rpcError.message,
+                code: "RPC_ERROR",
+                summary: { total, succeeded: 0, failed: total },
+                data: { succeeded: [], failed, updated_assignments: {} },
+                results: buildBulkResults([], failed),
+            });
         }
-        else {
-            succeeded = [...eligibleIds];
-        }
-        if (succeeded.length > 0) {
-            const { error: updateJobError } = await supabaseClient_1.supabase
-                .from("jobs")
-                .update({
-                assigned_to_id: workerId,
-                assigned_to_name: assigneeName,
-                assigned_to_email: assigneeEmail,
-            })
-                .eq("organization_id", organization_id)
-                .in("id", succeeded);
-            if (updateJobError) {
-                console.warn("[bulk/assign] Failed to update job assignment fields:", updateJobError.message);
+        const succeeded = Array.isArray(rpcResult)
+            ? rpcResult.map((r) => (typeof r === "string" ? r : r?.id ?? "")).filter(Boolean)
+            : [];
+        for (const id of eligibleIds) {
+            if (!succeeded.includes(id)) {
+                failed.push({ id, code: "ASSIGN_FAILED", message: "Job was not assigned (ineligible)" });
             }
         }
         const updated_assignments = {};
@@ -962,7 +1009,8 @@ exports.jobsRouter.post("/bulk/assign", auth_1.authenticate, requireWriteAccess_
                 ...clientMetadata,
             });
         }
-        res.json({ data: { succeeded, failed, updated_assignments } });
+        const total = succeeded.length + failed.length;
+        res.json({ success: true, summary: { total, succeeded: succeeded.length, failed: failed.length }, data: { succeeded, failed, updated_assignments }, results: buildBulkResults(succeeded, failed) });
     }
     catch (err) {
         console.error("Bulk assign failed:", err);
@@ -990,7 +1038,8 @@ exports.jobsRouter.post("/bulk/delete", auth_1.authenticate, requireWriteAccess_
             .filter((id) => typeof id !== "string")
             .map((id) => ({ id: String(id), code: "INVALID_ID", message: "Invalid job id" }));
         if (validIds.length === 0) {
-            return res.json({ data: { succeeded: [], failed } });
+            const total = failed.length;
+            return res.json({ success: true, summary: { total, succeeded: 0, failed: total }, data: { succeeded: [], failed }, results: buildBulkResults([], failed) });
         }
         const { data: jobs, error: jobsError } = await supabaseClient_1.supabase
             .from("jobs")
@@ -1020,9 +1069,10 @@ exports.jobsRouter.post("/bulk/delete", auth_1.authenticate, requireWriteAccess_
             return j && !j.deleted_at && j.status === "draft";
         });
         if (draftNotDeleted.length === 0) {
-            return res.json({ data: { succeeded: [], failed } });
+            const total = failed.length;
+            return res.json({ success: true, summary: { total, succeeded: 0, failed: total }, data: { succeeded: [], failed }, results: buildBulkResults([], failed) });
         }
-        const [auditByTarget, auditByJobId, docsRes, riskRes, reportRes,] = await Promise.all([
+        const [auditByTarget, auditByJobId, riskRes, reportRes, reportRunsRes,] = await Promise.all([
             supabaseClient_1.supabase
                 .from("audit_logs")
                 .select("target_id")
@@ -1034,24 +1084,26 @@ exports.jobsRouter.post("/bulk/delete", auth_1.authenticate, requireWriteAccess_
                 .eq("organization_id", organization_id)
                 .in("job_id", draftNotDeleted)
                 .not("job_id", "is", null),
-            supabaseClient_1.supabase.from("documents").select("job_id").in("job_id", draftNotDeleted),
             supabaseClient_1.supabase.from("job_risk_scores").select("job_id").in("job_id", draftNotDeleted),
             supabaseClient_1.supabase.from("reports").select("job_id").in("job_id", draftNotDeleted),
+            supabaseClient_1.supabase
+                .from("report_runs")
+                .select("job_id")
+                .eq("organization_id", organization_id)
+                .in("job_id", draftNotDeleted),
         ]);
         const hasAuditByTarget = new Set((auditByTarget.data ?? []).map((r) => r.target_id));
         const hasAuditByJobId = new Set((auditByJobId.data ?? []).map((r) => r.job_id).filter(Boolean));
-        const hasDocs = new Set((docsRes.data ?? []).map((r) => r.job_id));
         const hasRisk = new Set((riskRes.data ?? []).map((r) => r.job_id));
-        const hasReports = new Set((reportRes.data ?? []).map((r) => r.job_id));
+        const hasReports = new Set([
+            ...(reportRes.data ?? []).map((r) => r.job_id),
+            ...(reportRunsRes.data ?? []).map((r) => r.job_id),
+        ]);
         const ineligibleAudit = new Set([...hasAuditByTarget, ...hasAuditByJobId]);
         const eligibleIds = [];
         for (const id of draftNotDeleted) {
             if (ineligibleAudit.has(id)) {
                 failed.push({ id, code: "HAS_AUDIT_HISTORY", message: "Jobs with audit history cannot be deleted" });
-                continue;
-            }
-            if (hasDocs.has(id)) {
-                failed.push({ id, code: "HAS_EVIDENCE", message: "Jobs with uploaded evidence cannot be deleted" });
                 continue;
             }
             if (hasRisk.has(id)) {
@@ -1065,24 +1117,41 @@ exports.jobsRouter.post("/bulk/delete", auth_1.authenticate, requireWriteAccess_
             eligibleIds.push(id);
         }
         if (eligibleIds.length === 0) {
-            return res.json({ data: { succeeded: [], failed } });
+            const total = failed.length;
+            return res.json({ success: true, summary: { total, succeeded: 0, failed: total }, data: { succeeded: [], failed }, results: buildBulkResults([], failed) });
         }
         const deletedAt = new Date().toISOString();
-        const { error: updateError } = await supabaseClient_1.supabase
-            .from("jobs")
-            .update({ deleted_at: deletedAt })
-            .eq("organization_id", organization_id)
-            .in("id", eligibleIds);
-        if (updateError) {
+        const { error: rpcError } = await supabaseClient_1.supabase.rpc("bulk_soft_delete_jobs", {
+            p_organization_id: organization_id,
+            p_job_ids: eligibleIds,
+            p_deleted_at: deletedAt,
+        });
+        if (rpcError) {
             for (const id of eligibleIds) {
-                failed.push({ id, code: "DELETE_FAILED", message: updateError.message });
+                failed.push({ id, code: "DELETE_FAILED", message: rpcError.message });
             }
-            return res.json({ data: { succeeded: [], failed } });
+            const total = failed.length;
+            const payload = {
+                success: false,
+                message: rpcError.message,
+                summary: { total, succeeded: 0, failed: total },
+                data: { succeeded: [], failed },
+                results: buildBulkResults([], failed),
+            };
+            const pgCode = rpcError.code;
+            const isEligibilityError = pgCode === "P0001" ||
+                pgCode === "23514" ||
+                pgCode === "check_violation" ||
+                /ineligible|cannot be deleted/i.test(rpcError.message ?? "");
+            if (isEligibilityError) {
+                return res.status(400).json({ ...payload, code: "VALIDATION_ERROR" });
+            }
+            return res.status(500).json({ ...payload, code: "RPC_ERROR" });
         }
         const clientMetadata = (0, audit_1.extractClientMetadata)(req);
-        for (const jobId of eligibleIds) {
+        const auditPromises = eligibleIds.map((jobId) => {
             const job = jobMap.get(jobId);
-            await (0, audit_1.recordAuditLog)({
+            return (0, audit_1.recordAuditLog)({
                 organizationId: organization_id,
                 actorId: userId,
                 eventName: "job.deleted",
@@ -1091,8 +1160,10 @@ exports.jobsRouter.post("/bulk/delete", auth_1.authenticate, requireWriteAccess_
                 metadata: { previous_status: job.status, bulk: true },
                 ...clientMetadata,
             });
-        }
-        res.json({ data: { succeeded: eligibleIds, failed } });
+        });
+        await Promise.allSettled(auditPromises);
+        const total = eligibleIds.length + failed.length;
+        res.json({ success: true, summary: { total, succeeded: eligibleIds.length, failed: failed.length }, data: { succeeded: eligibleIds, failed }, results: buildBulkResults(eligibleIds, failed) });
     }
     catch (err) {
         console.error("Bulk delete failed:", err);
@@ -1117,12 +1188,15 @@ exports.jobsRouter.post("/bulk/export", auth_1.authenticate, async (req, res) =>
             .filter((id) => typeof id !== "string")
             .map((id) => ({ id: String(id), code: "INVALID_ID", message: "Invalid job id" }));
         if (validIds.length === 0) {
-            return res.json({ data: { succeeded: [], failed } });
+            const total = failed.length;
+            return res.json({ success: true, summary: { total, succeeded: 0, failed: total }, data: { succeeded: [], failed }, results: buildBulkResults([], failed) });
         }
         const { data: jobs, error: fetchError } = await supabaseClient_1.supabase
             .from("jobs")
             .select("id")
             .eq("organization_id", organization_id)
+            .is("deleted_at", null)
+            .is("archived_at", null)
             .in("id", validIds);
         if (fetchError) {
             return res.status(500).json({ message: fetchError.message, code: "QUERY_ERROR" });
@@ -1131,10 +1205,15 @@ exports.jobsRouter.post("/bulk/export", auth_1.authenticate, async (req, res) =>
         const succeeded = validIds.filter((id) => foundIds.has(id));
         for (const id of validIds) {
             if (!foundIds.has(id)) {
-                failed.push({ id, code: "NOT_FOUND", message: "Job not found" });
+                failed.push({
+                    id,
+                    code: "NOT_FOUND",
+                    message: "Job not found or excluded (deleted/archived)",
+                });
             }
         }
-        res.json({ data: { succeeded, failed } });
+        const total = succeeded.length + failed.length;
+        res.json({ success: true, summary: { total, succeeded: succeeded.length, failed: failed.length }, data: { succeeded, failed }, results: buildBulkResults(succeeded, failed) });
     }
     catch (err) {
         console.error("Bulk export validation failed:", err);
@@ -1604,6 +1683,13 @@ exports.jobsRouter.post("/", auth_1.authenticate, requireWriteAccess_1.requireWr
             console.error("Job creation failed:", jobError);
             return res.status(500).json({ message: "Failed to create job" });
         }
+        // Upsert client into clients table for search
+        if (client_name?.trim()) {
+            await supabaseClient_1.supabase.rpc("upsert_client", {
+                p_org_id: organization_id,
+                p_name: client_name.trim(),
+            });
+        }
         // Extract client metadata from request
         const clientMetadata = (0, audit_1.extractClientMetadata)(req);
         await (0, audit_1.recordAuditLog)({
@@ -1702,7 +1788,7 @@ exports.jobsRouter.post("/:id/assign", auth_1.authenticate, requireWriteAccess_1
         }
         const { data: assignee } = await supabaseClient_1.supabase
             .from("users")
-            .select("id, organization_id")
+            .select("id, organization_id, email, full_name")
             .eq("id", assigneeId)
             .single();
         if (!assignee) {
@@ -1721,6 +1807,7 @@ exports.jobsRouter.post("/:id/assign", auth_1.authenticate, requireWriteAccess_1
             job_id: jobId,
             user_id: assigneeId,
             role: String(role),
+            organization_id: job.organization_id,
         });
         if (insertError) {
             if (insertError.code === "23505") {
@@ -1733,6 +1820,24 @@ exports.jobsRouter.post("/:id/assign", auth_1.authenticate, requireWriteAccess_1
         }
         catch (notifyErr) {
             console.warn("[Jobs] Job assigned notification failed:", notifyErr);
+        }
+        try {
+            const { data: actor } = await supabaseClient_1.supabase
+                .from("users")
+                .select("full_name")
+                .eq("id", actorId)
+                .maybeSingle();
+            const assigneeEmail = assignee?.email ?? null;
+            if (assigneeEmail) {
+                (0, emailQueue_1.queueEmail)(emailQueue_1.EmailJobType.job_assigned, assigneeEmail, {
+                    job,
+                    assignedByName: actor?.full_name ?? "A teammate",
+                    userName: assignee?.full_name ?? null,
+                }, assigneeId);
+            }
+        }
+        catch (emailQueueErr) {
+            console.warn("[Jobs] Job assigned email queueing failed:", emailQueueErr);
         }
         res.status(201).json({ status: "ok", message: "User assigned to job" });
     }
@@ -1770,6 +1875,13 @@ exports.jobsRouter.patch("/:id", auth_1.authenticate, requireWriteAccess_1.requi
                 .eq("id", jobId);
             if (updateError)
                 throw updateError;
+            // Upsert client when client_name changes
+            if (jobUpdates.client_name != null && String(jobUpdates.client_name || "").trim()) {
+                await supabaseClient_1.supabase.rpc("upsert_client", {
+                    p_org_id: organization_id,
+                    p_name: String(jobUpdates.client_name).trim(),
+                });
+            }
         }
         // Recalculate risk if risk factors changed
         if (risk_factor_codes !== undefined) {
@@ -2010,6 +2122,7 @@ exports.jobsRouter.get("/:id/documents", auth_1.authenticate, async (req, res) =
             .select("id, name, type, file_size, file_path, mime_type, description, created_at, uploaded_by")
             .eq("job_id", jobId)
             .eq("organization_id", organization_id)
+            .is("deleted_at", null)
             .order("created_at", { ascending: true });
         if (error)
             throw error;
@@ -2028,7 +2141,8 @@ exports.jobsRouter.get("/:id/documents", auth_1.authenticate, async (req, res) =
             .select("id, storage_path, file_name, mime_type, phase, created_at, uploaded_by")
             .eq("work_record_id", jobId)
             .eq("organization_id", organization_id)
-            .eq("state", "sealed");
+            .eq("state", "sealed")
+            .is("deleted_at", null);
         const evidenceAsDocuments = await Promise.all((imageEvidence || [])
             .filter((ev) => ev.mime_type?.toLowerCase().startsWith(IMAGE_MIME_PREFIX))
             .map(async (ev) => {
@@ -2715,16 +2829,16 @@ exports.jobsRouter.delete("/:id", auth_1.authenticate, requireWriteAccess_1.requ
     try {
         const { id: userId, organization_id, role } = authReq.user;
         const jobId = authReq.params.id;
-        // Only owners can delete jobs (requireWriteAccess already blocks auditors/executives)
-        if (role !== "owner") {
+        // Single-job delete: owner and admin allowed (bulk delete remains owner-only)
+        if (!(0, permissions_1.canDeleteSingleJob)(role)) {
             const requestId = authReq.requestId || 'unknown';
             const { response: errorResponse, errorId } = (0, errorResponse_1.createErrorResponse)({
-                message: "Only organization owners can delete jobs",
-                internalMessage: `Delete attempt by user with role=${role}, required=owner`,
+                message: "You do not have permission to delete jobs",
+                internalMessage: `Single delete attempt by user with role=${role}, required=owner or admin`,
                 code: "AUTH_ROLE_FORBIDDEN",
                 requestId,
                 statusCode: 403,
-                required_role: "owner",
+                required_role: "owner or admin",
                 current_role: role || "unknown",
             });
             // Set error ID in response header

@@ -18,6 +18,9 @@ exports.notifyHighRiskJob = notifyHighRiskJob;
 exports.notifyReportReady = notifyReportReady;
 exports.notifyWeeklySummary = notifyWeeklySummary;
 exports.sendJobAssignedNotification = sendJobAssignedNotification;
+exports.sendTaskAssignedNotification = sendTaskAssignedNotification;
+exports.sendTaskCompletedNotification = sendTaskCompletedNotification;
+exports.sendTaskOverdueNotification = sendTaskOverdueNotification;
 exports.sendSignatureRequestNotification = sendSignatureRequestNotification;
 exports.sendEvidenceUploadedNotification = sendEvidenceUploadedNotification;
 exports.sendHazardAddedNotification = sendHazardAddedNotification;
@@ -133,7 +136,6 @@ async function fetchOrgUserIdsWithPreference(organizationId, prefKey) {
             .map((r) => r.user_id)),
     ];
 }
-/** Default notification preferences (contract keys). Master toggles on; weekly_summary off per spec; others on. */
 exports.DEFAULT_NOTIFICATION_PREFERENCES = {
     push_enabled: true,
     email_enabled: true,
@@ -143,7 +145,9 @@ exports.DEFAULT_NOTIFICATION_PREFERENCES = {
     evidence_uploaded: true,
     hazard_added: true,
     deadline_approaching: true,
+    email_deadline_reminder: true,
     weekly_summary: false,
+    email_weekly_digest: true,
     high_risk_job: true,
     report_ready: true,
 };
@@ -157,7 +161,9 @@ exports.OPT_OUT_SAFE_PREFERENCES = {
     evidence_uploaded: false,
     hazard_added: false,
     deadline_approaching: false,
+    email_deadline_reminder: false,
     weekly_summary: false,
+    email_weekly_digest: false,
     high_risk_job: false,
     report_ready: false,
 };
@@ -183,7 +189,9 @@ async function getNotificationPreferences(userId) {
         evidence_uploaded: data.evidence_uploaded ?? true,
         hazard_added: data.hazard_added ?? true,
         deadline_approaching: data.deadline_approaching ?? true,
+        email_deadline_reminder: data.email_deadline_reminder ?? true,
         weekly_summary: data.weekly_summary ?? false,
+        email_weekly_digest: data.email_weekly_digest ?? true,
         high_risk_job: data.high_risk_job ?? true,
         report_ready: data.report_ready ?? true,
     };
@@ -512,7 +520,8 @@ async function sendToUser(userId, organizationId, payload) {
     // Email delivery is gated on prefs.email_enabled. Any email job/worker that sends
     // notification emails must respect this flag; send email only inside this block.
     if (prefs.email_enabled) {
-        // TODO: send email when email delivery for in-app notifications is implemented
+        // Route-level handlers queue email jobs directly via emailQueue.ts.
+        // This block remains a no-op for in-app push delivery.
     }
 }
 /** Notify user when they are assigned to a job. */
@@ -534,6 +543,62 @@ async function sendJobAssignedNotification(userId, organizationId, jobId, jobTit
         },
         categoryId: "job_assigned",
         priority: "default",
+    });
+}
+async function sendTaskAssignedNotification(userId, organizationId, taskId, jobTitle, taskTitle) {
+    const prefs = await getNotificationPreferences(userId);
+    if (!prefs.job_assigned) {
+        console.log("[Notifications] Skipped task_assigned for user", userId, "(preference disabled)");
+        return;
+    }
+    let jobId = null;
+    const { data: task } = await supabaseClient_1.supabase
+        .from("tasks")
+        .select("job_id")
+        .eq("id", taskId)
+        .maybeSingle();
+    if (task?.job_id) {
+        jobId = task.job_id;
+    }
+    await sendToUser(userId, organizationId, {
+        title: "Task Assigned",
+        body: `You've been assigned '${taskTitle}' on '${jobTitle}'`,
+        data: {
+            type: "task_assigned",
+            taskId,
+            deepLink: `riskmate://jobs/${jobId ?? ""}/tasks/${taskId}`,
+        },
+        categoryId: "task_assigned",
+        priority: "default",
+    });
+}
+async function sendTaskCompletedNotification(userId, organizationId, taskId, taskTitle, jobTitle) {
+    void jobTitle;
+    await sendToUser(userId, organizationId, {
+        title: "Task Completed",
+        body: `'${taskTitle}' has been completed`,
+        data: {
+            type: "task_completed",
+            taskId,
+        },
+        priority: "default",
+    });
+}
+async function sendTaskOverdueNotification(userId, organizationId, taskId, taskTitle, jobTitle) {
+    const prefs = await getNotificationPreferences(userId);
+    if (!prefs.deadline_approaching) {
+        console.log("[Notifications] Skipped task_overdue for user", userId, "(preference disabled)");
+        return;
+    }
+    await sendToUser(userId, organizationId, {
+        title: "Task Overdue",
+        body: `'${taskTitle}' on '${jobTitle}' is overdue`,
+        data: {
+            type: "task_overdue",
+            taskId,
+        },
+        priority: "high",
+        categoryId: "deadline",
     });
 }
 /** Notify user when their signature is requested on a report run. */

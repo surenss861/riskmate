@@ -13,22 +13,24 @@ type DeviceTokenPayload = {
 export declare function registerDeviceToken({ userId, organizationId, token, platform, }: DeviceTokenPayload): Promise<boolean>;
 export declare function unregisterDeviceToken(token: string, userId: string, organizationId: string): Promise<boolean>;
 /** Default notification preferences (contract keys). Master toggles on; weekly_summary off per spec; others on. */
-export declare const DEFAULT_NOTIFICATION_PREFERENCES: {
-    readonly push_enabled: true;
-    readonly email_enabled: true;
-    readonly mention: true;
-    readonly job_assigned: true;
-    readonly signature_requested: true;
-    readonly evidence_uploaded: true;
-    readonly hazard_added: true;
-    readonly deadline_approaching: true;
-    readonly weekly_summary: false;
-    readonly high_risk_job: true;
-    readonly report_ready: true;
+export type NotificationPreferences = {
+    push_enabled: boolean;
+    email_enabled: boolean;
+    mention: boolean;
+    job_assigned: boolean;
+    signature_requested: boolean;
+    evidence_uploaded: boolean;
+    hazard_added: boolean;
+    deadline_approaching: boolean;
+    email_deadline_reminder: boolean;
+    weekly_summary: boolean;
+    email_weekly_digest: boolean;
+    high_risk_job: boolean;
+    report_ready: boolean;
 };
+export declare const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences;
 /** Safe opt-out when preferences cannot be loaded (e.g. Supabase error). All delivery disabled to avoid re-enabling push/email for opted-out users. */
 export declare const OPT_OUT_SAFE_PREFERENCES: NotificationPreferences;
-export type NotificationPreferences = typeof DEFAULT_NOTIFICATION_PREFERENCES;
 /** Fetch notification preferences for a user; returns defaults if no row exists. On Supabase error returns OPT_OUT_SAFE_PREFERENCES so delivery is skipped (fail closed). */
 export declare function getNotificationPreferences(userId: string): Promise<NotificationPreferences>;
 /** Fetch push tokens for a single user in a given organization (for targeted notifications). */
@@ -73,6 +75,9 @@ export declare function notifyWeeklySummary(params: {
 }): Promise<void>;
 /** Notify user when they are assigned to a job. */
 export declare function sendJobAssignedNotification(userId: string, organizationId: string, jobId: string, jobTitle?: string): Promise<void>;
+export declare function sendTaskAssignedNotification(userId: string, organizationId: string, taskId: string, jobTitle: string, taskTitle: string): Promise<void>;
+export declare function sendTaskCompletedNotification(userId: string, organizationId: string, taskId: string, taskTitle: string, jobTitle: string): Promise<void>;
+export declare function sendTaskOverdueNotification(userId: string, organizationId: string, taskId: string, taskTitle: string, jobTitle: string): Promise<void>;
 /** Notify user when their signature is requested on a report run. */
 export declare function sendSignatureRequestNotification(userId: string, organizationId: string, reportRunId: string, jobTitle?: string): Promise<void>;
 /** Notify user when evidence is uploaded to a job they care about. */

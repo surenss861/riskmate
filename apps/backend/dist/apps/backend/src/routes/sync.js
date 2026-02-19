@@ -97,6 +97,12 @@ exports.syncRouter.post("/batch", auth_1.authenticate, requireWriteAccess_1.requ
                             }
                         }
                         else if (job) {
+                            if (client_name?.trim()) {
+                                await supabaseClient_1.supabase.rpc("upsert_client", {
+                                    p_org_id: organization_id,
+                                    p_name: client_name.trim(),
+                                });
+                            }
                             baseResult.server_id = job.id;
                             const clientMetadata = (0, audit_1.extractClientMetadata)(req);
                             await (0, audit_2.recordAuditLog)({
@@ -182,6 +188,12 @@ exports.syncRouter.post("/batch", auth_1.authenticate, requireWriteAccess_1.requ
                             baseResult.error = updateError.message;
                         }
                         else {
+                            if (updates.client_name != null && String(updates.client_name || "").trim()) {
+                                await supabaseClient_1.supabase.rpc("upsert_client", {
+                                    p_org_id: organization_id,
+                                    p_name: String(updates.client_name).trim(),
+                                });
+                            }
                             baseResult.server_id = jobId;
                             const clientMetadata = (0, audit_1.extractClientMetadata)(req);
                             await (0, audit_2.recordAuditLog)({
@@ -949,6 +961,12 @@ exports.syncRouter.post("/resolve-conflict", auth_1.authenticate, requireWriteAc
                     .single();
                 if (jobError) {
                     return res.status(500).json({ message: jobError.message });
+                }
+                if (client_name?.trim()) {
+                    await supabaseClient_1.supabase.rpc("upsert_client", {
+                        p_org_id: organization_id,
+                        p_name: client_name.trim(),
+                    });
                 }
                 updatedJob = job;
                 const clientMetadataJob = (0, audit_1.extractClientMetadata)(req);

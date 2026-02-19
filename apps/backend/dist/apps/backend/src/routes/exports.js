@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.exportsRouter = void 0;
 const express_1 = __importDefault(require("express"));
 const supabaseClient_1 = require("../lib/supabaseClient");
+const exportWorker_1 = require("../services/exportWorker");
 const auth_1 = require("../middleware/auth");
 const errorResponse_1 = require("../utils/errorResponse");
 const idempotency_1 = require("../utils/idempotency");
@@ -13,6 +14,12 @@ const rateLimiter_1 = require("../middleware/rateLimiter");
 const structuredLog_1 = require("../utils/structuredLog");
 const crypto_1 = __importDefault(require("crypto"));
 exports.exportsRouter = express_1.default.Router();
+// POST /api/exports/trigger
+// Wakes the export worker to process queued exports immediately (e.g. after bulk export enqueue).
+exports.exportsRouter.post('/exports/trigger', auth_1.authenticate, async (_req, res) => {
+    (0, exportWorker_1.triggerExportProcessing)();
+    res.status(202).json({ ok: true, message: 'Export processing triggered' });
+});
 // POST /api/jobs/:id/export/pdf
 // Creates an async export job for a single PDF
 exports.exportsRouter.post('/jobs/:id/export/pdf', auth_1.authenticate, rateLimiter_1.exportRateLimiter, async (req, res) => {

@@ -33,6 +33,7 @@ import { verificationRouter } from "./routes/verification";
 import { publicVerificationRouter } from "./routes/publicVerification";
 import { metricsRouter } from "./routes/metrics";
 import { dashboardRouter } from "./routes/dashboard";
+import { commentsRouter } from "./routes/comments";
 import { startExportWorker } from "./services/exportWorker";
 import { startRetentionWorker } from "./services/retentionWorker";
 import { startLedgerRootWorker } from "./services/ledgerRootWorker";
@@ -361,6 +362,7 @@ app.use("/api", verificationRouter);
 app.use("/api/public", publicVerificationRouter);
 app.use("/api/metrics", metricsRouter);
 app.use("/api/dashboard", dashboardRouter);
+app.use("/api/comments", commentsRouter);
 
 // Mount all /api routes under /v1 as well (versioned API)
 v1Router.use("/risk", riskRouter);
@@ -382,6 +384,7 @@ v1Router.use("/", verificationRouter);
 v1Router.use("/public", publicVerificationRouter);
 v1Router.use("/metrics", metricsRouter);
 v1Router.use("/dashboard", dashboardRouter);
+v1Router.use("/comments", commentsRouter);
 
 // Dev endpoints (only available when DEV_AUTH_SECRET is set)
 // MUST be mounted BEFORE app.use("/v1", v1Router) to ensure Express registers it

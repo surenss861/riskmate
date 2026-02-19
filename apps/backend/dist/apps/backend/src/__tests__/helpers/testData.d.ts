@@ -14,6 +14,8 @@ export interface TestData {
     ownerUserId: string;
     auditorUserId: string;
     executiveUserId: string;
+    adminUserId?: string;
+    adminToken?: string;
     ownerToken: string;
     auditorToken: string;
     executiveToken: string;
