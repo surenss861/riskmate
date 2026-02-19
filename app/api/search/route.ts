@@ -225,59 +225,109 @@ export async function GET(request: NextRequest) {
       needsSignatures !== null ||
       includeArchived
 
-    if (q) {
+    if (q || useJobFilters) {
       if (type === 'jobs' || type === 'all') {
         if (useJobFilters) {
-          // Apply saved filter (required_ids) and boolean params via get_jobs_ranked so data and count stay in sync
-          const rankedRes = await searchClient.rpc('get_jobs_ranked', {
-            p_org_id: organizationId,
-            p_query: q,
-            p_limit: limit,
-            p_offset: 0,
-            p_include_archived: includeArchived,
-            p_sort_column: null,
-            p_sort_order: 'desc',
-            p_status: null,
-            p_risk_level: null,
-            p_assigned_to_id: null,
-            p_risk_score_min: null,
-            p_risk_score_max: null,
-            p_job_type: null,
-            p_client_ilike: null,
-            p_required_ids: requiredJobIds,
-            p_excluded_ids: null,
-            p_overdue: null,
-            p_unassigned: null,
-            p_recent_days: null,
-            p_has_photos: hasPhotos ?? null,
-            p_has_signatures: hasSignatures ?? null,
-            p_needs_signatures: needsSignatures ?? null,
-          })
-          if (rankedRes.error) throw rankedRes.error
-          const jobRows = (rankedRes.data || []) as Array<{
-            id: string
-            title: string | null
-            client_name: string | null
-            job_type: string | null
-            location: string | null
-            total_count?: number
-            score?: number
-            highlight?: string | null
-          }>
-          jobCount = Number(jobRows[0]?.total_count ?? 0) || 0
-          if (type === 'jobs') total = jobCount
-          for (const row of jobRows) {
-            if (row.id == null) continue
-            results.push({
-              type: 'job',
-              id: row.id,
-              title: (row.title || row.client_name || 'Untitled Job').trim() || 'Untitled Job',
-              subtitle: [row.job_type, row.location].filter(Boolean).join(' • '),
-              highlight: row.highlight ?? '',
-              score: Number(row.score) || 0,
+          if (q) {
+            // Apply saved filter (required_ids) and boolean params via get_jobs_ranked so data and count stay in sync
+            const rankedRes = await searchClient.rpc('get_jobs_ranked', {
+              p_org_id: organizationId,
+              p_query: q,
+              p_limit: limit,
+              p_offset: 0,
+              p_include_archived: includeArchived,
+              p_sort_column: null,
+              p_sort_order: 'desc',
+              p_status: null,
+              p_risk_level: null,
+              p_assigned_to_id: null,
+              p_risk_score_min: null,
+              p_risk_score_max: null,
+              p_job_type: null,
+              p_client_ilike: null,
+              p_required_ids: requiredJobIds,
+              p_excluded_ids: null,
+              p_overdue: null,
+              p_unassigned: null,
+              p_recent_days: null,
+              p_has_photos: hasPhotos ?? null,
+              p_has_signatures: hasSignatures ?? null,
+              p_needs_signatures: needsSignatures ?? null,
             })
+            if (rankedRes.error) throw rankedRes.error
+            const jobRows = (rankedRes.data || []) as Array<{
+              id: string
+              title: string | null
+              client_name: string | null
+              job_type: string | null
+              location: string | null
+              total_count?: number
+              score?: number
+              highlight?: string | null
+            }>
+            jobCount = Number(jobRows[0]?.total_count ?? 0) || 0
+            if (type === 'jobs') total = jobCount
+            for (const row of jobRows) {
+              if (row.id == null) continue
+              results.push({
+                type: 'job',
+                id: row.id,
+                title: (row.title || row.client_name || 'Untitled Job').trim() || 'Untitled Job',
+                subtitle: [row.job_type, row.location].filter(Boolean).join(' • '),
+                highlight: row.highlight ?? '',
+                score: Number(row.score) || 0,
+              })
+            }
+          } else {
+            // Filters present but no query: use get_jobs_list with same filter params for filtered results and count
+            const listRes = await searchClient.rpc('get_jobs_list', {
+              p_org_id: organizationId,
+              p_limit: limit,
+              p_offset: 0,
+              p_include_archived: includeArchived,
+              p_sort_column: 'created_at',
+              p_sort_order: 'desc',
+              p_status: null,
+              p_risk_level: null,
+              p_assigned_to_id: null,
+              p_risk_score_min: null,
+              p_risk_score_max: null,
+              p_job_type: null,
+              p_client_ilike: null,
+              p_required_ids: requiredJobIds,
+              p_excluded_ids: null,
+              p_overdue: null,
+              p_unassigned: null,
+              p_recent_days: null,
+              p_has_photos: hasPhotos ?? null,
+              p_has_signatures: hasSignatures ?? null,
+              p_needs_signatures: needsSignatures ?? null,
+            })
+            if (listRes.error) throw listRes.error
+            const jobRows = (listRes.data || []) as Array<{
+              id: string
+              title: string | null
+              client_name: string | null
+              job_type: string | null
+              location: string | null
+              total_count?: number
+            }>
+            jobCount = Number(jobRows[0]?.total_count ?? 0) || 0
+            if (type === 'jobs') total = jobCount
+            else if (type === 'all') total = jobCount
+            for (const row of jobRows) {
+              if (row.id == null) continue
+              results.push({
+                type: 'job',
+                id: row.id,
+                title: (row.title || row.client_name || 'Untitled Job').trim() || 'Untitled Job',
+                subtitle: [row.job_type, row.location].filter(Boolean).join(' • '),
+                highlight: '',
+                score: 0,
+              })
+            }
           }
-        } else {
+        } else if (q) {
           const [{ data: jobRows, error: jobSearchError }, { data: jobCountData, error: jobCountError }] = await Promise.all([
             searchClient.rpc('search_jobs', {
               p_org_id: organizationId,
@@ -311,7 +361,7 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      if (type === 'hazards' || type === 'all') {
+      if ((type === 'hazards' || type === 'all') && q) {
         const [{ data: hazardRows, error: hazardSearchError }, { data: hazardCountData, error: hazardCountError }] = await Promise.all([
           searchClient.rpc('search_hazards', {
             p_org_id: organizationId,
@@ -355,7 +405,7 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      if (type === 'clients' || type === 'all') {
+      if ((type === 'clients' || type === 'all') && q) {
         const [{ data: clientRows, error: clientSearchError }, { data: clientCountData, error: clientCountError }] = await Promise.all([
           searchClient.rpc('search_clients', {
             p_org_id: organizationId,
@@ -405,12 +455,13 @@ export async function GET(request: NextRequest) {
     const suggestions: string[] = []
 
     if (qRaw) {
-      const { data: suggestionRows } = await searchClient
+      let jobsSuggestQuery = searchClient
         .from('jobs')
         .select('client_name')
         .eq('organization_id', organizationId)
         .is('deleted_at', null)
-        .is('archived_at', null)
+      if (!includeArchived) jobsSuggestQuery = jobsSuggestQuery.is('archived_at', null)
+      const { data: suggestionRows } = await jobsSuggestQuery
         .ilike('client_name', `%${qRaw}%`)
         .limit(10)
 
@@ -422,12 +473,13 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      const { data: clientNameRows } = await searchClient
+      let clientsSuggestQuery = searchClient
         .from('clients')
         .select('name')
         .eq('organization_id', organizationId)
         .is('deleted_at', null)
-        .is('archived_at', null)
+      if (!includeArchived) clientsSuggestQuery = clientsSuggestQuery.is('archived_at', null)
+      const { data: clientNameRows } = await clientsSuggestQuery
         .ilike('name', `%${qRaw}%`)
         .limit(10)
 
@@ -439,12 +491,13 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      const { data: locationRows } = await searchClient
+      let locationSuggestQuery = searchClient
         .from('jobs')
         .select('location')
         .eq('organization_id', organizationId)
         .is('deleted_at', null)
-        .is('archived_at', null)
+      if (!includeArchived) locationSuggestQuery = locationSuggestQuery.is('archived_at', null)
+      const { data: locationRows } = await locationSuggestQuery
         .not('location', 'is', null)
         .ilike('location', `%${qRaw}%`)
         .limit(10)
@@ -457,12 +510,13 @@ export async function GET(request: NextRequest) {
         }
       }
     } else {
-      const { data: clientRows } = await searchClient
+      let clientRowsQuery = searchClient
         .from('jobs')
         .select('client_name')
         .eq('organization_id', organizationId)
         .is('deleted_at', null)
-        .is('archived_at', null)
+      if (!includeArchived) clientRowsQuery = clientRowsQuery.is('archived_at', null)
+      const { data: clientRows } = await clientRowsQuery
         .not('client_name', 'is', null)
         .limit(50)
 
@@ -474,13 +528,13 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      const { data: clientsTableRows } = await searchClient
+      let clientsTableQuery = searchClient
         .from('clients')
         .select('name')
         .eq('organization_id', organizationId)
         .is('deleted_at', null)
-        .is('archived_at', null)
-        .limit(50)
+      if (!includeArchived) clientsTableQuery = clientsTableQuery.is('archived_at', null)
+      const { data: clientsTableRows } = await clientsTableQuery.limit(50)
 
       for (const row of clientsTableRows || []) {
         const value = row.name?.trim()
@@ -490,12 +544,13 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      const { data: jobTypeRows } = await searchClient
+      let jobTypeRowsQuery = searchClient
         .from('jobs')
         .select('job_type')
         .eq('organization_id', organizationId)
         .is('deleted_at', null)
-        .is('archived_at', null)
+      if (!includeArchived) jobTypeRowsQuery = jobTypeRowsQuery.is('archived_at', null)
+      const { data: jobTypeRows } = await jobTypeRowsQuery
         .not('job_type', 'is', null)
         .limit(50)
 
@@ -507,12 +562,13 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      const { data: locationRows } = await searchClient
+      let locationRowsQuery = searchClient
         .from('jobs')
         .select('location')
         .eq('organization_id', organizationId)
         .is('deleted_at', null)
-        .is('archived_at', null)
+      if (!includeArchived) locationRowsQuery = locationRowsQuery.is('archived_at', null)
+      const { data: locationRows } = await locationRowsQuery
         .not('location', 'is', null)
         .limit(50)
 
