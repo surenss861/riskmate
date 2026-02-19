@@ -8,6 +8,21 @@ import { jobsApi } from '@/lib/api'
 const RECENT_KEY = 'riskmate_global_search_recent'
 const MAX_RECENT = 8
 
+const MARK_CLASS = 'bg-[#F97316]/30 text-white rounded px-0.5'
+
+/** Escape HTML so it is safe to render as text; then allow only our highlight markup. */
+function sanitizeHighlight(highlight: string): string {
+  if (!highlight || typeof highlight !== 'string') return ''
+  const escaped = highlight
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+  return escaped
+    .replace(/&lt;b&gt;/gi, `<mark class="${MARK_CLASS}">`)
+    .replace(/&lt;\/b&gt;/gi, '</mark>')
+}
+
 export type SearchResultItem = {
   type: 'job' | 'hazard' | 'client'
   id: string
@@ -267,12 +282,7 @@ export function GlobalSearchBar() {
                             {item.highlight && (
                               <span
                                 className="text-xs text-white/70 truncate"
-                                dangerouslySetInnerHTML={{
-                                  __html: item.highlight.replace(
-                                    /<b>(.*?)<\/b>/gi,
-                                    '<mark class="bg-[#F97316]/30 text-white rounded px-0.5">$1</mark>'
-                                  ),
-                                }}
+                                dangerouslySetInnerHTML={{ __html: sanitizeHighlight(item.highlight) }}
                               />
                             )}
                           </button>
