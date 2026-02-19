@@ -324,6 +324,8 @@ export const jobsApi = {
     risk_score_max?: number;
     job_type?: string;
     client?: string;
+    template_source?: string;
+    template_id?: string;
   }) => {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.set('page', params.page.toString());
@@ -354,6 +356,8 @@ export const jobsApi = {
     if (params?.risk_score_max != null) queryParams.set('risk_score_max', params.risk_score_max.toString());
     if (params?.job_type) queryParams.set('job_type', params.job_type);
     if (params?.client) queryParams.set('client', params.client);
+    if (params?.template_source) queryParams.set('template_source', params.template_source);
+    if (params?.template_id) queryParams.set('template_id', params.template_id);
     if (params?.overdue === true) queryParams.set('overdue', 'true');
     if (params?.unassigned === true) queryParams.set('unassigned', 'true');
     if (params?.recent === true) queryParams.set('recent', 'true');

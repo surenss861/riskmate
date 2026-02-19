@@ -151,6 +151,12 @@ export async function GET(request: NextRequest) {
     const recentDays = timeRangeParam === '7d' ? 7 : timeRangeParam === '30d' ? 30 : timeRangeParam === '90d' ? 90 : recent === true ? 7 : null
     const jobType = searchParams.get('job_type')
     const client = searchParams.get('client')
+    const templateSourceParam = searchParams.get('template_source')?.trim() ?? ''
+    const templateIdParam = searchParams.get('template_id')?.trim() ?? ''
+    const template_source =
+      templateSourceParam === 'template' || templateSourceParam === 'manual' ? templateSourceParam : null
+    const template_id =
+      templateIdParam && isValidUUID(templateIdParam) ? templateIdParam : null
     const sort = searchParams.get('sort')
     const order = (searchParams.get('order') || 'desc').toLowerCase() === 'asc' ? 'asc' : 'desc'
     const savedFilterIdParam = searchParams.get('saved_filter_id')?.trim() ?? ''
@@ -265,6 +271,8 @@ export async function GET(request: NextRequest) {
       p_has_photos: hasPhotos ?? null,
       p_has_signatures: hasSignatures ?? null,
       p_needs_signatures: needsSignatures ?? null,
+      p_template_source: template_source,
+      p_template_id: template_id,
     }
 
     let jobs: JobsListJob[] = []

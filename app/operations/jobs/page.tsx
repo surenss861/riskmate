@@ -102,6 +102,8 @@ const JobsPageContent = () => {
         assigned_to: state.myJobs ? 'me' : undefined,
         filter_config: filterConfig,
         saved_filter_id: state.savedFilterId || undefined,
+        template_source: state.filterTemplateSource || undefined,
+        template_id: state.filterTemplateId || undefined,
       })
 
       if (process.env.NODE_ENV === 'development' && response._meta) {
@@ -129,6 +131,8 @@ const JobsPageContent = () => {
       state.myJobs,
       state.filterConfig,
       state.savedFilterId,
+      state.filterTemplateSource,
+      state.filterTemplateId,
     ]
   )
 
@@ -152,27 +156,9 @@ const JobsPageContent = () => {
       if (!('applied_template_type' in job)) job.applied_template_type = null
     })
 
-    let filteredJobs = jobsData
-    if (state.filterTemplateSource === 'template') {
-      filteredJobs = filteredJobs.filter((job: any) => job.applied_template_id !== null)
-    } else if (state.filterTemplateSource === 'manual') {
-      filteredJobs = filteredJobs.filter((job: any) => job.applied_template_id === null)
-    }
-    if (state.filterTemplateId) {
-      filteredJobs = filteredJobs.filter((job: any) => job.applied_template_id === state.filterTemplateId)
-    }
+    setJobs(Array.isArray(jobsData) ? jobsData : [])
 
-    if (Array.isArray(filteredJobs)) {
-      setJobs(filteredJobs)
-    } else {
-      setJobs([])
-    }
-
-    // When client-side template filters are applied, use filtered count for pagination so totals match visible data
-    const hasTemplateFilter = state.filterTemplateSource || state.filterTemplateId
-    const totalCount = hasTemplateFilter
-      ? filteredJobs.length
-      : response.pagination?.total ?? filteredJobs.length
+    const totalCount = response.pagination?.total ?? 0
     setTotalPages(Math.max(1, Math.ceil(totalCount / 50)))
 
     if ((response as any).lastUpdated) {
@@ -185,7 +171,7 @@ const JobsPageContent = () => {
     } else {
       setSourceIndicator('')
     }
-  }, [response, state.filterTemplateSource, state.filterTemplateId])
+  }, [response])
 
   useEffect(() => {
     if (error) {
