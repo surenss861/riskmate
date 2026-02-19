@@ -1,12 +1,12 @@
 'use client'
 
 import React, { useEffect, useState, useCallback, Suspense } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
 import useSWR from 'swr'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import { jobsApi } from '@/lib/api'
 import { useDebounce } from '@/hooks/useDebounce'
+import { useAdvancedFilters } from '@/hooks/useAdvancedFilters'
 import { JobsPageContentView, type JobsTimeRange } from './JobsPageContent'
 
 interface Job {
@@ -24,89 +24,33 @@ interface Job {
 }
 
 const JobsPageContent = () => {
-  const router = useRouter()
-  const searchParams = useSearchParams()
+  const adv = useAdvancedFilters()
+  const { state } = adv
+  const debouncedSearchQuery = useDebounce(state.searchQuery, 300)
+
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [jobs, setJobs] = useState<Job[]>([])
-  const [filterStatus, setFilterStatus] = useState<string>(() => searchParams?.get('status') ?? '')
-  const [filterRiskLevel, setFilterRiskLevel] = useState<string>(() => searchParams?.get('risk_level') ?? '')
-  const [filterTemplateSource, setFilterTemplateSource] = useState<string>('')
-  const [filterTemplateId, setFilterTemplateId] = useState<string>('')
-  const [page, setPage] = useState(() => Math.max(1, parseInt(searchParams?.get('page') ?? '1', 10) || 1))
   const [totalPages, setTotalPages] = useState(1)
   const [templates, setTemplates] = useState<Array<{ id: string; name: string }>>([])
   const [loadingTemplates, setLoadingTemplates] = useState(false)
   const [userRole, setUserRole] = useState<'owner' | 'admin' | 'member'>('member')
+  const [lastUpdated, setLastUpdated] = useState<string | null>(null)
+  const [sourceIndicator, setSourceIndicator] = useState<string>('')
 
-  // Advanced search state (URL-synced)
-  const [searchQuery, setSearchQuery] = useState<string>(() => searchParams?.get('q') ?? '')
-  const debouncedSearchQuery = useDebounce(searchQuery, 300)
-  const [filterTimeRange, setFilterTimeRange] = useState<JobsTimeRange>(() =>
-    (searchParams?.get('time_range') as JobsTimeRange) || 'all'
-  )
-  const [includeArchived, setIncludeArchived] = useState<boolean>(() =>
-    searchParams?.get('include_archived') === 'true'
-  )
-  const [hasPhotos, setHasPhotos] = useState<boolean | undefined>(() => {
-    const v = searchParams?.get('has_photos')
-    return v === 'true' ? true : v === 'false' ? false : undefined
-  })
-  const [hasSignatures, setHasSignatures] = useState<boolean | undefined>(() => {
-    const v = searchParams?.get('has_signatures')
-    return v === 'true' ? true : v === 'false' ? false : undefined
-  })
-  const [needsSignatures, setNeedsSignatures] = useState<boolean | undefined>(() => {
-    const v = searchParams?.get('needs_signatures')
-    return v === 'true' ? true : v === 'false' ? false : undefined
-  })
-
-  // Initialize filters from URL params (source, templateId)
   useEffect(() => {
-    if (searchParams) {
-      const source = searchParams.get('source') || ''
-      const templateId = searchParams.get('templateId') || ''
-      setFilterTemplateSource(source)
-      setFilterTemplateId(templateId)
+    const loadUser = async () => {
+      const supabase = createSupabaseBrowserClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      setUser(user ?? null)
+      if (user) {
+        const { data: userRow } = await supabase.from('users').select('role').eq('id', user.id).single()
+        if (userRow?.role) setUserRole(userRow.role as 'owner' | 'admin' | 'member')
+      }
     }
-  }, [searchParams])
+    loadUser()
+  }, [])
 
-  // Sync filters to URL (shareable links)
-  useEffect(() => {
-    const params = new URLSearchParams(searchParams?.toString() ?? '')
-    if (debouncedSearchQuery) params.set('q', debouncedSearchQuery)
-    else params.delete('q')
-    if (filterStatus) params.set('status', filterStatus)
-    else params.delete('status')
-    if (filterRiskLevel) params.set('risk_level', filterRiskLevel)
-    else params.delete('risk_level')
-    if (filterTemplateSource) params.set('source', filterTemplateSource)
-    else params.delete('source')
-    if (filterTemplateId) params.set('templateId', filterTemplateId)
-    else params.delete('templateId')
-    if (filterTimeRange && filterTimeRange !== 'all') params.set('time_range', filterTimeRange)
-    else params.delete('time_range')
-    if (includeArchived) params.set('include_archived', 'true')
-    else params.delete('include_archived')
-    if (hasPhotos === true) params.set('has_photos', 'true')
-    else if (hasPhotos === false) params.set('has_photos', 'false')
-    else params.delete('has_photos')
-    if (hasSignatures === true) params.set('has_signatures', 'true')
-    else if (hasSignatures === false) params.set('has_signatures', 'false')
-    else params.delete('has_signatures')
-    if (needsSignatures === true) params.set('needs_signatures', 'true')
-    else if (needsSignatures === false) params.set('needs_signatures', 'false')
-    else params.delete('needs_signatures')
-    if (page > 1) params.set('page', String(page))
-    else params.delete('page')
-    const next = params.toString()
-    const current = searchParams?.toString() ?? ''
-    if (next !== current) {
-      router.replace(next ? `/operations/jobs?${next}` : '/operations/jobs', { scroll: false })
-    }
-  }, [debouncedSearchQuery, filterStatus, filterRiskLevel, filterTemplateSource, filterTemplateId, filterTimeRange, includeArchived, hasPhotos, hasSignatures, needsSignatures, page, router, searchParams])
-
-  // Load templates for filter dropdown
   useEffect(() => {
     const loadTemplates = async () => {
       try {
@@ -114,28 +58,18 @@ const JobsPageContent = () => {
         const supabase = createSupabaseBrowserClient()
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) return
-
-        const { data: userRow } = await supabase
-          .from('users')
-          .select('organization_id')
-          .eq('id', user.id)
-          .single()
-
+        const { data: userRow } = await supabase.from('users').select('organization_id').eq('id', user.id).single()
         if (!userRow?.organization_id) return
-
-        // Load both hazard and job templates
         const { data: hazardTemplates } = await supabase
           .from('hazard_templates')
           .select('id, name')
           .eq('organization_id', userRow.organization_id)
           .eq('archived', false)
-
         const { data: jobTemplates } = await supabase
           .from('job_templates')
           .select('id, name')
           .eq('organization_id', userRow.organization_id)
           .eq('archived', false)
-
         setTemplates([...(hazardTemplates || []), ...(jobTemplates || [])])
       } catch (err) {
         console.error('Failed to load templates:', err)
@@ -146,153 +80,125 @@ const JobsPageContent = () => {
     loadTemplates()
   }, [])
 
-  // Load user and role once
-  useEffect(() => {
-    const loadUser = async () => {
-      const supabase = createSupabaseBrowserClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      setUser(user)
+  // SWR fetcher: use URL-synced state from useAdvancedFilters
+  const fetcher = useCallback(
+    async (_key: string) => {
+      const filterConfig =
+        state.filterConfig && Object.keys(state.filterConfig).length > 0 ? state.filterConfig : undefined
+      const response = await jobsApi.list({
+        page: state.page,
+        limit: 50,
+        status: state.filterStatus || undefined,
+        risk_level: state.highRisk ? 'high' : state.filterRiskLevel || undefined,
+        q: debouncedSearchQuery || undefined,
+        time_range: state.filterTimeRange !== 'all' ? state.filterTimeRange : undefined,
+        include_archived: state.includeArchived || undefined,
+        has_photos: state.hasPhotos,
+        has_signatures: state.hasSignatures,
+        needs_signatures: state.needsSignatures,
+        overdue: state.overdue || undefined,
+        unassigned: state.unassigned || undefined,
+        recent: state.recent || undefined,
+        assigned_to: state.myJobs ? 'me' : undefined,
+        filter_config: filterConfig,
+        saved_filter_id: state.savedFilterId || undefined,
+      })
 
-      if (user) {
-      const { data: userRow } = await supabase
-        .from('users')
-          .select('role')
-        .eq('id', user.id)
-        .single()
-
-        if (userRow?.role) {
-          setUserRole(userRow.role as 'owner' | 'admin' | 'member')
-        }
+      if (process.env.NODE_ENV === 'development' && response._meta) {
+        console.log('[Jobs API] Source of truth:', response._meta)
       }
-    }
-    loadUser()
-  }, [])
-
-  // SWR fetcher function (stable reference)
-  const fetcher = useCallback(async (key: string) => {
-    const response = await jobsApi.list({
-      page,
-      limit: 50,
-      status: filterStatus || undefined,
-      risk_level: filterRiskLevel || undefined,
-      q: debouncedSearchQuery || undefined,
-      time_range: filterTimeRange !== 'all' ? filterTimeRange : undefined,
-      include_archived: includeArchived || undefined,
-      has_photos: hasPhotos,
-      has_signatures: hasSignatures,
-      needs_signatures: needsSignatures,
-    })
-
-    if (process.env.NODE_ENV === 'development' && response._meta) {
-      console.log('[Jobs API] Source of truth:', response._meta)
-    }
-    if (response.data && response.data.length > 0) {
-      (response as any).lastUpdated = new Date().toISOString()
-    }
-    return response
-  }, [page, filterStatus, filterRiskLevel, debouncedSearchQuery, filterTimeRange, includeArchived, hasPhotos, hasSignatures, needsSignatures])
-
-  // SWR key for caching
-  const swrKey = `jobs-list-${page}-${filterStatus}-${filterRiskLevel}-${filterTemplateSource}-${filterTemplateId}-${debouncedSearchQuery}-${filterTimeRange}-${includeArchived}-${hasPhotos}-${hasSignatures}-${needsSignatures}`
-
-  // Use SWR for caching and automatic revalidation
-  const { data: response, error, isLoading, mutate } = useSWR(
-    swrKey,
-    fetcher,
-    {
-      revalidateOnFocus: true,
-      revalidateOnReconnect: true,
-      dedupingInterval: 5000, // Dedupe requests within 5 seconds
-    }
+      if (response.data && response.data.length > 0) {
+        ;(response as any).lastUpdated = new Date().toISOString()
+      }
+      return response
+    },
+    [
+      state.page,
+      state.filterStatus,
+      state.filterRiskLevel,
+      state.highRisk,
+      debouncedSearchQuery,
+      state.filterTimeRange,
+      state.includeArchived,
+      state.hasPhotos,
+      state.hasSignatures,
+      state.needsSignatures,
+      state.overdue,
+      state.unassigned,
+      state.recent,
+      state.myJobs,
+      state.filterConfig,
+      state.savedFilterId,
+    ]
   )
 
-  // Track last updated time and source indicator
-  const [lastUpdated, setLastUpdated] = useState<string | null>(null)
-  const [sourceIndicator, setSourceIndicator] = useState<string>('')
+  const swrKey = `jobs-list-${state.page}-${state.filterStatus}-${state.filterRiskLevel}-${state.filterTemplateSource}-${state.filterTemplateId}-${debouncedSearchQuery}-${state.filterTimeRange}-${state.includeArchived}-${state.hasPhotos}-${state.hasSignatures}-${state.needsSignatures}-${state.filterConfig ? JSON.stringify(state.filterConfig) : ''}-${state.savedFilterId}-${state.myJobs}-${state.highRisk}-${state.overdue}-${state.unassigned}-${state.recent}`
 
-  // Process response data
+  const { data: response, error, isLoading, mutate } = useSWR(swrKey, fetcher, {
+    revalidateOnFocus: true,
+    revalidateOnReconnect: true,
+    dedupingInterval: 5000,
+  })
+
   useEffect(() => {
     if (!response) return
-    
+
     const jobsData = response.data || []
-    
-    // Ensure template fields are never undefined (always null if missing)
-    // This is critical for UI assumptions - field must exist, null is valid
+
     jobsData.forEach((job: any) => {
-      // Use nullish coalescing to ensure field exists
       job.applied_template_id = job.applied_template_id ?? null
       job.applied_template_type = job.applied_template_type ?? null
-      
-      // Verify field exists (defensive check)
-      if (!('applied_template_id' in job)) {
-        console.error('Job missing applied_template_id field after normalization:', job.id)
-        job.applied_template_id = null
-      }
-      if (!('applied_template_type' in job)) {
-        console.error('Job missing applied_template_type field after normalization:', job.id)
-        job.applied_template_type = null
-      }
+      if (!('applied_template_id' in job)) job.applied_template_id = null
+      if (!('applied_template_type' in job)) job.applied_template_type = null
     })
-    
-    // Apply template filters client-side (since API doesn't support them yet)
+
     let filteredJobs = jobsData
+    if (state.filterTemplateSource === 'template') {
+      filteredJobs = filteredJobs.filter((job: any) => job.applied_template_id !== null)
+    } else if (state.filterTemplateSource === 'manual') {
+      filteredJobs = filteredJobs.filter((job: any) => job.applied_template_id === null)
+    }
+    if (state.filterTemplateId) {
+      filteredJobs = filteredJobs.filter((job: any) => job.applied_template_id === state.filterTemplateId)
+    }
 
-      if (filterTemplateSource === 'template') {
-      filteredJobs = filteredJobs.filter(job => job.applied_template_id !== null)
-      } else if (filterTemplateSource === 'manual') {
-      filteredJobs = filteredJobs.filter(job => job.applied_template_id === null)
-      }
-
-      if (filterTemplateId) {
-      filteredJobs = filteredJobs.filter(job => job.applied_template_id === filterTemplateId)
-      }
-
-      // Ensure jobsData is an array and set jobs
     if (Array.isArray(filteredJobs)) {
       setJobs(filteredJobs)
-      } else {
-      console.warn('Jobs query returned non-array data:', filteredJobs)
-        setJobs([])
-      }
-      
-    // Calculate total pages from API pagination or filtered count
-    const totalCount = response.pagination?.total || filteredJobs.length
-    setTotalPages(Math.ceil(totalCount / 50))
-    
-    // Track last updated time
+    } else {
+      setJobs([])
+    }
+
+    // When client-side template filters are applied, use filtered count for pagination so totals match visible data
+    const hasTemplateFilter = state.filterTemplateSource || state.filterTemplateId
+    const totalCount = hasTemplateFilter
+      ? filteredJobs.length
+      : response.pagination?.total ?? filteredJobs.length
+    setTotalPages(Math.max(1, Math.ceil(totalCount / 50)))
+
     if ((response as any).lastUpdated) {
       setLastUpdated((response as any).lastUpdated)
     } else {
       setLastUpdated(new Date().toISOString())
     }
-    
-    // Set source indicator (dev only or subtle)
     if (process.env.NODE_ENV === 'development' && response._meta) {
       setSourceIndicator('API')
     } else {
       setSourceIndicator('')
     }
-  }, [response, filterTemplateSource, filterTemplateId])
+  }, [response, state.filterTemplateSource, state.filterTemplateId])
 
-  // Handle errors
   useEffect(() => {
     if (error) {
-      console.error('Failed to load jobs:', error)
+      console.error('Failed to load jobs', error)
       setJobs([])
     }
   }, [error])
 
-  // Sync loading state
   useEffect(() => {
     setLoading(isLoading)
   }, [isLoading])
 
-  // Legacy loadJobs callback for archive/delete callbacks (triggers SWR revalidation)
-  const loadJobs = useCallback(() => {
-    mutate() // Trigger SWR revalidation
-  }, [mutate])
-  
-  // Expose mutate and current response for optimistic updates
+  const loadJobs = useCallback(() => mutate(), [mutate])
   const getMutateData = useCallback(() => ({ mutate, currentData: response }), [mutate, response])
 
   const getRiskColor = (riskLevel: string | null) => {
@@ -340,38 +246,24 @@ const JobsPageContent = () => {
     })
   }
 
-  const clearAllFilters = useCallback(() => {
-    setSearchQuery('')
-    setFilterStatus('')
-    setFilterRiskLevel('')
-    setFilterTimeRange('all')
-    setIncludeArchived(false)
-    setHasPhotos(undefined)
-    setHasSignatures(undefined)
-    setNeedsSignatures(undefined)
-    setFilterTemplateSource('')
-    setFilterTemplateId('')
-    setPage(1)
-  }, [])
-
   return (
     <JobsPageContentView
       user={user}
       loading={loading}
       jobs={jobs}
-      filterStatus={filterStatus}
-      filterRiskLevel={filterRiskLevel}
-      filterTemplateSource={filterTemplateSource}
-      filterTemplateId={filterTemplateId}
+      filterStatus={state.filterStatus}
+      filterRiskLevel={state.filterRiskLevel}
+      filterTemplateSource={state.filterTemplateSource}
+      filterTemplateId={state.filterTemplateId}
       templates={templates}
       loadingTemplates={loadingTemplates}
-      page={page}
+      page={state.page}
       totalPages={totalPages}
-      onFilterStatusChange={(v) => { setFilterStatus(v); setPage(1) }}
-      onFilterRiskLevelChange={(v) => { setFilterRiskLevel(v); setPage(1) }}
-      onFilterTemplateSourceChange={(v) => { setFilterTemplateSource(v); setPage(1) }}
-      onFilterTemplateIdChange={(v) => { setFilterTemplateId(v); setPage(1) }}
-      onPageChange={setPage}
+      onFilterStatusChange={(v) => { adv.setFilterStatus(v) }}
+      onFilterRiskLevelChange={(v) => { adv.setFilterRiskLevel(v) }}
+      onFilterTemplateSourceChange={(v) => { adv.setFilterTemplateSource(v) }}
+      onFilterTemplateIdChange={(v) => { adv.setFilterTemplateId(v) }}
+      onPageChange={adv.setPage}
       getRiskColor={getRiskColor}
       getStatusColor={getStatusColor}
       formatDate={formatDate}
@@ -381,19 +273,38 @@ const JobsPageContent = () => {
       lastUpdated={lastUpdated || undefined}
       sourceIndicator={sourceIndicator}
       mutateData={getMutateData()}
-      searchQuery={searchQuery}
-      onSearchQueryChange={(v) => { setSearchQuery(v); setPage(1) }}
-      filterTimeRange={filterTimeRange}
-      onFilterTimeRangeChange={(v) => { setFilterTimeRange(v as JobsTimeRange); setPage(1) }}
-      includeArchived={includeArchived}
-      onIncludeArchivedChange={(v) => { setIncludeArchived(v); setPage(1) }}
-      hasPhotos={hasPhotos}
-      onHasPhotosChange={(v) => { setHasPhotos(v); setPage(1) }}
-      hasSignatures={hasSignatures}
-      onHasSignaturesChange={(v) => { setHasSignatures(v); setPage(1) }}
-      needsSignatures={needsSignatures}
-      onNeedsSignaturesChange={(v) => { setNeedsSignatures(v); setPage(1) }}
-      onClearAllFilters={clearAllFilters}
+      searchQuery={state.searchQuery}
+      onSearchQueryChange={adv.setSearchQuery}
+      filterTimeRange={state.filterTimeRange}
+      onFilterTimeRangeChange={(v) => adv.setFilterTimeRange(v as JobsTimeRange)}
+      includeArchived={state.includeArchived}
+      onIncludeArchivedChange={adv.setIncludeArchived}
+      hasPhotos={state.hasPhotos}
+      onHasPhotosChange={adv.setHasPhotos}
+      hasSignatures={state.hasSignatures}
+      onHasSignaturesChange={adv.setHasSignatures}
+      needsSignatures={state.needsSignatures}
+      onNeedsSignaturesChange={adv.setNeedsSignatures}
+      onClearAllFilters={adv.clearAllFilters}
+      quickFilters={{
+        myJobs: state.myJobs,
+        highRisk: state.highRisk,
+        overdue: state.overdue,
+        needsSignatures: state.needsSignaturesQuick,
+        unassigned: state.unassigned,
+        recent: state.recent,
+        onMyJobsChange: adv.setMyJobs,
+        onHighRiskChange: adv.setHighRisk,
+        onOverdueChange: adv.setOverdue,
+        onNeedsSignaturesChange: adv.setNeedsSignaturesQuick,
+        onUnassignedChange: adv.setUnassigned,
+        onRecentChange: adv.setRecent,
+      }}
+      filterConfig={state.filterConfig}
+      savedFilterId={state.savedFilterId}
+      onFilterConfigChange={adv.setFilterConfig}
+      onSavedFilterApply={adv.setSavedFilterId}
+      getShareUrl={adv.getShareUrl}
     />
   )
 }
@@ -413,4 +324,3 @@ export default function JobsPage() {
     </ProtectedRoute>
   )
 }
-

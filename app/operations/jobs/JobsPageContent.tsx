@@ -16,8 +16,27 @@ import { useBulkSelection } from '@/hooks/useBulkSelection'
 import { jobsApi } from '@/lib/api'
 import { hasPermission, hasJobsDeletePermission } from '@/lib/utils/permissions'
 import { AppBackground, AppShell, PageHeader, PageSection, GlassCard, Button, FilterBar, SearchInput, SegmentedControl, FilterPill } from '@/components/shared'
+import { GlobalSearchBar } from '@/components/shared/GlobalSearchBar'
+import { AdvancedFilterBuilder } from '@/components/shared/AdvancedFilterBuilder'
+import { SavedFiltersDropdown } from '@/components/shared/SavedFiltersDropdown'
+import type { FilterGroup } from '@/lib/jobs/filterConfig'
 
 export type JobsTimeRange = 'all' | '7d' | '30d' | '90d'
+
+export interface QuickFiltersProps {
+  myJobs: boolean
+  highRisk: boolean
+  overdue: boolean
+  needsSignatures: boolean
+  unassigned: boolean
+  recent: boolean
+  onMyJobsChange: (value: boolean) => void
+  onHighRiskChange: (value: boolean) => void
+  onOverdueChange: (value: boolean) => void
+  onNeedsSignaturesChange: (value: boolean) => void
+  onUnassignedChange: (value: boolean) => void
+  onRecentChange: (value: boolean) => void
+}
 
 interface JobsPageContentProps {
   user: any
@@ -58,6 +77,12 @@ interface JobsPageContentProps {
   needsSignatures: boolean | undefined
   onNeedsSignaturesChange: (value: boolean | undefined) => void
   onClearAllFilters: () => void
+  quickFilters?: QuickFiltersProps
+  filterConfig?: FilterGroup | null
+  savedFilterId?: string | null
+  onFilterConfigChange?: (value: FilterGroup | null) => void
+  onSavedFilterApply?: (savedFilterId: string | null, filterConfig: FilterGroup | null) => void
+  getShareUrl?: () => string
 }
 
 export function JobsPageContentView(props: JobsPageContentProps) {
@@ -617,6 +642,7 @@ export function JobsPageContentView(props: JobsPageContentProps) {
         {/* Filters */}
         <PageSection>
           <FilterBar className="mb-4">
+            <GlobalSearchBar />
             <SearchInput
               value={props.searchQuery}
               onChange={props.onSearchQueryChange}
@@ -743,6 +769,14 @@ export function JobsPageContentView(props: JobsPageContentProps) {
                 />
                 <span>Executive View</span>
               </label>
+              {props.onSavedFilterApply != null && (
+                <SavedFiltersDropdown
+                  currentFilterConfig={props.filterConfig ?? null}
+                  savedFilterId={props.savedFilterId ?? null}
+                  onApply={props.onSavedFilterApply}
+                  getShareUrl={props.getShareUrl}
+                />
+              )}
               <Button
                 variant="primary"
                 size="lg"
@@ -752,6 +786,41 @@ export function JobsPageContentView(props: JobsPageContentProps) {
               </Button>
             </div>
           </div>
+          {/* Quick filter chips */}
+          {props.quickFilters && (
+            <div className="flex flex-wrap items-center gap-2 mb-3">
+              {[
+                { key: 'myJobs' as const, label: 'My Jobs', active: props.quickFilters.myJobs, toggle: props.quickFilters.onMyJobsChange },
+                { key: 'highRisk' as const, label: 'High Risk', active: props.quickFilters.highRisk, toggle: props.quickFilters.onHighRiskChange },
+                { key: 'overdue' as const, label: 'Overdue', active: props.quickFilters.overdue, toggle: props.quickFilters.onOverdueChange },
+                { key: 'needsSignatures' as const, label: 'Needs Signatures', active: props.quickFilters.needsSignatures, toggle: props.quickFilters.onNeedsSignaturesChange },
+                { key: 'unassigned' as const, label: 'Unassigned', active: props.quickFilters.unassigned, toggle: props.quickFilters.onUnassignedChange },
+                { key: 'recent' as const, label: 'Recent', active: props.quickFilters.recent, toggle: props.quickFilters.onRecentChange },
+              ].map(({ label, active, toggle }) => (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => toggle(!active)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+                    active
+                      ? 'bg-[#F97316]/20 border-[#F97316]/50 text-white'
+                      : 'bg-white/5 border-white/10 text-white/70 hover:text-white hover:border-white/20'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+          {/* Advanced filter builder (collapsible) */}
+          {props.onFilterConfigChange != null && (
+            <div className="mb-3">
+              <AdvancedFilterBuilder
+                value={props.filterConfig ?? null}
+                onChange={props.onFilterConfigChange}
+              />
+            </div>
+          )}
           {/* Active filters pills */}
           {(props.searchQuery ||
             props.filterStatus ||

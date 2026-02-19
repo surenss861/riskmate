@@ -314,6 +314,10 @@ export const jobsApi = {
     has_photos?: boolean;
     has_signatures?: boolean;
     needs_signatures?: boolean;
+    overdue?: boolean;
+    unassigned?: boolean;
+    recent?: boolean;
+    assigned_to?: string;
     filter_config?: string | Record<string, unknown>;
     saved_filter_id?: string;
     risk_score_min?: number;
@@ -350,6 +354,10 @@ export const jobsApi = {
     if (params?.risk_score_max != null) queryParams.set('risk_score_max', params.risk_score_max.toString());
     if (params?.job_type) queryParams.set('job_type', params.job_type);
     if (params?.client) queryParams.set('client', params.client);
+    if (params?.overdue === true) queryParams.set('overdue', 'true');
+    if (params?.unassigned === true) queryParams.set('unassigned', 'true');
+    if (params?.recent === true) queryParams.set('recent', 'true');
+    if (params?.assigned_to) queryParams.set('assigned_to', params.assigned_to);
     if (params?.debug && process.env.NODE_ENV === 'development') {
       queryParams.set('debug', '1');
     }
@@ -397,6 +405,28 @@ export const jobsApi = {
 
   get: async (id: string) => {
     return apiRequest<{ data: any }>(`/api/jobs/${id}`);
+  },
+
+  /**
+   * Global search (jobs, hazards, clients). Sectioned results with highlights.
+   */
+  search: async (params: {
+    q: string;
+    type?: 'jobs' | 'hazards' | 'clients' | 'all';
+    limit?: number;
+    include_archived?: boolean;
+  }) => {
+    const searchParams = new URLSearchParams();
+    searchParams.set('q', params.q.trim());
+    if (params.type && params.type !== 'all') searchParams.set('type', params.type);
+    if (params.limit != null) searchParams.set('limit', String(Math.min(100, Math.max(1, params.limit))));
+    if (params.include_archived) searchParams.set('include_archived', 'true');
+    return apiRequest<{
+      results: Array<{ type: 'job' | 'hazard' | 'client'; id: string; title: string; subtitle: string; highlight: string; score: number }>;
+      total: number;
+      suggestions?: string[];
+      applied_filter?: { id: string; name: string };
+    }>(`/api/search?${searchParams.toString()}`);
   },
 
   create: async (jobData: {
@@ -814,6 +844,28 @@ export const jobsApi = {
       await new Promise((r) => setTimeout(r, pollInterval));
     }
     throw new Error('Export timed out');
+  },
+};
+
+// Saved filters API (list, create, update, delete)
+export const filtersApi = {
+  list: async () => {
+    return apiRequest<{ data: Array<{ id: string; name: string; filter_config: Record<string, unknown>; is_shared: boolean; created_at: string; updated_at: string }> }>('/api/filters');
+  },
+  create: async (body: { name: string; filter_config: Record<string, unknown>; is_shared?: boolean }) => {
+    return apiRequest<{ data: { id: string; name: string; filter_config: Record<string, unknown>; is_shared: boolean } }>('/api/filters', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  },
+  update: async (id: string, body: { name?: string; filter_config?: Record<string, unknown>; is_shared?: boolean }) => {
+    return apiRequest<{ data: { id: string; name: string; filter_config: Record<string, unknown> } }>(`/api/filters/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    });
+  },
+  delete: async (id: string) => {
+    return apiRequest<null>(`/api/filters/${id}`, { method: 'DELETE' });
   },
 };
 
