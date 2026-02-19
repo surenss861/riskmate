@@ -6,6 +6,7 @@ import { logFeatureUsage } from '@/lib/featureLogging'
 import { getRequestId } from '@/lib/featureEvents'
 import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { logApiError } from '@/lib/utils/errorLogging'
+import { normalizeSearchQueryForTsquery } from '@/lib/utils/normalizeSearchQuery'
 
 export const runtime = 'nodejs'
 
@@ -429,10 +430,11 @@ export async function GET(request: NextRequest) {
     let jobs: Array<Record<string, unknown>> = []
     let totalCount = 0
 
-    if (q) {
+    const normalizedQuery = q ? normalizeSearchQueryForTsquery(q) : ''
+    if (normalizedQuery) {
       const rankedRes = await supabase.rpc('get_jobs_ranked', {
         ...rpcBaseParams,
-        p_query: q,
+        p_query: normalizedQuery,
       })
       if (rankedRes.error) throw rankedRes.error
       const rows = (rankedRes.data || []) as Array<Record<string, unknown>>

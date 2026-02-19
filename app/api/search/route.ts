@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { getRequestId } from '@/lib/featureEvents'
 import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { logApiError } from '@/lib/utils/errorLogging'
+import { normalizeSearchQueryForTsquery } from '@/lib/utils/normalizeSearchQuery'
 
 export const runtime = 'nodejs'
 
@@ -22,7 +23,8 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const orgIdParam = searchParams.get('org_id')?.trim() ?? ''
-    const q = (searchParams.get('q') || '').trim()
+    const qRaw = (searchParams.get('q') || '').trim()
+    const q = qRaw ? normalizeSearchQueryForTsquery(qRaw) : '' // normalized for search RPCs (to_tsquery-safe)
     const type = (searchParams.get('type') || 'all') as SearchType
     const parsedLimit = parseInt(searchParams.get('limit') || '20', 10)
     const limit = Number.isFinite(parsedLimit) ? Math.min(Math.max(parsedLimit, 1), 100) : 20
@@ -287,14 +289,14 @@ export async function GET(request: NextRequest) {
     const seenSuggestions = new Set<string>()
     const suggestions: string[] = []
 
-    if (q) {
+    if (qRaw) {
       const { data: suggestionRows } = await searchClient
         .from('jobs')
         .select('client_name')
         .eq('organization_id', organizationId)
         .is('deleted_at', null)
         .is('archived_at', null)
-        .ilike('client_name', `%${q}%`)
+        .ilike('client_name', `%${qRaw}%`)
         .limit(10)
 
       for (const row of suggestionRows || []) {
@@ -311,7 +313,7 @@ export async function GET(request: NextRequest) {
         .eq('organization_id', organizationId)
         .is('deleted_at', null)
         .is('archived_at', null)
-        .ilike('name', `%${q}%`)
+        .ilike('name', `%${qRaw}%`)
         .limit(10)
 
       for (const row of clientNameRows || []) {
@@ -329,7 +331,7 @@ export async function GET(request: NextRequest) {
         .is('deleted_at', null)
         .is('archived_at', null)
         .not('location', 'is', null)
-        .ilike('location', `%${q}%`)
+        .ilike('location', `%${qRaw}%`)
         .limit(10)
 
       for (const row of locationRows || []) {
