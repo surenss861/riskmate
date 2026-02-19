@@ -15,7 +15,9 @@ import { BulkDeleteConfirmation } from '@/components/jobs/BulkDeleteConfirmation
 import { useBulkSelection } from '@/hooks/useBulkSelection'
 import { jobsApi } from '@/lib/api'
 import { hasPermission, hasJobsDeletePermission } from '@/lib/utils/permissions'
-import { AppBackground, AppShell, PageHeader, PageSection, GlassCard, Button } from '@/components/shared'
+import { AppBackground, AppShell, PageHeader, PageSection, GlassCard, Button, FilterBar, SearchInput, SegmentedControl, FilterPill } from '@/components/shared'
+
+export type JobsTimeRange = 'all' | '7d' | '30d' | '90d'
 
 interface JobsPageContentProps {
   user: any
@@ -43,6 +45,19 @@ interface JobsPageContentProps {
   lastUpdated?: string
   sourceIndicator?: string
   mutateData?: { mutate: any; currentData: any }
+  searchQuery: string
+  onSearchQueryChange: (value: string) => void
+  filterTimeRange: JobsTimeRange
+  onFilterTimeRangeChange: (value: string) => void
+  includeArchived: boolean
+  onIncludeArchivedChange: (value: boolean) => void
+  hasPhotos: boolean | undefined
+  onHasPhotosChange: (value: boolean | undefined) => void
+  hasSignatures: boolean | undefined
+  onHasSignaturesChange: (value: boolean | undefined) => void
+  needsSignatures: boolean | undefined
+  onNeedsSignaturesChange: (value: boolean | undefined) => void
+  onClearAllFilters: () => void
 }
 
 export function JobsPageContentView(props: JobsPageContentProps) {
@@ -601,74 +616,122 @@ export function JobsPageContentView(props: JobsPageContentProps) {
 
         {/* Filters */}
         <PageSection>
-          <div className="flex items-center justify-between mb-6">
+          <FilterBar className="mb-4">
+            <SearchInput
+              value={props.searchQuery}
+              onChange={props.onSearchQueryChange}
+              placeholder="Search jobs, client, location…"
+              className="min-w-[220px]"
+            />
+            <SegmentedControl
+              value={props.filterTimeRange}
+              onChange={props.onFilterTimeRangeChange}
+              options={[
+                { value: 'all', label: 'All time' },
+                { value: '7d', label: '7 days' },
+                { value: '30d', label: '30 days' },
+                { value: '90d', label: '90 days' },
+              ]}
+            />
+            <label className="flex items-center gap-2 text-sm text-white/60 cursor-pointer hover:text-white/80 transition-colors whitespace-nowrap">
+              <input
+                type="checkbox"
+                checked={props.includeArchived}
+                onChange={(e) => props.onIncludeArchivedChange(e.target.checked)}
+                className="w-4 h-4 rounded border-white/20 bg-white/5 text-[#F97316] focus:ring-[#F97316]/50"
+              />
+              <span>Include archived</span>
+            </label>
+          </FilterBar>
+          <div className="flex items-center justify-between mb-4">
             <div className="flex flex-wrap gap-3">
-            <JobRosterSelect
-            value={props.filterStatus}
-              onValueChange={(value) => {
-                props.onFilterStatusChange(value)
-              props.onPageChange(1)
-            }}
-              placeholder="All Statuses"
-              options={[
-                { label: 'All Statuses', value: '' },
-                { label: 'Draft', value: 'draft' },
-                { label: 'Active', value: 'active' },
-                { label: 'Completed', value: 'completed' },
-                { label: 'On Hold', value: 'on-hold' },
-                { label: 'Cancelled', value: 'cancelled' },
-              ]}
-            />
-
-            <JobRosterSelect
-            value={props.filterRiskLevel}
-              onValueChange={(value) => {
-                props.onFilterRiskLevelChange(value)
-              props.onPageChange(1)
-            }}
-              placeholder="All Risk Levels"
-              options={[
-                { label: 'All Risk Levels', value: '' },
-                { label: 'Low', value: 'low' },
-                { label: 'Medium', value: 'medium' },
-                { label: 'High', value: 'high' },
-                { label: 'Critical', value: 'critical' },
-              ]}
-            />
-
-            <JobRosterSelect
-            value={props.filterTemplateSource}
-              onValueChange={(value) => {
-                props.onFilterTemplateSourceChange(value)
-              props.onFilterTemplateIdChange('')
-              props.onPageChange(1)
-            }}
-              placeholder="All Sources"
-              options={[
-                { label: 'All Sources', value: '' },
-                { label: 'From Template', value: 'template' },
-                { label: 'Manual', value: 'manual' },
-              ]}
-            />
-
-          {props.filterTemplateSource === 'template' && props.templates.length > 0 && (
               <JobRosterSelect
-              value={props.filterTemplateId}
-                onValueChange={(value) => {
-                  props.onFilterTemplateIdChange(value)
-                props.onPageChange(1)
-              }}
-                placeholder="All Templates"
-              disabled={props.loadingTemplates}
+                value={props.filterStatus}
+                onValueChange={(value) => props.onFilterStatusChange(value)}
+                placeholder="All Statuses"
                 options={[
-                  { label: 'All Templates', value: '' },
-                  ...props.templates.map((template) => ({
-                    label: template.name,
-                    value: template.id,
-                  })),
+                  { label: 'All Statuses', value: '' },
+                  { label: 'Draft', value: 'draft' },
+                  { label: 'Active', value: 'active' },
+                  { label: 'Completed', value: 'completed' },
+                  { label: 'On Hold', value: 'on-hold' },
+                  { label: 'Cancelled', value: 'cancelled' },
                 ]}
               />
-            )}
+              <JobRosterSelect
+                value={props.filterRiskLevel}
+                onValueChange={(value) => props.onFilterRiskLevelChange(value)}
+                placeholder="All Risk Levels"
+                options={[
+                  { label: 'All Risk Levels', value: '' },
+                  { label: 'Low', value: 'low' },
+                  { label: 'Medium', value: 'medium' },
+                  { label: 'High', value: 'high' },
+                  { label: 'Critical', value: 'critical' },
+                ]}
+              />
+              <JobRosterSelect
+                value={props.filterTemplateSource}
+                onValueChange={(value) => {
+                  props.onFilterTemplateSourceChange(value)
+                  props.onFilterTemplateIdChange('')
+                  props.onPageChange(1)
+                }}
+                placeholder="All Sources"
+                options={[
+                  { label: 'All Sources', value: '' },
+                  { label: 'From Template', value: 'template' },
+                  { label: 'Manual', value: 'manual' },
+                ]}
+              />
+              {props.filterTemplateSource === 'template' && props.templates.length > 0 && (
+                <JobRosterSelect
+                  value={props.filterTemplateId}
+                  onValueChange={(value) => {
+                    props.onFilterTemplateIdChange(value)
+                    props.onPageChange(1)
+                  }}
+                  placeholder="All Templates"
+                  disabled={props.loadingTemplates}
+                  options={[
+                    { label: 'All Templates', value: '' },
+                    ...props.templates.map((template) => ({
+                      label: template.name,
+                      value: template.id,
+                    })),
+                  ]}
+                />
+              )}
+              <JobRosterSelect
+                value={props.hasPhotos === undefined ? '' : props.hasPhotos ? 'true' : 'false'}
+                onValueChange={(v) => props.onHasPhotosChange(v === '' ? undefined : v === 'true')}
+                placeholder="Photos"
+                options={[
+                  { label: 'Photos: Any', value: '' },
+                  { label: 'Has photos', value: 'true' },
+                  { label: 'No photos', value: 'false' },
+                ]}
+              />
+              <JobRosterSelect
+                value={props.hasSignatures === undefined ? '' : props.hasSignatures ? 'true' : 'false'}
+                onValueChange={(v) => props.onHasSignaturesChange(v === '' ? undefined : v === 'true')}
+                placeholder="Signatures"
+                options={[
+                  { label: 'Signatures: Any', value: '' },
+                  { label: 'Has signatures', value: 'true' },
+                  { label: 'No signatures', value: 'false' },
+                ]}
+              />
+              <JobRosterSelect
+                value={props.needsSignatures === undefined ? '' : props.needsSignatures ? 'true' : 'false'}
+                onValueChange={(v) => props.onNeedsSignaturesChange(v === '' ? undefined : v === 'true')}
+                placeholder="Needs signatures"
+                options={[
+                  { label: 'Needs sig: Any', value: '' },
+                  { label: 'Needs signatures', value: 'true' },
+                  { label: 'Signed', value: 'false' },
+                ]}
+              />
             </div>
             <div className="flex items-center gap-3">
               <label className="flex items-center gap-2 text-sm text-white/60 cursor-pointer hover:text-white/80 transition-colors">
@@ -689,30 +752,84 @@ export function JobsPageContentView(props: JobsPageContentProps) {
               </Button>
             </div>
           </div>
-          {/* Filter Summary */}
-          {(props.filterStatus || props.filterRiskLevel || props.filterTemplateSource || props.filterTemplateId) && (
-            <div className="flex items-center gap-2 text-sm text-white/50 mb-2">
-              <span>Filtered by:</span>
+          {/* Active filters pills */}
+          {(props.searchQuery ||
+            props.filterStatus ||
+            props.filterRiskLevel ||
+            props.filterTemplateSource ||
+            props.filterTemplateId ||
+            (props.filterTimeRange && props.filterTimeRange !== 'all') ||
+            props.includeArchived ||
+            props.hasPhotos !== undefined ||
+            props.hasSignatures !== undefined ||
+            props.needsSignatures !== undefined) && (
+            <div className="flex flex-wrap items-center gap-2 text-sm mb-2">
+              <span className="text-white/50">Active:</span>
+              {props.searchQuery && (
+                <FilterPill
+                  label={`"${props.searchQuery}"`}
+                  onRemove={() => props.onSearchQueryChange('')}
+                />
+              )}
               {props.filterStatus && (
-                <span className="px-2 py-0.5 bg-white/5 rounded text-white/70 capitalize">{props.filterStatus}</span>
+                <FilterPill
+                  label={`Status: ${props.filterStatus}`}
+                  onRemove={() => props.onFilterStatusChange('')}
+                />
               )}
               {props.filterRiskLevel && (
-                <span className="px-2 py-0.5 bg-white/5 rounded text-white/70 capitalize">{props.filterRiskLevel} Risk</span>
+                <FilterPill
+                  label={`Risk: ${props.filterRiskLevel}`}
+                  onRemove={() => props.onFilterRiskLevelChange('')}
+                />
+              )}
+              {props.filterTimeRange && props.filterTimeRange !== 'all' && (
+                <FilterPill
+                  label={`Time: ${props.filterTimeRange}`}
+                  onRemove={() => props.onFilterTimeRangeChange('all')}
+                />
+              )}
+              {props.includeArchived && (
+                <FilterPill label="Archived" onRemove={() => props.onIncludeArchivedChange(false)} />
+              )}
+              {props.hasPhotos === true && (
+                <FilterPill label="Has photos" onRemove={() => props.onHasPhotosChange(undefined)} />
+              )}
+              {props.hasPhotos === false && (
+                <FilterPill label="No photos" onRemove={() => props.onHasPhotosChange(undefined)} />
+              )}
+              {props.hasSignatures === true && (
+                <FilterPill label="Has signatures" onRemove={() => props.onHasSignaturesChange(undefined)} />
+              )}
+              {props.hasSignatures === false && (
+                <FilterPill label="No signatures" onRemove={() => props.onHasSignaturesChange(undefined)} />
+              )}
+              {props.needsSignatures === true && (
+                <FilterPill label="Needs signatures" onRemove={() => props.onNeedsSignaturesChange(undefined)} />
+              )}
+              {props.needsSignatures === false && (
+                <FilterPill label="Signed" onRemove={() => props.onNeedsSignaturesChange(undefined)} />
               )}
               {props.filterTemplateSource && (
-                <span className="px-2 py-0.5 bg-white/5 rounded text-white/70 capitalize">{props.filterTemplateSource === 'template' ? 'From Template' : 'Manual'}</span>
+                <FilterPill
+                  label={props.filterTemplateSource === 'template' ? 'From Template' : 'Manual'}
+                  onRemove={() => {
+                    props.onFilterTemplateSourceChange('')
+                    props.onFilterTemplateIdChange('')
+                  }}
+                />
+              )}
+              {props.filterTemplateId && (
+                <FilterPill
+                  label={`Template: ${props.templates.find((t) => t.id === props.filterTemplateId)?.name ?? props.filterTemplateId}`}
+                  onRemove={() => props.onFilterTemplateIdChange('')}
+                />
               )}
               <button
-                onClick={() => {
-                  props.onFilterStatusChange('')
-                  props.onFilterRiskLevelChange('')
-                  props.onFilterTemplateSourceChange('')
-                  props.onFilterTemplateIdChange('')
-                  props.onPageChange(1)
-                }}
+                onClick={props.onClearAllFilters}
                 className="px-2 py-0.5 text-xs text-white/60 hover:text-white/80 underline"
               >
-                Reset all
+                Clear all
               </button>
             </div>
           )}
@@ -744,22 +861,22 @@ export function JobsPageContentView(props: JobsPageContentProps) {
           </div>
         ) : props.jobs.length === 0 ? (
           <GlassCard className="p-12 text-center">
-            {props.filterStatus || props.filterRiskLevel || props.filterTemplateSource || props.filterTemplateId ? (
+            {(props.searchQuery ||
+              props.filterStatus ||
+              props.filterRiskLevel ||
+              props.filterTemplateSource ||
+              props.filterTemplateId ||
+              (props.filterTimeRange && props.filterTimeRange !== 'all') ||
+              props.includeArchived ||
+              props.hasPhotos !== undefined ||
+              props.hasSignatures !== undefined ||
+              props.needsSignatures !== undefined) ? (
               <>
                 <p className="text-white font-medium mb-2">No jobs match these filters</p>
                 <p className="text-sm text-white/60 mb-6 max-w-md mx-auto">
-                  Try adjusting your filters or clear them to see all work records.
+                  Try adjusting your search, filters, or time range.
                 </p>
-                <Button
-                  variant="secondary"
-                  onClick={() => {
-                    props.onFilterStatusChange('')
-                    props.onFilterRiskLevelChange('')
-                    props.onFilterTemplateSourceChange('')
-                    props.onFilterTemplateIdChange('')
-                    props.onPageChange(1)
-                  }}
-                >
+                <Button variant="secondary" onClick={props.onClearAllFilters}>
                   Clear Filters
                 </Button>
               </>

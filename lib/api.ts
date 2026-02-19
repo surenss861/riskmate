@@ -334,8 +334,11 @@ export const jobsApi = {
     if (params?.time_range) queryParams.set('time_range', params.time_range);
     if (params?.missing_evidence === true) queryParams.set('missing_evidence', 'true');
     if (params?.has_photos === true) queryParams.set('has_photos', 'true');
+    if (params?.has_photos === false) queryParams.set('has_photos', 'false');
     if (params?.has_signatures === true) queryParams.set('has_signatures', 'true');
+    if (params?.has_signatures === false) queryParams.set('has_signatures', 'false');
     if (params?.needs_signatures === true) queryParams.set('needs_signatures', 'true');
+    if (params?.needs_signatures === false) queryParams.set('needs_signatures', 'false');
     if (params?.filter_config != null) {
       const raw = typeof params.filter_config === 'string'
         ? params.filter_config

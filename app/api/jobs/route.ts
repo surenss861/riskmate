@@ -147,6 +147,8 @@ export async function GET(request: NextRequest) {
     const needsSignatures = parseBooleanParam(searchParams.get('needs_signatures'))
     const unassigned = parseBooleanParam(searchParams.get('unassigned'))
     const recent = parseBooleanParam(searchParams.get('recent'))
+    const timeRangeParam = searchParams.get('time_range')?.trim() ?? ''
+    const recentDays = timeRangeParam === '7d' ? 7 : timeRangeParam === '30d' ? 30 : timeRangeParam === '90d' ? 90 : recent === true ? 7 : null
     const jobType = searchParams.get('job_type')
     const client = searchParams.get('client')
     const sort = searchParams.get('sort')
@@ -259,7 +261,7 @@ export async function GET(request: NextRequest) {
       p_excluded_ids: excludedJobIds.size ? Array.from(excludedJobIds) : null,
       p_overdue: overdue === true ? true : null,
       p_unassigned: unassigned === true ? true : null,
-      p_recent_days: recent === true ? 7 : null,
+      p_recent_days: recentDays,
       p_has_photos: hasPhotos ?? null,
       p_has_signatures: hasSignatures ?? null,
       p_needs_signatures: needsSignatures ?? null,
