@@ -149,4 +149,85 @@ exports.commentsRouter.delete("/:id", auth_1.authenticate, async (req, res) => {
         res.status(500).json({ message: "Failed to delete comment" });
     }
 });
+/** POST /api/comments/:id/resolve — mark comment resolved. */
+exports.commentsRouter.post("/:id/resolve", auth_1.authenticate, async (req, res) => {
+    const authReq = req;
+    const commentId = req.params.id;
+    try {
+        const result = await (0, comments_1.resolveComment)(authReq.user.organization_id, commentId, authReq.user.id);
+        if (result.error) {
+            return res.status(404).json({ message: result.error, code: "NOT_FOUND" });
+        }
+        res.json({ data: result.data });
+    }
+    catch (err) {
+        console.error("Resolve comment failed:", err);
+        res.status(500).json({ message: "Failed to resolve comment" });
+    }
+});
+/** DELETE /api/comments/:id/resolve — unresolve comment. */
+exports.commentsRouter.delete("/:id/resolve", auth_1.authenticate, async (req, res) => {
+    const authReq = req;
+    const commentId = req.params.id;
+    try {
+        const result = await (0, comments_1.unresolveComment)(authReq.user.organization_id, commentId);
+        if (result.error) {
+            return res.status(404).json({ message: result.error, code: "NOT_FOUND" });
+        }
+        res.json({ data: result.data });
+    }
+    catch (err) {
+        console.error("Unresolve comment failed:", err);
+        res.status(500).json({ message: "Failed to unresolve comment" });
+    }
+});
+/** GET /api/comments/:id/replies — list replies for a comment. */
+exports.commentsRouter.get("/:id/replies", auth_1.authenticate, async (req, res) => {
+    const authReq = req;
+    const parentId = req.params.id;
+    try {
+        const limit = req.query.limit != null ? parseInt(String(req.query.limit), 10) : 50;
+        const offset = req.query.offset != null ? parseInt(String(req.query.offset), 10) : 0;
+        const result = await (0, comments_1.listReplies)(authReq.user.organization_id, parentId, { limit, offset });
+        res.json(result);
+    }
+    catch (err) {
+        console.error("List replies failed:", err);
+        res.status(500).json({ message: "Failed to list replies" });
+    }
+});
+/** POST /api/comments/:id/replies — create a reply (entity_type/entity_id from parent comment). */
+exports.commentsRouter.post("/:id/replies", auth_1.authenticate, async (req, res) => {
+    const authReq = req;
+    const parentId = req.params.id;
+    const body = (req.body || {});
+    const commentBody = body.body;
+    if (!commentBody || typeof commentBody !== "string" || !commentBody.trim()) {
+        return res.status(400).json({
+            message: "body.body is required and must be a non-empty string",
+            code: "INVALID_BODY",
+        });
+    }
+    const parent = await (0, comments_1.getComment)(authReq.user.organization_id, parentId);
+    if (!parent || parent.deleted_at) {
+        return res.status(404).json({ message: "Comment not found", code: "NOT_FOUND" });
+    }
+    try {
+        const result = await (0, comments_1.createComment)(authReq.user.organization_id, authReq.user.id, {
+            entity_type: parent.entity_type,
+            entity_id: parent.entity_id,
+            body: commentBody.trim(),
+            parent_id: parentId,
+            mention_user_ids: Array.isArray(body.mention_user_ids) ? body.mention_user_ids : undefined,
+        });
+        if (result.error) {
+            return res.status(400).json({ message: result.error, code: "CREATE_FAILED" });
+        }
+        res.status(201).json({ data: result.data });
+    }
+    catch (err) {
+        console.error("Create reply failed:", err);
+        res.status(500).json({ message: "Failed to create reply" });
+    }
+});
 //# sourceMappingURL=comments.js.map

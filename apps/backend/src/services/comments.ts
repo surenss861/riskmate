@@ -30,8 +30,9 @@ export interface CommentRow {
   updated_at: string;
 }
 
-export interface CommentWithAuthor extends CommentRow {
+export interface CommentWithAuthor extends Omit<CommentRow, 'mentions'> {
   author?: { id: string; full_name: string | null; email: string | null };
+  /** Resolved mention list for API (CommentRow.mentions is raw UUID[]). */
   mentions?: { user_id: string }[];
   reply_count?: number;
 }

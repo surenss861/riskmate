@@ -21,6 +21,14 @@ CREATE TABLE IF NOT EXISTS comments (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Add columns if table already existed from an older migration (e.g. without deleted_at).
+ALTER TABLE comments ADD COLUMN IF NOT EXISTS mentions UUID[] DEFAULT '{}';
+ALTER TABLE comments ADD COLUMN IF NOT EXISTS is_resolved BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE comments ADD COLUMN IF NOT EXISTS resolved_by UUID REFERENCES auth.users(id) ON DELETE SET NULL;
+ALTER TABLE comments ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMPTZ;
+ALTER TABLE comments ADD COLUMN IF NOT EXISTS edited_at TIMESTAMPTZ;
+ALTER TABLE comments ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+
 CREATE INDEX IF NOT EXISTS idx_comments_entity_type_entity_id ON comments(entity_type, entity_id);
 CREATE INDEX IF NOT EXISTS idx_comments_parent_id ON comments(parent_id) WHERE parent_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_comments_author_id ON comments(author_id);

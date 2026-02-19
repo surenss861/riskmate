@@ -7,6 +7,9 @@ exports.updateComment = updateComment;
 exports.deleteComment = deleteComment;
 exports.getComment = getComment;
 exports.listCommentsWhereMentioned = listCommentsWhereMentioned;
+exports.resolveComment = resolveComment;
+exports.unresolveComment = unresolveComment;
+exports.listReplies = listReplies;
 const supabaseClient_1 = require("../lib/supabaseClient");
 const notifications_1 = require("./notifications");
 exports.COMMENT_ENTITY_TYPES = [
@@ -16,20 +19,24 @@ exports.COMMENT_ENTITY_TYPES = [
     "task",
     "document",
     "signoff",
+    "photo",
 ];
-/** List comments for an entity. Returns flat list (replies have parent_id set). */
+/** List comments for an entity. Excludes soft-deleted by default. Returns author info and reply counts. */
 async function listComments(organizationId, entityType, entityId, options = {}) {
     const limit = Math.min(Math.max(options.limit ?? 50, 1), 100);
     const offset = Math.max(options.offset ?? 0, 0);
     let query = supabaseClient_1.supabase
         .from("comments")
-        .select("id, organization_id, entity_type, entity_id, parent_id, author_id, body, created_at, updated_at")
+        .select("id, organization_id, entity_type, entity_id, parent_id, author_id, body, mentions, is_resolved, resolved_by, resolved_at, edited_at, deleted_at, created_at, updated_at")
         .eq("organization_id", organizationId)
         .eq("entity_type", entityType)
         .eq("entity_id", entityId)
         .order("created_at", { ascending: true });
     if (options.includeReplies === false) {
         query = query.is("parent_id", null);
+    }
+    if (options.includeDeleted !== true) {
+        query = query.is("deleted_at", null);
     }
     const { data: rows, error } = await query.range(offset, offset + limit - 1);
     if (error) {
@@ -46,17 +53,18 @@ async function listComments(organizationId, entityType, entityId, options = {}) 
         .select("id, full_name, email")
         .in("id", authorIds);
     const commentIds = comments.map((c) => c.id);
-    const { data: mentionRows } = await supabaseClient_1.supabase
-        .from("comment_mentions")
-        .select("comment_id, user_id")
-        .in("comment_id", commentIds);
-    const userMap = new Map((users || []).map((u) => [u.id, u]));
-    const mentionsByComment = new Map();
-    for (const m of mentionRows || []) {
-        const list = mentionsByComment.get(m.comment_id) ?? [];
-        list.push({ user_id: m.user_id });
-        mentionsByComment.set(m.comment_id, list);
+    const { data: replyRows } = await supabaseClient_1.supabase
+        .from("comments")
+        .select("parent_id")
+        .in("parent_id", commentIds)
+        .is("deleted_at", null);
+    const replyCountByParent = new Map();
+    for (const r of replyRows || []) {
+        const pid = r.parent_id;
+        if (pid)
+            replyCountByParent.set(pid, (replyCountByParent.get(pid) ?? 0) + 1);
     }
+    const userMap = new Map((users || []).map((u) => [u.id, u]));
     const data = comments.map((c) => ({
         ...c,
         author: userMap.get(c.author_id)
@@ -66,11 +74,12 @@ async function listComments(organizationId, entityType, entityId, options = {}) 
                 email: userMap.get(c.author_id)?.email ?? null,
             }
             : undefined,
-        mentions: mentionsByComment.get(c.id) ?? [],
+        mentions: (c.mentions ?? []).map((user_id) => ({ user_id })),
+        reply_count: replyCountByParent.get(c.id) ?? 0,
     }));
     return { data };
 }
-/** Create a comment and optionally mention users (sends notifications). */
+/** Create a comment with optional mentions (stored in comments.mentions; sends notifications). */
 async function createComment(organizationId, authorId, params) {
     const { entity_type, entity_id, body, parent_id, mention_user_ids } = params;
     if (!body || typeof body !== "string" || body.trim().length === 0) {
@@ -79,6 +88,7 @@ async function createComment(organizationId, authorId, params) {
     if (!exports.COMMENT_ENTITY_TYPES.includes(entity_type)) {
         return { data: null, error: "Invalid entity_type" };
     }
+    const toMention = (mention_user_ids ?? []).filter((id) => id && id !== authorId);
     const { data: comment, error: insertError } = await supabaseClient_1.supabase
         .from("comments")
         .insert({
@@ -88,6 +98,7 @@ async function createComment(organizationId, authorId, params) {
         parent_id: parent_id ?? null,
         author_id: authorId,
         body: body.trim(),
+        mentions: toMention.length > 0 ? toMention : [],
     })
         .select()
         .single();
@@ -98,12 +109,7 @@ async function createComment(organizationId, authorId, params) {
     if (!comment) {
         return { data: null, error: "Failed to create comment" };
     }
-    const toMention = (mention_user_ids ?? []).filter((id) => id && id !== authorId);
     if (toMention.length > 0) {
-        await supabaseClient_1.supabase.from("comment_mentions").insert(toMention.map((user_id) => ({
-            comment_id: comment.id,
-            user_id,
-        })));
         const contextLabel = "You were mentioned in a comment.";
         for (const userId of toMention) {
             (0, notifications_1.sendMentionNotification)(userId, organizationId, comment.id, contextLabel).catch((err) => console.error("[Comments] Mention notification failed:", err));
@@ -111,26 +117,34 @@ async function createComment(organizationId, authorId, params) {
     }
     return { data: comment, error: null };
 }
-/** Update comment body (caller must ensure author or admin). */
+/** Update comment body (sets edited_at). Caller must ensure author or admin. */
 async function updateComment(organizationId, commentId, body, userId) {
     if (!body || typeof body !== "string" || body.trim().length === 0) {
         return { data: null, error: "Body is required" };
     }
     const { data: existing } = await supabaseClient_1.supabase
         .from("comments")
-        .select("id, author_id, organization_id")
+        .select("id, author_id, organization_id, deleted_at")
         .eq("id", commentId)
         .eq("organization_id", organizationId)
         .single();
     if (!existing) {
         return { data: null, error: "Comment not found" };
     }
+    if (existing.deleted_at) {
+        return { data: null, error: "Comment is deleted" };
+    }
     if (existing.author_id !== userId) {
         return { data: null, error: "Only the author can update this comment" };
     }
+    const now = new Date().toISOString();
     const { data: comment, error } = await supabaseClient_1.supabase
         .from("comments")
-        .update({ body: body.trim(), updated_at: new Date().toISOString() })
+        .update({
+        body: body.trim(),
+        edited_at: now,
+        updated_at: now,
+    })
         .eq("id", commentId)
         .eq("organization_id", organizationId)
         .select()
@@ -141,11 +155,12 @@ async function updateComment(organizationId, commentId, body, userId) {
     }
     return { data: comment, error: null };
 }
-/** Delete a comment (caller must ensure author or org admin). */
+/** Soft-delete a comment (sets deleted_at and updated_at). No cascade on replies. Caller must ensure author or org admin. */
 async function deleteComment(organizationId, commentId) {
+    const now = new Date().toISOString();
     const { error } = await supabaseClient_1.supabase
         .from("comments")
-        .delete()
+        .update({ deleted_at: now, updated_at: now })
         .eq("id", commentId)
         .eq("organization_id", organizationId);
     if (error) {
@@ -154,7 +169,7 @@ async function deleteComment(organizationId, commentId) {
     }
     return { ok: true, error: null };
 }
-/** Get a single comment by id (for permission checks). */
+/** Get a single comment by id (for permission checks). Includes deleted. */
 async function getComment(organizationId, commentId) {
     const { data, error } = await supabaseClient_1.supabase
         .from("comments")
@@ -166,23 +181,16 @@ async function getComment(organizationId, commentId) {
         return null;
     return data;
 }
-/** List comments where the given user is mentioned (for notification center). */
+/** List comments where the given user is in mentions array. Excludes soft-deleted. */
 async function listCommentsWhereMentioned(organizationId, userId, options = {}) {
     const limit = Math.min(Math.max(options.limit ?? 20, 1), 50);
     const offset = Math.max(options.offset ?? 0, 0);
-    const { data: mentionRows, error: mentionError } = await supabaseClient_1.supabase
-        .from("comment_mentions")
-        .select("comment_id")
-        .eq("user_id", userId);
-    if (mentionError || !mentionRows?.length) {
-        return { data: [] };
-    }
-    const commentIds = [...new Set(mentionRows.map((r) => r.comment_id))];
     const { data: comments, error } = await supabaseClient_1.supabase
         .from("comments")
-        .select("id, organization_id, entity_type, entity_id, parent_id, author_id, body, created_at, updated_at")
+        .select("id, organization_id, entity_type, entity_id, parent_id, author_id, body, mentions, is_resolved, resolved_by, resolved_at, edited_at, deleted_at, created_at, updated_at")
         .eq("organization_id", organizationId)
-        .in("id", commentIds)
+        .is("deleted_at", null)
+        .contains("mentions", [userId])
         .order("created_at", { ascending: false })
         .range(offset, offset + limit - 1);
     if (error || !comments?.length) {
@@ -193,17 +201,7 @@ async function listCommentsWhereMentioned(organizationId, userId, options = {}) 
         .from("users")
         .select("id, full_name, email")
         .in("id", authorIds);
-    const { data: mentionRows2 } = await supabaseClient_1.supabase
-        .from("comment_mentions")
-        .select("comment_id, user_id")
-        .in("comment_id", comments.map((c) => c.id));
     const userMap = new Map((users || []).map((u) => [u.id, u]));
-    const mentionsByComment = new Map();
-    for (const m of mentionRows2 || []) {
-        const list = mentionsByComment.get(m.comment_id) ?? [];
-        list.push({ user_id: m.user_id });
-        mentionsByComment.set(m.comment_id, list);
-    }
     const data = comments.map((c) => ({
         ...c,
         author: userMap.get(c.author_id)
@@ -213,7 +211,108 @@ async function listCommentsWhereMentioned(organizationId, userId, options = {}) 
                 email: userMap.get(c.author_id)?.email ?? null,
             }
             : undefined,
-        mentions: mentionsByComment.get(c.id) ?? [],
+        mentions: (c.mentions ?? []).map((user_id) => ({ user_id })),
+    }));
+    return { data };
+}
+/** Resolve a comment (sets is_resolved, resolved_by, resolved_at). */
+async function resolveComment(organizationId, commentId, userId) {
+    const { data: existing } = await supabaseClient_1.supabase
+        .from("comments")
+        .select("id, deleted_at")
+        .eq("id", commentId)
+        .eq("organization_id", organizationId)
+        .single();
+    if (!existing || existing.deleted_at) {
+        return { data: null, error: "Comment not found" };
+    }
+    const now = new Date().toISOString();
+    const { data: comment, error } = await supabaseClient_1.supabase
+        .from("comments")
+        .update({
+        is_resolved: true,
+        resolved_by: userId,
+        resolved_at: now,
+        updated_at: now,
+    })
+        .eq("id", commentId)
+        .eq("organization_id", organizationId)
+        .select()
+        .single();
+    if (error) {
+        console.error("[Comments] resolveComment error:", error);
+        return { data: null, error: error.message };
+    }
+    return { data: comment, error: null };
+}
+/** Unresolve a comment (clears is_resolved, resolved_by, resolved_at). */
+async function unresolveComment(organizationId, commentId) {
+    const { data: existing } = await supabaseClient_1.supabase
+        .from("comments")
+        .select("id, deleted_at")
+        .eq("id", commentId)
+        .eq("organization_id", organizationId)
+        .single();
+    if (!existing || existing.deleted_at) {
+        return { data: null, error: "Comment not found" };
+    }
+    const now = new Date().toISOString();
+    const { data: comment, error } = await supabaseClient_1.supabase
+        .from("comments")
+        .update({
+        is_resolved: false,
+        resolved_by: null,
+        resolved_at: null,
+        updated_at: now,
+    })
+        .eq("id", commentId)
+        .eq("organization_id", organizationId)
+        .select()
+        .single();
+    if (error) {
+        console.error("[Comments] unresolveComment error:", error);
+        return { data: null, error: error.message };
+    }
+    return { data: comment, error: null };
+}
+/** List replies for a comment. Excludes soft-deleted by default. */
+async function listReplies(organizationId, parentId, options = {}) {
+    const limit = Math.min(Math.max(options.limit ?? 50, 1), 100);
+    const offset = Math.max(options.offset ?? 0, 0);
+    let query = supabaseClient_1.supabase
+        .from("comments")
+        .select("id, organization_id, entity_type, entity_id, parent_id, author_id, body, mentions, is_resolved, resolved_by, resolved_at, edited_at, deleted_at, created_at, updated_at")
+        .eq("organization_id", organizationId)
+        .eq("parent_id", parentId)
+        .order("created_at", { ascending: true });
+    if (options.includeDeleted !== true) {
+        query = query.is("deleted_at", null);
+    }
+    const { data: rows, error } = await query.range(offset, offset + limit - 1);
+    if (error) {
+        console.error("[Comments] listReplies error:", error);
+        return { data: [] };
+    }
+    const comments = (rows || []);
+    if (comments.length === 0) {
+        return { data: [] };
+    }
+    const authorIds = [...new Set(comments.map((c) => c.author_id))];
+    const { data: users } = await supabaseClient_1.supabase
+        .from("users")
+        .select("id, full_name, email")
+        .in("id", authorIds);
+    const userMap = new Map((users || []).map((u) => [u.id, u]));
+    const data = comments.map((c) => ({
+        ...c,
+        author: userMap.get(c.author_id)
+            ? {
+                id: c.author_id,
+                full_name: userMap.get(c.author_id)?.full_name ?? null,
+                email: userMap.get(c.author_id)?.email ?? null,
+            }
+            : undefined,
+        mentions: (c.mentions ?? []).map((user_id) => ({ user_id })),
     }));
     return { data };
 }
