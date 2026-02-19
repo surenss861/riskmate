@@ -43,6 +43,11 @@ const SORT_ALLOWLIST = new Set([
   'client_name',
 ])
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+function isValidUUID(s: string): boolean {
+  return UUID_REGEX.test(s)
+}
+
 function parseBooleanParam(value: string | null): boolean | null {
   if (value === null) return null
   if (value === 'true') return true
@@ -146,7 +151,23 @@ export async function GET(request: NextRequest) {
     const client = searchParams.get('client')
     const sort = searchParams.get('sort')
     const order = (searchParams.get('order') || 'desc').toLowerCase() === 'asc' ? 'asc' : 'desc'
-    const filterConfigRaw = searchParams.get('filter_config')
+    const savedFilterIdParam = searchParams.get('saved_filter_id')?.trim() ?? ''
+    let filterConfigRaw = searchParams.get('filter_config')
+    // When saved_filter_id is provided, resolve it to filter_config (same as /api/search)
+    if (savedFilterIdParam && isValidUUID(savedFilterIdParam)) {
+      const { data: savedFilter } = await supabase
+        .from('saved_filters')
+        .select('id, filter_config')
+        .eq('organization_id', organization_id)
+        .eq('id', savedFilterIdParam)
+        .or(`user_id.eq.${user.id},is_shared.eq.true`)
+        .maybeSingle()
+      if (savedFilter?.filter_config != null) {
+        filterConfigRaw = typeof savedFilter.filter_config === 'string'
+          ? savedFilter.filter_config
+          : JSON.stringify(savedFilter.filter_config)
+      }
+    }
     const filterConfig = normalizeFilterConfig(filterConfigRaw)
 
     if (filterConfigRaw && !filterConfig) {

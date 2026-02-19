@@ -298,11 +298,11 @@ async function apiRequest<T>(
 
 // Jobs API
 export const jobsApi = {
-  list: async (params?: { 
-    page?: number; 
-    limit?: number; 
+  list: async (params?: {
+    page?: number;
+    limit?: number;
     page_size?: number;
-    status?: string; 
+    status?: string;
     risk_level?: string;
     include_archived?: boolean;
     sort?: string;
@@ -311,6 +311,15 @@ export const jobsApi = {
     time_range?: string;
     missing_evidence?: boolean;
     debug?: boolean;
+    has_photos?: boolean;
+    has_signatures?: boolean;
+    needs_signatures?: boolean;
+    filter_config?: string | Record<string, unknown>;
+    saved_filter_id?: string;
+    risk_score_min?: number;
+    risk_score_max?: number;
+    job_type?: string;
+    client?: string;
   }) => {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.set('page', params.page.toString());
@@ -324,6 +333,20 @@ export const jobsApi = {
     if (params?.q) queryParams.set('q', params.q);
     if (params?.time_range) queryParams.set('time_range', params.time_range);
     if (params?.missing_evidence === true) queryParams.set('missing_evidence', 'true');
+    if (params?.has_photos === true) queryParams.set('has_photos', 'true');
+    if (params?.has_signatures === true) queryParams.set('has_signatures', 'true');
+    if (params?.needs_signatures === true) queryParams.set('needs_signatures', 'true');
+    if (params?.filter_config != null) {
+      const raw = typeof params.filter_config === 'string'
+        ? params.filter_config
+        : JSON.stringify(params.filter_config);
+      queryParams.set('filter_config', raw);
+    }
+    if (params?.saved_filter_id) queryParams.set('saved_filter_id', params.saved_filter_id);
+    if (params?.risk_score_min != null) queryParams.set('risk_score_min', params.risk_score_min.toString());
+    if (params?.risk_score_max != null) queryParams.set('risk_score_max', params.risk_score_max.toString());
+    if (params?.job_type) queryParams.set('job_type', params.job_type);
+    if (params?.client) queryParams.set('client', params.client);
     if (params?.debug && process.env.NODE_ENV === 'development') {
       queryParams.set('debug', '1');
     }
