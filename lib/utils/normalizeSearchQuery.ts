@@ -7,9 +7,9 @@ export function normalizeSearchQueryForTsquery(raw: string): string {
   const trimmed = (raw ?? '').trim()
   if (!trimmed) return trimmed
 
-  // Replace tsquery operators and problematic punctuation with space so they
-  // are not passed through to to_tsquery (would throw on e.g. "foo | bar" or "a:b").
-  const safe = trimmed.replace(/[():|&!*\\]/g, ' ')
+  // Replace tsquery operators, apostrophes, and problematic punctuation with space so they
+  // are not passed through to to_tsquery (would throw on e.g. "foo | bar", "a:b", or "john's").
+  const safe = trimmed.replace(/[():|&!*\\']/g, ' ')
   const tokens = safe.split(/\s+/).filter((t) => t.length > 0)
   if (tokens.length === 0) return ''
 
