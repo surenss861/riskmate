@@ -1,13 +1,26 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import type { FilterCondition, FilterGroup } from '@/lib/jobs/filterConfig'
 import { FILTER_FIELD_ALLOWLIST } from '@/lib/jobs/filterConfig'
+import { teamApi } from '@/lib/api'
 
 const FIELD_OPTIONS = Array.from(FILTER_FIELD_ALLOWLIST).map((f) => ({
   value: f,
   label: f.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
 }))
+
+/** Job type enum values (match API validation). */
+const JOB_TYPE_OPTIONS = [
+  'repair',
+  'maintenance',
+  'installation',
+  'inspection',
+  'renovation',
+  'new_construction',
+  'remodel',
+  'other',
+]
 
 const OPERATORS_BY_TYPE: Record<string, { value: string; label: string }[]> = {
   default: [
@@ -49,6 +62,14 @@ const OPERATORS_BY_TYPE: Record<string, { value: string; label: string }[]> = {
     { value: 'eq', label: 'equals' },
     { value: 'in', label: 'in list' },
   ],
+  job_type_enum: [
+    { value: 'eq', label: 'equals' },
+    { value: 'in', label: 'in list' },
+  ],
+  user: [
+    { value: 'eq', label: 'equals' },
+    { value: 'in', label: 'in list' },
+  ],
 }
 
 function getFieldType(field: string): keyof typeof OPERATORS_BY_TYPE {
@@ -57,8 +78,9 @@ function getFieldType(field: string): keyof typeof OPERATORS_BY_TYPE {
   if (['risk_level'].includes(field)) return 'risk_level'
   if (['risk_score'].includes(field)) return 'number'
   if (['end_date', 'due_date', 'created_at'].includes(field)) return 'date'
-  if (['client_name', 'location', 'job_type'].includes(field)) return 'text'
-  if (['assigned_to', 'assigned_to_id'].includes(field)) return 'text'
+  if (['job_type'].includes(field)) return 'job_type_enum'
+  if (['assigned_to', 'assigned_to_id'].includes(field)) return 'user'
+  if (['client_name', 'location'].includes(field)) return 'text'
   return 'default'
 }
 
@@ -70,11 +92,21 @@ export interface AdvancedFilterBuilderProps {
   className?: string
 }
 
+type TeamMember = { id: string; full_name: string | null; email: string }
+
 export function AdvancedFilterBuilder({ value, onChange, onSaveAsFilter, className = '' }: AdvancedFilterBuilderProps) {
   const [saveModalOpen, setSaveModalOpen] = useState(false)
   const [saveName, setSaveName] = useState('')
   const [saveShared, setSaveShared] = useState(false)
   const [saveSubmitting, setSaveSubmitting] = useState(false)
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([])
+
+  useEffect(() => {
+    teamApi
+      .get()
+      .then((res) => setTeamMembers(res.members ?? []))
+      .catch(() => setTeamMembers([]))
+  }, [])
 
   const group: FilterGroup = value ?? { operator: 'AND', conditions: [] }
   const conditions = Array.isArray(group.conditions) ? (group.conditions as FilterCondition[]) : []
@@ -205,6 +237,96 @@ export function AdvancedFilterBuilder({ value, onChange, onSaveAsFilter, classNa
               {o}
             </option>
           ))}
+        </select>
+      )
+    }
+
+    if (field === 'job_type') {
+      const options = JOB_TYPE_OPTIONS
+      if (op === 'in') {
+        const arr = Array.isArray(val) ? (val as string[]) : typeof val === 'string' && val ? val.split(',').map((s) => s.trim()) : []
+        return (
+          <div className="flex flex-wrap gap-1">
+            {options.map((opt) => {
+              const selected = arr.includes(opt)
+              return (
+                <button
+                  key={opt}
+                  type="button"
+                  onClick={() => {
+                    const next = selected ? arr.filter((x) => x !== opt) : [...arr, opt]
+                    updateCondition(index, { value: next })
+                  }}
+                  className={`px-2 py-1 rounded text-xs border ${selected ? 'bg-[#F97316]/30 border-[#F97316]/50 text-white' : 'bg-white/5 border-white/10 text-white/70'}`}
+                >
+                  {opt.replace(/_/g, ' ')}
+                </button>
+              )
+            })}
+          </div>
+        )
+      }
+      return (
+        <select
+          value={typeof val === 'string' ? val : ''}
+          onChange={(e) => updateCondition(index, { value: e.target.value || undefined })}
+          className="h-9 px-3 rounded-lg bg-white/5 border border-white/10 text-sm text-white focus:ring-1 focus:ring-[#F97316]/50 outline-none min-w-[140px]"
+        >
+          <option value="">—</option>
+          {options.map((o) => (
+            <option key={o} value={o}>
+              {o.replace(/_/g, ' ')}
+            </option>
+          ))}
+        </select>
+      )
+    }
+
+    if (field === 'assigned_to' || field === 'assigned_to_id') {
+      const members = teamMembers
+      const selectedId = typeof val === 'string' ? val : val != null ? String(val) : ''
+      if (op === 'in') {
+        const arr = Array.isArray(val) ? (val as string[]) : typeof val === 'string' && val ? val.split(',').map((s) => s.trim()) : []
+        return (
+          <div className="flex flex-wrap gap-1 max-w-[280px]">
+            {members.map((m) => {
+              const selected = arr.includes(m.id)
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => {
+                    const next = selected ? arr.filter((x) => x !== m.id) : [...arr, m.id]
+                    updateCondition(index, { value: next })
+                  }}
+                  className={`px-2 py-1 rounded text-xs border truncate max-w-full ${selected ? 'bg-[#F97316]/30 border-[#F97316]/50 text-white' : 'bg-white/5 border-white/10 text-white/70'}`}
+                  title={m.full_name || m.email}
+                >
+                  {m.full_name || m.email}
+                </button>
+              )
+            })}
+            {members.length === 0 && (
+              <span className="text-xs text-white/50">Loading members…</span>
+            )}
+          </div>
+        )
+      }
+      return (
+        <select
+          value={selectedId}
+          onChange={(e) => updateCondition(index, { value: e.target.value || undefined })}
+          className="h-9 px-3 rounded-lg bg-white/5 border border-white/10 text-sm text-white focus:ring-1 focus:ring-[#F97316]/50 outline-none min-w-[160px]"
+        >
+          <option value="">—</option>
+          {members.map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.full_name || m.email}
+            </option>
+          ))}
+          {members.length === 0 && (
+            <option value="" disabled>Loading…</option>
+          )}
         </select>
       )
     }
