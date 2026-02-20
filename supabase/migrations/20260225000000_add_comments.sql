@@ -35,6 +35,7 @@ CREATE INDEX IF NOT EXISTS idx_comments_author_id ON comments(author_id);
 CREATE INDEX IF NOT EXISTS idx_comments_organization_id ON comments(organization_id);
 CREATE INDEX IF NOT EXISTS idx_comments_created_at ON comments(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_comments_deleted_at ON comments(deleted_at) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_comments_mentions_gin ON comments USING GIN (mentions);
 
 ALTER TABLE comments ENABLE ROW LEVEL SECURITY;
 
