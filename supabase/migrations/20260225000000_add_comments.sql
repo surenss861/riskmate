@@ -48,9 +48,12 @@ CREATE POLICY "Users can read comments in their organization"
 DROP POLICY IF EXISTS "Users can create comments in their organization" ON comments;
 CREATE POLICY "Users can create comments in their organization"
   ON comments FOR INSERT
-  WITH CHECK (organization_id = get_user_organization_id());
+  WITH CHECK (
+    organization_id = get_user_organization_id()
+    AND author_id = auth.uid()
+  );
 
--- UPDATE: author can update own comments; org admin/owner can update any comment in org (e.g. resolve/unresolve).
+-- UPDATE: author only (per ticket); no broad admin update—resolve/unresolve use dedicated endpoints if needed.
 DROP POLICY IF EXISTS "Users can update comments in their organization" ON comments;
 DROP POLICY IF EXISTS "Author or admin can update comments" ON comments;
 DROP POLICY IF EXISTS "Author can update own comments" ON comments;
@@ -64,17 +67,6 @@ CREATE POLICY "Author can update own comments"
   WITH CHECK (
     organization_id = get_user_organization_id()
     AND author_id = auth.uid()
-  );
-
-CREATE POLICY "Org admin or owner can update comments in their organization"
-  ON comments FOR UPDATE
-  USING (
-    organization_id = get_user_organization_id()
-    AND public.org_role(organization_id) IN ('owner', 'admin')
-  )
-  WITH CHECK (
-    organization_id = get_user_organization_id()
-    AND public.org_role(organization_id) IN ('owner', 'admin')
   );
 
 -- No DELETE policy: soft delete only. Authors/admins set deleted_at via UPDATE to preserve rows and avoid cascading replies.

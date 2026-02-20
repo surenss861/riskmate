@@ -143,12 +143,13 @@ export async function POST(
     if (rawMentionIds.length === 0) {
       mentionUserIds = []
     } else {
-      const { data: orgUsers } = await supabase
+      const { data: mentionUsers } = await supabase
         .from('users')
         .select('id')
         .eq('organization_id', organization_id)
-      const orgIds = new Set((orgUsers ?? []).map((r: { id: string }) => r.id))
-      mentionUserIds = rawMentionIds.filter((id) => orgIds.has(id))
+        .in('id', rawMentionIds)
+      const validIds = new Set((mentionUsers ?? []).map((r: { id: string }) => r.id))
+      mentionUserIds = rawMentionIds.filter((id) => validIds.has(id))
     }
 
     const { data: comment, error } = await supabase
