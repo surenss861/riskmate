@@ -64,7 +64,8 @@ export async function GET(request: NextRequest) {
     let query = supabase
       .from('comments')
       .select(
-        'id, organization_id, entity_type, entity_id, parent_id, author_id, content, mentions, is_resolved, resolved_by, resolved_at, edited_at, deleted_at, created_at, updated_at'
+        'id, organization_id, entity_type, entity_id, parent_id, author_id, content, mentions, is_resolved, resolved_by, resolved_at, edited_at, deleted_at, created_at, updated_at',
+        { count: 'exact' }
       )
       .eq('organization_id', organization_id)
       .eq('entity_type', entityType)
@@ -76,13 +77,15 @@ export async function GET(request: NextRequest) {
       query = query.is('parent_id', null)
     }
 
-    const { data: rows, error } = await query.range(offset, offset + limit - 1)
+    const { data: rows, error, count } = await query.range(offset, offset + limit - 1)
 
     if (error) throw error
 
     const comments = (rows || []) as any[]
+    const total = count ?? 0
+    const has_more = total > offset + comments.length
     if (comments.length === 0) {
-      return NextResponse.json({ data: [] })
+      return NextResponse.json({ data: [], count: total, has_more: false })
     }
 
     const authorIds = [...new Set(comments.map((c) => c.author_id))]
@@ -123,7 +126,7 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    return NextResponse.json({ data })
+    return NextResponse.json({ data, count: total, has_more })
   } catch (error: any) {
     const { response, errorId } = createErrorResponse(
       error?.message || 'Failed to list comments',
