@@ -5,8 +5,49 @@
  * Plain mentions: only tokens of safe length, not contained in emails/words, and exact full_name/email match only.
  */
 
-import { parseMentions } from '@/lib/utils/mentionParser'
+import { parseMentions, formatMention } from '@/lib/utils/mentionParser'
 import type { SupabaseClient } from '@supabase/supabase-js'
+
+/** User shape for contentToMentionTokenFormat (id, full_name, email for matching and display). */
+export interface MentionTokenUser {
+  id: string
+  full_name?: string | null
+  email?: string | null
+}
+
+/**
+ * Convert content to mention-token format so that every resolved mention is persisted as @[Display Name](userId).
+ * Leaves existing @[Name](id) segments unchanged; replaces plain @name / @email with @[Display Name](userId)
+ * using the provided users. Use after resolving mention IDs and fetching users so content and mentions array stay in sync.
+ */
+export function contentToMentionTokenFormat(
+  content: string,
+  users: MentionTokenUser[]
+): string {
+  if (!content || typeof content !== 'string') return content
+  if (!Array.isArray(users) || users.length === 0) return content
+
+  const normalized = (s: string) => (s || '').toLowerCase().trim()
+  const tokenToReplacement = new Map<string, string>()
+  for (const u of users) {
+    const displayName = (u.full_name ?? '').trim() || u.id
+    const replacement = formatMention(displayName, u.id)
+    if ((u.email ?? '').trim()) tokenToReplacement.set(normalized(u.email!), replacement)
+    if ((u.full_name ?? '').trim()) {
+      tokenToReplacement.set(normalized(u.full_name!), replacement)
+      tokenToReplacement.set((u.full_name ?? '').trim(), replacement)
+    }
+  }
+
+  // Only replace plain @mentions (not already @[Name](id)); match @ not followed by [
+  const plainNameOrEmailRegex = /@(?!\[)(\w+(?:\s+\w+)*)|@(?!\[)([^\s@]+@[^\s@]+)/g
+  return content.replace(plainNameOrEmailRegex, (match, namePart: string | undefined, emailPart: string | undefined) => {
+    const token = (namePart ?? emailPart ?? '').trim()
+    if (!token) return match
+    const replacement = tokenToReplacement.get(token) ?? tokenToReplacement.get(normalized(token))
+    return replacement ?? match
+  })
+}
 
 const AT_NAME_REGEX = /@(\w+(?:\s+\w+)*)/g
 const AT_EMAIL_REGEX = /@([^\s@]+@[^\s@]+)/g
