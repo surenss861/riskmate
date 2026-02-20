@@ -1,7 +1,6 @@
--- RLS: allow organization owner/admin to update comments only for resolve/unresolve/soft-delete.
--- Immutable fields (content, mentions, author_id, entity_type, entity_id, parent_id, organization_id)
--- must remain unchanged; WITH CHECK compares new row to existing row via subquery.
--- Author-only UPDATE policy remains for content edits.
+-- Re-apply comments RLS policy so deployed environments get the corrected row comparison.
+-- Editing an already-applied migration does not run again; this migration ensures the
+-- policy is dropped and recreated with the correct definition everywhere.
 
 DROP POLICY IF EXISTS "Org admin or owner can update comments in their organization" ON comments;
 CREATE POLICY "Org admin or owner can update comments in their organization"
