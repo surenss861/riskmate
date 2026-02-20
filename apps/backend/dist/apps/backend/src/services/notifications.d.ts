@@ -17,6 +17,7 @@ export type NotificationPreferences = {
     push_enabled: boolean;
     email_enabled: boolean;
     mention: boolean;
+    reply: boolean;
     job_assigned: boolean;
     signature_requested: boolean;
     evidence_uploaded: boolean;
@@ -27,6 +28,8 @@ export type NotificationPreferences = {
     email_weekly_digest: boolean;
     high_risk_job: boolean;
     report_ready: boolean;
+    job_comment: boolean;
+    comment_resolved: boolean;
 };
 export declare const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences;
 /** Safe opt-out when preferences cannot be loaded (e.g. Supabase error). All delivery disabled to avoid re-enabling push/email for opted-out users. */
@@ -88,5 +91,11 @@ export declare function sendHazardAddedNotification(userId: string, organization
 export declare function sendDeadlineNotification(userId: string, organizationId: string, jobId: string, hoursRemaining: number, jobTitle?: string): Promise<void>;
 /** Notify user when they are mentioned in a comment. */
 export declare function sendMentionNotification(userId: string, organizationId: string, commentId: string, contextLabel?: string): Promise<void>;
+/** Notify user when someone replies to their comment. */
+export declare function sendCommentReplyNotification(userId: string, organizationId: string, commentId: string, contextLabel?: string): Promise<void>;
+/** Notify job owner when someone comments on a job they own (skips when author is the owner). */
+export declare function sendJobCommentNotification(userId: string, organizationId: string, commentId: string, jobId: string, contextLabel?: string): Promise<void>;
+/** Notify comment author when someone else resolves their comment. */
+export declare function sendCommentResolvedNotification(authorUserId: string, organizationId: string, commentId: string, contextLabel?: string): Promise<void>;
 export {};
 //# sourceMappingURL=notifications.d.ts.map

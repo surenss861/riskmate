@@ -267,4 +267,152 @@ exports.notificationsRouter.post("/evidence-uploaded", auth_1.authenticate, asyn
         res.status(500).json({ message: "Failed to send notification" });
     }
 });
+/** POST /api/notifications/mention — send mention notification (gated on user preferences, push/email). Used by Next.js comment APIs. Body may include organizationId; must match auth. */
+exports.notificationsRouter.post("/mention", auth_1.authenticate, async (req, res) => {
+    const authReq = req;
+    try {
+        const { userId, commentId, contextLabel, organizationId: bodyOrgId } = req.body || {};
+        if (!userId || !commentId) {
+            return res.status(400).json({ message: "Missing userId or commentId" });
+        }
+        const organizationId = authReq.user.organization_id;
+        if (bodyOrgId && bodyOrgId !== organizationId) {
+            return res.status(403).json({ message: "organizationId does not match your organization" });
+        }
+        const { data: comment, error: commentError } = await supabaseClient_1.supabase
+            .from("comments")
+            .select("id, organization_id")
+            .eq("id", commentId)
+            .eq("organization_id", organizationId)
+            .maybeSingle();
+        if (commentError || !comment) {
+            return res.status(404).json({ message: "Comment not found" });
+        }
+        const { data: user } = await supabaseClient_1.supabase
+            .from("users")
+            .select("id, organization_id")
+            .eq("id", userId)
+            .single();
+        if (!user || user.organization_id !== organizationId) {
+            return res.status(403).json({ message: "User not in this organization" });
+        }
+        await (0, notifications_1.sendMentionNotification)(userId, organizationId, commentId, contextLabel);
+        res.status(204).end();
+    }
+    catch (err) {
+        console.error("Mention notification failed:", err);
+        res.status(500).json({ message: "Failed to send notification" });
+    }
+});
+/** POST /api/notifications/comment-reply — send reply notification to parent comment author (gated on preferences, push/email). Body may include organizationId; must match auth. */
+exports.notificationsRouter.post("/comment-reply", auth_1.authenticate, async (req, res) => {
+    const authReq = req;
+    try {
+        const { userId, commentId, contextLabel, organizationId: bodyOrgId } = req.body || {};
+        if (!userId || !commentId) {
+            return res.status(400).json({ message: "Missing userId or commentId" });
+        }
+        const organizationId = authReq.user.organization_id;
+        if (bodyOrgId && bodyOrgId !== organizationId) {
+            return res.status(403).json({ message: "organizationId does not match your organization" });
+        }
+        const { data: comment, error: commentError } = await supabaseClient_1.supabase
+            .from("comments")
+            .select("id, organization_id")
+            .eq("id", commentId)
+            .eq("organization_id", organizationId)
+            .maybeSingle();
+        if (commentError || !comment) {
+            return res.status(404).json({ message: "Comment not found" });
+        }
+        const { data: user } = await supabaseClient_1.supabase
+            .from("users")
+            .select("id, organization_id")
+            .eq("id", userId)
+            .single();
+        if (!user || user.organization_id !== organizationId) {
+            return res.status(403).json({ message: "User not in this organization" });
+        }
+        await (0, notifications_1.sendCommentReplyNotification)(userId, organizationId, commentId, contextLabel);
+        res.status(204).end();
+    }
+    catch (err) {
+        console.error("Comment reply notification failed:", err);
+        res.status(500).json({ message: "Failed to send notification" });
+    }
+});
+/** POST /api/notifications/job-comment — notify job owner about a new comment on their job (gated on preferences). Used by Next.js job comments API. Body may include organizationId; must match auth. */
+exports.notificationsRouter.post("/job-comment", auth_1.authenticate, async (req, res) => {
+    const authReq = req;
+    try {
+        const { jobId, commentId, authorId, organizationId: bodyOrgId } = req.body || {};
+        if (!jobId || !commentId) {
+            return res.status(400).json({ message: "Missing jobId or commentId" });
+        }
+        const organizationId = authReq.user.organization_id;
+        if (bodyOrgId && bodyOrgId !== organizationId) {
+            return res.status(403).json({ message: "organizationId does not match your organization" });
+        }
+        const { data: job } = await supabaseClient_1.supabase
+            .from("jobs")
+            .select("id, organization_id, assigned_to_id")
+            .eq("id", jobId)
+            .eq("organization_id", organizationId)
+            .single();
+        if (!job) {
+            return res.status(404).json({ message: "Job not found" });
+        }
+        const ownerId = job.assigned_to_id;
+        if (!ownerId || ownerId === authorId) {
+            return res.status(204).end();
+        }
+        const { data: user } = await supabaseClient_1.supabase
+            .from("users")
+            .select("id, organization_id")
+            .eq("id", ownerId)
+            .single();
+        if (!user || user.organization_id !== organizationId) {
+            return res.status(204).end();
+        }
+        await (0, notifications_1.sendJobCommentNotification)(ownerId, organizationId, commentId, jobId, "Someone commented on a job you own.");
+        res.status(204).end();
+    }
+    catch (err) {
+        console.error("Job comment notification failed:", err);
+        res.status(500).json({ message: "Failed to send notification" });
+    }
+});
+/** POST /api/notifications/comment-resolved — notify comment author that their comment was resolved (gated on preferences). Used by Next.js resolve API. Body may include organizationId; must match auth. */
+exports.notificationsRouter.post("/comment-resolved", auth_1.authenticate, async (req, res) => {
+    const authReq = req;
+    try {
+        const { commentId, resolverId, organizationId: bodyOrgId } = req.body || {};
+        if (!commentId) {
+            return res.status(400).json({ message: "Missing commentId" });
+        }
+        const organizationId = authReq.user.organization_id;
+        if (bodyOrgId && bodyOrgId !== organizationId) {
+            return res.status(403).json({ message: "organizationId does not match your organization" });
+        }
+        const { data: comment } = await supabaseClient_1.supabase
+            .from("comments")
+            .select("id, author_id, organization_id")
+            .eq("id", commentId)
+            .eq("organization_id", organizationId)
+            .single();
+        if (!comment) {
+            return res.status(404).json({ message: "Comment not found" });
+        }
+        const authorId = comment.author_id;
+        if (!authorId || authorId === resolverId) {
+            return res.status(204).end();
+        }
+        await (0, notifications_1.sendCommentResolvedNotification)(authorId, organizationId, commentId, "Your comment was marked resolved.");
+        res.status(204).end();
+    }
+    catch (err) {
+        console.error("Comment resolved notification failed:", err);
+        res.status(500).json({ message: "Failed to send notification" });
+    }
+});
 //# sourceMappingURL=notifications.js.map

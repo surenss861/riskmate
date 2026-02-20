@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.COMMENT_ENTITY_TYPES = void 0;
 exports.listComments = listComments;
+exports.getParentComment = getParentComment;
 exports.createComment = createComment;
 exports.updateComment = updateComment;
 exports.deleteComment = deleteComment;
@@ -12,6 +13,7 @@ exports.unresolveComment = unresolveComment;
 exports.listReplies = listReplies;
 const supabaseClient_1 = require("../lib/supabaseClient");
 const notifications_1 = require("./notifications");
+const mentionParser_1 = require("../utils/mentionParser");
 exports.COMMENT_ENTITY_TYPES = [
     "job",
     "hazard",
@@ -27,7 +29,7 @@ async function listComments(organizationId, entityType, entityId, options = {}) 
     const offset = Math.max(options.offset ?? 0, 0);
     let query = supabaseClient_1.supabase
         .from("comments")
-        .select("id, organization_id, entity_type, entity_id, parent_id, author_id, body, mentions, is_resolved, resolved_by, resolved_at, edited_at, deleted_at, created_at, updated_at")
+        .select("id, organization_id, entity_type, entity_id, parent_id, author_id, content, mentions, is_resolved, resolved_by, resolved_at, edited_at, deleted_at, created_at, updated_at")
         .eq("organization_id", organizationId)
         .eq("entity_type", entityType)
         .eq("entity_id", entityId)
@@ -56,6 +58,7 @@ async function listComments(organizationId, entityType, entityId, options = {}) 
     const { data: replyRows } = await supabaseClient_1.supabase
         .from("comments")
         .select("parent_id")
+        .eq("organization_id", organizationId)
         .in("parent_id", commentIds)
         .is("deleted_at", null);
     const replyCountByParent = new Map();
@@ -79,7 +82,26 @@ async function listComments(organizationId, entityType, entityId, options = {}) 
     }));
     return { data };
 }
-/** Create a comment with optional mentions (stored in comments.mentions; sends notifications). */
+/** Get a parent comment by id scoped to org and optional entity_type/entity_id; excludes deleted. Returns null if not found. */
+async function getParentComment(organizationId, parentId, entityType, entityId) {
+    let query = supabaseClient_1.supabase
+        .from("comments")
+        .select()
+        .eq("id", parentId)
+        .eq("organization_id", organizationId)
+        .is("deleted_at", null);
+    if (entityType != null && entityType !== "") {
+        query = query.eq("entity_type", entityType);
+    }
+    if (entityId != null && entityId !== "") {
+        query = query.eq("entity_id", entityId);
+    }
+    const { data, error } = await query.maybeSingle();
+    if (error || !data)
+        return null;
+    return data;
+}
+/** Create a comment with optional mentions (stored in comments.mentions; sends notifications). Parses body for @[Name](id) as fallback. */
 async function createComment(organizationId, authorId, params) {
     const { entity_type, entity_id, body, parent_id, mention_user_ids } = params;
     if (!body || typeof body !== "string" || body.trim().length === 0) {
@@ -88,7 +110,29 @@ async function createComment(organizationId, authorId, params) {
     if (!exports.COMMENT_ENTITY_TYPES.includes(entity_type)) {
         return { data: null, error: "Invalid entity_type" };
     }
-    const toMention = (mention_user_ids ?? []).filter((id) => id && id !== authorId);
+    // When parent_id is provided, validate parent exists, is not deleted, and belongs to same org + entity
+    if (parent_id != null && parent_id !== "") {
+        const parent = await getParentComment(organizationId, parent_id, entity_type, entity_id);
+        if (!parent) {
+            return {
+                data: null,
+                error: "Parent comment not found or not valid for this entity",
+            };
+        }
+    }
+    const fromText = (0, mentionParser_1.extractMentionUserIds)(body);
+    const explicitIds = Array.isArray(mention_user_ids) ? mention_user_ids : [];
+    const rawMentionIds = [...new Set([...explicitIds, ...fromText])].filter((id) => id && id !== authorId);
+    // Only send mention notifications to users in the same organization
+    let toMention = [];
+    if (rawMentionIds.length > 0) {
+        const { data: orgUsers } = await supabaseClient_1.supabase
+            .from("users")
+            .select("id")
+            .eq("organization_id", organizationId)
+            .in("id", rawMentionIds);
+        toMention = (orgUsers ?? []).map((u) => u.id);
+    }
     const { data: comment, error: insertError } = await supabaseClient_1.supabase
         .from("comments")
         .insert({
@@ -97,7 +141,7 @@ async function createComment(organizationId, authorId, params) {
         entity_id,
         parent_id: parent_id ?? null,
         author_id: authorId,
-        body: body.trim(),
+        content: body.trim(),
         mentions: toMention.length > 0 ? toMention : [],
     })
         .select()
@@ -117,14 +161,14 @@ async function createComment(organizationId, authorId, params) {
     }
     return { data: comment, error: null };
 }
-/** Update comment body (sets edited_at). Caller must ensure author or admin. */
+/** Update comment content (sets edited_at). Re-parses mentions, sends notifications for newly added mentions. Author only. */
 async function updateComment(organizationId, commentId, body, userId) {
     if (!body || typeof body !== "string" || body.trim().length === 0) {
         return { data: null, error: "Body is required" };
     }
     const { data: existing } = await supabaseClient_1.supabase
         .from("comments")
-        .select("id, author_id, organization_id, deleted_at")
+        .select("id, author_id, organization_id, deleted_at, mentions")
         .eq("id", commentId)
         .eq("organization_id", organizationId)
         .single();
@@ -134,14 +178,30 @@ async function updateComment(organizationId, commentId, body, userId) {
     if (existing.deleted_at) {
         return { data: null, error: "Comment is deleted" };
     }
-    if (existing.author_id !== userId) {
+    const isAuthor = existing.author_id === userId;
+    if (!isAuthor) {
         return { data: null, error: "Only the author can update this comment" };
     }
+    const fromText = (0, mentionParser_1.extractMentionUserIds)(body.trim());
+    const rawMentionIds = fromText.filter((id) => id && id !== userId);
+    let mentionUserIds = [];
+    if (rawMentionIds.length > 0) {
+        const { data: orgUsers } = await supabaseClient_1.supabase
+            .from("users")
+            .select("id")
+            .eq("organization_id", organizationId)
+            .in("id", rawMentionIds);
+        mentionUserIds = (orgUsers ?? []).map((u) => u.id);
+    }
+    const existingMentions = existing.mentions ?? [];
+    const existingSet = new Set(existingMentions);
+    const addedMentionIds = mentionUserIds.filter((id) => !existingSet.has(id));
     const now = new Date().toISOString();
     const { data: comment, error } = await supabaseClient_1.supabase
         .from("comments")
         .update({
-        body: body.trim(),
+        content: body.trim(),
+        mentions: mentionUserIds,
         edited_at: now,
         updated_at: now,
     })
@@ -152,6 +212,10 @@ async function updateComment(organizationId, commentId, body, userId) {
     if (error) {
         console.error("[Comments] updateComment error:", error);
         return { data: null, error: error.message };
+    }
+    const contextLabel = "You were mentioned in a comment.";
+    for (const mentionedUserId of addedMentionIds) {
+        (0, notifications_1.sendMentionNotification)(mentionedUserId, organizationId, commentId, contextLabel).catch((err) => console.error("[Comments] Mention notification (edit) failed:", err));
     }
     return { data: comment, error: null };
 }
@@ -187,7 +251,7 @@ async function listCommentsWhereMentioned(organizationId, userId, options = {}) 
     const offset = Math.max(options.offset ?? 0, 0);
     const { data: comments, error } = await supabaseClient_1.supabase
         .from("comments")
-        .select("id, organization_id, entity_type, entity_id, parent_id, author_id, body, mentions, is_resolved, resolved_by, resolved_at, edited_at, deleted_at, created_at, updated_at")
+        .select("id, organization_id, entity_type, entity_id, parent_id, author_id, content, mentions, is_resolved, resolved_by, resolved_at, edited_at, deleted_at, created_at, updated_at")
         .eq("organization_id", organizationId)
         .is("deleted_at", null)
         .contains("mentions", [userId])
@@ -281,7 +345,7 @@ async function listReplies(organizationId, parentId, options = {}) {
     const offset = Math.max(options.offset ?? 0, 0);
     let query = supabaseClient_1.supabase
         .from("comments")
-        .select("id, organization_id, entity_type, entity_id, parent_id, author_id, body, mentions, is_resolved, resolved_by, resolved_at, edited_at, deleted_at, created_at, updated_at")
+        .select("id, organization_id, entity_type, entity_id, parent_id, author_id, content, mentions, is_resolved, resolved_by, resolved_at, edited_at, deleted_at, created_at, updated_at")
         .eq("organization_id", organizationId)
         .eq("parent_id", parentId)
         .order("created_at", { ascending: true });

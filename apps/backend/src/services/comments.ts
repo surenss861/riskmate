@@ -125,7 +125,7 @@ export async function listComments(
 export async function getParentComment(
   organizationId: string,
   parentId: string,
-  entityType?: CommentEntityType,
+  entityType?: CommentEntityType | string,
   entityId?: string
 ): Promise<CommentRow | null> {
   let query = supabase

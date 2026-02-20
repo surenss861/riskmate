@@ -7,7 +7,7 @@ export interface CommentRow {
     entity_id: string;
     parent_id: string | null;
     author_id: string;
-    body: string;
+    content: string;
     mentions?: string[];
     is_resolved?: boolean;
     resolved_by?: string | null;
@@ -39,7 +39,9 @@ export interface ListCommentsOptions {
 export declare function listComments(organizationId: string, entityType: CommentEntityType, entityId: string, options?: ListCommentsOptions): Promise<{
     data: CommentWithAuthor[];
 }>;
-/** Create a comment with optional mentions (stored in comments.mentions; sends notifications). */
+/** Get a parent comment by id scoped to org and optional entity_type/entity_id; excludes deleted. Returns null if not found. */
+export declare function getParentComment(organizationId: string, parentId: string, entityType?: CommentEntityType | string, entityId?: string): Promise<CommentRow | null>;
+/** Create a comment with optional mentions (stored in comments.mentions; sends notifications). Parses body for @[Name](id) as fallback. */
 export declare function createComment(organizationId: string, authorId: string, params: {
     entity_type: CommentEntityType;
     entity_id: string;
@@ -50,7 +52,7 @@ export declare function createComment(organizationId: string, authorId: string, 
     data: CommentRow | null;
     error: string | null;
 }>;
-/** Update comment body (sets edited_at). Caller must ensure author or admin. */
+/** Update comment content (sets edited_at). Re-parses mentions, sends notifications for newly added mentions. Author only. */
 export declare function updateComment(organizationId: string, commentId: string, body: string, userId: string): Promise<{
     data: CommentRow | null;
     error: string | null;

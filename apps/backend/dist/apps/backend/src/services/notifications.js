@@ -26,6 +26,9 @@ exports.sendEvidenceUploadedNotification = sendEvidenceUploadedNotification;
 exports.sendHazardAddedNotification = sendHazardAddedNotification;
 exports.sendDeadlineNotification = sendDeadlineNotification;
 exports.sendMentionNotification = sendMentionNotification;
+exports.sendCommentReplyNotification = sendCommentReplyNotification;
+exports.sendJobCommentNotification = sendJobCommentNotification;
+exports.sendCommentResolvedNotification = sendCommentResolvedNotification;
 const fs_1 = __importDefault(require("fs"));
 const apn_1 = __importDefault(require("apn"));
 const supabaseClient_1 = require("../lib/supabaseClient");
@@ -140,6 +143,7 @@ exports.DEFAULT_NOTIFICATION_PREFERENCES = {
     push_enabled: true,
     email_enabled: true,
     mention: true,
+    reply: true,
     job_assigned: true,
     signature_requested: true,
     evidence_uploaded: true,
@@ -150,12 +154,15 @@ exports.DEFAULT_NOTIFICATION_PREFERENCES = {
     email_weekly_digest: true,
     high_risk_job: true,
     report_ready: true,
+    job_comment: true,
+    comment_resolved: true,
 };
 /** Safe opt-out when preferences cannot be loaded (e.g. Supabase error). All delivery disabled to avoid re-enabling push/email for opted-out users. */
 exports.OPT_OUT_SAFE_PREFERENCES = {
     push_enabled: false,
     email_enabled: false,
     mention: false,
+    reply: false,
     job_assigned: false,
     signature_requested: false,
     evidence_uploaded: false,
@@ -166,6 +173,8 @@ exports.OPT_OUT_SAFE_PREFERENCES = {
     email_weekly_digest: false,
     high_risk_job: false,
     report_ready: false,
+    job_comment: false,
+    comment_resolved: false,
 };
 /** Fetch notification preferences for a user; returns defaults if no row exists. On Supabase error returns OPT_OUT_SAFE_PREFERENCES so delivery is skipped (fail closed). */
 async function getNotificationPreferences(userId) {
@@ -184,6 +193,7 @@ async function getNotificationPreferences(userId) {
         push_enabled: data.push_enabled ?? true,
         email_enabled: data.email_enabled ?? true,
         mention: data.mention ?? true,
+        reply: data.reply ?? true,
         job_assigned: data.job_assigned ?? true,
         signature_requested: data.signature_requested ?? true,
         evidence_uploaded: data.evidence_uploaded ?? true,
@@ -194,6 +204,8 @@ async function getNotificationPreferences(userId) {
         email_weekly_digest: data.email_weekly_digest ?? true,
         high_risk_job: data.high_risk_job ?? true,
         report_ready: data.report_ready ?? true,
+        job_comment: data.job_comment ?? true,
+        comment_resolved: data.comment_resolved ?? true,
     };
 }
 /** Fetch push tokens for a single user in a given organization (for targeted notifications). */
@@ -705,6 +717,64 @@ async function sendMentionNotification(userId, organizationId, commentId, contex
         },
         categoryId: "mention",
         priority: "high",
+    });
+}
+/** Notify user when someone replies to their comment. */
+async function sendCommentReplyNotification(userId, organizationId, commentId, contextLabel) {
+    const prefs = await getNotificationPreferences(userId);
+    if (!prefs.reply) {
+        console.log("[Notifications] Skipped reply for user", userId, "(preference disabled)");
+        return;
+    }
+    await sendToUser(userId, organizationId, {
+        title: "Reply to your comment",
+        body: contextLabel ?? "Someone replied to your comment.",
+        data: {
+            type: "reply",
+            commentId,
+            deepLink: `riskmate://comments/${commentId}`,
+        },
+        categoryId: "reply",
+        priority: "high",
+    });
+}
+/** Notify job owner when someone comments on a job they own (skips when author is the owner). */
+async function sendJobCommentNotification(userId, organizationId, commentId, jobId, contextLabel) {
+    const prefs = await getNotificationPreferences(userId);
+    if (!prefs.job_comment) {
+        console.log("[Notifications] Skipped job_comment for user", userId, "(preference disabled)");
+        return;
+    }
+    await sendToUser(userId, organizationId, {
+        title: "New comment on your job",
+        body: contextLabel ?? "Someone commented on a job you own.",
+        data: {
+            type: "job_comment",
+            commentId,
+            jobId,
+            deepLink: `riskmate://comments/${commentId}`,
+        },
+        categoryId: "job_comment",
+        priority: "high",
+    });
+}
+/** Notify comment author when someone else resolves their comment. */
+async function sendCommentResolvedNotification(authorUserId, organizationId, commentId, contextLabel) {
+    const prefs = await getNotificationPreferences(authorUserId);
+    if (!prefs.comment_resolved) {
+        console.log("[Notifications] Skipped comment_resolved for user", authorUserId, "(preference disabled)");
+        return;
+    }
+    await sendToUser(authorUserId, organizationId, {
+        title: "Comment resolved",
+        body: contextLabel ?? "Your comment was marked resolved.",
+        data: {
+            type: "comment_resolved",
+            commentId,
+            deepLink: `riskmate://comments/${commentId}`,
+        },
+        categoryId: "comment_resolved",
+        priority: "default",
     });
 }
 //# sourceMappingURL=notifications.js.map
