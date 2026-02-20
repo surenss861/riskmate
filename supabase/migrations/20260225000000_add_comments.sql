@@ -52,6 +52,8 @@ CREATE POLICY "Users can create comments in their organization"
 -- UPDATE: author can update own comments; org admin/owner can update any comment in org (e.g. resolve/unresolve).
 DROP POLICY IF EXISTS "Users can update comments in their organization" ON comments;
 DROP POLICY IF EXISTS "Author or admin can update comments" ON comments;
+DROP POLICY IF EXISTS "Author can update own comments" ON comments;
+DROP POLICY IF EXISTS "Org admin or owner can update comments in their organization" ON comments;
 CREATE POLICY "Author can update own comments"
   ON comments FOR UPDATE
   USING (

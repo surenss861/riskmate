@@ -94,6 +94,7 @@ export async function listComments(
   const { data: replyRows } = await supabase
     .from("comments")
     .select("parent_id")
+    .eq("organization_id", organizationId)
     .in("parent_id", commentIds)
     .is("deleted_at", null);
 

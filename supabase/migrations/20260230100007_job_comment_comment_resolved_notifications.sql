@@ -1,13 +1,14 @@
 -- Add job_comment and comment_resolved notification types and preferences.
 
--- Notifications: allow types 'job_comment' and 'comment_resolved'
+-- Notifications: allow types 'job_comment', 'comment_resolved', and task types (task_assigned, task_completed, task_overdue)
 ALTER TABLE notifications DROP CONSTRAINT IF EXISTS notifications_type_check;
 ALTER TABLE notifications ADD CONSTRAINT notifications_type_check CHECK (
   type IN (
     'risk_alert', 'job_reminder', 'mitigation_due', 'report_generated', 'subscription_update',
     'high_risk_job', 'report_ready', 'weekly_summary', 'push', 'job_assigned',
     'signature_request', 'evidence_uploaded', 'hazard_added', 'deadline', 'mention', 'reply',
-    'job_comment', 'comment_resolved'
+    'job_comment', 'comment_resolved',
+    'task_assigned', 'task_completed', 'task_overdue'
   )
 );
 
