@@ -3,7 +3,7 @@
  *
  * Verifies that when a user is @mentioned in a sign-off comment, sendMentionNotification
  * is triggered, creating a notification record with type=mention, deep_link=riskmate://comments/{commentId},
- * and delivery is guarded by notification_preferences.mentions_enabled.
+ * and delivery is guarded by notification_preferences.mention.
  *
  * Prerequisites:
  * - TEST_ORG_ID environment variable set
@@ -12,7 +12,7 @@
  * - TEST_USER_PASSWORD (optional)
  *
  * Manual verification: Create a sign-off with @mention via the app and verify push is emitted
- * (requires device token registered and mentions_enabled=true). Example: "Please review @user@example.com"
+ * (requires device token registered and mention=true). Example: "Please review @user@example.com"
  */
 
 import request from "supertest";
