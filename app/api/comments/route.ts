@@ -272,6 +272,7 @@ export async function POST(request: NextRequest) {
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
+            organizationId: organization_id,
             userId: mentionedUserId,
             commentId: (comment as any).id,
             contextLabel,
@@ -287,6 +288,7 @@ export async function POST(request: NextRequest) {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
+          organizationId: organization_id,
           userId: parentAuthorId,
           commentId: (comment as any).id,
           contextLabel: 'Someone replied to your comment.',

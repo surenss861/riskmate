@@ -82,7 +82,11 @@ export async function POST(
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({ commentId, resolverId: user_id }),
+          body: JSON.stringify({
+            organizationId: organization_id,
+            commentId,
+            resolverId: user_id,
+          }),
         }).catch((err) =>
           console.error('[Comments] Comment resolved notification request failed:', err)
         )

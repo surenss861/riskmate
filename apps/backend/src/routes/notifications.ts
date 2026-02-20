@@ -344,18 +344,21 @@ notificationsRouter.post(
   }
 );
 
-/** POST /api/notifications/mention — send mention notification (gated on user preferences, push/email). Used by Next.js comment APIs. */
+/** POST /api/notifications/mention — send mention notification (gated on user preferences, push/email). Used by Next.js comment APIs. Body may include organizationId; must match auth. */
 notificationsRouter.post(
   "/mention",
   authenticate as unknown as express.RequestHandler,
   async (req: express.Request, res: express.Response) => {
     const authReq = req as AuthenticatedRequest;
     try {
-      const { userId, commentId, contextLabel } = req.body || {};
+      const { userId, commentId, contextLabel, organizationId: bodyOrgId } = req.body || {};
       if (!userId || !commentId) {
         return res.status(400).json({ message: "Missing userId or commentId" });
       }
       const organizationId = authReq.user.organization_id;
+      if (bodyOrgId && bodyOrgId !== organizationId) {
+        return res.status(403).json({ message: "organizationId does not match your organization" });
+      }
 
       const { data: comment, error: commentError } = await supabase
         .from("comments")
@@ -384,18 +387,21 @@ notificationsRouter.post(
   }
 );
 
-/** POST /api/notifications/comment-reply — send reply notification to parent comment author (gated on preferences, push/email). */
+/** POST /api/notifications/comment-reply — send reply notification to parent comment author (gated on preferences, push/email). Body may include organizationId; must match auth. */
 notificationsRouter.post(
   "/comment-reply",
   authenticate as unknown as express.RequestHandler,
   async (req: express.Request, res: express.Response) => {
     const authReq = req as AuthenticatedRequest;
     try {
-      const { userId, commentId, contextLabel } = req.body || {};
+      const { userId, commentId, contextLabel, organizationId: bodyOrgId } = req.body || {};
       if (!userId || !commentId) {
         return res.status(400).json({ message: "Missing userId or commentId" });
       }
       const organizationId = authReq.user.organization_id;
+      if (bodyOrgId && bodyOrgId !== organizationId) {
+        return res.status(403).json({ message: "organizationId does not match your organization" });
+      }
 
       const { data: comment, error: commentError } = await supabase
         .from("comments")
@@ -424,18 +430,21 @@ notificationsRouter.post(
   }
 );
 
-/** POST /api/notifications/job-comment — notify job owner about a new comment on their job (gated on preferences). Used by Next.js job comments API. */
+/** POST /api/notifications/job-comment — notify job owner about a new comment on their job (gated on preferences). Used by Next.js job comments API. Body may include organizationId; must match auth. */
 notificationsRouter.post(
   "/job-comment",
   authenticate as unknown as express.RequestHandler,
   async (req: express.Request, res: express.Response) => {
     const authReq = req as AuthenticatedRequest;
     try {
-      const { jobId, commentId, authorId } = req.body || {};
+      const { jobId, commentId, authorId, organizationId: bodyOrgId } = req.body || {};
       if (!jobId || !commentId) {
         return res.status(400).json({ message: "Missing jobId or commentId" });
       }
       const organizationId = authReq.user.organization_id;
+      if (bodyOrgId && bodyOrgId !== organizationId) {
+        return res.status(403).json({ message: "organizationId does not match your organization" });
+      }
       const { data: job } = await supabase
         .from("jobs")
         .select("id, organization_id, assigned_to_id")
@@ -472,18 +481,21 @@ notificationsRouter.post(
   }
 );
 
-/** POST /api/notifications/comment-resolved — notify comment author that their comment was resolved (gated on preferences). Used by Next.js resolve API. */
+/** POST /api/notifications/comment-resolved — notify comment author that their comment was resolved (gated on preferences). Used by Next.js resolve API. Body may include organizationId; must match auth. */
 notificationsRouter.post(
   "/comment-resolved",
   authenticate as unknown as express.RequestHandler,
   async (req: express.Request, res: express.Response) => {
     const authReq = req as AuthenticatedRequest;
     try {
-      const { commentId, resolverId } = req.body || {};
+      const { commentId, resolverId, organizationId: bodyOrgId } = req.body || {};
       if (!commentId) {
         return res.status(400).json({ message: "Missing commentId" });
       }
       const organizationId = authReq.user.organization_id;
+      if (bodyOrgId && bodyOrgId !== organizationId) {
+        return res.status(403).json({ message: "organizationId does not match your organization" });
+      }
       const { data: comment } = await supabase
         .from("comments")
         .select("id, author_id, organization_id")

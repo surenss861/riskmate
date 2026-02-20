@@ -126,6 +126,7 @@ export async function PATCH(
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
+            organizationId: organization_id,
             userId: mentionedUserId,
             commentId,
             contextLabel,
