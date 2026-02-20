@@ -4,7 +4,7 @@ import { getOrganizationContext } from '@/lib/utils/organizationGuard'
 import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { logApiError } from '@/lib/utils/errorLogging'
 import { getRequestId } from '@/lib/utils/requestId'
-import { extractMentionUserIds } from '@/lib/utils/mentionParser'
+import { resolveMentionUserIds } from '@/lib/utils/mentionResolverServer'
 import { getSessionToken, BACKEND_URL } from '@/lib/api/proxy-helpers'
 
 export const runtime = 'nodejs'
@@ -80,7 +80,7 @@ export async function PATCH(
       })
     }
 
-    const fromText = extractMentionUserIds(commentBody)
+    const fromText = await resolveMentionUserIds(supabase, commentBody, organization_id)
     const rawMentionIds = fromText.filter((id) => id && id !== user_id)
 
     let mentionUserIds: string[]

@@ -4,7 +4,7 @@ import { getOrganizationContext, verifyEntityOwnership, COMMENT_ENTITY_TYPES, ty
 import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { logApiError } from '@/lib/utils/errorLogging'
 import { getRequestId } from '@/lib/utils/requestId'
-import { extractMentionUserIds } from '@/lib/utils/mentionParser'
+import { resolveMentionUserIds } from '@/lib/utils/mentionResolverServer'
 import { getSessionToken, BACKEND_URL } from '@/lib/api/proxy-helpers'
 
 export const runtime = 'nodejs'
@@ -226,7 +226,7 @@ export async function POST(request: NextRequest) {
       parentAuthorId = (parentRow as { author_id?: string }).author_id ?? null
     }
 
-    const fromText = extractMentionUserIds(trimmed)
+    const fromText = await resolveMentionUserIds(supabase, trimmed, organization_id)
     const rawMentionIds = Array.isArray(explicitMentions)
       ? [...new Set([...explicitMentions, ...fromText])].filter((id) => id && id !== user_id)
       : fromText.filter((id) => id !== user_id)
