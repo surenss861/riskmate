@@ -1,4 +1,4 @@
--- Comments: first-class comments on jobs, hazards, controls, tasks, documents, signoffs, photos.
+-- Comments: first-class comments on jobs, hazards, controls, photos (ticket scope).
 -- Schema per ticket: mentions as UUID[], is_resolved, resolved_by/at, edited_at, deleted_at (soft delete).
 -- References auth.users and organizations; indexes for entity, parent, author; realtime enabled.
 -- No separate comment_mentions table (mentions stored on comments.mentions).
@@ -6,7 +6,7 @@
 CREATE TABLE IF NOT EXISTS comments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-  entity_type TEXT NOT NULL CHECK (entity_type IN ('job', 'hazard', 'control', 'task', 'document', 'signoff', 'photo')),
+  entity_type TEXT NOT NULL CHECK (entity_type IN ('job', 'hazard', 'control', 'photo')),
   entity_id UUID NOT NULL,
   parent_id UUID REFERENCES comments(id) ON DELETE SET NULL,
   author_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -77,7 +77,7 @@ CREATE POLICY "Author can update own comments"
 
 -- No DELETE policy: soft delete only. Authors/admins set deleted_at via UPDATE to preserve rows and avoid cascading replies.
 
-COMMENT ON TABLE comments IS 'First-class comments on entities (job, hazard, control, task, document, signoff, photo); supports threads via parent_id; mentions as UUID[]; soft delete via deleted_at.';
+COMMENT ON TABLE comments IS 'First-class comments on entities (job, hazard, control, photo); supports threads via parent_id; mentions as UUID[]; soft delete via deleted_at.';
 
 -- Realtime: enable for comments so clients can subscribe to new/updated comments.
 DO $$

@@ -4,7 +4,7 @@ import { getOrganizationContext } from '@/lib/utils/organizationGuard'
 import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { logApiError } from '@/lib/utils/errorLogging'
 import { getRequestId } from '@/lib/utils/requestId'
-import { resolveMentionUserIds } from '@/lib/utils/mentionResolverServer'
+import { resolveMentionUserIds, contentToMentionTokenFormat } from '@/lib/utils/mentionResolverServer'
 import { getSessionToken, BACKEND_URL } from '@/lib/api/proxy-helpers'
 
 export const runtime = 'nodejs'
@@ -140,17 +140,21 @@ export async function POST(
       : fromText.filter((id) => id !== user_id)
 
     let mentionUserIds: string[]
+    let mentionUsersForFormat: { id: string; full_name?: string | null; email?: string | null }[] = []
     if (rawMentionIds.length === 0) {
       mentionUserIds = []
     } else {
       const { data: mentionUsers } = await supabase
         .from('users')
-        .select('id')
+        .select('id, full_name, email')
         .eq('organization_id', organization_id)
         .in('id', rawMentionIds)
       const validIds = new Set((mentionUsers ?? []).map((r: { id: string }) => r.id))
       mentionUserIds = rawMentionIds.filter((id) => validIds.has(id))
+      mentionUsersForFormat = (mentionUsers ?? []).filter((u: { id: string }) => mentionUserIds.includes(u.id))
     }
+
+    const contentToPersist = contentToMentionTokenFormat(trimmed, mentionUsersForFormat)
 
     const { data: comment, error } = await supabase
       .from('comments')
@@ -160,7 +164,7 @@ export async function POST(
         entity_id: (parent as any).entity_id,
         parent_id: parentId,
         author_id: user_id,
-        content: trimmed,
+        content: contentToPersist,
         mentions: mentionUserIds,
       })
       .select()

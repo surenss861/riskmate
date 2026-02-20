@@ -22,14 +22,11 @@ import {
 import { supabase } from "../lib/supabaseClient";
 import { extractMentionUserIds } from "../utils/mentionParser";
 
-/** Table names for entity_type ownership checks (entity_id must exist in table with organization_id). */
+/** Table names for entity_type ownership checks (ticket scope: job, hazard, control, photo). */
 const ENTITY_TYPE_TO_TABLE: Record<CommentEntityType, string> = {
   job: "jobs",
   hazard: "hazards",
   control: "controls",
-  task: "tasks",
-  document: "job_documents",
-  signoff: "job_signoffs",
   photo: "job_photos",
 };
 

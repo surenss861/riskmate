@@ -110,14 +110,11 @@ export async function verifyOrganizationOwnership(
   return true
 }
 
-/** Allowed comment entity types; table names for ownership checks. */
+/** Allowed comment entity types (ticket scope); table names for ownership checks. */
 export const COMMENT_ENTITY_TYPES = [
   'job',
   'hazard',
   'control',
-  'task',
-  'document',
-  'signoff',
   'photo',
 ] as const
 export type CommentEntityType = (typeof COMMENT_ENTITY_TYPES)[number]
@@ -126,9 +123,6 @@ const ENTITY_TYPE_TO_TABLE: Record<CommentEntityType, string> = {
   job: 'jobs',
   hazard: 'hazards',
   control: 'controls',
-  task: 'tasks',
-  document: 'job_documents',
-  signoff: 'job_signoffs',
   photo: 'job_photos',
 }
 

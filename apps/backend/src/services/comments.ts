@@ -1,14 +1,11 @@
 import { supabase } from "../lib/supabaseClient";
 import { sendMentionNotification } from "./notifications";
-import { extractMentionUserIds } from "../utils/mentionParser";
+import { extractMentionUserIds, contentToMentionTokenFormat } from "../utils/mentionParser";
 
 export const COMMENT_ENTITY_TYPES = [
   "job",
   "hazard",
   "control",
-  "task",
-  "document",
-  "signoff",
   "photo",
 ] as const;
 export type CommentEntityType = (typeof COMMENT_ENTITY_TYPES)[number];
@@ -185,16 +182,20 @@ export async function createComment(
     (id) => id && id !== authorId
   );
 
-  // Only send mention notifications to users in the same organization
+  // Only send mention notifications to users in the same organization; fetch id/full_name/email for token formatting
   let toMention: string[] = [];
+  let mentionUsersForFormat: { id: string; full_name?: string | null; email?: string | null }[] = [];
   if (rawMentionIds.length > 0) {
     const { data: orgUsers } = await supabase
       .from("users")
-      .select("id")
+      .select("id, full_name, email")
       .eq("organization_id", organizationId)
       .in("id", rawMentionIds);
     toMention = (orgUsers ?? []).map((u: { id: string }) => u.id);
+    mentionUsersForFormat = orgUsers ?? [];
   }
+
+  const contentToPersist = contentToMentionTokenFormat(body.trim(), mentionUsersForFormat);
 
   const { data: comment, error: insertError } = await supabase
     .from("comments")
@@ -204,7 +205,7 @@ export async function createComment(
       entity_id,
       parent_id: parent_id ?? null,
       author_id: authorId,
-      content: body.trim(),
+      content: contentToPersist,
       mentions: toMention.length > 0 ? toMention : [],
     })
     .select()
@@ -268,14 +269,18 @@ export async function updateComment(
   const rawMentionIds = fromText.filter((id) => id && id !== userId);
 
   let mentionUserIds: string[] = [];
+  let mentionUsersForFormat: { id: string; full_name?: string | null; email?: string | null }[] = [];
   if (rawMentionIds.length > 0) {
     const { data: orgUsers } = await supabase
       .from("users")
-      .select("id")
+      .select("id, full_name, email")
       .eq("organization_id", organizationId)
       .in("id", rawMentionIds);
     mentionUserIds = (orgUsers ?? []).map((u: { id: string }) => u.id);
+    mentionUsersForFormat = orgUsers ?? [];
   }
+
+  const contentToPersist = contentToMentionTokenFormat(body.trim(), mentionUsersForFormat);
 
   const existingMentions: string[] = (existing as any).mentions ?? [];
   const existingSet = new Set(existingMentions);
@@ -285,7 +290,7 @@ export async function updateComment(
   const { data: comment, error } = await supabase
     .from("comments")
     .update({
-      content: body.trim(),
+      content: contentToPersist,
       mentions: mentionUserIds,
       edited_at: now,
       updated_at: now,

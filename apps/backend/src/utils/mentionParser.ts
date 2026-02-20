@@ -97,6 +97,54 @@ async function resolvePlainMentionsToUserIds(
   return [...resolved];
 }
 
+/** Format a mention for storage: @[Display Name](userId). */
+export function formatMention(displayName: string, userId: string): string {
+  const safe = (displayName || "").replace(/\]/g, "\\]").trim() || "User";
+  return `@[${safe}](${userId})`;
+}
+
+/** User shape for contentToMentionTokenFormat (id, full_name, email for matching and display). */
+export interface MentionTokenUser {
+  id: string;
+  full_name?: string | null;
+  email?: string | null;
+}
+
+/**
+ * Convert content to mention-token format so that every resolved mention is persisted as @[Display Name](userId).
+ * Leaves existing @[Name](id) segments unchanged; replaces plain @name / @email with @[Display Name](userId).
+ */
+export function contentToMentionTokenFormat(
+  content: string,
+  users: MentionTokenUser[]
+): string {
+  if (!content || typeof content !== "string") return content;
+  if (!Array.isArray(users) || users.length === 0) return content;
+
+  const normalized = (s: string) => (s || "").toLowerCase().trim();
+  const tokenToReplacement = new Map<string, string>();
+  for (const u of users) {
+    const displayName = (u.full_name ?? "").trim() || u.id;
+    const replacement = formatMention(displayName, u.id);
+    if ((u.email ?? "").trim()) tokenToReplacement.set(normalized(u.email!), replacement);
+    if ((u.full_name ?? "").trim()) {
+      tokenToReplacement.set(normalized(u.full_name!), replacement);
+      tokenToReplacement.set((u.full_name ?? "").trim(), replacement);
+    }
+  }
+
+  const plainNameOrEmailRegex = /@(?!\[)(\w+(?:\s+\w+)*)|@(?!\[)([^\s@]+@[^\s@]+)/g;
+  return content.replace(
+    plainNameOrEmailRegex,
+    (match, namePart: string | undefined, emailPart: string | undefined) => {
+      const token = (namePart ?? emailPart ?? "").trim();
+      if (!token) return match;
+      const replacement = tokenToReplacement.get(token) ?? tokenToReplacement.get(normalized(token));
+      return replacement ?? match;
+    }
+  );
+}
+
 /**
  * Extract user IDs from body: @[Name](userId) markers plus plain @name / @email when organizationId is provided.
  * When organizationId is provided, plain mentions are looked up in that organization and resolved to user IDs.
