@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
     const { data: rows, error } = await supabase
       .from('comments')
       .select(
-        'id, organization_id, entity_type, entity_id, parent_id, author_id, body, mentions, is_resolved, resolved_by, resolved_at, edited_at, deleted_at, created_at, updated_at'
+        'id, organization_id, entity_type, entity_id, parent_id, author_id, content, mentions, is_resolved, resolved_by, resolved_at, edited_at, deleted_at, created_at, updated_at'
       )
       .eq('organization_id', organization_id)
       .is('deleted_at', null)
@@ -47,10 +47,10 @@ export async function GET(request: NextRequest) {
 
     const userMap = new Map((users || []).map((u: any) => [u.id, u]))
     const data = comments.map((c) => {
-      const { body: bodyText, ...rest } = c
+      const { content: contentText, ...rest } = c
       return {
         ...rest,
-        content: bodyText,
+        content: contentText,
         author: userMap.get(c.author_id)
           ? {
               id: c.author_id,

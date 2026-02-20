@@ -30,7 +30,7 @@ export async function GET(
     const { data: rows, error } = await supabase
       .from('comments')
       .select(
-        'id, organization_id, entity_type, entity_id, parent_id, author_id, body, mentions, is_resolved, resolved_by, resolved_at, edited_at, deleted_at, created_at, updated_at'
+        'id, organization_id, entity_type, entity_id, parent_id, author_id, content, mentions, is_resolved, resolved_by, resolved_at, edited_at, deleted_at, created_at, updated_at'
       )
       .eq('organization_id', organization_id)
       .eq('parent_id', parentId)
@@ -53,10 +53,10 @@ export async function GET(
 
     const userMap = new Map((users || []).map((u: any) => [u.id, u]))
     const data = comments.map((c) => {
-      const { body: bodyText, ...rest } = c
+      const { content: contentText, ...rest } = c
       return {
         ...rest,
-        content: bodyText,
+        content: contentText,
         author: userMap.get(c.author_id)
           ? {
               id: c.author_id,
@@ -159,7 +159,7 @@ export async function POST(
         entity_id: (parent as any).entity_id,
         parent_id: parentId,
         author_id: user_id,
-        body: trimmed,
+        content: trimmed,
         mentions: mentionUserIds,
       })
       .select()
@@ -167,8 +167,8 @@ export async function POST(
 
     if (error || !comment) throw error || new Error('Failed to create reply')
 
-    const { body: _b, ...commentRest } = comment as any
-    const responseData = { ...commentRest, content: _b }
+    const { content: _c, ...commentRest } = comment as any
+    const responseData = { ...commentRest, content: _c }
 
     const token = await getSessionToken(request)
     if (token && BACKEND_URL) {

@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
     let query = supabase
       .from('comments')
       .select(
-        'id, organization_id, entity_type, entity_id, parent_id, author_id, body, mentions, is_resolved, resolved_by, resolved_at, edited_at, deleted_at, created_at, updated_at'
+        'id, organization_id, entity_type, entity_id, parent_id, author_id, content, mentions, is_resolved, resolved_by, resolved_at, edited_at, deleted_at, created_at, updated_at'
       )
       .eq('organization_id', organization_id)
       .eq('entity_type', entityType)
@@ -107,10 +107,10 @@ export async function GET(request: NextRequest) {
 
     const userMap = new Map((users || []).map((u: any) => [u.id, u]))
     const data = comments.map((c) => {
-      const { body: bodyText, ...rest } = c
+      const { content: contentText, ...rest } = c
       return {
         ...rest,
-        content: bodyText,
+        content: contentText,
         author: userMap.get(c.author_id)
           ? {
               id: c.author_id,
@@ -199,10 +199,11 @@ export async function POST(request: NextRequest) {
 
     const supabase = await createSupabaseServerClient()
 
+    let parentAuthorId: string | null = null
     if (parent_id != null && parent_id !== '') {
       const { data: parentRow, error: parentError } = await supabase
         .from('comments')
-        .select('id, organization_id, entity_type, entity_id, deleted_at')
+        .select('id, organization_id, entity_type, entity_id, author_id, deleted_at')
         .eq('id', parent_id)
         .eq('organization_id', organization_id)
         .eq('entity_type', entityType)
@@ -222,6 +223,7 @@ export async function POST(request: NextRequest) {
           headers: { 'X-Request-ID': requestId, 'X-Error-ID': errId },
         })
       }
+      parentAuthorId = (parentRow as { author_id?: string }).author_id ?? null
     }
 
     const fromText = extractMentionUserIds(trimmed)
@@ -249,7 +251,7 @@ export async function POST(request: NextRequest) {
         entity_id: entityId,
         parent_id: parent_id ?? null,
         author_id: user_id,
-        body: trimmed,
+        content: trimmed,
         mentions: mentionUserIds,
       })
       .select()
@@ -277,9 +279,23 @@ export async function POST(request: NextRequest) {
         }).catch((err) => console.error('[Comments] Mention notification request failed:', err))
       }
     }
+    if (token && BACKEND_URL && parentAuthorId && parentAuthorId !== user_id) {
+      fetch(`${BACKEND_URL}/api/notifications/comment-reply`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          userId: parentAuthorId,
+          commentId: (comment as any).id,
+          contextLabel: 'Someone replied to your comment.',
+        }),
+      }).catch((err) => console.error('[Comments] Reply notification request failed:', err))
+    }
 
-    const { body: _b, ...commentRest } = comment as any
-    return NextResponse.json({ data: { ...commentRest, content: _b } }, { status: 201 })
+    const { content: _c, ...commentRest } = comment as any
+    return NextResponse.json({ data: { ...commentRest, content: _c } }, { status: 201 })
   } catch (error: any) {
     const { response, errorId } = createErrorResponse(
       error?.message || 'Failed to create comment',

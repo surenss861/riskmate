@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS comments (
   entity_id UUID NOT NULL,
   parent_id UUID REFERENCES comments(id) ON DELETE SET NULL,
   author_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  body TEXT NOT NULL,
+  content TEXT NOT NULL,
   mentions UUID[] DEFAULT '{}',
   is_resolved BOOLEAN NOT NULL DEFAULT FALSE,
   resolved_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
@@ -49,23 +49,18 @@ CREATE POLICY "Users can create comments in their organization"
   ON comments FOR INSERT
   WITH CHECK (organization_id = get_user_organization_id());
 
--- UPDATE/soft-delete: author only, or org owner/admin (USING and WITH CHECK enforce author-only or admin).
+-- UPDATE/soft-delete: author only (per spec; no owner/admin override).
 DROP POLICY IF EXISTS "Users can update comments in their organization" ON comments;
-CREATE POLICY "Author or admin can update comments"
+DROP POLICY IF EXISTS "Author or admin can update comments" ON comments;
+CREATE POLICY "Author can update own comments"
   ON comments FOR UPDATE
   USING (
     organization_id = get_user_organization_id()
-    AND (
-      author_id = auth.uid()
-      OR public.org_role(organization_id) IN ('owner', 'admin')
-    )
+    AND author_id = auth.uid()
   )
   WITH CHECK (
     organization_id = get_user_organization_id()
-    AND (
-      author_id = auth.uid()
-      OR public.org_role(organization_id) IN ('owner', 'admin')
-    )
+    AND author_id = auth.uid()
   );
 
 -- No DELETE policy: soft delete only. Authors/admins set deleted_at via UPDATE to preserve rows and avoid cascading replies.

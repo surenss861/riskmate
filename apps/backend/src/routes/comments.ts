@@ -89,7 +89,7 @@ commentsRouter.get(
         entityId,
         { limit, offset, includeReplies }
       );
-      const data = (result.data || []).map((c: any) => ({ ...c, content: c.body }));
+      const data = (result.data || []).map((c: any) => ({ ...c, content: c.content }));
       res.json({ data });
     } catch (err: any) {
       console.error("List comments failed:", err);
@@ -112,7 +112,7 @@ commentsRouter.get(
         authReq.user.id,
         { limit, offset }
       );
-      const data = (result.data || []).map((c: any) => ({ ...c, content: c.body }));
+      const data = (result.data || []).map((c: any) => ({ ...c, content: c.content }));
       res.json({ data });
     } catch (err: any) {
       console.error("List mentions failed:", err);
@@ -227,7 +227,7 @@ commentsRouter.post(
           );
         }
       }
-      res.status(201).json({ data: data ? { ...data, content: data.body } : data });
+      res.status(201).json({ data: data ? { ...data, content: data.content } : data });
     } catch (err: any) {
       console.error("Create comment failed:", err);
       res.status(500).json({ message: "Failed to create comment" });
@@ -260,20 +260,19 @@ commentsRouter.patch(
         authReq.user.organization_id,
         commentId,
         commentBody,
-        authReq.user.id,
-        { callerRole: authReq.user.role }
+        authReq.user.id
       );
       if (result.error) {
         if (result.error === "Comment not found") {
           return res.status(404).json({ message: result.error, code: "NOT_FOUND" });
         }
-        if (result.error.includes("Only the author") || result.error.includes("Only the author or an admin")) {
+        if (result.error.includes("Only the author")) {
           return res.status(403).json({ message: result.error, code: "FORBIDDEN" });
         }
         return res.status(400).json({ message: result.error, code: "UPDATE_FAILED" });
       }
       const data = result.data as any;
-      res.json({ data: data ? { ...data, content: data.body } : data });
+      res.json({ data: data ? { ...data, content: data.content } : data });
     } catch (err: any) {
       console.error("Update comment failed:", err);
       res.status(500).json({ message: "Failed to update comment" });
@@ -294,10 +293,9 @@ commentsRouter.delete(
       return res.status(404).json({ message: "Comment not found", code: "NOT_FOUND" });
     }
     const isAuthor = comment.author_id === authReq.user.id;
-    const isAdmin = authReq.user.role === "owner" || authReq.user.role === "admin";
-    if (!isAuthor && !isAdmin) {
+    if (!isAuthor) {
       return res.status(403).json({
-        message: "Only the author or an admin can delete this comment",
+        message: "Only the author can delete this comment",
         code: "FORBIDDEN",
       });
     }
@@ -358,7 +356,7 @@ commentsRouter.post(
           console.error("[Comments] Comment resolved notification failed:", err)
         );
       }
-      res.json({ data: data ? { ...data, content: data.body } : data });
+      res.json({ data: data ? { ...data, content: data.content } : data });
     } catch (err: any) {
       console.error("Resolve comment failed:", err);
       res.status(500).json({ message: "Failed to resolve comment" });
@@ -396,7 +394,7 @@ commentsRouter.delete(
         return res.status(404).json({ message: result.error, code: "NOT_FOUND" });
       }
       const data = result.data as any;
-      res.json({ data: data ? { ...data, content: data.body } : data });
+      res.json({ data: data ? { ...data, content: data.content } : data });
     } catch (err: any) {
       console.error("Unresolve comment failed:", err);
       res.status(500).json({ message: "Failed to unresolve comment" });
@@ -434,7 +432,7 @@ commentsRouter.post(
         return res.status(404).json({ message: result.error, code: "NOT_FOUND" });
       }
       const data = result.data as any;
-      res.json({ data: data ? { ...data, content: data.body } : data });
+      res.json({ data: data ? { ...data, content: data.content } : data });
     } catch (err: any) {
       console.error("Unresolve comment failed:", err);
       res.status(500).json({ message: "Failed to unresolve comment" });
@@ -457,7 +455,7 @@ commentsRouter.get(
         parentId,
         { limit, offset }
       );
-      const data = (result.data || []).map((c: any) => ({ ...c, content: c.body }));
+      const data = (result.data || []).map((c: any) => ({ ...c, content: c.content }));
       res.json({ data });
     } catch (err: any) {
       console.error("List replies failed:", err);
@@ -517,7 +515,7 @@ commentsRouter.post(
         );
       }
       const replyData = result.data as any;
-      res.status(201).json({ data: replyData ? { ...replyData, content: replyData.body } : replyData });
+      res.status(201).json({ data: replyData ? { ...replyData, content: replyData.content } : replyData });
     } catch (err: any) {
       console.error("Create reply failed:", err);
       res.status(500).json({ message: "Failed to create reply" });

@@ -20,7 +20,7 @@ export interface CommentRow {
   entity_id: string;
   parent_id: string | null;
   author_id: string;
-  body: string;
+  content: string;
   mentions?: string[];
   is_resolved?: boolean;
   resolved_by?: string | null;
@@ -58,7 +58,7 @@ export async function listComments(
   let query = supabase
     .from("comments")
     .select(
-      "id, organization_id, entity_type, entity_id, parent_id, author_id, body, mentions, is_resolved, resolved_by, resolved_at, edited_at, deleted_at, created_at, updated_at"
+      "id, organization_id, entity_type, entity_id, parent_id, author_id, content, mentions, is_resolved, resolved_by, resolved_at, edited_at, deleted_at, created_at, updated_at"
     )
     .eq("organization_id", organizationId)
     .eq("entity_type", entityType)
@@ -203,7 +203,7 @@ export async function createComment(
       entity_id,
       parent_id: parent_id ?? null,
       author_id: authorId,
-      body: body.trim(),
+      content: body.trim(),
       mentions: toMention.length > 0 ? toMention : [],
     })
     .select()
@@ -234,13 +234,12 @@ export async function createComment(
   return { data: comment as CommentRow, error: null };
 }
 
-/** Update comment body (sets edited_at). Re-parses mentions, updates mentions column, sends notifications for newly added mentions. Caller must ensure author or org owner/admin. */
+/** Update comment content (sets edited_at). Re-parses mentions, sends notifications for newly added mentions. Author only. */
 export async function updateComment(
   organizationId: string,
   commentId: string,
   body: string,
-  userId: string,
-  options?: { callerRole?: string }
+  userId: string
 ): Promise<{ data: CommentRow | null; error: string | null }> {
   if (!body || typeof body !== "string" || body.trim().length === 0) {
     return { data: null, error: "Body is required" };
@@ -260,9 +259,8 @@ export async function updateComment(
     return { data: null, error: "Comment is deleted" };
   }
   const isAuthor = (existing as any).author_id === userId;
-  const isOwnerOrAdmin = options?.callerRole === "owner" || options?.callerRole === "admin";
-  if (!isAuthor && !isOwnerOrAdmin) {
-    return { data: null, error: "Only the author or an admin can update this comment" };
+  if (!isAuthor) {
+    return { data: null, error: "Only the author can update this comment" };
   }
 
   const fromText = extractMentionUserIds(body.trim());
@@ -286,7 +284,7 @@ export async function updateComment(
   const { data: comment, error } = await supabase
     .from("comments")
     .update({
-      body: body.trim(),
+      content: body.trim(),
       mentions: mentionUserIds,
       edited_at: now,
       updated_at: now,
@@ -363,7 +361,7 @@ export async function listCommentsWhereMentioned(
   const { data: comments, error } = await supabase
     .from("comments")
     .select(
-      "id, organization_id, entity_type, entity_id, parent_id, author_id, body, mentions, is_resolved, resolved_by, resolved_at, edited_at, deleted_at, created_at, updated_at"
+      "id, organization_id, entity_type, entity_id, parent_id, author_id, content, mentions, is_resolved, resolved_by, resolved_at, edited_at, deleted_at, created_at, updated_at"
     )
     .eq("organization_id", organizationId)
     .is("deleted_at", null)
@@ -484,7 +482,7 @@ export async function listReplies(
   let query = supabase
     .from("comments")
     .select(
-      "id, organization_id, entity_type, entity_id, parent_id, author_id, body, mentions, is_resolved, resolved_by, resolved_at, edited_at, deleted_at, created_at, updated_at"
+      "id, organization_id, entity_type, entity_id, parent_id, author_id, content, mentions, is_resolved, resolved_by, resolved_at, edited_at, deleted_at, created_at, updated_at"
     )
     .eq("organization_id", organizationId)
     .eq("parent_id", parentId)

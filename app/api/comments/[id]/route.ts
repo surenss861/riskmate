@@ -11,7 +11,7 @@ export const runtime = 'nodejs'
 
 const ROUTE = '/api/comments/[id]'
 
-/** PATCH /api/comments/[id] — update comment body (sets edited_at). Re-parses mentions, updates mentions column, sends notifications for newly added. Author or org owner/admin. */
+/** PATCH /api/comments/[id] — update comment content (sets edited_at). Re-parses mentions, sends notifications for newly added. Author only. */
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -19,7 +19,7 @@ export async function PATCH(
   const requestId = getRequestId(request)
 
   try {
-    const { organization_id, user_id, user_role } = await getOrganizationContext(request)
+    const { organization_id, user_id } = await getOrganizationContext(request)
     const { id: commentId } = await params
 
     const body = await request.json().catch(() => ({}))
@@ -68,10 +68,9 @@ export async function PATCH(
       })
     }
     const isAuthor = (existing as any).author_id === user_id
-    const isAdmin = user_role === 'owner' || user_role === 'admin'
-    if (!isAuthor && !isAdmin) {
+    if (!isAuthor) {
       const { response, errorId } = createErrorResponse(
-        'Only the author or an admin can update this comment',
+        'Only the author can update this comment',
         'FORBIDDEN',
         { requestId, statusCode: 403 }
       )
@@ -104,7 +103,7 @@ export async function PATCH(
     const { data: comment, error } = await supabase
       .from('comments')
       .update({
-        body: commentBody,
+        content: commentBody,
         mentions: mentionUserIds,
         edited_at: now,
         updated_at: now,
@@ -135,8 +134,8 @@ export async function PATCH(
       }
     }
 
-    const { body: _b, ...rest } = comment as any
-    return NextResponse.json({ data: { ...rest, content: _b } })
+    const { content: _c, ...rest } = comment as any
+    return NextResponse.json({ data: { ...rest, content: _c } })
   } catch (error: any) {
     const { response, errorId } = createErrorResponse(
       error?.message || 'Failed to update comment',
@@ -155,7 +154,7 @@ export async function PATCH(
   }
 }
 
-/** DELETE /api/comments/[id] — soft-delete comment (sets deleted_at). Author or org admin. */
+/** DELETE /api/comments/[id] — soft-delete comment (sets deleted_at). Author only. */
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -163,7 +162,7 @@ export async function DELETE(
   const requestId = getRequestId(request)
 
   try {
-    const { organization_id, user_id, user_role } = await getOrganizationContext(request)
+    const { organization_id, user_id } = await getOrganizationContext(request)
     const { id: commentId } = await params
 
     const supabase = await createSupabaseServerClient()
@@ -190,10 +189,9 @@ export async function DELETE(
     }
 
     const isAuthor = (comment as any).author_id === user_id
-    const isAdmin = user_role === 'owner' || user_role === 'admin'
-    if (!isAuthor && !isAdmin) {
+    if (!isAuthor) {
       const { response, errorId } = createErrorResponse(
-        'Only the author or an admin can delete this comment',
+        'Only the author can delete this comment',
         'FORBIDDEN',
         { requestId, statusCode: 403 }
       )
