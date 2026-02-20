@@ -12,8 +12,12 @@ import { requireWriteAccess } from "../middleware/requireWriteAccess";
 import { emitJobEvent, emitEvidenceEvent } from "../utils/realtimeEvents";
 import { hasJobsDeletePermission, canDeleteSingleJob } from "../utils/permissions";
 import { EmailJobType, queueEmail } from "../workers/emailQueue";
+import { jobCommentsRouter } from "./comments";
 
 export const jobsRouter: ExpressRouter = express.Router();
+
+// Spec path: /api/jobs/:id/comments (list/create). Must be mounted before /:id so /:id/comments matches here.
+jobsRouter.use(jobCommentsRouter);
 
 /** Maximum number of job IDs per bulk request; prevents oversized batches. */
 const BULK_BATCH_CAP = 100;

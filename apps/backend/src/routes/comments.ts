@@ -56,6 +56,128 @@ async function assertEntityExistsInOrg(
 
 export const commentsRouter: ExpressRouter = express.Router();
 
+/** Router for job-scoped comment routes: GET/POST /api/jobs/:id/comments. Mount on jobs router. */
+export const jobCommentsRouter: ExpressRouter = express.Router();
+
+/** GET /api/jobs/:id/comments — list comments for a job (spec path). */
+jobCommentsRouter.get(
+  "/:id/comments",
+  authenticate as unknown as express.RequestHandler,
+  async (req: express.Request, res: express.Response) => {
+    const authReq = req as AuthenticatedRequest;
+    const jobId = req.params.id;
+    if (!jobId) {
+      return res.status(400).json({ message: "Job id is required", code: "MISSING_PARAMS" });
+    }
+    try {
+      const limit = req.query.limit != null ? parseInt(String(req.query.limit), 10) : 50;
+      const offset = req.query.offset != null ? parseInt(String(req.query.offset), 10) : 0;
+      const includeReplies = req.query.include_replies !== "false";
+      const result = await listComments(
+        authReq.user.organization_id,
+        "job",
+        jobId,
+        { limit, offset, includeReplies }
+      );
+      const data = (result.data || []).map((c: any) => ({ ...c, content: c.content }));
+      res.json({ data });
+    } catch (err: any) {
+      console.error("List comments failed:", err);
+      res.status(500).json({ message: "Failed to list comments" });
+    }
+  }
+);
+
+/** POST /api/jobs/:id/comments — create a comment on a job (spec path). */
+jobCommentsRouter.post(
+  "/:id/comments",
+  authenticate as unknown as express.RequestHandler,
+  async (req: express.Request, res: express.Response) => {
+    const authReq = req as AuthenticatedRequest;
+    const jobId = req.params.id;
+    const body = (req.body || {}) as {
+      content?: string;
+      body?: string;
+      parent_id?: string | null;
+      mention_user_ids?: string[];
+    };
+    const commentBody = body.content ?? body.body ?? "";
+    if (!jobId) {
+      return res.status(400).json({ message: "Job id is required", code: "MISSING_PARAMS" });
+    }
+    if (body.parent_id != null && body.parent_id !== "") {
+      const parent = await getParentComment(
+        authReq.user.organization_id,
+        body.parent_id,
+        "job",
+        jobId
+      );
+      if (!parent) {
+        return res.status(404).json({
+          message: "Parent comment not found or not valid for this entity",
+          code: "NOT_FOUND",
+        });
+      }
+    }
+    const entityCheck = await assertEntityExistsInOrg("job", jobId, authReq.user.organization_id);
+    if (!entityCheck.ok) {
+      return res.status(entityCheck.status).json({
+        message: entityCheck.message,
+        code: entityCheck.code,
+      });
+    }
+    const fromText = await extractMentionUserIds(commentBody, authReq.user.organization_id);
+    const explicitMentions = Array.isArray(body.mention_user_ids) ? body.mention_user_ids : [];
+    const mentionUserIds = [...new Set([...explicitMentions, ...fromText])].filter(
+      (id) => id && id !== authReq.user.id
+    );
+    try {
+      const result = await createComment(
+        authReq.user.organization_id,
+        authReq.user.id,
+        {
+          entity_type: "job",
+          entity_id: jobId,
+          body: commentBody,
+          parent_id: body.parent_id,
+          mention_user_ids: mentionUserIds.length > 0 ? mentionUserIds : undefined,
+        }
+      );
+      if (result.error) {
+        if (result.error.includes("Parent comment not found")) {
+          return res.status(404).json({ message: result.error, code: "NOT_FOUND" });
+        }
+        return res.status(400).json({ message: result.error, code: "CREATE_FAILED" });
+      }
+      const data = result.data as any;
+      if (data?.id && authReq.user.id) {
+        const { data: job } = await supabase
+          .from("jobs")
+          .select("assigned_to_id")
+          .eq("id", jobId)
+          .eq("organization_id", authReq.user.organization_id)
+          .maybeSingle();
+        const ownerId = (job as { assigned_to_id?: string } | null)?.assigned_to_id;
+        if (ownerId && ownerId !== authReq.user.id) {
+          sendJobCommentNotification(
+            ownerId,
+            authReq.user.organization_id,
+            data.id,
+            jobId,
+            "Someone commented on a job you own."
+          ).catch((err) =>
+            console.error("[Comments] Job comment notification failed:", err)
+          );
+        }
+      }
+      res.status(201).json({ data: data ? { ...data, content: data.content } : data });
+    } catch (err: any) {
+      console.error("Create comment failed:", err);
+      res.status(500).json({ message: "Failed to create comment" });
+    }
+  }
+);
+
 /** GET /api/comments?entity_type=job&entity_id=uuid — list comments for an entity. */
 commentsRouter.get(
   "/",
@@ -181,7 +303,7 @@ commentsRouter.post(
       });
     }
 
-    const fromText = extractMentionUserIds(commentBody);
+    const fromText = await extractMentionUserIds(commentBody, authReq.user.organization_id);
     const explicitMentions = Array.isArray(body.mention_user_ids) ? body.mention_user_ids : [];
     const mentionUserIds = [...new Set([...explicitMentions, ...fromText])].filter(
       (id) => id && id !== authReq.user.id
@@ -484,7 +606,7 @@ commentsRouter.post(
     if (!parent || (parent as any).deleted_at) {
       return res.status(404).json({ message: "Comment not found", code: "NOT_FOUND" });
     }
-    const fromText = extractMentionUserIds(commentBody);
+    const fromText = await extractMentionUserIds(commentBody, authReq.user.organization_id);
     const explicitMentions = Array.isArray(body.mention_user_ids) ? body.mention_user_ids : [];
     const mentionUserIds = [...new Set([...explicitMentions, ...fromText])].filter(
       (id) => id && id !== authReq.user.id

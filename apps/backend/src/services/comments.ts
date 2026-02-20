@@ -179,7 +179,7 @@ export async function createComment(
     }
   }
 
-  const fromText = extractMentionUserIds(body);
+  const fromText = await extractMentionUserIds(body, organizationId);
   const explicitIds = Array.isArray(mention_user_ids) ? mention_user_ids : [];
   const rawMentionIds = [...new Set([...explicitIds, ...fromText])].filter(
     (id) => id && id !== authorId
@@ -264,7 +264,7 @@ export async function updateComment(
     return { data: null, error: "Only the author can update this comment" };
   }
 
-  const fromText = extractMentionUserIds(body.trim());
+  const fromText = await extractMentionUserIds(body.trim(), organizationId);
   const rawMentionIds = fromText.filter((id) => id && id !== userId);
 
   let mentionUserIds: string[] = [];
