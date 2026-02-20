@@ -1,7 +1,8 @@
 /**
  * Extract user IDs from text containing @[Display Name](userId) markers and/or plain @mentions.
  * Plain @name / @email patterns are resolved to user IDs by looking up users in the caller's organization.
- * Matches frontend lib/utils/mentionParser.ts contract (AT_NAME_REGEX-style) for notifications.
+ * Matches frontend lib/utils/mentionResolverServer.ts: only tokens of safe length, not contained in emails,
+ * and exact (case-insensitive) full_name or email match only.
  */
 import { supabase } from "../lib/supabaseClient";
 
@@ -10,6 +11,9 @@ const MENTION_REGEX = /@\[([^\]]+)\]\(([a-f0-9-]+)\)/g;
 const AT_NAME_REGEX = /@(\w+(?:\s+\w+)*)/g;
 /** Plain @email for addresses like user@example.com. */
 const AT_EMAIL_REGEX = /@([^\s@]+@[^\s@]+)/g;
+
+/** Minimum length for a name-like token to be considered (avoids @ab, @x matching). */
+const MIN_TOKEN_LENGTH = 3;
 
 function extractMarkedMentionIds(body: string): string[] {
   if (!body || typeof body !== "string") return [];
@@ -24,15 +28,27 @@ function extractMarkedMentionIds(body: string): string[] {
 
 function extractPlainMentionTokens(body: string): string[] {
   if (!body || typeof body !== "string") return [];
-  const tokens = new Set<string>();
+  const nameTokens = new Set<string>();
+  const emailTokens = new Set<string>();
   let m: RegExpExecArray | null;
   const nameRe = new RegExp(AT_NAME_REGEX.source, "g");
   while ((m = nameRe.exec(body)) !== null) {
-    if (m[1]?.trim()) tokens.add(m[1].trim());
+    const t = m[1]?.trim();
+    if (t) nameTokens.add(t);
   }
   const emailRe = new RegExp(AT_EMAIL_REGEX.source, "g");
   while ((m = emailRe.exec(body)) !== null) {
-    if (m[1]?.trim()) tokens.add(m[1].trim());
+    const t = m[1]?.trim();
+    if (t) emailTokens.add(t);
+  }
+  const tokens = new Set<string>();
+  for (const t of emailTokens) tokens.add(t);
+  for (const t of nameTokens) {
+    if (t.length < MIN_TOKEN_LENGTH) continue;
+    if (t.includes("@")) continue;
+    const isContainedInEmail = [...emailTokens].some((e) => e.includes(t));
+    if (isContainedInEmail) continue;
+    tokens.add(t);
   }
   return [...tokens];
 }
@@ -71,11 +87,7 @@ async function resolvePlainMentionsToUserIds(
     for (const u of usersData || []) {
       const email = normalized((u as { email?: string }).email || "");
       const name = normalized((u as { full_name?: string }).full_name || "");
-      const matched =
-        email === t ||
-        name === t ||
-        (name && name.includes(t)) ||
-        (name && name.split(/\s+/).some((p: string) => p === t));
+      const matched = email === t || name === t;
       if (matched) {
         resolved.add((u as { id: string }).id);
         break;

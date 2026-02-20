@@ -2,6 +2,7 @@
  * Server-only: resolve @mentions in comment body to user IDs within the caller's organization.
  * Extracts IDs from @[Display Name](userId) markers and resolves plain @name / @email tokens
  * by looking up users in the given organization. Port of apps/backend/src/utils/mentionParser.ts.
+ * Plain mentions: only tokens of safe length, not contained in emails/words, and exact full_name/email match only.
  */
 
 import { parseMentions } from '@/lib/utils/mentionParser'
@@ -10,17 +11,33 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 const AT_NAME_REGEX = /@(\w+(?:\s+\w+)*)/g
 const AT_EMAIL_REGEX = /@([^\s@]+@[^\s@]+)/g
 
-function extractPlainMentionTokens(body: string): string[] {
+/** Minimum length for a name-like token to be considered (avoids @ab, @x matching). */
+const MIN_TOKEN_LENGTH = 3
+
+/** Exported for tests: extract plain @name / @email tokens with strict filtering. */
+export function extractPlainMentionTokens(body: string): string[] {
   if (!body || typeof body !== 'string') return []
-  const tokens = new Set<string>()
+  const nameTokens = new Set<string>()
+  const emailTokens = new Set<string>()
   let m: RegExpExecArray | null
   const nameRe = new RegExp(AT_NAME_REGEX.source, 'g')
   while ((m = nameRe.exec(body)) !== null) {
-    if (m[1]?.trim()) tokens.add(m[1].trim())
+    const t = m[1]?.trim()
+    if (t) nameTokens.add(t)
   }
   const emailRe = new RegExp(AT_EMAIL_REGEX.source, 'g')
   while ((m = emailRe.exec(body)) !== null) {
-    if (m[1]?.trim()) tokens.add(m[1].trim())
+    const t = m[1]?.trim()
+    if (t) emailTokens.add(t)
+  }
+  const tokens = new Set<string>()
+  for (const t of emailTokens) tokens.add(t)
+  for (const t of nameTokens) {
+    if (t.length < MIN_TOKEN_LENGTH) continue
+    if (t.includes('@')) continue
+    const isContainedInEmail = [...emailTokens].some((e) => e.includes(t))
+    if (isContainedInEmail) continue
+    tokens.add(t)
   }
   return [...tokens]
 }
@@ -60,11 +77,7 @@ async function resolvePlainMentionsToUserIds(
     for (const u of usersData || []) {
       const email = normalized((u as { email?: string }).email || '')
       const name = normalized((u as { full_name?: string }).full_name || '')
-      const matched =
-        email === t ||
-        name === t ||
-        (name && name.includes(t)) ||
-        (name && name.split(/\s+/).some((p: string) => p === t))
+      const matched = email === t || name === t
       if (matched) {
         resolved.add((u as { id: string }).id)
         break
