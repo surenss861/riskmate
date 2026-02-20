@@ -23,7 +23,22 @@ export async function GET(
   try {
     const { organization_id } = await getOrganizationContext(request)
     const { id: jobId } = await params
-    await verifyJobOwnership(jobId, organization_id)
+    try {
+      await verifyJobOwnership(jobId, organization_id)
+    } catch (err: any) {
+      const msg = err?.message ?? ''
+      const isNotFound = msg.includes('Resource not found')
+      const statusCode = isNotFound ? 404 : 403
+      const { response, errorId } = createErrorResponse(
+        isNotFound ? 'Job not found' : 'Access denied',
+        isNotFound ? 'NOT_FOUND' : 'FORBIDDEN',
+        { requestId, statusCode }
+      )
+      return NextResponse.json(response, {
+        status: statusCode,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
 
     const supabase = await createSupabaseServerClient()
     const url = new URL(request.url)
@@ -65,6 +80,7 @@ export async function GET(
     const { data: replyRows } = await supabase
       .from('comments')
       .select('parent_id')
+      .eq('organization_id', organization_id)
       .in('parent_id', commentIds)
       .is('deleted_at', null)
 
@@ -121,7 +137,22 @@ export async function POST(
   try {
     const { organization_id, user_id } = await getOrganizationContext(request)
     const { id: jobId } = await params
-    await verifyJobOwnership(jobId, organization_id)
+    try {
+      await verifyJobOwnership(jobId, organization_id)
+    } catch (err: any) {
+      const msg = err?.message ?? ''
+      const isNotFound = msg.includes('Resource not found')
+      const statusCode = isNotFound ? 404 : 403
+      const { response, errorId } = createErrorResponse(
+        isNotFound ? 'Job not found' : 'Access denied',
+        isNotFound ? 'NOT_FOUND' : 'FORBIDDEN',
+        { requestId, statusCode }
+      )
+      return NextResponse.json(response, {
+        status: statusCode,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
 
     const body = await request.json().catch(() => ({}))
     const rawContent = body?.content ?? body?.body

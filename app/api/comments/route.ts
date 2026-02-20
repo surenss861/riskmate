@@ -39,7 +39,22 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    await verifyEntityOwnership(entityType, entityId, organization_id)
+    try {
+      await verifyEntityOwnership(entityType, entityId, organization_id)
+    } catch (err: any) {
+      const msg = err?.message ?? ''
+      const isNotFound = msg.includes('Resource not found')
+      const statusCode = isNotFound ? 404 : 403
+      const { response, errorId } = createErrorResponse(
+        isNotFound ? 'Entity not found' : 'Access denied',
+        isNotFound ? 'NOT_FOUND' : 'FORBIDDEN',
+        { requestId, statusCode }
+      )
+      return NextResponse.json(response, {
+        status: statusCode,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
 
     const supabase = await createSupabaseServerClient()
     const limit = Math.min(Math.max(Number(url.searchParams.get('limit')) || 50, 1), 100)
@@ -80,6 +95,7 @@ export async function GET(request: NextRequest) {
     const { data: replyRows } = await supabase
       .from('comments')
       .select('parent_id')
+      .eq('organization_id', organization_id)
       .in('parent_id', commentIds)
       .is('deleted_at', null)
 
@@ -164,7 +180,22 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    await verifyEntityOwnership(entityType, entityId, organization_id)
+    try {
+      await verifyEntityOwnership(entityType, entityId, organization_id)
+    } catch (err: any) {
+      const msg = err?.message ?? ''
+      const isNotFound = msg.includes('Resource not found')
+      const statusCode = isNotFound ? 404 : 403
+      const { response, errorId } = createErrorResponse(
+        isNotFound ? 'Entity not found' : 'Access denied',
+        isNotFound ? 'NOT_FOUND' : 'FORBIDDEN',
+        { requestId, statusCode }
+      )
+      return NextResponse.json(response, {
+        status: statusCode,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
 
     const supabase = await createSupabaseServerClient()
 
