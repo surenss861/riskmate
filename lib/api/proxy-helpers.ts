@@ -246,6 +246,10 @@ export async function proxyToBackend(
       })
     }
 
+    if (response.status === 204) {
+      return new NextResponse(null, { status: 204 })
+    }
+
     if (isFileDownload) {
       const blob = await response.blob()
       const contentType = response.headers.get('content-type') || 'application/octet-stream'

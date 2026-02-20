@@ -1,33 +1,20 @@
 /**
  * Mention parsing, formatting, and rendering utilities for comments.
  * Supports @mention syntax and optional user ID extraction for notifications.
+ * Parsing/formatting (regexes, token rules, email/name) come from mentionParserCore for consistency with backend.
  */
 
 import React from 'react'
+import { MENTION_REGEX, AT_NAME_REGEX, parseMentions, formatMention } from './mentionParserCore'
 
-const MENTION_REGEX = /@\[([^\]]+)\]\(([a-f0-9-]+)\)/g
-const AT_NAME_REGEX = /@(\w+(?:\s+\w+)*)/g
+export { parseMentions, formatMention } from './mentionParserCore'
+export type { MentionTokenUser } from './mentionParserCore'
 
 export interface MentionSpan {
   type: 'text' | 'mention'
   text: string
   userId?: string
   displayName?: string
-}
-
-/**
- * Parse content for @[Display Name](userId) markers and return mentioned user IDs.
- * Contract: parseMentions(content: string): string[]
- */
-export function parseMentions(content: string): string[] {
-  if (!content || typeof content !== 'string') return []
-  const ids: string[] = []
-  let m: RegExpExecArray | null
-  const re = new RegExp(MENTION_REGEX.source, 'g')
-  while ((m = re.exec(content)) !== null) {
-    if (m[2] && !ids.includes(m[2])) ids.push(m[2])
-  }
-  return ids
 }
 
 /**
@@ -82,15 +69,6 @@ export function extractMentionQuery(text: string, cursorPos: number): string | n
   const afterAt = beforeCursor.slice(lastAt + 1)
   if (/[\s\n\r]/.test(afterAt)) return null
   return afterAt
-}
-
-/**
- * Format a mention for storage: @[Display Name](userId).
- * Use when inserting a mention into plain text (e.g. from a mention picker).
- */
-export function formatMention(displayName: string, userId: string): string {
-  const safe = (displayName || '').replace(/\]/g, '\\]').trim() || 'User'
-  return `@[${safe}](${userId})`
 }
 
 /**
