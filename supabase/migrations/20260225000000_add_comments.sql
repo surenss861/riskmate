@@ -53,7 +53,8 @@ CREATE POLICY "Users can create comments in their organization"
     AND author_id = auth.uid()
   );
 
--- UPDATE: author only (per ticket); immutable fields (entity_type, entity_id, parent_id, organization_id, author_id, resolution) enforced via WITH CHECK.
+-- UPDATE: author only (per ticket); immutable fields (entity_type, entity_id, parent_id, organization_id, author_id) enforced via WITH CHECK.
+-- Authors may change is_resolved, resolved_by, resolved_at for their own comments (resolve/unresolve).
 DROP POLICY IF EXISTS "Users can update comments in their organization" ON comments;
 DROP POLICY IF EXISTS "Author or admin can update comments" ON comments;
 DROP POLICY IF EXISTS "Author can update own comments" ON comments;
@@ -72,9 +73,6 @@ CREATE POLICY "Author can update own comments"
     AND (parent_id IS NOT DISTINCT FROM (SELECT c.parent_id FROM comments c WHERE c.id = comments.id))
     AND organization_id = (SELECT c.organization_id FROM comments c WHERE c.id = comments.id)
     AND author_id = (SELECT c.author_id FROM comments c WHERE c.id = comments.id)
-    AND is_resolved IS NOT DISTINCT FROM (SELECT c.is_resolved FROM comments c WHERE c.id = comments.id)
-    AND (resolved_by IS NOT DISTINCT FROM (SELECT c.resolved_by FROM comments c WHERE c.id = comments.id))
-    AND (resolved_at IS NOT DISTINCT FROM (SELECT c.resolved_at FROM comments c WHERE c.id = comments.id))
   );
 
 -- No DELETE policy: soft delete only. Authors/admins set deleted_at via UPDATE to preserve rows and avoid cascading replies.

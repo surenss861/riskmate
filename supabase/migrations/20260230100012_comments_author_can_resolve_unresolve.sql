@@ -1,6 +1,5 @@
--- Reapply author UPDATE policy with WITH CHECK so immutable fields cannot be changed by authors.
--- Authors may change is_resolved, resolved_by, resolved_at for their own comments (resolve/unresolve).
--- Deployed environments that already ran 20260225000000_add_comments.sql get the fix via this migration.
+-- Re-apply author UPDATE policy so authors can change is_resolved, resolved_by, resolved_at
+-- for their own comments (resolve/unresolve). Fixes RLS blocking author resolve/unresolve.
 
 DROP POLICY IF EXISTS "Author can update own comments" ON comments;
 
