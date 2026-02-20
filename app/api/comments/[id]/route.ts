@@ -11,7 +11,7 @@ export const runtime = 'nodejs'
 
 const ROUTE = '/api/comments/[id]'
 
-/** PATCH /api/comments/[id] — update comment body (sets edited_at). Re-parses mentions, updates mentions column, sends notifications for newly added. Author only. */
+/** PATCH /api/comments/[id] — update comment body (sets edited_at). Re-parses mentions, updates mentions column, sends notifications for newly added. Author or org owner/admin. */
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -19,7 +19,7 @@ export async function PATCH(
   const requestId = getRequestId(request)
 
   try {
-    const { organization_id, user_id } = await getOrganizationContext(request)
+    const { organization_id, user_id, user_role } = await getOrganizationContext(request)
     const { id: commentId } = await params
 
     const body = await request.json().catch(() => ({}))
@@ -67,9 +67,11 @@ export async function PATCH(
         headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
       })
     }
-    if ((existing as any).author_id !== user_id) {
+    const isAuthor = (existing as any).author_id === user_id
+    const isAdmin = user_role === 'owner' || user_role === 'admin'
+    if (!isAuthor && !isAdmin) {
       const { response, errorId } = createErrorResponse(
-        'Only the author can update this comment',
+        'Only the author or an admin can update this comment',
         'FORBIDDEN',
         { requestId, statusCode: 403 }
       )

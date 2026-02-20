@@ -22,6 +22,38 @@ import {
 import { supabase } from "../lib/supabaseClient";
 import { extractMentionUserIds } from "../utils/mentionParser";
 
+/** Table names for entity_type ownership checks (entity_id must exist in table with organization_id). */
+const ENTITY_TYPE_TO_TABLE: Record<CommentEntityType, string> = {
+  job: "jobs",
+  hazard: "hazards",
+  control: "controls",
+  task: "tasks",
+  document: "job_documents",
+  signoff: "job_signoffs",
+  photo: "job_photos",
+};
+
+async function assertEntityExistsInOrg(
+  entityType: CommentEntityType,
+  entityId: string,
+  organizationId: string
+): Promise<{ ok: true } | { ok: false; status: number; code: string; message: string }> {
+  const table = ENTITY_TYPE_TO_TABLE[entityType];
+  if (!table) {
+    return { ok: false, status: 400, code: "INVALID_ENTITY_TYPE", message: "Invalid entity_type" };
+  }
+  const { data, error } = await supabase
+    .from(table)
+    .select("id, organization_id")
+    .eq("id", entityId)
+    .eq("organization_id", organizationId)
+    .maybeSingle();
+  if (error || !data) {
+    return { ok: false, status: 404, code: "NOT_FOUND", message: "Target entity not found" };
+  }
+  return { ok: true };
+}
+
 export const commentsRouter: ExpressRouter = express.Router();
 
 /** GET /api/comments?entity_type=job&entity_id=uuid — list comments for an entity. */
@@ -136,6 +168,19 @@ commentsRouter.post(
       }
     }
 
+    // Validate target entity exists and belongs to caller's organization
+    const entityCheck = await assertEntityExistsInOrg(
+      entityType as CommentEntityType,
+      entityId,
+      authReq.user.organization_id
+    );
+    if (!entityCheck.ok) {
+      return res.status(entityCheck.status).json({
+        message: entityCheck.message,
+        code: entityCheck.code,
+      });
+    }
+
     const fromText = extractMentionUserIds(commentBody);
     const explicitMentions = Array.isArray(body.mention_user_ids) ? body.mention_user_ids : [];
     const mentionUserIds = [...new Set([...explicitMentions, ...fromText])].filter(
@@ -215,13 +260,14 @@ commentsRouter.patch(
         authReq.user.organization_id,
         commentId,
         commentBody,
-        authReq.user.id
+        authReq.user.id,
+        { callerRole: authReq.user.role }
       );
       if (result.error) {
         if (result.error === "Comment not found") {
           return res.status(404).json({ message: result.error, code: "NOT_FOUND" });
         }
-        if (result.error.includes("Only the author")) {
+        if (result.error.includes("Only the author") || result.error.includes("Only the author or an admin")) {
           return res.status(403).json({ message: result.error, code: "FORBIDDEN" });
         }
         return res.status(400).json({ message: result.error, code: "UPDATE_FAILED" });

@@ -234,12 +234,13 @@ export async function createComment(
   return { data: comment as CommentRow, error: null };
 }
 
-/** Update comment body (sets edited_at). Re-parses mentions, updates mentions column, sends notifications for newly added mentions. Caller must ensure author or admin. */
+/** Update comment body (sets edited_at). Re-parses mentions, updates mentions column, sends notifications for newly added mentions. Caller must ensure author or org owner/admin. */
 export async function updateComment(
   organizationId: string,
   commentId: string,
   body: string,
-  userId: string
+  userId: string,
+  options?: { callerRole?: string }
 ): Promise<{ data: CommentRow | null; error: string | null }> {
   if (!body || typeof body !== "string" || body.trim().length === 0) {
     return { data: null, error: "Body is required" };
@@ -258,8 +259,10 @@ export async function updateComment(
   if ((existing as any).deleted_at) {
     return { data: null, error: "Comment is deleted" };
   }
-  if ((existing as any).author_id !== userId) {
-    return { data: null, error: "Only the author can update this comment" };
+  const isAuthor = (existing as any).author_id === userId;
+  const isOwnerOrAdmin = options?.callerRole === "owner" || options?.callerRole === "admin";
+  if (!isAuthor && !isOwnerOrAdmin) {
+    return { data: null, error: "Only the author or an admin can update this comment" };
   }
 
   const fromText = extractMentionUserIds(body.trim());

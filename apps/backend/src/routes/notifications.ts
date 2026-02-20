@@ -396,6 +396,17 @@ notificationsRouter.post(
         return res.status(400).json({ message: "Missing userId or commentId" });
       }
       const organizationId = authReq.user.organization_id;
+
+      const { data: comment, error: commentError } = await supabase
+        .from("comments")
+        .select("id, organization_id")
+        .eq("id", commentId)
+        .eq("organization_id", organizationId)
+        .maybeSingle();
+      if (commentError || !comment) {
+        return res.status(404).json({ message: "Comment not found" });
+      }
+
       const { data: user } = await supabase
         .from("users")
         .select("id, organization_id")
