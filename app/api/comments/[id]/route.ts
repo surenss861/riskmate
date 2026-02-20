@@ -155,7 +155,7 @@ export async function PATCH(
   }
 }
 
-/** DELETE /api/comments/[id] — soft-delete comment (sets deleted_at). Author only. */
+/** DELETE /api/comments/[id] — soft-delete comment (sets deleted_at). Author or org owner/admin. */
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -163,7 +163,7 @@ export async function DELETE(
   const requestId = getRequestId(request)
 
   try {
-    const { organization_id, user_id } = await getOrganizationContext(request)
+    const { organization_id, user_id, user_role } = await getOrganizationContext(request)
     const { id: commentId } = await params
 
     const supabase = await createSupabaseServerClient()
@@ -190,9 +190,10 @@ export async function DELETE(
     }
 
     const isAuthor = (comment as any).author_id === user_id
-    if (!isAuthor) {
+    const isAdmin = user_role === 'owner' || user_role === 'admin'
+    if (!isAuthor && !isAdmin) {
       const { response, errorId } = createErrorResponse(
-        'Only the author can delete this comment',
+        'Only the author or an admin can delete this comment',
         'FORBIDDEN',
         { requestId, statusCode: 403 }
       )

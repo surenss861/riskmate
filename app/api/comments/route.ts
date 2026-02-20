@@ -296,6 +296,32 @@ export async function POST(request: NextRequest) {
       }).catch((err) => console.error('[Comments] Reply notification request failed:', err))
     }
 
+    // Notify job owner when entity_type is job (skip when author is the owner); backend respects notification preferences
+    if (entityType === 'job' && token && BACKEND_URL) {
+      const { data: job } = await supabase
+        .from('jobs')
+        .select('assigned_to_id')
+        .eq('id', entityId)
+        .eq('organization_id', organization_id)
+        .maybeSingle()
+      const ownerId = (job as { assigned_to_id?: string } | null)?.assigned_to_id
+      if (ownerId && ownerId !== user_id) {
+        fetch(`${BACKEND_URL}/api/notifications/job-comment`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            organizationId: organization_id,
+            jobId: entityId,
+            commentId: (comment as any).id,
+            authorId: user_id,
+          }),
+        }).catch((err) => console.error('[Comments] Job comment notification request failed:', err))
+      }
+    }
+
     const { content: _c, ...commentRest } = comment as any
     return NextResponse.json({ data: { ...commentRest, content: _c } }, { status: 201 })
   } catch (error: any) {

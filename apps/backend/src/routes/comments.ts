@@ -293,9 +293,10 @@ commentsRouter.delete(
       return res.status(404).json({ message: "Comment not found", code: "NOT_FOUND" });
     }
     const isAuthor = comment.author_id === authReq.user.id;
-    if (!isAuthor) {
+    const isAdmin = authReq.user.role === "owner" || authReq.user.role === "admin";
+    if (!isAuthor && !isAdmin) {
       return res.status(403).json({
-        message: "Only the author can delete this comment",
+        message: "Only the author or an admin can delete this comment",
         code: "FORBIDDEN",
       });
     }
