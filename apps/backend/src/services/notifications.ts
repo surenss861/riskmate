@@ -128,16 +128,19 @@ async function fetchOrgUserIdsWithPreference(
     .select("user_id, push_enabled, " + prefKey)
     .in("user_id", userIds);
 
+  const defaultFalseKeys: (keyof NotificationPreferences)[] = [
+    "weekly_summary",
+    "email_deadline_reminder",
+  ];
   const prefsByUser = new Map<
     string,
     { push_enabled: boolean; prefValue: boolean }
   >(
     (prefsData || []).map((r: any) => {
       const push_enabled = r.push_enabled ?? true;
-      const prefValue =
-        prefKey === "weekly_summary"
-          ? (r[prefKey] ?? false)
-          : (r[prefKey] ?? true);
+      const prefValue = defaultFalseKeys.includes(prefKey)
+        ? (r[prefKey] ?? false)
+        : (r[prefKey] ?? true);
       return [r.user_id, { push_enabled, prefValue }];
     })
   );
@@ -190,7 +193,7 @@ export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
   evidence_uploaded: true,
   hazard_added: true,
   deadline_approaching: true,
-  email_deadline_reminder: true,
+  email_deadline_reminder: false,
   weekly_summary: false,
   email_weekly_digest: true,
   high_risk_job: true,
@@ -246,7 +249,7 @@ export async function getNotificationPreferences(
     evidence_uploaded: data.evidence_uploaded ?? true,
     hazard_added: data.hazard_added ?? true,
     deadline_approaching: data.deadline_approaching ?? true,
-    email_deadline_reminder: data.email_deadline_reminder ?? true,
+    email_deadline_reminder: data.email_deadline_reminder ?? false,
     weekly_summary: data.weekly_summary ?? false,
     email_weekly_digest: data.email_weekly_digest ?? true,
     high_risk_job: data.high_risk_job ?? true,

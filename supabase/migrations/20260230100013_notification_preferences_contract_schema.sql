@@ -12,7 +12,7 @@ ALTER TABLE notification_preferences ADD COLUMN IF NOT EXISTS signature_requeste
 ALTER TABLE notification_preferences ADD COLUMN IF NOT EXISTS evidence_uploaded BOOLEAN NOT NULL DEFAULT true;
 ALTER TABLE notification_preferences ADD COLUMN IF NOT EXISTS hazard_added BOOLEAN NOT NULL DEFAULT true;
 ALTER TABLE notification_preferences ADD COLUMN IF NOT EXISTS deadline_approaching BOOLEAN NOT NULL DEFAULT true;
-ALTER TABLE notification_preferences ADD COLUMN IF NOT EXISTS email_deadline_reminder BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE notification_preferences ADD COLUMN IF NOT EXISTS email_deadline_reminder BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE notification_preferences ADD COLUMN IF NOT EXISTS weekly_summary BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE notification_preferences ADD COLUMN IF NOT EXISTS email_weekly_digest BOOLEAN NOT NULL DEFAULT true;
 ALTER TABLE notification_preferences ADD COLUMN IF NOT EXISTS high_risk_job BOOLEAN NOT NULL DEFAULT true;
@@ -71,12 +71,12 @@ BEGIN
 END $$;
 
 -- 3) Ensure email_* and any nullable contract columns are NOT NULL with default (idempotent)
-UPDATE notification_preferences SET email_deadline_reminder = COALESCE(email_deadline_reminder, true) WHERE email_deadline_reminder IS NULL;
+UPDATE notification_preferences SET email_deadline_reminder = COALESCE(email_deadline_reminder, false) WHERE email_deadline_reminder IS NULL;
 UPDATE notification_preferences SET email_weekly_digest = COALESCE(email_weekly_digest, true) WHERE email_weekly_digest IS NULL;
 
 ALTER TABLE notification_preferences ALTER COLUMN email_deadline_reminder SET NOT NULL;
-ALTER TABLE notification_preferences ALTER COLUMN email_deadline_reminder SET DEFAULT true;
+ALTER TABLE notification_preferences ALTER COLUMN email_deadline_reminder SET DEFAULT false;
 ALTER TABLE notification_preferences ALTER COLUMN email_weekly_digest SET NOT NULL;
 ALTER TABLE notification_preferences ALTER COLUMN email_weekly_digest SET DEFAULT true;
 
-COMMENT ON TABLE notification_preferences IS 'Per-user notification preferences matching backend contract: push_enabled, email_enabled, mention, reply, job_assigned, signature_requested, evidence_uploaded, hazard_added, deadline_approaching, email_deadline_reminder, weekly_summary, email_weekly_digest, high_risk_job, report_ready, job_comment, comment_resolved. weekly_summary default false; others true.';
+COMMENT ON TABLE notification_preferences IS 'Per-user notification preferences matching backend contract: push_enabled, email_enabled, mention, reply, job_assigned, signature_requested, evidence_uploaded, hazard_added, deadline_approaching, email_deadline_reminder, weekly_summary, email_weekly_digest, high_risk_job, report_ready, job_comment, comment_resolved. weekly_summary and email_deadline_reminder default false; others true.';
