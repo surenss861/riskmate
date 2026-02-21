@@ -1678,6 +1678,7 @@ struct JobComment: Codable, Identifiable {
     let entityType: String
     let entityId: String
     let parentId: String?
+    let jobId: String?
     let authorId: String
     let content: String
     let isResolved: Bool?
@@ -1695,6 +1696,7 @@ struct JobComment: Codable, Identifiable {
         case entityType = "entity_type"
         case entityId = "entity_id"
         case parentId = "parent_id"
+        case jobId = "job_id"
         case authorId = "author_id"
         case content
         case isResolved = "is_resolved"

@@ -78,8 +78,13 @@ struct JobCommentsView: View {
         }
         .onChange(of: realtimeService.needsRefresh) { _, newValue in
             if newValue {
-                Task { await loadComments() }
-                realtimeService.clearRefresh()
+                Task {
+                    await loadComments()
+                    if let expandedId = expandedReplyForId {
+                        await loadReplies(commentId: expandedId)
+                    }
+                    realtimeService.clearRefresh()
+                }
             }
         }
     }

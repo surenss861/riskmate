@@ -108,6 +108,10 @@ struct MentionsListView: View {
             if comment.entityType == "job", !comment.entityId.isEmpty {
                 DeepLinkRouter.shared.openJob(id: comment.entityId, tab: .comments)
                 dismiss()
+            } else if let jobId = comment.jobId, !jobId.isEmpty {
+                // hazard/control/photo mentions: open job's Comments tab
+                DeepLinkRouter.shared.openJob(id: jobId, tab: .comments)
+                dismiss()
             }
         } label: {
             VStack(alignment: .leading, spacing: 4) {
@@ -131,6 +135,10 @@ struct MentionsListView: View {
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
                 if comment.entityType == "job", !comment.entityId.isEmpty {
+                    Text("View job")
+                        .font(RMTheme.Typography.caption2)
+                        .foregroundColor(RMTheme.Colors.accent)
+                } else if comment.jobId != nil, !(comment.jobId ?? "").isEmpty {
                     Text("View job")
                         .font(RMTheme.Typography.caption2)
                         .foregroundColor(RMTheme.Colors.accent)

@@ -1007,6 +1007,11 @@ export default function JobDetailPage() {
               className={`${tabStyles.item} ${activeTab === 'comments' ? tabStyles.active : tabStyles.inactive}`}
             >
               Comments
+              {commentCount != null && commentCount > 0 && (
+                <span className="ml-1.5 inline-flex items-center justify-center min-w-[2rem] px-1.5 py-0.5 text-xs font-medium rounded-md bg-white/10 text-white/80 border border-white/10">
+                  {commentCount}
+                </span>
+              )}
               {commentUnreadCount > 0 && (
                 <span className="ml-1.5 inline-flex items-center justify-center min-w-[2rem] px-1.5 py-0.5 text-xs font-medium rounded-md bg-white/10 text-white/80 border border-white/10">
                   {commentUnreadCount}
