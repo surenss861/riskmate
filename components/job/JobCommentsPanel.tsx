@@ -336,7 +336,7 @@ export function JobCommentsPanel({
     }
   }
 
-  const handleUpdate = async (commentId: string, content: string) => {
+  const handleUpdate = async (commentId: string, content: string, parentId?: string) => {
     if (!content.trim()) return
     const mentionUserIds = extractMentionUserIds(content.trim())
     try {
@@ -344,6 +344,7 @@ export function JobCommentsPanel({
       setEditId(null)
       setEditContent('')
       await loadComments(0)
+      if (parentId) await loadReplies(parentId, true)
     } catch (e: unknown) {
       const message = e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : 'Failed to update comment'
       onError?.(message)

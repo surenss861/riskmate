@@ -64,7 +64,7 @@ export interface CommentThreadProps {
   canResolve: (c: CommentItem) => boolean
   canEditOrDelete: (c: CommentItem) => boolean
   onResolve: (commentId: string, resolve: boolean) => void
-  onUpdate: (commentId: string, content: string) => void
+  onUpdate: (commentId: string, content: string, parentId?: string) => void
   onDelete: (commentId: string) => void
   onLoadReplies: (parentId: string, forceRefresh?: boolean) => void
   onSubmitReply: (parentId: string, content: string, mentionUserIds: string[]) => Promise<void>
@@ -280,7 +280,7 @@ export function CommentThread({
                           <button
                             type="button"
                             className={buttonStyles.primary}
-                            onClick={() => onUpdate(r.id, editContent.trim())}
+                            onClick={() => onUpdate(r.id, editContent.trim(), comment.id)}
                           >
                             Save
                           </button>
