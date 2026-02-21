@@ -18,6 +18,7 @@ import { TemplatesManager, TemplateModal, TemplateModalProps } from '@/component
 import { ApplyTemplateInline } from '@/components/dashboard/ApplyTemplateInline'
 import { JobPacketView } from '@/components/job/JobPacketView'
 import { JobActivityFeed, type AuditEvent } from '@/components/job/JobActivityFeed'
+import { JobCommentsPanel } from '@/components/job/JobCommentsPanel'
 import { TeamSignatures } from '@/components/report/TeamSignatures'
 import { AddTaskModal } from '@/components/tasks/AddTaskModal'
 import { TaskList } from '@/components/tasks/TaskList'
@@ -167,7 +168,7 @@ export default function JobDetailPage() {
     actionType?: 'job_created' | 'hazard_added' | 'hazard_removed' | 'mitigation_completed' | 'photo_uploaded' | 'evidence_approved' | 'evidence_rejected' | 'template_applied' | 'worker_assigned' | 'worker_unassigned' | 'status_changed' | 'pdf_generated'
     metadata?: any
   }>>([])
-  const [activeTab, setActiveTab] = useState<'overview' | 'activity' | 'signatures' | 'tasks'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'activity' | 'signatures' | 'tasks' | 'comments'>('overview')
   const [activityInitialEvents, setActivityInitialEvents] = useState<AuditEvent[] | null>(null)
   const [signatureCount, setSignatureCount] = useState<{ signed: number; total: number } | null>(null)
   const [taskIncompleteCount, setTaskIncompleteCount] = useState<number | null>(null)
@@ -933,6 +934,13 @@ export default function JobDetailPage() {
                 </span>
               )}
             </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('comments')}
+              className={`${tabStyles.item} ${activeTab === 'comments' ? tabStyles.active : tabStyles.inactive}`}
+            >
+              Comments
+            </button>
           </div>
 
           {activeTab === 'activity' ? (
@@ -983,6 +991,19 @@ export default function JobDetailPage() {
                   onAddTask={() => setShowAddTask(true)}
                   onTaskCountChange={(count) => setTaskIncompleteCount(count)}
                   refreshKey={taskRefreshKey}
+                />
+              </GlassCard>
+            </PageSection>
+          ) : activeTab === 'comments' ? (
+            <PageSection>
+              <GlassCard className="p-6 md:p-8">
+                <h2 className={`${typography.h2} mb-1`}>Comments</h2>
+                <p className="text-sm text-white/60 mb-6">
+                  Discuss this job with your team. Use @ to mention someone—they’ll get notified.
+                </p>
+                <JobCommentsPanel
+                  jobId={jobId}
+                  onError={(msg) => setToast({ message: msg, type: 'error' })}
                 />
               </GlassCard>
             </PageSection>

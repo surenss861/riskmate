@@ -30,12 +30,12 @@ struct JobDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var quickAction: QuickActionRouter
     
-    /// Tabs to show: Overview + Activity + Signatures + Evidence always; Hazards/Controls only when API returns count > 0
+    /// Tabs to show: Overview + Activity + Signatures + Evidence + Comments always; Hazards/Controls only when API returns count > 0
     private var visibleTabs: [JobDetailTab] {
         [.overview]
         + (hazardsCount > 0 ? [.hazards] : [])
         + (controlsCount > 0 ? [.controls] : [])
-        + [.activity, .signatures, .evidence, .tasks]
+        + [.activity, .signatures, .evidence, .tasks, .comments]
     }
     
     /// Single source of truth: validate selection when counts or loading state change. Only reset when loading finished and count is 0 (no jank during load).
@@ -286,6 +286,8 @@ struct JobDetailView: View {
                 EvidenceTab(jobId: jobId)
             case .tasks:
                 JobTasksView(jobId: jobId)
+            case .comments:
+                JobCommentsView(jobId: jobId)
             }
         }
     }
@@ -417,7 +419,8 @@ enum JobDetailTab: String, CaseIterable {
     case signatures
     case evidence
     case tasks
-    
+    case comments
+
     var title: String {
         switch self {
         case .overview: return "Overview"
@@ -427,6 +430,7 @@ enum JobDetailTab: String, CaseIterable {
         case .signatures: return "Signatures"
         case .evidence: return "Evidence"
         case .tasks: return "Tasks"
+        case .comments: return "Comments"
         }
     }
 }

@@ -978,6 +978,37 @@ class APIClient {
         return response.data
     }
 
+    /// Get comments for a job
+    func getComments(jobId: String, limit: Int = 50, offset: Int = 0, includeReplies: Bool = false) async throws -> [JobComment] {
+        var query = "limit=\(limit)&offset=\(offset)"
+        if includeReplies { query += "&include_replies=true" }
+        let response: CommentsListResponse = try await request(
+            endpoint: "/api/jobs/\(jobId)/comments?\(query)"
+        )
+        return response.data
+    }
+
+    /// Create a comment on a job
+    func createComment(jobId: String, content: String, parentId: String? = nil) async throws -> JobComment {
+        struct CreateCommentBody: Encodable {
+            let content: String
+            let parentId: String?
+
+            enum CodingKeys: String, CodingKey {
+                case content
+                case parentId = "parent_id"
+            }
+        }
+        let body = CreateCommentBody(content: content, parentId: parentId)
+        let data = try JSONEncoder().encode(body)
+        let response: CreateCommentResponse = try await request(
+            endpoint: "/api/jobs/\(jobId)/comments",
+            method: "POST",
+            body: data
+        )
+        return response.data
+    }
+
     /// Complete a task
     func completeTask(id: String) async throws {
         let _: EmptyResponse = try await request(
@@ -1563,6 +1594,72 @@ struct TasksResponse: Codable {
 
 struct TaskResponse: Codable {
     let data: APIClientTask
+}
+
+// MARK: - Comments API
+
+struct CommentAuthor: Codable {
+    let id: String
+    let fullName: String?
+    let email: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case fullName = "full_name"
+        case email
+    }
+}
+
+struct JobComment: Codable, Identifiable {
+    let id: String
+    let entityType: String
+    let entityId: String
+    let parentId: String?
+    let authorId: String
+    let content: String
+    let isResolved: Bool?
+    let resolvedBy: String?
+    let resolvedAt: String?
+    let editedAt: String?
+    let deletedAt: String?
+    let createdAt: String
+    let updatedAt: String
+    let author: CommentAuthor?
+    let replyCount: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case entityType = "entity_type"
+        case entityId = "entity_id"
+        case parentId = "parent_id"
+        case authorId = "author_id"
+        case content
+        case isResolved = "is_resolved"
+        case resolvedBy = "resolved_by"
+        case resolvedAt = "resolved_at"
+        case editedAt = "edited_at"
+        case deletedAt = "deleted_at"
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+        case author
+        case replyCount = "reply_count"
+    }
+}
+
+struct CommentsListResponse: Codable {
+    let data: [JobComment]
+    let count: Int?
+    let hasMore: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case data
+        case count
+        case hasMore = "has_more"
+    }
+}
+
+struct CreateCommentResponse: Codable {
+    let data: JobComment
 }
 
 struct HazardResponse: Codable {

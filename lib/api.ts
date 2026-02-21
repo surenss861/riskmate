@@ -21,6 +21,27 @@ export interface ApiError {
   code?: string;
 }
 
+/** Comment with author info (from comments API). */
+export interface CommentWithAuthor {
+  id: string;
+  organization_id: string;
+  entity_type: string;
+  entity_id: string;
+  parent_id: string | null;
+  author_id: string;
+  content: string;
+  mentions?: { user_id: string }[];
+  is_resolved?: boolean;
+  resolved_by?: string | null;
+  resolved_at?: string | null;
+  edited_at?: string | null;
+  deleted_at?: string | null;
+  created_at: string;
+  updated_at: string;
+  author?: { id: string; full_name: string | null; email: string | null };
+  reply_count?: number;
+}
+
 // Readiness API types
 export interface ReadinessItem {
   id: string
@@ -737,6 +758,28 @@ export const jobsApi = {
     });
   },
 
+  // Comments (job-scoped list/create; other ops on commentsApi)
+  getComments: async (jobId: string, options?: { limit?: number; offset?: number; include_replies?: boolean }) => {
+    const params = new URLSearchParams();
+    if (options?.limit != null) params.set('limit', String(options.limit));
+    if (options?.offset != null) params.set('offset', String(options.offset));
+    if (options?.include_replies === true) params.set('include_replies', 'true');
+    const q = params.toString();
+    return apiRequest<{ data: CommentWithAuthor[]; count: number; has_more: boolean }>(
+      `/api/jobs/${jobId}/comments${q ? `?${q}` : ''}`
+    );
+  },
+  createComment: async (jobId: string, payload: { content: string; parent_id?: string | null; mention_user_ids?: string[] }) => {
+    return apiRequest<{ data: CommentWithAuthor }>(`/api/jobs/${jobId}/comments`, {
+      method: 'POST',
+      body: JSON.stringify({
+        content: payload.content,
+        parent_id: payload.parent_id ?? null,
+        mention_user_ids: payload.mention_user_ids ?? undefined,
+      }),
+    });
+  },
+
   archive: async (jobId: string) => {
     return apiRequest<{
       data: {
@@ -1031,6 +1074,42 @@ export const teamApi = {
     apiRequest(`/api/team/member/${memberId}`, { method: 'DELETE' }),
   acknowledgeReset: async () =>
     apiRequest('/api/team/acknowledge-reset', { method: 'POST' }),
+};
+
+// Comments API (entity-level: update, delete, resolve, replies, mentions)
+export const commentsApi = {
+  update: async (commentId: string, content: string) =>
+    apiRequest<{ data: CommentWithAuthor }>(`/api/comments/${commentId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ content }),
+    }),
+  delete: async (commentId: string) =>
+    apiRequest<null>(`/api/comments/${commentId}`, { method: 'DELETE' }),
+  resolve: async (commentId: string) =>
+    apiRequest<{ data: CommentWithAuthor }>(`/api/comments/${commentId}/resolve`, { method: 'POST' }),
+  unresolve: async (commentId: string) =>
+    apiRequest<{ data: CommentWithAuthor }>(`/api/comments/${commentId}/unresolve`, { method: 'POST' }),
+  listReplies: async (commentId: string, options?: { limit?: number; offset?: number }) => {
+    const params = new URLSearchParams();
+    if (options?.limit != null) params.set('limit', String(options.limit));
+    if (options?.offset != null) params.set('offset', String(options.offset));
+    const q = params.toString();
+    return apiRequest<{ data: CommentWithAuthor[] }>(`/api/comments/${commentId}/replies${q ? `?${q}` : ''}`);
+  },
+  createReply: async (commentId: string, payload: { content: string; mention_user_ids?: string[] }) =>
+    apiRequest<{ data: CommentWithAuthor }>(`/api/comments/${commentId}/replies`, {
+      method: 'POST',
+      body: JSON.stringify({ content: payload.content, mention_user_ids: payload.mention_user_ids }),
+    }),
+  listMentionsMe: async (options?: { limit?: number; offset?: number }) => {
+    const params = new URLSearchParams();
+    if (options?.limit != null) params.set('limit', String(options.limit));
+    if (options?.offset != null) params.set('offset', String(options.offset));
+    const q = params.toString();
+    return apiRequest<{ data: CommentWithAuthor[]; count: number; has_more: boolean }>(
+      `/api/comments/mentions/me${q ? `?${q}` : ''}`
+    );
+  },
 };
 
 // Reports API
