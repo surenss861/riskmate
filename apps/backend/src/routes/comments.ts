@@ -232,7 +232,7 @@ commentsRouter.get(
         { limit, offset }
       );
       const data = (result.data || []).map((c: any) => ({ ...c, content: c.content }));
-      res.json({ data });
+      res.json({ data, count: result.count, has_more: result.has_more });
     } catch (err: any) {
       console.error("List mentions failed:", err);
       res.status(500).json({ message: "Failed to list comments where mentioned" });
@@ -624,7 +624,13 @@ commentsRouter.post(
         return res.status(400).json({ message: result.error, code: "CREATE_FAILED" });
       }
       const parentAuthorId = parent.author_id;
-      if (parentAuthorId && parentAuthorId !== authReq.user.id && result.data) {
+      const parentAlreadyMentioned = parentAuthorId && mentionUserIds.includes(parentAuthorId);
+      if (
+        parentAuthorId &&
+        parentAuthorId !== authReq.user.id &&
+        result.data &&
+        !parentAlreadyMentioned
+      ) {
         sendCommentReplyNotification(
           parentAuthorId,
           authReq.user.organization_id,

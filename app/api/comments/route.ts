@@ -288,7 +288,15 @@ export async function POST(request: NextRequest) {
         }).catch((err) => console.error('[Comments] Mention notification request failed:', err))
       }
     }
-    if (token && BACKEND_URL && parentAuthorId && parentAuthorId !== user_id) {
+    const parentAlreadyMentioned =
+      parentAuthorId != null && mentionUserIds.includes(parentAuthorId)
+    if (
+      token &&
+      BACKEND_URL &&
+      parentAuthorId &&
+      parentAuthorId !== user_id &&
+      !parentAlreadyMentioned
+    ) {
       fetch(`${BACKEND_URL}/api/notifications/comment-reply`, {
         method: 'POST',
         headers: {

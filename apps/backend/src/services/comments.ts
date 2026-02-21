@@ -358,19 +358,20 @@ export async function getComment(
   return data as CommentRow;
 }
 
-/** List comments where the given user is in mentions array. Excludes soft-deleted. */
+/** List comments where the given user is in mentions array. Excludes soft-deleted. Returns count and has_more for pagination. */
 export async function listCommentsWhereMentioned(
   organizationId: string,
   userId: string,
   options: { limit?: number; offset?: number } = {}
-): Promise<{ data: CommentWithAuthor[] }> {
+): Promise<{ data: CommentWithAuthor[]; count: number; has_more: boolean }> {
   const limit = Math.min(Math.max(options.limit ?? 20, 1), 50);
   const offset = Math.max(options.offset ?? 0, 0);
 
-  const { data: comments, error } = await supabase
+  const { data: comments, error, count } = await supabase
     .from("comments")
     .select(
-      "id, organization_id, entity_type, entity_id, parent_id, author_id, content, mentions, is_resolved, resolved_by, resolved_at, edited_at, deleted_at, created_at, updated_at"
+      "id, organization_id, entity_type, entity_id, parent_id, author_id, content, mentions, is_resolved, resolved_by, resolved_at, edited_at, deleted_at, created_at, updated_at",
+      { count: "exact" }
     )
     .eq("organization_id", organizationId)
     .is("deleted_at", null)
@@ -378,18 +379,27 @@ export async function listCommentsWhereMentioned(
     .order("created_at", { ascending: false })
     .range(offset, offset + limit - 1);
 
-  if (error || !comments?.length) {
-    return { data: [] };
+  if (error) {
+    console.error("[Comments] listCommentsWhereMentioned error:", error);
+    return { data: [], count: 0, has_more: false };
   }
 
-  const authorIds = [...new Set((comments as CommentRow[]).map((c) => c.author_id))];
+  const total = count ?? 0;
+  const rows = (comments || []) as CommentRow[];
+  const has_more = total > offset + rows.length;
+
+  if (rows.length === 0) {
+    return { data: [], count: total, has_more: false };
+  }
+
+  const authorIds = [...new Set(rows.map((c) => c.author_id))];
   const { data: users } = await supabase
     .from("users")
     .select("id, full_name, email")
     .in("id", authorIds);
 
   const userMap = new Map((users || []).map((u: any) => [u.id, u]));
-  const data: CommentWithAuthor[] = (comments as CommentRow[]).map((c) => ({
+  const data: CommentWithAuthor[] = rows.map((c) => ({
     ...c,
     author: userMap.get(c.author_id)
       ? {
@@ -401,7 +411,7 @@ export async function listCommentsWhereMentioned(
     mentions: (c.mentions ?? []).map((user_id) => ({ user_id })),
   }));
 
-  return { data };
+  return { data, count: total, has_more };
 }
 
 /** Resolve a comment (sets is_resolved, resolved_by, resolved_at). */

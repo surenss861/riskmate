@@ -21,10 +21,11 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(Math.max(Number(url.searchParams.get('limit')) || 50, 1), 100)
     const offset = Math.max(Number(url.searchParams.get('offset')) || 0, 0)
 
-    const { data: rows, error } = await supabase
+    const { data: rows, error, count } = await supabase
       .from('comments')
       .select(
-        'id, organization_id, entity_type, entity_id, parent_id, author_id, content, mentions, is_resolved, resolved_by, resolved_at, edited_at, deleted_at, created_at, updated_at'
+        'id, organization_id, entity_type, entity_id, parent_id, author_id, content, mentions, is_resolved, resolved_by, resolved_at, edited_at, deleted_at, created_at, updated_at',
+        { count: 'exact' }
       )
       .eq('organization_id', organization_id)
       .is('deleted_at', null)
@@ -35,8 +36,10 @@ export async function GET(request: NextRequest) {
     if (error) throw error
 
     const comments = (rows || []) as any[]
+    const total = count ?? 0
+    const has_more = total > offset + comments.length
     if (comments.length === 0) {
-      return NextResponse.json({ data: [] })
+      return NextResponse.json({ data: [], count: total, has_more: false })
     }
 
     const authorIds = [...new Set(comments.map((c) => c.author_id))]
@@ -62,7 +65,7 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    return NextResponse.json({ data })
+    return NextResponse.json({ data, count: total, has_more })
   } catch (error: any) {
     const { response, errorId } = createErrorResponse(
       error?.message || 'Failed to list mentions',
