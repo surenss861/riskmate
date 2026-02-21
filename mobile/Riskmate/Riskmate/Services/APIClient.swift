@@ -978,14 +978,14 @@ class APIClient {
         return response.data
     }
 
-    /// Get comments for a job
-    func getComments(jobId: String, limit: Int = 50, offset: Int = 0, includeReplies: Bool = false) async throws -> [JobComment] {
+    /// Get comments for a job. Returns data and hasMore for pagination.
+    func getComments(jobId: String, limit: Int = 50, offset: Int = 0, includeReplies: Bool = false) async throws -> (data: [JobComment], hasMore: Bool) {
         var query = "limit=\(limit)&offset=\(offset)"
         if includeReplies { query += "&include_replies=true" }
         let response: CommentsListResponse = try await request(
             endpoint: "/api/jobs/\(jobId)/comments?\(query)"
         )
-        return response.data
+        return (response.data, response.hasMore ?? false)
     }
 
     /// Create a comment on a job (optionally with mention_user_ids for notifications)

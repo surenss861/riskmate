@@ -7,6 +7,10 @@ struct JobCommentsView: View {
     let jobId: String
 
     @State private var comments: [JobComment] = []
+    @State private var commentsOffset = 0
+    @State private var hasMoreComments = true
+    @State private var isLoadingMore = false
+    private let commentsPageSize = 20
     @State private var isLoading = true
     @State private var loadError: String?
     @State private var newContent = ""
@@ -63,6 +67,28 @@ struct JobCommentsView: View {
                         } else {
                             ForEach(comments) { comment in
                                 commentRow(comment)
+                            }
+                            if hasMoreComments {
+                                HStack {
+                                    if isLoadingMore {
+                                        ProgressView()
+                                            .scaleEffect(0.9)
+                                        Text("Loading more…")
+                                            .font(RMTheme.Typography.caption)
+                                            .foregroundColor(RMTheme.Colors.textTertiary)
+                                    } else {
+                                        Button {
+                                            Task { await loadMoreComments() }
+                                        } label: {
+                                            Text("Load more")
+                                                .font(RMTheme.Typography.caption)
+                                                .foregroundColor(RMTheme.Colors.accent)
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, RMTheme.Spacing.md)
                             }
                         }
                     }
@@ -268,6 +294,11 @@ struct JobCommentsView: View {
                 Text(authorDisplay(comment))
                     .font(RMTheme.Typography.bodySmallBold)
                     .foregroundColor(RMTheme.Colors.textPrimary)
+                if comment.editedAt != nil {
+                    Text("(edited)")
+                        .font(RMTheme.Typography.caption)
+                        .foregroundColor(RMTheme.Colors.textTertiary)
+                }
                 Spacer()
                 Text(relativeTime(comment.createdAt))
                     .font(RMTheme.Typography.caption)
@@ -478,6 +509,11 @@ struct JobCommentsView: View {
                     .font(RMTheme.Typography.caption)
                     .fontWeight(.medium)
                     .foregroundColor(RMTheme.Colors.textPrimary)
+                if reply.editedAt != nil {
+                    Text("(edited)")
+                        .font(RMTheme.Typography.caption2)
+                        .foregroundColor(RMTheme.Colors.textTertiary)
+                }
                 Text(relativeTime(reply.createdAt))
                     .font(RMTheme.Typography.caption2)
                     .foregroundColor(RMTheme.Colors.textTertiary)
@@ -636,9 +672,38 @@ struct JobCommentsView: View {
     private func loadComments() async {
         isLoading = true
         loadError = nil
+        commentsOffset = 0
+        hasMoreComments = true
         defer { isLoading = false }
         do {
-            comments = try await APIClient.shared.getComments(jobId: jobId, includeReplies: false)
+            let (data, hasMore) = try await APIClient.shared.getComments(
+                jobId: jobId,
+                limit: commentsPageSize,
+                offset: 0,
+                includeReplies: false
+            )
+            comments = data
+            hasMoreComments = hasMore
+            commentsOffset = data.count
+        } catch {
+            loadError = error.localizedDescription
+        }
+    }
+
+    private func loadMoreComments() async {
+        guard hasMoreComments, !isLoadingMore else { return }
+        isLoadingMore = true
+        defer { isLoadingMore = false }
+        do {
+            let (data, hasMore) = try await APIClient.shared.getComments(
+                jobId: jobId,
+                limit: commentsPageSize,
+                offset: commentsOffset,
+                includeReplies: false
+            )
+            comments.append(contentsOf: data)
+            hasMoreComments = hasMore
+            commentsOffset += data.count
         } catch {
             loadError = error.localizedDescription
         }
