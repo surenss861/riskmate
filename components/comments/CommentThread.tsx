@@ -259,6 +259,9 @@ export function CommentThread({
                       <span className="text-xs text-white/50 shrink-0">
                         {formatDistanceToNow(new Date(r.created_at), { addSuffix: true })}
                       </span>
+                      {(r as CommentItem).edited_at && (
+                        <span className="text-xs text-white/40">(edited)</span>
+                      )}
                       {(r as CommentItem)._pending && (
                         <span className="text-xs text-white/50">Sending…</span>
                       )}

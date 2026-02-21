@@ -194,10 +194,11 @@ export function JobCommentsPanel({
         const team = await teamApi.get()
         if (cancelled) return
         setMembers(
-          (team.members ?? []).map((m: { id: string; full_name?: string | null; email?: string }) => ({
+          (team.members ?? []).map((m: { id: string; full_name?: string | null; email?: string; role?: string }) => ({
             id: m.id,
             full_name: m.full_name ?? null,
             email: m.email ?? '',
+            role: m.role ?? null,
           }))
         )
         setCurrentUserRole(team.current_user_role ?? 'member')

@@ -224,9 +224,47 @@ struct JobCommentsView: View {
         return isAuthor || isOwnerOrAdmin
     }
 
+    /// Circular badge with author initials for wireframe avatar requirement.
+    private func authorInitialsBadge(_ comment: JobComment, size: CGFloat = 28) -> some View {
+        let initials = authorInitials(comment)
+        let color = colorForAuthorId(comment.authorId)
+        return Text(initials)
+            .font(.system(size: size * 0.4, weight: .semibold))
+            .foregroundColor(color)
+            .frame(width: size, height: size)
+            .background(color.opacity(0.2))
+            .clipShape(Circle())
+    }
+
+    private func authorInitials(_ comment: JobComment) -> String {
+        let name = comment.author?.fullName?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let n = name, !n.isEmpty {
+            let parts = n.split(separator: " ").compactMap { $0.first }
+            let initStr = String(parts.prefix(2)).uppercased()
+            if !initStr.isEmpty { return initStr }
+        }
+        let email = comment.author?.email ?? ""
+        let local = email.split(separator: "@").first.map(String.init) ?? ""
+        let initStr = String(local.prefix(2)).uppercased()
+        return initStr.isEmpty ? "?" : initStr
+    }
+
+    private func colorForAuthorId(_ authorId: String) -> Color {
+        let palette: [Color] = [
+            RMTheme.Colors.accent,
+            Color(red: 0.4, green: 0.6, blue: 1),
+            Color(red: 0.5, green: 0.8, blue: 0.5),
+            Color(red: 0.9, green: 0.6, blue: 0.3),
+            Color(red: 0.7, green: 0.5, blue: 0.9),
+        ]
+        let hash = abs(authorId.hashValue)
+        return palette[hash % palette.count]
+    }
+
     private func commentRow(_ comment: JobComment) -> some View {
         VStack(alignment: .leading, spacing: RMTheme.Spacing.xs) {
             HStack(alignment: .center) {
+                authorInitialsBadge(comment)
                 Text(authorDisplay(comment))
                     .font(RMTheme.Typography.bodySmallBold)
                     .foregroundColor(RMTheme.Colors.textPrimary)
@@ -435,6 +473,7 @@ struct JobCommentsView: View {
     private func replyRow(_ reply: JobComment) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .center) {
+                authorInitialsBadge(reply, size: 22)
                 Text(authorDisplay(reply))
                     .font(RMTheme.Typography.caption)
                     .fontWeight(.medium)
