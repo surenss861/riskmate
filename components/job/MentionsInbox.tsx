@@ -136,14 +136,14 @@ export function MentionsInbox({ onMentionsCountChange }: MentionsInboxProps) {
                 )}
               >
                 <div className="flex items-center justify-between gap-2 mb-1">
-                  <span className={clsx(typography.bodySmall, 'font-medium text-white/90')}>
+                  <span className={clsx(typography.body, 'font-medium text-white/90')}>
                     {c.author?.full_name?.trim() || c.author?.email || 'Unknown'}
                   </span>
                   <span className="text-xs text-white/50">
                     {formatDistanceToNow(new Date(c.created_at), { addSuffix: true })}
                   </span>
                 </div>
-                <div className={clsx(typography.bodySmall, 'text-white/70 line-clamp-2')}>
+                <div className={clsx(typography.body, 'text-white/70 line-clamp-2')}>
                   {renderMentions(c.content)}
                 </div>
                 <div className="mt-2 text-xs text-white/50">
