@@ -1,5 +1,5 @@
 import { supabase } from "../lib/supabaseClient";
-import { sendTaskOverdueNotification, sendTaskDueSoonNotification } from "../services/notifications";
+import { getNotificationPreferences, sendTaskOverdueNotification, sendTaskDueSoonNotification } from "../services/notifications";
 import { EmailJobType, queueEmail } from "./emailQueue";
 
 const TASK_REMINDER_INTERVAL_MS = 24 * 60 * 60 * 1000;
@@ -131,12 +131,18 @@ async function processTaskReminders() {
           console.warn("[TaskReminderWorker] No email for assignee", task.assigned_to, "skipping email");
         }
 
+        const prefs = await getNotificationPreferences(task.assigned_to);
+        const shouldQueueEmail =
+          assigneeEmail &&
+          prefs.email_enabled &&
+          prefs.deadline_approaching;
+
         const isOverdue = task.due_date ? new Date(task.due_date).getTime() < now.getTime() : false;
 
         await sendTaskReminderPushAndEmail(
           task,
           jobTitle,
-          assigneeEmail,
+          shouldQueueEmail ? assigneeEmail : null,
           now,
           isOverdue
         );

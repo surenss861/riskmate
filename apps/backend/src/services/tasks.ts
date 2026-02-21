@@ -316,6 +316,48 @@ export async function updateTask(
     console.error("[Tasks] updateTask error:", error);
     throw new Error("Failed to update task");
   }
+
+  const current = taskCheck.task;
+  const updated = task as TaskRow & { assignee?: unknown };
+
+  // Completion: when status transitions to done via PATCH, notify creator (match completeTask behavior).
+  if (input.status === "done" && current.status !== "done" && current.created_by) {
+    const { data: job } = await supabase
+      .from("jobs")
+      .select("client_name")
+      .eq("id", current.job_id)
+      .eq("organization_id", organizationId)
+      .maybeSingle();
+    const jobTitle = (job as any)?.client_name ?? "Job";
+    sendTaskCompletedNotification(
+      current.created_by,
+      organizationId,
+      taskId,
+      current.title,
+      jobTitle
+    ).catch((err) => console.error("[Tasks] sendTaskCompletedNotification failed:", err));
+  }
+
+  // Reassignment: when assigned_to changes to a new non-null user, notify the new assignee.
+  const newAssigneeId = input.assigned_to !== undefined ? input.assigned_to : null;
+  if (newAssigneeId && newAssigneeId !== current.assigned_to) {
+    const { data: job } = await supabase
+      .from("jobs")
+      .select("client_name")
+      .eq("id", current.job_id)
+      .eq("organization_id", organizationId)
+      .maybeSingle();
+    const jobTitle = (job as any)?.client_name ?? "Job";
+    const taskTitle = updated.title ?? current.title;
+    sendTaskAssignedNotification(
+      newAssigneeId,
+      organizationId,
+      taskId,
+      jobTitle,
+      taskTitle
+    ).catch((err) => console.error("[Tasks] sendTaskAssignedNotification failed:", err));
+  }
+
   return toTaskApiShape(task as any);
 }
 
