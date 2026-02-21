@@ -6,31 +6,13 @@ import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { logApiError } from '@/lib/utils/errorLogging'
 import { getRequestId } from '@/lib/utils/requestId'
 import { mapTaskToApiShape } from '@/lib/utils/taskApiShape'
+import { getSessionToken, BACKEND_URL } from '@/lib/api/proxy-helpers'
 
 export const runtime = 'nodejs'
 
 const ROUTE = '/api/jobs/[id]/tasks'
 
 const TASK_PRIORITIES = ['low', 'medium', 'high', 'urgent'] as const
-
-async function createTaskAssignedNotificationRecord(
-  userId: string,
-  organizationId: string,
-  taskId: string,
-  jobId: string,
-  taskTitle: string,
-  jobTitle?: string | null
-) {
-  const admin = createSupabaseAdminClient()
-  await admin.from('notifications').insert({
-    user_id: userId,
-    organization_id: organizationId,
-    type: 'task_assigned',
-    content: `You've been assigned '${taskTitle}' on '${jobTitle || 'Job'}'`,
-    is_read: false,
-    deep_link: `riskmate://jobs/${jobId}/tasks/${taskId}`,
-  })
-}
 
 export async function GET(
   request: NextRequest,
@@ -178,7 +160,7 @@ export async function POST(
       throw error || new Error('Failed to create task')
     }
 
-    if (assigned_to) {
+    if (assigned_to && BACKEND_URL) {
       const { data: job } = await supabase
         .from('jobs')
         .select('client_name')
@@ -187,14 +169,25 @@ export async function POST(
         .maybeSingle()
 
       const jobTitle = job?.client_name || 'Job'
-      await createTaskAssignedNotificationRecord(
-        assigned_to,
-        organization_id,
-        task.id,
-        jobId,
-        task.title,
-        jobTitle
-      )
+      const token = await getSessionToken(request)
+      if (token) {
+        fetch(`${BACKEND_URL}/api/notifications/task-assigned`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            userId: assigned_to,
+            taskId: task.id,
+            taskTitle: task.title,
+            jobId,
+            jobTitle,
+          }),
+        }).catch((err) => {
+          console.warn('[Tasks] Task assigned notification (push/email) failed:', err)
+        })
+      }
     }
 
     const data = mapTaskToApiShape(task)

@@ -20,6 +20,9 @@ var EmailJobType;
     EmailJobType["mention"] = "mention";
     EmailJobType["weekly_digest"] = "weekly_digest";
     EmailJobType["deadline_reminder"] = "deadline_reminder";
+    EmailJobType["task_reminder"] = "task_reminder";
+    EmailJobType["task_assigned"] = "task_assigned";
+    EmailJobType["task_completed"] = "task_completed";
 })(EmailJobType || (exports.EmailJobType = EmailJobType = {}));
 const emailQueue = [];
 let workerStarted = false;
@@ -113,6 +116,41 @@ async function processJob(job) {
             client_name: typeof rawJob.client_name === 'string' ? rawJob.client_name : null,
             due_date: typeof rawJob.due_date === 'string' ? rawJob.due_date : null,
         }, Number(job.data.hoursRemaining || 0), job.userId);
+        return;
+    }
+    if (job.type === EmailJobType.task_reminder) {
+        if (!job.userId)
+            throw new Error('task_reminder requires userId');
+        await (0, email_1.sendTaskReminderEmail)(job.to, userName, {
+            taskTitle: String(job.data.taskTitle || ''),
+            jobTitle: String(job.data.jobTitle || 'Job'),
+            dueDate: typeof job.data.dueDate === 'string' ? job.data.dueDate : null,
+            isOverdue: Boolean(job.data.isOverdue),
+            hoursRemaining: typeof job.data.hoursRemaining === 'number' ? job.data.hoursRemaining : undefined,
+            jobId: typeof job.data.jobId === 'string' ? job.data.jobId : undefined,
+            taskId: typeof job.data.taskId === 'string' ? job.data.taskId : undefined,
+        }, job.userId);
+        return;
+    }
+    if (job.type === EmailJobType.task_assigned) {
+        if (!job.userId)
+            throw new Error('task_assigned requires userId');
+        await (0, email_1.sendTaskAssignedEmail)(job.to, userName, {
+            taskTitle: String(job.data.taskTitle || ''),
+            jobTitle: String(job.data.jobTitle || 'Job'),
+            jobId: String(job.data.jobId || ''),
+            taskId: String(job.data.taskId || ''),
+        }, job.userId);
+        return;
+    }
+    if (job.type === EmailJobType.task_completed) {
+        if (!job.userId)
+            throw new Error('task_completed requires userId');
+        await (0, email_1.sendTaskCompletedEmail)(job.to, userName, {
+            taskTitle: String(job.data.taskTitle || ''),
+            jobTitle: String(job.data.jobTitle || 'Job'),
+            taskId: String(job.data.taskId || ''),
+        }, job.userId);
         return;
     }
     throw new Error(`Unsupported email job type: ${job.type}`);

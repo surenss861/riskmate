@@ -54,6 +54,7 @@ exports.jobTasksRouter.post("/:id/tasks", auth_1.authenticate, async (req, res) 
             priority: body.priority,
             due_date: body.due_date,
             sort_order: body.sort_order,
+            status: body.status,
         });
         res.status(201).json({ data: task });
     }
@@ -108,7 +109,7 @@ exports.tasksRouter.patch("/:id", auth_1.authenticate, async (req, res) => {
             due_date: body.due_date,
             status: body.status,
             sort_order: body.sort_order,
-        });
+        }, authReq.user.id);
         res.json({ data: task });
     }
     catch (err) {

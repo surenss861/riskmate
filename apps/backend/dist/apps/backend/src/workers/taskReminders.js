@@ -4,8 +4,9 @@ exports.startTaskReminderWorker = startTaskReminderWorker;
 exports.stopTaskReminderWorker = stopTaskReminderWorker;
 const supabaseClient_1 = require("../lib/supabaseClient");
 const notifications_1 = require("../services/notifications");
+const emailQueue_1 = require("./emailQueue");
 const TASK_REMINDER_INTERVAL_MS = 24 * 60 * 60 * 1000;
-const MIN_REMINDER_GAP_MS = 23 * 60 * 60 * 1000;
+const MIN_REMINDER_GAP_MS = 23 * 60 * 60 * 1000; // throttle: don't re-notify same task within ~23h
 let workerRunning = false;
 let workerInterval = null;
 let startupTimeout = null;
@@ -18,21 +19,48 @@ function getMillisecondsUntilNext8amLocal() {
     }
     return Math.max(next.getTime() - now.getTime(), 0);
 }
+/** Send push and enqueue email for one task reminder; then update last_reminded_at to prevent duplicates. */
+async function sendTaskReminderPushAndEmail(task, jobTitle, assigneeEmail, now, isOverdue) {
+    const hoursRemaining = task.due_date
+        ? (new Date(task.due_date).getTime() - now.getTime()) / (60 * 60 * 1000)
+        : 0;
+    if (isOverdue) {
+        await (0, notifications_1.sendTaskOverdueNotification)(task.assigned_to, task.organization_id, task.id, task.title, jobTitle);
+    }
+    else {
+        await (0, notifications_1.sendTaskDueSoonNotification)(task.assigned_to, task.organization_id, task.id, task.title, jobTitle, hoursRemaining);
+    }
+    if (assigneeEmail) {
+        (0, emailQueue_1.queueEmail)(emailQueue_1.EmailJobType.task_reminder, assigneeEmail, {
+            taskTitle: task.title,
+            jobTitle,
+            dueDate: task.due_date,
+            isOverdue,
+            hoursRemaining: isOverdue ? undefined : hoursRemaining,
+            jobId: task.job_id,
+            taskId: task.id,
+        }, task.assigned_to);
+    }
+    await supabaseClient_1.supabase
+        .from("tasks")
+        .update({ last_reminded_at: new Date().toISOString() })
+        .eq("id", task.id);
+}
 async function processTaskReminders() {
     const now = new Date();
-    const in24h = new Date(now.getTime() + TASK_REMINDER_INTERVAL_MS);
     const remindedBefore = new Date(now.getTime() - MIN_REMINDER_GAP_MS).toISOString();
     const nowIso = now.toISOString();
-    const in24hIso = in24h.toISOString();
+    const in24hIso = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString();
     try {
+        // Tasks due by 24h from now (overdue or due within 24h); not done/cancelled; has assignee; throttle by last_reminded_at
         const { data: tasks, error } = await supabaseClient_1.supabase
             .from("tasks")
             .select("id, organization_id, assigned_to, title, job_id, due_date, status, last_reminded_at")
-            .gte("due_date", nowIso)
             .lte("due_date", in24hIso)
             .neq("status", "done")
             .neq("status", "cancelled")
             .not("assigned_to", "is", null)
+            .not("due_date", "is", null)
             .or(`last_reminded_at.is.null,last_reminded_at.lt.${remindedBefore}`);
         if (error) {
             console.error("[TaskReminderWorker] Failed to load tasks:", error);
@@ -51,11 +79,17 @@ async function processTaskReminders() {
                     .eq("organization_id", task.organization_id)
                     .maybeSingle();
                 const jobTitle = job?.client_name || "Job";
-                await (0, notifications_1.sendTaskOverdueNotification)(task.assigned_to, task.organization_id, task.id, task.title, jobTitle);
-                await supabaseClient_1.supabase
-                    .from("tasks")
-                    .update({ last_reminded_at: new Date().toISOString() })
-                    .eq("id", task.id);
+                const { data: assignee } = await supabaseClient_1.supabase
+                    .from("users")
+                    .select("email")
+                    .eq("id", task.assigned_to)
+                    .maybeSingle();
+                const assigneeEmail = assignee?.email ?? null;
+                if (!assigneeEmail) {
+                    console.warn("[TaskReminderWorker] No email for assignee", task.assigned_to, "skipping email");
+                }
+                const isOverdue = task.due_date ? new Date(task.due_date).getTime() < now.getTime() : false;
+                await sendTaskReminderPushAndEmail(task, jobTitle, assigneeEmail, now, isOverdue);
                 processed += 1;
             }
             catch (err) {

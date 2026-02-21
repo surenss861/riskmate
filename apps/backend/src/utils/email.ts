@@ -8,6 +8,9 @@ import { TeamInviteEmail } from '../emails/TeamInviteEmail'
 import { MentionEmail } from '../emails/MentionEmail'
 import { WeeklyDigestEmail, type WeeklyDigestData } from '../emails/WeeklyDigestEmail'
 import { DeadlineReminderEmail } from '../emails/DeadlineReminderEmail'
+import { TaskReminderEmail } from '../emails/TaskReminderEmail'
+import { TaskAssignedEmail } from '../emails/TaskAssignedEmail'
+import { TaskCompletedEmail } from '../emails/TaskCompletedEmail'
 
 interface EmailOptions {
   to: string | string[]
@@ -368,6 +371,88 @@ export async function sendDeadlineReminderEmail(
     userName: userName || fallbackName(to),
     job,
     hoursRemaining,
+  })
+
+  await sendEmail({
+    to,
+    subject: template.subject,
+    html: template.html,
+  })
+}
+
+export async function sendTaskAssignedEmail(
+  to: string,
+  userName: string,
+  params: { taskTitle: string; jobTitle: string; jobId: string; taskId: string },
+  userId: string
+): Promise<void> {
+  const prefs = await getNotificationPreferences(userId)
+  if (!(prefs.email_enabled && prefs.job_assigned)) return
+
+  const template = TaskAssignedEmail({
+    userName: userName || fallbackName(to),
+    taskTitle: params.taskTitle,
+    jobTitle: params.jobTitle,
+    jobId: params.jobId,
+    taskId: params.taskId,
+  })
+
+  await sendEmail({
+    to,
+    subject: template.subject,
+    html: template.html,
+  })
+}
+
+export async function sendTaskCompletedEmail(
+  to: string,
+  userName: string,
+  params: { taskTitle: string; jobTitle: string; taskId: string },
+  userId: string
+): Promise<void> {
+  const prefs = await getNotificationPreferences(userId)
+  if (!prefs.email_enabled) return
+
+  const template = TaskCompletedEmail({
+    userName: userName || fallbackName(to),
+    taskTitle: params.taskTitle,
+    jobTitle: params.jobTitle,
+    taskId: params.taskId,
+  })
+
+  await sendEmail({
+    to,
+    subject: template.subject,
+    html: template.html,
+  })
+}
+
+export async function sendTaskReminderEmail(
+  to: string,
+  userName: string,
+  params: {
+    taskTitle: string
+    jobTitle: string
+    dueDate: string | null
+    isOverdue: boolean
+    hoursRemaining?: number
+    jobId?: string
+    taskId?: string
+  },
+  userId: string
+): Promise<void> {
+  const prefs = await getNotificationPreferences(userId)
+  if (!(prefs.email_enabled && prefs.deadline_approaching)) return
+
+  const template = TaskReminderEmail({
+    userName: userName || fallbackName(to),
+    taskTitle: params.taskTitle,
+    jobTitle: params.jobTitle,
+    dueDate: params.dueDate,
+    isOverdue: params.isOverdue,
+    hoursRemaining: params.hoursRemaining,
+    jobId: params.jobId,
+    taskId: params.taskId,
   })
 
   await sendEmail({

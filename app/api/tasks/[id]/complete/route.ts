@@ -1,35 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
-import { createSupabaseAdminClient } from '@/lib/supabase/admin'
 import { getOrganizationContext, verifyOrganizationOwnership } from '@/lib/utils/organizationGuard'
 import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { logApiError } from '@/lib/utils/errorLogging'
 import { getRequestId } from '@/lib/utils/requestId'
 import { mapTaskToApiShape } from '@/lib/utils/taskApiShape'
+import { getSessionToken, BACKEND_URL } from '@/lib/api/proxy-helpers'
 
 export const runtime = 'nodejs'
 
 const ROUTE = '/api/tasks/[id]/complete'
-
-async function createTaskCompletedNotificationRecord(
-  userId: string,
-  organizationId: string,
-  taskId: string,
-  taskTitle: string,
-  jobTitle?: string | null
-) {
-  const admin = createSupabaseAdminClient()
-  await admin.from('notifications').insert({
-    user_id: userId,
-    organization_id: organizationId,
-    type: 'task_completed',
-    content: `'${taskTitle}' has been completed`,
-    is_read: false,
-    deep_link: `riskmate://tasks/${taskId}`,
-  })
-
-  void jobTitle
-}
 
 export async function POST(
   request: NextRequest,
@@ -81,14 +61,25 @@ export async function POST(
       .eq('organization_id', organization_id)
       .maybeSingle()
 
-    if (existingTask.created_by) {
-      await createTaskCompletedNotificationRecord(
-        existingTask.created_by,
-        organization_id,
-        taskId,
-        existingTask.title,
-        job?.client_name || 'Job'
-      )
+    if (existingTask.created_by && BACKEND_URL) {
+      const token = await getSessionToken(request)
+      if (token) {
+        fetch(`${BACKEND_URL}/api/notifications/task-completed`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            userId: existingTask.created_by,
+            taskId,
+            taskTitle: existingTask.title,
+            jobTitle: job?.client_name || 'Job',
+          }),
+        }).catch((err) => {
+          console.warn('[Tasks] Task completed notification (push/email) failed:', err)
+        })
+      }
     }
 
     const data = mapTaskToApiShape(updatedTask)

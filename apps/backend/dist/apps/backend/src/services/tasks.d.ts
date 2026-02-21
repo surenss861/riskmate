@@ -34,6 +34,7 @@ export interface CreateTaskInput {
     priority?: TaskPriority | string;
     due_date?: string | null;
     sort_order?: number;
+    status?: TaskStatus | string;
 }
 export interface UpdateTaskInput {
     title?: string;
@@ -52,8 +53,8 @@ export declare function listTasksByJob(organizationId: string, jobId: string): P
 export declare function getTask(organizationId: string, taskId: string): Promise<TaskWithAssignee | null>;
 /** Create a task on a job. */
 export declare function createTask(organizationId: string, userId: string, jobId: string, input: CreateTaskInput): Promise<TaskWithAssignee>;
-/** Update a task. */
-export declare function updateTask(organizationId: string, taskId: string, input: UpdateTaskInput): Promise<TaskWithAssignee>;
+/** Update a task. actingUserId is required when status may change to/from done (for completed_at/completed_by). */
+export declare function updateTask(organizationId: string, taskId: string, input: UpdateTaskInput, actingUserId: string): Promise<TaskWithAssignee>;
 /** Delete a task. */
 export declare function deleteTask(organizationId: string, taskId: string): Promise<void>;
 /** Mark task as done. */

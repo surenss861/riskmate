@@ -21,6 +21,7 @@ exports.sendJobAssignedNotification = sendJobAssignedNotification;
 exports.sendTaskAssignedNotification = sendTaskAssignedNotification;
 exports.sendTaskCompletedNotification = sendTaskCompletedNotification;
 exports.sendTaskOverdueNotification = sendTaskOverdueNotification;
+exports.sendTaskDueSoonNotification = sendTaskDueSoonNotification;
 exports.sendSignatureRequestNotification = sendSignatureRequestNotification;
 exports.sendEvidenceUploadedNotification = sendEvidenceUploadedNotification;
 exports.sendHazardAddedNotification = sendHazardAddedNotification;
@@ -611,6 +612,26 @@ async function sendTaskOverdueNotification(userId, organizationId, taskId, taskT
         body: `'${taskTitle}' on '${jobTitle}' is overdue`,
         data: {
             type: "task_overdue",
+            taskId,
+        },
+        priority: "high",
+        categoryId: "deadline",
+    });
+}
+/** Notify assignee that a task is due within 24 hours (push only; caller should queue email separately). */
+async function sendTaskDueSoonNotification(userId, organizationId, taskId, taskTitle, jobTitle, hoursRemaining) {
+    const prefs = await getNotificationPreferences(userId);
+    if (!prefs.deadline_approaching) {
+        console.log("[Notifications] Skipped task_due_soon for user", userId, "(preference disabled)");
+        return;
+    }
+    const h = Math.max(0, Math.round(hoursRemaining));
+    const text = h <= 0 ? "Due now" : h === 1 ? "Due in 1 hour" : `Due in ${h} hours`;
+    await sendToUser(userId, organizationId, {
+        title: "Task due soon",
+        body: `'${taskTitle}' on '${jobTitle}' – ${text}`,
+        data: {
+            type: "task_due_soon",
             taskId,
         },
         priority: "high",

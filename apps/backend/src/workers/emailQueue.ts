@@ -5,6 +5,9 @@ import {
   sendMentionEmail,
   sendReportReadyEmail,
   sendSignatureRequestEmail,
+  sendTaskAssignedEmail,
+  sendTaskCompletedEmail,
+  sendTaskReminderEmail,
   sendTeamInviteEmail,
   sendWeeklyDigestEmail,
   sendWelcomeEmail,
@@ -21,6 +24,9 @@ export enum EmailJobType {
   mention = 'mention',
   weekly_digest = 'weekly_digest',
   deadline_reminder = 'deadline_reminder',
+  task_reminder = 'task_reminder',
+  task_assigned = 'task_assigned',
+  task_completed = 'task_completed',
 }
 
 export interface EmailJob {
@@ -179,6 +185,57 @@ async function processJob(job: EmailJob): Promise<void> {
         due_date: typeof rawJob.due_date === 'string' ? rawJob.due_date : null,
       },
       Number(job.data.hoursRemaining || 0),
+      job.userId
+    )
+    return
+  }
+
+  if (job.type === EmailJobType.task_reminder) {
+    if (!job.userId) throw new Error('task_reminder requires userId')
+    await sendTaskReminderEmail(
+      job.to,
+      userName,
+      {
+        taskTitle: String(job.data.taskTitle || ''),
+        jobTitle: String(job.data.jobTitle || 'Job'),
+        dueDate: typeof job.data.dueDate === 'string' ? job.data.dueDate : null,
+        isOverdue: Boolean(job.data.isOverdue),
+        hoursRemaining:
+          typeof job.data.hoursRemaining === 'number' ? job.data.hoursRemaining : undefined,
+        jobId: typeof job.data.jobId === 'string' ? job.data.jobId : undefined,
+        taskId: typeof job.data.taskId === 'string' ? job.data.taskId : undefined,
+      },
+      job.userId
+    )
+    return
+  }
+
+  if (job.type === EmailJobType.task_assigned) {
+    if (!job.userId) throw new Error('task_assigned requires userId')
+    await sendTaskAssignedEmail(
+      job.to,
+      userName,
+      {
+        taskTitle: String(job.data.taskTitle || ''),
+        jobTitle: String(job.data.jobTitle || 'Job'),
+        jobId: String(job.data.jobId || ''),
+        taskId: String(job.data.taskId || ''),
+      },
+      job.userId
+    )
+    return
+  }
+
+  if (job.type === EmailJobType.task_completed) {
+    if (!job.userId) throw new Error('task_completed requires userId')
+    await sendTaskCompletedEmail(
+      job.to,
+      userName,
+      {
+        taskTitle: String(job.data.taskTitle || ''),
+        jobTitle: String(job.data.jobTitle || 'Job'),
+        taskId: String(job.data.taskId || ''),
+      },
       job.userId
     )
     return

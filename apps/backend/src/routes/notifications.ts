@@ -9,6 +9,8 @@ import {
   sendCommentReplyNotification,
   sendJobCommentNotification,
   sendCommentResolvedNotification,
+  sendTaskAssignedNotification,
+  sendTaskCompletedNotification,
   validatePushToken,
   getNotificationPreferences,
   getUnreadNotificationCount,
@@ -19,6 +21,7 @@ import {
 } from "../services/notifications";
 import { requireFeature } from "../middleware/limits";
 import { supabase } from "../lib/supabaseClient";
+import { EmailJobType, queueEmail } from "../workers/emailQueue";
 
 export const notificationsRouter: ExpressRouter = express.Router();
 
@@ -252,6 +255,116 @@ notificationsRouter.post(
       res.status(204).end();
     } catch (err: any) {
       console.error("Job assigned notification failed:", err);
+      res.status(500).json({ message: "Failed to send notification" });
+    }
+  }
+);
+
+/** POST /api/notifications/task-assigned — notify assignee (push + email). Body: { userId, taskId, taskTitle, jobId, jobTitle? }. */
+notificationsRouter.post(
+  "/task-assigned",
+  authenticate as unknown as express.RequestHandler,
+  async (req: express.Request, res: express.Response) => {
+    const authReq = req as AuthenticatedRequest;
+    try {
+      const { userId, taskId, taskTitle, jobId, jobTitle } = req.body || {};
+      if (!userId || !taskId || !taskTitle || !jobId) {
+        return res
+          .status(400)
+          .json({ message: "Missing userId, taskId, taskTitle, or jobId" });
+      }
+      const organizationId = authReq.user.organization_id;
+      const { data: task } = await supabase
+        .from("tasks")
+        .select("id, organization_id")
+        .eq("id", taskId)
+        .eq("organization_id", organizationId)
+        .single();
+      if (!task) {
+        return res.status(404).json({ message: "Task not found" });
+      }
+      const { data: user } = await supabase
+        .from("users")
+        .select("id, organization_id, email")
+        .eq("id", userId)
+        .single();
+      if (!user || user.organization_id !== organizationId) {
+        return res.status(403).json({ message: "User not in this organization" });
+      }
+      await sendTaskAssignedNotification(
+        userId,
+        organizationId,
+        taskId,
+        jobTitle || "Job",
+        taskTitle
+      );
+      const toEmail = (user as { email?: string | null }).email;
+      if (toEmail) {
+        queueEmail(
+          EmailJobType.task_assigned,
+          toEmail,
+          { taskId, taskTitle, jobTitle: jobTitle || "Job", jobId },
+          userId
+        );
+      }
+      res.status(204).end();
+    } catch (err: any) {
+      console.error("Task assigned notification failed:", err);
+      res.status(500).json({ message: "Failed to send notification" });
+    }
+  }
+);
+
+/** POST /api/notifications/task-completed — notify task creator (push + email). Body: { userId, taskId, taskTitle, jobTitle? }. */
+notificationsRouter.post(
+  "/task-completed",
+  authenticate as unknown as express.RequestHandler,
+  async (req: express.Request, res: express.Response) => {
+    const authReq = req as AuthenticatedRequest;
+    try {
+      const { userId, taskId, taskTitle, jobTitle } = req.body || {};
+      if (!userId || !taskId || !taskTitle) {
+        return res
+          .status(400)
+          .json({ message: "Missing userId, taskId, or taskTitle" });
+      }
+      const organizationId = authReq.user.organization_id;
+      const { data: task } = await supabase
+        .from("tasks")
+        .select("id, organization_id")
+        .eq("id", taskId)
+        .eq("organization_id", organizationId)
+        .single();
+      if (!task) {
+        return res.status(404).json({ message: "Task not found" });
+      }
+      const { data: user } = await supabase
+        .from("users")
+        .select("id, organization_id, email")
+        .eq("id", userId)
+        .single();
+      if (!user || user.organization_id !== organizationId) {
+        return res.status(403).json({ message: "User not in this organization" });
+      }
+      await sendTaskCompletedNotification(
+        userId,
+        organizationId,
+        taskId,
+        taskTitle,
+        jobTitle || "Job"
+      );
+      const toEmail = (user as { email?: string | null }).email;
+      if (toEmail) {
+        queueEmail(
+          EmailJobType.task_completed,
+          toEmail,
+          { taskId, taskTitle, jobTitle: jobTitle || "Job" },
+          userId
+        );
+      }
+      res.status(204).end();
+    } catch (err: any) {
+      console.error("Task completed notification failed:", err);
       res.status(500).json({ message: "Failed to send notification" });
     }
   }

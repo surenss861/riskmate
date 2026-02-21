@@ -45,6 +45,9 @@ exports.sendTeamInviteEmail = sendTeamInviteEmail;
 exports.sendMentionEmail = sendMentionEmail;
 exports.sendWeeklyDigestEmail = sendWeeklyDigestEmail;
 exports.sendDeadlineReminderEmail = sendDeadlineReminderEmail;
+exports.sendTaskAssignedEmail = sendTaskAssignedEmail;
+exports.sendTaskCompletedEmail = sendTaskCompletedEmail;
+exports.sendTaskReminderEmail = sendTaskReminderEmail;
 exports.hashAlertPayload = hashAlertPayload;
 const crypto_1 = __importDefault(require("crypto"));
 const notifications_1 = require("../services/notifications");
@@ -56,6 +59,9 @@ const TeamInviteEmail_1 = require("../emails/TeamInviteEmail");
 const MentionEmail_1 = require("../emails/MentionEmail");
 const WeeklyDigestEmail_1 = require("../emails/WeeklyDigestEmail");
 const DeadlineReminderEmail_1 = require("../emails/DeadlineReminderEmail");
+const TaskReminderEmail_1 = require("../emails/TaskReminderEmail");
+const TaskAssignedEmail_1 = require("../emails/TaskAssignedEmail");
+const TaskCompletedEmail_1 = require("../emails/TaskCompletedEmail");
 function sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -288,6 +294,59 @@ async function sendDeadlineReminderEmail(to, userName, job, hoursRemaining, user
         userName: userName || fallbackName(to),
         job,
         hoursRemaining,
+    });
+    await sendEmail({
+        to,
+        subject: template.subject,
+        html: template.html,
+    });
+}
+async function sendTaskAssignedEmail(to, userName, params, userId) {
+    const prefs = await (0, notifications_1.getNotificationPreferences)(userId);
+    if (!(prefs.email_enabled && prefs.job_assigned))
+        return;
+    const template = (0, TaskAssignedEmail_1.TaskAssignedEmail)({
+        userName: userName || fallbackName(to),
+        taskTitle: params.taskTitle,
+        jobTitle: params.jobTitle,
+        jobId: params.jobId,
+        taskId: params.taskId,
+    });
+    await sendEmail({
+        to,
+        subject: template.subject,
+        html: template.html,
+    });
+}
+async function sendTaskCompletedEmail(to, userName, params, userId) {
+    const prefs = await (0, notifications_1.getNotificationPreferences)(userId);
+    if (!prefs.email_enabled)
+        return;
+    const template = (0, TaskCompletedEmail_1.TaskCompletedEmail)({
+        userName: userName || fallbackName(to),
+        taskTitle: params.taskTitle,
+        jobTitle: params.jobTitle,
+        taskId: params.taskId,
+    });
+    await sendEmail({
+        to,
+        subject: template.subject,
+        html: template.html,
+    });
+}
+async function sendTaskReminderEmail(to, userName, params, userId) {
+    const prefs = await (0, notifications_1.getNotificationPreferences)(userId);
+    if (!(prefs.email_enabled && prefs.deadline_approaching))
+        return;
+    const template = (0, TaskReminderEmail_1.TaskReminderEmail)({
+        userName: userName || fallbackName(to),
+        taskTitle: params.taskTitle,
+        jobTitle: params.jobTitle,
+        dueDate: params.dueDate,
+        isOverdue: params.isOverdue,
+        hoursRemaining: params.hoursRemaining,
+        jobId: params.jobId,
+        taskId: params.taskId,
     });
     await sendEmail({
         to,

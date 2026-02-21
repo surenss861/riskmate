@@ -27,6 +27,26 @@ export declare function sendDeadlineReminderEmail(to: string, userName: string, 
     client_name?: string | null;
     due_date?: string | null;
 }, hoursRemaining: number, userId: string): Promise<void>;
+export declare function sendTaskAssignedEmail(to: string, userName: string, params: {
+    taskTitle: string;
+    jobTitle: string;
+    jobId: string;
+    taskId: string;
+}, userId: string): Promise<void>;
+export declare function sendTaskCompletedEmail(to: string, userName: string, params: {
+    taskTitle: string;
+    jobTitle: string;
+    taskId: string;
+}, userId: string): Promise<void>;
+export declare function sendTaskReminderEmail(to: string, userName: string, params: {
+    taskTitle: string;
+    jobTitle: string;
+    dueDate: string | null;
+    isOverdue: boolean;
+    hoursRemaining?: number;
+    jobId?: string;
+    taskId?: string;
+}, userId: string): Promise<void>;
 export declare function hashAlertPayload(payload: Record<string, unknown>): string;
 export {};
 //# sourceMappingURL=email.d.ts.map

@@ -6,6 +6,7 @@ import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { logApiError } from '@/lib/utils/errorLogging'
 import { getRequestId } from '@/lib/utils/requestId'
 import { mapTaskToApiShape } from '@/lib/utils/taskApiShape'
+import { getSessionToken, BACKEND_URL } from '@/lib/api/proxy-helpers'
 
 export const runtime = 'nodejs'
 
@@ -110,6 +111,18 @@ export async function PATCH(
     if (sort_order !== undefined) updateData.sort_order = sort_order
 
     const supabase = await createSupabaseServerClient()
+
+    let existingTask: { status: string; created_by: string | null; title: string; job_id: string } | null = null
+    if (status === 'done') {
+      const { data: existing } = await supabase
+        .from('tasks')
+        .select('status, created_by, title, job_id')
+        .eq('id', taskId)
+        .eq('organization_id', organization_id)
+        .single()
+      existingTask = existing ?? null
+    }
+
     const { data: task, error } = await supabase
       .from('tasks')
       .update(updateData)
@@ -120,6 +133,33 @@ export async function PATCH(
 
     if (error || !task) {
       throw error || new Error('Failed to update task')
+    }
+
+    if (status === 'done' && existingTask?.status !== 'done' && existingTask?.created_by && BACKEND_URL) {
+      const token = await getSessionToken(request)
+      if (token) {
+        const { data: job } = await supabase
+          .from('jobs')
+          .select('client_name')
+          .eq('id', existingTask.job_id)
+          .eq('organization_id', organization_id)
+          .maybeSingle()
+        fetch(`${BACKEND_URL}/api/notifications/task-completed`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            userId: existingTask.created_by,
+            taskId,
+            taskTitle: existingTask.title,
+            jobTitle: job?.client_name || 'Job',
+          }),
+        }).catch((err) => {
+          console.warn('[Tasks] Task completed notification (push/email) failed:', err)
+        })
+      }
     }
 
     const data = mapTaskToApiShape(task)
