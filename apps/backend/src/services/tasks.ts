@@ -197,20 +197,27 @@ export async function createTask(
   }
   const status = input.status ?? "todo";
 
+  const nowIso = new Date().toISOString();
+  const insertPayload: Record<string, unknown> = {
+    organization_id: organizationId,
+    job_id: jobId,
+    created_by: userId,
+    title: input.title.trim(),
+    description: input.description ?? null,
+    assigned_to: input.assigned_to ?? null,
+    priority,
+    due_date: input.due_date ?? null,
+    sort_order: input.sort_order ?? 0,
+    status,
+  };
+  if (status === "done") {
+    insertPayload.completed_at = nowIso;
+    insertPayload.completed_by = userId;
+  }
+
   const { data: task, error } = await supabase
     .from("tasks")
-    .insert({
-      organization_id: organizationId,
-      job_id: jobId,
-      created_by: userId,
-      title: input.title.trim(),
-      description: input.description ?? null,
-      assigned_to: input.assigned_to ?? null,
-      priority,
-      due_date: input.due_date ?? null,
-      sort_order: input.sort_order ?? 0,
-      status,
-    })
+    .insert(insertPayload)
     .select("*, assignee:assigned_to(id, full_name, email)")
     .single();
 

@@ -207,7 +207,32 @@ tasksRouter.post(
   }
 );
 
-/** DELETE /api/tasks/:id/complete — reopen task */
+/** POST /api/tasks/:id/reopen — reopen task (spec'd endpoint) */
+tasksRouter.post(
+  "/:id/reopen",
+  authenticate as unknown as express.RequestHandler,
+  async (req: express.Request, res: express.Response) => {
+    const authReq = req as AuthenticatedRequest;
+    const taskId = req.params.id;
+    if (!taskId) {
+      return res.status(400).json({ message: "Task id is required", code: "MISSING_PARAMS" });
+    }
+    try {
+      const task = await reopenTask(authReq.user.organization_id, taskId);
+      res.json({ data: task });
+    } catch (err: any) {
+      const status = err?.status ?? 500;
+      const code = err?.code ?? "QUERY_ERROR";
+      console.error("Reopen task failed:", err);
+      res.status(status).json({
+        message: err?.message ?? "Failed to reopen task",
+        code,
+      });
+    }
+  }
+);
+
+/** DELETE /api/tasks/:id/complete — reopen task (backward compatibility) */
 tasksRouter.delete(
   "/:id/complete",
   authenticate as unknown as express.RequestHandler,
