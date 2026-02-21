@@ -1080,10 +1080,10 @@ export const teamApi = {
 
 // Comments API (entity-level: update, delete, resolve, replies, mentions)
 export const commentsApi = {
-  update: async (commentId: string, content: string) =>
+  update: async (commentId: string, content: string, mention_user_ids?: string[]) =>
     apiRequest<{ data: CommentWithAuthor }>(`/api/comments/${commentId}`, {
       method: 'PATCH',
-      body: JSON.stringify({ content }),
+      body: JSON.stringify({ content, ...(mention_user_ids != null && { mention_user_ids }) }),
     }),
   delete: async (commentId: string) =>
     apiRequest<null>(`/api/comments/${commentId}`, { method: 'DELETE' }),

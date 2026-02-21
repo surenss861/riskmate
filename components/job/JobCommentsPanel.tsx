@@ -7,6 +7,7 @@ import { typography, emptyStateStyles, buttonStyles } from '@/lib/styles/design-
 import clsx from 'clsx'
 import { MessageSquare } from 'lucide-react'
 import { CommentCompose, CommentThread, type CommentItem, type MentionUser } from '@/components/comments'
+import { extractMentionUserIds } from '@/lib/utils/mentionParser'
 
 const COMMENT_PAGE_SIZE = 20
 const REPLY_PAGE_SIZE = 50
@@ -123,7 +124,8 @@ export function JobCommentsPanel({
     }
   }, [])
 
-  // Report unread count: include both top-level comments and all loaded replies (merge repliesByParent timestamps)
+  // Report unread count: include both top-level comments and all loaded replies (merge repliesByParent timestamps).
+  // Exclude the current user's own comments/replies so posting does not inflate unread.
   const lastViewedMs = lastViewedAt != null ? (typeof lastViewedAt === 'number' ? lastViewedAt : new Date(lastViewedAt).getTime()) : 0
   useEffect(() => {
     const allItems = [
@@ -131,10 +133,13 @@ export function JobCommentsPanel({
       ...Object.values(repliesByParent).flat(),
     ]
     const unread = allItems.filter(
-      (c) => !c._pending && new Date(c.created_at).getTime() > lastViewedMs
+      (c) =>
+        !c._pending &&
+        c.author_id !== currentUserId &&
+        new Date(c.created_at).getTime() > lastViewedMs
     ).length
     onUnreadCountChange?.(unread)
-  }, [comments, repliesByParent, lastViewedMs, onUnreadCountChange])
+  }, [comments, repliesByParent, lastViewedMs, currentUserId, onUnreadCountChange])
 
   // Realtime: subscribe to comments for this job; refresh list and reply counts
   useEffect(() => {
@@ -317,8 +322,9 @@ export function JobCommentsPanel({
 
   const handleUpdate = async (commentId: string, content: string) => {
     if (!content.trim()) return
+    const mentionUserIds = extractMentionUserIds(content.trim())
     try {
-      await commentsApi.update(commentId, content.trim())
+      await commentsApi.update(commentId, content.trim(), mentionUserIds.length > 0 ? mentionUserIds : undefined)
       setEditId(null)
       setEditContent('')
       await loadComments(0)

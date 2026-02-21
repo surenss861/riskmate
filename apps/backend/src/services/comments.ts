@@ -244,7 +244,8 @@ export async function updateComment(
   organizationId: string,
   commentId: string,
   body: string,
-  userId: string
+  userId: string,
+  explicitMentionUserIds?: string[]
 ): Promise<{ data: CommentRow | null; error: string | null }> {
   if (!body || typeof body !== "string" || body.trim().length === 0) {
     return { data: null, error: "Body is required" };
@@ -269,7 +270,8 @@ export async function updateComment(
   }
 
   const fromText = await extractMentionUserIds(body.trim(), organizationId);
-  const rawMentionIds = fromText.filter((id) => id && id !== userId);
+  const explicitMentions = Array.isArray(explicitMentionUserIds) ? explicitMentionUserIds : [];
+  const rawMentionIds = [...new Set([...fromText, ...explicitMentions])].filter((id) => id && id !== userId);
 
   let mentionUserIds: string[] = [];
   let mentionUsersForFormat: { id: string; full_name?: string | null; email?: string | null }[] = [];

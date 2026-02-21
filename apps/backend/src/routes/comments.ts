@@ -361,7 +361,7 @@ commentsRouter.patch(
   async (req: express.Request, res: express.Response) => {
     const authReq = req as AuthenticatedRequest;
     const commentId = req.params.id;
-    const body = (req.body || {}) as { content?: string; body?: string };
+    const body = (req.body || {}) as { content?: string; body?: string; mention_user_ids?: string[] };
     const commentBody = body.content ?? body.body;
 
     if (commentBody !== undefined && (typeof commentBody !== "string" || !commentBody.trim())) {
@@ -379,7 +379,8 @@ commentsRouter.patch(
         authReq.user.organization_id,
         commentId,
         commentBody,
-        authReq.user.id
+        authReq.user.id,
+        body.mention_user_ids
       );
       if (result.error) {
         if (result.error === "Comment not found") {
