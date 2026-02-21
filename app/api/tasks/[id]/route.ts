@@ -256,14 +256,31 @@ export async function DELETE(
     await verifyOrganizationOwnership('tasks', taskId, organization_id)
 
     const supabase = await createSupabaseServerClient()
-    const { error } = await supabase
+    const { data: deleted, error } = await supabase
       .from('tasks')
       .delete()
       .eq('id', taskId)
       .eq('organization_id', organization_id)
+      .select('id')
 
     if (error) {
       throw error
+    }
+
+    if (!deleted || deleted.length === 0) {
+      const { response, errorId } = createErrorResponse('Task not found', 'NOT_FOUND', {
+        requestId,
+        statusCode: 404,
+      })
+      logApiError(404, 'NOT_FOUND', errorId, requestId, organization_id, response.message, {
+        category: 'validation',
+        severity: 'warn',
+        route: ROUTE,
+      })
+      return NextResponse.json(response, {
+        status: 404,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
     }
 
     return NextResponse.json({ data: { id: taskId } })

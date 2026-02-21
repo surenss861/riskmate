@@ -33,7 +33,19 @@ export async function POST(
       .single()
 
     if (existingTaskError || !existingTask) {
-      throw existingTaskError || new Error('Task not found')
+      const { response, errorId } = createErrorResponse('Task not found', 'NOT_FOUND', {
+        requestId,
+        statusCode: 404,
+      })
+      logApiError(404, 'NOT_FOUND', errorId, requestId, organization_id, response.message, {
+        category: 'validation',
+        severity: 'warn',
+        route: ROUTE,
+      })
+      return NextResponse.json(response, {
+        status: 404,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
     }
 
     const nowIso = new Date().toISOString()
@@ -119,8 +131,31 @@ export async function DELETE(
 
     await verifyOrganizationOwnership('tasks', taskId, organization_id)
 
-    const nowIso = new Date().toISOString()
     const supabase = await createSupabaseServerClient()
+    const { data: existingTask, error: fetchError } = await supabase
+      .from('tasks')
+      .select('id')
+      .eq('id', taskId)
+      .eq('organization_id', organization_id)
+      .single()
+
+    if (fetchError || !existingTask) {
+      const { response, errorId } = createErrorResponse('Task not found', 'NOT_FOUND', {
+        requestId,
+        statusCode: 404,
+      })
+      logApiError(404, 'NOT_FOUND', errorId, requestId, organization_id, response.message, {
+        category: 'validation',
+        severity: 'warn',
+        route: ROUTE,
+      })
+      return NextResponse.json(response, {
+        status: 404,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
+
+    const nowIso = new Date().toISOString()
     const { data: task, error } = await supabase
       .from('tasks')
       .update({
