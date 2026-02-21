@@ -43,6 +43,7 @@ export interface CreateTaskInput {
   priority?: TaskPriority | string;
   due_date?: string | null;
   sort_order?: number;
+  status?: TaskStatus | string;
 }
 
 export interface UpdateTaskInput {
@@ -185,6 +186,17 @@ export async function createTask(
   }
   const priority = input.priority ?? "medium";
 
+  if (
+    input.status !== undefined &&
+    !TASK_STATUSES.includes(input.status as TaskStatus)
+  ) {
+    throw Object.assign(new Error("status must be one of: todo, in_progress, done, cancelled"), {
+      status: 400,
+      code: "VALIDATION_ERROR",
+    });
+  }
+  const status = input.status ?? "todo";
+
   const { data: task, error } = await supabase
     .from("tasks")
     .insert({
@@ -197,6 +209,7 @@ export async function createTask(
       priority,
       due_date: input.due_date ?? null,
       sort_order: input.sort_order ?? 0,
+      status,
     })
     .select("*, assignee:assigned_to(id, full_name, email)")
     .single();
@@ -228,11 +241,12 @@ export async function createTask(
   return out;
 }
 
-/** Update a task. */
+/** Update a task. actingUserId is required when status may change to/from done (for completed_at/completed_by). */
 export async function updateTask(
   organizationId: string,
   taskId: string,
-  input: UpdateTaskInput
+  input: UpdateTaskInput,
+  actingUserId: string
 ): Promise<TaskWithAssignee> {
   const taskCheck = await taskBelongsToOrg(taskId, organizationId);
   if (!taskCheck.ok) {
@@ -271,7 +285,16 @@ export async function updateTask(
   if (input.assigned_to !== undefined) updatePayload.assigned_to = input.assigned_to;
   if (input.priority !== undefined) updatePayload.priority = input.priority;
   if (input.due_date !== undefined) updatePayload.due_date = input.due_date;
-  if (input.status !== undefined) updatePayload.status = input.status;
+  if (input.status !== undefined) {
+    updatePayload.status = input.status;
+    if (input.status === "done") {
+      updatePayload.completed_at = new Date().toISOString();
+      updatePayload.completed_by = actingUserId;
+    } else {
+      updatePayload.completed_at = null;
+      updatePayload.completed_by = null;
+    }
+  }
   if (input.sort_order !== undefined) updatePayload.sort_order = input.sort_order;
 
   const { data: task, error } = await supabase

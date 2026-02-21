@@ -70,6 +70,7 @@ jobTasksRouter.post(
           priority: body.priority,
           due_date: body.due_date,
           sort_order: body.sort_order,
+          status: body.status,
         }
       );
       res.status(201).json({ data: task });
@@ -125,15 +126,20 @@ tasksRouter.patch(
     }
     try {
       const body = req.body ?? {};
-      const task = await updateTask(authReq.user.organization_id, taskId, {
-        title: body.title,
-        description: body.description,
-        assigned_to: body.assigned_to,
-        priority: body.priority,
-        due_date: body.due_date,
-        status: body.status,
-        sort_order: body.sort_order,
-      });
+      const task = await updateTask(
+        authReq.user.organization_id,
+        taskId,
+        {
+          title: body.title,
+          description: body.description,
+          assigned_to: body.assigned_to,
+          priority: body.priority,
+          due_date: body.due_date,
+          status: body.status,
+          sort_order: body.sort_order,
+        },
+        authReq.user.id
+      );
       res.json({ data: task });
     } catch (err: any) {
       const status = err?.status ?? 500;
