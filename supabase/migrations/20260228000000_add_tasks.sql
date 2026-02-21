@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS tasks (
   title TEXT NOT NULL,
   description TEXT,
   assigned_to UUID REFERENCES users(id) ON DELETE SET NULL,
-  created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  created_by UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
   completed_by UUID REFERENCES users(id) ON DELETE SET NULL,
   priority TEXT NOT NULL DEFAULT 'medium' CHECK (priority IN ('low', 'medium', 'high', 'urgent')),
   status TEXT NOT NULL DEFAULT 'todo' CHECK (status IN ('todo', 'in_progress', 'done', 'cancelled')),

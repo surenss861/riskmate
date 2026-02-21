@@ -132,11 +132,11 @@ export async function PATCH(
 
     const supabase = await createSupabaseServerClient()
 
-    let existingTask: { status: string; created_by: string | null; title: string; job_id: string } | null = null
-    if (status === 'done') {
+    let existingTask: { status: string; created_by: string | null; title: string; job_id: string; assigned_to: string | null } | null = null
+    if (status === 'done' || assigned_to !== undefined) {
       const { data: existing } = await supabase
         .from('tasks')
-        .select('status, created_by, title, job_id')
+        .select('status, created_by, title, job_id, assigned_to')
         .eq('id', taskId)
         .eq('organization_id', organization_id)
         .single()
@@ -178,6 +178,42 @@ export async function PATCH(
           }),
         }).catch((err) => {
           console.warn('[Tasks] Task completed notification (push/email) failed:', err)
+        })
+      }
+    }
+
+    const previousAssignee = existingTask?.assigned_to ?? null
+    const newAssignee = assigned_to !== undefined ? assigned_to : previousAssignee
+    if (
+      assigned_to !== undefined &&
+      newAssignee != null &&
+      String(previousAssignee) !== String(newAssignee) &&
+      BACKEND_URL
+    ) {
+      const token = await getSessionToken(request)
+      if (token) {
+        const { data: job } = await supabase
+          .from('jobs')
+          .select('client_name')
+          .eq('id', task.job_id)
+          .eq('organization_id', organization_id)
+          .maybeSingle()
+        const jobTitle = job?.client_name || 'Job'
+        fetch(`${BACKEND_URL}/api/notifications/task-assigned`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            userId: newAssignee,
+            taskId,
+            taskTitle: task.title,
+            jobId: task.job_id,
+            jobTitle,
+          }),
+        }).catch((err) => {
+          console.warn('[Tasks] Task assigned notification (push/email) failed:', err)
         })
       }
     }
