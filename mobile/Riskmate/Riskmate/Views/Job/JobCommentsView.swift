@@ -1,4 +1,5 @@
 import SwiftUI
+import Supabase
 
 /// Comments tab for job detail: list comments, replies nested per comment, add comment and reply. Mentions shown as styled chips.
 /// Supports @ mention composition: teammate lookup on @, tokens as @[Display Name](userId), and mention_user_ids sent to backend for notifications.
@@ -20,6 +21,8 @@ struct JobCommentsView: View {
     @State private var members: [TeamMember] = []
     @State private var mentionQuery: String?
     @State private var activeReplyMentionParentId: String?
+    @State private var resolvingCommentId: String?
+    @StateObject private var realtimeService = JobCommentsRealtimeService()
 
     var body: some View {
         Group {
@@ -65,6 +68,18 @@ struct JobCommentsView: View {
         .task {
             await loadComments()
             await loadMembers()
+        }
+        .onAppear {
+            realtimeService.subscribe(jobId: jobId)
+        }
+        .onDisappear {
+            Task { await realtimeService.unsubscribe() }
+        }
+        .onChange(of: realtimeService.needsRefresh) { _, newValue in
+            if newValue {
+                Task { await loadComments() }
+                realtimeService.clearRefresh()
+            }
         }
     }
 
@@ -161,6 +176,10 @@ struct JobCommentsView: View {
         .clipShape(RoundedRectangle(cornerRadius: RMTheme.Radius.md))
     }
 
+    private func canResolve(_ comment: JobComment) -> Bool {
+        comment.authorId == currentUserId
+    }
+
     private func commentRow(_ comment: JobComment) -> some View {
         VStack(alignment: .leading, spacing: RMTheme.Spacing.xs) {
             HStack(alignment: .center) {
@@ -175,6 +194,27 @@ struct JobCommentsView: View {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 14))
                         .foregroundColor(RMTheme.Colors.success)
+                }
+                if canResolve(comment) {
+                    let isResolving = resolvingCommentId == comment.id
+                    Button {
+                        Task { await toggleResolve(comment) }
+                    } label: {
+                        if isResolving {
+                            ProgressView()
+                                .scaleEffect(0.7)
+                        } else if comment.isResolved == true {
+                            Image(systemName: "circle")
+                                .font(.system(size: 14))
+                                .foregroundColor(RMTheme.Colors.textTertiary)
+                        } else {
+                            Image(systemName: "checkmark.circle")
+                                .font(.system(size: 14))
+                                .foregroundColor(RMTheme.Colors.textSecondary)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isResolving)
                 }
             }
             contentWithMentions(comment.content)
@@ -421,6 +461,21 @@ struct JobCommentsView: View {
         }
     }
 
+    private func toggleResolve(_ comment: JobComment) async {
+        resolvingCommentId = comment.id
+        defer { resolvingCommentId = nil }
+        do {
+            if comment.isResolved == true {
+                _ = try await APIClient.shared.unresolveComment(commentId: comment.id)
+            } else {
+                _ = try await APIClient.shared.resolveComment(commentId: comment.id)
+            }
+            await loadComments()
+        } catch {
+            // Non-fatal: comment state unchanged; user can retry
+        }
+    }
+
     private func postComment() async {
         let content = newContent.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !content.isEmpty else { return }
@@ -552,6 +607,53 @@ struct JobCommentsView: View {
             segments.append(.text(ns.substring(from: lastEnd)))
         }
         return segments.isEmpty ? [.text(content)] : segments
+    }
+}
+
+// MARK: - Job Comments Realtime
+
+@MainActor
+final class JobCommentsRealtimeService: ObservableObject {
+    @Published var needsRefresh = false
+
+    private var channel: RealtimeChannelV2?
+    private var subscription: RealtimeSubscription?
+    private var supabaseClient: SupabaseClient?
+
+    func subscribe(jobId: String) {
+        guard let url = URL(string: AppConfig.shared.supabaseURL) else { return }
+        let client = SupabaseClient(supabaseURL: url, supabaseKey: AppConfig.shared.supabaseAnonKey)
+        supabaseClient = client
+        let channelName = "job-comments-\(jobId)"
+        let ch = client.channel(channelName)
+        let filter = "entity_id=eq.\(jobId)"
+        subscription = ch.onPostgresChange(
+            InsertAction.self,
+            schema: "public",
+            table: "comments",
+            filter: filter
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.needsRefresh = true
+            }
+        }
+        Task { @MainActor in
+            try? await ch.subscribeWithError()
+            self.channel = ch
+        }
+    }
+
+    func unsubscribe() async {
+        subscription = nil
+        if let ch = channel {
+            await ch.unsubscribe()
+        }
+        channel = nil
+        supabaseClient = nil
+    }
+
+    func clearRefresh() {
+        needsRefresh = false
     }
 }
 

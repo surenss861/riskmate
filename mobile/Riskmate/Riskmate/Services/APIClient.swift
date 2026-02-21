@@ -1041,6 +1041,24 @@ class APIClient {
         return response.data
     }
 
+    /// Resolve a comment (POST /api/comments/:id/resolve)
+    func resolveComment(commentId: String) async throws -> JobComment {
+        let response: CreateCommentResponse = try await request(
+            endpoint: "/api/comments/\(commentId)/resolve",
+            method: "POST"
+        )
+        return response.data
+    }
+
+    /// Unresolve a comment (POST /api/comments/:id/unresolve)
+    func unresolveComment(commentId: String) async throws -> JobComment {
+        let response: CreateCommentResponse = try await request(
+            endpoint: "/api/comments/\(commentId)/unresolve",
+            method: "POST"
+        )
+        return response.data
+    }
+
     /// Complete a task
     func completeTask(id: String) async throws {
         let _: EmptyResponse = try await request(

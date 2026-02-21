@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { jobsApi, commentsApi, teamApi } from '@/lib/api'
 import type { CommentWithAuthor } from '@/lib/api'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
-import { renderMentions, extractMentionQuery, formatMention } from '@/lib/utils/mentionParser'
+import { renderMentions, extractMentionQuery, formatMention, extractMentionUserIds } from '@/lib/utils/mentionParser'
 import { typography, spacing, buttonStyles, emptyStateStyles } from '@/lib/styles/design-system'
 import { MessageSquare, Send, CheckCircle2, Circle, Reply, Pencil, Trash2, ChevronDown, ChevronRight } from 'lucide-react'
 import clsx from 'clsx'
@@ -16,19 +16,28 @@ interface MentionUser {
   email: string
 }
 
+const COMMENT_PAGE_SIZE = 20
+const COMMENT_MAX_LENGTH = 2000
+
 export interface JobCommentsPanelProps {
   jobId: string
   onError?: (message: string) => void
+  onCommentCountChange?: (count: number) => void
+  onNewCommentArrived?: () => void
 }
 
-export function JobCommentsPanel({ jobId, onError }: JobCommentsPanelProps) {
-  const [comments, setComments] = useState<CommentWithAuthor[]>([])
+type CommentItem = CommentWithAuthor & { _pending?: boolean }
+
+export function JobCommentsPanel({ jobId, onError, onCommentCountChange, onNewCommentArrived }: JobCommentsPanelProps) {
+  const [comments, setComments] = useState<CommentItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [hasMoreComments, setHasMoreComments] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [newContent, setNewContent] = useState('')
   const [replyForId, setReplyForId] = useState<string | null>(null)
   const [replyContent, setReplyContent] = useState('')
-  const [repliesByParent, setRepliesByParent] = useState<Record<string, CommentWithAuthor[]>>({})
+  const [repliesByParent, setRepliesByParent] = useState<Record<string, CommentItem[]>>({})
   const [loadingReplies, setLoadingReplies] = useState<Record<string, boolean>>({})
   type RepliesStatus = 'idle' | 'loading' | 'loaded' | 'error'
   const [repliesStatus, setRepliesStatus] = useState<Record<string, RepliesStatus>>({})
@@ -43,27 +52,89 @@ export function JobCommentsPanel({ jobId, onError }: JobCommentsPanelProps) {
   const [replyMentionQuery, setReplyMentionQuery] = useState<string | null>(null)
   const [replyMentionCursorPos, setReplyMentionCursorPos] = useState(0)
   const [activeReplyMentionParentId, setActiveReplyMentionParentId] = useState<string | null>(null)
+  const [mentionHighlightIndex, setMentionHighlightIndex] = useState(0)
+  const [replyMentionHighlightIndex, setReplyMentionHighlightIndex] = useState(0)
+  const newCommentBlockRef = useRef<HTMLDivElement>(null)
   const newTextareaRef = useRef<HTMLTextAreaElement>(null)
   const replyTextareaRefs = useRef<Record<string, HTMLTextAreaElement | null>>({})
   const loadingRepliesInFlightRef = useRef<Record<string, boolean>>({})
+  const commentsListRef = useRef<HTMLUListElement>(null)
+  const previousCommentsLengthRef = useRef(0)
+  const pendingNewIdRef = useRef<string | null>(null)
+  const pendingReplyIdsRef = useRef<Record<string, string>>({})
 
-  const loadComments = useCallback(async () => {
+  const loadComments = useCallback(async (offset?: number) => {
     if (!jobId) return
-    setLoading(true)
+    const isLoadMore = offset != null && offset > 0
+    if (isLoadMore) setLoadingMore(true)
+    else setLoading(true)
     try {
-      const res = await jobsApi.getComments(jobId, { limit: 50, include_replies: false })
-      setComments(res.data ?? [])
+      const res = await jobsApi.getComments(jobId, {
+        limit: COMMENT_PAGE_SIZE,
+        offset: offset ?? 0,
+        include_replies: false,
+      })
+      const data = res.data ?? []
+      const hasMore = res.has_more === true
+      setHasMoreComments(hasMore)
+      if (isLoadMore) {
+        setComments((prev) => [...prev, ...data])
+      } else {
+        setComments(data)
+      }
+      if (res.count != null) onCommentCountChange?.(res.count)
     } catch (e: any) {
       onError?.(e?.message ?? 'Failed to load comments')
-      setComments([])
+      if (!isLoadMore) setComments([])
     } finally {
       setLoading(false)
+      setLoadingMore(false)
     }
-  }, [jobId, onError])
+  }, [jobId, onError, onCommentCountChange])
 
   useEffect(() => {
-    loadComments()
+    loadComments(0)
   }, [loadComments])
+
+  // Realtime: subscribe to comments for this job; refresh list and reply counts
+  useEffect(() => {
+    if (!jobId) return
+    const supabase = createSupabaseBrowserClient()
+    const channel = supabase
+      .channel(`job-comments-${jobId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'comments',
+          filter: `entity_id=eq.${jobId}`,
+        },
+        (payload: { new?: Record<string, unknown> }) => {
+          const row = payload.new as Record<string, unknown> | undefined
+          if (!row || (row.entity_type as string) !== 'job') return
+          const parentId = row.parent_id as string | null | undefined
+          loadComments(0)
+          if (parentId) loadReplies(parentId, true)
+          onNewCommentArrived?.()
+        }
+      )
+      .subscribe()
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [jobId, loadComments, loadReplies, onNewCommentArrived])
+
+  // Scroll to newest comment when list grows (realtime or optimistic)
+  useEffect(() => {
+    const len = comments.length
+    if (len > previousCommentsLengthRef.current && commentsListRef.current) {
+      const last = commentsListRef.current.querySelector('li:last-of-type')
+      if (last) (last as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+      onNewCommentArrived?.()
+    }
+    previousCommentsLengthRef.current = len
+  }, [comments.length, onNewCommentArrived])
 
   useEffect(() => {
     let cancelled = false
@@ -116,34 +187,88 @@ export function JobCommentsPanel({ jobId, onError }: JobCommentsPanelProps) {
   const handleSubmitNew = async () => {
     const content = newContent.trim()
     if (!content || submitting) return
+    const mentionUserIds = extractMentionUserIds(content)
+    const pendingId = `pending-new-${Date.now()}`
+    pendingNewIdRef.current = pendingId
+    const optimistic: CommentItem = {
+      id: pendingId,
+      organization_id: '',
+      entity_type: 'job',
+      entity_id: jobId,
+      parent_id: null,
+      author_id: currentUserId ?? '',
+      content,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      reply_count: 0,
+      author: members.find((m) => m.id === currentUserId)
+        ? { id: currentUserId!, full_name: members.find((m) => m.id === currentUserId)!.full_name, email: members.find((m) => m.id === currentUserId)!.email }
+        : undefined,
+      _pending: true,
+    }
+    setComments((prev) => [...prev, optimistic])
+    setNewContent('')
     setSubmitting(true)
     try {
-      await jobsApi.createComment(jobId, { content })
-      setNewContent('')
-      await loadComments()
+      await jobsApi.createComment(jobId, {
+        content,
+        mention_user_ids: mentionUserIds.length > 0 ? mentionUserIds : undefined,
+      })
+      await loadComments(0)
     } catch (e: any) {
+      setComments((prev) => prev.filter((c) => c.id !== pendingId))
       onError?.(e?.message ?? 'Failed to post comment')
     } finally {
       setSubmitting(false)
+      pendingNewIdRef.current = null
     }
   }
 
   const handleSubmitReply = async (parentId: string) => {
     const content = replyContent.trim()
     if (!content || submitting) return
+    const mentionUserIds = extractMentionUserIds(content)
+    const pendingId = `pending-reply-${parentId}-${Date.now()}`
+    pendingReplyIdsRef.current = { ...pendingReplyIdsRef.current, [parentId]: pendingId }
+    const optimistic: CommentItem = {
+      id: pendingId,
+      organization_id: '',
+      entity_type: 'job',
+      entity_id: jobId,
+      parent_id: parentId,
+      author_id: currentUserId ?? '',
+      content,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      author: members.find((m) => m.id === currentUserId)
+        ? { id: currentUserId!, full_name: members.find((m) => m.id === currentUserId)!.full_name, email: members.find((m) => m.id === currentUserId)!.email }
+        : undefined,
+      _pending: true,
+    }
+    setRepliesByParent((prev) => ({ ...prev, [parentId]: [...(prev[parentId] ?? []), optimistic] }))
+    setReplyContent('')
+    setActiveReplyMentionParentId(null)
+    setReplyMentionQuery(null)
     setSubmitting(true)
     try {
-      await commentsApi.createReply(parentId, { content })
-      setReplyContent('')
-      setReplyForId(null)
-      setActiveReplyMentionParentId(null)
-      setReplyMentionQuery(null)
+      await commentsApi.createReply(parentId, {
+        content,
+        mention_user_ids: mentionUserIds.length > 0 ? mentionUserIds : undefined,
+      })
       await loadReplies(parentId, true)
-      await loadComments() // refresh reply_count
+      await loadComments(0) // refresh reply_count on parent comments
+      setReplyForId(null) // close reply section after success
     } catch (e: any) {
+      setRepliesByParent((prev) => ({
+        ...prev,
+        [parentId]: (prev[parentId] ?? []).filter((r) => r.id !== pendingId),
+      }))
       onError?.(e?.message ?? 'Failed to post reply')
     } finally {
       setSubmitting(false)
+      const next = { ...pendingReplyIdsRef.current }
+      delete next[parentId]
+      pendingReplyIdsRef.current = next
     }
   }
 
@@ -185,10 +310,10 @@ export function JobCommentsPanel({ jobId, onError }: JobCommentsPanelProps) {
     }
   }
 
-  const canResolve = (c: CommentWithAuthor) =>
-    currentUserId && (c.author_id === currentUserId || currentUserRole === 'owner' || currentUserRole === 'admin')
-  const canEditOrDelete = (c: CommentWithAuthor) =>
-    currentUserId && (c.author_id === currentUserId || currentUserRole === 'owner' || currentUserRole === 'admin')
+  const canResolve = (c: CommentItem) =>
+    !c._pending && currentUserId && (c.author_id === currentUserId || currentUserRole === 'owner' || currentUserRole === 'admin')
+  const canEditOrDelete = (c: CommentItem) =>
+    !c._pending && currentUserId && (c.author_id === currentUserId || currentUserRole === 'owner' || currentUserRole === 'admin')
 
   // Mention autocomplete: track @ and cursor in new comment textarea
   const handleNewContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -207,6 +332,49 @@ export function JobCommentsPanel({ jobId, onError }: JobCommentsPanelProps) {
     const query = extractMentionQuery(ta.value, pos)
     setMentionQuery(query)
     setMentionAnchorRef(ta)
+
+    const candidates =
+      query && !activeReplyMentionParentId
+        ? members
+            .filter(
+              (m) =>
+                (m.full_name?.toLowerCase().includes(query.toLowerCase()) ||
+                  m.email.toLowerCase().includes(query.toLowerCase())) &&
+                m.id !== currentUserId
+            )
+            .slice(0, 5)
+        : []
+    if (candidates.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setMentionHighlightIndex((i) => Math.min(i + 1, candidates.length - 1))
+        return
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setMentionHighlightIndex((i) => Math.max(0, i - 1))
+        return
+      }
+      if (e.key === 'Enter') {
+        e.preventDefault()
+        const chosen = candidates[mentionHighlightIndex]
+        if (chosen) {
+          insertMention(chosen, 'new')
+          setMentionHighlightIndex(0)
+        }
+        return
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        setMentionQuery(null)
+        setMentionHighlightIndex(0)
+        return
+      }
+    }
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault()
+      handleSubmitNew()
+    }
   }
   const mentionCandidates = mentionQuery && !activeReplyMentionParentId
     ? members.filter(
@@ -216,6 +384,24 @@ export function JobCommentsPanel({ jobId, onError }: JobCommentsPanelProps) {
           m.id !== currentUserId
       ).slice(0, 5)
     : []
+
+  useEffect(() => {
+    setMentionHighlightIndex(0)
+  }, [mentionCandidates.length])
+
+  useEffect(() => {
+    setReplyMentionHighlightIndex(0)
+  }, [replyMentionCandidates.length])
+
+  useEffect(() => {
+    const handleClickOutside = (ev: MouseEvent) => {
+      if (newCommentBlockRef.current && !newCommentBlockRef.current.contains(ev.target as Node)) {
+        setMentionQuery(null)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   const replyMentionCandidates = replyMentionQuery && activeReplyMentionParentId
     ? members.filter(
@@ -263,7 +449,7 @@ export function JobCommentsPanel({ jobId, onError }: JobCommentsPanelProps) {
 
   return (
     <div className="space-y-6">
-      <div>
+      <div ref={newCommentBlockRef}>
         <label className={clsx(typography.label, 'block mb-2')}>Add a comment</label>
         <div className="relative">
           <textarea
@@ -275,8 +461,9 @@ export function JobCommentsPanel({ jobId, onError }: JobCommentsPanelProps) {
               const ta = newTextareaRef.current
               if (ta) setMentionCursorPos(ta.selectionStart ?? 0)
             }}
-            placeholder="Write a comment… Use @ to mention a teammate."
+            placeholder="Write a comment… Use @ to mention a teammate. Cmd+Enter to send."
             rows={3}
+            maxLength={COMMENT_MAX_LENGTH}
             className={clsx(
               'w-full px-4 py-3 rounded-lg border border-white/10 bg-white/5 text-white/90 placeholder:text-white/40',
               'focus:outline-none focus:ring-1 focus:ring-white/20 focus:border-white/20 resize-y min-h-[80px]'
@@ -287,12 +474,16 @@ export function JobCommentsPanel({ jobId, onError }: JobCommentsPanelProps) {
               className="absolute left-0 right-0 top-full z-10 mt-1 rounded-lg border border-white/10 bg-[#1a1a1a] py-1 shadow-lg"
               role="listbox"
             >
-              {mentionCandidates.map((m) => (
+              {mentionCandidates.map((m, i) => (
                 <button
                   key={m.id}
                   type="button"
                   role="option"
-                  className="w-full px-4 py-2 text-left text-sm text-white/90 hover:bg-white/10 flex items-center gap-2"
+                  aria-selected={i === mentionHighlightIndex}
+                  className={clsx(
+                    'w-full px-4 py-2 text-left text-sm text-white/90 flex items-center gap-2',
+                    i === mentionHighlightIndex ? 'bg-white/10' : 'hover:bg-white/10'
+                  )}
                   onClick={() => insertMention(m, 'new')}
                 >
                   <span className="font-medium">{m.full_name || m.email}</span>
@@ -302,15 +493,27 @@ export function JobCommentsPanel({ jobId, onError }: JobCommentsPanelProps) {
             </div>
           )}
         </div>
-        <button
-          type="button"
-          disabled={!newContent.trim() || submitting}
-          onClick={handleSubmitNew}
-          className={clsx(buttonStyles.primary, 'mt-2 inline-flex items-center gap-2')}
-        >
-          <Send className="w-4 h-4" />
-          Post
-        </button>
+        <div className="mt-2 flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            disabled={!newContent.trim() || submitting}
+            onClick={handleSubmitNew}
+            className={clsx(buttonStyles.primary, 'inline-flex items-center gap-2')}
+          >
+            <Send className="w-4 h-4" />
+            Post
+          </button>
+          <button
+            type="button"
+            onClick={() => setNewContent('')}
+            className={clsx(buttonStyles.secondary)}
+          >
+            Cancel
+          </button>
+          <span className="text-xs text-white/50">
+            {newContent.length} / {COMMENT_MAX_LENGTH}
+          </span>
+        </div>
       </div>
 
       <div>
@@ -322,15 +525,18 @@ export function JobCommentsPanel({ jobId, onError }: JobCommentsPanelProps) {
             <p className={emptyStateStyles.description}>Be the first to add a comment or mention a teammate.</p>
           </div>
         ) : (
-          <ul className="space-y-4">
+          <ul ref={commentsListRef} className="space-y-4">
             {comments.map((c) => (
-              <li key={c.id} className="rounded-lg border border-white/10 bg-white/5 p-4">
+              <li key={c.id} className={clsx('rounded-lg border border-white/10 bg-white/5 p-4', c._pending && 'opacity-80')}>
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-medium text-white/90">
                         {c.author?.full_name || c.author?.email || 'Unknown'}
                       </span>
+                      {c._pending && (
+                        <span className="text-xs text-white/50">Sending…</span>
+                      )}
                       <span className="text-xs text-white/50">
                         {formatDistanceToNow(new Date(c.created_at), { addSuffix: true })}
                       </span>
@@ -450,13 +656,16 @@ export function JobCommentsPanel({ jobId, onError }: JobCommentsPanelProps) {
                       <div className="animate-pulse h-10 rounded bg-white/5" />
                     ) : (
                       (repliesByParent[c.id] ?? []).map((r) => (
-                        <div key={r.id} className="flex gap-2">
+                        <div key={r.id} className={clsx('flex gap-2', (r as CommentItem)._pending && 'opacity-80')}>
                           <span className="font-medium text-white/70 text-sm shrink-0">
                             {r.author?.full_name || r.author?.email || 'Unknown'}
                           </span>
                           <span className="text-xs text-white/50 shrink-0">
                             {formatDistanceToNow(new Date(r.created_at), { addSuffix: true })}
                           </span>
+                          {(r as CommentItem)._pending && (
+                            <span className="text-xs text-white/50">Sending…</span>
+                          )}
                           <span className="text-sm text-white/80 break-words [&_.mention]:text-[#F97316]">
                             {renderMentions(r.content)}
                           </span>
@@ -481,8 +690,41 @@ export function JobCommentsPanel({ jobId, onError }: JobCommentsPanelProps) {
                             const ta = e.currentTarget
                             const pos = ta.selectionStart ?? 0
                             setReplyMentionCursorPos(pos)
-                            setReplyMentionQuery(extractMentionQuery(ta.value, pos))
+                            const q = extractMentionQuery(ta.value, pos)
+                            setReplyMentionQuery(q)
                             setActiveReplyMentionParentId(c.id)
+                            if (activeReplyMentionParentId === c.id && replyMentionCandidates.length > 0) {
+                              if (e.key === 'ArrowDown') {
+                                e.preventDefault()
+                                setReplyMentionHighlightIndex((i) => Math.min(i + 1, replyMentionCandidates.length - 1))
+                                return
+                              }
+                              if (e.key === 'ArrowUp') {
+                                e.preventDefault()
+                                setReplyMentionHighlightIndex((i) => Math.max(0, i - 1))
+                                return
+                              }
+                              if (e.key === 'Enter') {
+                                e.preventDefault()
+                                const chosen = replyMentionCandidates[replyMentionHighlightIndex]
+                                if (chosen) {
+                                  insertMention(chosen, 'reply', c.id)
+                                  setReplyMentionHighlightIndex(0)
+                                }
+                                return
+                              }
+                              if (e.key === 'Escape') {
+                                e.preventDefault()
+                                setReplyMentionQuery(null)
+                                setActiveReplyMentionParentId(null)
+                                setReplyMentionHighlightIndex(0)
+                                return
+                              }
+                            }
+                            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                              e.preventDefault()
+                              handleSubmitReply(c.id)
+                            }
                           }}
                           onSelect={() => {
                             const ta = replyTextareaRefs.current[c.id]
@@ -495,8 +737,9 @@ export function JobCommentsPanel({ jobId, onError }: JobCommentsPanelProps) {
                           onBlur={() => {
                             setTimeout(() => setActiveReplyMentionParentId(null), 150)
                           }}
-                          placeholder="Write a reply… Use @ to mention."
+                          placeholder="Write a reply… Use @ to mention. Cmd+Enter to send."
                           rows={2}
+                          maxLength={COMMENT_MAX_LENGTH}
                           className={clsx(
                             'w-full px-3 py-2 rounded border border-white/10 bg-black/30 text-white/90 text-sm placeholder:text-white/40'
                           )}
@@ -506,12 +749,16 @@ export function JobCommentsPanel({ jobId, onError }: JobCommentsPanelProps) {
                             className="absolute left-0 right-0 top-full z-10 mt-1 rounded-lg border border-white/10 bg-[#1a1a1a] py-1 shadow-lg"
                             role="listbox"
                           >
-                            {replyMentionCandidates.map((m) => (
+                            {replyMentionCandidates.map((m, i) => (
                               <button
                                 key={m.id}
                                 type="button"
                                 role="option"
-                                className="w-full px-4 py-2 text-left text-sm text-white/90 hover:bg-white/10 flex items-center gap-2"
+                                aria-selected={i === replyMentionHighlightIndex}
+                                className={clsx(
+                                  'w-full px-4 py-2 text-left text-sm text-white/90 flex items-center gap-2',
+                                  i === replyMentionHighlightIndex ? 'bg-white/10' : 'hover:bg-white/10'
+                                )}
                                 onClick={() => insertMention(m, 'reply', c.id)}
                               >
                                 <span className="font-medium">{m.full_name || m.email}</span>
@@ -534,6 +781,18 @@ export function JobCommentsPanel({ jobId, onError }: JobCommentsPanelProps) {
                 )}
               </li>
             ))}
+            {hasMoreComments && (
+              <li className="pt-2">
+                <button
+                  type="button"
+                  disabled={loadingMore}
+                  onClick={() => loadComments(comments.length)}
+                  className={clsx(buttonStyles.secondary, 'w-full')}
+                >
+                  {loadingMore ? 'Loading…' : 'Load more'}
+                </button>
+              </li>
+            )}
           </ul>
         )}
       </div>

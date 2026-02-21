@@ -173,6 +173,7 @@ export default function JobDetailPage() {
   const [signatureCount, setSignatureCount] = useState<{ signed: number; total: number } | null>(null)
   const [taskIncompleteCount, setTaskIncompleteCount] = useState<number | null>(null)
   const [taskRefreshKey, setTaskRefreshKey] = useState(0)
+  const [commentCount, setCommentCount] = useState<number | null>(null)
 
   const { addTask, refetch: refetchTasks, incompleteCount } = useTasks(jobId)
 
@@ -940,6 +941,11 @@ export default function JobDetailPage() {
               className={`${tabStyles.item} ${activeTab === 'comments' ? tabStyles.active : tabStyles.inactive}`}
             >
               Comments
+              {commentCount !== null && (
+                <span className="ml-1.5 inline-flex items-center justify-center min-w-[2rem] px-1.5 py-0.5 text-xs font-medium rounded-md bg-white/10 text-white/80 border border-white/10">
+                  {commentCount}
+                </span>
+              )}
             </button>
           </div>
 
@@ -1004,6 +1010,7 @@ export default function JobDetailPage() {
                 <JobCommentsPanel
                   jobId={jobId}
                   onError={(msg) => setToast({ message: msg, type: 'error' })}
+                  onCommentCountChange={setCommentCount}
                 />
               </GlassCard>
             </PageSection>
