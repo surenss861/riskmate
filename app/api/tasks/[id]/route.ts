@@ -15,6 +15,72 @@ const ROUTE = '/api/tasks/[id]'
 const TASK_PRIORITIES = ['low', 'medium', 'high', 'urgent'] as const
 const TASK_STATUSES = ['todo', 'in_progress', 'done', 'cancelled'] as const
 
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const requestId = getRequestId(request)
+
+  try {
+    const { organization_id } = await getOrganizationContext(request)
+    const { id: taskId } = await params
+
+    await verifyOrganizationOwnership('tasks', taskId, organization_id)
+
+    const supabase = await createSupabaseServerClient()
+    const { data: task, error } = await supabase
+      .from('tasks')
+      .select('*, assignee:assigned_to(id, full_name, email)')
+      .eq('id', taskId)
+      .eq('organization_id', organization_id)
+      .maybeSingle()
+
+    if (error) {
+      throw error
+    }
+
+    if (!task) {
+      const { response, errorId } = createErrorResponse('Task not found', 'NOT_FOUND', {
+        requestId,
+        statusCode: 404,
+      })
+      logApiError(404, 'NOT_FOUND', errorId, requestId, organization_id, response.message, {
+        category: 'validation',
+        severity: 'warn',
+        route: ROUTE,
+      })
+      return NextResponse.json(response, {
+        status: 404,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
+
+    const data = mapTaskToApiShape(task)
+    return NextResponse.json({ data })
+  } catch (error: any) {
+    const msg = error?.message || 'Failed to get task'
+    const isNotFound = typeof msg === 'string' && msg.includes('Resource not found')
+    const isForbidden = typeof msg === 'string' && msg.includes('Access denied')
+    const statusCode = isNotFound ? 404 : isForbidden ? 403 : 500
+    const code = isNotFound ? 'NOT_FOUND' : isForbidden ? 'FORBIDDEN' : 'QUERY_ERROR'
+    const { response, errorId } = createErrorResponse(msg, code, {
+      requestId,
+      statusCode,
+      details: process.env.NODE_ENV === 'development' ? { detail: error?.message } : undefined,
+    })
+    logApiError(statusCode, code, errorId, requestId, undefined, response.message, {
+      category: isNotFound || isForbidden ? 'auth' : 'internal',
+      severity: statusCode >= 500 ? 'error' : 'warn',
+      route: ROUTE,
+      details: process.env.NODE_ENV === 'development' ? { detail: error?.message } : undefined,
+    })
+    return NextResponse.json(response, {
+      status: statusCode,
+      headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+    })
+  }
+}
+
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

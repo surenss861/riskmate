@@ -42,7 +42,7 @@ import { startLedgerRootWorker } from "./services/ledgerRootWorker";
 import { startEmailQueueWorker } from "./workers/emailQueue";
 import { startWeeklyDigestWorker } from "./workers/weeklyDigest";
 import { startDeadlineReminderWorker } from "./workers/deadlineReminders";
-import { startTaskReminderWorker } from "./workers/taskReminders";
+import { startTaskReminderWorker, stopTaskReminderWorker } from "./workers/taskReminders";
 import { requestIdMiddleware, RequestWithId } from "./middleware/requestId";
 import { createErrorResponse, logErrorForSupport } from "./utils/errorResponse";
 import { authenticate } from "./middleware/auth";
@@ -454,7 +454,7 @@ export default app;
 
 // Only start server if not in test mode
 if (process.env.NODE_ENV !== "test") {
-  app.listen(PORT, '0.0.0.0', () => {
+  const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`[BOOT] Listening on 0.0.0.0:${PORT} (raw PORT=${process.env.PORT})`);
     console.log(`🚀 Riskmate Backend API running on port ${PORT}`);
     console.log(`📡 Health check: http://0.0.0.0:${PORT}/health`);
@@ -469,4 +469,20 @@ if (process.env.NODE_ENV !== "test") {
     startDeadlineReminderWorker();
     startTaskReminderWorker();
   });
+
+  function shutdown(signal: string) {
+    console.log(`[BOOT] ${signal} received, shutting down...`);
+    stopTaskReminderWorker();
+    server.close(() => {
+      console.log("[BOOT] Server closed");
+      process.exit(0);
+    });
+    setTimeout(() => {
+      console.error("[BOOT] Forced exit after shutdown timeout");
+      process.exit(1);
+    }, 10000);
+  }
+
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => shutdown("SIGINT"));
 }
