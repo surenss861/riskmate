@@ -52,8 +52,6 @@ struct JobCommentsView: View {
             } else {
                 ScrollView(showsIndicators: false) {
                     LazyVStack(alignment: .leading, spacing: RMTheme.Spacing.md) {
-                        addCommentRow()
-
                         if comments.isEmpty {
                             RMEmptyState(
                                 icon: "bubble.left.and.bubble.right",
@@ -69,6 +67,13 @@ struct JobCommentsView: View {
                         }
                     }
                     .padding(RMTheme.Spacing.pagePadding)
+                }
+                .refreshable {
+                    await loadComments()
+                    await loadMembers()
+                }
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    addCommentRow()
                 }
             }
         }

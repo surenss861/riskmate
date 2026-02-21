@@ -263,10 +263,65 @@ export function CommentThread({
                         <span className="text-xs text-white/50">Sending…</span>
                       )}
                     </div>
-                    <span className="text-sm text-white/80 break-words [&_.mention]:text-[#F97316] block mt-0.5">
-                      {renderMentions(r.content)}
-                    </span>
+                    {editId === r.id ? (
+                      <div className="mt-1">
+                        <textarea
+                          value={editContent}
+                          onChange={(e) => setEditContent(e.target.value)}
+                          rows={2}
+                          className={clsx(
+                            'w-full px-3 py-2 rounded border border-white/10 bg-black/30 text-white/90 text-sm'
+                          )}
+                        />
+                        <div className="flex gap-2 mt-2">
+                          <button
+                            type="button"
+                            className={buttonStyles.primary}
+                            onClick={() => onUpdate(r.id, editContent.trim())}
+                          >
+                            Save
+                          </button>
+                          <button
+                            type="button"
+                            className={buttonStyles.secondary}
+                            onClick={() => {
+                              setEditId(null)
+                              setEditContent('')
+                            }}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <span className="text-sm text-white/80 break-words [&_.mention]:text-[#F97316] block mt-0.5">
+                        {renderMentions(r.content)}
+                      </span>
+                    )}
                   </div>
+                  {canEditOrDelete(r) && editId !== r.id && (
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditId(r.id)
+                          setEditContent(r.content)
+                        }}
+                        className="p-1.5 rounded text-white/60 hover:text-white hover:bg-white/10"
+                        title="Edit"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onDelete(r.id)}
+                        className="p-1.5 rounded text-white/60 hover:text-red-400 hover:bg-white/10"
+                        title="Delete"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))}
               {hasMoreReplies && onLoadMoreReplies && (
