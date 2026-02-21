@@ -49,11 +49,35 @@ export async function GET(request: NextRequest) {
       .in('id', authorIds)
 
     const userMap = new Map((users || []).map((u: any) => [u.id, u]))
-    const data = comments.map((c) => {
+
+    // Resolve job_id for hazard/control/photo so the client can navigate to the job
+    const jobIds = new Map<string, string>()
+    const hazardControlIds = comments.filter((c: any) => c.entity_type === 'hazard' || c.entity_type === 'control').map((c: any) => c.entity_id)
+    const photoIds = comments.filter((c: any) => c.entity_type === 'photo').map((c: any) => c.entity_id)
+    if (hazardControlIds.length > 0) {
+      const { data: mitigations } = await supabase
+        .from('mitigation_items')
+        .select('id, job_id')
+        .in('id', hazardControlIds)
+      ;(mitigations || []).forEach((m: any) => jobIds.set(m.id, m.job_id))
+    }
+    if (photoIds.length > 0) {
+      const { data: docs } = await supabase
+        .from('documents')
+        .select('id, job_id')
+        .in('id', photoIds)
+      ;(docs || []).forEach((d: any) => { if (d.job_id) jobIds.set(d.id, d.job_id) })
+    }
+
+    const data = comments.map((c: any) => {
       const { content: contentText, ...rest } = c
+      let job_id: string | null = null
+      if (c.entity_type === 'job' && c.entity_id) job_id = c.entity_id
+      else if (c.entity_type === 'hazard' || c.entity_type === 'control' || c.entity_type === 'photo') job_id = jobIds.get(c.entity_id) ?? null
       return {
         ...rest,
         content: contentText,
+        job_id,
         author: userMap.get(c.author_id)
           ? {
               id: c.author_id,

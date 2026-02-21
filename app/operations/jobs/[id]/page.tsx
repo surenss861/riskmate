@@ -441,6 +441,22 @@ export default function JobDetailPage() {
     }
   }, [])
 
+  // Refetch mentions count when user opens or closes Mentions inbox so badge stays in sync and can clear after reading
+  useEffect(() => {
+    let cancelled = false
+    commentsApi
+      .listMentionsMe({ limit: 1, offset: 0 })
+      .then((res) => {
+        if (!cancelled && res.count != null) setMentionsCount(res.count)
+      })
+      .catch(() => {
+        if (!cancelled) setMentionsCount(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [showMentionsInbox])
+
   // Monitor online/offline status
   useEffect(() => {
     const handleOnline = () => setIsOnline(true)
@@ -1023,7 +1039,7 @@ export default function JobDetailPage() {
               {showMentionsInbox ? (
                 <div className="mb-6">
                   <h3 className={`${typography.h3} mb-3`}>Mentions of you</h3>
-                  <MentionsInbox />
+                  <MentionsInbox onMentionsCountChange={setMentionsCount} />
                 </div>
               ) : null}
               <JobCommentsPanel

@@ -12,9 +12,16 @@ import { formatDistanceToNow } from 'date-fns'
 
 const PAGE_SIZE = 20
 
-export function MentionsInbox() {
+export type MentionItem = CommentWithAuthor & { job_id?: string | null }
+
+export interface MentionsInboxProps {
+  /** Called after initial load and loadMore with latest count so the badge can stay in sync / clear after reading */
+  onMentionsCountChange?: (count: number) => void
+}
+
+export function MentionsInbox({ onMentionsCountChange }: MentionsInboxProps) {
   const router = useRouter()
-  const [items, setItems] = useState<CommentWithAuthor[]>([])
+  const [items, setItems] = useState<MentionItem[]>([])
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [hasMore, setHasMore] = useState(false)
@@ -31,7 +38,7 @@ export function MentionsInbox() {
         limit: PAGE_SIZE,
         offset: offsetVal,
       })
-      const data = res.data ?? []
+      const data = (res.data ?? []) as MentionItem[]
       setHasMore(res.has_more === true)
       setOffset(offsetVal + data.length)
       if (append) {
@@ -39,6 +46,7 @@ export function MentionsInbox() {
       } else {
         setItems(data)
       }
+      if (res.count != null) onMentionsCountChange?.(res.count)
     } catch (e: unknown) {
       const msg =
         e && typeof e === 'object' && 'message' in e
@@ -50,7 +58,7 @@ export function MentionsInbox() {
       setLoading(false)
       setLoadingMore(false)
     }
-  }, [])
+  }, [onMentionsCountChange])
 
   useEffect(() => {
     load(0, false)
@@ -60,8 +68,21 @@ export function MentionsInbox() {
     if (!loadingMore && hasMore) load(offset, true)
   }
 
-  const openJob = (entityId: string) => {
-    router.push(`/operations/jobs/${entityId}`)
+  const getEntityLabel = (entityType: string) => {
+    switch (entityType) {
+      case 'hazard': return 'Mention on hazard'
+      case 'control': return 'Mention on control'
+      case 'photo': return 'Mention on photo'
+      case 'job': return 'View job'
+      default: return 'View'
+    }
+  }
+
+  const handleMentionClick = (c: MentionItem) => {
+    const jobId = c.job_id ?? (c.entity_type === 'job' ? c.entity_id : null)
+    if (jobId) {
+      router.push(`/operations/jobs/${jobId}`)
+    }
   }
 
   if (loading && items.length === 0) {
@@ -98,30 +119,44 @@ export function MentionsInbox() {
   return (
     <div className="space-y-4">
       <ul className="space-y-3">
-        {items.map((c) => (
-          <li key={c.id}>
-            <button
-              type="button"
-              onClick={() => c.entity_type === 'job' && c.entity_id && openJob(c.entity_id)}
-              className="w-full text-left p-4 rounded-lg border border-white/10 bg-white/[0.03] hover:bg-white/5 transition-colors"
-            >
-              <div className="flex items-center justify-between gap-2 mb-1">
-                <span className={clsx(typography.bodySmall, 'font-medium text-white/90')}>
-                  {c.author?.full_name?.trim() || c.author?.email || 'Unknown'}
-                </span>
-                <span className="text-xs text-white/50">
-                  {formatDistanceToNow(new Date(c.created_at), { addSuffix: true })}
-                </span>
-              </div>
-              <div className={clsx(typography.bodySmall, 'text-white/70 line-clamp-2')}>
-                {renderMentions(c.content)}
-              </div>
-              {c.entity_type === 'job' && c.entity_id && (
-                <div className="mt-2 text-xs text-white/50">View job →</div>
-              )}
-            </button>
-          </li>
-        ))}
+        {items.map((c) => {
+          const jobId = c.job_id ?? (c.entity_type === 'job' ? c.entity_id : null)
+          const canNavigate = Boolean(jobId)
+          return (
+            <li key={c.id}>
+              <button
+                type="button"
+                onClick={() => handleMentionClick(c)}
+                disabled={!canNavigate}
+                className={clsx(
+                  'w-full text-left p-4 rounded-lg border transition-colors',
+                  canNavigate
+                    ? 'border-white/10 bg-white/[0.03] hover:bg-white/5 cursor-pointer'
+                    : 'border-white/5 bg-white/[0.02] cursor-not-allowed opacity-80'
+                )}
+              >
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <span className={clsx(typography.bodySmall, 'font-medium text-white/90')}>
+                    {c.author?.full_name?.trim() || c.author?.email || 'Unknown'}
+                  </span>
+                  <span className="text-xs text-white/50">
+                    {formatDistanceToNow(new Date(c.created_at), { addSuffix: true })}
+                  </span>
+                </div>
+                <div className={clsx(typography.bodySmall, 'text-white/70 line-clamp-2')}>
+                  {renderMentions(c.content)}
+                </div>
+                <div className="mt-2 text-xs text-white/50">
+                  {canNavigate ? (
+                    <span>{getEntityLabel(c.entity_type)} →</span>
+                  ) : (
+                    <span>{getEntityLabel(c.entity_type)} — open from job to view</span>
+                  )}
+                </div>
+              </button>
+            </li>
+          )
+        })}
       </ul>
       {hasMore && (
         <button

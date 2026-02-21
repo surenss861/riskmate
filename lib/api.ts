@@ -21,7 +21,7 @@ export interface ApiError {
   code?: string;
 }
 
-/** Comment with author info (from comments API). */
+/** Comment with author info (from comments API). listMentionsMe may also include job_id for navigation. */
 export interface CommentWithAuthor {
   id: string;
   organization_id: string;
@@ -40,6 +40,8 @@ export interface CommentWithAuthor {
   updated_at: string;
   author?: { id: string; full_name: string | null; email: string | null };
   reply_count?: number;
+  /** Set by listMentionsMe so client can navigate to job for hazard/control/photo mentions */
+  job_id?: string | null;
 }
 
 // Readiness API types
