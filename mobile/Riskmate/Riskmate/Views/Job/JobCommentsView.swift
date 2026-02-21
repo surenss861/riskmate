@@ -740,11 +740,12 @@ struct JobCommentsView: View {
     private func saveEdit(commentId: String) async {
         let content = editContent.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !content.isEmpty else { return }
+        let mentionUserIds = Self.extractMentionUserIds(editContent)
         updatingCommentId = commentId
         editOrDeleteError = nil
         defer { updatingCommentId = nil }
         do {
-            _ = try await APIClient.shared.updateComment(commentId: commentId, content: content)
+            _ = try await APIClient.shared.updateComment(commentId: commentId, content: content, mentionUserIds: mentionUserIds.isEmpty ? nil : mentionUserIds)
             editCommentId = nil
             editContent = ""
             await loadComments()
@@ -922,8 +923,8 @@ final class JobCommentsRealtimeService: ObservableObject {
     private var supabaseClient: SupabaseClient?
 
     func subscribe(jobId: String) {
-        guard let url = URL(string: AppConfig.shared.supabaseURL) else { return }
-        let client = SupabaseClient(supabaseURL: url, supabaseKey: AppConfig.shared.supabaseAnonKey)
+        // Use authenticated Supabase client so RLS permits comment row change events.
+        let client = AuthService.shared.getSupabaseClientForRealtime()
         supabaseClient = client
         let channelName = "job-comments-\(jobId)"
         let ch = client.channel(channelName)

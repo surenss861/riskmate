@@ -127,6 +127,11 @@ class AuthService {
         }
     }
     
+    /// Returns the shared Supabase client for Realtime subscriptions. When the user is signed in, this client carries the session so RLS permits postgres_changes (e.g. comments).
+    func getSupabaseClientForRealtime() -> SupabaseClient {
+        return supabase
+    }
+
     /// Ensure session is restored (call this at app startup before making API calls)
     func ensureSessionRestored() async {
         do {
