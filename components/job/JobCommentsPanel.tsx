@@ -90,6 +90,39 @@ export function JobCommentsPanel({
     loadComments(0)
   }, [loadComments])
 
+  const loadReplies = useCallback(async (parentId: string, forceRefresh = false) => {
+    const isLoadMore = !forceRefresh && (repliesOffsetRef.current[parentId] ?? 0) > 0
+    if (loadingRepliesInFlightRef.current[parentId] && !forceRefresh) return
+    loadingRepliesInFlightRef.current[parentId] = true
+    if (isLoadMore) setLoadingMoreRepliesForId(parentId)
+    else setRepliesStatus((prev) => ({ ...prev, [parentId]: 'loading' }))
+    const offset = forceRefresh ? 0 : (repliesOffsetRef.current[parentId] ?? 0)
+    try {
+      const res = await commentsApi.listReplies(parentId, { limit: REPLY_PAGE_SIZE, offset })
+      const data = res.data ?? []
+      const has_more = res.has_more === true
+      setHasMoreRepliesByParent((prev) => ({ ...prev, [parentId]: has_more }))
+      if (forceRefresh) {
+        setRepliesByParent((prev) => ({ ...prev, [parentId]: data }))
+        repliesOffsetRef.current[parentId] = data.length
+      } else {
+        setRepliesByParent((prev) => ({ ...prev, [parentId]: [...(prev[parentId] ?? []), ...data] }))
+        repliesOffsetRef.current[parentId] = (repliesOffsetRef.current[parentId] ?? 0) + data.length
+      }
+      setRepliesStatus((prev) => ({ ...prev, [parentId]: 'loaded' }))
+    } catch {
+      setRepliesByParent((prev) => {
+        const next = { ...prev }
+        if (forceRefresh) delete next[parentId]
+        return next
+      })
+      setRepliesStatus((prev) => ({ ...prev, [parentId]: 'error' }))
+    } finally {
+      loadingRepliesInFlightRef.current[parentId] = false
+      setLoadingMoreRepliesForId(null)
+    }
+  }, [])
+
   // Report unread count whenever comments or lastViewedAt change
   const lastViewedMs = lastViewedAt != null ? (typeof lastViewedAt === 'number' ? lastViewedAt : new Date(lastViewedAt).getTime()) : 0
   useEffect(() => {
@@ -166,39 +199,6 @@ export function JobCommentsPanel({
     run()
     return () => {
       cancelled = true
-    }
-  }, [])
-
-  const loadReplies = useCallback(async (parentId: string, forceRefresh = false) => {
-    const isLoadMore = !forceRefresh && (repliesOffsetRef.current[parentId] ?? 0) > 0
-    if (loadingRepliesInFlightRef.current[parentId] && !forceRefresh) return
-    loadingRepliesInFlightRef.current[parentId] = true
-    if (isLoadMore) setLoadingMoreRepliesForId(parentId)
-    else setRepliesStatus((prev) => ({ ...prev, [parentId]: 'loading' }))
-    const offset = forceRefresh ? 0 : (repliesOffsetRef.current[parentId] ?? 0)
-    try {
-      const res = await commentsApi.listReplies(parentId, { limit: REPLY_PAGE_SIZE, offset })
-      const data = res.data ?? []
-      const has_more = res.has_more === true
-      setHasMoreRepliesByParent((prev) => ({ ...prev, [parentId]: has_more }))
-      if (forceRefresh) {
-        setRepliesByParent((prev) => ({ ...prev, [parentId]: data }))
-        repliesOffsetRef.current[parentId] = data.length
-      } else {
-        setRepliesByParent((prev) => ({ ...prev, [parentId]: [...(prev[parentId] ?? []), ...data] }))
-        repliesOffsetRef.current[parentId] = (repliesOffsetRef.current[parentId] ?? 0) + data.length
-      }
-      setRepliesStatus((prev) => ({ ...prev, [parentId]: 'loaded' }))
-    } catch {
-      setRepliesByParent((prev) => {
-        const next = { ...prev }
-        if (forceRefresh) delete next[parentId]
-        return next
-      })
-      setRepliesStatus((prev) => ({ ...prev, [parentId]: 'error' }))
-    } finally {
-      loadingRepliesInFlightRef.current[parentId] = false
-      setLoadingMoreRepliesForId(null)
     }
   }, [])
 
@@ -340,18 +340,22 @@ export function JobCommentsPanel({
     }
   }
 
-  const canResolve = (c: CommentItem) =>
-    !c._pending &&
-    currentUserId &&
-    (c.author_id === currentUserId ||
-      currentUserRole === 'owner' ||
-      currentUserRole === 'admin')
-  const canEditOrDelete = (c: CommentItem) =>
-    !c._pending &&
-    currentUserId &&
-    (c.author_id === currentUserId ||
-      currentUserRole === 'owner' ||
-      currentUserRole === 'admin')
+  const canResolve = (c: CommentItem): boolean =>
+    Boolean(
+      !c._pending &&
+        currentUserId &&
+        (c.author_id === currentUserId ||
+          currentUserRole === 'owner' ||
+          currentUserRole === 'admin')
+    )
+  const canEditOrDelete = (c: CommentItem): boolean =>
+    Boolean(
+      !c._pending &&
+        currentUserId &&
+        (c.author_id === currentUserId ||
+          currentUserRole === 'owner' ||
+          currentUserRole === 'admin')
+    )
 
   const openReplyFor = (parentId: string | null) => {
     setReplyForId(parentId)

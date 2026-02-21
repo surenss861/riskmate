@@ -984,7 +984,7 @@ export default function JobDetailPage() {
             <GlassCard className="p-6 md:p-8">
               <h2 className={`${typography.h2} mb-1`}>Comments</h2>
               <p className="text-sm text-white/60 mb-6">
-                Discuss this job with your team. Use @ to mention someone—they'll get notified.
+                Discuss this job with your team. Use @ to mention someone—they&apos;ll get notified.
               </p>
               <JobCommentsPanel
                 jobId={jobId}
