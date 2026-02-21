@@ -114,7 +114,7 @@ export async function POST(
       })
     }
 
-    if (priority !== undefined && (typeof priority !== 'string' || !TASK_PRIORITIES.includes(priority))) {
+    if (priority !== undefined && (typeof priority !== 'string' || !(TASK_PRIORITIES as readonly string[]).includes(priority))) {
       const { response, errorId } = createErrorResponse(
         'priority must be one of: low, medium, high, urgent',
         'VALIDATION_ERROR',

@@ -29,7 +29,7 @@ export async function PATCH(
     const body = await request.json()
     const { title, description, assigned_to, priority, due_date, status, sort_order } = body
 
-    if (priority !== undefined && (typeof priority !== 'string' || !TASK_PRIORITIES.includes(priority))) {
+    if (priority !== undefined && (typeof priority !== 'string' || !(TASK_PRIORITIES as readonly string[]).includes(priority))) {
       const { response, errorId } = createErrorResponse(
         'priority must be one of: low, medium, high, urgent',
         'VALIDATION_ERROR',
@@ -45,7 +45,7 @@ export async function PATCH(
         headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
       })
     }
-    if (status !== undefined && (typeof status !== 'string' || !TASK_STATUSES.includes(status))) {
+    if (status !== undefined && (typeof status !== 'string' || !(TASK_STATUSES as readonly string[]).includes(status))) {
       const { response, errorId } = createErrorResponse(
         'status must be one of: todo, in_progress, done, cancelled',
         'VALIDATION_ERROR',
