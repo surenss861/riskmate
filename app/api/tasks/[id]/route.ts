@@ -21,7 +21,7 @@ export async function PATCH(
   const requestId = getRequestId(request)
 
   try {
-    const { organization_id } = await getOrganizationContext(request)
+    const { organization_id, user_id } = await getOrganizationContext(request)
     const { id: taskId } = await params
 
     await verifyOrganizationOwnership('tasks', taskId, organization_id)
@@ -97,7 +97,16 @@ export async function PATCH(
     if (assigned_to !== undefined) updateData.assigned_to = assigned_to
     if (priority !== undefined) updateData.priority = priority
     if (due_date !== undefined) updateData.due_date = due_date
-    if (status !== undefined) updateData.status = status
+    if (status !== undefined) {
+      updateData.status = status
+      if (status === 'done') {
+        updateData.completed_at = new Date().toISOString()
+        updateData.completed_by = user_id
+      } else {
+        updateData.completed_at = null
+        updateData.completed_by = null
+      }
+    }
     if (sort_order !== undefined) updateData.sort_order = sort_order
 
     const supabase = await createSupabaseServerClient()
