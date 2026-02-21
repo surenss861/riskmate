@@ -1,4 +1,5 @@
 import { supabase } from "../lib/supabaseClient";
+import { mapTaskToApiShape } from "@lib/utils/taskApiShape";
 import { sendTaskAssignedNotification, sendTaskCompletedNotification } from "./notifications";
 
 const TASK_PRIORITIES = ["low", "medium", "high", "urgent"] as const;
@@ -28,12 +29,6 @@ export interface TaskRow {
 
 export interface TaskWithAssignee extends TaskRow {
   assignee?: { id: string; full_name: string | null; email: string | null } | null;
-}
-
-/** Map task row (with assignee from Supabase join) to API shape: assigned_user only, assignee stripped. */
-function toTaskApiShape(row: any): Omit<TaskWithAssignee, "assignee"> & { assigned_user: { id: string; full_name: string | null; email: string | null } | null } {
-  const { assignee, ...rest } = row;
-  return { ...rest, assigned_user: assignee ?? null };
 }
 
 export interface CreateTaskInput {
@@ -139,7 +134,7 @@ export async function listTasksByJob(
     throw new Error("Failed to list tasks");
   }
 
-  return { data: (tasks || []).map((t: any) => toTaskApiShape(t)) };
+  return { data: (tasks || []).map((t: any) => mapTaskToApiShape(t) as unknown as TaskWithAssignee) };
 }
 
 /** Get a single task by id. */
@@ -155,7 +150,7 @@ export async function getTask(
     .maybeSingle();
 
   if (error || !data) return null;
-  return toTaskApiShape(data as any);
+  return mapTaskToApiShape(data as any) as unknown as TaskWithAssignee;
 }
 
 /** Create a task on a job. */
@@ -226,7 +221,7 @@ export async function createTask(
     throw new Error("Failed to create task");
   }
 
-  const out = toTaskApiShape(task as any);
+  const out = mapTaskToApiShape(task as any) as unknown as TaskWithAssignee;
 
   if (input.assigned_to) {
     const { data: job } = await supabase
@@ -358,7 +353,7 @@ export async function updateTask(
     ).catch((err) => console.error("[Tasks] sendTaskAssignedNotification failed:", err));
   }
 
-  return toTaskApiShape(task as any);
+  return mapTaskToApiShape(task as any) as unknown as TaskWithAssignee;
 }
 
 /** Delete a task. */
@@ -434,7 +429,7 @@ export async function completeTask(
     ).catch((err) => console.error("[Tasks] sendTaskCompletedNotification failed:", err));
   }
 
-  return toTaskApiShape(task as any);
+  return mapTaskToApiShape(task as any) as unknown as TaskWithAssignee;
 }
 
 /** Reopen a task (set status todo, clear completed_at/completed_by). */
@@ -467,7 +462,7 @@ export async function reopenTask(
     console.error("[Tasks] reopenTask error:", error);
     throw new Error("Failed to reopen task");
   }
-  return toTaskApiShape(task as any);
+  return mapTaskToApiShape(task as any) as unknown as TaskWithAssignee;
 }
 
 /** List task templates for org (including defaults). */
@@ -486,6 +481,88 @@ export async function listTaskTemplates(
     throw new Error("Failed to list task templates");
   }
   return { data: data ?? [] };
+}
+
+/** Validate and coerce a single task definition for a template. Returns validated task or throws 400 VALIDATION_ERROR. */
+function validateTemplateTaskItem(
+  item: any,
+  index: number
+): { title: string; description: string | null; priority: TaskPriority; status: TaskStatus; due_date: string | null; sort_order: number; assigned_to: string | null } {
+  const titleRaw = item?.title;
+  if (titleRaw === undefined || titleRaw === null || typeof titleRaw !== "string") {
+    throw Object.assign(new Error(`tasks[${index}]: title is required`), {
+      status: 400,
+      code: "VALIDATION_ERROR",
+    });
+  }
+  const title = String(titleRaw).trim();
+  if (!title) {
+    throw Object.assign(new Error(`tasks[${index}]: title cannot be empty or whitespace`), {
+      status: 400,
+      code: "VALIDATION_ERROR",
+    });
+  }
+
+  const priorityRaw = item?.priority;
+  const priority =
+    priorityRaw === undefined || priorityRaw === null
+      ? "medium"
+      : (typeof priorityRaw === "string" ? priorityRaw : String(priorityRaw)).toLowerCase();
+  if (!TASK_PRIORITIES.includes(priority as TaskPriority)) {
+    throw Object.assign(
+      new Error(`tasks[${index}]: priority must be one of: low, medium, high, urgent`),
+      { status: 400, code: "VALIDATION_ERROR" }
+    );
+  }
+
+  const statusRaw = item?.status;
+  const status =
+    statusRaw === undefined || statusRaw === null
+      ? "todo"
+      : (typeof statusRaw === "string" ? statusRaw : String(statusRaw)).toLowerCase();
+  if (!TASK_STATUSES.includes(status as TaskStatus)) {
+    throw Object.assign(
+      new Error(`tasks[${index}]: status must be one of: todo, in_progress, done, cancelled`),
+      { status: 400, code: "VALIDATION_ERROR" }
+    );
+  }
+
+  const description =
+    item?.description === undefined || item?.description === null
+      ? null
+      : typeof item.description === "string"
+        ? item.description
+        : String(item.description);
+  const due_date =
+    item?.due_date === undefined || item?.due_date === null
+      ? null
+      : typeof item.due_date === "string"
+        ? item.due_date
+        : typeof item.due_date === "number"
+          ? String(item.due_date)
+          : null;
+  const sort_order =
+    typeof item?.sort_order === "number" && Number.isFinite(item.sort_order)
+      ? item.sort_order
+      : typeof item?.sort_order === "string"
+        ? parseInt(item.sort_order, 10)
+        : 0;
+  const assigned_to =
+    item?.assigned_to === undefined || item?.assigned_to === null
+      ? null
+      : typeof item.assigned_to === "string"
+        ? item.assigned_to
+        : null;
+
+  return {
+    title,
+    description,
+    priority: priority as TaskPriority,
+    status: status as TaskStatus,
+    due_date,
+    sort_order: Number.isFinite(sort_order) ? sort_order : 0,
+    assigned_to,
+  };
 }
 
 /** Create a task template. */
@@ -507,6 +584,8 @@ export async function createTaskTemplate(
     });
   }
 
+  const validatedTasks = input.tasks.map((item, index) => validateTemplateTaskItem(item, index));
+
   const { data: template, error } = await supabase
     .from("task_templates")
     .insert({
@@ -514,7 +593,7 @@ export async function createTaskTemplate(
       created_by: userId,
       is_default: false,
       name: input.name.trim(),
-      tasks: input.tasks,
+      tasks: validatedTasks,
       job_type: input.job_type ?? null,
     })
     .select("*")

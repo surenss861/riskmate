@@ -124,8 +124,18 @@ tasksRouter.patch(
     if (!taskId) {
       return res.status(400).json({ message: "Task id is required", code: "MISSING_PARAMS" });
     }
+    const body = req.body ?? {};
+    if (body.title !== undefined) {
+      const title = body.title;
+      if (!title || typeof title !== "string" || !String(title).trim()) {
+        return res.status(400).json({
+          message: "title is required",
+          code: "VALIDATION_ERROR",
+        });
+      }
+      body.title = String(title).trim();
+    }
     try {
-      const body = req.body ?? {};
       const task = await updateTask(
         authReq.user.organization_id,
         taskId,
