@@ -21,6 +21,7 @@ struct NotificationCenterView: View {
     @State private var loadError: String?
     @State private var markingAllRead = false
     @State private var typeFilter: NotificationType? = nil
+    @State private var showMentionsList = false
 
     private let pageSize = 50
     @State private var hasMore = true
@@ -85,6 +86,20 @@ struct NotificationCenterView: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 typeFilterMenu
+            }
+            ToolbarItem(placement: .topBarLeading) {
+                Button {
+                    showMentionsList = true
+                } label: {
+                    Label("Mentions", systemImage: "at.badge.plus")
+                        .font(RMTheme.Typography.bodySmall)
+                        .foregroundColor(RMTheme.Colors.accent)
+                }
+            }
+        }
+        .sheet(isPresented: $showMentionsList) {
+            NavigationStack {
+                MentionsListView()
             }
         }
         .task {

@@ -19,6 +19,8 @@ import { ApplyTemplateInline } from '@/components/dashboard/ApplyTemplateInline'
 import { JobPacketView } from '@/components/job/JobPacketView'
 import { JobActivityFeed, type AuditEvent } from '@/components/job/JobActivityFeed'
 import { JobCommentsPanel } from '@/components/job/JobCommentsPanel'
+import { MentionsInbox } from '@/components/job/MentionsInbox'
+import { commentsApi } from '@/lib/api'
 import { TeamSignatures } from '@/components/report/TeamSignatures'
 import { AddTaskModal } from '@/components/tasks/AddTaskModal'
 import { TaskList } from '@/components/tasks/TaskList'
@@ -176,6 +178,8 @@ export default function JobDetailPage() {
   const [commentCount, setCommentCount] = useState<number | null>(null)
   const [commentUnreadCount, setCommentUnreadCount] = useState<number>(0)
   const [commentsLastViewedAt, setCommentsLastViewedAt] = useState<number | null>(null)
+  const [mentionsCount, setMentionsCount] = useState<number | null>(null)
+  const [showMentionsInbox, setShowMentionsInbox] = useState(false)
 
   const { addTask, refetch: refetchTasks, incompleteCount } = useTasks(jobId)
 
@@ -420,6 +424,22 @@ export default function JobDetailPage() {
       // ignore
     }
   }, [activeTab, jobId])
+
+  // Fetch mentions count for badge (lightweight: limit=1 just to get count)
+  useEffect(() => {
+    let cancelled = false
+    commentsApi
+      .listMentionsMe({ limit: 1, offset: 0 })
+      .then((res) => {
+        if (!cancelled && res.count != null) setMentionsCount(res.count)
+      })
+      .catch(() => {
+        if (!cancelled) setMentionsCount(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   // Monitor online/offline status
   useEffect(() => {
@@ -982,10 +1002,30 @@ export default function JobDetailPage() {
           {/* Comments section: always mounted so realtime/unread stay active when tab is inactive; hidden when not selected */}
           <PageSection className={activeTab === 'comments' ? '' : 'hidden'}>
             <GlassCard className="p-6 md:p-8">
-              <h2 className={`${typography.h2} mb-1`}>Comments</h2>
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-1">
+                <h2 className={typography.h2}>Comments</h2>
+                <button
+                  type="button"
+                  onClick={() => setShowMentionsInbox((v) => !v)}
+                  className="flex items-center gap-2 text-sm text-white/70 hover:text-white border border-white/10 hover:border-white/20 rounded-lg px-3 py-1.5 transition-colors"
+                >
+                  <span>Mentions</span>
+                  {mentionsCount != null && mentionsCount > 0 && (
+                    <span className="inline-flex items-center justify-center min-w-[1.25rem] px-1.5 py-0.5 text-xs font-medium rounded-md bg-white/10 text-white/80 border border-white/10">
+                      {mentionsCount}
+                    </span>
+                  )}
+                </button>
+              </div>
               <p className="text-sm text-white/60 mb-6">
                 Discuss this job with your team. Use @ to mention someone—they&apos;ll get notified.
               </p>
+              {showMentionsInbox ? (
+                <div className="mb-6">
+                  <h3 className={`${typography.h3} mb-3`}>Mentions of you</h3>
+                  <MentionsInbox />
+                </div>
+              ) : null}
               <JobCommentsPanel
                 jobId={jobId}
                 onError={(msg) => setToast({ message: msg, type: 'error' })}

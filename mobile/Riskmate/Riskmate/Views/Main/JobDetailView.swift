@@ -25,6 +25,7 @@ struct JobDetailView: View {
     @State private var evidenceCountForExport: Int = 0
     @State private var evidenceRequiredForExport: Int = 5
     @State private var showEditJobSheet = false
+    @State private var showMentionsList = false
     @StateObject private var jobsStore = JobsStore.shared
     @StateObject private var statusManager = ServerStatusManager.shared
     @Environment(\.dismiss) private var dismiss
@@ -215,6 +216,11 @@ struct JobDetailView: View {
                 ExportHistorySheet(jobId: jobId)
                     .environmentObject(quickAction)
             }
+            .sheet(isPresented: $showMentionsList) {
+                NavigationStack {
+                    MentionsListView()
+                }
+            }
             .onChange(of: showExportHistory) { _, isShowing in
                 if !isShowing {
                     Task { await checkForFailedExports() }
@@ -287,7 +293,22 @@ struct JobDetailView: View {
             case .tasks:
                 JobTasksView(jobId: jobId)
             case .comments:
-                JobCommentsView(jobId: jobId)
+                VStack(spacing: 0) {
+                    HStack {
+                        Spacer()
+                        Button {
+                            Haptics.tap()
+                            showMentionsList = true
+                        } label: {
+                            Label("Mentions", systemImage: "at.badge.plus")
+                                .font(RMTheme.Typography.bodySmall)
+                                .foregroundColor(RMTheme.Colors.accent)
+                        }
+                        .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                        .padding(.vertical, RMTheme.Spacing.sm)
+                    }
+                    JobCommentsView(jobId: jobId)
+                }
             }
         }
     }

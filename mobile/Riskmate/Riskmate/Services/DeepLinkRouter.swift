@@ -115,6 +115,13 @@ final class DeepLinkRouter: ObservableObject {
         return nil
     }
 
+    /// Programmatically open job detail (e.g. from Mentions list). ContentView observes pendingJobId and presents JobDetailView.
+    func openJob(id: String, tab: JobDetailTab? = nil) {
+        pendingJobId = id
+        pendingJobTab = tab?.rawValue
+        pendingHazardId = nil
+    }
+
     /// Clear pending navigation after handling.
     func clearPending() {
         pendingURL = nil

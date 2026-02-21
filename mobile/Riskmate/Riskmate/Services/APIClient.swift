@@ -1059,6 +1059,19 @@ class APIClient {
         return response.data
     }
 
+    /// List comments where the current user is mentioned (GET /api/comments/mentions/me)
+    func getMentionsMe(limit: Int = 50, offset: Int = 0) async throws -> (data: [JobComment], count: Int, hasMore: Bool) {
+        let query = "limit=\(limit)&offset=\(offset)"
+        let response: MentionsListResponse = try await request(
+            endpoint: "/api/comments/mentions/me?\(query)"
+        )
+        return (
+            response.data,
+            response.count ?? response.data.count,
+            response.hasMore ?? false
+        )
+    }
+
     /// Complete a task
     func completeTask(id: String) async throws {
         let _: EmptyResponse = try await request(
@@ -1697,6 +1710,18 @@ struct JobComment: Codable, Identifiable {
 }
 
 struct CommentsListResponse: Codable {
+    let data: [JobComment]
+    let count: Int?
+    let hasMore: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case data
+        case count
+        case hasMore = "has_more"
+    }
+}
+
+struct MentionsListResponse: Codable {
     let data: [JobComment]
     let count: Int?
     let hasMore: Bool?

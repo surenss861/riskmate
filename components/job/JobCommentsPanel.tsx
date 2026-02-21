@@ -123,14 +123,18 @@ export function JobCommentsPanel({
     }
   }, [])
 
-  // Report unread count whenever comments or lastViewedAt change
+  // Report unread count: include both top-level comments and all loaded replies (merge repliesByParent timestamps)
   const lastViewedMs = lastViewedAt != null ? (typeof lastViewedAt === 'number' ? lastViewedAt : new Date(lastViewedAt).getTime()) : 0
   useEffect(() => {
-    const unread = comments.filter(
+    const allItems = [
+      ...comments,
+      ...Object.values(repliesByParent).flat(),
+    ]
+    const unread = allItems.filter(
       (c) => !c._pending && new Date(c.created_at).getTime() > lastViewedMs
     ).length
     onUnreadCountChange?.(unread)
-  }, [comments, lastViewedMs, onUnreadCountChange])
+  }, [comments, repliesByParent, lastViewedMs, onUnreadCountChange])
 
   // Realtime: subscribe to comments for this job; refresh list and reply counts
   useEffect(() => {
