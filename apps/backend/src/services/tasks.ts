@@ -214,6 +214,16 @@ export async function updateTask(
     });
   }
 
+  if (
+    input.priority !== undefined &&
+    !TASK_PRIORITIES.includes(input.priority as TaskPriority)
+  ) {
+    throw Object.assign(new Error("priority must be one of: low, medium, high, urgent"), {
+      status: 400,
+      code: "VALIDATION_ERROR",
+    });
+  }
+
   const updatePayload: Record<string, unknown> = {
     updated_at: new Date().toISOString(),
   };
