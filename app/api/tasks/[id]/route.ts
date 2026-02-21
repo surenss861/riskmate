@@ -89,11 +89,31 @@ export async function PATCH(
       }
     }
 
+    if (title !== undefined) {
+      const trimmed = typeof title === 'string' ? title.trim() : ''
+      if (!trimmed) {
+        const { response, errorId } = createErrorResponse(
+          'title cannot be empty or whitespace',
+          'VALIDATION_ERROR',
+          { requestId, statusCode: 400 }
+        )
+        logApiError(400, 'VALIDATION_ERROR', errorId, requestId, organization_id, response.message, {
+          category: 'validation',
+          severity: 'warn',
+          route: ROUTE,
+        })
+        return NextResponse.json(response, {
+          status: 400,
+          headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+        })
+      }
+    }
+
     const updateData: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
     }
 
-    if (title !== undefined) updateData.title = title
+    if (title !== undefined) updateData.title = typeof title === 'string' ? title.trim() : title
     if (description !== undefined) updateData.description = description
     if (assigned_to !== undefined) updateData.assigned_to = assigned_to
     if (priority !== undefined) updateData.priority = priority
