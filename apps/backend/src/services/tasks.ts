@@ -30,6 +30,12 @@ export interface TaskWithAssignee extends TaskRow {
   assignee?: { id: string; full_name: string | null; email: string | null } | null;
 }
 
+/** Map task row (with assignee from Supabase join) to API shape: assigned_user only, assignee stripped. */
+function toTaskApiShape(row: any): Omit<TaskWithAssignee, "assignee"> & { assigned_user: { id: string; full_name: string | null; email: string | null } | null } {
+  const { assignee, ...rest } = row;
+  return { ...rest, assigned_user: assignee ?? null };
+}
+
 export interface CreateTaskInput {
   title: string;
   description?: string | null;
@@ -86,6 +92,26 @@ async function taskBelongsToOrg(
   return { ok: true, task: data as TaskRow };
 }
 
+/** Ensure assigned_to user belongs to organization. Throws 400 VALIDATION_ERROR if not. */
+async function ensureAssignedToInOrg(
+  assignedTo: string | null | undefined,
+  organizationId: string
+): Promise<void> {
+  if (!assignedTo) return;
+  const { data, error } = await supabase
+    .from("users")
+    .select("id")
+    .eq("id", assignedTo)
+    .eq("organization_id", organizationId)
+    .maybeSingle();
+  if (error || !data) {
+    throw Object.assign(new Error("assigned_to must be a user in your organization"), {
+      status: 400,
+      code: "VALIDATION_ERROR",
+    });
+  }
+}
+
 /** List tasks for a job. */
 export async function listTasksByJob(
   organizationId: string,
@@ -112,11 +138,7 @@ export async function listTasksByJob(
     throw new Error("Failed to list tasks");
   }
 
-  const rows = (tasks || []).map((t: any) => ({
-    ...t,
-    assigned_user: t.assignee ?? null,
-  }));
-  return { data: rows };
+  return { data: (tasks || []).map((t: any) => toTaskApiShape(t)) };
 }
 
 /** Get a single task by id. */
@@ -132,8 +154,7 @@ export async function getTask(
     .maybeSingle();
 
   if (error || !data) return null;
-  const row = data as any;
-  return { ...row, assigned_user: row.assignee ?? null };
+  return toTaskApiShape(data as any);
 }
 
 /** Create a task on a job. */
@@ -151,10 +172,18 @@ export async function createTask(
     });
   }
 
-  const priority =
-    input.priority && TASK_PRIORITIES.includes(input.priority as TaskPriority)
-      ? input.priority
-      : "medium";
+  await ensureAssignedToInOrg(input.assigned_to, organizationId);
+
+  if (
+    input.priority !== undefined &&
+    !TASK_PRIORITIES.includes(input.priority as TaskPriority)
+  ) {
+    throw Object.assign(new Error("priority must be one of: low, medium, high, urgent"), {
+      status: 400,
+      code: "VALIDATION_ERROR",
+    });
+  }
+  const priority = input.priority ?? "medium";
 
   const { data: task, error } = await supabase
     .from("tasks")
@@ -177,8 +206,7 @@ export async function createTask(
     throw new Error("Failed to create task");
   }
 
-  const row = task as any;
-  const out: TaskWithAssignee = { ...row, assigned_user: row.assignee ?? null };
+  const out = toTaskApiShape(task as any);
 
   if (input.assigned_to) {
     const { data: job } = await supabase
@@ -214,11 +242,22 @@ export async function updateTask(
     });
   }
 
+  await ensureAssignedToInOrg(input.assigned_to, organizationId);
+
   if (
     input.priority !== undefined &&
     !TASK_PRIORITIES.includes(input.priority as TaskPriority)
   ) {
     throw Object.assign(new Error("priority must be one of: low, medium, high, urgent"), {
+      status: 400,
+      code: "VALIDATION_ERROR",
+    });
+  }
+  if (
+    input.status !== undefined &&
+    !TASK_STATUSES.includes(input.status as TaskStatus)
+  ) {
+    throw Object.assign(new Error("status must be one of: todo, in_progress, done, cancelled"), {
       status: 400,
       code: "VALIDATION_ERROR",
     });
@@ -247,8 +286,7 @@ export async function updateTask(
     console.error("[Tasks] updateTask error:", error);
     throw new Error("Failed to update task");
   }
-  const row = task as any;
-  return { ...row, assigned_user: row.assignee ?? null };
+  return toTaskApiShape(task as any);
 }
 
 /** Delete a task. */
@@ -324,8 +362,7 @@ export async function completeTask(
     ).catch((err) => console.error("[Tasks] sendTaskCompletedNotification failed:", err));
   }
 
-  const row = task as any;
-  return { ...row, assigned_user: row.assignee ?? null };
+  return toTaskApiShape(task as any);
 }
 
 /** Reopen a task (set status todo, clear completed_at/completed_by). */
@@ -358,8 +395,7 @@ export async function reopenTask(
     console.error("[Tasks] reopenTask error:", error);
     throw new Error("Failed to reopen task");
   }
-  const row = task as any;
-  return { ...row, assigned_user: row.assignee ?? null };
+  return toTaskApiShape(task as any);
 }
 
 /** List task templates for org (including defaults). */

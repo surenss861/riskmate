@@ -11,6 +11,8 @@ export const runtime = 'nodejs'
 
 const ROUTE = '/api/jobs/[id]/tasks'
 
+const TASK_PRIORITIES = ['low', 'medium', 'high', 'urgent'] as const
+
 async function createTaskAssignedNotificationRecord(
   userId: string,
   organizationId: string,
@@ -110,6 +112,49 @@ export async function POST(
         status: 400,
         headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
       })
+    }
+
+    if (priority !== undefined && (typeof priority !== 'string' || !TASK_PRIORITIES.includes(priority))) {
+      const { response, errorId } = createErrorResponse(
+        'priority must be one of: low, medium, high, urgent',
+        'VALIDATION_ERROR',
+        { requestId, statusCode: 400 }
+      )
+      logApiError(400, 'VALIDATION_ERROR', errorId, requestId, organization_id, response.message, {
+        category: 'validation',
+        severity: 'warn',
+        route: ROUTE,
+      })
+      return NextResponse.json(response, {
+        status: 400,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
+
+    if (assigned_to != null) {
+      const admin = createSupabaseAdminClient()
+      const { data: userInOrg } = await admin
+        .from('users')
+        .select('id')
+        .eq('id', assigned_to)
+        .eq('organization_id', organization_id)
+        .maybeSingle()
+      if (!userInOrg) {
+        const { response, errorId } = createErrorResponse(
+          'assigned_to must be a user in your organization',
+          'VALIDATION_ERROR',
+          { requestId, statusCode: 400 }
+        )
+        logApiError(400, 'VALIDATION_ERROR', errorId, requestId, organization_id, response.message, {
+          category: 'validation',
+          severity: 'warn',
+          route: ROUTE,
+        })
+        return NextResponse.json(response, {
+          status: 400,
+          headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+        })
+      }
     }
 
     const supabase = await createSupabaseServerClient()

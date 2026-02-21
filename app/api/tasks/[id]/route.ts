@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { createSupabaseAdminClient } from '@/lib/supabase/admin'
 import { getOrganizationContext, verifyOrganizationOwnership } from '@/lib/utils/organizationGuard'
 import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { logApiError } from '@/lib/utils/errorLogging'
@@ -9,6 +10,9 @@ import { mapTaskToApiShape } from '@/lib/utils/taskApiShape'
 export const runtime = 'nodejs'
 
 const ROUTE = '/api/tasks/[id]'
+
+const TASK_PRIORITIES = ['low', 'medium', 'high', 'urgent'] as const
+const TASK_STATUSES = ['todo', 'in_progress', 'done', 'cancelled'] as const
 
 export async function PATCH(
   request: NextRequest,
@@ -24,6 +28,65 @@ export async function PATCH(
 
     const body = await request.json()
     const { title, description, assigned_to, priority, due_date, status, sort_order } = body
+
+    if (priority !== undefined && (typeof priority !== 'string' || !TASK_PRIORITIES.includes(priority))) {
+      const { response, errorId } = createErrorResponse(
+        'priority must be one of: low, medium, high, urgent',
+        'VALIDATION_ERROR',
+        { requestId, statusCode: 400 }
+      )
+      logApiError(400, 'VALIDATION_ERROR', errorId, requestId, organization_id, response.message, {
+        category: 'validation',
+        severity: 'warn',
+        route: ROUTE,
+      })
+      return NextResponse.json(response, {
+        status: 400,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
+    if (status !== undefined && (typeof status !== 'string' || !TASK_STATUSES.includes(status))) {
+      const { response, errorId } = createErrorResponse(
+        'status must be one of: todo, in_progress, done, cancelled',
+        'VALIDATION_ERROR',
+        { requestId, statusCode: 400 }
+      )
+      logApiError(400, 'VALIDATION_ERROR', errorId, requestId, organization_id, response.message, {
+        category: 'validation',
+        severity: 'warn',
+        route: ROUTE,
+      })
+      return NextResponse.json(response, {
+        status: 400,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
+
+    if (assigned_to !== undefined && assigned_to != null) {
+      const admin = createSupabaseAdminClient()
+      const { data: userInOrg } = await admin
+        .from('users')
+        .select('id')
+        .eq('id', assigned_to)
+        .eq('organization_id', organization_id)
+        .maybeSingle()
+      if (!userInOrg) {
+        const { response, errorId } = createErrorResponse(
+          'assigned_to must be a user in your organization',
+          'VALIDATION_ERROR',
+          { requestId, statusCode: 400 }
+        )
+        logApiError(400, 'VALIDATION_ERROR', errorId, requestId, organization_id, response.message, {
+          category: 'validation',
+          severity: 'warn',
+          route: ROUTE,
+        })
+        return NextResponse.json(response, {
+          status: 400,
+          headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+        })
+      }
+    }
 
     const updateData: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
