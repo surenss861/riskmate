@@ -109,7 +109,7 @@ struct MentionsListView: View {
                 DeepLinkRouter.shared.openJob(id: comment.entityId, tab: .comments)
                 dismiss()
             } else if let jobId = comment.jobId, !jobId.isEmpty {
-                // hazard/control/photo mentions: open job's Comments tab
+                // Non-job mentions: API returns job_id for hazard/control/photo; open job's Comments tab
                 DeepLinkRouter.shared.openJob(id: jobId, tab: .comments)
                 dismiss()
             }

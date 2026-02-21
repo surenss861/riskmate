@@ -33,6 +33,8 @@ export interface CommentWithAuthor extends Omit<CommentRow, 'mentions'> {
   /** Resolved mention list for API (CommentRow.mentions is raw UUID[]). */
   mentions?: { user_id: string }[];
   reply_count?: number;
+  /** Owning job id for hazard/control/photo mentions (same as entity_id when entity_type is job). */
+  job_id?: string | null;
 }
 
 export interface ListCommentsOptions {
@@ -401,7 +403,7 @@ export async function listCommentsWhereMentioned(
     .in("id", authorIds);
 
   const userMap = new Map((users || []).map((u: any) => [u.id, u]));
-  const data: CommentWithAuthor[] = rows.map((c) => ({
+  const withAuthors: CommentWithAuthor[] = rows.map((c) => ({
     ...c,
     author: userMap.get(c.author_id)
       ? {
@@ -412,6 +414,46 @@ export async function listCommentsWhereMentioned(
       : undefined,
     mentions: (c.mentions ?? []).map((user_id) => ({ user_id })),
   }));
+
+  // Resolve job_id for hazard, control, photo by joining parent entity (job comments already have entity_id = job_id).
+  const hazardControlIds = withAuthors
+    .filter((c) => c.entity_type === "hazard" || c.entity_type === "control")
+    .map((c) => c.entity_id);
+  const photoIds = withAuthors.filter((c) => c.entity_type === "photo").map((c) => c.entity_id);
+
+  const jobIdByEntityId = new Map<string, string>();
+  if (hazardControlIds.length > 0) {
+    const { data: mitigationRows } = await supabase
+      .from("mitigation_items")
+      .select("id, job_id")
+      .eq("organization_id", organizationId)
+      .in("id", hazardControlIds);
+    for (const r of mitigationRows || []) {
+      const row = r as { id: string; job_id: string };
+      if (row.job_id) jobIdByEntityId.set(row.id, row.job_id);
+    }
+  }
+  if (photoIds.length > 0) {
+    const { data: photoRows } = await supabase
+      .from("job_photos")
+      .select("id, job_id")
+      .eq("organization_id", organizationId)
+      .in("id", photoIds);
+    for (const r of photoRows || []) {
+      const row = r as { id: string; job_id: string };
+      if (row.job_id) jobIdByEntityId.set(row.id, row.job_id);
+    }
+  }
+
+  const data: CommentWithAuthor[] = withAuthors.map((c) => {
+    const job_id =
+      c.entity_type === "job"
+        ? c.entity_id
+        : c.entity_type === "hazard" || c.entity_type === "control" || c.entity_type === "photo"
+          ? jobIdByEntityId.get(c.entity_id) ?? null
+          : null;
+    return { ...c, job_id: job_id ?? undefined };
+  });
 
   return { data, count: total, has_more };
 }

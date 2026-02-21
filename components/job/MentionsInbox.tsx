@@ -120,6 +120,7 @@ export function MentionsInbox({ onMentionsCountChange }: MentionsInboxProps) {
     <div className="space-y-4">
       <ul className="space-y-3">
         {items.map((c) => {
+          // API returns job_id for job and for hazard/control/photo (resolved from parent entity)
           const jobId = c.job_id ?? (c.entity_type === 'job' ? c.entity_id : null)
           const canNavigate = Boolean(jobId)
           return (

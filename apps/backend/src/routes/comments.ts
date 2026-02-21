@@ -231,7 +231,11 @@ commentsRouter.get(
         authReq.user.id,
         { limit, offset }
       );
-      const data = (result.data || []).map((c: any) => ({ ...c, content: c.content }));
+      const data = (result.data || []).map((c: any) => ({
+        ...c,
+        content: c.content,
+        job_id: c.job_id ?? (c.entity_type === "job" ? c.entity_id : null),
+      }));
       res.json({ data, count: result.count, has_more: result.has_more });
     } catch (err: any) {
       console.error("List mentions failed:", err);
