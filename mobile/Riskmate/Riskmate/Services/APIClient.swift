@@ -1059,6 +1059,35 @@ class APIClient {
         return response.data
     }
 
+    /// Update a comment (PATCH /api/comments/:id); author only for content.
+    func updateComment(commentId: String, content: String, mentionUserIds: [String]? = nil) async throws -> JobComment {
+        struct UpdateCommentBody: Encodable {
+            let content: String
+            let mentionUserIds: [String]?
+
+            enum CodingKeys: String, CodingKey {
+                case content
+                case mentionUserIds = "mention_user_ids"
+            }
+        }
+        let body = UpdateCommentBody(content: content, mentionUserIds: mentionUserIds)
+        let data = try JSONEncoder().encode(body)
+        let response: CreateCommentResponse = try await request(
+            endpoint: "/api/comments/\(commentId)",
+            method: "PATCH",
+            body: data
+        )
+        return response.data
+    }
+
+    /// Delete a comment (DELETE /api/comments/:id); author or org admin/owner. Soft-delete on backend.
+    func deleteComment(commentId: String) async throws {
+        let _: EmptyResponse = try await request(
+            endpoint: "/api/comments/\(commentId)",
+            method: "DELETE"
+        )
+    }
+
     /// List comments where the current user is mentioned (GET /api/comments/mentions/me)
     func getMentionsMe(limit: Int = 50, offset: Int = 0) async throws -> (data: [JobComment], count: Int, hasMore: Bool) {
         let query = "limit=\(limit)&offset=\(offset)"

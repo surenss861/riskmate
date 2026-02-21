@@ -23,6 +23,12 @@ struct JobCommentsView: View {
     @State private var activeReplyMentionParentId: String?
     @State private var resolvingCommentId: String?
     @State private var currentUserRole: String = "member"
+    @State private var editCommentId: String?
+    @State private var editContent: String = ""
+    @State private var commentToDelete: JobComment?
+    @State private var updatingCommentId: String?
+    @State private var deletingCommentId: String?
+    @State private var editOrDeleteError: String?
     @StateObject private var realtimeService = JobCommentsRealtimeService()
 
     var body: some View {
@@ -86,6 +92,22 @@ struct JobCommentsView: View {
                     realtimeService.clearRefresh()
                 }
             }
+        }
+        .confirmationDialog("Delete comment?", isPresented: Binding(
+            get: { commentToDelete != nil },
+            set: { if !$0 { commentToDelete = nil } }
+        ), titleVisibility: .visible) {
+            Button("Delete", role: .destructive) {
+                if let c = commentToDelete {
+                    Task { await performDelete(comment: c) }
+                }
+                commentToDelete = nil
+            }
+            Button("Cancel", role: .cancel) {
+                commentToDelete = nil
+            }
+        } message: {
+            Text("This comment will be removed. This action cannot be undone.")
         }
     }
 
@@ -190,6 +212,13 @@ struct JobCommentsView: View {
         return isAuthor || isOwnerOrAdmin
     }
 
+    /// Edit/delete permission: author, org owner, or org admin (aligned with backend).
+    private func canEditOrDelete(_ comment: JobComment) -> Bool {
+        let isAuthor = comment.authorId == currentUserId
+        let isOwnerOrAdmin = currentUserRole == "owner" || currentUserRole == "admin"
+        return isAuthor || isOwnerOrAdmin
+    }
+
     private func commentRow(_ comment: JobComment) -> some View {
         VStack(alignment: .leading, spacing: RMTheme.Spacing.xs) {
             HStack(alignment: .center) {
@@ -226,10 +255,72 @@ struct JobCommentsView: View {
                     .buttonStyle(.plain)
                     .disabled(isResolving)
                 }
+                if canEditOrDelete(comment) && editCommentId != comment.id {
+                    Button {
+                        editCommentId = comment.id
+                        editContent = comment.content
+                        editOrDeleteError = nil
+                    } label: {
+                        Image(systemName: "pencil")
+                            .font(.system(size: 14))
+                            .foregroundColor(RMTheme.Colors.textSecondary)
+                    }
+                    .buttonStyle(.plain)
+                    Button {
+                        commentToDelete = comment
+                        editOrDeleteError = nil
+                    } label: {
+                        Image(systemName: "trash")
+                            .font(.system(size: 14))
+                            .foregroundColor(RMTheme.Colors.textSecondary)
+                    }
+                    .buttonStyle(.plain)
+                }
             }
-            contentWithMentions(comment.content)
-                .font(RMTheme.Typography.bodySmall)
-                .fixedSize(horizontal: false, vertical: true)
+            if editCommentId == comment.id {
+                VStack(alignment: .leading, spacing: RMTheme.Spacing.sm) {
+                    TextField("Edit comment…", text: $editContent, axis: .vertical)
+                        .textFieldStyle(.plain)
+                        .font(RMTheme.Typography.bodySmall)
+                        .foregroundColor(RMTheme.Colors.textPrimary)
+                        .padding(RMTheme.Spacing.sm)
+                        .background(RMTheme.Colors.inputFill)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: RMTheme.Radius.sm)
+                                .stroke(RMTheme.Colors.border, lineWidth: 1)
+                        )
+                        .lineLimit(2...6)
+                    if let err = editOrDeleteError {
+                        Text(err)
+                            .font(RMTheme.Typography.caption2)
+                            .foregroundColor(RMTheme.Colors.error)
+                    }
+                    HStack(spacing: RMTheme.Spacing.sm) {
+                        Button("Save") {
+                            Task { await saveEdit(commentId: comment.id) }
+                        }
+                        .font(RMTheme.Typography.caption)
+                        .foregroundColor(RMTheme.Colors.accent)
+                        .disabled(updatingCommentId == comment.id || editContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        if updatingCommentId == comment.id {
+                            ProgressView()
+                                .scaleEffect(0.7)
+                        }
+                        Button("Cancel") {
+                            editCommentId = nil
+                            editContent = ""
+                            editOrDeleteError = nil
+                        }
+                        .font(RMTheme.Typography.caption)
+                        .foregroundColor(RMTheme.Colors.textSecondary)
+                    }
+                }
+                .padding(.top, 4)
+            } else {
+                contentWithMentions(comment.content)
+                    .font(RMTheme.Typography.bodySmall)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
             Button {
                 withAnimation(.easeInOut(duration: 0.2)) {
@@ -337,7 +428,7 @@ struct JobCommentsView: View {
     }
 
     private func replyRow(_ reply: JobComment) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .center) {
                 Text(authorDisplay(reply))
                     .font(RMTheme.Typography.caption)
@@ -346,9 +437,60 @@ struct JobCommentsView: View {
                 Text(relativeTime(reply.createdAt))
                     .font(RMTheme.Typography.caption2)
                     .foregroundColor(RMTheme.Colors.textTertiary)
+                Spacer()
+                if canEditOrDelete(reply) && editCommentId != reply.id {
+                    Button {
+                        editCommentId = reply.id
+                        editContent = reply.content
+                        editOrDeleteError = nil
+                    } label: {
+                        Image(systemName: "pencil")
+                            .font(.system(size: 12))
+                            .foregroundColor(RMTheme.Colors.textTertiary)
+                    }
+                    .buttonStyle(.plain)
+                    Button {
+                        commentToDelete = reply
+                        editOrDeleteError = nil
+                    } label: {
+                        Image(systemName: "trash")
+                            .font(.system(size: 12))
+                            .foregroundColor(RMTheme.Colors.textTertiary)
+                    }
+                    .buttonStyle(.plain)
+                }
             }
-            contentWithMentions(reply.content)
-                .font(RMTheme.Typography.caption)
+            if editCommentId == reply.id {
+                TextField("Edit reply…", text: $editContent, axis: .vertical)
+                    .textFieldStyle(.plain)
+                    .font(RMTheme.Typography.caption)
+                    .foregroundColor(RMTheme.Colors.textPrimary)
+                    .padding(6)
+                    .background(RMTheme.Colors.surface)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: RMTheme.Radius.sm)
+                            .stroke(RMTheme.Colors.border, lineWidth: 1)
+                    )
+                    .lineLimit(2...4)
+                HStack(spacing: RMTheme.Spacing.xs) {
+                    Button("Save") {
+                        Task { await saveEdit(commentId: reply.id) }
+                    }
+                    .font(RMTheme.Typography.caption2)
+                    .foregroundColor(RMTheme.Colors.accent)
+                    .disabled(updatingCommentId == reply.id || editContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    Button("Cancel") {
+                        editCommentId = nil
+                        editContent = ""
+                        editOrDeleteError = nil
+                    }
+                    .font(RMTheme.Typography.caption2)
+                    .foregroundColor(RMTheme.Colors.textSecondary)
+                }
+            } else {
+                contentWithMentions(reply.content)
+                    .font(RMTheme.Typography.caption)
+            }
         }
         .padding(.vertical, 6)
         .padding(.horizontal, 8)
@@ -483,6 +625,46 @@ struct JobCommentsView: View {
             await loadComments()
         } catch {
             // Non-fatal: comment state unchanged; user can retry
+        }
+    }
+
+    private func saveEdit(commentId: String) async {
+        let content = editContent.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !content.isEmpty else { return }
+        updatingCommentId = commentId
+        editOrDeleteError = nil
+        defer { updatingCommentId = nil }
+        do {
+            _ = try await APIClient.shared.updateComment(commentId: commentId, content: content)
+            editCommentId = nil
+            editContent = ""
+            await loadComments()
+            if expandedReplyForId != nil {
+                await loadReplies(commentId: expandedReplyForId!)
+            }
+        } catch {
+            editOrDeleteError = error.localizedDescription
+        }
+    }
+
+    private func performDelete(comment: JobComment) async {
+        deletingCommentId = comment.id
+        editOrDeleteError = nil
+        defer { deletingCommentId = nil }
+        do {
+            try await APIClient.shared.deleteComment(commentId: comment.id)
+            await loadComments()
+            if let parentId = comment.parentId {
+                await loadReplies(commentId: parentId)
+            }
+            if expandedReplyForId == comment.id {
+                expandedReplyForId = nil
+                repliesByParent.removeValue(forKey: comment.id)
+            } else if let expandedId = expandedReplyForId {
+                await loadReplies(commentId: expandedId)
+            }
+        } catch {
+            editOrDeleteError = error.localizedDescription
         }
     }
 

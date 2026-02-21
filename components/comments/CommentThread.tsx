@@ -12,6 +12,41 @@ import type { MentionUser } from './MentionAutocomplete'
 
 export type CommentItem = CommentWithAuthor & { _pending?: boolean }
 
+function getInitials(author: CommentItem['author']): string {
+  if (!author) return '?'
+  const name = author.full_name?.trim()
+  if (name && name.length > 0) {
+    return name
+      .split(/\s+/)
+      .map((n) => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2)
+  }
+  const email = author.email?.trim()
+  if (email && email.length > 0) {
+    const local = email.split('@')[0] ?? ''
+    return (local.slice(0, 2) || '?').toUpperCase()
+  }
+  return '?'
+}
+
+function CommentAvatar({ author, size = 'md' }: { author: CommentItem['author']; size?: 'md' | 'sm' }) {
+  const initials = getInitials(author)
+  const isSm = size === 'sm'
+  return (
+    <div
+      className={clsx(
+        'shrink-0 rounded-full border border-white/10 bg-[#F97316]/20 flex items-center justify-center font-semibold text-[#F97316]',
+        isSm ? 'w-6 h-6 text-[10px]' : 'w-8 h-8 text-xs'
+      )}
+      aria-hidden
+    >
+      {initials}
+    </div>
+  )
+}
+
 export interface CommentThreadProps {
   comment: CommentItem
   replies: CommentItem[]
@@ -83,6 +118,7 @@ export function CommentThread({
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
+            <CommentAvatar author={comment.author} size="md" />
             <span className="font-medium text-white/90">
               {comment.author?.full_name || comment.author?.email || 'Unknown'}
             </span>
@@ -212,20 +248,25 @@ export function CommentThread({
               {replies.map((r) => (
                 <div
                   key={r.id}
-                  className={clsx('flex gap-2', (r as CommentItem)._pending && 'opacity-80')}
+                  className={clsx('flex gap-2 items-start', (r as CommentItem)._pending && 'opacity-80')}
                 >
-                  <span className="font-medium text-white/70 text-sm shrink-0">
-                    {r.author?.full_name || r.author?.email || 'Unknown'}
-                  </span>
-                  <span className="text-xs text-white/50 shrink-0">
-                    {formatDistanceToNow(new Date(r.created_at), { addSuffix: true })}
-                  </span>
-                  {(r as CommentItem)._pending && (
-                    <span className="text-xs text-white/50">Sending…</span>
-                  )}
-                  <span className="text-sm text-white/80 break-words [&_.mention]:text-[#F97316]">
-                    {renderMentions(r.content)}
-                  </span>
+                  <CommentAvatar author={r.author} size="sm" />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-medium text-white/70 text-sm shrink-0">
+                        {r.author?.full_name || r.author?.email || 'Unknown'}
+                      </span>
+                      <span className="text-xs text-white/50 shrink-0">
+                        {formatDistanceToNow(new Date(r.created_at), { addSuffix: true })}
+                      </span>
+                      {(r as CommentItem)._pending && (
+                        <span className="text-xs text-white/50">Sending…</span>
+                      )}
+                    </div>
+                    <span className="text-sm text-white/80 break-words [&_.mention]:text-[#F97316] block mt-0.5">
+                      {renderMentions(r.content)}
+                    </span>
+                  </div>
                 </div>
               ))}
               {hasMoreReplies && onLoadMoreReplies && (
