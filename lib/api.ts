@@ -1094,7 +1094,7 @@ export const commentsApi = {
     if (options?.limit != null) params.set('limit', String(options.limit));
     if (options?.offset != null) params.set('offset', String(options.offset));
     const q = params.toString();
-    return apiRequest<{ data: CommentWithAuthor[] }>(`/api/comments/${commentId}/replies${q ? `?${q}` : ''}`);
+    return apiRequest<{ data: CommentWithAuthor[]; has_more?: boolean }>(`/api/comments/${commentId}/replies${q ? `?${q}` : ''}`);
   },
   createReply: async (commentId: string, payload: { content: string; mention_user_ids?: string[] }) =>
     apiRequest<{ data: CommentWithAuthor }>(`/api/comments/${commentId}/replies`, {

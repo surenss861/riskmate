@@ -576,7 +576,7 @@ commentsRouter.get(
         { limit, offset }
       );
       const data = (result.data || []).map((c: any) => ({ ...c, content: c.content }));
-      res.json({ data });
+      res.json({ data, has_more: result.has_more === true });
     } catch (err: any) {
       console.error("List replies failed:", err);
       res.status(500).json({ message: "Failed to list replies" });

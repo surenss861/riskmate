@@ -4,10 +4,12 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { jobsApi, commentsApi, teamApi } from '@/lib/api'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { typography, emptyStateStyles, buttonStyles } from '@/lib/styles/design-system'
+import clsx from 'clsx'
 import { MessageSquare } from 'lucide-react'
 import { CommentCompose, CommentThread, type CommentItem, type MentionUser } from '@/components/comments'
 
 const COMMENT_PAGE_SIZE = 20
+const REPLY_PAGE_SIZE = 50
 
 export interface JobCommentsPanelProps {
   jobId: string
@@ -37,12 +39,15 @@ export function JobCommentsPanel({
   const [repliesByParent, setRepliesByParent] = useState<Record<string, CommentItem[]>>({})
   type RepliesStatus = 'idle' | 'loading' | 'loaded' | 'error'
   const [repliesStatus, setRepliesStatus] = useState<Record<string, RepliesStatus>>({})
+  const [hasMoreRepliesByParent, setHasMoreRepliesByParent] = useState<Record<string, boolean>>({})
+  const [loadingMoreRepliesForId, setLoadingMoreRepliesForId] = useState<string | null>(null)
   const [editId, setEditId] = useState<string | null>(null)
   const [editContent, setEditContent] = useState('')
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [currentUserRole, setCurrentUserRole] = useState<string>('member')
   const [members, setMembers] = useState<MentionUser[]>([])
   const loadingRepliesInFlightRef = useRef<Record<string, boolean>>({})
+  const repliesOffsetRef = useRef<Record<string, number>>({})
   const commentsListRef = useRef<HTMLUListElement>(null)
   const previousCommentsLengthRef = useRef(0)
   const pendingNewIdRef = useRef<string | null>(null)
@@ -165,22 +170,35 @@ export function JobCommentsPanel({
   }, [])
 
   const loadReplies = useCallback(async (parentId: string, forceRefresh = false) => {
+    const isLoadMore = !forceRefresh && (repliesOffsetRef.current[parentId] ?? 0) > 0
     if (loadingRepliesInFlightRef.current[parentId] && !forceRefresh) return
     loadingRepliesInFlightRef.current[parentId] = true
-    setRepliesStatus((prev) => ({ ...prev, [parentId]: 'loading' }))
+    if (isLoadMore) setLoadingMoreRepliesForId(parentId)
+    else setRepliesStatus((prev) => ({ ...prev, [parentId]: 'loading' }))
+    const offset = forceRefresh ? 0 : (repliesOffsetRef.current[parentId] ?? 0)
     try {
-      const res = await commentsApi.listReplies(parentId, { limit: 50 })
-      setRepliesByParent((prev) => ({ ...prev, [parentId]: res.data ?? [] }))
+      const res = await commentsApi.listReplies(parentId, { limit: REPLY_PAGE_SIZE, offset })
+      const data = res.data ?? []
+      const has_more = res.has_more === true
+      setHasMoreRepliesByParent((prev) => ({ ...prev, [parentId]: has_more }))
+      if (forceRefresh) {
+        setRepliesByParent((prev) => ({ ...prev, [parentId]: data }))
+        repliesOffsetRef.current[parentId] = data.length
+      } else {
+        setRepliesByParent((prev) => ({ ...prev, [parentId]: [...(prev[parentId] ?? []), ...data] }))
+        repliesOffsetRef.current[parentId] = (repliesOffsetRef.current[parentId] ?? 0) + data.length
+      }
       setRepliesStatus((prev) => ({ ...prev, [parentId]: 'loaded' }))
     } catch {
       setRepliesByParent((prev) => {
         const next = { ...prev }
-        delete next[parentId]
+        if (forceRefresh) delete next[parentId]
         return next
       })
       setRepliesStatus((prev) => ({ ...prev, [parentId]: 'error' }))
     } finally {
       loadingRepliesInFlightRef.current[parentId] = false
+      setLoadingMoreRepliesForId(null)
     }
   }, [])
 
@@ -395,9 +413,12 @@ export function JobCommentsPanel({
                 onResolve={handleResolve}
                 onUpdate={handleUpdate}
                 onDelete={handleDelete}
-                onLoadReplies={loadReplies}
+                onLoadReplies={(parentId) => loadReplies(parentId, true)}
                 onSubmitReply={handleSubmitReply}
                 submitting={submitting}
+                hasMoreReplies={hasMoreRepliesByParent[c.id] === true}
+                loadingMoreReplies={loadingMoreRepliesForId === c.id}
+                onLoadMoreReplies={() => loadReplies(c.id, false)}
               />
             ))}
             {hasMoreComments && (

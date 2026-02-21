@@ -979,6 +979,23 @@ export default function JobDetailPage() {
             </button>
           </div>
 
+          {/* Comments section: always mounted so realtime/unread stay active when tab is inactive; hidden when not selected */}
+          <PageSection className={activeTab === 'comments' ? '' : 'hidden'}>
+            <GlassCard className="p-6 md:p-8">
+              <h2 className={`${typography.h2} mb-1`}>Comments</h2>
+              <p className="text-sm text-white/60 mb-6">
+                Discuss this job with your team. Use @ to mention someone—they'll get notified.
+              </p>
+              <JobCommentsPanel
+                jobId={jobId}
+                onError={(msg) => setToast({ message: msg, type: 'error' })}
+                onCommentCountChange={setCommentCount}
+                onUnreadCountChange={setCommentUnreadCount}
+                lastViewedAt={commentsLastViewedAt}
+              />
+            </GlassCard>
+          </PageSection>
+
           {activeTab === 'activity' ? (
             <PageSection>
               <GlassCard className="p-6 md:p-8">
@@ -1030,23 +1047,7 @@ export default function JobDetailPage() {
                 />
               </GlassCard>
             </PageSection>
-          ) : activeTab === 'comments' ? (
-            <PageSection>
-              <GlassCard className="p-6 md:p-8">
-                <h2 className={`${typography.h2} mb-1`}>Comments</h2>
-                <p className="text-sm text-white/60 mb-6">
-                  Discuss this job with your team. Use @ to mention someone—they’ll get notified.
-                </p>
-                <JobCommentsPanel
-                  jobId={jobId}
-                  onError={(msg) => setToast({ message: msg, type: 'error' })}
-                  onCommentCountChange={setCommentCount}
-                  onUnreadCountChange={setCommentUnreadCount}
-                  lastViewedAt={activeTab === 'comments' ? Date.now() : commentsLastViewedAt}
-                />
-              </GlassCard>
-            </PageSection>
-          ) : (
+                    ) : activeTab === 'comments' ? null : (
           <>
           <div className="grid lg:grid-cols-3 gap-6 mb-16">
             <GlassCard className="p-10 flex flex-col h-full">

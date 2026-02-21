@@ -489,12 +489,12 @@ export async function unresolveComment(
   return { data: comment as CommentRow, error: null };
 }
 
-/** List replies for a comment. Excludes soft-deleted by default. */
+/** List replies for a comment. Excludes soft-deleted by default. Returns has_more when there are additional pages. */
 export async function listReplies(
   organizationId: string,
   parentId: string,
   options: { limit?: number; offset?: number; includeDeleted?: boolean } = {}
-): Promise<{ data: CommentWithAuthor[] }> {
+): Promise<{ data: CommentWithAuthor[]; has_more: boolean }> {
   const limit = Math.min(Math.max(options.limit ?? 50, 1), 100);
   const offset = Math.max(options.offset ?? 0, 0);
 
@@ -511,16 +511,20 @@ export async function listReplies(
     query = query.is("deleted_at", null);
   }
 
-  const { data: rows, error } = await query.range(offset, offset + limit - 1);
+  // Fetch limit+1 to determine has_more
+  const { data: rows, error } = await query.range(offset, offset + limit);
 
   if (error) {
     console.error("[Comments] listReplies error:", error);
-    return { data: [] };
+    return { data: [], has_more: false };
   }
 
-  const comments = (rows || []) as CommentRow[];
+  const raw = (rows || []) as CommentRow[];
+  const has_more = raw.length > limit;
+  const comments = has_more ? raw.slice(0, limit) : raw;
+
   if (comments.length === 0) {
-    return { data: [] };
+    return { data: [], has_more: false };
   }
 
   const authorIds = [...new Set(comments.map((c) => c.author_id))];
@@ -542,5 +546,5 @@ export async function listReplies(
     mentions: (c.mentions ?? []).map((user_id) => ({ user_id })),
   }));
 
-  return { data };
+  return { data, has_more };
 }

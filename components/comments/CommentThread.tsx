@@ -34,6 +34,10 @@ export interface CommentThreadProps {
   onLoadReplies: (parentId: string, forceRefresh?: boolean) => void
   onSubmitReply: (parentId: string, content: string, mentionUserIds: string[]) => Promise<void>
   submitting: boolean
+  /** When true, a "Load more replies" button is shown; clicking calls onLoadMoreReplies. */
+  hasMoreReplies?: boolean
+  loadingMoreReplies?: boolean
+  onLoadMoreReplies?: () => void
 }
 
 /**
@@ -62,6 +66,9 @@ export function CommentThread({
   onLoadReplies,
   onSubmitReply,
   submitting,
+  hasMoreReplies,
+  loadingMoreReplies,
+  onLoadMoreReplies,
 }: CommentThreadProps) {
   const isReplyOpen = replyForId === comment.id
   const currentReplyContent = isReplyOpen ? replyContent : ''
@@ -221,6 +228,18 @@ export function CommentThread({
                   </span>
                 </div>
               ))}
+              {hasMoreReplies && onLoadMoreReplies && (
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    disabled={loadingMoreReplies}
+                    onClick={onLoadMoreReplies}
+                    className={clsx(buttonStyles.secondary, 'w-full text-sm')}
+                  >
+                    {loadingMoreReplies ? 'Loading…' : 'Load more replies'}
+                  </button>
+                </div>
+              )}
             </>
           )}
           <CommentCompose

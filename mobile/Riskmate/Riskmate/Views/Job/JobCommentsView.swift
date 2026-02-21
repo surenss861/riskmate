@@ -632,16 +632,29 @@ final class JobCommentsRealtimeService: ObservableObject {
         let channelName = "job-comments-\(jobId)"
         let ch = client.channel(channelName)
         let filter = "entity_id=eq.\(jobId)"
+        let refresh: @Sendable () -> Void = { [weak self] in
+            Task { @MainActor in
+                self?.needsRefresh = true
+            }
+        }
         subscription = ch.onPostgresChange(
             InsertAction.self,
             schema: "public",
             table: "comments",
             filter: filter
-        ) { [weak self] _ in
-            Task { @MainActor in
-                self?.needsRefresh = true
-            }
-        }
+        ) { _ in refresh() }
+        ch.onPostgresChange(
+            UpdateAction.self,
+            schema: "public",
+            table: "comments",
+            filter: filter
+        ) { _ in refresh() }
+        ch.onPostgresChange(
+            DeleteAction.self,
+            schema: "public",
+            table: "comments",
+            filter: filter
+        ) { _ in refresh() }
         Task { @MainActor in
             try? await ch.subscribeWithError()
             self.channel = ch
