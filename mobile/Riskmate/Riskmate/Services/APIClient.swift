@@ -1009,6 +1009,30 @@ class APIClient {
         return response.data
     }
 
+    /// Get replies for a comment (GET /api/comments/:id/replies)
+    func getReplies(commentId: String, limit: Int = 50, offset: Int = 0) async throws -> [JobComment] {
+        var query = "limit=\(limit)&offset=\(offset)"
+        let response: CommentsListResponse = try await request(
+            endpoint: "/api/comments/\(commentId)/replies?\(query)"
+        )
+        return response.data
+    }
+
+    /// Create a reply to a comment (POST /api/comments/:id/replies)
+    func createReply(commentId: String, content: String) async throws -> JobComment {
+        struct CreateReplyBody: Encodable {
+            let content: String
+        }
+        let body = CreateReplyBody(content: content)
+        let data = try JSONEncoder().encode(body)
+        let response: CreateCommentResponse = try await request(
+            endpoint: "/api/comments/\(commentId)/replies",
+            method: "POST",
+            body: data
+        )
+        return response.data
+    }
+
     /// Complete a task
     func completeTask(id: String) async throws {
         let _: EmptyResponse = try await request(

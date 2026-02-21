@@ -30,6 +30,8 @@ export function JobCommentsPanel({ jobId, onError }: JobCommentsPanelProps) {
   const [replyContent, setReplyContent] = useState('')
   const [repliesByParent, setRepliesByParent] = useState<Record<string, CommentWithAuthor[]>>({})
   const [loadingReplies, setLoadingReplies] = useState<Record<string, boolean>>({})
+  type RepliesStatus = 'idle' | 'loading' | 'loaded' | 'error'
+  const [repliesStatus, setRepliesStatus] = useState<Record<string, RepliesStatus>>({})
   const [editId, setEditId] = useState<string | null>(null)
   const [editContent, setEditContent] = useState('')
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
@@ -38,8 +40,12 @@ export function JobCommentsPanel({ jobId, onError }: JobCommentsPanelProps) {
   const [mentionQuery, setMentionQuery] = useState<string | null>(null)
   const [mentionCursorPos, setMentionCursorPos] = useState(0)
   const [mentionAnchorRef, setMentionAnchorRef] = useState<HTMLTextAreaElement | null>(null)
+  const [replyMentionQuery, setReplyMentionQuery] = useState<string | null>(null)
+  const [replyMentionCursorPos, setReplyMentionCursorPos] = useState(0)
+  const [activeReplyMentionParentId, setActiveReplyMentionParentId] = useState<string | null>(null)
   const newTextareaRef = useRef<HTMLTextAreaElement>(null)
-  const replyTextareaRef = useRef<HTMLTextAreaElement>(null)
+  const replyTextareaRefs = useRef<Record<string, HTMLTextAreaElement | null>>({})
+  const loadingRepliesInFlightRef = useRef<Record<string, boolean>>({})
 
   const loadComments = useCallback(async () => {
     if (!jobId) return
@@ -85,18 +91,27 @@ export function JobCommentsPanel({ jobId, onError }: JobCommentsPanelProps) {
     return () => { cancelled = true }
   }, [])
 
-  const loadReplies = useCallback(async (parentId: string) => {
-    if (repliesByParent[parentId]?.length !== undefined) return
+  const loadReplies = useCallback(async (parentId: string, forceRefresh = false) => {
+    if (loadingRepliesInFlightRef.current[parentId] && !forceRefresh) return
+    loadingRepliesInFlightRef.current[parentId] = true
+    setRepliesStatus((prev) => ({ ...prev, [parentId]: 'loading' }))
     setLoadingReplies((prev) => ({ ...prev, [parentId]: true }))
     try {
       const res = await commentsApi.listReplies(parentId, { limit: 50 })
       setRepliesByParent((prev) => ({ ...prev, [parentId]: res.data ?? [] }))
+      setRepliesStatus((prev) => ({ ...prev, [parentId]: 'loaded' }))
     } catch {
-      setRepliesByParent((prev) => ({ ...prev, [parentId]: [] }))
+      setRepliesByParent((prev) => {
+        const next = { ...prev }
+        delete next[parentId]
+        return next
+      })
+      setRepliesStatus((prev) => ({ ...prev, [parentId]: 'error' }))
     } finally {
       setLoadingReplies((prev) => ({ ...prev, [parentId]: false }))
+      loadingRepliesInFlightRef.current[parentId] = false
     }
-  }, [repliesByParent])
+  }, [])
 
   const handleSubmitNew = async () => {
     const content = newContent.trim()
@@ -121,7 +136,9 @@ export function JobCommentsPanel({ jobId, onError }: JobCommentsPanelProps) {
       await commentsApi.createReply(parentId, { content })
       setReplyContent('')
       setReplyForId(null)
-      await loadReplies(parentId)
+      setActiveReplyMentionParentId(null)
+      setReplyMentionQuery(null)
+      await loadReplies(parentId, true)
       await loadComments() // refresh reply_count
     } catch (e: any) {
       onError?.(e?.message ?? 'Failed to post reply')
@@ -191,11 +208,20 @@ export function JobCommentsPanel({ jobId, onError }: JobCommentsPanelProps) {
     setMentionQuery(query)
     setMentionAnchorRef(ta)
   }
-  const mentionCandidates = mentionQuery
+  const mentionCandidates = mentionQuery && !activeReplyMentionParentId
     ? members.filter(
         (m) =>
           (m.full_name?.toLowerCase().includes(mentionQuery.toLowerCase()) ||
             m.email.toLowerCase().includes(mentionQuery.toLowerCase())) &&
+          m.id !== currentUserId
+      ).slice(0, 5)
+    : []
+
+  const replyMentionCandidates = replyMentionQuery && activeReplyMentionParentId
+    ? members.filter(
+        (m) =>
+          (m.full_name?.toLowerCase().includes(replyMentionQuery.toLowerCase()) ||
+            m.email.toLowerCase().includes(replyMentionQuery.toLowerCase())) &&
           m.id !== currentUserId
       ).slice(0, 5)
     : []
@@ -211,15 +237,17 @@ export function JobCommentsPanel({ jobId, onError }: JobCommentsPanelProps) {
       setNewContent(next)
       setMentionQuery(null)
       setTimeout(() => ta.focus(), 0)
-    } else if (target === 'reply' && parentId && replyTextareaRef.current) {
-      const ta = replyTextareaRef.current
-      const pos = ta.selectionStart ?? 0
-      const start = ta.value.slice(0, pos).lastIndexOf('@')
-      const before = start >= 0 ? ta.value.slice(0, start) : ta.value
-      const after = ta.value.slice(pos)
-      setReplyContent(before + token + ' ' + after)
-      setMentionQuery(null)
-      setTimeout(() => ta.focus(), 0)
+    } else if (target === 'reply' && parentId) {
+      const ta = replyTextareaRefs.current[parentId]
+      if (ta) {
+        const pos = replyMentionCursorPos
+        const start = ta.value.slice(0, pos).lastIndexOf('@')
+        const before = start >= 0 ? ta.value.slice(0, start) : ta.value
+        const after = ta.value.slice(pos)
+        setReplyContent(before + token + ' ' + after)
+        setReplyMentionQuery(null)
+        setTimeout(() => ta.focus(), 0)
+      }
     }
   }
 
@@ -389,8 +417,13 @@ export function JobCommentsPanel({ jobId, onError }: JobCommentsPanelProps) {
                   <button
                     type="button"
                     onClick={() => {
+                      const opening = replyForId !== c.id
                       setReplyForId(replyForId === c.id ? null : c.id)
-                      if (replyForId !== c.id) loadReplies(c.id)
+                      if (opening) {
+                        loadReplies(c.id)
+                        setActiveReplyMentionParentId(null)
+                        setReplyMentionQuery(null)
+                      }
                     }}
                     className="inline-flex items-center gap-1 text-sm text-white/70 hover:text-white"
                   >
@@ -401,6 +434,18 @@ export function JobCommentsPanel({ jobId, onError }: JobCommentsPanelProps) {
                 </div>
                 {replyForId === c.id && (
                   <div className="mt-4 pl-4 border-l-2 border-white/10 space-y-3">
+                    {repliesStatus[c.id] === 'error' && (
+                      <div className="flex items-center gap-2 py-1">
+                        <span className="text-xs text-red-400">Failed to load replies.</span>
+                        <button
+                          type="button"
+                          onClick={() => loadReplies(c.id)}
+                          className="text-xs text-white/80 hover:text-white underline"
+                        >
+                          Retry
+                        </button>
+                      </div>
+                    )}
                     {loadingReplies[c.id] ? (
                       <div className="animate-pulse h-10 rounded bg-white/5" />
                     ) : (
@@ -419,16 +464,63 @@ export function JobCommentsPanel({ jobId, onError }: JobCommentsPanelProps) {
                       ))
                     )}
                     <div className="flex gap-2">
-                      <textarea
-                        ref={replyTextareaRef}
-                        value={replyContent}
-                        onChange={(e) => setReplyContent(e.target.value)}
-                        placeholder="Write a reply…"
-                        rows={2}
-                        className={clsx(
-                          'flex-1 min-w-0 px-3 py-2 rounded border border-white/10 bg-black/30 text-white/90 text-sm placeholder:text-white/40'
+                      <div className="flex-1 min-w-0 flex flex-col relative">
+                        <textarea
+                          ref={(el) => { replyTextareaRefs.current[c.id] = el }}
+                          value={replyContent}
+                          onChange={(e) => {
+                            const value = e.target.value
+                            setReplyContent(value)
+                            const ta = e.target
+                            const pos = ta.selectionStart ?? 0
+                            setReplyMentionCursorPos(pos)
+                            setReplyMentionQuery(extractMentionQuery(value, pos))
+                            setActiveReplyMentionParentId(c.id)
+                          }}
+                          onKeyDown={(e) => {
+                            const ta = e.currentTarget
+                            const pos = ta.selectionStart ?? 0
+                            setReplyMentionCursorPos(pos)
+                            setReplyMentionQuery(extractMentionQuery(ta.value, pos))
+                            setActiveReplyMentionParentId(c.id)
+                          }}
+                          onSelect={() => {
+                            const ta = replyTextareaRefs.current[c.id]
+                            if (ta) {
+                              setReplyMentionCursorPos(ta.selectionStart ?? 0)
+                              setReplyMentionQuery(extractMentionQuery(ta.value, ta.selectionStart ?? 0))
+                              setActiveReplyMentionParentId(c.id)
+                            }
+                          }}
+                          onBlur={() => {
+                            setTimeout(() => setActiveReplyMentionParentId(null), 150)
+                          }}
+                          placeholder="Write a reply… Use @ to mention."
+                          rows={2}
+                          className={clsx(
+                            'w-full px-3 py-2 rounded border border-white/10 bg-black/30 text-white/90 text-sm placeholder:text-white/40'
+                          )}
+                        />
+                        {activeReplyMentionParentId === c.id && replyMentionCandidates.length > 0 && (
+                          <div
+                            className="absolute left-0 right-0 top-full z-10 mt-1 rounded-lg border border-white/10 bg-[#1a1a1a] py-1 shadow-lg"
+                            role="listbox"
+                          >
+                            {replyMentionCandidates.map((m) => (
+                              <button
+                                key={m.id}
+                                type="button"
+                                role="option"
+                                className="w-full px-4 py-2 text-left text-sm text-white/90 hover:bg-white/10 flex items-center gap-2"
+                                onClick={() => insertMention(m, 'reply', c.id)}
+                              >
+                                <span className="font-medium">{m.full_name || m.email}</span>
+                                {m.full_name && <span className="text-white/50 text-xs">{m.email}</span>}
+                              </button>
+                            ))}
+                          </div>
                         )}
-                      />
+                      </div>
                       <button
                         type="button"
                         disabled={!replyContent.trim() || submitting}

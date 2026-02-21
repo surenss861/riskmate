@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		211796242F19003E00FDF243 /* JobCommentsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 211796232F19003E00FDF243 /* JobCommentsView.swift */; };
 		211795702F18FC1A00FDF243 /* Auth in Frameworks */ = {isa = PBXBuildFile; productRef = 2117956F2F18FC1A00FDF243 /* Auth */; };
 		211795722F18FC1A00FDF243 /* Functions in Frameworks */ = {isa = PBXBuildFile; productRef = 211795712F18FC1A00FDF243 /* Functions */; };
 		211795742F18FC1A00FDF243 /* PostgREST in Frameworks */ = {isa = PBXBuildFile; productRef = 211795732F18FC1A00FDF243 /* PostgREST */; };
@@ -197,6 +198,7 @@
 		2117961E2F18FC4D00FDF243 /* libAppletTranslationLibrary.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libAppletTranslationLibrary.tbd; path = usr/lib/libAppletTranslationLibrary.tbd; sourceTree = SDKROOT; };
 		2117961F2F18FC4D00FDF243 /* AppClip.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AppClip.framework; path = System/Library/Frameworks/AppClip.framework; sourceTree = SDKROOT; };
 		211796202F18FC4D00FDF243 /* IdentityDocumentServicesUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = IdentityDocumentServicesUI.framework; path = System/Library/Frameworks/IdentityDocumentServicesUI.framework; sourceTree = SDKROOT; };
+		211796232F19003E00FDF243 /* JobCommentsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JobCommentsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -271,9 +273,18 @@
 				211794A72F18213B00FDF243 /* Riskmate */,
 				211794B92F18213C00FDF243 /* RiskmateTests */,
 				211794C32F18213C00FDF243 /* RiskmateUITests */,
+				211796252F19003E00FDF243 /* Job */,
 				211794F32F182CC200FDF243 /* Frameworks */,
 				211794A62F18213B00FDF243 /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		211796252F19003E00FDF243 /* Job */ = {
+			isa = PBXGroup;
+			children = (
+				211796232F19003E00FDF243 /* JobCommentsView.swift */,
+			);
+			path = "Riskmate/Views/Job";
 			sourceTree = "<group>";
 		};
 		211794A62F18213B00FDF243 /* Products */ = {
@@ -600,6 +611,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				211796242F19003E00FDF243 /* JobCommentsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
