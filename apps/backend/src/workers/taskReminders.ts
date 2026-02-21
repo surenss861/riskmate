@@ -135,7 +135,7 @@ async function processTaskReminders() {
         const shouldQueueEmail =
           assigneeEmail &&
           prefs.email_enabled &&
-          prefs.deadline_approaching;
+          prefs.email_deadline_reminder;
 
         const isOverdue = task.due_date ? new Date(task.due_date).getTime() < now.getTime() : false;
 

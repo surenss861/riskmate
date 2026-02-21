@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { createSupabaseAdminClient } from '@/lib/supabase/admin'
 import { getOrganizationContext } from '@/lib/utils/organizationGuard'
 import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { logApiError } from '@/lib/utils/errorLogging'
@@ -199,6 +200,35 @@ export async function POST(request: NextRequest) {
         })
       }
       validatedTasks.push(result.task)
+    }
+
+    const assigneeIds = [...new Set(validatedTasks.map((t) => t.assigned_to).filter((id): id is string => id != null))]
+    if (assigneeIds.length > 0) {
+      const admin = createSupabaseAdminClient()
+      for (const userId of assigneeIds) {
+        const { data: userInOrg } = await admin
+          .from('users')
+          .select('id')
+          .eq('id', userId)
+          .eq('organization_id', organization_id)
+          .maybeSingle()
+        if (!userInOrg) {
+          const { response, errorId } = createErrorResponse(
+            'assigned_to must be a user in your organization',
+            'VALIDATION_ERROR',
+            { requestId, statusCode: 400 }
+          )
+          logApiError(400, 'VALIDATION_ERROR', errorId, requestId, organization_id, response.message, {
+            category: 'validation',
+            severity: 'warn',
+            route: ROUTE,
+          })
+          return NextResponse.json(response, {
+            status: 400,
+            headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+          })
+        }
+      }
     }
 
     const supabase = await createSupabaseServerClient()
