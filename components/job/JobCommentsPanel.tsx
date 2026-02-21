@@ -74,7 +74,7 @@ export function JobCommentsPanel({
         } else {
           setComments(data)
         }
-        if (res.count != null) onCommentCountChange?.(res.count)
+        // Tab badge count is set by refreshCommentBadgeCounts (includes replies)
       } catch (e: unknown) {
         const message = e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : 'Failed to load comments'
         onError?.(message)
@@ -84,12 +84,38 @@ export function JobCommentsPanel({
         setLoadingMore(false)
       }
     },
-    [jobId, onError, onCommentCountChange]
+    [jobId, onError]
   )
+
+  // Tab badge: total count (including replies) and server-supplied unread count (including replies when threads collapsed).
+  const refreshCommentBadgeCounts = useCallback(() => {
+    if (!jobId) return
+    const run = async () => {
+      try {
+        const [countRes, unreadRes] = await Promise.all([
+          jobsApi.getCommentCount(jobId, { include_replies: true }),
+          jobsApi.getCommentUnreadCount(jobId, {
+            since: lastViewedAt != null
+              ? (typeof lastViewedAt === 'number' ? new Date(lastViewedAt) : new Date(lastViewedAt)).toISOString()
+              : new Date(0).toISOString(),
+          }),
+        ])
+        if (countRes?.count != null) onCommentCountChange?.(countRes.count)
+        if (unreadRes?.count != null) onUnreadCountChange?.(unreadRes.count)
+      } catch {
+        // ignore badge errors
+      }
+    }
+    run()
+  }, [jobId, lastViewedAt, onCommentCountChange, onUnreadCountChange])
 
   useEffect(() => {
     loadComments(0)
   }, [loadComments])
+
+  useEffect(() => {
+    refreshCommentBadgeCounts()
+  }, [refreshCommentBadgeCounts])
 
   const loadReplies = useCallback(async (parentId: string, forceRefresh = false) => {
     const isLoadMore = !forceRefresh && (repliesOffsetRef.current[parentId] ?? 0) > 0
@@ -124,22 +150,7 @@ export function JobCommentsPanel({
     }
   }, [])
 
-  // Report unread count: include both top-level comments and all loaded replies (merge repliesByParent timestamps).
-  // Exclude the current user's own comments/replies so posting does not inflate unread.
-  const lastViewedMs = lastViewedAt != null ? (typeof lastViewedAt === 'number' ? lastViewedAt : new Date(lastViewedAt).getTime()) : 0
-  useEffect(() => {
-    const allItems = [
-      ...comments,
-      ...Object.values(repliesByParent).flat(),
-    ]
-    const unread = allItems.filter(
-      (c) =>
-        !c._pending &&
-        c.author_id !== currentUserId &&
-        new Date(c.created_at).getTime() > lastViewedMs
-    ).length
-    onUnreadCountChange?.(unread)
-  }, [comments, repliesByParent, lastViewedMs, currentUserId, onUnreadCountChange])
+  // Unread count is supplied by server (refreshCommentBadgeCounts) so it includes replies even when threads stay collapsed.
 
   // Realtime: subscribe to comments for this job; refresh list and reply counts
   useEffect(() => {
@@ -161,6 +172,7 @@ export function JobCommentsPanel({
           const parentId = row.parent_id as string | null | undefined
           loadComments(0)
           if (parentId) loadReplies(parentId, true)
+          refreshCommentBadgeCounts()
           onNewCommentArrived?.()
         }
       )
@@ -168,7 +180,7 @@ export function JobCommentsPanel({
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [jobId, loadComments, loadReplies, onNewCommentArrived])
+  }, [jobId, loadComments, loadReplies, refreshCommentBadgeCounts, onNewCommentArrived])
 
   // Scroll to newest comment when list grows (realtime or optimistic)
   useEffect(() => {
@@ -244,6 +256,7 @@ export function JobCommentsPanel({
         mention_user_ids: mentionUserIds.length > 0 ? mentionUserIds : undefined,
       })
       await loadComments(0)
+      refreshCommentBadgeCounts()
     } catch (e: unknown) {
       setComments((prev) => prev.filter((c) => c.id !== pendingId))
       const message = e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : 'Failed to post comment'
@@ -295,6 +308,7 @@ export function JobCommentsPanel({
       await loadReplies(parentId, true)
       await loadComments(0)
       setReplyForId(null)
+      refreshCommentBadgeCounts()
     } catch (e: unknown) {
       setRepliesByParent((prev) => ({
         ...prev,
@@ -315,6 +329,7 @@ export function JobCommentsPanel({
       if (resolve) await commentsApi.resolve(commentId)
       else await commentsApi.unresolve(commentId)
       await loadComments(0)
+      refreshCommentBadgeCounts()
     } catch (e: unknown) {
       const message = e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : 'Failed to update comment'
       onError?.(message)
@@ -345,6 +360,7 @@ export function JobCommentsPanel({
         delete next[commentId]
         return next
       })
+      refreshCommentBadgeCounts()
     } catch (e: unknown) {
       const message = e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : 'Failed to delete comment'
       onError?.(message)

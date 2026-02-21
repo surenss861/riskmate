@@ -123,6 +123,58 @@ export async function listComments(
   return { data, count: total, has_more };
 }
 
+/** Get total comment count for an entity, optionally including replies. Excludes soft-deleted. */
+export async function getCommentCount(
+  organizationId: string,
+  entityType: CommentEntityType,
+  entityId: string,
+  options: { includeReplies?: boolean } = {}
+): Promise<number> {
+  let query = supabase
+    .from("comments")
+    .select("id", { count: "exact", head: true })
+    .eq("organization_id", organizationId)
+    .eq("entity_type", entityType)
+    .eq("entity_id", entityId)
+    .is("deleted_at", null);
+
+  if (options.includeReplies !== true) {
+    query = query.is("parent_id", null);
+  }
+
+  const { count, error } = await query;
+  if (error) {
+    console.error("[Comments] getCommentCount error:", error);
+    return 0;
+  }
+  return typeof count === "number" ? count : 0;
+}
+
+/** Get unread comment count for an entity (comments + replies created after since, excluding those by currentUser). Excludes soft-deleted. */
+export async function getUnreadCommentCount(
+  organizationId: string,
+  entityType: CommentEntityType,
+  entityId: string,
+  sinceIso: string,
+  currentUserId: string
+): Promise<number> {
+  const { count, error } = await supabase
+    .from("comments")
+    .select("id", { count: "exact", head: true })
+    .eq("organization_id", organizationId)
+    .eq("entity_type", entityType)
+    .eq("entity_id", entityId)
+    .is("deleted_at", null)
+    .neq("author_id", currentUserId)
+    .gt("created_at", sinceIso);
+
+  if (error) {
+    console.error("[Comments] getUnreadCommentCount error:", error);
+    return 0;
+  }
+  return typeof count === "number" ? count : 0;
+}
+
 /** Get a parent comment by id scoped to org and optional entity_type/entity_id; excludes deleted. Returns null if not found. */
 export async function getParentComment(
   organizationId: string,

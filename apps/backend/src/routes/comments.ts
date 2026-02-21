@@ -11,6 +11,8 @@ import {
   resolveComment,
   unresolveComment,
   listReplies,
+  getCommentCount,
+  getUnreadCommentCount,
   COMMENT_ENTITY_TYPES,
   type CommentEntityType,
 } from "../services/comments";
@@ -55,6 +57,62 @@ export const commentsRouter: ExpressRouter = express.Router();
 
 /** Router for job-scoped comment routes: GET/POST /api/jobs/:id/comments. Mount on jobs router. */
 export const jobCommentsRouter: ExpressRouter = express.Router();
+
+/** GET /api/jobs/:id/comments/count — total comment count for tab badge; include_replies=true for count including replies. */
+jobCommentsRouter.get(
+  "/:id/comments/count",
+  authenticate as unknown as express.RequestHandler,
+  async (req: express.Request, res: express.Response) => {
+    const authReq = req as AuthenticatedRequest;
+    const jobId = req.params.id;
+    if (!jobId) {
+      return res.status(400).json({ message: "Job id is required", code: "MISSING_PARAMS" });
+    }
+    try {
+      const includeReplies = req.query.include_replies === "true";
+      const count = await getCommentCount(
+        authReq.user.organization_id,
+        "job",
+        jobId,
+        { includeReplies }
+      );
+      res.json({ count });
+    } catch (err: any) {
+      console.error("Comment count failed:", err);
+      res.status(500).json({ message: "Failed to get comment count" });
+    }
+  }
+);
+
+/** GET /api/jobs/:id/comments/unread-count — unread count (comments + replies) after since= ISO timestamp; for tab badge. */
+jobCommentsRouter.get(
+  "/:id/comments/unread-count",
+  authenticate as unknown as express.RequestHandler,
+  async (req: express.Request, res: express.Response) => {
+    const authReq = req as AuthenticatedRequest;
+    const jobId = req.params.id;
+    const since = typeof req.query.since === "string" ? req.query.since : undefined;
+    if (!jobId) {
+      return res.status(400).json({ message: "Job id is required", code: "MISSING_PARAMS" });
+    }
+    if (!since) {
+      return res.status(400).json({ message: "Query param since is required (ISO timestamp)", code: "MISSING_PARAMS" });
+    }
+    try {
+      const count = await getUnreadCommentCount(
+        authReq.user.organization_id,
+        "job",
+        jobId,
+        since,
+        authReq.user.id
+      );
+      res.json({ count });
+    } catch (err: any) {
+      console.error("Unread comment count failed:", err);
+      res.status(500).json({ message: "Failed to get unread comment count" });
+    }
+  }
+);
 
 /** GET /api/jobs/:id/comments — list comments for a job (spec path). */
 jobCommentsRouter.get(

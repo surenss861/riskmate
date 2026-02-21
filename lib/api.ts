@@ -771,6 +771,19 @@ export const jobsApi = {
       `/api/jobs/${jobId}/comments${q ? `?${q}` : ''}`
     );
   },
+  /** Total comment count for tab badge; use include_replies: true so count includes replies. */
+  getCommentCount: async (jobId: string, options?: { include_replies?: boolean }) => {
+    const params = new URLSearchParams();
+    if (options?.include_replies === true) params.set('include_replies', 'true');
+    const q = params.toString();
+    return apiRequest<{ count: number }>(`/api/jobs/${jobId}/comments/count${q ? `?${q}` : ''}`);
+  },
+  /** Unread comment count (comments + replies) after since (ISO string) for tab badge. */
+  getCommentUnreadCount: async (jobId: string, options: { since: string }) => {
+    const params = new URLSearchParams();
+    params.set('since', options.since);
+    return apiRequest<{ count: number }>(`/api/jobs/${jobId}/comments/unread-count?${params.toString()}`);
+  },
   createComment: async (jobId: string, payload: { content: string; parent_id?: string | null; mention_user_ids?: string[] }) => {
     return apiRequest<{ data: CommentWithAuthor }>(`/api/jobs/${jobId}/comments`, {
       method: 'POST',
