@@ -22,6 +22,7 @@ struct JobCommentsView: View {
     @State private var mentionQuery: String?
     @State private var activeReplyMentionParentId: String?
     @State private var resolvingCommentId: String?
+    @State private var currentUserRole: String = "member"
     @StateObject private var realtimeService = JobCommentsRealtimeService()
 
     var body: some View {
@@ -87,6 +88,7 @@ struct JobCommentsView: View {
         do {
             let team = try await APIClient.shared.getTeam()
             members = team.members
+            currentUserRole = team.currentUserRole
         } catch {
             // Non-fatal: comments work without mention picker
         }
@@ -176,8 +178,11 @@ struct JobCommentsView: View {
         .clipShape(RoundedRectangle(cornerRadius: RMTheme.Radius.md))
     }
 
+    /// Resolve permission aligned with backend: author, org owner, or org admin may resolve/unresolve.
     private func canResolve(_ comment: JobComment) -> Bool {
-        comment.authorId == currentUserId
+        let isAuthor = comment.authorId == currentUserId
+        let isOwnerOrAdmin = currentUserRole == "owner" || currentUserRole == "admin"
+        return isAuthor || isOwnerOrAdmin
     }
 
     private func commentRow(_ comment: JobComment) -> some View {

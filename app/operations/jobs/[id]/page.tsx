@@ -174,6 +174,8 @@ export default function JobDetailPage() {
   const [taskIncompleteCount, setTaskIncompleteCount] = useState<number | null>(null)
   const [taskRefreshKey, setTaskRefreshKey] = useState(0)
   const [commentCount, setCommentCount] = useState<number | null>(null)
+  const [commentUnreadCount, setCommentUnreadCount] = useState<number>(0)
+  const [commentsLastViewedAt, setCommentsLastViewedAt] = useState<number | null>(null)
 
   const { addTask, refetch: refetchTasks, incompleteCount } = useTasks(jobId)
 
@@ -390,6 +392,34 @@ export default function JobDetailPage() {
       loadJob()
     }
   }, [jobId, loadJob])
+
+  // Restore last-viewed timestamp for comments (unread badge) from localStorage
+  useEffect(() => {
+    if (!jobId || typeof window === 'undefined') return
+    try {
+      const key = `riskmate_comments_last_viewed_${jobId}`
+      const raw = localStorage.getItem(key)
+      if (raw) {
+        const t = parseInt(raw, 10)
+        if (!Number.isNaN(t)) setCommentsLastViewedAt(t)
+      }
+    } catch {
+      // ignore
+    }
+  }, [jobId])
+
+  // When user opens Comments tab, mark all as read (reset unread badge)
+  useEffect(() => {
+    if (activeTab !== 'comments' || !jobId) return
+    const now = Date.now()
+    setCommentsLastViewedAt(now)
+    setCommentUnreadCount(0)
+    try {
+      localStorage.setItem(`riskmate_comments_last_viewed_${jobId}`, String(now))
+    } catch {
+      // ignore
+    }
+  }, [activeTab, jobId])
 
   // Monitor online/offline status
   useEffect(() => {
@@ -941,9 +971,9 @@ export default function JobDetailPage() {
               className={`${tabStyles.item} ${activeTab === 'comments' ? tabStyles.active : tabStyles.inactive}`}
             >
               Comments
-              {commentCount !== null && (
+              {commentUnreadCount > 0 && (
                 <span className="ml-1.5 inline-flex items-center justify-center min-w-[2rem] px-1.5 py-0.5 text-xs font-medium rounded-md bg-white/10 text-white/80 border border-white/10">
-                  {commentCount}
+                  {commentUnreadCount}
                 </span>
               )}
             </button>
@@ -1011,6 +1041,8 @@ export default function JobDetailPage() {
                   jobId={jobId}
                   onError={(msg) => setToast({ message: msg, type: 'error' })}
                   onCommentCountChange={setCommentCount}
+                  onUnreadCountChange={setCommentUnreadCount}
+                  lastViewedAt={activeTab === 'comments' ? Date.now() : commentsLastViewedAt}
                 />
               </GlassCard>
             </PageSection>

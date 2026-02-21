@@ -2,43 +2,39 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { jobsApi, commentsApi, teamApi } from '@/lib/api'
-import type { CommentWithAuthor } from '@/lib/api'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
-import { renderMentions, extractMentionQuery, formatMention, extractMentionUserIds } from '@/lib/utils/mentionParser'
-import { typography, spacing, buttonStyles, emptyStateStyles } from '@/lib/styles/design-system'
-import { MessageSquare, Send, CheckCircle2, Circle, Reply, Pencil, Trash2, ChevronDown, ChevronRight } from 'lucide-react'
-import clsx from 'clsx'
-import { formatDistanceToNow } from 'date-fns'
-
-interface MentionUser {
-  id: string
-  full_name: string | null
-  email: string
-}
+import { typography, emptyStateStyles, buttonStyles } from '@/lib/styles/design-system'
+import { MessageSquare } from 'lucide-react'
+import { CommentCompose, CommentThread, type CommentItem, type MentionUser } from '@/components/comments'
 
 const COMMENT_PAGE_SIZE = 20
-const COMMENT_MAX_LENGTH = 2000
 
 export interface JobCommentsPanelProps {
   jobId: string
   onError?: (message: string) => void
   onCommentCountChange?: (count: number) => void
+  onUnreadCountChange?: (unreadCount: number) => void
   onNewCommentArrived?: () => void
+  /** Timestamp (ms or ISO string) before which comments are considered read; used for unread badge. */
+  lastViewedAt?: number | string | null
 }
 
-type CommentItem = CommentWithAuthor & { _pending?: boolean }
-
-export function JobCommentsPanel({ jobId, onError, onCommentCountChange, onNewCommentArrived }: JobCommentsPanelProps) {
+export function JobCommentsPanel({
+  jobId,
+  onError,
+  onCommentCountChange,
+  onUnreadCountChange,
+  onNewCommentArrived,
+  lastViewedAt,
+}: JobCommentsPanelProps) {
   const [comments, setComments] = useState<CommentItem[]>([])
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [hasMoreComments, setHasMoreComments] = useState(false)
   const [submitting, setSubmitting] = useState(false)
-  const [newContent, setNewContent] = useState('')
   const [replyForId, setReplyForId] = useState<string | null>(null)
   const [replyContent, setReplyContent] = useState('')
   const [repliesByParent, setRepliesByParent] = useState<Record<string, CommentItem[]>>({})
-  const [loadingReplies, setLoadingReplies] = useState<Record<string, boolean>>({})
   type RepliesStatus = 'idle' | 'loading' | 'loaded' | 'error'
   const [repliesStatus, setRepliesStatus] = useState<Record<string, RepliesStatus>>({})
   const [editId, setEditId] = useState<string | null>(null)
@@ -46,55 +42,57 @@ export function JobCommentsPanel({ jobId, onError, onCommentCountChange, onNewCo
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [currentUserRole, setCurrentUserRole] = useState<string>('member')
   const [members, setMembers] = useState<MentionUser[]>([])
-  const [mentionQuery, setMentionQuery] = useState<string | null>(null)
-  const [mentionCursorPos, setMentionCursorPos] = useState(0)
-  const [mentionAnchorRef, setMentionAnchorRef] = useState<HTMLTextAreaElement | null>(null)
-  const [replyMentionQuery, setReplyMentionQuery] = useState<string | null>(null)
-  const [replyMentionCursorPos, setReplyMentionCursorPos] = useState(0)
-  const [activeReplyMentionParentId, setActiveReplyMentionParentId] = useState<string | null>(null)
-  const [mentionHighlightIndex, setMentionHighlightIndex] = useState(0)
-  const [replyMentionHighlightIndex, setReplyMentionHighlightIndex] = useState(0)
-  const newCommentBlockRef = useRef<HTMLDivElement>(null)
-  const newTextareaRef = useRef<HTMLTextAreaElement>(null)
-  const replyTextareaRefs = useRef<Record<string, HTMLTextAreaElement | null>>({})
   const loadingRepliesInFlightRef = useRef<Record<string, boolean>>({})
   const commentsListRef = useRef<HTMLUListElement>(null)
   const previousCommentsLengthRef = useRef(0)
   const pendingNewIdRef = useRef<string | null>(null)
   const pendingReplyIdsRef = useRef<Record<string, string>>({})
 
-  const loadComments = useCallback(async (offset?: number) => {
-    if (!jobId) return
-    const isLoadMore = offset != null && offset > 0
-    if (isLoadMore) setLoadingMore(true)
-    else setLoading(true)
-    try {
-      const res = await jobsApi.getComments(jobId, {
-        limit: COMMENT_PAGE_SIZE,
-        offset: offset ?? 0,
-        include_replies: false,
-      })
-      const data = res.data ?? []
-      const hasMore = res.has_more === true
-      setHasMoreComments(hasMore)
-      if (isLoadMore) {
-        setComments((prev) => [...prev, ...data])
-      } else {
-        setComments(data)
+  const loadComments = useCallback(
+    async (offset?: number) => {
+      if (!jobId) return
+      const isLoadMore = offset != null && offset > 0
+      if (isLoadMore) setLoadingMore(true)
+      else setLoading(true)
+      try {
+        const res = await jobsApi.getComments(jobId, {
+          limit: COMMENT_PAGE_SIZE,
+          offset: offset ?? 0,
+          include_replies: false,
+        })
+        const data = res.data ?? []
+        const hasMore = res.has_more === true
+        setHasMoreComments(hasMore)
+        if (isLoadMore) {
+          setComments((prev) => [...prev, ...data])
+        } else {
+          setComments(data)
+        }
+        if (res.count != null) onCommentCountChange?.(res.count)
+      } catch (e: unknown) {
+        const message = e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : 'Failed to load comments'
+        onError?.(message)
+        if (!isLoadMore) setComments([])
+      } finally {
+        setLoading(false)
+        setLoadingMore(false)
       }
-      if (res.count != null) onCommentCountChange?.(res.count)
-    } catch (e: any) {
-      onError?.(e?.message ?? 'Failed to load comments')
-      if (!isLoadMore) setComments([])
-    } finally {
-      setLoading(false)
-      setLoadingMore(false)
-    }
-  }, [jobId, onError, onCommentCountChange])
+    },
+    [jobId, onError, onCommentCountChange]
+  )
 
   useEffect(() => {
     loadComments(0)
   }, [loadComments])
+
+  // Report unread count whenever comments or lastViewedAt change
+  const lastViewedMs = lastViewedAt != null ? (typeof lastViewedAt === 'number' ? lastViewedAt : new Date(lastViewedAt).getTime()) : 0
+  useEffect(() => {
+    const unread = comments.filter(
+      (c) => !c._pending && new Date(c.created_at).getTime() > lastViewedMs
+    ).length
+    onUnreadCountChange?.(unread)
+  }, [comments, lastViewedMs, onUnreadCountChange])
 
   // Realtime: subscribe to comments for this job; refresh list and reply counts
   useEffect(() => {
@@ -140,14 +138,16 @@ export function JobCommentsPanel({ jobId, onError, onCommentCountChange, onNewCo
     let cancelled = false
     const run = async () => {
       const supabase = createSupabaseBrowserClient()
-      const { data: { user } } = await supabase.auth.getUser()
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
       if (cancelled) return
       if (user) setCurrentUserId(user.id)
       try {
         const team = await teamApi.get()
         if (cancelled) return
         setMembers(
-          (team.members ?? []).map((m: any) => ({
+          (team.members ?? []).map((m: { id: string; full_name?: string | null; email?: string }) => ({
             id: m.id,
             full_name: m.full_name ?? null,
             email: m.email ?? '',
@@ -159,14 +159,15 @@ export function JobCommentsPanel({ jobId, onError, onCommentCountChange, onNewCo
       }
     }
     run()
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   const loadReplies = useCallback(async (parentId: string, forceRefresh = false) => {
     if (loadingRepliesInFlightRef.current[parentId] && !forceRefresh) return
     loadingRepliesInFlightRef.current[parentId] = true
     setRepliesStatus((prev) => ({ ...prev, [parentId]: 'loading' }))
-    setLoadingReplies((prev) => ({ ...prev, [parentId]: true }))
     try {
       const res = await commentsApi.listReplies(parentId, { limit: 50 })
       setRepliesByParent((prev) => ({ ...prev, [parentId]: res.data ?? [] }))
@@ -179,15 +180,12 @@ export function JobCommentsPanel({ jobId, onError, onCommentCountChange, onNewCo
       })
       setRepliesStatus((prev) => ({ ...prev, [parentId]: 'error' }))
     } finally {
-      setLoadingReplies((prev) => ({ ...prev, [parentId]: false }))
       loadingRepliesInFlightRef.current[parentId] = false
     }
   }, [])
 
-  const handleSubmitNew = async () => {
-    const content = newContent.trim()
-    if (!content || submitting) return
-    const mentionUserIds = extractMentionUserIds(content)
+  const handleSubmitNew = async (content: string, mentionUserIds: string[]) => {
+    if (!content.trim() || submitting) return
     const pendingId = `pending-new-${Date.now()}`
     pendingNewIdRef.current = pendingId
     const optimistic: CommentItem = {
@@ -197,37 +195,43 @@ export function JobCommentsPanel({ jobId, onError, onCommentCountChange, onNewCo
       entity_id: jobId,
       parent_id: null,
       author_id: currentUserId ?? '',
-      content,
+      content: content.trim(),
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       reply_count: 0,
       author: members.find((m) => m.id === currentUserId)
-        ? { id: currentUserId!, full_name: members.find((m) => m.id === currentUserId)!.full_name, email: members.find((m) => m.id === currentUserId)!.email }
+        ? {
+            id: currentUserId!,
+            full_name: members.find((m) => m.id === currentUserId)!.full_name,
+            email: members.find((m) => m.id === currentUserId)!.email,
+          }
         : undefined,
       _pending: true,
     }
     setComments((prev) => [...prev, optimistic])
-    setNewContent('')
     setSubmitting(true)
     try {
       await jobsApi.createComment(jobId, {
-        content,
+        content: content.trim(),
         mention_user_ids: mentionUserIds.length > 0 ? mentionUserIds : undefined,
       })
       await loadComments(0)
-    } catch (e: any) {
+    } catch (e: unknown) {
       setComments((prev) => prev.filter((c) => c.id !== pendingId))
-      onError?.(e?.message ?? 'Failed to post comment')
+      const message = e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : 'Failed to post comment'
+      onError?.(message)
     } finally {
       setSubmitting(false)
       pendingNewIdRef.current = null
     }
   }
 
-  const handleSubmitReply = async (parentId: string) => {
-    const content = replyContent.trim()
-    if (!content || submitting) return
-    const mentionUserIds = extractMentionUserIds(content)
+  const handleSubmitReply = async (
+    parentId: string,
+    content: string,
+    mentionUserIds: string[]
+  ) => {
+    if (!content.trim() || submitting) return
     const pendingId = `pending-reply-${parentId}-${Date.now()}`
     pendingReplyIdsRef.current = { ...pendingReplyIdsRef.current, [parentId]: pendingId }
     const optimistic: CommentItem = {
@@ -237,33 +241,39 @@ export function JobCommentsPanel({ jobId, onError, onCommentCountChange, onNewCo
       entity_id: jobId,
       parent_id: parentId,
       author_id: currentUserId ?? '',
-      content,
+      content: content.trim(),
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       author: members.find((m) => m.id === currentUserId)
-        ? { id: currentUserId!, full_name: members.find((m) => m.id === currentUserId)!.full_name, email: members.find((m) => m.id === currentUserId)!.email }
+        ? {
+            id: currentUserId!,
+            full_name: members.find((m) => m.id === currentUserId)!.full_name,
+            email: members.find((m) => m.id === currentUserId)!.email,
+          }
         : undefined,
       _pending: true,
     }
-    setRepliesByParent((prev) => ({ ...prev, [parentId]: [...(prev[parentId] ?? []), optimistic] }))
+    setRepliesByParent((prev) => ({
+      ...prev,
+      [parentId]: [...(prev[parentId] ?? []), optimistic],
+    }))
     setReplyContent('')
-    setActiveReplyMentionParentId(null)
-    setReplyMentionQuery(null)
     setSubmitting(true)
     try {
       await commentsApi.createReply(parentId, {
-        content,
+        content: content.trim(),
         mention_user_ids: mentionUserIds.length > 0 ? mentionUserIds : undefined,
       })
       await loadReplies(parentId, true)
-      await loadComments(0) // refresh reply_count on parent comments
-      setReplyForId(null) // close reply section after success
-    } catch (e: any) {
+      await loadComments(0)
+      setReplyForId(null)
+    } catch (e: unknown) {
       setRepliesByParent((prev) => ({
         ...prev,
         [parentId]: (prev[parentId] ?? []).filter((r) => r.id !== pendingId),
       }))
-      onError?.(e?.message ?? 'Failed to post reply')
+      const message = e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : 'Failed to post reply'
+      onError?.(message)
     } finally {
       setSubmitting(false)
       const next = { ...pendingReplyIdsRef.current }
@@ -276,165 +286,58 @@ export function JobCommentsPanel({ jobId, onError, onCommentCountChange, onNewCo
     try {
       if (resolve) await commentsApi.resolve(commentId)
       else await commentsApi.unresolve(commentId)
-      await loadComments()
-    } catch (e: any) {
-      onError?.(e?.message ?? 'Failed to update comment')
+      await loadComments(0)
+    } catch (e: unknown) {
+      const message = e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : 'Failed to update comment'
+      onError?.(message)
     }
   }
 
-  const handleUpdate = async (commentId: string) => {
-    const content = editContent.trim()
-    if (!content) return
+  const handleUpdate = async (commentId: string, content: string) => {
+    if (!content.trim()) return
     try {
-      await commentsApi.update(commentId, content)
+      await commentsApi.update(commentId, content.trim())
       setEditId(null)
       setEditContent('')
-      await loadComments()
-    } catch (e: any) {
-      onError?.(e?.message ?? 'Failed to update comment')
+      await loadComments(0)
+    } catch (e: unknown) {
+      const message = e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : 'Failed to update comment'
+      onError?.(message)
     }
   }
 
   const handleDelete = async (commentId: string) => {
-    if (!confirm('Delete this comment?')) return
+    if (typeof window !== 'undefined' && !window.confirm('Delete this comment?')) return
     try {
       await commentsApi.delete(commentId)
-      await loadComments()
+      await loadComments(0)
       setRepliesByParent((prev) => {
         const next = { ...prev }
         delete next[commentId]
         return next
       })
-    } catch (e: any) {
-      onError?.(e?.message ?? 'Failed to delete comment')
+    } catch (e: unknown) {
+      const message = e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : 'Failed to delete comment'
+      onError?.(message)
     }
   }
 
   const canResolve = (c: CommentItem) =>
-    !c._pending && currentUserId && (c.author_id === currentUserId || currentUserRole === 'owner' || currentUserRole === 'admin')
+    !c._pending &&
+    currentUserId &&
+    (c.author_id === currentUserId ||
+      currentUserRole === 'owner' ||
+      currentUserRole === 'admin')
   const canEditOrDelete = (c: CommentItem) =>
-    !c._pending && currentUserId && (c.author_id === currentUserId || currentUserRole === 'owner' || currentUserRole === 'admin')
+    !c._pending &&
+    currentUserId &&
+    (c.author_id === currentUserId ||
+      currentUserRole === 'owner' ||
+      currentUserRole === 'admin')
 
-  // Mention autocomplete: track @ and cursor in new comment textarea
-  const handleNewContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const value = e.target.value
-    setNewContent(value)
-    const ta = e.target
-    const pos = ta.selectionStart ?? 0
-    setMentionCursorPos(pos)
-    setMentionQuery(extractMentionQuery(value, pos))
-    setMentionAnchorRef(ta)
-  }
-  const handleNewContentKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    const ta = e.currentTarget
-    const pos = ta.selectionStart ?? 0
-    setMentionCursorPos(pos)
-    const query = extractMentionQuery(ta.value, pos)
-    setMentionQuery(query)
-    setMentionAnchorRef(ta)
-
-    const candidates =
-      query && !activeReplyMentionParentId
-        ? members
-            .filter(
-              (m) =>
-                (m.full_name?.toLowerCase().includes(query.toLowerCase()) ||
-                  m.email.toLowerCase().includes(query.toLowerCase())) &&
-                m.id !== currentUserId
-            )
-            .slice(0, 5)
-        : []
-    if (candidates.length > 0) {
-      if (e.key === 'ArrowDown') {
-        e.preventDefault()
-        setMentionHighlightIndex((i) => Math.min(i + 1, candidates.length - 1))
-        return
-      }
-      if (e.key === 'ArrowUp') {
-        e.preventDefault()
-        setMentionHighlightIndex((i) => Math.max(0, i - 1))
-        return
-      }
-      if (e.key === 'Enter') {
-        e.preventDefault()
-        const chosen = candidates[mentionHighlightIndex]
-        if (chosen) {
-          insertMention(chosen, 'new')
-          setMentionHighlightIndex(0)
-        }
-        return
-      }
-      if (e.key === 'Escape') {
-        e.preventDefault()
-        setMentionQuery(null)
-        setMentionHighlightIndex(0)
-        return
-      }
-    }
-    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-      e.preventDefault()
-      handleSubmitNew()
-    }
-  }
-  const mentionCandidates = mentionQuery && !activeReplyMentionParentId
-    ? members.filter(
-        (m) =>
-          (m.full_name?.toLowerCase().includes(mentionQuery.toLowerCase()) ||
-            m.email.toLowerCase().includes(mentionQuery.toLowerCase())) &&
-          m.id !== currentUserId
-      ).slice(0, 5)
-    : []
-
-  useEffect(() => {
-    setMentionHighlightIndex(0)
-  }, [mentionCandidates.length])
-
-  useEffect(() => {
-    setReplyMentionHighlightIndex(0)
-  }, [replyMentionCandidates.length])
-
-  useEffect(() => {
-    const handleClickOutside = (ev: MouseEvent) => {
-      if (newCommentBlockRef.current && !newCommentBlockRef.current.contains(ev.target as Node)) {
-        setMentionQuery(null)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
-
-  const replyMentionCandidates = replyMentionQuery && activeReplyMentionParentId
-    ? members.filter(
-        (m) =>
-          (m.full_name?.toLowerCase().includes(replyMentionQuery.toLowerCase()) ||
-            m.email.toLowerCase().includes(replyMentionQuery.toLowerCase())) &&
-          m.id !== currentUserId
-      ).slice(0, 5)
-    : []
-
-  const insertMention = (user: MentionUser, target: 'new' | 'reply', parentId?: string) => {
-    const token = formatMention(user.full_name ?? user.email, user.id)
-    if (target === 'new' && newTextareaRef.current) {
-      const ta = newTextareaRef.current
-      const start = ta.value.slice(0, mentionCursorPos).lastIndexOf('@')
-      const before = start >= 0 ? ta.value.slice(0, start) : ta.value
-      const after = ta.value.slice(mentionCursorPos)
-      const next = before + token + ' ' + after
-      setNewContent(next)
-      setMentionQuery(null)
-      setTimeout(() => ta.focus(), 0)
-    } else if (target === 'reply' && parentId) {
-      const ta = replyTextareaRefs.current[parentId]
-      if (ta) {
-        const pos = replyMentionCursorPos
-        const start = ta.value.slice(0, pos).lastIndexOf('@')
-        const before = start >= 0 ? ta.value.slice(0, start) : ta.value
-        const after = ta.value.slice(pos)
-        setReplyContent(before + token + ' ' + after)
-        setReplyMentionQuery(null)
-        setTimeout(() => ta.focus(), 0)
-      }
-    }
+  const openReplyFor = (parentId: string | null) => {
+    setReplyForId(parentId)
+    if (parentId) setReplyContent('')
   }
 
   if (loading) {
@@ -449,71 +352,14 @@ export function JobCommentsPanel({ jobId, onError, onCommentCountChange, onNewCo
 
   return (
     <div className="space-y-6">
-      <div ref={newCommentBlockRef}>
+      <div>
         <label className={clsx(typography.label, 'block mb-2')}>Add a comment</label>
-        <div className="relative">
-          <textarea
-            ref={newTextareaRef}
-            value={newContent}
-            onChange={handleNewContentChange}
-            onKeyDown={handleNewContentKeyDown}
-            onSelect={() => {
-              const ta = newTextareaRef.current
-              if (ta) setMentionCursorPos(ta.selectionStart ?? 0)
-            }}
-            placeholder="Write a comment… Use @ to mention a teammate. Cmd+Enter to send."
-            rows={3}
-            maxLength={COMMENT_MAX_LENGTH}
-            className={clsx(
-              'w-full px-4 py-3 rounded-lg border border-white/10 bg-white/5 text-white/90 placeholder:text-white/40',
-              'focus:outline-none focus:ring-1 focus:ring-white/20 focus:border-white/20 resize-y min-h-[80px]'
-            )}
-          />
-          {mentionCandidates.length > 0 && (
-            <div
-              className="absolute left-0 right-0 top-full z-10 mt-1 rounded-lg border border-white/10 bg-[#1a1a1a] py-1 shadow-lg"
-              role="listbox"
-            >
-              {mentionCandidates.map((m, i) => (
-                <button
-                  key={m.id}
-                  type="button"
-                  role="option"
-                  aria-selected={i === mentionHighlightIndex}
-                  className={clsx(
-                    'w-full px-4 py-2 text-left text-sm text-white/90 flex items-center gap-2',
-                    i === mentionHighlightIndex ? 'bg-white/10' : 'hover:bg-white/10'
-                  )}
-                  onClick={() => insertMention(m, 'new')}
-                >
-                  <span className="font-medium">{m.full_name || m.email}</span>
-                  {m.full_name && <span className="text-white/50 text-xs">{m.email}</span>}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-        <div className="mt-2 flex items-center gap-2 flex-wrap">
-          <button
-            type="button"
-            disabled={!newContent.trim() || submitting}
-            onClick={handleSubmitNew}
-            className={clsx(buttonStyles.primary, 'inline-flex items-center gap-2')}
-          >
-            <Send className="w-4 h-4" />
-            Post
-          </button>
-          <button
-            type="button"
-            onClick={() => setNewContent('')}
-            className={clsx(buttonStyles.secondary)}
-          >
-            Cancel
-          </button>
-          <span className="text-xs text-white/50">
-            {newContent.length} / {COMMENT_MAX_LENGTH}
-          </span>
-        </div>
+        <CommentCompose
+          members={members}
+          currentUserId={currentUserId}
+          onSubmit={handleSubmitNew}
+          disabled={submitting}
+        />
       </div>
 
       <div>
@@ -522,264 +368,37 @@ export function JobCommentsPanel({ jobId, onError, onCommentCountChange, onNewCo
           <div className={clsx(emptyStateStyles.container, 'py-12')}>
             <MessageSquare className={emptyStateStyles.icon} />
             <p className={emptyStateStyles.title}>No comments yet</p>
-            <p className={emptyStateStyles.description}>Be the first to add a comment or mention a teammate.</p>
+            <p className={emptyStateStyles.description}>
+              Be the first to add a comment or mention a teammate.
+            </p>
           </div>
         ) : (
           <ul ref={commentsListRef} className="space-y-4">
             {comments.map((c) => (
-              <li key={c.id} className={clsx('rounded-lg border border-white/10 bg-white/5 p-4', c._pending && 'opacity-80')}>
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-medium text-white/90">
-                        {c.author?.full_name || c.author?.email || 'Unknown'}
-                      </span>
-                      {c._pending && (
-                        <span className="text-xs text-white/50">Sending…</span>
-                      )}
-                      <span className="text-xs text-white/50">
-                        {formatDistanceToNow(new Date(c.created_at), { addSuffix: true })}
-                      </span>
-                      {c.edited_at && (
-                        <span className="text-xs text-white/40">(edited)</span>
-                      )}
-                      {c.is_resolved && (
-                        <span className="inline-flex items-center gap-1 text-xs text-emerald-400">
-                          <CheckCircle2 className="w-3.5 h-3.5" /> Resolved
-                        </span>
-                      )}
-                    </div>
-                    {editId === c.id ? (
-                      <div className="mt-2">
-                        <textarea
-                          value={editContent}
-                          onChange={(e) => setEditContent(e.target.value)}
-                          rows={2}
-                          className={clsx(
-                            'w-full px-3 py-2 rounded border border-white/10 bg-black/30 text-white/90 text-sm'
-                          )}
-                        />
-                        <div className="flex gap-2 mt-2">
-                          <button
-                            type="button"
-                            className={buttonStyles.primary}
-                            onClick={() => handleUpdate(c.id)}
-                          >
-                            Save
-                          </button>
-                          <button
-                            type="button"
-                            className={buttonStyles.secondary}
-                            onClick={() => { setEditId(null); setEditContent(''); }}
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="mt-1 text-sm text-white/80 break-words [&_.mention]:text-[#F97316] [&_.mention]:font-medium">
-                        {renderMentions(c.content)}
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    {canResolve(c) && (
-                      <button
-                        type="button"
-                        onClick={() => handleResolve(c.id, !c.is_resolved)}
-                        className="p-1.5 rounded text-white/60 hover:text-white hover:bg-white/10"
-                        title={c.is_resolved ? 'Unresolve' : 'Resolve'}
-                      >
-                        {c.is_resolved ? (
-                          <Circle className="w-4 h-4" />
-                        ) : (
-                          <CheckCircle2 className="w-4 h-4" />
-                        )}
-                      </button>
-                    )}
-                    {canEditOrDelete(c) && editId !== c.id && (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => { setEditId(c.id); setEditContent(c.content); }}
-                          className="p-1.5 rounded text-white/60 hover:text-white hover:bg-white/10"
-                          title="Edit"
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(c.id)}
-                          className="p-1.5 rounded text-white/60 hover:text-red-400 hover:bg-white/10"
-                          title="Delete"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </div>
-                <div className="mt-3 flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const opening = replyForId !== c.id
-                      setReplyForId(replyForId === c.id ? null : c.id)
-                      if (opening) {
-                        loadReplies(c.id)
-                        setActiveReplyMentionParentId(null)
-                        setReplyMentionQuery(null)
-                      }
-                    }}
-                    className="inline-flex items-center gap-1 text-sm text-white/70 hover:text-white"
-                  >
-                    {replyForId === c.id ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                    <Reply className="w-3.5 h-3.5" />
-                    Reply {(c.reply_count ?? 0) > 0 && `(${c.reply_count})`}
-                  </button>
-                </div>
-                {replyForId === c.id && (
-                  <div className="mt-4 pl-4 border-l-2 border-white/10 space-y-3">
-                    {repliesStatus[c.id] === 'error' && (
-                      <div className="flex items-center gap-2 py-1">
-                        <span className="text-xs text-red-400">Failed to load replies.</span>
-                        <button
-                          type="button"
-                          onClick={() => loadReplies(c.id)}
-                          className="text-xs text-white/80 hover:text-white underline"
-                        >
-                          Retry
-                        </button>
-                      </div>
-                    )}
-                    {loadingReplies[c.id] ? (
-                      <div className="animate-pulse h-10 rounded bg-white/5" />
-                    ) : (
-                      (repliesByParent[c.id] ?? []).map((r) => (
-                        <div key={r.id} className={clsx('flex gap-2', (r as CommentItem)._pending && 'opacity-80')}>
-                          <span className="font-medium text-white/70 text-sm shrink-0">
-                            {r.author?.full_name || r.author?.email || 'Unknown'}
-                          </span>
-                          <span className="text-xs text-white/50 shrink-0">
-                            {formatDistanceToNow(new Date(r.created_at), { addSuffix: true })}
-                          </span>
-                          {(r as CommentItem)._pending && (
-                            <span className="text-xs text-white/50">Sending…</span>
-                          )}
-                          <span className="text-sm text-white/80 break-words [&_.mention]:text-[#F97316]">
-                            {renderMentions(r.content)}
-                          </span>
-                        </div>
-                      ))
-                    )}
-                    <div className="flex gap-2">
-                      <div className="flex-1 min-w-0 flex flex-col relative">
-                        <textarea
-                          ref={(el) => { replyTextareaRefs.current[c.id] = el }}
-                          value={replyContent}
-                          onChange={(e) => {
-                            const value = e.target.value
-                            setReplyContent(value)
-                            const ta = e.target
-                            const pos = ta.selectionStart ?? 0
-                            setReplyMentionCursorPos(pos)
-                            setReplyMentionQuery(extractMentionQuery(value, pos))
-                            setActiveReplyMentionParentId(c.id)
-                          }}
-                          onKeyDown={(e) => {
-                            const ta = e.currentTarget
-                            const pos = ta.selectionStart ?? 0
-                            setReplyMentionCursorPos(pos)
-                            const q = extractMentionQuery(ta.value, pos)
-                            setReplyMentionQuery(q)
-                            setActiveReplyMentionParentId(c.id)
-                            if (activeReplyMentionParentId === c.id && replyMentionCandidates.length > 0) {
-                              if (e.key === 'ArrowDown') {
-                                e.preventDefault()
-                                setReplyMentionHighlightIndex((i) => Math.min(i + 1, replyMentionCandidates.length - 1))
-                                return
-                              }
-                              if (e.key === 'ArrowUp') {
-                                e.preventDefault()
-                                setReplyMentionHighlightIndex((i) => Math.max(0, i - 1))
-                                return
-                              }
-                              if (e.key === 'Enter') {
-                                e.preventDefault()
-                                const chosen = replyMentionCandidates[replyMentionHighlightIndex]
-                                if (chosen) {
-                                  insertMention(chosen, 'reply', c.id)
-                                  setReplyMentionHighlightIndex(0)
-                                }
-                                return
-                              }
-                              if (e.key === 'Escape') {
-                                e.preventDefault()
-                                setReplyMentionQuery(null)
-                                setActiveReplyMentionParentId(null)
-                                setReplyMentionHighlightIndex(0)
-                                return
-                              }
-                            }
-                            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                              e.preventDefault()
-                              handleSubmitReply(c.id)
-                            }
-                          }}
-                          onSelect={() => {
-                            const ta = replyTextareaRefs.current[c.id]
-                            if (ta) {
-                              setReplyMentionCursorPos(ta.selectionStart ?? 0)
-                              setReplyMentionQuery(extractMentionQuery(ta.value, ta.selectionStart ?? 0))
-                              setActiveReplyMentionParentId(c.id)
-                            }
-                          }}
-                          onBlur={() => {
-                            setTimeout(() => setActiveReplyMentionParentId(null), 150)
-                          }}
-                          placeholder="Write a reply… Use @ to mention. Cmd+Enter to send."
-                          rows={2}
-                          maxLength={COMMENT_MAX_LENGTH}
-                          className={clsx(
-                            'w-full px-3 py-2 rounded border border-white/10 bg-black/30 text-white/90 text-sm placeholder:text-white/40'
-                          )}
-                        />
-                        {activeReplyMentionParentId === c.id && replyMentionCandidates.length > 0 && (
-                          <div
-                            className="absolute left-0 right-0 top-full z-10 mt-1 rounded-lg border border-white/10 bg-[#1a1a1a] py-1 shadow-lg"
-                            role="listbox"
-                          >
-                            {replyMentionCandidates.map((m, i) => (
-                              <button
-                                key={m.id}
-                                type="button"
-                                role="option"
-                                aria-selected={i === replyMentionHighlightIndex}
-                                className={clsx(
-                                  'w-full px-4 py-2 text-left text-sm text-white/90 flex items-center gap-2',
-                                  i === replyMentionHighlightIndex ? 'bg-white/10' : 'hover:bg-white/10'
-                                )}
-                                onClick={() => insertMention(m, 'reply', c.id)}
-                              >
-                                <span className="font-medium">{m.full_name || m.email}</span>
-                                {m.full_name && <span className="text-white/50 text-xs">{m.email}</span>}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                      <button
-                        type="button"
-                        disabled={!replyContent.trim() || submitting}
-                        onClick={() => handleSubmitReply(c.id)}
-                        className={buttonStyles.primary}
-                      >
-                        Reply
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </li>
+              <CommentThread
+                key={c.id}
+                comment={c}
+                replies={repliesByParent[c.id] ?? []}
+                repliesStatus={repliesStatus[c.id] ?? 'idle'}
+                replyContent={replyContent}
+                setReplyContent={setReplyContent}
+                replyForId={replyForId}
+                setReplyForId={openReplyFor}
+                editId={editId}
+                editContent={editContent}
+                setEditId={setEditId}
+                setEditContent={setEditContent}
+                members={members}
+                currentUserId={currentUserId}
+                canResolve={canResolve}
+                canEditOrDelete={canEditOrDelete}
+                onResolve={handleResolve}
+                onUpdate={handleUpdate}
+                onDelete={handleDelete}
+                onLoadReplies={loadReplies}
+                onSubmitReply={handleSubmitReply}
+                submitting={submitting}
+              />
             ))}
             {hasMoreComments && (
               <li className="pt-2">
