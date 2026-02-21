@@ -5,6 +5,7 @@ import { getOrganizationContext, verifyOrganizationOwnership } from '@/lib/utils
 import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { logApiError } from '@/lib/utils/errorLogging'
 import { getRequestId } from '@/lib/utils/requestId'
+import { mapTaskToApiShape } from '@/lib/utils/taskApiShape'
 
 export const runtime = 'nodejs'
 
@@ -66,7 +67,7 @@ export async function POST(
       })
       .eq('id', taskId)
       .eq('organization_id', organization_id)
-      .select('*')
+      .select('*, assignee:assigned_to(id, full_name, email)')
       .single()
 
     if (updateError || !updatedTask) {
@@ -90,7 +91,8 @@ export async function POST(
       )
     }
 
-    return NextResponse.json({ data: updatedTask })
+    const data = mapTaskToApiShape(updatedTask)
+    return NextResponse.json({ data })
   } catch (error: any) {
     const { response, errorId } = createErrorResponse(
       error?.message || 'Failed to complete task',
@@ -138,14 +140,15 @@ export async function DELETE(
       })
       .eq('id', taskId)
       .eq('organization_id', organization_id)
-      .select('*')
+      .select('*, assignee:assigned_to(id, full_name, email)')
       .single()
 
     if (error || !task) {
       throw error || new Error('Failed to reopen task')
     }
 
-    return NextResponse.json({ data: task })
+    const data = mapTaskToApiShape(task)
+    return NextResponse.json({ data })
   } catch (error: any) {
     const { response, errorId } = createErrorResponse(
       error?.message || 'Failed to reopen task',

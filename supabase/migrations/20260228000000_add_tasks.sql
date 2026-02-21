@@ -39,44 +39,44 @@ ALTER TABLE task_templates ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Users can read tasks in their organization" ON tasks;
 CREATE POLICY "Users can read tasks in their organization"
   ON tasks FOR SELECT
-  USING (organization_id = get_user_org_id());
+  USING (organization_id = get_user_organization_id());
 
 DROP POLICY IF EXISTS "Users can create tasks in their organization" ON tasks;
 CREATE POLICY "Users can create tasks in their organization"
   ON tasks FOR INSERT
-  WITH CHECK (organization_id = get_user_org_id());
+  WITH CHECK (organization_id = get_user_organization_id());
 
 DROP POLICY IF EXISTS "Users can update tasks in their organization" ON tasks;
 CREATE POLICY "Users can update tasks in their organization"
   ON tasks FOR UPDATE
-  USING (organization_id = get_user_org_id())
-  WITH CHECK (organization_id = get_user_org_id());
+  USING (organization_id = get_user_organization_id())
+  WITH CHECK (organization_id = get_user_organization_id());
 
 DROP POLICY IF EXISTS "Users can delete tasks in their organization" ON tasks;
 CREATE POLICY "Users can delete tasks in their organization"
   ON tasks FOR DELETE
-  USING (organization_id = get_user_org_id());
+  USING (organization_id = get_user_organization_id());
 
 DROP POLICY IF EXISTS "Users can read task templates in their organization or defaults" ON task_templates;
 CREATE POLICY "Users can read task templates in their organization or defaults"
   ON task_templates FOR SELECT
-  USING (organization_id = get_user_org_id() OR is_default = true);
+  USING (organization_id = get_user_organization_id() OR is_default = true);
 
 DROP POLICY IF EXISTS "Users can create task templates in their organization" ON task_templates;
 CREATE POLICY "Users can create task templates in their organization"
   ON task_templates FOR INSERT
-  WITH CHECK (organization_id = get_user_org_id());
+  WITH CHECK (organization_id = get_user_organization_id());
 
 DROP POLICY IF EXISTS "Users can update task templates in their organization" ON task_templates;
 CREATE POLICY "Users can update task templates in their organization"
   ON task_templates FOR UPDATE
-  USING (organization_id = get_user_org_id())
-  WITH CHECK (organization_id = get_user_org_id());
+  USING (organization_id = get_user_organization_id())
+  WITH CHECK (organization_id = get_user_organization_id());
 
 DROP POLICY IF EXISTS "Users can delete task templates in their organization" ON task_templates;
 CREATE POLICY "Users can delete task templates in their organization"
   ON task_templates FOR DELETE
-  USING (organization_id = get_user_org_id());
+  USING (organization_id = get_user_organization_id());
 
 INSERT INTO task_templates (id, organization_id, is_default, name, tasks, job_type, created_by)
 VALUES

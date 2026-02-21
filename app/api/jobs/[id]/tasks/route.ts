@@ -5,6 +5,7 @@ import { getOrganizationContext, verifyJobOwnership } from '@/lib/utils/organiza
 import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { logApiError } from '@/lib/utils/errorLogging'
 import { getRequestId } from '@/lib/utils/requestId'
+import { mapTaskToApiShape } from '@/lib/utils/taskApiShape'
 
 export const runtime = 'nodejs'
 
@@ -54,7 +55,8 @@ export async function GET(
       throw error
     }
 
-    return NextResponse.json({ data: tasks || [] })
+    const data = (tasks || []).map((t) => mapTaskToApiShape(t))
+    return NextResponse.json({ data })
   } catch (error: any) {
     const { response, errorId } = createErrorResponse(
       error?.message || 'Failed to fetch tasks',
@@ -124,7 +126,7 @@ export async function POST(
         due_date: due_date ?? null,
         sort_order: sort_order ?? 0,
       })
-      .select('*')
+      .select('*, assignee:assigned_to(id, full_name, email)')
       .single()
 
     if (error || !task) {
@@ -150,7 +152,8 @@ export async function POST(
       )
     }
 
-    return NextResponse.json({ data: task }, { status: 201 })
+    const data = mapTaskToApiShape(task)
+    return NextResponse.json({ data }, { status: 201 })
   } catch (error: any) {
     const { response, errorId } = createErrorResponse(
       error?.message || 'Failed to create task',

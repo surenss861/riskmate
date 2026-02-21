@@ -2,7 +2,7 @@ import { supabase } from "../lib/supabaseClient";
 import { sendTaskOverdueNotification } from "../services/notifications";
 
 const TASK_REMINDER_INTERVAL_MS = 24 * 60 * 60 * 1000;
-const MIN_REMINDER_GAP_MS = 23 * 60 * 60 * 1000;
+const MIN_REMINDER_GAP_MS = 23 * 60 * 60 * 1000; // throttle: don't re-notify same task within ~23h
 
 let workerRunning = false;
 let workerInterval: NodeJS.Timeout | null = null;
@@ -20,17 +20,15 @@ function getMillisecondsUntilNext8amLocal(): number {
 
 async function processTaskReminders() {
   const now = new Date();
-  const in24h = new Date(now.getTime() + TASK_REMINDER_INTERVAL_MS);
   const remindedBefore = new Date(now.getTime() - MIN_REMINDER_GAP_MS).toISOString();
   const nowIso = now.toISOString();
-  const in24hIso = in24h.toISOString();
 
   try {
+    // Overdue only: due_date < now, not done/cancelled, so "overdue" notification copy is correct
     const { data: tasks, error } = await supabase
       .from("tasks")
       .select("id, organization_id, assigned_to, title, job_id, due_date, status, last_reminded_at")
-      .gte("due_date", nowIso)
-      .lte("due_date", in24hIso)
+      .lt("due_date", nowIso)
       .neq("status", "done")
       .neq("status", "cancelled")
       .not("assigned_to", "is", null)
