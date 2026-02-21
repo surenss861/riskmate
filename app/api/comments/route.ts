@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
     const supabase = await createSupabaseServerClient()
     const limit = Math.min(Math.max(Number(url.searchParams.get('limit')) || 50, 1), 100)
     const offset = Math.max(Number(url.searchParams.get('offset')) || 0, 0)
-    const includeReplies = url.searchParams.get('include_replies') !== 'false'
+    const includeReplies = url.searchParams.get('include_replies') === 'true'
 
     let query = supabase
       .from('comments')

@@ -42,43 +42,46 @@ export interface ListCommentsOptions {
   includeDeleted?: boolean;
 }
 
-/** List comments for an entity. Excludes soft-deleted by default. Returns author info and reply counts. */
+/** List comments for an entity. Excludes soft-deleted by default. Returns author info and reply counts. Excludes replies by default (top-level list + reply_count contract). */
 export async function listComments(
   organizationId: string,
   entityType: CommentEntityType,
   entityId: string,
   options: ListCommentsOptions = {}
-): Promise<{ data: CommentWithAuthor[] }> {
+): Promise<{ data: CommentWithAuthor[]; count: number; has_more: boolean }> {
   const limit = Math.min(Math.max(options.limit ?? 50, 1), 100);
   const offset = Math.max(options.offset ?? 0, 0);
 
   let query = supabase
     .from("comments")
     .select(
-      "id, organization_id, entity_type, entity_id, parent_id, author_id, content, mentions, is_resolved, resolved_by, resolved_at, edited_at, deleted_at, created_at, updated_at"
+      "id, organization_id, entity_type, entity_id, parent_id, author_id, content, mentions, is_resolved, resolved_by, resolved_at, edited_at, deleted_at, created_at, updated_at",
+      { count: "exact" }
     )
     .eq("organization_id", organizationId)
     .eq("entity_type", entityType)
     .eq("entity_id", entityId)
     .order("created_at", { ascending: true });
 
-  if (options.includeReplies === false) {
+  if (options.includeReplies !== true) {
     query = query.is("parent_id", null);
   }
   if (options.includeDeleted !== true) {
     query = query.is("deleted_at", null);
   }
 
-  const { data: rows, error } = await query.range(offset, offset + limit - 1);
+  const { data: rows, error, count } = await query.range(offset, offset + limit - 1);
 
   if (error) {
     console.error("[Comments] listComments error:", error);
-    return { data: [] };
+    return { data: [], count: 0, has_more: false };
   }
 
+  const total = count ?? 0;
+  const has_more = total > offset + (rows?.length ?? 0);
   const comments = (rows || []) as CommentRow[];
   if (comments.length === 0) {
-    return { data: [] };
+    return { data: [], count: total, has_more: false };
   }
 
   const authorIds = [...new Set(comments.map((c) => c.author_id))];
@@ -115,7 +118,7 @@ export async function listComments(
     reply_count: replyCountByParent.get(c.id) ?? 0,
   }));
 
-  return { data };
+  return { data, count: total, has_more };
 }
 
 /** Get a parent comment by id scoped to org and optional entity_type/entity_id; excludes deleted. Returns null if not found. */

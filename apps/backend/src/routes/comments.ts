@@ -69,7 +69,7 @@ jobCommentsRouter.get(
     try {
       const limit = req.query.limit != null ? parseInt(String(req.query.limit), 10) : 50;
       const offset = req.query.offset != null ? parseInt(String(req.query.offset), 10) : 0;
-      const includeReplies = req.query.include_replies !== "false";
+      const includeReplies = req.query.include_replies === "true";
       const result = await listComments(
         authReq.user.organization_id,
         "job",
@@ -77,7 +77,7 @@ jobCommentsRouter.get(
         { limit, offset, includeReplies }
       );
       const data = (result.data || []).map((c: any) => ({ ...c, content: c.content }));
-      res.json({ data });
+      res.json({ data, count: result.count, has_more: result.has_more });
     } catch (err: any) {
       console.error("List comments failed:", err);
       res.status(500).json({ message: "Failed to list comments" });
@@ -200,7 +200,7 @@ commentsRouter.get(
     try {
       const limit = req.query.limit != null ? parseInt(String(req.query.limit), 10) : 50;
       const offset = req.query.offset != null ? parseInt(String(req.query.offset), 10) : 0;
-      const includeReplies = req.query.include_replies !== "false";
+      const includeReplies = req.query.include_replies === "true";
 
       const result = await listComments(
         authReq.user.organization_id,
@@ -209,7 +209,7 @@ commentsRouter.get(
         { limit, offset, includeReplies }
       );
       const data = (result.data || []).map((c: any) => ({ ...c, content: c.content }));
-      res.json({ data });
+      res.json({ data, count: result.count, has_more: result.has_more });
     } catch (err: any) {
       console.error("List comments failed:", err);
       res.status(500).json({ message: "Failed to list comments" });
