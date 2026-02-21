@@ -3,21 +3,18 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.commentsRouter = void 0;
+exports.jobCommentsRouter = exports.commentsRouter = void 0;
 const express_1 = __importDefault(require("express"));
 const auth_1 = require("../middleware/auth");
 const comments_1 = require("../services/comments");
 const notifications_1 = require("../services/notifications");
 const supabaseClient_1 = require("../lib/supabaseClient");
 const mentionParser_1 = require("../utils/mentionParser");
-/** Table names for entity_type ownership checks (entity_id must exist in table with organization_id). */
+/** Table names for entity_type ownership checks (ticket scope: job, hazard, control, photo). */
 const ENTITY_TYPE_TO_TABLE = {
     job: "jobs",
     hazard: "hazards",
     control: "controls",
-    task: "tasks",
-    document: "job_documents",
-    signoff: "job_signoffs",
     photo: "job_photos",
 };
 async function assertEntityExistsInOrg(entityType, entityId, organizationId) {
@@ -37,6 +34,127 @@ async function assertEntityExistsInOrg(entityType, entityId, organizationId) {
     return { ok: true };
 }
 exports.commentsRouter = express_1.default.Router();
+/** Router for job-scoped comment routes: GET/POST /api/jobs/:id/comments. Mount on jobs router. */
+exports.jobCommentsRouter = express_1.default.Router();
+/** GET /api/jobs/:id/comments/count — total comment count for tab badge; include_replies=true for count including replies. */
+exports.jobCommentsRouter.get("/:id/comments/count", auth_1.authenticate, async (req, res) => {
+    const authReq = req;
+    const jobId = req.params.id;
+    if (!jobId) {
+        return res.status(400).json({ message: "Job id is required", code: "MISSING_PARAMS" });
+    }
+    try {
+        const includeReplies = req.query.include_replies === "true";
+        const count = await (0, comments_1.getCommentCount)(authReq.user.organization_id, "job", jobId, { includeReplies });
+        res.json({ count });
+    }
+    catch (err) {
+        console.error("Comment count failed:", err);
+        res.status(500).json({ message: "Failed to get comment count" });
+    }
+});
+/** GET /api/jobs/:id/comments/unread-count — unread count (comments + replies) after since= ISO timestamp; for tab badge. */
+exports.jobCommentsRouter.get("/:id/comments/unread-count", auth_1.authenticate, async (req, res) => {
+    const authReq = req;
+    const jobId = req.params.id;
+    const since = typeof req.query.since === "string" ? req.query.since : undefined;
+    if (!jobId) {
+        return res.status(400).json({ message: "Job id is required", code: "MISSING_PARAMS" });
+    }
+    if (!since) {
+        return res.status(400).json({ message: "Query param since is required (ISO timestamp)", code: "MISSING_PARAMS" });
+    }
+    try {
+        const count = await (0, comments_1.getUnreadCommentCount)(authReq.user.organization_id, "job", jobId, since, authReq.user.id);
+        res.json({ count });
+    }
+    catch (err) {
+        console.error("Unread comment count failed:", err);
+        res.status(500).json({ message: "Failed to get unread comment count" });
+    }
+});
+/** GET /api/jobs/:id/comments — list comments for a job (spec path). */
+exports.jobCommentsRouter.get("/:id/comments", auth_1.authenticate, async (req, res) => {
+    const authReq = req;
+    const jobId = req.params.id;
+    if (!jobId) {
+        return res.status(400).json({ message: "Job id is required", code: "MISSING_PARAMS" });
+    }
+    try {
+        const limit = req.query.limit != null ? parseInt(String(req.query.limit), 10) : 50;
+        const offset = req.query.offset != null ? parseInt(String(req.query.offset), 10) : 0;
+        const includeReplies = req.query.include_replies === "true";
+        const result = await (0, comments_1.listComments)(authReq.user.organization_id, "job", jobId, { limit, offset, includeReplies });
+        const data = (result.data || []).map((c) => ({ ...c, content: c.content }));
+        res.json({ data, count: result.count, has_more: result.has_more });
+    }
+    catch (err) {
+        console.error("List comments failed:", err);
+        res.status(500).json({ message: "Failed to list comments" });
+    }
+});
+/** POST /api/jobs/:id/comments — create a comment on a job (spec path). */
+exports.jobCommentsRouter.post("/:id/comments", auth_1.authenticate, async (req, res) => {
+    const authReq = req;
+    const jobId = req.params.id;
+    const body = (req.body || {});
+    const commentBody = body.content ?? body.body ?? "";
+    if (!jobId) {
+        return res.status(400).json({ message: "Job id is required", code: "MISSING_PARAMS" });
+    }
+    if (body.parent_id != null && body.parent_id !== "") {
+        const parent = await (0, comments_1.getParentComment)(authReq.user.organization_id, body.parent_id, "job", jobId);
+        if (!parent) {
+            return res.status(404).json({
+                message: "Parent comment not found or not valid for this entity",
+                code: "NOT_FOUND",
+            });
+        }
+    }
+    const entityCheck = await assertEntityExistsInOrg("job", jobId, authReq.user.organization_id);
+    if (!entityCheck.ok) {
+        return res.status(entityCheck.status).json({
+            message: entityCheck.message,
+            code: entityCheck.code,
+        });
+    }
+    const fromText = await (0, mentionParser_1.extractMentionUserIds)(commentBody, authReq.user.organization_id);
+    const explicitMentions = Array.isArray(body.mention_user_ids) ? body.mention_user_ids : [];
+    const mentionUserIds = [...new Set([...explicitMentions, ...fromText])].filter((id) => id && id !== authReq.user.id);
+    try {
+        const result = await (0, comments_1.createComment)(authReq.user.organization_id, authReq.user.id, {
+            entity_type: "job",
+            entity_id: jobId,
+            body: commentBody,
+            parent_id: body.parent_id,
+            mention_user_ids: mentionUserIds.length > 0 ? mentionUserIds : undefined,
+        });
+        if (result.error) {
+            if (result.error.includes("Parent comment not found")) {
+                return res.status(404).json({ message: result.error, code: "NOT_FOUND" });
+            }
+            return res.status(400).json({ message: result.error, code: "CREATE_FAILED" });
+        }
+        const data = result.data;
+        if (data?.id && authReq.user.id) {
+            const { data: job } = await supabaseClient_1.supabase
+                .from("jobs")
+                .select("assigned_to_id")
+                .eq("id", jobId)
+                .eq("organization_id", authReq.user.organization_id)
+                .maybeSingle();
+            const ownerId = job?.assigned_to_id;
+            if (ownerId && ownerId !== authReq.user.id) {
+                (0, notifications_1.sendJobCommentNotification)(ownerId, authReq.user.organization_id, data.id, jobId, "Someone commented on a job you own.").catch((err) => console.error("[Comments] Job comment notification failed:", err));
+            }
+        }
+        res.status(201).json({ data: data ? { ...data, content: data.content } : data });
+    }
+    catch (err) {
+        console.error("Create comment failed:", err);
+        res.status(500).json({ message: "Failed to create comment" });
+    }
+});
 /** GET /api/comments?entity_type=job&entity_id=uuid — list comments for an entity. */
 exports.commentsRouter.get("/", auth_1.authenticate, async (req, res) => {
     const authReq = req;
@@ -57,10 +175,10 @@ exports.commentsRouter.get("/", auth_1.authenticate, async (req, res) => {
     try {
         const limit = req.query.limit != null ? parseInt(String(req.query.limit), 10) : 50;
         const offset = req.query.offset != null ? parseInt(String(req.query.offset), 10) : 0;
-        const includeReplies = req.query.include_replies !== "false";
+        const includeReplies = req.query.include_replies === "true";
         const result = await (0, comments_1.listComments)(authReq.user.organization_id, entityType, entityId, { limit, offset, includeReplies });
         const data = (result.data || []).map((c) => ({ ...c, content: c.content }));
-        res.json({ data });
+        res.json({ data, count: result.count, has_more: result.has_more });
     }
     catch (err) {
         console.error("List comments failed:", err);
@@ -74,8 +192,12 @@ exports.commentsRouter.get("/mentions/me", auth_1.authenticate, async (req, res)
         const limit = req.query.limit != null ? parseInt(String(req.query.limit), 10) : 20;
         const offset = req.query.offset != null ? parseInt(String(req.query.offset), 10) : 0;
         const result = await (0, comments_1.listCommentsWhereMentioned)(authReq.user.organization_id, authReq.user.id, { limit, offset });
-        const data = (result.data || []).map((c) => ({ ...c, content: c.content }));
-        res.json({ data });
+        const data = (result.data || []).map((c) => ({
+            ...c,
+            content: c.content,
+            job_id: c.job_id ?? (c.entity_type === "job" ? c.entity_id : null),
+        }));
+        res.json({ data, count: result.count, has_more: result.has_more });
     }
     catch (err) {
         console.error("List mentions failed:", err);
@@ -119,7 +241,7 @@ exports.commentsRouter.post("/", auth_1.authenticate, async (req, res) => {
             code: entityCheck.code,
         });
     }
-    const fromText = (0, mentionParser_1.extractMentionUserIds)(commentBody);
+    const fromText = await (0, mentionParser_1.extractMentionUserIds)(commentBody, authReq.user.organization_id);
     const explicitMentions = Array.isArray(body.mention_user_ids) ? body.mention_user_ids : [];
     const mentionUserIds = [...new Set([...explicitMentions, ...fromText])].filter((id) => id && id !== authReq.user.id);
     try {
@@ -173,7 +295,7 @@ exports.commentsRouter.patch("/:id", auth_1.authenticate, async (req, res) => {
         return res.status(400).json({ message: "content is required", code: "MISSING_BODY" });
     }
     try {
-        const result = await (0, comments_1.updateComment)(authReq.user.organization_id, commentId, commentBody, authReq.user.id);
+        const result = await (0, comments_1.updateComment)(authReq.user.organization_id, commentId, commentBody, authReq.user.id, body.mention_user_ids);
         if (result.error) {
             if (result.error === "Comment not found") {
                 return res.status(404).json({ message: result.error, code: "NOT_FOUND" });
@@ -320,7 +442,7 @@ exports.commentsRouter.get("/:id/replies", auth_1.authenticate, async (req, res)
         const offset = req.query.offset != null ? parseInt(String(req.query.offset), 10) : 0;
         const result = await (0, comments_1.listReplies)(authReq.user.organization_id, parentId, { limit, offset });
         const data = (result.data || []).map((c) => ({ ...c, content: c.content }));
-        res.json({ data });
+        res.json({ data, has_more: result.has_more === true });
     }
     catch (err) {
         console.error("List replies failed:", err);
@@ -343,7 +465,7 @@ exports.commentsRouter.post("/:id/replies", auth_1.authenticate, async (req, res
     if (!parent || parent.deleted_at) {
         return res.status(404).json({ message: "Comment not found", code: "NOT_FOUND" });
     }
-    const fromText = (0, mentionParser_1.extractMentionUserIds)(commentBody);
+    const fromText = await (0, mentionParser_1.extractMentionUserIds)(commentBody, authReq.user.organization_id);
     const explicitMentions = Array.isArray(body.mention_user_ids) ? body.mention_user_ids : [];
     const mentionUserIds = [...new Set([...explicitMentions, ...fromText])].filter((id) => id && id !== authReq.user.id);
     try {
@@ -358,7 +480,11 @@ exports.commentsRouter.post("/:id/replies", auth_1.authenticate, async (req, res
             return res.status(400).json({ message: result.error, code: "CREATE_FAILED" });
         }
         const parentAuthorId = parent.author_id;
-        if (parentAuthorId && parentAuthorId !== authReq.user.id && result.data) {
+        const parentAlreadyMentioned = parentAuthorId && mentionUserIds.includes(parentAuthorId);
+        if (parentAuthorId &&
+            parentAuthorId !== authReq.user.id &&
+            result.data &&
+            !parentAlreadyMentioned) {
             (0, notifications_1.sendCommentReplyNotification)(parentAuthorId, authReq.user.organization_id, result.data.id, "Someone replied to your comment.").catch((err) => console.error("[Comments] Reply notification failed:", err));
         }
         const replyData = result.data;

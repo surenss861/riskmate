@@ -71,6 +71,8 @@ const publicVerification_1 = require("./routes/publicVerification");
 const metrics_1 = require("./routes/metrics");
 const dashboard_1 = require("./routes/dashboard");
 const comments_1 = require("./routes/comments");
+const tasks_1 = require("./routes/tasks");
+const taskTemplates_1 = require("./routes/taskTemplates");
 const exportWorker_1 = require("./services/exportWorker");
 const retentionWorker_1 = require("./services/retentionWorker");
 const ledgerRootWorker_1 = require("./services/ledgerRootWorker");
@@ -368,6 +370,8 @@ app.use("/api/public", publicVerification_1.publicVerificationRouter);
 app.use("/api/metrics", metrics_1.metricsRouter);
 app.use("/api/dashboard", dashboard_1.dashboardRouter);
 app.use("/api/comments", comments_1.commentsRouter);
+app.use("/api/tasks", tasks_1.tasksRouter);
+app.use("/api/task-templates", taskTemplates_1.taskTemplatesRouter);
 // Mount all /api routes under /v1 as well (versioned API)
 v1Router.use("/risk", risk_1.riskRouter);
 v1Router.use("/subscriptions", subscriptions_1.subscriptionsRouter);
@@ -389,6 +393,8 @@ v1Router.use("/public", publicVerification_1.publicVerificationRouter);
 v1Router.use("/metrics", metrics_1.metricsRouter);
 v1Router.use("/dashboard", dashboard_1.dashboardRouter);
 v1Router.use("/comments", comments_1.commentsRouter);
+v1Router.use("/tasks", tasks_1.tasksRouter);
+v1Router.use("/task-templates", taskTemplates_1.taskTemplatesRouter);
 // Dev endpoints (only available when DEV_AUTH_SECRET is set)
 // MUST be mounted BEFORE app.use("/v1", v1Router) to ensure Express registers it
 if (process.env.DEV_AUTH_SECRET) {

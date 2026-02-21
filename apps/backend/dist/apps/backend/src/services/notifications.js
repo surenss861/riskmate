@@ -117,9 +117,13 @@ async function fetchOrgUserIdsWithPreference(organizationId, prefKey) {
         .from("notification_preferences")
         .select("user_id, push_enabled, " + prefKey)
         .in("user_id", userIds);
+    const defaultFalseKeys = [
+        "weekly_summary",
+        "email_deadline_reminder",
+    ];
     const prefsByUser = new Map((prefsData || []).map((r) => {
         const push_enabled = r.push_enabled ?? true;
-        const prefValue = prefKey === "weekly_summary"
+        const prefValue = defaultFalseKeys.includes(prefKey)
             ? (r[prefKey] ?? false)
             : (r[prefKey] ?? true);
         return [r.user_id, { push_enabled, prefValue }];
@@ -149,7 +153,7 @@ exports.DEFAULT_NOTIFICATION_PREFERENCES = {
     evidence_uploaded: true,
     hazard_added: true,
     deadline_approaching: true,
-    email_deadline_reminder: true,
+    email_deadline_reminder: false,
     weekly_summary: false,
     email_weekly_digest: true,
     high_risk_job: true,
@@ -199,7 +203,7 @@ async function getNotificationPreferences(userId) {
         evidence_uploaded: data.evidence_uploaded ?? true,
         hazard_added: data.hazard_added ?? true,
         deadline_approaching: data.deadline_approaching ?? true,
-        email_deadline_reminder: data.email_deadline_reminder ?? true,
+        email_deadline_reminder: data.email_deadline_reminder ?? false,
         weekly_summary: data.weekly_summary ?? false,
         email_weekly_digest: data.email_weekly_digest ?? true,
         high_risk_job: data.high_risk_job ?? true,

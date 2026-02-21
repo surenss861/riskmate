@@ -1,1 +1,1 @@
-{"version":3,"file":"mentionParser.d.ts","sourceRoot":"","sources":["../../../../../src/utils/mentionParser.ts"],"names":[],"mappings":"AAMA,wBAAgB,qBAAqB,CAAC,IAAI,EAAE,MAAM,GAAG,MAAM,EAAE,CAS5D"}
+{"version":3,"file":"mentionParser.d.ts","sourceRoot":"","sources":["../../../../../src/utils/mentionParser.ts"],"names":[],"mappings":"AAYA,YAAY,EAAE,gBAAgB,EAAE,MAAM,yCAAyC,CAAC;AAChF,OAAO,EAAE,2BAA2B,EAAE,aAAa,EAAE,MAAM,yCAAyC,CAAC;AAErG;;;GAGG;AACH,wBAAsB,qBAAqB,CACzC,IAAI,EAAE,MAAM,EACZ,cAAc,CAAC,EAAE,MAAM,GACtB,OAAO,CAAC,MAAM,EAAE,CAAC,CAEnB"}

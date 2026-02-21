@@ -50,7 +50,13 @@ const requireWriteAccess_1 = require("../middleware/requireWriteAccess");
 const realtimeEvents_1 = require("../utils/realtimeEvents");
 const permissions_1 = require("../utils/permissions");
 const emailQueue_1 = require("../workers/emailQueue");
+const comments_1 = require("./comments");
+const tasks_1 = require("./tasks");
 exports.jobsRouter = express_1.default.Router();
+// Spec path: /api/jobs/:id/comments (list/create). Must be mounted before /:id so /:id/comments matches here.
+exports.jobsRouter.use(comments_1.jobCommentsRouter);
+// Spec path: /api/jobs/:id/tasks (list/create). Must be mounted before /:id so /:id/tasks matches here.
+exports.jobsRouter.use(tasks_1.jobTasksRouter);
 /** Maximum number of job IDs per bulk request; prevents oversized batches. */
 const BULK_BATCH_CAP = 100;
 // Log that jobs routes are being loaded (verification for deployment)

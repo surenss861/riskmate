@@ -1,4 +1,4 @@
-export declare const COMMENT_ENTITY_TYPES: readonly ["job", "hazard", "control", "task", "document", "signoff", "photo"];
+export declare const COMMENT_ENTITY_TYPES: readonly ["job", "hazard", "control", "photo"];
 export type CommentEntityType = (typeof COMMENT_ENTITY_TYPES)[number];
 export interface CommentRow {
     id: string;
@@ -28,6 +28,8 @@ export interface CommentWithAuthor extends Omit<CommentRow, 'mentions'> {
         user_id: string;
     }[];
     reply_count?: number;
+    /** Owning job id for hazard/control/photo mentions (same as entity_id when entity_type is job). */
+    job_id?: string | null;
 }
 export interface ListCommentsOptions {
     limit?: number;
@@ -35,10 +37,18 @@ export interface ListCommentsOptions {
     includeReplies?: boolean;
     includeDeleted?: boolean;
 }
-/** List comments for an entity. Excludes soft-deleted by default. Returns author info and reply counts. */
+/** List comments for an entity. Excludes soft-deleted by default. Returns author info and reply counts. Excludes replies by default (top-level list + reply_count contract). */
 export declare function listComments(organizationId: string, entityType: CommentEntityType, entityId: string, options?: ListCommentsOptions): Promise<{
     data: CommentWithAuthor[];
+    count: number;
+    has_more: boolean;
 }>;
+/** Get total comment count for an entity, optionally including replies. Excludes soft-deleted. */
+export declare function getCommentCount(organizationId: string, entityType: CommentEntityType, entityId: string, options?: {
+    includeReplies?: boolean;
+}): Promise<number>;
+/** Get unread comment count for an entity (comments + replies created after since, excluding those by currentUser). Excludes soft-deleted. */
+export declare function getUnreadCommentCount(organizationId: string, entityType: CommentEntityType, entityId: string, sinceIso: string, currentUserId: string): Promise<number>;
 /** Get a parent comment by id scoped to org and optional entity_type/entity_id; excludes deleted. Returns null if not found. */
 export declare function getParentComment(organizationId: string, parentId: string, entityType?: CommentEntityType | string, entityId?: string): Promise<CommentRow | null>;
 /** Create a comment with optional mentions (stored in comments.mentions; sends notifications). Parses body for @[Name](id) as fallback. */
@@ -53,7 +63,7 @@ export declare function createComment(organizationId: string, authorId: string, 
     error: string | null;
 }>;
 /** Update comment content (sets edited_at). Re-parses mentions, sends notifications for newly added mentions. Author only. */
-export declare function updateComment(organizationId: string, commentId: string, body: string, userId: string): Promise<{
+export declare function updateComment(organizationId: string, commentId: string, body: string, userId: string, explicitMentionUserIds?: string[]): Promise<{
     data: CommentRow | null;
     error: string | null;
 }>;
@@ -64,12 +74,14 @@ export declare function deleteComment(organizationId: string, commentId: string)
 }>;
 /** Get a single comment by id (for permission checks). Includes deleted. */
 export declare function getComment(organizationId: string, commentId: string): Promise<CommentRow | null>;
-/** List comments where the given user is in mentions array. Excludes soft-deleted. */
+/** List comments where the given user is in mentions array. Excludes soft-deleted. Returns count and has_more for pagination. */
 export declare function listCommentsWhereMentioned(organizationId: string, userId: string, options?: {
     limit?: number;
     offset?: number;
 }): Promise<{
     data: CommentWithAuthor[];
+    count: number;
+    has_more: boolean;
 }>;
 /** Resolve a comment (sets is_resolved, resolved_by, resolved_at). */
 export declare function resolveComment(organizationId: string, commentId: string, userId: string): Promise<{
@@ -81,12 +93,13 @@ export declare function unresolveComment(organizationId: string, commentId: stri
     data: CommentRow | null;
     error: string | null;
 }>;
-/** List replies for a comment. Excludes soft-deleted by default. */
+/** List replies for a comment. Excludes soft-deleted by default. Returns has_more when there are additional pages. */
 export declare function listReplies(organizationId: string, parentId: string, options?: {
     limit?: number;
     offset?: number;
     includeDeleted?: boolean;
 }): Promise<{
     data: CommentWithAuthor[];
+    has_more: boolean;
 }>;
 //# sourceMappingURL=comments.d.ts.map
