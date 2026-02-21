@@ -988,18 +988,20 @@ class APIClient {
         return response.data
     }
 
-    /// Create a comment on a job
-    func createComment(jobId: String, content: String, parentId: String? = nil) async throws -> JobComment {
+    /// Create a comment on a job (optionally with mention_user_ids for notifications)
+    func createComment(jobId: String, content: String, parentId: String? = nil, mentionUserIds: [String]? = nil) async throws -> JobComment {
         struct CreateCommentBody: Encodable {
             let content: String
             let parentId: String?
+            let mentionUserIds: [String]?
 
             enum CodingKeys: String, CodingKey {
                 case content
                 case parentId = "parent_id"
+                case mentionUserIds = "mention_user_ids"
             }
         }
-        let body = CreateCommentBody(content: content, parentId: parentId)
+        let body = CreateCommentBody(content: content, parentId: parentId, mentionUserIds: mentionUserIds)
         let data = try JSONEncoder().encode(body)
         let response: CreateCommentResponse = try await request(
             endpoint: "/api/jobs/\(jobId)/comments",
@@ -1018,12 +1020,18 @@ class APIClient {
         return response.data
     }
 
-    /// Create a reply to a comment (POST /api/comments/:id/replies)
-    func createReply(commentId: String, content: String) async throws -> JobComment {
+    /// Create a reply to a comment (POST /api/comments/:id/replies); optionally pass mention_user_ids for notifications
+    func createReply(commentId: String, content: String, mentionUserIds: [String]? = nil) async throws -> JobComment {
         struct CreateReplyBody: Encodable {
             let content: String
+            let mentionUserIds: [String]?
+
+            enum CodingKeys: String, CodingKey {
+                case content
+                case mentionUserIds = "mention_user_ids"
+            }
         }
-        let body = CreateReplyBody(content: content)
+        let body = CreateReplyBody(content: content, mentionUserIds: mentionUserIds)
         let data = try JSONEncoder().encode(body)
         let response: CreateCommentResponse = try await request(
             endpoint: "/api/comments/\(commentId)/replies",

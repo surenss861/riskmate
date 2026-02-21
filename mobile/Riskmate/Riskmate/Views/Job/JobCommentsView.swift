@@ -1,6 +1,7 @@
 import SwiftUI
 
 /// Comments tab for job detail: list comments, replies nested per comment, add comment and reply. Mentions shown as styled chips.
+/// Supports @ mention composition: teammate lookup on @, tokens as @[Display Name](userId), and mention_user_ids sent to backend for notifications.
 struct JobCommentsView: View {
     let jobId: String
 
@@ -15,6 +16,10 @@ struct JobCommentsView: View {
     @State private var expandedReplyForId: String?
     @State private var replyContent: [String: String] = [:]
     @State private var replyPostingForId: String?
+    // Mention composition: teammate list and @ autocomplete state
+    @State private var members: [TeamMember] = []
+    @State private var mentionQuery: String?
+    @State private var activeReplyMentionParentId: String?
 
     var body: some View {
         Group {
@@ -59,42 +64,96 @@ struct JobCommentsView: View {
         }
         .task {
             await loadComments()
+            await loadMembers()
+        }
+    }
+
+    private func loadMembers() async {
+        do {
+            let team = try await APIClient.shared.getTeam()
+            members = team.members
+        } catch {
+            // Non-fatal: comments work without mention picker
         }
     }
 
     private func addCommentRow() -> some View {
-        VStack(alignment: .leading, spacing: RMTheme.Spacing.sm) {
+        let newContentBinding = Binding(
+            get: { newContent },
+            set: { val in
+                newContent = val
+                // Cursor-at-end heuristic for @ mention query (mirrors web extractMentionQuery)
+                mentionQuery = Self.extractMentionQuery(text: val, cursorPos: val.count)
+            }
+        )
+        return VStack(alignment: .leading, spacing: RMTheme.Spacing.sm) {
             Text("Add a comment")
                 .font(RMTheme.Typography.bodySmallBold)
                 .foregroundColor(RMTheme.Colors.textSecondary)
 
-            HStack(alignment: .bottom, spacing: RMTheme.Spacing.sm) {
-                TextField("Write a comment…", text: $newContent, axis: .vertical)
-                    .textFieldStyle(.plain)
-                    .font(RMTheme.Typography.body)
-                    .foregroundColor(RMTheme.Colors.textPrimary)
-                    .padding(RMTheme.Spacing.sm)
-                    .background(RMTheme.Colors.inputFill)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: RMTheme.Radius.sm)
-                            .stroke(RMTheme.Colors.border, lineWidth: 1)
-                    )
-                    .lineLimit(3...6)
+            ZStack(alignment: .topLeading) {
+                HStack(alignment: .bottom, spacing: RMTheme.Spacing.sm) {
+                    TextField("Write a comment… Use @ to mention a teammate.", text: newContentBinding, axis: .vertical)
+                        .textFieldStyle(.plain)
+                        .font(RMTheme.Typography.body)
+                        .foregroundColor(RMTheme.Colors.textPrimary)
+                        .padding(RMTheme.Spacing.sm)
+                        .background(RMTheme.Colors.inputFill)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: RMTheme.Radius.sm)
+                                .stroke(RMTheme.Colors.border, lineWidth: 1)
+                        )
+                        .lineLimit(3...6)
 
-                Button {
-                    Task { await postComment() }
-                } label: {
-                    if isPosting {
-                        ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle(tint: .black))
-                            .frame(width: 44, height: 44)
-                    } else {
-                        Image(systemName: "arrow.up.circle.fill")
-                            .font(.system(size: 32))
-                            .foregroundColor(newContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? RMTheme.Colors.textTertiary : RMTheme.Colors.accent)
+                    Button {
+                        Task { await postComment() }
+                    } label: {
+                        if isPosting {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: .black))
+                                .frame(width: 44, height: 44)
+                        } else {
+                            Image(systemName: "arrow.up.circle.fill")
+                                .font(.system(size: 32))
+                                .foregroundColor(newContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? RMTheme.Colors.textTertiary : RMTheme.Colors.accent)
+                        }
+                    }
+                    .disabled(newContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isPosting)
+                }
+                if mentionQuery != nil {
+                    let candidates = mentionCandidates(query: mentionQuery ?? "", forReplyParentId: nil)
+                    if !candidates.isEmpty {
+                        VStack(alignment: .leading, spacing: 0) {
+                            ForEach(candidates) { member in
+                                Button {
+                                    insertMention(member: member, intoNewComment: true, replyParentId: nil)
+                                } label: {
+                                    HStack(spacing: RMTheme.Spacing.sm) {
+                                        Text(member.fullName ?? member.email)
+                                            .font(RMTheme.Typography.bodySmall)
+                                            .fontWeight(.medium)
+                                            .foregroundColor(RMTheme.Colors.textPrimary)
+                                        if member.fullName != nil {
+                                            Text(member.email)
+                                                .font(RMTheme.Typography.caption2)
+                                                .foregroundColor(RMTheme.Colors.textTertiary)
+                                        }
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.horizontal, RMTheme.Spacing.sm)
+                                    .padding(.vertical, 8)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .background(RMTheme.Colors.surface)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: RMTheme.Radius.sm)
+                                .stroke(RMTheme.Colors.border, lineWidth: 1)
+                        )
+                        .padding(.top, 4)
                     }
                 }
-                .disabled(newContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isPosting)
             }
         }
         .padding(RMTheme.Spacing.md)
@@ -251,35 +310,74 @@ struct JobCommentsView: View {
     private func replyComposer(_ comment: JobComment) -> some View {
         let binding = Binding(
             get: { replyContent[comment.id] ?? "" },
-            set: { replyContent[comment.id] = $0 }
+            set: { val in
+                replyContent[comment.id] = val
+                activeReplyMentionParentId = comment.id
+            }
         )
-        let text = binding.wrappedValue
+        let text = replyContent[comment.id] ?? ""
         let isPosting = replyPostingForId == comment.id
-        return HStack(alignment: .bottom, spacing: RMTheme.Spacing.sm) {
-            TextField("Write a reply…", text: binding, axis: .vertical)
-                .textFieldStyle(.plain)
-                .font(RMTheme.Typography.bodySmall)
-                .foregroundColor(RMTheme.Colors.textPrimary)
-                .padding(8)
-                .background(RMTheme.Colors.inputFill)
+        let replyQuery = Self.extractMentionQuery(text: text, cursorPos: text.count)
+        let showReplyPicker = activeReplyMentionParentId == comment.id && replyQuery != nil
+        let replyCandidates = showReplyPicker ? mentionCandidates(query: replyQuery ?? "", forReplyParentId: comment.id) : []
+        return ZStack(alignment: .topLeading) {
+            HStack(alignment: .bottom, spacing: RMTheme.Spacing.sm) {
+                TextField("Write a reply… Use @ to mention.", text: binding, axis: .vertical)
+                    .textFieldStyle(.plain)
+                    .font(RMTheme.Typography.bodySmall)
+                    .foregroundColor(RMTheme.Colors.textPrimary)
+                    .padding(8)
+                    .background(RMTheme.Colors.inputFill)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: RMTheme.Radius.sm)
+                            .stroke(RMTheme.Colors.border, lineWidth: 1)
+                    )
+                    .lineLimit(2...4)
+                Button {
+                    Task { await postReply(commentId: comment.id) }
+                } label: {
+                    if isPosting {
+                        ProgressView()
+                            .scaleEffect(0.8)
+                    } else {
+                        Image(systemName: "arrow.up.circle.fill")
+                            .font(.system(size: 28))
+                            .foregroundColor(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? RMTheme.Colors.textTertiary : RMTheme.Colors.accent)
+                    }
+                }
+                .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isPosting)
+            }
+            if !replyCandidates.isEmpty {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(replyCandidates) { member in
+                        Button {
+                            insertMention(member: member, intoNewComment: false, replyParentId: comment.id)
+                        } label: {
+                            HStack(spacing: RMTheme.Spacing.sm) {
+                                Text(member.fullName ?? member.email)
+                                    .font(RMTheme.Typography.caption)
+                                    .fontWeight(.medium)
+                                    .foregroundColor(RMTheme.Colors.textPrimary)
+                                if member.fullName != nil {
+                                    Text(member.email)
+                                        .font(RMTheme.Typography.caption2)
+                                        .foregroundColor(RMTheme.Colors.textTertiary)
+                                }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 6)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .background(RMTheme.Colors.surface)
                 .overlay(
                     RoundedRectangle(cornerRadius: RMTheme.Radius.sm)
                         .stroke(RMTheme.Colors.border, lineWidth: 1)
                 )
-                .lineLimit(2...4)
-            Button {
-                Task { await postReply(commentId: comment.id) }
-            } label: {
-                if isPosting {
-                    ProgressView()
-                        .scaleEffect(0.8)
-                } else {
-                    Image(systemName: "arrow.up.circle.fill")
-                        .font(.system(size: 28))
-                        .foregroundColor(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? RMTheme.Colors.textTertiary : RMTheme.Colors.accent)
-                }
+                .padding(.top, 4)
             }
-            .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isPosting)
         }
         .padding(.top, 4)
     }
@@ -326,10 +424,12 @@ struct JobCommentsView: View {
     private func postComment() async {
         let content = newContent.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !content.isEmpty else { return }
+        let mentionUserIds = Self.extractMentionUserIds(content)
         isPosting = true
+        mentionQuery = nil
         defer { isPosting = false }
         do {
-            _ = try await APIClient.shared.createComment(jobId: jobId, content: content)
+            _ = try await APIClient.shared.createComment(jobId: jobId, content: content, mentionUserIds: mentionUserIds.isEmpty ? nil : mentionUserIds)
             newContent = ""
             await loadComments()
         } catch {
@@ -340,15 +440,85 @@ struct JobCommentsView: View {
     private func postReply(commentId: String) async {
         let content = (replyContent[commentId] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         guard !content.isEmpty else { return }
+        let mentionUserIds = Self.extractMentionUserIds(content)
         replyPostingForId = commentId
+        if activeReplyMentionParentId == commentId { activeReplyMentionParentId = nil }
         defer { replyPostingForId = nil }
         do {
-            _ = try await APIClient.shared.createReply(commentId: commentId, content: content)
+            _ = try await APIClient.shared.createReply(commentId: commentId, content: content, mentionUserIds: mentionUserIds.isEmpty ? nil : mentionUserIds)
             replyContent.removeValue(forKey: commentId)
             await loadReplies(commentId: commentId)
             await loadComments()
         } catch {
             repliesErrorForId[commentId] = error.localizedDescription
+        }
+    }
+
+    // MARK: - Mention composition (mirrors web: @[Display Name](userId), mention_user_ids for backend notifications)
+
+    /// Extract query string after last @ before cursor for autocomplete (mirrors web extractMentionQuery).
+    private static func extractMentionQuery(text: String, cursorPos: Int) -> String? {
+        guard cursorPos >= 0, cursorPos <= text.count else { return nil }
+        let beforeCursor = String(text.prefix(cursorPos))
+        guard let lastAt = beforeCursor.lastIndex(of: "@") else { return nil }
+        let afterAt = String(beforeCursor[beforeCursor.index(after: lastAt)...])
+        if afterAt.contains(where: { $0.isNewline || $0 == " " }) { return nil }
+        return afterAt
+    }
+
+    /// Format mention token for storage (mirrors web: @[Display Name](userId)).
+    private static func formatMention(displayName: String, userId: String) -> String {
+        let safe = (displayName.isEmpty ? "User" : displayName.replacingOccurrences(of: "]", with: "\\]").trimmingCharacters(in: .whitespacesAndNewlines))
+        return "@[\(safe)](\(userId))"
+    }
+
+    /// Extract user IDs from content containing @[Name](userId) (for API mention_user_ids).
+    private static func extractMentionUserIds(_ content: String) -> [String] {
+        let pattern = #"@\[[^\]]+\]\(([a-f0-9-]+)\)"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
+        let ns = content as NSString
+        let range = NSRange(location: 0, length: ns.length)
+        var ids: [String] = []
+        regex.enumerateMatches(in: content, options: [], range: range) { match, _, _ in
+            guard let m = match, m.numberOfRanges >= 2 else { return }
+            let idRange = m.range(at: 1)
+            let id = ns.substring(with: idRange)
+            if !id.isEmpty, !ids.contains(id) { ids.append(id) }
+        }
+        return ids
+    }
+
+    /// Insert mention token into text: replace from last @ to cursor (cursor-at-end) with token + space.
+    private static func insertMentionIntoText(_ text: String, token: String) -> String {
+        let cursorPos = text.count
+        guard cursorPos > 0, let lastAt = text.prefix(cursorPos).lastIndex(of: "@") else { return text + token + " " }
+        let before = String(text[..<lastAt])
+        return before + token + " "
+    }
+
+    private var currentUserId: String { SessionManager.shared.currentUser?.id ?? "" }
+
+    private func mentionCandidates(query: String, forReplyParentId replyParentId: String?) -> [TeamMember] {
+        let q = query.lowercased()
+        let filtered = members.filter { m in
+            m.id != currentUserId &&
+            (q.isEmpty ||
+             (m.fullName?.lowercased().contains(q) == true) ||
+             m.email.lowercased().contains(q))
+        }
+        return Array(filtered.prefix(5))
+    }
+
+    private func insertMention(member: TeamMember, intoNewComment: Bool, replyParentId: String?) {
+        let displayName = member.fullName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? member.email
+        let token = Self.formatMention(displayName: displayName, userId: member.id)
+        if intoNewComment {
+            newContent = Self.insertMentionIntoText(newContent, token: token)
+            mentionQuery = nil
+        } else if let parentId = replyParentId {
+            let current = replyContent[parentId] ?? ""
+            replyContent[parentId] = Self.insertMentionIntoText(current, token: token)
+            if activeReplyMentionParentId == parentId { activeReplyMentionParentId = nil }
         }
     }
 
