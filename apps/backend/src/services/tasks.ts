@@ -586,6 +586,12 @@ export async function createTaskTemplate(
 
   const validatedTasks = input.tasks.map((item, index) => validateTemplateTaskItem(item, index));
 
+  for (const task of validatedTasks) {
+    if (task.assigned_to != null) {
+      await ensureAssignedToInOrg(task.assigned_to, organizationId);
+    }
+  }
+
   const { data: template, error } = await supabase
     .from("task_templates")
     .insert({
