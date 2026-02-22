@@ -56,7 +56,8 @@ export function TaskList({ jobId, onAddTask, onTaskCountChange, refreshKey = 0 }
 
     const next = [...orderedTasks]
     const [moved] = next.splice(dragIndex, 1)
-    next.splice(dropIndex, 0, moved)
+    const insertIndex = dragIndex < dropIndex ? dropIndex - 1 : dropIndex
+    next.splice(insertIndex, 0, moved)
     const normalized = next.map((task, index) => ({ ...task, sort_order: index }))
 
     setOrderedTasks(normalized)

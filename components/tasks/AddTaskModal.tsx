@@ -48,17 +48,21 @@ export function AddTaskModal({ isOpen, onClose, jobId, onTaskAdded, onUseTemplat
       try {
         const supabase = createSupabaseBrowserClient()
         const {
-          data: { session },
-        } = await supabase.auth.getSession()
-        if (!session) return
+          data: { user },
+        } = await supabase.auth.getUser()
+        if (!user) return
 
-        const { data: orgData } = await supabase.from('organizations').select('id').single()
-        if (!orgData) return
+        const { data: userRow } = await supabase
+          .from('users')
+          .select('organization_id')
+          .eq('id', user.id)
+          .single()
+        if (!userRow?.organization_id) return
 
         const { data: usersData } = await supabase
           .from('users')
           .select('id, full_name, email')
-          .eq('organization_id', orgData.id)
+          .eq('organization_id', userRow.organization_id)
           .is('deleted_at', null)
           .order('full_name')
 
