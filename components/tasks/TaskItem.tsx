@@ -15,6 +15,8 @@ interface TaskItemProps {
   onDragStart: (event: DragEvent<HTMLDivElement>) => void
   onDragOver: (event: DragEvent<HTMLDivElement>) => void
   onDrop: (event: DragEvent<HTMLDivElement>) => void
+  /** When false, task is not draggable (e.g. cancelled section). Default true. */
+  isDraggable?: boolean
 }
 
 const PRIORITY_CLASSES: Record<Task['priority'], string> = {
@@ -33,19 +35,19 @@ function getInitials(fullName: string | null | undefined, email: string | null |
   return 'U'
 }
 
-export function TaskItem({ task, onComplete, onDelete, onEditRequest, onDragStart, onDragOver, onDrop }: TaskItemProps) {
+export function TaskItem({ task, onComplete, onDelete, onEditRequest, onDragStart, onDragOver, onDrop, isDraggable = true }: TaskItemProps) {
   const [expanded, setExpanded] = useState(false)
   const dueDate = task.due_date ? new Date(task.due_date) : null
-  const isOverdue = Boolean(dueDate && task.status !== 'done' && isPast(dueDate))
+  const isOverdue = Boolean(dueDate && task.status !== 'done' && task.status !== 'cancelled' && isPast(dueDate))
   const assigneeName = task.assigned_user?.full_name || task.assigned_user?.email || null
   const hasDetails = Boolean(task.description?.trim())
 
   return (
     <div
-      draggable
-      onDragStart={onDragStart}
-      onDragOver={onDragOver}
-      onDrop={onDrop}
+      draggable={isDraggable}
+      onDragStart={isDraggable ? onDragStart : undefined}
+      onDragOver={isDraggable ? onDragOver : undefined}
+      onDrop={isDraggable ? onDrop : undefined}
       className={`${cardStyles.base} ${hoverStates.row} group p-3 flex items-start gap-3 ${motion.normal}`}
     >
       <button
@@ -78,7 +80,7 @@ export function TaskItem({ task, onComplete, onDelete, onEditRequest, onDragStar
             onClick={() => hasDetails && setExpanded((e) => !e)}
             className="flex-1 min-w-0 text-left"
           >
-            <p className={`text-sm font-medium ${task.status === 'done' ? 'line-through text-white/40' : 'text-white'}`}>
+            <p className={`text-sm font-medium ${task.status === 'done' ? 'line-through text-white/40' : task.status === 'cancelled' ? 'text-white/50' : 'text-white'}`}>
               {task.title}
             </p>
           </button>

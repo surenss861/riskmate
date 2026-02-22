@@ -63,6 +63,7 @@ export function TaskList({
       inProgress: sorted.filter((task) => task.status === 'in_progress'),
       todo: sorted.filter((task) => task.status === 'todo'),
       done: sorted.filter((task) => task.status === 'done'),
+      cancelled: sorted.filter((task) => task.status === 'cancelled'),
     }
   }, [orderedTasks])
 
@@ -203,6 +204,27 @@ export function TaskList({
                 />
               )
             })}
+          </div>
+        </section>
+      )}
+
+      {grouped.cancelled.length > 0 && (
+        <section>
+          <h4 className="text-xs font-semibold text-white/40 uppercase tracking-wider mb-2">Cancelled</h4>
+          <div className="space-y-2">
+            {grouped.cancelled.map((task) => (
+              <TaskItem
+                key={task.id}
+                task={task}
+                onComplete={completeTask}
+                onDelete={deleteTask}
+                onEditRequest={setEditingTask}
+                onDragStart={() => {}}
+                onDragOver={() => {}}
+                onDrop={() => {}}
+                isDraggable={false}
+              />
+            ))}
           </div>
         </section>
       )}
