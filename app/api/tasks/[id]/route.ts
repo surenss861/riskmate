@@ -336,11 +336,14 @@ export async function PATCH(
     return NextResponse.json({ data })
   } catch (error: any) {
     const msg = error?.message || 'Failed to update task'
-    const isNotFound = typeof msg === 'string' && msg.includes('Resource not found')
+    const pgNoRows = error?.code === 'PGRST116' || (typeof msg === 'string' && (msg.includes('no results') || msg.includes('PGRST116')))
+    const isNotFound =
+      pgNoRows || (typeof msg === 'string' && msg.includes('Resource not found'))
     const isForbidden = typeof msg === 'string' && msg.includes('Access denied')
     const statusCode = isNotFound ? 404 : isForbidden ? 403 : 500
     const code = isNotFound ? 'NOT_FOUND' : isForbidden ? 'FORBIDDEN' : 'QUERY_ERROR'
-    const { response, errorId } = createErrorResponse(msg, code, {
+    const displayMessage = isNotFound ? 'Task not found' : msg
+    const { response, errorId } = createErrorResponse(displayMessage, code, {
       requestId,
       statusCode,
       details: process.env.NODE_ENV === 'development' ? { detail: error?.message } : undefined,
