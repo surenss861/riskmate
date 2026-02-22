@@ -206,11 +206,11 @@ export default function JobDetailPage() {
           tasks.length === 0
             ? 0
             : Math.max(0, ...tasks.map((t) => t.sort_order)) + 1
-        const creations = templateTasks.map((task, i) => {
+        for (let i = 0; i < templateTasks.length; i++) {
+          const task = templateTasks[i]
           const sortOrder = offset + (task.sort_order ?? i)
-          return addTask({ ...task, sort_order: sortOrder })
-        })
-        await Promise.all(creations)
+          await addTask({ ...task, sort_order: sortOrder })
+        }
       } catch (err: any) {
         const message = err?.message || 'Some tasks could not be created. Please retry.'
         setToast({ message, type: 'error' })
