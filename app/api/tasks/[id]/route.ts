@@ -175,6 +175,38 @@ export async function PATCH(
       }
     }
 
+    let resolvedSortOrder: number | undefined
+    if (sort_order !== undefined && sort_order !== null) {
+      const parsed =
+        typeof sort_order === 'number'
+          ? Number.isFinite(sort_order)
+            ? Math.floor(sort_order)
+            : NaN
+          : typeof sort_order === 'string'
+            ? (() => {
+                const n = parseInt(sort_order, 10)
+                return Number.isNaN(n) ? NaN : n
+              })()
+            : NaN
+      if (Number.isNaN(parsed)) {
+        const { response, errorId } = createErrorResponse(
+          'sort_order must be a number or numeric string',
+          'VALIDATION_ERROR',
+          { requestId, statusCode: 400 }
+        )
+        logApiError(400, 'VALIDATION_ERROR', errorId, requestId, organization_id, response.message, {
+          category: 'validation',
+          severity: 'warn',
+          route: ROUTE,
+        })
+        return NextResponse.json(response, {
+          status: 400,
+          headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+        })
+      }
+      resolvedSortOrder = parsed
+    }
+
     const updateData: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
     }
@@ -194,11 +226,11 @@ export async function PATCH(
         updateData.completed_by = null
       }
     }
-    if (sort_order !== undefined) updateData.sort_order = sort_order
+    if (resolvedSortOrder !== undefined) updateData.sort_order = resolvedSortOrder
 
     const supabase = await createSupabaseServerClient()
 
-    let existingTask: { status: string; created_by: string | null; title: string; job_id: string; assigned_to: string | null } | null = null
+    let existingTask: { status: string; created_by: string; title: string; job_id: string; assigned_to: string | null } | null = null
     if (status === 'done' || assigned_to !== undefined) {
       const { data: existing } = await supabase
         .from('tasks')

@@ -158,6 +158,38 @@ export async function POST(
       }
     }
 
+    let resolvedSortOrder = 0
+    if (sort_order !== undefined && sort_order !== null) {
+      const parsed =
+        typeof sort_order === 'number'
+          ? Number.isFinite(sort_order)
+            ? Math.floor(sort_order)
+            : NaN
+          : typeof sort_order === 'string'
+            ? (() => {
+                const n = parseInt(sort_order, 10)
+                return Number.isNaN(n) ? NaN : n
+              })()
+            : NaN
+      if (Number.isNaN(parsed)) {
+        const { response, errorId } = createErrorResponse(
+          'sort_order must be a number or numeric string',
+          'VALIDATION_ERROR',
+          { requestId, statusCode: 400 }
+        )
+        logApiError(400, 'VALIDATION_ERROR', errorId, requestId, organization_id, response.message, {
+          category: 'validation',
+          severity: 'warn',
+          route: ROUTE,
+        })
+        return NextResponse.json(response, {
+          status: 400,
+          headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+        })
+      }
+      resolvedSortOrder = parsed
+    }
+
     const resolvedStatus = status ?? 'todo'
     const nowIso = new Date().toISOString()
     const insertPayload: Record<string, unknown> = {
@@ -169,7 +201,7 @@ export async function POST(
       assigned_to: assigned_to ?? null,
       priority: priority ?? 'medium',
       due_date: due_date ?? null,
-      sort_order: sort_order ?? 0,
+      sort_order: resolvedSortOrder,
       status: resolvedStatus,
     }
     if (resolvedStatus === 'done') {

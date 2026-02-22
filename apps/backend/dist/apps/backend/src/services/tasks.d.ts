@@ -9,7 +9,7 @@ export interface TaskRow {
     title: string;
     description: string | null;
     assigned_to: string | null;
-    created_by: string | null;
+    created_by: string;
     completed_by: string | null;
     priority: string;
     status: string;

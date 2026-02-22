@@ -1,3 +1,9 @@
+/**
+ * App Router API for task templates: GET (list) and POST (create).
+ * Uses the same validation (name required, non-empty tasks array, per-item validation)
+ * and organization scoping as the backend. Consumers should use this endpoint;
+ * the backend path is available for server-to-server or legacy use.
+ */
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { createSupabaseAdminClient } from '@/lib/supabase/admin'
@@ -116,23 +122,24 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ data: templates || [] })
   } catch (error: any) {
-    const { response, errorId } = createErrorResponse(
-      error?.message || 'Failed to fetch task templates',
-      'QUERY_ERROR',
-      {
-        requestId,
-        statusCode: 500,
-        details: process.env.NODE_ENV === 'development' ? { detail: error?.message } : undefined,
-      }
-    )
-    logApiError(500, 'QUERY_ERROR', errorId, requestId, undefined, response.message, {
-      category: 'internal',
-      severity: 'error',
+    const msg = error?.message || 'Failed to fetch task templates'
+    const isNotFound = typeof msg === 'string' && msg.includes('Resource not found')
+    const isForbidden = typeof msg === 'string' && msg.includes('Access denied')
+    const statusCode = error?.status ?? (isNotFound ? 404 : isForbidden ? 403 : 500)
+    const code = error?.code ?? (isNotFound ? 'NOT_FOUND' : isForbidden ? 'FORBIDDEN' : 'QUERY_ERROR')
+    const { response, errorId } = createErrorResponse(msg, code, {
+      requestId,
+      statusCode,
+      details: process.env.NODE_ENV === 'development' ? { detail: error?.message } : undefined,
+    })
+    logApiError(statusCode, code, errorId, requestId, undefined, response.message, {
+      category: isNotFound || isForbidden ? 'auth' : 'internal',
+      severity: statusCode >= 500 ? 'error' : 'warn',
       route: ROUTE,
       details: process.env.NODE_ENV === 'development' ? { detail: error?.message } : undefined,
     })
     return NextResponse.json(response, {
-      status: 500,
+      status: statusCode,
       headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
     })
   }
@@ -251,23 +258,24 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ data: template }, { status: 201 })
   } catch (error: any) {
-    const { response, errorId } = createErrorResponse(
-      error?.message || 'Failed to create task template',
-      'QUERY_ERROR',
-      {
-        requestId,
-        statusCode: 500,
-        details: process.env.NODE_ENV === 'development' ? { detail: error?.message } : undefined,
-      }
-    )
-    logApiError(500, 'QUERY_ERROR', errorId, requestId, undefined, response.message, {
-      category: 'internal',
-      severity: 'error',
+    const msg = error?.message || 'Failed to create task template'
+    const isNotFound = typeof msg === 'string' && msg.includes('Resource not found')
+    const isForbidden = typeof msg === 'string' && msg.includes('Access denied')
+    const statusCode = error?.status ?? (isNotFound ? 404 : isForbidden ? 403 : 500)
+    const code = error?.code ?? (isNotFound ? 'NOT_FOUND' : isForbidden ? 'FORBIDDEN' : 'QUERY_ERROR')
+    const { response, errorId } = createErrorResponse(msg, code, {
+      requestId,
+      statusCode,
+      details: process.env.NODE_ENV === 'development' ? { detail: error?.message } : undefined,
+    })
+    logApiError(statusCode, code, errorId, requestId, undefined, response.message, {
+      category: isNotFound || isForbidden ? 'auth' : 'internal',
+      severity: statusCode >= 500 ? 'error' : 'warn',
       route: ROUTE,
       details: process.env.NODE_ENV === 'development' ? { detail: error?.message } : undefined,
     })
     return NextResponse.json(response, {
-      status: 500,
+      status: statusCode,
       headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
     })
   }
