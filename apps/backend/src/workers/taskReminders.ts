@@ -88,9 +88,12 @@ async function processTaskReminders() {
 
   try {
     // Tasks due by 24h from now (overdue or due within 24h); not done/cancelled; has assignee; throttle by last_reminded_at
+    // Join job title and assignee email in one query to avoid N+1 lookups
     const { data: tasks, error } = await supabase
       .from("tasks")
-      .select("id, organization_id, assigned_to, title, job_id, due_date, status, last_reminded_at")
+      .select(
+        "id, organization_id, assigned_to, title, job_id, due_date, status, last_reminded_at, job:job_id(client_name), assignee:assigned_to(email)"
+      )
       .lte("due_date", in24hIso)
       .neq("status", "done")
       .neq("status", "cancelled")
@@ -111,22 +114,10 @@ async function processTaskReminders() {
 
     for (const task of pending) {
       try {
-        const { data: job } = await supabase
-          .from("jobs")
-          .select("client_name")
-          .eq("id", task.job_id)
-          .eq("organization_id", task.organization_id)
-          .maybeSingle();
-
-        const jobTitle = job?.client_name || "Job";
-
-        const { data: assignee } = await supabase
-          .from("users")
-          .select("email")
-          .eq("id", task.assigned_to)
-          .maybeSingle();
-
-        const assigneeEmail = assignee?.email ?? null;
+        const jobTitle =
+          (task as { job?: { client_name: string } | null }).job?.client_name ?? "Job";
+        const assigneeEmail =
+          (task as { assignee?: { email: string } | null }).assignee?.email ?? null;
         if (!assigneeEmail) {
           console.warn("[TaskReminderWorker] No email for assignee", task.assigned_to, "skipping email");
         }

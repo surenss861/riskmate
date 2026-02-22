@@ -78,19 +78,48 @@ CREATE POLICY "Users can delete task templates in their organization"
   ON task_templates FOR DELETE
   USING (organization_id = get_user_organization_id());
 
--- Seed default templates for the first organization (if any)
+-- Seed default templates for existing organizations (if any)
 INSERT INTO task_templates (id, organization_id, is_default, name, tasks, job_type, created_by)
 SELECT gen_random_uuid(), o.id, true, 'Electrical Inspection',
   '[{"title":"Isolate power","sort_order":0},{"title":"Test circuits","sort_order":1},{"title":"Document findings","sort_order":2},{"title":"Sign off","sort_order":3}]'::jsonb,
-  'electrical', NULL
+  'electrical', NULL::uuid
 FROM (SELECT id FROM organizations LIMIT 1) o
 UNION ALL
 SELECT gen_random_uuid(), o.id, true, 'Plumbing Repair',
   '[{"title":"Shut off water","sort_order":0},{"title":"Inspect pipes","sort_order":1},{"title":"Complete repair","sort_order":2},{"title":"Test pressure","sort_order":3}]'::jsonb,
-  'plumbing', NULL
+  'plumbing', NULL::uuid
 FROM (SELECT id FROM organizations LIMIT 1) o
 UNION ALL
 SELECT gen_random_uuid(), o.id, true, 'Safety Audit',
   '[{"title":"Review hazards","sort_order":0},{"title":"Check controls","sort_order":1},{"title":"Verify PPE","sort_order":2},{"title":"Complete checklist","sort_order":3}]'::jsonb,
-  'safety', NULL
+  'safety', NULL::uuid
 FROM (SELECT id FROM organizations LIMIT 1) o;
+
+-- Ensure new organizations get the three default templates (fresh DB with zero orgs gets them on first org creation)
+CREATE OR REPLACE FUNCTION seed_default_task_templates_for_org()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  INSERT INTO task_templates (id, organization_id, is_default, name, tasks, job_type, created_by)
+  VALUES
+    (gen_random_uuid(), NEW.id, true, 'Electrical Inspection',
+     '[{"title":"Isolate power","sort_order":0},{"title":"Test circuits","sort_order":1},{"title":"Document findings","sort_order":2},{"title":"Sign off","sort_order":3}]'::jsonb,
+     'electrical', NULL),
+    (gen_random_uuid(), NEW.id, true, 'Plumbing Repair',
+     '[{"title":"Shut off water","sort_order":0},{"title":"Inspect pipes","sort_order":1},{"title":"Complete repair","sort_order":2},{"title":"Test pressure","sort_order":3}]'::jsonb,
+     'plumbing', NULL),
+    (gen_random_uuid(), NEW.id, true, 'Safety Audit',
+     '[{"title":"Review hazards","sort_order":0},{"title":"Check controls","sort_order":1},{"title":"Verify PPE","sort_order":2},{"title":"Complete checklist","sort_order":3}]'::jsonb,
+     'safety', NULL);
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS seed_default_task_templates_trigger ON organizations;
+CREATE TRIGGER seed_default_task_templates_trigger
+  AFTER INSERT ON organizations
+  FOR EACH ROW
+  EXECUTE FUNCTION seed_default_task_templates_for_org();
