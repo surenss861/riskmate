@@ -173,52 +173,51 @@ export default function JobDetailPage() {
   const [activeTab, setActiveTab] = useState<'overview' | 'activity' | 'signatures' | 'tasks' | 'comments'>('overview')
   const [activityInitialEvents, setActivityInitialEvents] = useState<AuditEvent[] | null>(null)
   const [signatureCount, setSignatureCount] = useState<{ signed: number; total: number } | null>(null)
-  const [taskIncompleteCount, setTaskIncompleteCount] = useState<number | null>(null)
-  const [taskTotalCount, setTaskTotalCount] = useState<number | null>(null)
-  const [taskRefreshKey, setTaskRefreshKey] = useState(0)
   const [commentCount, setCommentCount] = useState<number | null>(null)
   const [commentUnreadCount, setCommentUnreadCount] = useState<number>(0)
   const [commentsLastViewedAt, setCommentsLastViewedAt] = useState<number | null>(null)
   const [mentionsCount, setMentionsCount] = useState<number | null>(null)
   const [showMentionsInbox, setShowMentionsInbox] = useState(false)
 
-  const { tasks: currentTasks, addTask, refetch: refetchTasks, incompleteCount } = useTasks(jobId)
-
-  // taskTotalCount is set by TaskList via onTaskCountChange(incomplete, total)
-  useEffect(() => {
-    setTaskIncompleteCount(incompleteCount)
-  }, [incompleteCount])
+  const {
+    tasks,
+    isLoading: tasksLoading,
+    error: tasksError,
+    addTask,
+    updateTask,
+    deleteTask,
+    completeTask,
+    reorderTasks,
+    refetch: refetchTasks,
+    incompleteCount: taskIncompleteCount,
+  } = useTasks(jobId)
 
   const handleAddTask = useCallback(
     async (payload: CreateTaskPayload) => {
       await addTask(payload)
-      await refetchTasks()
-      setTaskRefreshKey((value) => value + 1)
     },
-    [addTask, refetchTasks]
+    [addTask]
   )
 
   const handleApplyTaskTemplate = useCallback(
-    async (tasks: CreateTaskPayload[]) => {
+    async (templateTasks: CreateTaskPayload[]) => {
       try {
         const offset =
-          currentTasks.length === 0
+          tasks.length === 0
             ? 0
-            : Math.max(0, ...currentTasks.map((t) => t.sort_order)) + 1
-        const creations = tasks.map((task, i) => {
+            : Math.max(0, ...tasks.map((t) => t.sort_order)) + 1
+        const creations = templateTasks.map((task, i) => {
           const sortOrder = offset + (task.sort_order ?? i)
           return addTask({ ...task, sort_order: sortOrder })
         })
         await Promise.all(creations)
-        await refetchTasks()
-        setTaskRefreshKey((value) => value + 1)
       } catch (err: any) {
         const message = err?.message || 'Some tasks could not be created. Please retry.'
         setToast({ message, type: 'error' })
         throw err
       }
     },
-    [currentTasks, addTask, refetchTasks]
+    [tasks, addTask]
   )
 
   const loadVersionHistory = async () => {
@@ -1009,16 +1008,20 @@ export default function JobDetailPage() {
               className={`${tabStyles.item} ${activeTab === 'tasks' ? tabStyles.active : tabStyles.inactive}`}
             >
               Tasks
-              {taskIncompleteCount !== null && (
+              {taskIncompleteCount > 0 && (
                 <span className="ml-1.5 inline-flex items-center justify-center min-w-[2rem] px-1.5 py-0.5 text-xs font-medium rounded-md bg-white/10 text-white/80 border border-white/10">
                   {taskIncompleteCount}
                 </span>
               )}
-              {taskTotalCount != null && taskIncompleteCount != null && taskTotalCount > 0 && (
-                <span className="ml-1.5 text-white/60 font-normal">
-                  ({Math.round((taskTotalCount - taskIncompleteCount) / taskTotalCount * 100)}%)
-                </span>
-              )}
+              {tasks.length > 0 && (() => {
+                const total = tasks.filter((t) => t.status !== 'cancelled').length
+                const done = tasks.filter((t) => t.status === 'done').length
+                return total > 0 ? (
+                  <span className="ml-1.5 text-white/60 font-normal">
+                    ({Math.round((done / total) * 100)}%)
+                  </span>
+                ) : null
+              })()}
             </button>
             <button
               type="button"
@@ -1122,11 +1125,16 @@ export default function JobDetailPage() {
                 <TaskList
                   jobId={jobId}
                   onAddTask={() => setShowAddTask(true)}
-                  onTaskCountChange={(count, total) => {
-                    setTaskIncompleteCount(count)
-                    if (total !== undefined) setTaskTotalCount(total)
-                  }}
-                  refreshKey={taskRefreshKey}
+                  tasks={tasks}
+                  isLoading={tasksLoading}
+                  error={tasksError}
+                  addTask={addTask}
+                  updateTask={updateTask}
+                  deleteTask={deleteTask}
+                  completeTask={completeTask}
+                  reorderTasks={reorderTasks}
+                  refetch={refetchTasks}
+                  incompleteCount={taskIncompleteCount}
                 />
               </GlassCard>
             </PageSection>

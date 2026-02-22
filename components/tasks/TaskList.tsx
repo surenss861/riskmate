@@ -4,23 +4,43 @@ import { useEffect, useMemo, useState } from 'react'
 import { CheckSquare } from 'lucide-react'
 import { EditTaskModal } from '@/components/tasks/EditTaskModal'
 import { TaskItem } from '@/components/tasks/TaskItem'
-import { useTasks } from '@/hooks/useTasks'
 import { buttonStyles } from '@/lib/styles/design-system'
 import { Task } from '@/types/tasks'
+import type { CreateTaskPayload, UpdateTaskPayload } from '@/types/tasks'
 
 interface TaskListProps {
   jobId: string
   onAddTask: () => void
-  onTaskCountChange?: (incompleteCount: number, totalCount?: number) => void
-  refreshKey?: number
+  tasks: Task[]
+  isLoading: boolean
+  error: Error | null
+  addTask: (payload: CreateTaskPayload) => Promise<Task | null>
+  updateTask: (id: string, patch: UpdateTaskPayload) => Promise<void>
+  deleteTask: (id: string) => Promise<void>
+  completeTask: (id: string) => Promise<void>
+  reorderTasks: (reordered: Task[]) => Promise<void>
+  refetch: () => Promise<void>
+  incompleteCount: number
 }
 
 function sortByOrder(list: Task[]) {
   return [...list].sort((a, b) => a.sort_order - b.sort_order)
 }
 
-export function TaskList({ jobId, onAddTask, onTaskCountChange, refreshKey = 0 }: TaskListProps) {
-  const { tasks, isLoading, error, completeTask, deleteTask, updateTask, reorderTasks, incompleteCount, refetch } = useTasks(jobId)
+export function TaskList({
+  jobId: _jobId,
+  onAddTask,
+  tasks,
+  isLoading,
+  error,
+  addTask: _addTask,
+  updateTask,
+  deleteTask,
+  completeTask,
+  reorderTasks,
+  refetch: _refetch,
+  incompleteCount: _incompleteCount,
+}: TaskListProps) {
   const [dragIndex, setDragIndex] = useState<number | null>(null)
   const [orderedTasks, setOrderedTasks] = useState<Task[]>([])
   const [editingTask, setEditingTask] = useState<Task | null>(null)
@@ -36,14 +56,6 @@ export function TaskList({ jobId, onAddTask, onTaskCountChange, refreshKey = 0 }
   const totalCount = nonCancelledTasks.length
   const completedCount = nonCancelledTasks.filter((task) => task.status === 'done').length
   const progress = totalCount > 0 ? (completedCount / totalCount) * 100 : 0
-
-  useEffect(() => {
-    onTaskCountChange?.(totalCount - completedCount, totalCount)
-  }, [totalCount, completedCount, onTaskCountChange])
-
-  useEffect(() => {
-    void refetch()
-  }, [refreshKey, refetch])
 
   const grouped = useMemo(() => {
     const sorted = sortByOrder(orderedTasks)
