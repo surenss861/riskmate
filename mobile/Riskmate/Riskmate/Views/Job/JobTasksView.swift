@@ -246,15 +246,22 @@ struct JobTasksView: View {
     }
 
     private func taskRow(_ task: TaskItem) -> some View {
-        HStack(alignment: .top, spacing: RMTheme.Spacing.sm) {
-            Button {
-                Task { await completeTask(id: task.id) }
-            } label: {
-                Image(systemName: task.status == "done" ? "checkmark.circle.fill" : "circle")
+        let isCancelled = task.status == "cancelled"
+        return HStack(alignment: .top, spacing: RMTheme.Spacing.sm) {
+            if isCancelled {
+                Image(systemName: "circle")
                     .font(.system(size: 20, weight: .medium))
-                    .foregroundColor(task.status == "done" ? .green : RMTheme.Colors.textTertiary)
+                    .foregroundColor(RMTheme.Colors.textTertiary.opacity(0.5))
+            } else {
+                Button {
+                    Task { await completeTask(id: task.id) }
+                } label: {
+                    Image(systemName: task.status == "done" ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundColor(task.status == "done" ? .green : RMTheme.Colors.textTertiary)
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(task.title)
@@ -280,12 +287,21 @@ struct JobTasksView: View {
         }
         .padding(.vertical, 4)
         .swipeActions(edge: .leading, allowsFullSwipe: true) {
-            Button {
-                Task { await completeTask(id: task.id) }
-            } label: {
-                Label("Complete", systemImage: "checkmark")
+            if task.status == "cancelled" {
+                Button {
+                    Task { await reopenTask(id: task.id) }
+                } label: {
+                    Label("Reopen", systemImage: "arrow.uturn.backward")
+                }
+                .tint(.blue)
+            } else {
+                Button {
+                    Task { await completeTask(id: task.id) }
+                } label: {
+                    Label("Complete", systemImage: "checkmark")
+                }
+                .tint(.green)
             }
-            .tint(.green)
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             Button(role: .destructive) {
@@ -362,6 +378,26 @@ struct JobTasksView: View {
     private func deleteTask(id: String) async {
         do {
             try await APIClient.shared.deleteTask(id: id)
+            await loadTasks()
+        } catch {
+            loadError = error.localizedDescription
+        }
+    }
+
+    /// Reopen a cancelled task by setting status back to "todo" (does not call completeTask).
+    private func reopenTask(id: String) async {
+        do {
+            let payload = UpdateTaskRequest(
+                title: nil,
+                description: nil,
+                assigned_to: nil,
+                priority: nil,
+                due_date: nil,
+                status: "todo",
+                completed_at: nil,
+                sort_order: nil
+            )
+            _ = try await APIClient.shared.updateTask(id: id, payload: payload)
             await loadTasks()
         } catch {
             loadError = error.localizedDescription

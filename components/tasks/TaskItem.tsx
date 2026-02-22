@@ -9,7 +9,8 @@ import { Task } from '@/types/tasks'
 
 interface TaskItemProps {
   task: Task
-  onComplete: (id: string) => void
+  /** Omit or pass undefined for cancelled tasks so they cannot be completed. */
+  onComplete?: (id: string) => void
   onDelete: (id: string) => void
   onEditRequest: (task: Task) => void
   onDragStart: (event: DragEvent<HTMLDivElement>) => void
@@ -35,12 +36,16 @@ function getInitials(fullName: string | null | undefined, email: string | null |
   return 'U'
 }
 
+const isCompletionDisabled = (task: Task, onComplete?: (id: string) => void) =>
+  task.status === 'cancelled' || onComplete == null
+
 export function TaskItem({ task, onComplete, onDelete, onEditRequest, onDragStart, onDragOver, onDrop, isDraggable = true }: TaskItemProps) {
   const [expanded, setExpanded] = useState(false)
   const dueDate = task.due_date ? new Date(task.due_date) : null
   const isOverdue = Boolean(dueDate && task.status !== 'done' && task.status !== 'cancelled' && isPast(dueDate))
   const assigneeName = task.assigned_user?.full_name || task.assigned_user?.email || null
   const hasDetails = Boolean(task.description?.trim())
+  const completionDisabled = isCompletionDisabled(task, onComplete)
 
   return (
     <div
@@ -52,13 +57,16 @@ export function TaskItem({ task, onComplete, onDelete, onEditRequest, onDragStar
     >
       <button
         type="button"
-        onClick={() => onComplete(task.id)}
+        onClick={() => !completionDisabled && onComplete?.(task.id)}
+        disabled={completionDisabled}
         className={`mt-0.5 h-6 w-6 rounded-full border-2 flex items-center justify-center shrink-0 ${
-          task.status === 'done'
-            ? 'bg-green-500 border-green-500 text-white scale-100'
-            : 'border-white/30 text-transparent hover:border-white/50 scale-100'
+          completionDisabled
+            ? 'border-white/20 text-transparent cursor-not-allowed opacity-60'
+            : task.status === 'done'
+              ? 'bg-green-500 border-green-500 text-white scale-100'
+              : 'border-white/30 text-transparent hover:border-white/50 scale-100'
         } transition-all duration-200 ease-out active:scale-90`}
-        aria-label="Complete task"
+        aria-label={completionDisabled ? 'Task cannot be completed' : 'Complete task'}
       >
         <Check className={`h-3.5 w-3.5 ${task.status === 'done' ? 'animate-in zoom-in-50 duration-200' : ''}`} />
       </button>

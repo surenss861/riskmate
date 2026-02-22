@@ -216,7 +216,6 @@ export function TaskList({
               <TaskItem
                 key={task.id}
                 task={task}
-                onComplete={completeTask}
                 onDelete={deleteTask}
                 onEditRequest={setEditingTask}
                 onDragStart={() => {}}
