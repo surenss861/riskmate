@@ -200,12 +200,13 @@ export function useTasks(jobId: string | null): UseTasksResult {
         const prevIdx = previous.findIndex((t) => t.id === task.id)
         return prevIdx !== newIdx
       })
-      const visibleChanged = changed.filter((task) => task.status !== 'cancelled')
-      if (visibleChanged.length === 0) return
+      // Persist sort_order for all changed tasks (including cancelled) so DB ordering
+      // matches the client's normalized list and avoids duplicate sort_order / reversion on refresh.
+      if (changed.length === 0) return
 
       try {
         await Promise.all(
-          visibleChanged.map((task) => {
+          changed.map((task) => {
             const newOrder = reordered.findIndex((candidate) => candidate.id === task.id)
             return fetch(`/api/tasks/${task.id}`, {
               method: 'PATCH',

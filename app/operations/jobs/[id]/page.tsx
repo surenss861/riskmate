@@ -200,17 +200,23 @@ export default function JobDetailPage() {
 
   const handleApplyTaskTemplate = useCallback(
     async (tasks: CreateTaskPayload[]) => {
-      const offset =
-        currentTasks.length === 0
-          ? 0
-          : Math.max(0, ...currentTasks.map((t) => t.sort_order)) + 1
-      for (let i = 0; i < tasks.length; i++) {
-        const task = tasks[i]
-        const sortOrder = offset + (task.sort_order ?? i)
-        await addTask({ ...task, sort_order: sortOrder })
+      try {
+        const offset =
+          currentTasks.length === 0
+            ? 0
+            : Math.max(0, ...currentTasks.map((t) => t.sort_order)) + 1
+        const creations = tasks.map((task, i) => {
+          const sortOrder = offset + (task.sort_order ?? i)
+          return addTask({ ...task, sort_order: sortOrder })
+        })
+        await Promise.all(creations)
+        await refetchTasks()
+        setTaskRefreshKey((value) => value + 1)
+      } catch (err: any) {
+        const message = err?.message || 'Some tasks could not be created. Please retry.'
+        setToast({ message, type: 'error' })
+        throw err
       }
-      await refetchTasks()
-      setTaskRefreshKey((value) => value + 1)
     },
     [currentTasks, addTask, refetchTasks]
   )
