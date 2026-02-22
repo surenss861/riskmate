@@ -404,6 +404,8 @@ private struct TaskDetailSheet: View {
     @State private var priority: String = "medium"
     @State private var dueDate: Date?
     @State private var status: String = "todo"
+    @State private var assignedToId: String?
+    @State private var detailSheetMembers: [TeamMember] = []
     @State private var isSaving = false
     @State private var saveError: String?
 
@@ -435,10 +437,12 @@ private struct TaskDetailSheet: View {
                         displayedComponents: .date
                     )
                 }
-                if let assignee = task.assignedUser, !assignee.isEmpty {
-                    Section("Assignee") {
-                        Text(assignee)
-                            .foregroundColor(RMTheme.Colors.textSecondary)
+                Section("Assignment") {
+                    Picker("Assignee", selection: $assignedToId) {
+                        Text("Unassigned").tag(String?.none)
+                        ForEach(detailSheetMembers) { member in
+                            Text(member.fullName ?? member.email).tag(String?(member.id))
+                        }
                     }
                 }
                 if saveError != nil {
@@ -457,6 +461,15 @@ private struct TaskDetailSheet: View {
                 priority = task.priority
                 dueDate = task.dueDate
                 status = task.status
+                assignedToId = task.assignedUserId
+                Task {
+                    do {
+                        let team = try await APIClient.shared.getTeam()
+                        detailSheetMembers = team.members
+                    } catch {
+                        detailSheetMembers = []
+                    }
+                }
             }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -498,7 +511,7 @@ private struct TaskDetailSheet: View {
             let payload = UpdateTaskRequest(
                 title: title.trimmingCharacters(in: .whitespacesAndNewlines),
                 description: taskDescription.isEmpty ? nil : taskDescription,
-                assigned_to: task.assignedUserId,
+                assigned_to: assignedToId,
                 priority: priority,
                 due_date: isoDate(dueDate),
                 status: status,

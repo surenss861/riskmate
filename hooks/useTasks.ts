@@ -128,13 +128,21 @@ export function useTasks(jobId: string | null): UseTasksResult {
         if (!response.ok) {
           throw new Error(`Failed to update task (${response.status})`)
         }
+
+        const json = await response.json()
+        const updated = unwrapTask(json)
+        if (updated) {
+          setTasks((prev) => prev.map((task) => (task.id === id ? updated : task)))
+        } else {
+          await fetchTasks()
+        }
       } catch (err: any) {
         setTasks(previous)
         setError(err)
         throw err
       }
     },
-    [tasks]
+    [tasks, fetchTasks]
   )
 
   const deleteTask = useCallback(
