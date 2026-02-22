@@ -88,6 +88,29 @@ async function taskBelongsToOrg(
   return { ok: true, task: data as TaskRow };
 }
 
+/** Parse and validate sort_order: coerce numeric strings to integer; throw 400 VALIDATION_ERROR on invalid. */
+function parseSortOrder(value: unknown): number {
+  if (value === undefined || value === null) {
+    throw Object.assign(new Error("sort_order must be a valid integer"), {
+      status: 400,
+      code: "VALIDATION_ERROR",
+    });
+  }
+  const n =
+    typeof value === "number"
+      ? Number.isFinite(value)
+        ? Math.floor(value)
+        : NaN
+      : parseInt(String(value).trim(), 10);
+  if (!Number.isFinite(n)) {
+    throw Object.assign(new Error("sort_order must be a valid integer"), {
+      status: 400,
+      code: "VALIDATION_ERROR",
+    });
+  }
+  return n;
+}
+
 /** Ensure assigned_to user belongs to organization. Throws 400 VALIDATION_ERROR if not. */
 async function ensureAssignedToInOrg(
   assignedTo: string | null | undefined,
@@ -192,6 +215,11 @@ export async function createTask(
   }
   const status = input.status ?? "todo";
 
+  const sortOrder =
+    input.sort_order !== undefined && input.sort_order !== null
+      ? parseSortOrder(input.sort_order)
+      : 0;
+
   const nowIso = new Date().toISOString();
   const insertPayload: Record<string, unknown> = {
     organization_id: organizationId,
@@ -202,7 +230,7 @@ export async function createTask(
     assigned_to: input.assigned_to ?? null,
     priority,
     due_date: input.due_date ?? null,
-    sort_order: input.sort_order ?? 0,
+    sort_order: sortOrder,
     status,
   };
   if (status === "done") {
@@ -297,7 +325,9 @@ export async function updateTask(
       updatePayload.completed_by = null;
     }
   }
-  if (input.sort_order !== undefined) updatePayload.sort_order = input.sort_order;
+  if (input.sort_order !== undefined) {
+    updatePayload.sort_order = parseSortOrder(input.sort_order);
+  }
 
   const { data: task, error } = await supabase
     .from("tasks")
@@ -329,7 +359,8 @@ export async function updateTask(
       organizationId,
       taskId,
       current.title,
-      jobTitle
+      jobTitle,
+      current.job_id
     ).catch((err) => console.error("[Tasks] sendTaskCompletedNotification failed:", err));
   }
 
@@ -425,7 +456,8 @@ export async function completeTask(
       organizationId,
       taskId,
       taskCheck.task.title,
-      jobTitle
+      jobTitle,
+      taskCheck.task.job_id
     ).catch((err) => console.error("[Tasks] sendTaskCompletedNotification failed:", err));
   }
 

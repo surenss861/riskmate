@@ -5,11 +5,15 @@ export interface TaskCompletedEmailInput {
   taskTitle: string;
   jobTitle: string;
   taskId: string;
+  jobId: string;
 }
 
 export function TaskCompletedEmail(input: TaskCompletedEmailInput): EmailTemplate {
   const frontendUrl = process.env.FRONTEND_URL || "https://www.riskmate.dev";
   const jobTitle = input.jobTitle || "Job";
+  const ctaUrl = input.jobId
+    ? `${frontendUrl}/jobs/${input.jobId}/tasks?highlight=${input.taskId}`
+    : `${frontendUrl}/tasks/${input.taskId}`;
   const html = layout({
     title: "Task completed",
     intro: `Hi ${input.userName}, a task you created has been completed.`,
@@ -18,7 +22,7 @@ export function TaskCompletedEmail(input: TaskCompletedEmailInput): EmailTemplat
       <p style="margin:0;"><strong>Job:</strong> ${e(jobTitle)}</p>
     `,
     ctaLabel: "View Task →",
-    ctaUrl: `${frontendUrl}/tasks/${input.taskId}`,
+    ctaUrl,
   });
 
   return {

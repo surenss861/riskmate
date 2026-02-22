@@ -235,6 +235,7 @@ async function processJob(job: EmailJob): Promise<void> {
         taskTitle: String(job.data.taskTitle || ''),
         jobTitle: String(job.data.jobTitle || 'Job'),
         taskId: String(job.data.taskId || ''),
+        jobId: String(job.data.jobId ?? ''),
       },
       job.userId
     )

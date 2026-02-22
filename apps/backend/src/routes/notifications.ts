@@ -331,13 +331,14 @@ notificationsRouter.post(
       const organizationId = authReq.user.organization_id;
       const { data: task } = await supabase
         .from("tasks")
-        .select("id, organization_id")
+        .select("id, organization_id, job_id")
         .eq("id", taskId)
         .eq("organization_id", organizationId)
         .single();
       if (!task) {
         return res.status(404).json({ message: "Task not found" });
       }
+      const jobId = (task as { job_id?: string }).job_id;
       const { data: user } = await supabase
         .from("users")
         .select("id, organization_id, email")
@@ -351,14 +352,15 @@ notificationsRouter.post(
         organizationId,
         taskId,
         taskTitle,
-        jobTitle || "Job"
+        jobTitle || "Job",
+        jobId
       );
       const toEmail = (user as { email?: string | null }).email;
       if (toEmail) {
         queueEmail(
           EmailJobType.task_completed,
           toEmail,
-          { taskId, taskTitle, jobTitle: jobTitle || "Job" },
+          { taskId, taskTitle, jobTitle: jobTitle || "Job", jobId: jobId ?? "" },
           userId
         );
       }

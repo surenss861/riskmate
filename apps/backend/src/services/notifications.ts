@@ -780,15 +780,21 @@ export async function sendTaskCompletedNotification(
   organizationId: string,
   taskId: string,
   taskTitle: string,
-  jobTitle: string
+  jobTitle: string,
+  jobId?: string
 ) {
   void jobTitle;
+  const deepLink =
+    jobId != null && jobId !== ""
+      ? `riskmate://jobs/${jobId}/tasks?highlight=${taskId}`
+      : undefined;
   await sendToUser(userId, organizationId, {
     title: "Task Completed",
     body: `'${taskTitle}' has been completed`,
     data: {
       type: "task_completed",
       taskId,
+      ...(deepLink && { deepLink }),
     },
     priority: "default",
   });

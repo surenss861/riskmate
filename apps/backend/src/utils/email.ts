@@ -407,7 +407,7 @@ export async function sendTaskAssignedEmail(
 export async function sendTaskCompletedEmail(
   to: string,
   userName: string,
-  params: { taskTitle: string; jobTitle: string; taskId: string },
+  params: { taskTitle: string; jobTitle: string; taskId: string; jobId: string },
   userId: string
 ): Promise<void> {
   const prefs = await getNotificationPreferences(userId)
@@ -418,6 +418,7 @@ export async function sendTaskCompletedEmail(
     taskTitle: params.taskTitle,
     jobTitle: params.jobTitle,
     taskId: params.taskId,
+    jobId: params.jobId ?? '',
   })
 
   await sendEmail({
