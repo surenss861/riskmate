@@ -58,6 +58,7 @@ CREATE POLICY "Users can delete tasks in their organization"
   USING (organization_id = get_user_organization_id());
 
 DROP POLICY IF EXISTS "Users can read task templates in their organization or defaults" ON task_templates;
+DROP POLICY IF EXISTS "Users can read task templates in their organization" ON task_templates;
 CREATE POLICY "Users can read task templates in their organization"
   ON task_templates FOR SELECT
   USING (organization_id = get_user_organization_id());
