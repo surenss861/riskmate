@@ -182,7 +182,7 @@ export default function JobDetailPage() {
   const [mentionsCount, setMentionsCount] = useState<number | null>(null)
   const [showMentionsInbox, setShowMentionsInbox] = useState(false)
 
-  const { addTask, refetch: refetchTasks, incompleteCount } = useTasks(jobId)
+  const { tasks: currentTasks, addTask, refetch: refetchTasks, incompleteCount } = useTasks(jobId)
 
   // taskTotalCount is set by TaskList via onTaskCountChange(incomplete, total)
   useEffect(() => {
@@ -200,13 +200,19 @@ export default function JobDetailPage() {
 
   const handleApplyTaskTemplate = useCallback(
     async (tasks: CreateTaskPayload[]) => {
-      for (const task of tasks) {
-        await addTask(task)
+      const offset =
+        currentTasks.length === 0
+          ? 0
+          : Math.max(0, ...currentTasks.map((t) => t.sort_order)) + 1
+      for (let i = 0; i < tasks.length; i++) {
+        const task = tasks[i]
+        const sortOrder = offset + (task.sort_order ?? i)
+        await addTask({ ...task, sort_order: sortOrder })
       }
       await refetchTasks()
       setTaskRefreshKey((value) => value + 1)
     },
-    [addTask, refetchTasks]
+    [currentTasks, addTask, refetchTasks]
   )
 
   const loadVersionHistory = async () => {
