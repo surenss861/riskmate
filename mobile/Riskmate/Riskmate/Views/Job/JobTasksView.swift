@@ -32,6 +32,11 @@ struct JobTasksView: View {
         tasks.sorted { $0.sortOrder < $1.sortOrder }
     }
 
+    /// Tasks that count toward progress: todo, in_progress, done. Cancelled are excluded from counts and progress bar.
+    private var activeTasks: [TaskItem] {
+        sortedTasks.filter { ["todo", "in_progress", "done"].contains($0.status) }
+    }
+
     private var inProgress: [TaskItem] {
         sortedTasks.filter { $0.status == "in_progress" }
     }
@@ -44,13 +49,17 @@ struct JobTasksView: View {
         sortedTasks.filter { $0.status == "done" }
     }
 
+    private var cancelled: [TaskItem] {
+        sortedTasks.filter { $0.status == "cancelled" }
+    }
+
     private var completedCount: Int {
-        sortedTasks.filter { $0.status == "done" }.count
+        activeTasks.filter { $0.status == "done" }.count
     }
 
     private var completedFraction: Double {
-        guard !sortedTasks.isEmpty else { return 0 }
-        return Double(completedCount) / Double(sortedTasks.count)
+        guard !activeTasks.isEmpty else { return 0 }
+        return Double(completedCount) / Double(activeTasks.count)
     }
 
     var body: some View {
@@ -86,7 +95,7 @@ struct JobTasksView: View {
                 List {
                     Section {
                         VStack(alignment: .leading, spacing: RMTheme.Spacing.sm) {
-                            Text("\(completedCount) of \(sortedTasks.count) tasks completed")
+                            Text("\(completedCount) of \(activeTasks.count) tasks completed")
                                 .font(RMTheme.Typography.bodySmall)
                                 .foregroundColor(RMTheme.Colors.textSecondary)
                             ProgressView(value: completedFraction)
@@ -117,6 +126,15 @@ struct JobTasksView: View {
                     if !done.isEmpty {
                         Section(header: sectionHeader("Done")) {
                             ForEach(done) { task in
+                                taskRow(task)
+                                    .onTapGesture { selectedTask = task }
+                            }
+                        }
+                    }
+
+                    if !cancelled.isEmpty {
+                        Section(header: sectionHeader("Cancelled")) {
+                            ForEach(cancelled) { task in
                                 taskRow(task)
                                     .onTapGesture { selectedTask = task }
                             }

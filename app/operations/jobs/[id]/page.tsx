@@ -997,14 +997,14 @@ export default function JobDetailPage() {
               className={`${tabStyles.item} ${activeTab === 'tasks' ? tabStyles.active : tabStyles.inactive}`}
             >
               Tasks
+              {taskIncompleteCount !== null && (
+                <span className="ml-1.5 inline-flex items-center justify-center min-w-[2rem] px-1.5 py-0.5 text-xs font-medium rounded-md bg-white/10 text-white/80 border border-white/10">
+                  {taskIncompleteCount}
+                </span>
+              )}
               {taskTotalCount != null && taskIncompleteCount != null && taskTotalCount > 0 && (
                 <span className="ml-1.5 text-white/60 font-normal">
                   ({Math.round((taskTotalCount - taskIncompleteCount) / taskTotalCount * 100)}%)
-                </span>
-              )}
-              {taskIncompleteCount !== null && taskIncompleteCount > 0 && (
-                <span className="ml-1.5 inline-flex items-center justify-center min-w-[2rem] px-1.5 py-0.5 text-xs font-medium rounded-md bg-white/10 text-white/80 border border-white/10">
-                  {taskIncompleteCount}
                 </span>
               )}
             </button>
