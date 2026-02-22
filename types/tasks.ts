@@ -15,6 +15,9 @@ export interface Task {
   description: string | null
   assigned_to: string | null
   assigned_user: TaskAssignedUser | null
+  created_by: string
+  completed_by: string | null
+  last_reminded_at: string | null
   status: TaskStatus
   priority: TaskPriority
   due_date: string | null
