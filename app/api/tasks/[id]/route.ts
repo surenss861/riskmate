@@ -249,8 +249,24 @@ export async function PATCH(
       .select('*, assignee:assigned_to(id, full_name, email)')
       .single()
 
-    if (error || !task) {
-      throw error || new Error('Failed to update task')
+    if (error) {
+      throw error
+    }
+
+    if (!task) {
+      const { response, errorId } = createErrorResponse('Task not found', 'NOT_FOUND', {
+        requestId,
+        statusCode: 404,
+      })
+      logApiError(404, 'NOT_FOUND', errorId, requestId, organization_id, response.message, {
+        category: 'validation',
+        severity: 'warn',
+        route: ROUTE,
+      })
+      return NextResponse.json(response, {
+        status: 404,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
     }
 
     if (status === 'done' && existingTask?.status !== 'done' && existingTask?.created_by && BACKEND_URL) {
