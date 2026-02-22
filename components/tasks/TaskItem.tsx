@@ -37,7 +37,7 @@ function getInitials(fullName: string | null | undefined, email: string | null |
 }
 
 const isCompletionDisabled = (task: Task, onComplete?: (id: string) => void) =>
-  task.status === 'cancelled' || onComplete == null
+  task.status === 'cancelled' || task.status === 'done' || onComplete == null
 
 export function TaskItem({ task, onComplete, onDelete, onEditRequest, onDragStart, onDragOver, onDrop, isDraggable = true }: TaskItemProps) {
   const [expanded, setExpanded] = useState(false)
@@ -59,6 +59,7 @@ export function TaskItem({ task, onComplete, onDelete, onEditRequest, onDragStar
         type="button"
         onClick={() => !completionDisabled && onComplete?.(task.id)}
         disabled={completionDisabled}
+        aria-disabled={completionDisabled}
         className={`mt-0.5 h-6 w-6 rounded-full border-2 flex items-center justify-center shrink-0 ${
           completionDisabled
             ? 'border-white/20 text-transparent cursor-not-allowed opacity-60'

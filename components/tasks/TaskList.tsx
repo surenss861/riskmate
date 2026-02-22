@@ -73,7 +73,8 @@ export function TaskList({
     const visible = nonCancelledTasks
     const nextVisible = [...visible]
     const [moved] = nextVisible.splice(dragIndex, 1)
-    const insertIndex = dragIndex < dropIndex ? dropIndex - 1 : dropIndex
+    // Insert at drop index: when dragging down this places after the target; when dragging up, before it.
+    const insertIndex = dropIndex
     nextVisible.splice(insertIndex, 0, moved)
     const visibleWithOrder = nextVisible.map((task, index) => ({ ...task, sort_order: index }))
     const cancelled = orderedTasks.filter((task) => task.status === 'cancelled')
@@ -206,6 +207,20 @@ export function TaskList({
             })}
           </div>
         </section>
+      )}
+
+      {nonCancelledTasks.length > 0 && (
+        <div
+          className="min-h-[24px] -mt-1"
+          onDragOver={(e) => {
+            e.preventDefault()
+            e.dataTransfer.dropEffect = 'move'
+          }}
+          onDrop={() => {
+            void handleDrop(nonCancelledTasks.length)
+          }}
+          aria-hidden
+        />
       )}
 
       {grouped.cancelled.length > 0 && (
