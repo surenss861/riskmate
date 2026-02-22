@@ -29,18 +29,21 @@ export function TaskList({ jobId, onAddTask, onTaskCountChange, refreshKey = 0 }
     setOrderedTasks(sortByOrder(tasks))
   }, [tasks])
 
+  const nonCancelledTasks = useMemo(
+    () => orderedTasks.filter((task) => task.status !== 'cancelled'),
+    [orderedTasks]
+  )
+  const totalCount = nonCancelledTasks.length
+  const completedCount = nonCancelledTasks.filter((task) => task.status === 'done').length
+  const progress = totalCount > 0 ? (completedCount / totalCount) * 100 : 0
+
   useEffect(() => {
-    const total = orderedTasks.length
-    onTaskCountChange?.(incompleteCount, total)
-  }, [incompleteCount, orderedTasks.length, onTaskCountChange])
+    onTaskCountChange?.(totalCount - completedCount, totalCount)
+  }, [totalCount, completedCount, onTaskCountChange])
 
   useEffect(() => {
     void refetch()
   }, [refreshKey, refetch])
-
-  const totalCount = orderedTasks.length
-  const completedCount = orderedTasks.filter((task) => task.status === 'done').length
-  const progress = totalCount > 0 ? (completedCount / totalCount) * 100 : 0
 
   const grouped = useMemo(() => {
     const sorted = sortByOrder(orderedTasks)

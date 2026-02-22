@@ -11,8 +11,9 @@ struct JobTasksView: View {
 
     @State private var newTaskTitle = ""
     @State private var newTaskPriority = "medium"
-    @State private var newTaskAssignee: String?
+    @State private var newTaskAssigneeId: String?
     @State private var newTaskDueDate: Date?
+    @State private var addSheetMembers: [TeamMember] = []
 
     struct TaskItem: Codable, Identifiable {
         let id: String
@@ -166,10 +167,12 @@ struct JobTasksView: View {
                         }
                     }
                     Section("Assignment") {
-                        TextField("Assignee (optional)", text: Binding(
-                            get: { newTaskAssignee ?? "" },
-                            set: { newTaskAssignee = $0.isEmpty ? nil : $0 }
-                        ))
+                        Picker("Assignee", selection: $newTaskAssigneeId) {
+                            Text("Unassigned").tag(String?.none)
+                            ForEach(addSheetMembers) { member in
+                                Text(member.fullName ?? member.email).tag(String?(member.id))
+                            }
+                        }
                     }
                     Section("Due Date") {
                         DatePicker(
@@ -181,6 +184,22 @@ struct JobTasksView: View {
                             displayedComponents: .date
                         )
                     }
+                }
+                .onAppear {
+                    Task {
+                        do {
+                            let team = try await APIClient.shared.getTeam()
+                            addSheetMembers = team.members
+                        } catch {
+                            addSheetMembers = []
+                        }
+                    }
+                }
+                .onDisappear {
+                    newTaskTitle = ""
+                    newTaskPriority = "medium"
+                    newTaskAssigneeId = nil
+                    newTaskDueDate = nil
                 }
                 .navigationTitle("Add Task")
                 .toolbar {
@@ -295,7 +314,7 @@ struct JobTasksView: View {
             let payload = CreateTaskRequest(
                 title: trimmed,
                 description: nil,
-                assigned_to: newTaskAssignee,
+                assigned_to: newTaskAssigneeId,
                 priority: newTaskPriority,
                 due_date: isoDate(newTaskDueDate),
                 status: "todo",
@@ -304,7 +323,7 @@ struct JobTasksView: View {
             _ = try await APIClient.shared.createTask(jobId: jobId, payload: payload)
             newTaskTitle = ""
             newTaskPriority = "medium"
-            newTaskAssignee = nil
+            newTaskAssigneeId = nil
             newTaskDueDate = nil
             showAddSheet = false
             await loadTasks()
