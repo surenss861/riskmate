@@ -1,9 +1,51 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useMemo, useEffect, useState } from 'react'
 import { ChevronDown, ChevronUp, X } from 'lucide-react'
 import { badgeStyles, buttonStyles, cardStyles, modalStyles } from '@/lib/styles/design-system'
 import { CreateTaskPayload, TaskTemplate } from '@/types/tasks'
+
+/** Required default templates shown even when the API returns no org templates. */
+const DEFAULT_TASK_TEMPLATES: TaskTemplate[] = [
+  {
+    id: 'default-electrical-inspection',
+    name: 'Electrical Inspection',
+    job_type: 'electrical',
+    organization_id: '',
+    tasks: [
+      { title: 'Isolate power', sort_order: 0 },
+      { title: 'Test circuits', sort_order: 1 },
+      { title: 'Document findings', sort_order: 2 },
+      { title: 'Sign off', sort_order: 3 },
+    ],
+  },
+  {
+    id: 'default-plumbing-repair',
+    name: 'Plumbing Repair',
+    job_type: 'plumbing',
+    organization_id: '',
+    tasks: [
+      { title: 'Shut off water', sort_order: 0 },
+      { title: 'Inspect pipes', sort_order: 1 },
+      { title: 'Complete repair', sort_order: 2 },
+      { title: 'Test pressure', sort_order: 3 },
+    ],
+  },
+  {
+    id: 'default-safety-audit',
+    name: 'Safety Audit',
+    job_type: 'safety',
+    organization_id: '',
+    tasks: [
+      { title: 'Review hazards', sort_order: 0 },
+      { title: 'Check controls', sort_order: 1 },
+      { title: 'Verify PPE', sort_order: 2 },
+      { title: 'Complete checklist', sort_order: 3 },
+    ],
+  },
+]
+
+const DEFAULT_TEMPLATE_NAMES = new Set(DEFAULT_TASK_TEMPLATES.map((t) => t.name))
 
 interface TaskTemplateSelectorProps {
   isOpen: boolean
@@ -45,6 +87,12 @@ export function TaskTemplateSelector({ isOpen, onClose, jobId, onApply }: TaskTe
     loadTemplates()
   }, [isOpen, jobId])
 
+  // Always include built-in defaults; add org templates that are not already defaults (by name) to avoid duplicates.
+  const combinedTemplates = useMemo(() => {
+    const orgOnly = templates.filter((t) => !DEFAULT_TEMPLATE_NAMES.has(t.name))
+    return [...DEFAULT_TASK_TEMPLATES, ...orgOnly]
+  }, [templates])
+
   const applyTemplate = async (template: TaskTemplate) => {
     const tasks: CreateTaskPayload[] = (template.tasks || []).map((task) => ({
       title: task.title || 'Untitled task',
@@ -74,11 +122,11 @@ export function TaskTemplateSelector({ isOpen, onClose, jobId, onApply }: TaskTe
 
         {isLoading ? (
           <p className="text-sm text-white/60">Loading templates...</p>
-        ) : templates.length === 0 ? (
+        ) : combinedTemplates.length === 0 ? (
           <p className="text-sm text-white/50">No templates yet</p>
         ) : (
           <div className="space-y-3">
-            {templates.map((template) => {
+            {combinedTemplates.map((template) => {
               const isExpanded = expandedId === template.id
 
               return (
