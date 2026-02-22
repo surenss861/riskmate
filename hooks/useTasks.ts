@@ -188,12 +188,15 @@ export function useTasks(jobId: string | null): UseTasksResult {
       const previous = tasks
       setTasks(reordered)
 
-      const changed = reordered.filter((task, idx) => task.sort_order !== idx)
+      const changed = reordered.filter((task, newIdx) => {
+        const prevIdx = previous.findIndex((t) => t.id === task.id)
+        return prevIdx !== newIdx
+      })
       if (changed.length === 0) return
 
       try {
         await Promise.all(
-          changed.map((task, idx) => {
+          changed.map((task) => {
             const newOrder = reordered.findIndex((candidate) => candidate.id === task.id)
             return fetch(`/api/tasks/${task.id}`, {
               method: 'PATCH',
@@ -203,7 +206,6 @@ export function useTasks(jobId: string | null): UseTasksResult {
               if (!response.ok) {
                 throw new Error(`Failed to reorder task (${response.status})`)
               }
-              return idx
             })
           })
         )
