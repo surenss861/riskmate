@@ -97,23 +97,24 @@ export async function POST(
     const data = mapTaskToApiShape(updatedTask)
     return NextResponse.json({ data })
   } catch (error: any) {
-    const { response, errorId } = createErrorResponse(
-      error?.message || 'Failed to complete task',
-      'QUERY_ERROR',
-      {
-        requestId,
-        statusCode: 500,
-        details: process.env.NODE_ENV === 'development' ? { detail: error?.message } : undefined,
-      }
-    )
-    logApiError(500, 'QUERY_ERROR', errorId, requestId, undefined, response.message, {
-      category: 'internal',
-      severity: 'error',
+    const msg = error?.message || 'Failed to complete task'
+    const isNotFound = typeof msg === 'string' && msg.includes('Resource not found')
+    const isForbidden = typeof msg === 'string' && msg.includes('Access denied')
+    const statusCode = isNotFound ? 404 : isForbidden ? 403 : 500
+    const code = isNotFound ? 'NOT_FOUND' : isForbidden ? 'FORBIDDEN' : 'QUERY_ERROR'
+    const { response, errorId } = createErrorResponse(msg, code, {
+      requestId,
+      statusCode,
+      details: process.env.NODE_ENV === 'development' ? { detail: error?.message } : undefined,
+    })
+    logApiError(statusCode, code, errorId, requestId, undefined, response.message, {
+      category: isNotFound || isForbidden ? 'auth' : 'internal',
+      severity: statusCode >= 500 ? 'error' : 'warn',
       route: ROUTE,
       details: process.env.NODE_ENV === 'development' ? { detail: error?.message } : undefined,
     })
     return NextResponse.json(response, {
-      status: 500,
+      status: statusCode,
       headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
     })
   }
@@ -176,23 +177,24 @@ export async function DELETE(
     const data = mapTaskToApiShape(task)
     return NextResponse.json({ data })
   } catch (error: any) {
-    const { response, errorId } = createErrorResponse(
-      error?.message || 'Failed to reopen task',
-      'QUERY_ERROR',
-      {
-        requestId,
-        statusCode: 500,
-        details: process.env.NODE_ENV === 'development' ? { detail: error?.message } : undefined,
-      }
-    )
-    logApiError(500, 'QUERY_ERROR', errorId, requestId, undefined, response.message, {
-      category: 'internal',
-      severity: 'error',
+    const msg = error?.message || 'Failed to reopen task'
+    const isNotFound = typeof msg === 'string' && msg.includes('Resource not found')
+    const isForbidden = typeof msg === 'string' && msg.includes('Access denied')
+    const statusCode = isNotFound ? 404 : isForbidden ? 403 : 500
+    const code = isNotFound ? 'NOT_FOUND' : isForbidden ? 'FORBIDDEN' : 'QUERY_ERROR'
+    const { response, errorId } = createErrorResponse(msg, code, {
+      requestId,
+      statusCode,
+      details: process.env.NODE_ENV === 'development' ? { detail: error?.message } : undefined,
+    })
+    logApiError(statusCode, code, errorId, requestId, undefined, response.message, {
+      category: isNotFound || isForbidden ? 'auth' : 'internal',
+      severity: statusCode >= 500 ? 'error' : 'warn',
       route: ROUTE,
       details: process.env.NODE_ENV === 'development' ? { detail: error?.message } : undefined,
     })
     return NextResponse.json(response, {
-      status: 500,
+      status: statusCode,
       headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
     })
   }
