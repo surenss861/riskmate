@@ -744,6 +744,11 @@ export async function sendTaskAssignedNotification(
   jobTitle: string,
   taskTitle: string
 ) {
+  const prefs = await getNotificationPreferences(userId);
+  if (!prefs.job_assigned) {
+    console.log("[Notifications] Skipped task_assigned for user", userId, "(preference disabled)");
+    return;
+  }
   let jobId: string | null = null;
   const { data: task } = await supabase
     .from("tasks")
