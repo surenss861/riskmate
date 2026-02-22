@@ -1,6 +1,9 @@
 -- Tasks FKs must reference auth.users(id) per spec and existing auth schema
 -- (not public.users). Recreate assigned_to, created_by, completed_by with
 -- auth.users and appropriate ON DELETE actions.
+-- Lock table first to avoid deadlock with concurrent sessions (40P01).
+
+LOCK TABLE tasks IN ACCESS EXCLUSIVE MODE;
 
 ALTER TABLE tasks
   DROP CONSTRAINT IF EXISTS tasks_assigned_to_fkey;
