@@ -7,6 +7,7 @@ struct JobTasksView: View {
     @State private var isLoading = true
     @State private var loadError: String?
     @State private var showAddSheet = false
+    @State private var selectedTask: TaskItem?
 
     @State private var newTaskTitle = ""
     @State private var newTaskPriority = "medium"
@@ -16,6 +17,7 @@ struct JobTasksView: View {
     struct TaskItem: Codable, Identifiable {
         let id: String
         let title: String
+        let description: String?
         let status: String
         let priority: String
         let assignedUser: String?
@@ -96,6 +98,7 @@ struct JobTasksView: View {
                         Section(header: sectionHeader("In Progress")) {
                             ForEach(inProgress) { task in
                                 taskRow(task)
+                                    .onTapGesture { selectedTask = task }
                             }
                         }
                     }
@@ -104,6 +107,7 @@ struct JobTasksView: View {
                         Section(header: sectionHeader("To Do")) {
                             ForEach(todo) { task in
                                 taskRow(task)
+                                    .onTapGesture { selectedTask = task }
                             }
                         }
                     }
@@ -112,12 +116,24 @@ struct JobTasksView: View {
                         Section(header: sectionHeader("Done")) {
                             ForEach(done) { task in
                                 taskRow(task)
+                                    .onTapGesture { selectedTask = task }
                             }
                         }
                     }
                 }
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
+                .sheet(item: $selectedTask) { task in
+                    TaskDetailSheet(
+                        task: task,
+                        jobId: jobId,
+                        onDismiss: { selectedTask = nil },
+                        onSaved: {
+                            await loadTasks()
+                            selectedTask = nil
+                        }
+                    )
+                }
             }
         }
         .refreshable {
@@ -254,6 +270,7 @@ struct JobTasksView: View {
                 TaskItem(
                     id: item.id,
                     title: item.title,
+                    description: item.description,
                     status: item.status,
                     priority: item.priority,
                     assignedUser: item.assignedUser?.fullName ?? item.assignedUser?.email,
@@ -343,6 +360,121 @@ struct JobTasksView: View {
             return parsed
         }
         return ISO8601DateFormatter().date(from: value)
+    }
+
+    private func isoDate(_ date: Date?) -> String? {
+        guard let date = date else { return nil }
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withFullDate]
+        return formatter.string(from: date)
+    }
+}
+
+// MARK: - Task Detail / Edit Sheet
+
+private struct TaskDetailSheet: View {
+    let task: JobTasksView.TaskItem
+    let jobId: String
+    let onDismiss: () -> Void
+    let onSaved: () async -> Void
+
+    @State private var title: String = ""
+    @State private var taskDescription: String = ""
+    @State private var priority: String = "medium"
+    @State private var dueDate: Date?
+    @State private var status: String = "todo"
+    @State private var isSaving = false
+    @State private var saveError: String?
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Task") {
+                    TextField("Title", text: $title)
+                    TextField("Description", text: $taskDescription, axis: .vertical)
+                        .lineLimit(3...6)
+                    Picker("Priority", selection: $priority) {
+                        Text("Low").tag("low")
+                        Text("Medium").tag("medium")
+                        Text("High").tag("high")
+                        Text("Urgent").tag("urgent")
+                    }
+                    Picker("Status", selection: $status) {
+                        Text("To Do").tag("todo")
+                        Text("In Progress").tag("in_progress")
+                        Text("Done").tag("done")
+                        Text("Cancelled").tag("cancelled")
+                    }
+                    DatePicker(
+                        "Due date",
+                        selection: Binding(
+                            get: { dueDate ?? Date() },
+                            set: { dueDate = $0 }
+                        ),
+                        displayedComponents: .date
+                    )
+                }
+                if let assignee = task.assignedUser, !assignee.isEmpty {
+                    Section("Assignee") {
+                        Text(assignee)
+                            .foregroundColor(RMTheme.Colors.textSecondary)
+                    }
+                }
+                if saveError != nil {
+                    Section {
+                        Text(saveError ?? "")
+                            .foregroundColor(.red)
+                            .font(RMTheme.Typography.caption)
+                    }
+                }
+            }
+            .navigationTitle("Task")
+            .navigationBarTitleDisplayMode(.inline)
+            .onAppear {
+                title = task.title
+                taskDescription = task.description ?? ""
+                priority = task.priority
+                dueDate = task.dueDate
+                status = task.status
+            }
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Cancel") {
+                        onDismiss()
+                    }
+                    .foregroundColor(RMTheme.Colors.textSecondary)
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Save") {
+                        Task { await save() }
+                    }
+                    .disabled(isSaving || title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+        }
+    }
+
+    private func save() async {
+        isSaving = true
+        saveError = nil
+        defer { isSaving = false }
+
+        do {
+            let payload = UpdateTaskRequest(
+                title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+                description: taskDescription.isEmpty ? nil : taskDescription,
+                assigned_to: nil,
+                priority: priority,
+                due_date: isoDate(dueDate),
+                status: status,
+                completed_at: status == "done" ? ISO8601DateFormatter().string(from: Date()) : nil,
+                sort_order: nil
+            )
+            _ = try await APIClient.shared.updateTask(id: task.id, payload: payload)
+            await onSaved()
+        } catch {
+            saveError = error.localizedDescription
+        }
     }
 
     private func isoDate(_ date: Date?) -> String? {

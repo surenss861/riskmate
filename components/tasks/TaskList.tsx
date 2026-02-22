@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { CheckSquare } from 'lucide-react'
+import { EditTaskModal } from '@/components/tasks/EditTaskModal'
 import { TaskItem } from '@/components/tasks/TaskItem'
 import { useTasks } from '@/hooks/useTasks'
 import { buttonStyles } from '@/lib/styles/design-system'
@@ -10,7 +11,7 @@ import { Task } from '@/types/tasks'
 interface TaskListProps {
   jobId: string
   onAddTask: () => void
-  onTaskCountChange?: (count: number) => void
+  onTaskCountChange?: (incompleteCount: number, totalCount?: number) => void
   refreshKey?: number
 }
 
@@ -22,14 +23,16 @@ export function TaskList({ jobId, onAddTask, onTaskCountChange, refreshKey = 0 }
   const { tasks, isLoading, error, completeTask, deleteTask, updateTask, reorderTasks, incompleteCount, refetch } = useTasks(jobId)
   const [dragIndex, setDragIndex] = useState<number | null>(null)
   const [orderedTasks, setOrderedTasks] = useState<Task[]>([])
+  const [editingTask, setEditingTask] = useState<Task | null>(null)
 
   useEffect(() => {
     setOrderedTasks(sortByOrder(tasks))
   }, [tasks])
 
   useEffect(() => {
-    onTaskCountChange?.(incompleteCount)
-  }, [incompleteCount, onTaskCountChange])
+    const total = orderedTasks.length
+    onTaskCountChange?.(incompleteCount, total)
+  }, [incompleteCount, orderedTasks.length, onTaskCountChange])
 
   useEffect(() => {
     void refetch()
@@ -118,7 +121,7 @@ export function TaskList({ jobId, onAddTask, onTaskCountChange, refreshKey = 0 }
                   task={task}
                   onComplete={completeTask}
                   onDelete={deleteTask}
-                  onEdit={(nextTask) => updateTask(nextTask.id, { status: nextTask.status === 'done' ? 'todo' : 'in_progress' })}
+                  onEditRequest={setEditingTask}
                   onDragStart={() => setDragIndex(currentIndex)}
                   onDragOver={(event) => event.preventDefault()}
                   onDrop={() => {
@@ -143,7 +146,7 @@ export function TaskList({ jobId, onAddTask, onTaskCountChange, refreshKey = 0 }
                   task={task}
                   onComplete={completeTask}
                   onDelete={deleteTask}
-                  onEdit={(nextTask) => updateTask(nextTask.id, { status: 'in_progress' })}
+                  onEditRequest={setEditingTask}
                   onDragStart={() => setDragIndex(currentIndex)}
                   onDragOver={(event) => event.preventDefault()}
                   onDrop={() => {
@@ -168,7 +171,7 @@ export function TaskList({ jobId, onAddTask, onTaskCountChange, refreshKey = 0 }
                   task={task}
                   onComplete={completeTask}
                   onDelete={deleteTask}
-                  onEdit={(nextTask) => updateTask(nextTask.id, { status: 'todo', completed_at: null })}
+                  onEditRequest={setEditingTask}
                   onDragStart={() => setDragIndex(currentIndex)}
                   onDragOver={(event) => event.preventDefault()}
                   onDrop={() => {
@@ -180,6 +183,16 @@ export function TaskList({ jobId, onAddTask, onTaskCountChange, refreshKey = 0 }
           </div>
         </section>
       )}
+
+      <EditTaskModal
+        isOpen={editingTask !== null}
+        onClose={() => setEditingTask(null)}
+        task={editingTask}
+        onSave={async (id, patch) => {
+          await updateTask(id, patch)
+          setEditingTask(null)
+        }}
+      />
     </div>
   )
 }

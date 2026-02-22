@@ -1,16 +1,17 @@
 'use client'
 
+import { useState } from 'react'
 import { format, isPast } from 'date-fns'
-import { Check, Pencil, Trash2 } from 'lucide-react'
+import { Check, ChevronDown, ChevronRight, Pencil, Trash2 } from 'lucide-react'
 import type { DragEvent } from 'react'
-import { badgeStyles, cardStyles, hoverStates } from '@/lib/styles/design-system'
+import { badgeStyles, cardStyles, hoverStates, motion } from '@/lib/styles/design-system'
 import { Task } from '@/types/tasks'
 
 interface TaskItemProps {
   task: Task
   onComplete: (id: string) => void
   onDelete: (id: string) => void
-  onEdit: (task: Task) => void
+  onEditRequest: (task: Task) => void
   onDragStart: (event: DragEvent<HTMLDivElement>) => void
   onDragOver: (event: DragEvent<HTMLDivElement>) => void
   onDrop: (event: DragEvent<HTMLDivElement>) => void
@@ -32,10 +33,12 @@ function getInitials(fullName: string | null | undefined, email: string | null |
   return 'U'
 }
 
-export function TaskItem({ task, onComplete, onDelete, onEdit, onDragStart, onDragOver, onDrop }: TaskItemProps) {
+export function TaskItem({ task, onComplete, onDelete, onEditRequest, onDragStart, onDragOver, onDrop }: TaskItemProps) {
+  const [expanded, setExpanded] = useState(false)
   const dueDate = task.due_date ? new Date(task.due_date) : null
   const isOverdue = Boolean(dueDate && task.status !== 'done' && isPast(dueDate))
   const assigneeName = task.assigned_user?.full_name || task.assigned_user?.email || null
+  const hasDetails = Boolean(task.description?.trim())
 
   return (
     <div
@@ -43,27 +46,45 @@ export function TaskItem({ task, onComplete, onDelete, onEdit, onDragStart, onDr
       onDragStart={onDragStart}
       onDragOver={onDragOver}
       onDrop={onDrop}
-      className={`${cardStyles.base} ${hoverStates.row} group p-3 flex items-start gap-3`}
+      className={`${cardStyles.base} ${hoverStates.row} group p-3 flex items-start gap-3 ${motion.normal}`}
     >
       <button
         type="button"
         onClick={() => onComplete(task.id)}
-        className={`mt-0.5 h-6 w-6 rounded-full border-2 flex items-center justify-center transition-colors ${
+        className={`mt-0.5 h-6 w-6 rounded-full border-2 flex items-center justify-center shrink-0 ${
           task.status === 'done'
-            ? 'bg-green-500 border-green-500 text-white'
-            : 'border-white/30 text-transparent hover:border-white/50'
-        }`}
+            ? 'bg-green-500 border-green-500 text-white scale-100'
+            : 'border-white/30 text-transparent hover:border-white/50 scale-100'
+        } transition-all duration-200 ease-out active:scale-90`}
         aria-label="Complete task"
       >
-        <Check className="h-3.5 w-3.5" />
+        <Check className={`h-3.5 w-3.5 ${task.status === 'done' ? 'animate-in zoom-in-50 duration-200' : ''}`} />
       </button>
 
       <div className="flex-1 min-w-0">
         <div className="flex items-start gap-2">
-          <p className={`text-sm font-medium ${task.status === 'done' ? 'line-through text-white/40' : 'text-white'}`}>
-            {task.title}
-          </p>
-          <span className={`${badgeStyles.base} ${PRIORITY_CLASSES[task.priority]} capitalize`}>{task.priority}</span>
+          {hasDetails && (
+            <button
+              type="button"
+              onClick={() => setExpanded((e) => !e)}
+              className="shrink-0 mt-0.5 text-white/50 hover:text-white/80 p-0.5 -ml-0.5"
+              aria-label={expanded ? 'Collapse details' : 'Expand details'}
+            >
+              {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => hasDetails && setExpanded((e) => !e)}
+            className="flex-1 min-w-0 text-left"
+          >
+            <p className={`text-sm font-medium ${task.status === 'done' ? 'line-through text-white/40' : 'text-white'}`}>
+              {task.title}
+            </p>
+          </button>
+          <span className={`${badgeStyles.base} ${PRIORITY_CLASSES[task.priority]} capitalize shrink-0`}>
+            {task.priority}
+          </span>
         </div>
 
         <div className="mt-2 flex flex-wrap items-center gap-3 text-xs">
@@ -85,12 +106,18 @@ export function TaskItem({ task, onComplete, onDelete, onEdit, onDragStart, onDr
             </span>
           )}
         </div>
+
+        {expanded && task.description?.trim() && (
+          <div className="mt-3 pt-3 border-t border-white/10">
+            <p className="text-sm text-white/70 whitespace-pre-wrap">{task.description.trim()}</p>
+          </div>
+        )}
       </div>
 
-      <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+      <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 shrink-0">
         <button
           type="button"
-          onClick={() => onEdit(task)}
+          onClick={() => onEditRequest(task)}
           className={`${hoverStates.iconButton} p-2 rounded-md text-white/60 hover:text-white`}
           aria-label="Edit task"
         >

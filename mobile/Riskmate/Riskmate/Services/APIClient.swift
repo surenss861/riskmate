@@ -1116,7 +1116,18 @@ class APIClient {
             method: "DELETE"
         )
     }
-    
+
+    /// Update a task (PATCH /api/tasks/:id)
+    func updateTask(id: String, payload: UpdateTaskRequest) async throws -> APIClientTask {
+        let body = try JSONEncoder().encode(payload)
+        let response: TaskResponse = try await request(
+            endpoint: "/api/tasks/\(id)",
+            method: "PATCH",
+            body: body
+        )
+        return response.data
+    }
+
     /// Get controls for a job
     func getControls(jobId: String) async throws -> [Control] {
         let response: ControlsResponse = try await request(
@@ -1790,9 +1801,21 @@ struct CreateTaskRequest: Codable {
     let sort_order: Int?
 }
 
+struct UpdateTaskRequest: Codable {
+    let title: String?
+    let description: String?
+    let assigned_to: String?
+    let priority: String?
+    let due_date: String?
+    let status: String?
+    let completed_at: String?
+    let sort_order: Int?
+}
+
 struct APIClientTask: Codable, Identifiable {
     let id: String
     let title: String
+    let description: String?
     let status: String
     let priority: String
     let dueDate: String?
@@ -1803,6 +1826,7 @@ struct APIClientTask: Codable, Identifiable {
     enum CodingKeys: String, CodingKey {
         case id
         case title
+        case description
         case status
         case priority
         case dueDate = "due_date"

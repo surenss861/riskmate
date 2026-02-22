@@ -174,6 +174,7 @@ export default function JobDetailPage() {
   const [activityInitialEvents, setActivityInitialEvents] = useState<AuditEvent[] | null>(null)
   const [signatureCount, setSignatureCount] = useState<{ signed: number; total: number } | null>(null)
   const [taskIncompleteCount, setTaskIncompleteCount] = useState<number | null>(null)
+  const [taskTotalCount, setTaskTotalCount] = useState<number | null>(null)
   const [taskRefreshKey, setTaskRefreshKey] = useState(0)
   const [commentCount, setCommentCount] = useState<number | null>(null)
   const [commentUnreadCount, setCommentUnreadCount] = useState<number>(0)
@@ -183,6 +184,7 @@ export default function JobDetailPage() {
 
   const { addTask, refetch: refetchTasks, incompleteCount } = useTasks(jobId)
 
+  // taskTotalCount is set by TaskList via onTaskCountChange(incomplete, total)
   useEffect(() => {
     setTaskIncompleteCount(incompleteCount)
   }, [incompleteCount])
@@ -995,6 +997,11 @@ export default function JobDetailPage() {
               className={`${tabStyles.item} ${activeTab === 'tasks' ? tabStyles.active : tabStyles.inactive}`}
             >
               Tasks
+              {taskTotalCount != null && taskTotalCount > 0 && (
+                <span className="ml-1.5 text-white/60 font-normal">
+                  ({Math.round((taskTotalCount - (taskIncompleteCount ?? 0)) / taskTotalCount * 100)}%)
+                </span>
+              )}
               {taskIncompleteCount !== null && taskIncompleteCount > 0 && (
                 <span className="ml-1.5 inline-flex items-center justify-center min-w-[2rem] px-1.5 py-0.5 text-xs font-medium rounded-md bg-white/10 text-white/80 border border-white/10">
                   {taskIncompleteCount}
@@ -1103,7 +1110,10 @@ export default function JobDetailPage() {
                 <TaskList
                   jobId={jobId}
                   onAddTask={() => setShowAddTask(true)}
-                  onTaskCountChange={(count) => setTaskIncompleteCount(count)}
+                  onTaskCountChange={(count, total) => {
+                    setTaskIncompleteCount(count)
+                    if (total !== undefined) setTaskTotalCount(total)
+                  }}
                   refreshKey={taskRefreshKey}
                 />
               </GlassCard>
