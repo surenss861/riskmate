@@ -387,7 +387,7 @@ export async function sendTaskAssignedEmail(
   userId: string
 ): Promise<void> {
   const prefs = await getNotificationPreferences(userId)
-  if (!(prefs.email_enabled && prefs.job_assigned)) return
+  if (!prefs.email_enabled) return
 
   const template = TaskAssignedEmail({
     userName: userName || fallbackName(to),

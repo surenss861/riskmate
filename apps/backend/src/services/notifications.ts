@@ -130,7 +130,6 @@ async function fetchOrgUserIdsWithPreference(
 
   const defaultFalseKeys: (keyof NotificationPreferences)[] = [
     "weekly_summary",
-    "email_deadline_reminder",
   ];
   const prefsByUser = new Map<
     string,
@@ -193,7 +192,7 @@ export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
   evidence_uploaded: true,
   hazard_added: true,
   deadline_approaching: true,
-  email_deadline_reminder: false,
+  email_deadline_reminder: true,
   weekly_summary: false,
   email_weekly_digest: true,
   high_risk_job: true,
@@ -249,7 +248,7 @@ export async function getNotificationPreferences(
     evidence_uploaded: data.evidence_uploaded ?? true,
     hazard_added: data.hazard_added ?? true,
     deadline_approaching: data.deadline_approaching ?? true,
-    email_deadline_reminder: data.email_deadline_reminder ?? false,
+    email_deadline_reminder: data.email_deadline_reminder ?? true,
     weekly_summary: data.weekly_summary ?? false,
     email_weekly_digest: data.email_weekly_digest ?? true,
     high_risk_job: data.high_risk_job ?? true,
@@ -745,12 +744,6 @@ export async function sendTaskAssignedNotification(
   jobTitle: string,
   taskTitle: string
 ) {
-  const prefs = await getNotificationPreferences(userId);
-  if (!prefs.job_assigned) {
-    console.log("[Notifications] Skipped task_assigned for user", userId, "(preference disabled)");
-    return;
-  }
-
   let jobId: string | null = null;
   const { data: task } = await supabase
     .from("tasks")

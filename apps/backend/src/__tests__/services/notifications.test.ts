@@ -61,9 +61,9 @@ describe("notifications service", () => {
       expect(defaultKeys).toEqual(expected);
     });
 
-    it("sets weekly_summary and email_deadline_reminder default false", () => {
+    it("sets weekly_summary default false, email_deadline_reminder default true", () => {
       expect(DEFAULT_NOTIFICATION_PREFERENCES.weekly_summary).toBe(false);
-      expect(DEFAULT_NOTIFICATION_PREFERENCES.email_deadline_reminder).toBe(false);
+      expect(DEFAULT_NOTIFICATION_PREFERENCES.email_deadline_reminder).toBe(true);
     });
   });
 
