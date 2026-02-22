@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS tasks (
 
 CREATE TABLE IF NOT EXISTS task_templates (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
+  organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   is_default BOOLEAN DEFAULT false NOT NULL,
   name TEXT NOT NULL,
   tasks JSONB NOT NULL DEFAULT '[]'::jsonb,
@@ -78,32 +78,19 @@ CREATE POLICY "Users can delete task templates in their organization"
   ON task_templates FOR DELETE
   USING (organization_id = get_user_organization_id());
 
+-- Seed default templates for the first organization (if any)
 INSERT INTO task_templates (id, organization_id, is_default, name, tasks, job_type, created_by)
-VALUES
-  (
-    gen_random_uuid(),
-    NULL,
-    true,
-    'Electrical Inspection',
-    '[{"title":"Isolate power","sort_order":0},{"title":"Test circuits","sort_order":1},{"title":"Document findings","sort_order":2},{"title":"Sign off","sort_order":3}]'::jsonb,
-    'electrical',
-    NULL
-  ),
-  (
-    gen_random_uuid(),
-    NULL,
-    true,
-    'Plumbing Repair',
-    '[{"title":"Shut off water","sort_order":0},{"title":"Inspect pipes","sort_order":1},{"title":"Complete repair","sort_order":2},{"title":"Test pressure","sort_order":3}]'::jsonb,
-    'plumbing',
-    NULL
-  ),
-  (
-    gen_random_uuid(),
-    NULL,
-    true,
-    'Safety Audit',
-    '[{"title":"Review hazards","sort_order":0},{"title":"Check controls","sort_order":1},{"title":"Verify PPE","sort_order":2},{"title":"Complete checklist","sort_order":3}]'::jsonb,
-    'safety',
-    NULL
-  );
+SELECT gen_random_uuid(), o.id, true, 'Electrical Inspection',
+  '[{"title":"Isolate power","sort_order":0},{"title":"Test circuits","sort_order":1},{"title":"Document findings","sort_order":2},{"title":"Sign off","sort_order":3}]'::jsonb,
+  'electrical', NULL
+FROM (SELECT id FROM organizations LIMIT 1) o
+UNION ALL
+SELECT gen_random_uuid(), o.id, true, 'Plumbing Repair',
+  '[{"title":"Shut off water","sort_order":0},{"title":"Inspect pipes","sort_order":1},{"title":"Complete repair","sort_order":2},{"title":"Test pressure","sort_order":3}]'::jsonb,
+  'plumbing', NULL
+FROM (SELECT id FROM organizations LIMIT 1) o
+UNION ALL
+SELECT gen_random_uuid(), o.id, true, 'Safety Audit',
+  '[{"title":"Review hazards","sort_order":0},{"title":"Check controls","sort_order":1},{"title":"Verify PPE","sort_order":2},{"title":"Complete checklist","sort_order":3}]'::jsonb,
+  'safety', NULL
+FROM (SELECT id FROM organizations LIMIT 1) o;
