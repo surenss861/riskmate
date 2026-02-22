@@ -58,9 +58,9 @@ CREATE POLICY "Users can delete tasks in their organization"
   USING (organization_id = get_user_organization_id());
 
 DROP POLICY IF EXISTS "Users can read task templates in their organization or defaults" ON task_templates;
-CREATE POLICY "Users can read task templates in their organization or defaults"
+CREATE POLICY "Users can read task templates in their organization"
   ON task_templates FOR SELECT
-  USING (organization_id = get_user_organization_id() OR is_default = true);
+  USING (organization_id = get_user_organization_id());
 
 DROP POLICY IF EXISTS "Users can create task templates in their organization" ON task_templates;
 CREATE POLICY "Users can create task templates in their organization"
@@ -78,22 +78,25 @@ CREATE POLICY "Users can delete task templates in their organization"
   ON task_templates FOR DELETE
   USING (organization_id = get_user_organization_id());
 
--- Seed default templates for existing organizations (if any)
+-- Seed default templates for every existing organization (set-based, idempotent by organization_id + name)
 INSERT INTO task_templates (id, organization_id, is_default, name, tasks, job_type, created_by)
 SELECT gen_random_uuid(), o.id, true, 'Electrical Inspection',
   '[{"title":"Isolate power","sort_order":0},{"title":"Test circuits","sort_order":1},{"title":"Document findings","sort_order":2},{"title":"Sign off","sort_order":3}]'::jsonb,
   'electrical', NULL::uuid
-FROM (SELECT id FROM organizations LIMIT 1) o
+FROM organizations o
+WHERE NOT EXISTS (SELECT 1 FROM task_templates tt WHERE tt.organization_id = o.id AND tt.name = 'Electrical Inspection')
 UNION ALL
 SELECT gen_random_uuid(), o.id, true, 'Plumbing Repair',
   '[{"title":"Shut off water","sort_order":0},{"title":"Inspect pipes","sort_order":1},{"title":"Complete repair","sort_order":2},{"title":"Test pressure","sort_order":3}]'::jsonb,
   'plumbing', NULL::uuid
-FROM (SELECT id FROM organizations LIMIT 1) o
+FROM organizations o
+WHERE NOT EXISTS (SELECT 1 FROM task_templates tt WHERE tt.organization_id = o.id AND tt.name = 'Plumbing Repair')
 UNION ALL
 SELECT gen_random_uuid(), o.id, true, 'Safety Audit',
   '[{"title":"Review hazards","sort_order":0},{"title":"Check controls","sort_order":1},{"title":"Verify PPE","sort_order":2},{"title":"Complete checklist","sort_order":3}]'::jsonb,
   'safety', NULL::uuid
-FROM (SELECT id FROM organizations LIMIT 1) o;
+FROM organizations o
+WHERE NOT EXISTS (SELECT 1 FROM task_templates tt WHERE tt.organization_id = o.id AND tt.name = 'Safety Audit');
 
 -- Ensure new organizations get the three default templates (fresh DB with zero orgs gets them on first org creation)
 CREATE OR REPLACE FUNCTION seed_default_task_templates_for_org()
