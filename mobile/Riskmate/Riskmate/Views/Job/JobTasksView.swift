@@ -480,6 +480,20 @@ private struct TaskDetailSheet: View {
         saveError = nil
         defer { isSaving = false }
 
+        let completedAtValue: String?
+        if status == "done" {
+            if task.status != "done" {
+                completedAtValue = ISO8601DateFormatter().string(from: Date())
+            } else {
+                let formatter = ISO8601DateFormatter()
+                formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+                completedAtValue = task.completedAt.map { formatter.string(from: $0) }
+                    ?? ISO8601DateFormatter().string(from: Date())
+            }
+        } else {
+            completedAtValue = nil
+        }
+
         do {
             let payload = UpdateTaskRequest(
                 title: title.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -488,7 +502,7 @@ private struct TaskDetailSheet: View {
                 priority: priority,
                 due_date: isoDate(dueDate),
                 status: status,
-                completed_at: status == "done" ? ISO8601DateFormatter().string(from: Date()) : nil,
+                completed_at: completedAtValue,
                 sort_order: nil
             )
             _ = try await APIClient.shared.updateTask(id: task.id, payload: payload)

@@ -57,11 +57,18 @@ export function TaskList({ jobId, onAddTask, onTaskCountChange, refreshKey = 0 }
   const handleDrop = async (dropIndex: number) => {
     if (dragIndex === null || dragIndex === dropIndex) return
 
-    const next = [...orderedTasks]
-    const [moved] = next.splice(dragIndex, 1)
+    const visible = nonCancelledTasks
+    const nextVisible = [...visible]
+    const [moved] = nextVisible.splice(dragIndex, 1)
     const insertIndex = dragIndex < dropIndex ? dropIndex - 1 : dropIndex
-    next.splice(insertIndex, 0, moved)
-    const normalized = next.map((task, index) => ({ ...task, sort_order: index }))
+    nextVisible.splice(insertIndex, 0, moved)
+    const visibleWithOrder = nextVisible.map((task, index) => ({ ...task, sort_order: index }))
+    const cancelled = orderedTasks.filter((task) => task.status === 'cancelled')
+    const cancelledWithOrder = cancelled.map((task, index) => ({
+      ...task,
+      sort_order: visibleWithOrder.length + index,
+    }))
+    const normalized = sortByOrder([...visibleWithOrder, ...cancelledWithOrder])
 
     setOrderedTasks(normalized)
     setDragIndex(null)
@@ -118,7 +125,7 @@ export function TaskList({ jobId, onAddTask, onTaskCountChange, refreshKey = 0 }
           <h4 className="text-xs font-semibold text-white/40 uppercase tracking-wider mb-2">In Progress</h4>
           <div className="space-y-2">
             {grouped.inProgress.map((task) => {
-              const currentIndex = orderedTasks.findIndex((item) => item.id === task.id)
+              const currentIndex = nonCancelledTasks.findIndex((item) => item.id === task.id)
               return (
                 <TaskItem
                   key={task.id}
@@ -143,7 +150,7 @@ export function TaskList({ jobId, onAddTask, onTaskCountChange, refreshKey = 0 }
           <h4 className="text-xs font-semibold text-white/40 uppercase tracking-wider mb-2">To Do</h4>
           <div className="space-y-2">
             {grouped.todo.map((task) => {
-              const currentIndex = orderedTasks.findIndex((item) => item.id === task.id)
+              const currentIndex = nonCancelledTasks.findIndex((item) => item.id === task.id)
               return (
                 <TaskItem
                   key={task.id}
@@ -168,7 +175,7 @@ export function TaskList({ jobId, onAddTask, onTaskCountChange, refreshKey = 0 }
           <h4 className="text-xs font-semibold text-white/40 uppercase tracking-wider mb-2">Done</h4>
           <div className="space-y-2">
             {grouped.done.map((task) => {
-              const currentIndex = orderedTasks.findIndex((item) => item.id === task.id)
+              const currentIndex = nonCancelledTasks.findIndex((item) => item.id === task.id)
               return (
                 <TaskItem
                   key={task.id}

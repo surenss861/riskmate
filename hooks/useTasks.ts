@@ -192,11 +192,12 @@ export function useTasks(jobId: string | null): UseTasksResult {
         const prevIdx = previous.findIndex((t) => t.id === task.id)
         return prevIdx !== newIdx
       })
-      if (changed.length === 0) return
+      const visibleChanged = changed.filter((task) => task.status !== 'cancelled')
+      if (visibleChanged.length === 0) return
 
       try {
         await Promise.all(
-          changed.map((task) => {
+          visibleChanged.map((task) => {
             const newOrder = reordered.findIndex((candidate) => candidate.id === task.id)
             return fetch(`/api/tasks/${task.id}`, {
               method: 'PATCH',
