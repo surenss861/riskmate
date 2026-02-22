@@ -21,6 +21,7 @@ struct JobTasksView: View {
         let status: String
         let priority: String
         let assignedUser: String?
+        let assignedUserId: String?
         let dueDate: Date?
         let completedAt: Date?
         let sortOrder: Int
@@ -274,6 +275,7 @@ struct JobTasksView: View {
                     status: item.status,
                     priority: item.priority,
                     assignedUser: item.assignedUser?.fullName ?? item.assignedUser?.email,
+                    assignedUserId: item.assignedUser?.id,
                     dueDate: parseDate(item.dueDate),
                     completedAt: parseDate(item.completedAt),
                     sortOrder: item.sortOrder
@@ -463,7 +465,7 @@ private struct TaskDetailSheet: View {
             let payload = UpdateTaskRequest(
                 title: title.trimmingCharacters(in: .whitespacesAndNewlines),
                 description: taskDescription.isEmpty ? nil : taskDescription,
-                assigned_to: nil,
+                assigned_to: task.assignedUserId,
                 priority: priority,
                 due_date: isoDate(dueDate),
                 status: status,
