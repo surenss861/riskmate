@@ -150,6 +150,7 @@ async function processJob(job) {
             taskTitle: String(job.data.taskTitle || ''),
             jobTitle: String(job.data.jobTitle || 'Job'),
             taskId: String(job.data.taskId || ''),
+            jobId: String(job.data.jobId ?? ''),
         }, job.userId);
         return;
     }

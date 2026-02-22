@@ -37,6 +37,7 @@ export declare function sendTaskCompletedEmail(to: string, userName: string, par
     taskTitle: string;
     jobTitle: string;
     taskId: string;
+    jobId: string;
 }, userId: string): Promise<void>;
 export declare function sendTaskReminderEmail(to: string, userName: string, params: {
     taskTitle: string;

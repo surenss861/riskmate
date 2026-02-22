@@ -72,7 +72,6 @@ const metrics_1 = require("./routes/metrics");
 const dashboard_1 = require("./routes/dashboard");
 const comments_1 = require("./routes/comments");
 const tasks_1 = require("./routes/tasks");
-const taskTemplates_1 = require("./routes/taskTemplates");
 const exportWorker_1 = require("./services/exportWorker");
 const retentionWorker_1 = require("./services/retentionWorker");
 const ledgerRootWorker_1 = require("./services/ledgerRootWorker");
@@ -371,7 +370,7 @@ app.use("/api/metrics", metrics_1.metricsRouter);
 app.use("/api/dashboard", dashboard_1.dashboardRouter);
 app.use("/api/comments", comments_1.commentsRouter);
 app.use("/api/tasks", tasks_1.tasksRouter);
-app.use("/api/task-templates", taskTemplates_1.taskTemplatesRouter);
+app.use("/api/task-templates", tasks_1.taskTemplatesRouter);
 // Mount all /api routes under /v1 as well (versioned API)
 v1Router.use("/risk", risk_1.riskRouter);
 v1Router.use("/subscriptions", subscriptions_1.subscriptionsRouter);
@@ -394,7 +393,7 @@ v1Router.use("/metrics", metrics_1.metricsRouter);
 v1Router.use("/dashboard", dashboard_1.dashboardRouter);
 v1Router.use("/comments", comments_1.commentsRouter);
 v1Router.use("/tasks", tasks_1.tasksRouter);
-v1Router.use("/task-templates", taskTemplates_1.taskTemplatesRouter);
+v1Router.use("/task-templates", tasks_1.taskTemplatesRouter);
 // Dev endpoints (only available when DEV_AUTH_SECRET is set)
 // MUST be mounted BEFORE app.use("/v1", v1Router) to ensure Express registers it
 if (process.env.DEV_AUTH_SECRET) {
@@ -438,7 +437,7 @@ app.use((err, req, res, next) => {
 exports.default = app;
 // Only start server if not in test mode
 if (process.env.NODE_ENV !== "test") {
-    app.listen(PORT, '0.0.0.0', () => {
+    const server = app.listen(PORT, '0.0.0.0', () => {
         console.log(`[BOOT] Listening on 0.0.0.0:${PORT} (raw PORT=${process.env.PORT})`);
         console.log(`🚀 Riskmate Backend API running on port ${PORT}`);
         console.log(`📡 Health check: http://0.0.0.0:${PORT}/health`);
@@ -452,5 +451,19 @@ if (process.env.NODE_ENV !== "test") {
         (0, deadlineReminders_1.startDeadlineReminderWorker)();
         (0, taskReminders_1.startTaskReminderWorker)();
     });
+    function shutdown(signal) {
+        console.log(`[BOOT] ${signal} received, shutting down...`);
+        (0, taskReminders_1.stopTaskReminderWorker)();
+        server.close(() => {
+            console.log("[BOOT] Server closed");
+            process.exit(0);
+        });
+        setTimeout(() => {
+            console.error("[BOOT] Forced exit after shutdown timeout");
+            process.exit(1);
+        }, 10000);
+    }
+    process.on("SIGTERM", () => shutdown("SIGTERM"));
+    process.on("SIGINT", () => shutdown("SIGINT"));
 }
 //# sourceMappingURL=index.js.map

@@ -52,10 +52,11 @@ async function processTaskReminders() {
     const nowIso = now.toISOString();
     const in24hIso = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString();
     try {
-        // Tasks due by 24h from now (overdue or due within 24h); not done/cancelled; has assignee; throttle by last_reminded_at
+        // Due soon: due_date in [now, now+24h]. Overdue: all tasks with due_date < now (no cap).
+        // last_reminded_at throttle prevents repeated sends within ~23h for all reminders.
         const { data: tasks, error } = await supabaseClient_1.supabase
             .from("tasks")
-            .select("id, organization_id, assigned_to, title, job_id, due_date, status, last_reminded_at")
+            .select("id, organization_id, assigned_to, title, job_id, due_date, status, last_reminded_at, job:job_id(client_name), assignee:assigned_to(email)")
             .lte("due_date", in24hIso)
             .neq("status", "done")
             .neq("status", "cancelled")
@@ -72,24 +73,17 @@ async function processTaskReminders() {
         let failed = 0;
         for (const task of pending) {
             try {
-                const { data: job } = await supabaseClient_1.supabase
-                    .from("jobs")
-                    .select("client_name")
-                    .eq("id", task.job_id)
-                    .eq("organization_id", task.organization_id)
-                    .maybeSingle();
-                const jobTitle = job?.client_name || "Job";
-                const { data: assignee } = await supabaseClient_1.supabase
-                    .from("users")
-                    .select("email")
-                    .eq("id", task.assigned_to)
-                    .maybeSingle();
-                const assigneeEmail = assignee?.email ?? null;
+                const jobTitle = task.job?.client_name ?? "Job";
+                const assigneeEmail = task.assignee?.email ?? null;
                 if (!assigneeEmail) {
                     console.warn("[TaskReminderWorker] No email for assignee", task.assigned_to, "skipping email");
                 }
+                const prefs = await (0, notifications_1.getNotificationPreferences)(task.assigned_to);
+                const shouldQueueEmail = assigneeEmail &&
+                    prefs.email_enabled &&
+                    prefs.email_deadline_reminder;
                 const isOverdue = task.due_date ? new Date(task.due_date).getTime() < now.getTime() : false;
-                await sendTaskReminderPushAndEmail(task, jobTitle, assigneeEmail, now, isOverdue);
+                await sendTaskReminderPushAndEmail(task, jobTitle, shouldQueueEmail ? assigneeEmail : null, now, isOverdue);
                 processed += 1;
             }
             catch (err) {

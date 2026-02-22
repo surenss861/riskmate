@@ -79,7 +79,7 @@ export declare function notifyWeeklySummary(params: {
 /** Notify user when they are assigned to a job. */
 export declare function sendJobAssignedNotification(userId: string, organizationId: string, jobId: string, jobTitle?: string): Promise<void>;
 export declare function sendTaskAssignedNotification(userId: string, organizationId: string, taskId: string, jobTitle: string, taskTitle: string): Promise<void>;
-export declare function sendTaskCompletedNotification(userId: string, organizationId: string, taskId: string, taskTitle: string, jobTitle: string): Promise<void>;
+export declare function sendTaskCompletedNotification(userId: string, organizationId: string, taskId: string, taskTitle: string, jobTitle: string, jobId?: string): Promise<void>;
 export declare function sendTaskOverdueNotification(userId: string, organizationId: string, taskId: string, taskTitle: string, jobTitle: string): Promise<void>;
 /** Notify assignee that a task is due within 24 hours (push only; caller should queue email separately). */
 export declare function sendTaskDueSoonNotification(userId: string, organizationId: string, taskId: string, taskTitle: string, jobTitle: string, hoursRemaining: number): Promise<void>;

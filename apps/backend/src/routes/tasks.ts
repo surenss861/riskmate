@@ -8,9 +8,14 @@ import {
   deleteTask,
   completeTask,
   reopenTask,
+  listTaskTemplates,
+  createTaskTemplate,
 } from "../services/tasks";
 
 export const tasksRouter: ExpressRouter = express.Router();
+
+/** Router for task templates: GET/POST /api/task-templates. Mount on app at /api/task-templates. */
+export const taskTemplatesRouter: ExpressRouter = express.Router();
 
 /** Router for job-scoped task routes: GET/POST /api/jobs/:id/tasks. Mount on jobs router. */
 export const jobTasksRouter: ExpressRouter = express.Router();
@@ -261,6 +266,57 @@ tasksRouter.delete(
       console.error("Reopen task failed:", err);
       res.status(status).json({
         message: err?.message ?? "Failed to reopen task",
+        code,
+      });
+    }
+  }
+);
+
+/** GET /api/task-templates — list task templates for the caller's org */
+taskTemplatesRouter.get(
+  "/",
+  authenticate as unknown as express.RequestHandler,
+  async (req: express.Request, res: express.Response) => {
+    const authReq = req as AuthenticatedRequest;
+    try {
+      const result = await listTaskTemplates(authReq.user.organization_id);
+      res.json({ data: result.data });
+    } catch (err: any) {
+      const status = err?.status ?? 500;
+      const code = err?.code ?? "QUERY_ERROR";
+      console.error("List task templates failed:", err);
+      res.status(status).json({
+        message: err?.message ?? "Failed to list task templates",
+        code,
+      });
+    }
+  }
+);
+
+/** POST /api/task-templates — create a task template */
+taskTemplatesRouter.post(
+  "/",
+  authenticate as unknown as express.RequestHandler,
+  async (req: express.Request, res: express.Response) => {
+    const authReq = req as AuthenticatedRequest;
+    const body = req.body ?? {};
+    try {
+      const template = await createTaskTemplate(
+        authReq.user.organization_id,
+        authReq.user.id,
+        {
+          name: body.name,
+          tasks: body.tasks,
+          job_type: body.job_type,
+        }
+      );
+      res.status(201).json({ data: template });
+    } catch (err: any) {
+      const status = err?.status ?? 500;
+      const code = err?.code ?? "QUERY_ERROR";
+      console.error("Create task template failed:", err);
+      res.status(status).json({
+        message: err?.message ?? "Failed to create task template",
         code,
       });
     }

@@ -120,7 +120,6 @@ async function fetchOrgUserIdsWithPreference(organizationId, prefKey) {
         .in("user_id", userIds);
     const defaultFalseKeys = [
         "weekly_summary",
-        "email_deadline_reminder",
     ];
     const prefsByUser = new Map((prefsData || []).map((r) => {
         const push_enabled = r.push_enabled ?? true;
@@ -154,7 +153,7 @@ exports.DEFAULT_NOTIFICATION_PREFERENCES = {
     evidence_uploaded: true,
     hazard_added: true,
     deadline_approaching: true,
-    email_deadline_reminder: false,
+    email_deadline_reminder: true,
     weekly_summary: false,
     email_weekly_digest: true,
     high_risk_job: true,
@@ -204,7 +203,7 @@ async function getNotificationPreferences(userId) {
         evidence_uploaded: data.evidence_uploaded ?? true,
         hazard_added: data.hazard_added ?? true,
         deadline_approaching: data.deadline_approaching ?? true,
-        email_deadline_reminder: data.email_deadline_reminder ?? false,
+        email_deadline_reminder: data.email_deadline_reminder ?? true,
         weekly_summary: data.weekly_summary ?? false,
         email_weekly_digest: data.email_weekly_digest ?? true,
         high_risk_job: data.high_risk_job ?? true,
@@ -589,14 +588,18 @@ async function sendTaskAssignedNotification(userId, organizationId, taskId, jobT
         priority: "default",
     });
 }
-async function sendTaskCompletedNotification(userId, organizationId, taskId, taskTitle, jobTitle) {
+async function sendTaskCompletedNotification(userId, organizationId, taskId, taskTitle, jobTitle, jobId) {
     void jobTitle;
+    const deepLink = jobId != null && jobId !== ""
+        ? `riskmate://jobs/${jobId}/tasks?highlight=${taskId}`
+        : undefined;
     await sendToUser(userId, organizationId, {
         title: "Task Completed",
         body: `'${taskTitle}' has been completed`,
         data: {
             type: "task_completed",
             taskId,
+            ...(deepLink && { deepLink }),
         },
         priority: "default",
     });

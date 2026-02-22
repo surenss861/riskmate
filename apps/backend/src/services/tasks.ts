@@ -497,15 +497,14 @@ export async function reopenTask(
   return mapTaskToApiShape(task as any) as unknown as TaskWithAssignee;
 }
 
-/** List task templates for org (including defaults). */
+/** List task templates for the caller's organization only (strictly scoped). */
 export async function listTaskTemplates(
   organizationId: string
 ): Promise<{ data: any[] }> {
   const { data, error } = await supabase
     .from("task_templates")
     .select("*")
-    .or(`organization_id.eq.${organizationId},is_default.eq.true`)
-    .order("is_default", { ascending: false })
+    .eq("organization_id", organizationId)
     .order("created_at", { ascending: true });
 
   if (error) {

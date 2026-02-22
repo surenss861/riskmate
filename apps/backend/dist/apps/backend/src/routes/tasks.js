@@ -3,11 +3,13 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.jobTasksRouter = exports.tasksRouter = void 0;
+exports.jobTasksRouter = exports.taskTemplatesRouter = exports.tasksRouter = void 0;
 const express_1 = __importDefault(require("express"));
 const auth_1 = require("../middleware/auth");
 const tasks_1 = require("../services/tasks");
 exports.tasksRouter = express_1.default.Router();
+/** Router for task templates: GET/POST /api/task-templates. Mount on app at /api/task-templates. */
+exports.taskTemplatesRouter = express_1.default.Router();
 /** Router for job-scoped task routes: GET/POST /api/jobs/:id/tasks. Mount on jobs router. */
 exports.jobTasksRouter = express_1.default.Router();
 /** GET /api/jobs/:id/tasks — list tasks for a job */
@@ -99,8 +101,18 @@ exports.tasksRouter.patch("/:id", auth_1.authenticate, async (req, res) => {
     if (!taskId) {
         return res.status(400).json({ message: "Task id is required", code: "MISSING_PARAMS" });
     }
+    const body = req.body ?? {};
+    if (body.title !== undefined) {
+        const title = body.title;
+        if (!title || typeof title !== "string" || !String(title).trim()) {
+            return res.status(400).json({
+                message: "title is required",
+                code: "VALIDATION_ERROR",
+            });
+        }
+        body.title = String(title).trim();
+    }
     try {
-        const body = req.body ?? {};
         const task = await (0, tasks_1.updateTask)(authReq.user.organization_id, taskId, {
             title: body.title,
             description: body.description,
@@ -164,7 +176,28 @@ exports.tasksRouter.post("/:id/complete", auth_1.authenticate, async (req, res) 
         });
     }
 });
-/** DELETE /api/tasks/:id/complete — reopen task */
+/** POST /api/tasks/:id/reopen — reopen task (spec'd endpoint) */
+exports.tasksRouter.post("/:id/reopen", auth_1.authenticate, async (req, res) => {
+    const authReq = req;
+    const taskId = req.params.id;
+    if (!taskId) {
+        return res.status(400).json({ message: "Task id is required", code: "MISSING_PARAMS" });
+    }
+    try {
+        const task = await (0, tasks_1.reopenTask)(authReq.user.organization_id, taskId);
+        res.json({ data: task });
+    }
+    catch (err) {
+        const status = err?.status ?? 500;
+        const code = err?.code ?? "QUERY_ERROR";
+        console.error("Reopen task failed:", err);
+        res.status(status).json({
+            message: err?.message ?? "Failed to reopen task",
+            code,
+        });
+    }
+});
+/** DELETE /api/tasks/:id/complete — reopen task (backward compatibility) */
 exports.tasksRouter.delete("/:id/complete", auth_1.authenticate, async (req, res) => {
     const authReq = req;
     const taskId = req.params.id;
@@ -181,6 +214,45 @@ exports.tasksRouter.delete("/:id/complete", auth_1.authenticate, async (req, res
         console.error("Reopen task failed:", err);
         res.status(status).json({
             message: err?.message ?? "Failed to reopen task",
+            code,
+        });
+    }
+});
+/** GET /api/task-templates — list task templates for the caller's org */
+exports.taskTemplatesRouter.get("/", auth_1.authenticate, async (req, res) => {
+    const authReq = req;
+    try {
+        const result = await (0, tasks_1.listTaskTemplates)(authReq.user.organization_id);
+        res.json({ data: result.data });
+    }
+    catch (err) {
+        const status = err?.status ?? 500;
+        const code = err?.code ?? "QUERY_ERROR";
+        console.error("List task templates failed:", err);
+        res.status(status).json({
+            message: err?.message ?? "Failed to list task templates",
+            code,
+        });
+    }
+});
+/** POST /api/task-templates — create a task template */
+exports.taskTemplatesRouter.post("/", auth_1.authenticate, async (req, res) => {
+    const authReq = req;
+    const body = req.body ?? {};
+    try {
+        const template = await (0, tasks_1.createTaskTemplate)(authReq.user.organization_id, authReq.user.id, {
+            name: body.name,
+            tasks: body.tasks,
+            job_type: body.job_type,
+        });
+        res.status(201).json({ data: template });
+    }
+    catch (err) {
+        const status = err?.status ?? 500;
+        const code = err?.code ?? "QUERY_ERROR";
+        console.error("Create task template failed:", err);
+        res.status(status).json({
+            message: err?.message ?? "Failed to create task template",
             code,
         });
     }

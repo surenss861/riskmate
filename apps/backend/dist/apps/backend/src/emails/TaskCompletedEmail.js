@@ -5,6 +5,9 @@ const base_1 = require("./base");
 function TaskCompletedEmail(input) {
     const frontendUrl = process.env.FRONTEND_URL || "https://www.riskmate.dev";
     const jobTitle = input.jobTitle || "Job";
+    const ctaUrl = input.jobId
+        ? `${frontendUrl}/jobs/${input.jobId}/tasks?highlight=${input.taskId}`
+        : `${frontendUrl}/tasks/${input.taskId}`;
     const html = (0, base_1.layout)({
         title: "Task completed",
         intro: `Hi ${input.userName}, a task you created has been completed.`,
@@ -13,7 +16,7 @@ function TaskCompletedEmail(input) {
       <p style="margin:0;"><strong>Job:</strong> ${(0, base_1.e)(jobTitle)}</p>
     `,
         ctaLabel: "View Task →",
-        ctaUrl: `${frontendUrl}/tasks/${input.taskId}`,
+        ctaUrl,
     });
     return {
         subject: `Task completed: ${input.taskTitle}`,

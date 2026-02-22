@@ -10,14 +10,10 @@ exports.reopenTask = reopenTask;
 exports.listTaskTemplates = listTaskTemplates;
 exports.createTaskTemplate = createTaskTemplate;
 const supabaseClient_1 = require("../lib/supabaseClient");
+const taskApiShape_1 = require("@lib/utils/taskApiShape");
 const notifications_1 = require("./notifications");
 const TASK_PRIORITIES = ["low", "medium", "high", "urgent"];
 const TASK_STATUSES = ["todo", "in_progress", "done", "cancelled"];
-/** Map task row (with assignee from Supabase join) to API shape: assigned_user only, assignee stripped. */
-function toTaskApiShape(row) {
-    const { assignee, ...rest } = row;
-    return { ...rest, assigned_user: assignee ?? null };
-}
 /** Ensure job belongs to organization. Returns true if ok, false otherwise. */
 async function jobBelongsToOrg(jobId, organizationId) {
     const { data, error } = await supabaseClient_1.supabase
@@ -43,6 +39,27 @@ async function taskBelongsToOrg(taskId, organizationId) {
         return { ok: false, status: 404, code: "NOT_FOUND", message: "Task not found" };
     }
     return { ok: true, task: data };
+}
+/** Parse and validate sort_order: coerce numeric strings to integer; throw 400 VALIDATION_ERROR on invalid. */
+function parseSortOrder(value) {
+    if (value === undefined || value === null) {
+        throw Object.assign(new Error("sort_order must be a valid integer"), {
+            status: 400,
+            code: "VALIDATION_ERROR",
+        });
+    }
+    const n = typeof value === "number"
+        ? Number.isFinite(value)
+            ? Math.floor(value)
+            : NaN
+        : parseInt(String(value).trim(), 10);
+    if (!Number.isFinite(n)) {
+        throw Object.assign(new Error("sort_order must be a valid integer"), {
+            status: 400,
+            code: "VALIDATION_ERROR",
+        });
+    }
+    return n;
 }
 /** Ensure assigned_to user belongs to organization. Throws 400 VALIDATION_ERROR if not. */
 async function ensureAssignedToInOrg(assignedTo, organizationId) {
@@ -81,7 +98,7 @@ async function listTasksByJob(organizationId, jobId) {
         console.error("[Tasks] listTasksByJob error:", error);
         throw new Error("Failed to list tasks");
     }
-    return { data: (tasks || []).map((t) => toTaskApiShape(t)) };
+    return { data: (tasks || []).map((t) => (0, taskApiShape_1.mapTaskToApiShape)(t)) };
 }
 /** Get a single task by id. */
 async function getTask(organizationId, taskId) {
@@ -93,7 +110,7 @@ async function getTask(organizationId, taskId) {
         .maybeSingle();
     if (error || !data)
         return null;
-    return toTaskApiShape(data);
+    return (0, taskApiShape_1.mapTaskToApiShape)(data);
 }
 /** Create a task on a job. */
 async function createTask(organizationId, userId, jobId, input) {
@@ -121,9 +138,11 @@ async function createTask(organizationId, userId, jobId, input) {
         });
     }
     const status = input.status ?? "todo";
-    const { data: task, error } = await supabaseClient_1.supabase
-        .from("tasks")
-        .insert({
+    const sortOrder = input.sort_order !== undefined && input.sort_order !== null
+        ? parseSortOrder(input.sort_order)
+        : 0;
+    const nowIso = new Date().toISOString();
+    const insertPayload = {
         organization_id: organizationId,
         job_id: jobId,
         created_by: userId,
@@ -132,16 +151,23 @@ async function createTask(organizationId, userId, jobId, input) {
         assigned_to: input.assigned_to ?? null,
         priority,
         due_date: input.due_date ?? null,
-        sort_order: input.sort_order ?? 0,
+        sort_order: sortOrder,
         status,
-    })
+    };
+    if (status === "done") {
+        insertPayload.completed_at = nowIso;
+        insertPayload.completed_by = userId;
+    }
+    const { data: task, error } = await supabaseClient_1.supabase
+        .from("tasks")
+        .insert(insertPayload)
         .select("*, assignee:assigned_to(id, full_name, email)")
         .single();
     if (error || !task) {
         console.error("[Tasks] createTask error:", error);
         throw new Error("Failed to create task");
     }
-    const out = toTaskApiShape(task);
+    const out = (0, taskApiShape_1.mapTaskToApiShape)(task);
     if (input.assigned_to) {
         const { data: job } = await supabaseClient_1.supabase
             .from("jobs")
@@ -202,8 +228,9 @@ async function updateTask(organizationId, taskId, input, actingUserId) {
             updatePayload.completed_by = null;
         }
     }
-    if (input.sort_order !== undefined)
-        updatePayload.sort_order = input.sort_order;
+    if (input.sort_order !== undefined) {
+        updatePayload.sort_order = parseSortOrder(input.sort_order);
+    }
     const { data: task, error } = await supabaseClient_1.supabase
         .from("tasks")
         .update(updatePayload)
@@ -215,7 +242,33 @@ async function updateTask(organizationId, taskId, input, actingUserId) {
         console.error("[Tasks] updateTask error:", error);
         throw new Error("Failed to update task");
     }
-    return toTaskApiShape(task);
+    const current = taskCheck.task;
+    const updated = task;
+    // Completion: when status transitions to done via PATCH, notify creator (match completeTask behavior).
+    if (input.status === "done" && current.status !== "done" && current.created_by) {
+        const { data: job } = await supabaseClient_1.supabase
+            .from("jobs")
+            .select("client_name")
+            .eq("id", current.job_id)
+            .eq("organization_id", organizationId)
+            .maybeSingle();
+        const jobTitle = job?.client_name ?? "Job";
+        (0, notifications_1.sendTaskCompletedNotification)(current.created_by, organizationId, taskId, current.title, jobTitle, current.job_id).catch((err) => console.error("[Tasks] sendTaskCompletedNotification failed:", err));
+    }
+    // Reassignment: when assigned_to changes to a new non-null user, notify the new assignee.
+    const newAssigneeId = input.assigned_to !== undefined ? input.assigned_to : null;
+    if (newAssigneeId && newAssigneeId !== current.assigned_to) {
+        const { data: job } = await supabaseClient_1.supabase
+            .from("jobs")
+            .select("client_name")
+            .eq("id", current.job_id)
+            .eq("organization_id", organizationId)
+            .maybeSingle();
+        const jobTitle = job?.client_name ?? "Job";
+        const taskTitle = updated.title ?? current.title;
+        (0, notifications_1.sendTaskAssignedNotification)(newAssigneeId, organizationId, taskId, jobTitle, taskTitle).catch((err) => console.error("[Tasks] sendTaskAssignedNotification failed:", err));
+    }
+    return (0, taskApiShape_1.mapTaskToApiShape)(task);
 }
 /** Delete a task. */
 async function deleteTask(organizationId, taskId) {
@@ -271,9 +324,9 @@ async function completeTask(organizationId, userId, taskId) {
             .eq("organization_id", organizationId)
             .maybeSingle();
         const jobTitle = job?.client_name ?? "Job";
-        (0, notifications_1.sendTaskCompletedNotification)(createdBy, organizationId, taskId, taskCheck.task.title, jobTitle).catch((err) => console.error("[Tasks] sendTaskCompletedNotification failed:", err));
+        (0, notifications_1.sendTaskCompletedNotification)(createdBy, organizationId, taskId, taskCheck.task.title, jobTitle, taskCheck.task.job_id).catch((err) => console.error("[Tasks] sendTaskCompletedNotification failed:", err));
     }
-    return toTaskApiShape(task);
+    return (0, taskApiShape_1.mapTaskToApiShape)(task);
 }
 /** Reopen a task (set status todo, clear completed_at/completed_by). */
 async function reopenTask(organizationId, taskId) {
@@ -301,21 +354,82 @@ async function reopenTask(organizationId, taskId) {
         console.error("[Tasks] reopenTask error:", error);
         throw new Error("Failed to reopen task");
     }
-    return toTaskApiShape(task);
+    return (0, taskApiShape_1.mapTaskToApiShape)(task);
 }
-/** List task templates for org (including defaults). */
+/** List task templates for the caller's organization only (strictly scoped). */
 async function listTaskTemplates(organizationId) {
     const { data, error } = await supabaseClient_1.supabase
         .from("task_templates")
         .select("*")
-        .or(`organization_id.eq.${organizationId},is_default.eq.true`)
-        .order("is_default", { ascending: false })
+        .eq("organization_id", organizationId)
         .order("created_at", { ascending: true });
     if (error) {
         console.error("[Tasks] listTaskTemplates error:", error);
         throw new Error("Failed to list task templates");
     }
     return { data: data ?? [] };
+}
+/** Validate and coerce a single task definition for a template. Returns validated task or throws 400 VALIDATION_ERROR. */
+function validateTemplateTaskItem(item, index) {
+    const titleRaw = item?.title;
+    if (titleRaw === undefined || titleRaw === null || typeof titleRaw !== "string") {
+        throw Object.assign(new Error(`tasks[${index}]: title is required`), {
+            status: 400,
+            code: "VALIDATION_ERROR",
+        });
+    }
+    const title = String(titleRaw).trim();
+    if (!title) {
+        throw Object.assign(new Error(`tasks[${index}]: title cannot be empty or whitespace`), {
+            status: 400,
+            code: "VALIDATION_ERROR",
+        });
+    }
+    const priorityRaw = item?.priority;
+    const priority = priorityRaw === undefined || priorityRaw === null
+        ? "medium"
+        : (typeof priorityRaw === "string" ? priorityRaw : String(priorityRaw)).toLowerCase();
+    if (!TASK_PRIORITIES.includes(priority)) {
+        throw Object.assign(new Error(`tasks[${index}]: priority must be one of: low, medium, high, urgent`), { status: 400, code: "VALIDATION_ERROR" });
+    }
+    const statusRaw = item?.status;
+    const status = statusRaw === undefined || statusRaw === null
+        ? "todo"
+        : (typeof statusRaw === "string" ? statusRaw : String(statusRaw)).toLowerCase();
+    if (!TASK_STATUSES.includes(status)) {
+        throw Object.assign(new Error(`tasks[${index}]: status must be one of: todo, in_progress, done, cancelled`), { status: 400, code: "VALIDATION_ERROR" });
+    }
+    const description = item?.description === undefined || item?.description === null
+        ? null
+        : typeof item.description === "string"
+            ? item.description
+            : String(item.description);
+    const due_date = item?.due_date === undefined || item?.due_date === null
+        ? null
+        : typeof item.due_date === "string"
+            ? item.due_date
+            : typeof item.due_date === "number"
+                ? String(item.due_date)
+                : null;
+    const sort_order = typeof item?.sort_order === "number" && Number.isFinite(item.sort_order)
+        ? item.sort_order
+        : typeof item?.sort_order === "string"
+            ? parseInt(item.sort_order, 10)
+            : 0;
+    const assigned_to = item?.assigned_to === undefined || item?.assigned_to === null
+        ? null
+        : typeof item.assigned_to === "string"
+            ? item.assigned_to
+            : null;
+    return {
+        title,
+        description,
+        priority: priority,
+        status: status,
+        due_date,
+        sort_order: Number.isFinite(sort_order) ? sort_order : 0,
+        assigned_to,
+    };
 }
 /** Create a task template. */
 async function createTaskTemplate(organizationId, userId, input) {
@@ -331,6 +445,12 @@ async function createTaskTemplate(organizationId, userId, input) {
             code: "VALIDATION_ERROR",
         });
     }
+    const validatedTasks = input.tasks.map((item, index) => validateTemplateTaskItem(item, index));
+    for (const task of validatedTasks) {
+        if (task.assigned_to != null) {
+            await ensureAssignedToInOrg(task.assigned_to, organizationId);
+        }
+    }
     const { data: template, error } = await supabaseClient_1.supabase
         .from("task_templates")
         .insert({
@@ -338,7 +458,7 @@ async function createTaskTemplate(organizationId, userId, input) {
         created_by: userId,
         is_default: false,
         name: input.name.trim(),
-        tasks: input.tasks,
+        tasks: validatedTasks,
         job_type: input.job_type ?? null,
     })
         .select("*")

@@ -247,13 +247,14 @@ exports.notificationsRouter.post("/task-completed", auth_1.authenticate, async (
         const organizationId = authReq.user.organization_id;
         const { data: task } = await supabaseClient_1.supabase
             .from("tasks")
-            .select("id, organization_id")
+            .select("id, organization_id, job_id")
             .eq("id", taskId)
             .eq("organization_id", organizationId)
             .single();
         if (!task) {
             return res.status(404).json({ message: "Task not found" });
         }
+        const jobId = task.job_id;
         const { data: user } = await supabaseClient_1.supabase
             .from("users")
             .select("id, organization_id, email")
@@ -262,10 +263,10 @@ exports.notificationsRouter.post("/task-completed", auth_1.authenticate, async (
         if (!user || user.organization_id !== organizationId) {
             return res.status(403).json({ message: "User not in this organization" });
         }
-        await (0, notifications_1.sendTaskCompletedNotification)(userId, organizationId, taskId, taskTitle, jobTitle || "Job");
+        await (0, notifications_1.sendTaskCompletedNotification)(userId, organizationId, taskId, taskTitle, jobTitle || "Job", jobId);
         const toEmail = user.email;
         if (toEmail) {
-            (0, emailQueue_1.queueEmail)(emailQueue_1.EmailJobType.task_completed, toEmail, { taskId, taskTitle, jobTitle: jobTitle || "Job" }, userId);
+            (0, emailQueue_1.queueEmail)(emailQueue_1.EmailJobType.task_completed, toEmail, { taskId, taskTitle, jobTitle: jobTitle || "Job", jobId: jobId ?? "" }, userId);
         }
         res.status(204).end();
     }

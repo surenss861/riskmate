@@ -327,6 +327,7 @@ async function sendTaskCompletedEmail(to, userName, params, userId) {
         taskTitle: params.taskTitle,
         jobTitle: params.jobTitle,
         taskId: params.taskId,
+        jobId: params.jobId ?? '',
     });
     await sendEmail({
         to,

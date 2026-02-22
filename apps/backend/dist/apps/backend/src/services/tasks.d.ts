@@ -61,7 +61,7 @@ export declare function deleteTask(organizationId: string, taskId: string): Prom
 export declare function completeTask(organizationId: string, userId: string, taskId: string): Promise<TaskWithAssignee>;
 /** Reopen a task (set status todo, clear completed_at/completed_by). */
 export declare function reopenTask(organizationId: string, taskId: string): Promise<TaskWithAssignee>;
-/** List task templates for org (including defaults). */
+/** List task templates for the caller's organization only (strictly scoped). */
 export declare function listTaskTemplates(organizationId: string): Promise<{
     data: any[];
 }>;
