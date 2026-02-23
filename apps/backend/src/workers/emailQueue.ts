@@ -11,6 +11,7 @@ import {
   sendTeamInviteEmail,
   sendWeeklyDigestEmail,
   sendWelcomeEmail,
+  isEmailConfigured,
 } from '../utils/email'
 import { supabase } from '../lib/supabaseClient'
 import { tryAcquireWorkerLease, WORKER_LEASE_KEYS } from '../lib/workerLock'
@@ -138,6 +139,20 @@ export async function queueEmail(
   userId?: string,
   scheduledAt?: Date
 ): Promise<EmailJob> {
+  if (process.env.DISABLE_EMAIL_QUEUE === 'true' || process.env.DISABLE_EMAIL_QUEUE === '1') {
+    const id = crypto.randomUUID()
+    console.warn('[EmailQueue] Enqueue skipped (DISABLE_EMAIL_QUEUE). type=%s to=%s', type, to)
+    return {
+      id,
+      type,
+      to,
+      userId,
+      data,
+      scheduledAt: scheduledAt ? new Date(scheduledAt) : undefined,
+      attempts: 0,
+      createdAt: new Date(),
+    }
+  }
   const id = crypto.randomUUID()
   const now = new Date().toISOString()
   const scheduled = (scheduledAt ?? new Date()).toISOString()
@@ -340,6 +355,13 @@ async function processJob(job: EmailJob): Promise<boolean> {
 
 async function runQueueCycle(): Promise<void> {
   if (processing) return
+  if (process.env.DISABLE_EMAIL_QUEUE === 'true' || process.env.DISABLE_EMAIL_QUEUE === '1') {
+    return
+  }
+  if (!isEmailConfigured()) {
+    console.warn('[EmailQueue] Skipping cycle: no email provider configured. Set RESEND_API_KEY or SMTP_* (or DISABLE_EMAIL_QUEUE=1 to disable processing).')
+    return
+  }
   const hasLease = await tryAcquireWorkerLease(WORKER_LEASE_KEYS.email_queue, 60)
   if (!hasLease) return
   processing = true
@@ -378,12 +400,29 @@ async function runQueueCycle(): Promise<void> {
 
         if (newAttempts >= MAX_ATTEMPTS) {
           await logEmailEvent(domainJobId, job.id, job.type, job.to, job.userId, 'failed', errMsg)
+          try {
+            await supabase.from('email_queue_dlq').insert({
+              original_queue_id: job.id,
+              type: job.type,
+              recipient: job.to,
+              user_id: job.userId ?? null,
+              data: job.data,
+              attempts: newAttempts,
+              last_error: errMsg,
+              failed_at: new Date().toISOString(),
+              created_at: job.createdAt.toISOString(),
+            })
+          } catch (dlqErr) {
+            console.error('[EmailQueue] DLQ insert failed (job still removed):', dlqErr)
+          }
           await supabase.from('email_queue').delete().eq('id', job.id)
-          console.error('[EmailQueue] Job failed and removed after 3 attempts:', {
+          console.error('[EmailQueue] PERMANENT_FAILURE', {
+            metric: 'email_queue_permanent_failure',
             id: job.id,
             type: job.type,
             to: job.to,
-            error,
+            attempts: newAttempts,
+            error: errMsg,
           })
         } else {
           const backoffSec = 2 ** (newAttempts - 1)

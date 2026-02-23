@@ -189,6 +189,11 @@ function getEmailProvider(): EmailProvider | null {
   return null
 }
 
+/** Whether an email provider is configured (Resend or SMTP). Use to short-circuit queue worker when not configured. */
+export function isEmailConfigured(): boolean {
+  return getEmailProvider() !== null
+}
+
 // Singleton email provider instance
 let emailProvider: EmailProvider | null = null
 
